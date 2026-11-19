@@ -29,10 +29,10 @@
 //! inserted when the chooser opens — the row menu's technique — so the entries
 //! land after the queue's regions in the merged report and win the hit map where
 //! the dropdown paints over a queue row beneath it (the hit map's last push
-//! wins). A child-held key would land first, before the parent's, and lose. The
-//! card paints from the header's switcher anchor rather than from the panel's
-//! tree, which changes nothing about that order: the key belongs to the panel,
-//! not to where the card mounts.
+//! wins). A child-held key would land first, before the parent's, and lose.
+//! `QueuePanel` builds the card and mounts it in the header's switcher anchor,
+//! which changes nothing about that order: the key belongs to the panel, not to
+//! where the card mounts.
 
 use dioxus_native::prelude::*;
 

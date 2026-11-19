@@ -23,8 +23,9 @@
 //! The bar clips no child: the switcher sits in its own positioning anchor and
 //! the Queue chooser's dropdown mounts inside it (design D8), so the card hangs
 //! under the switcher with its leading edge on the switcher's and paints over
-//! the queue rows below. The title keeps its own clipping, so a long name still
-//! cannot push the controls.
+//! the queue rows below. `QueuePanel` builds that dropdown and passes it as
+//! this component's children, so the header carries no chooser facts. The title
+//! keeps its own clipping, so a long name still cannot push the controls.
 //!
 //! Each control carries a pointer target: it reports its own region through
 //! `QueuePanel`'s report keys — the switcher `queueChooser`, the filter
@@ -38,7 +39,6 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::GuiQueueSummary;
-use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
 use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
 use crate::window::theme::{EfToken, ef_var};
 
@@ -72,13 +72,9 @@ const ICON_BUTTON_STYLE: &str = "width: 32px; height: 32px; border-radius: 6px;"
 pub struct QueueHeaderProps {
     /// The queue summary the header's controls read.
     pub summary: GuiQueueSummary,
-    /// The open Queue chooser's dropdown facts: its cursor, its entries in
-    /// paint order, and the rename draft. `None` while it is closed, and the
-    /// switcher's chevron follows it (design D7).
-    pub chooser_menu: Option<QueueChooserMenuState>,
-    /// The painted chooser entries' mounted events, by their entry index — the
-    /// handles the panel's `queueChooserEntry` regions read.
-    pub chooser_row_slot: Signal<Vec<Option<Event<MountedData>>>>,
+    /// Whether the Queue chooser's dropdown is open: the switcher's chevron
+    /// points up while it is (design D7).
+    pub chooser_open: bool,
     /// The Queue chooser button's mounted event — the handle the
     /// `queueChooser` region reads.
     pub chooser: Signal<Option<Event<MountedData>>>,
@@ -91,6 +87,9 @@ pub struct QueueHeaderProps {
     /// The close control's mounted event — the handle the `closeQueue` region
     /// reads.
     pub close: Signal<Option<Event<MountedData>>>,
+    /// The open Queue chooser's dropdown, built by `QueuePanel` and placed in
+    /// the switcher's anchor (design D8). The header carries no chooser facts.
+    pub children: Element,
 }
 
 /// The Queue header: the `QUEUE` label and the switcher on the leading edge,
@@ -103,8 +102,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     let filter = props.filter;
     let new_queue = props.new_queue;
     let close = props.close;
-    let chooser_menu = props.chooser_menu.clone();
-    let chooser_open = chooser_menu.is_some();
+    let chooser_open = props.chooser_open;
     let title = if summary.header.shown_name.is_empty() {
         DEFAULT_TITLE.to_owned()
     } else {
@@ -205,14 +203,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                         }
                     }
                 }
-                if let Some(menu) = chooser_menu {
-                    QueueChooserMenu {
-                        cursor: menu.cursor,
-                        entries: menu.entries,
-                        renaming: menu.renaming,
-                        row_slot: props.chooser_row_slot,
-                    }
-                }
+                {props.children}
             }
             // The new-queue control: a press asks the local Owner for a new
             // Named queue, the same request `Ctrl+T` dispatches.

@@ -51,11 +51,12 @@
 //! same way, naming each painted entry's own identity.
 //!
 //! The open Queue chooser's dropdown (task 8.3) is `QueueChooserMenu`'s: the
-//! panel measures its `[data-chooser-entry]` rows and reports each entry's
-//! region — the local queue's own identity, or the peer entry — under a third
-//! report key inserted when the chooser opens, so the dropdown's rows win the
-//! hit map over the queue rows beneath them. The footer totals are the Queue
-//! footer line's (task 8.5).
+//! panel builds it from the overlay, mounts it in the header's switcher anchor
+//! (the header carries no chooser facts), measures its `[data-chooser-entry]`
+//! rows, and reports each entry's region — the local queue's own identity, or
+//! the peer entry — under a third report key inserted when the chooser opens,
+//! so the dropdown's rows win the hit map over the queue rows beneath them. The
+//! footer totals are the Queue footer line's (task 8.5).
 //!
 //! The row paint is the redesign's (design D9): the row states come through
 //! the queue column's `--ef-*` tokens (design D1), so no theme slot or TUI
@@ -79,7 +80,7 @@ use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry};
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
-use crate::window::components::queue_chooser_menu::QueueChooserMenuState;
+use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
 use crate::window::components::queue_header::QueueHeader;
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::{Ellipsis, GripVertical};
@@ -451,12 +452,19 @@ pub fn QueuePanel() -> Element {
                 "data-pointer-zone": PointerZone::Queue.token(),
                 QueueHeader {
                     summary: summary.clone(),
-                    chooser_menu,
-                    chooser_row_slot: chooser_rows,
+                    chooser_open: chooser_menu.is_some(),
                     chooser: chooser_handle,
                     filter: filter_handle,
                     new_queue: new_queue_handle,
                     close: close_handle,
+                    if let Some(menu) = chooser_menu {
+                        QueueChooserMenu {
+                            cursor: menu.cursor,
+                            entries: menu.entries,
+                            renaming: menu.renaming,
+                            row_slot: chooser_rows,
+                        }
+                    }
                 }
                 div {
                     class: "relative min-h-0 flex-1 overflow-hidden",
