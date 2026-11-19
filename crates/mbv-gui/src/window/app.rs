@@ -37,6 +37,7 @@ use crate::window::components::panel_divider::{
 };
 use crate::window::components::playlists_panel::PlaylistsPanel;
 use crate::window::components::settings_screen::SettingsScreen;
+use crate::window::components::toast_stack::ToastStack;
 use crate::window::input::KeyOutcome;
 use crate::window::layout::{
     LayoutEpoch, ViewportSize, note_presented_frame, track_container_size, use_container_size,
@@ -775,6 +776,10 @@ pub fn App() -> Element {
                         _ => rsx! {},
                     }
                 }
+                // The floating toast cards (design D7 of `gui-floating-toasts`):
+                // mounted last, so they paint over the panels, the Settings
+                // screen, and the overlays, and nothing while none is live.
+                ToastStack {}
             } else {
                 // The pre-attach states (design D9): the wait before the
                 // first batch, the Owner attach outcomes, and the mismatch
