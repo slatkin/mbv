@@ -507,7 +507,7 @@ The A to Z column beside a name-sorted *GUI Library panel* list. A press jumps t
 _Avoid_: alphabet bar, jump bar
 
 Library Status bar:
-The *GUI Library panel*'s bottom bar: the canvas key hints on the left and the location on the right: the destination, `All` or the names of the checked collections, and the picked item. The shared prefix state and toasts replace the hints while active. It is not the TUI's *Status bar panel*.
+The *GUI Library panel*'s bottom bar: the canvas key hints on the left and the location on the right: the destination, `All` or the names of the checked collections, and the picked item. The shared prefix state replaces the hints while active. The bar shows no toast: toasts show as floating cards from the `Toasts` section, painted by `toast_stack.rs`. It is not the TUI's *Status bar panel*.
 _Avoid_: footer (for this bar), breadcrumb bar
 
 Library Hero overlay:

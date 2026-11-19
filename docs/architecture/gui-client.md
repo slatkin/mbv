@@ -854,7 +854,7 @@ control height — then the collapse control with its muted `Maximize2` glyph.
 After them follow the autosave indicator (while save-on-consume is on for a
 saved playlist), the queue's source text with no leading icon, and the dirty
 mark beside the source it describes; its centre carries the armed `PREFIX`
-badge and a live toast inline in the severity colour; and its right group
+badge; and its right group
 carries the shown queue's totals — the marked rows' total, named `Sel`,
 while rows are marked, beside the queue total, each with a `+` while its sum
 carries an unknown runtime. The filter narrows no total. The footer names no
@@ -868,22 +868,20 @@ status fact, and the `playback` section no longer carries one.
 
 ## The Status bar in the footer line
 
-`GuiStatusBar` mirrors the shared `StatusBarProjection`: the prefix-armed
-state and the live toast with its severity. The Queue column's canvas has no
-separate status bar: `src/window/components/queue_footer.rs` paints both facts in the footer
-line. The
-badge drops while a toast is live — the TUI's pill-drop rule — and the
-toast moves no layout, because the line is always painted and the toast
-only fills its centre span. The line reports no regions: the source text
-paints but is no press target (the GUI presents no playlists surface), and
-a point anywhere on the line resolves to nothing. The spec permits the GUI to show toasts in a
-conventional GUI form that TUI geometry does not constrain, so a toast
-presentation outside the line is lawful. While the Library panel shows, the
-Library Status bar paints the same projection (`move-playback-header-`
-`into-queue-footer` D9): the armed prefix or the live toast paints at its
-left edge — the toast wins, as the footer line drops the badge while a
-toast is live — and the location stays flush right. The bar paints no key
-hints. The location names the destination, `All` or the checked
+`GuiStatusBar` carries the prefix-armed state from the shared
+`StatusBarProjection`. The Queue column's canvas has no separate status bar:
+`src/window/components/queue_footer.rs` paints it in the footer line. No
+status line shows toasts: they show as floating cards from the `Toasts`
+section (`gui-toasts`), painted by `src/window/components/toast_stack.rs` at
+the bottom-right of the window, over every panel, the Settings screen, and
+the modal overlays, with no layout change and no pointer input. The line
+reports no regions: the source text paints but is no press target (the GUI
+presents no playlists surface), and a point anywhere on the line resolves to
+nothing. While the Library panel shows, the Library Status bar paints the
+same armed state (`move-playback-header-`
+`into-queue-footer` D9): the armed prefix paints at its
+left edge and the location stays flush right; it paints no toast. The bar
+paints no key hints. The location names the destination, `All` or the checked
 collections' names, and the picked item, joined by the canvas's separator.
 No Search field paints here (user request 2026-11-19): the top bar's Search
 control paints it at the window's top edge in every screen but Settings, so
@@ -1568,7 +1566,8 @@ While the Settings screen is open it replaces the two columns
 (add-gui-settings-screen design D11): the sidebar sits at the left window
 edge and paints no divider; the shown section's content takes the rest of
 the window, and the status line closes the screen with the frame's `status`
-facts (the prefix-armed state and the live toast). Below the Mini threshold
+facts (the prefix-armed state); toasts show as floating cards over the
+screen (`gui-toasts`). Below the Mini threshold
 — `libraryArrangement` measured on the window width minus the sidebar's
 column — only the pane that holds the keyboard shows: the sidebar until a
 section opens, then its content. A resize across the threshold keeps the
