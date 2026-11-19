@@ -112,15 +112,18 @@ impl GuiSettingsSection {
     }
 
     /// The sections the sidebar lists (design D3): the closed order, without
-    /// a section whose every F2 row the GUI hides.
+    /// a section whose every F2 row the GUI hides. `Playlists` lists no more
+    /// either: the Library top bar's Playlists control is the section's route
+    /// now, so the sidebar's route to it is gone (user request 2026-11-19).
     #[must_use]
     pub fn shown_sections() -> Vec<Self> {
         Self::ALL
             .into_iter()
             .filter(|section| {
-                section
-                    .setting_section()
-                    .is_none_or(|_| !section.shown_rows().is_empty())
+                *section != Self::Playlists
+                    && section
+                        .setting_section()
+                        .is_none_or(|_| !section.shown_rows().is_empty())
             })
             .collect()
     }

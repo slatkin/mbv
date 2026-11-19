@@ -393,6 +393,25 @@ pub fn ListPlus(props: IconProps) -> Element {
     )
 }
 
+/// The Lucide `list-video` icon. A hand addition (user request 2026-11-19):
+/// the former front end imported 36 icons and this is not one of them, so its
+/// port keeps the same `@lucide/svelte` 1.70.0 child elements the rest port
+/// from.
+#[component]
+pub fn ListVideo(props: IconProps) -> Element {
+    icon_shell(
+        "list-video",
+        &[],
+        &props,
+        rsx! {
+            path { d: "M21 5H3" }
+            path { d: "M10 12H3" }
+            path { d: "M10 19H3" }
+            path { d: "M15 12.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997a1 1 0 0 1-1.517-.86z" }
+        },
+    )
+}
+
 /// The Lucide `loader-circle` icon (`lucide-loader-2` is its alias class).
 #[component]
 pub fn LoaderCircle(props: IconProps) -> Element {

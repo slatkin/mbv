@@ -26,7 +26,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::settings::GuiSettingsCommand;
-use crate::window::icons::{ChevronLeft, ChevronRight, Settings};
+use crate::window::icons::{ChevronLeft, ChevronRight, ListVideo, Settings};
 use crate::window::input::f32_from_f64;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
@@ -79,6 +79,14 @@ fn open_destination(
 /// the screen without a key.
 fn open_settings(library: &LibraryState) {
     library.link.settings(GuiSettingsCommand::Open);
+}
+
+/// Open the Settings screen at Playlists, and close it while it shows
+/// Playlists — the `playlists_open` action's toggle (user request
+/// 2026-11-19): the icon beside Home is the playlist screen's route, the
+/// route the settings sidebar carried before it.
+fn open_playlists(library: &LibraryState) {
+    library.link.settings(GuiSettingsCommand::OpenPlaylists);
 }
 
 /// The window's global header.
@@ -183,6 +191,24 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                     "stroke-linejoin": "round",
                     "aria-hidden": "true",
                     path { d: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" }
+                }
+            }
+            // The Playlists route (user request 2026-11-19): the icon beside
+            // Home opens the playlist screen — the settings screen shown at
+            // Playlists — as the `playlists_open` action's toggle. The route
+            // the settings sidebar carried before it.
+            {
+                let playlists_library = library.clone();
+                rsx! {
+                    button {
+                        "type": "button",
+                        class: "flex flex-none items-center justify-center",
+                        style: "width: 44px; height: 44px; color: var(--canvas-muted); cursor: pointer;",
+                        "aria-label": "Playlists",
+                        "data-library-playlists": "",
+                        onclick: move |_| open_playlists(&playlists_library),
+                        ListVideo { size: 18 }
+                    }
                 }
             }
             // The tab strip: the tabs that fit, with a chevron at each edge

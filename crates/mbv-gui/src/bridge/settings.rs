@@ -24,6 +24,10 @@ pub enum GuiSettingsCommand {
     /// change nothing while it is open (design D5's `open`, D11
     /// *Mouse-centric*). The Library top bar's Settings control sends it.
     Open,
+    /// Open the screen at Playlists, and close it while it shows Playlists —
+    /// the `playlists_open` action's toggle. The Library top bar's Playlists
+    /// control sends it (user request 2026-11-19).
+    OpenPlaylists,
     /// Close the screen.
     Close,
     /// Show a section, and start its load.
@@ -161,6 +165,7 @@ impl From<GuiPlaylistAction> for MusicTreeAction {
 pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
     Some(match command {
         GuiSettingsCommand::Open => mbv::GuiSettingsCommand::Open,
+        GuiSettingsCommand::OpenPlaylists => mbv::GuiSettingsCommand::OpenPlaylists,
         GuiSettingsCommand::Close => mbv::GuiSettingsCommand::Close,
         GuiSettingsCommand::SelectSection { section } => mbv::GuiSettingsCommand::SelectSection {
             section: section.into(),

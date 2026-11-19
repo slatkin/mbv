@@ -35,6 +35,18 @@ fn the_open_actions_follow_the_toggle_rule(
     assert_eq!(app.gui_settings().map(|state| state.section), expected);
 }
 
+/// The sidebar lists no Playlists (user request 2026-11-19): the Library top
+/// bar's Playlists control is the section's route, so the sidebar's own route
+/// is gone. `Sessions` keeps its sidebar entry — the `Sessions` group's route
+/// is the F3 key and the chooser, not a top-bar control.
+#[test]
+fn the_sidebar_lists_no_playlists_section() {
+    let sections = GuiSettingsSection::shown_sections();
+
+    assert!(!sections.contains(&GuiSettingsSection::Playlists));
+    assert_eq!(sections.last(), Some(&GuiSettingsSection::Sessions));
+}
+
 /// A setup secret never reaches a log line (design D9, the spec's *A failed
 /// setup does not echo the password*): the log sites format the whole command
 /// and the GUI Client's sink is a file, so the command's `Debug` form masks the

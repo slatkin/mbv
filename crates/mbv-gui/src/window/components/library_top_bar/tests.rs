@@ -17,7 +17,7 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::{LibraryTopBar, LibraryTopBarProps, open_destination, open_settings};
+use super::{LibraryTopBar, LibraryTopBarProps, open_destination, open_playlists, open_settings};
 use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -371,6 +371,41 @@ fn a_press_on_the_settings_control_opens_the_screen() {
             Some(CoreInput::Settings(mbv::GuiSettingsCommand::Open))
         ),
         "the Settings control sends the open command"
+    );
+}
+
+/// Contract (user request 2026-11-19): the Playlists control sits beside the
+/// Home icon and its press sends the `playlists_open` toggle — the screen
+/// opens at Playlists and closes while it shows Playlists. The route the
+/// settings sidebar carried before it.
+#[test]
+fn a_press_on_the_playlists_control_toggles_the_screen_at_playlists() {
+    let mut fixture = built(props(two_tabs(), Some(1), false));
+
+    assert!(
+        fixture.presents("[data-library-playlists]"),
+        "the Playlists control paints beside Home"
+    );
+    assert_eq!(
+        fixture
+            .attrs_of("[data-library-playlists]", &local_name!("aria-label"))
+            .first()
+            .and_then(Clone::clone)
+            .as_deref(),
+        Some("Playlists")
+    );
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || open_playlists(&state));
+
+    let settings_commands: Vec<CoreInput> = fixture.receiver.try_iter().collect();
+    assert_eq!(settings_commands.len(), 1);
+    assert!(
+        matches!(
+            settings_commands.first(),
+            Some(CoreInput::Settings(mbv::GuiSettingsCommand::OpenPlaylists))
+        ),
+        "the Playlists control sends the toggle command"
     );
 }
 
