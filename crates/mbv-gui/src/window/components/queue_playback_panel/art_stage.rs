@@ -144,7 +144,7 @@ impl std::fmt::Debug for ArtStageProps {
 
 /// The stage: the visual slot's `relative` wrapper with no clip, holding the
 /// clipped media box and the two absolute overlay layers. The top layer paints
-/// the chips and the badge at all times; the bottom layer paints the gradient
+/// the chips and the badge at all times; the bottom layer paints the scrim
 /// and the control row.
 #[component]
 pub fn ArtStage(props: ArtStageProps) -> Element {
@@ -197,7 +197,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             }
             div {
                 class: "bottom absolute inset-x-0 bottom-0",
-                style: "background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.6)); --player-scale: {scale};",
+                style: "background: rgb(0 0 0 / 0.6); --player-scale: {scale};",
                 ControlRow {
                     paused: props.paused,
                     availability: props.availability,
