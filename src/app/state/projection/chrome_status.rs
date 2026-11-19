@@ -33,6 +33,14 @@ impl App {
             || self.notif_failed
     }
 
+    /// The live toasts that render in-app, oldest first: the one list both the
+    /// status row and the card stack read.
+    fn in_app_toasts(&self) -> impl Iterator<Item = &LiveToast> {
+        self.toasts
+            .live(Instant::now())
+            .filter(|toast| self.renders_in_app(toast.severity))
+    }
+
     /// The live toast's presentation for the status row, or `None` when no
     /// toast should render in-app (spec `toast-notification-semantics`): the
     /// newest live toast that renders in-app. The presentation is neutral
@@ -40,11 +48,7 @@ impl App {
     /// choice, and the presented facts — the text and the severity — ride the
     /// Status bar's Surface state.
     pub(in crate::app) fn toast_presentation(&self) -> Option<StatusToast> {
-        self.toasts
-            .live(Instant::now())
-            .filter(|toast| self.renders_in_app(toast.severity))
-            .last()
-            .map(presented_toast)
+        self.in_app_toasts().last().map(presented_toast)
     }
 
     /// Every live toast that renders in-app, oldest first (design D3): one
@@ -52,9 +56,7 @@ impl App {
     /// the card's stable key.
     #[must_use]
     pub fn toast_cards(&self) -> Vec<ToastCard> {
-        self.toasts
-            .live(Instant::now())
-            .filter(|toast| self.renders_in_app(toast.severity))
+        self.in_app_toasts()
             .map(|toast| ToastCard {
                 id: toast.id,
                 toast: presented_toast(toast),
