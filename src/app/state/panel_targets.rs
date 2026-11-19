@@ -89,7 +89,10 @@ impl crate::app::App {
     /// (`SessionEvent::Loaded`, `CastEvent::DiscoveryCompleted`) so Emby rows
     /// render as soon as they arrive without waiting on the concurrent cast
     /// browse (8.1). Preserves the panel cursor's selection by identity
-    /// across the rebuild when possible, falling back to a clamp.
+    /// across the rebuild when possible, falling back to a clamp. Cast rows
+    /// follow the local Owner's `playback-output` capability: a Cast
+    /// selection severs a peer link (`mbvd` or another machine's Owner) to
+    /// the local Owner first, so the peer's capabilities do not apply.
     pub(in crate::app) fn rebuild_panel_targets(&mut self) {
         // SessionsComponent owns the cursor. Preserve only its selected row
         // identity in the runtime snapshot; the component clamps its cursor
@@ -97,7 +100,7 @@ impl crate::app::App {
         self.panel_targets = build_panel_targets(
             &self.sessions,
             &self.cast_receivers,
-            self.player.remote().supports_playback_output(),
+            self.local_owner_supports_playback_output(),
         );
     }
 }

@@ -325,12 +325,18 @@ Next and previous on a remote output SHALL be resolved by the owner's relative s
 
 ### Requirement: The packaged owner has only local playback
 
-Packaged `mbvd` SHALL have local playback as its only output. Its runtime setup SHALL have no way to express a remote output: no Cast receiver attachment and no Emby Session output can be configured for the packaged role, so the exclusion does not rest on a value that the packaged process could set differently. Packaged `mbvd` SHALL NOT advertise a remote-output ctrl capability, a Client connected to it SHALL NOT offer a remote output, and it SHALL reject a request to select one with a stated reason while local playback stays the output.
+Packaged `mbvd` SHALL have local playback as its only output. Its runtime setup SHALL have no way to express a remote output: no Cast receiver attachment and no Emby Session output can be configured for the packaged role, so the exclusion does not rest on a value that the packaged process could set differently. Packaged `mbvd` SHALL NOT advertise a remote-output ctrl capability, a Client connected to it SHALL NOT offer a remote output as mbvd's output, and it SHALL reject a request to select one with a stated reason while local playback stays the output. The limit is mbvd's alone: a Client that controls mbvd and selects a Cast receiver or an Emby Session returns to its local Owner first (`cast-session-control` "Playback targets are mutually exclusive"), and the local Owner's capabilities decide that selection.
 
 #### Scenario: Client connected to mbvd
 
 - **WHEN** a Client is connected to a packaged `mbvd` owner
-- **THEN** it does not offer a Cast receiver or an Emby Session as an output
+- **THEN** it does not offer a Cast receiver or an Emby Session as mbvd's output
+
+#### Scenario: Client controlling mbvd selects an Emby Session
+
+- **WHEN** a Client that controls packaged `mbvd` selects an Emby Session from F3
+- **THEN** the Client severs mbvd, which keeps its own playback, and returns to its local Owner
+- **AND** the local Owner selects the Session as its output; mbvd's capabilities are not consulted
 
 #### Scenario: Request reaches mbvd
 

@@ -165,26 +165,26 @@ fn detaching_to_local_with_an_active_remote_output_asks_first() {
     ));
 }
 
-/// A thin-client app: the home Owner is the local-daemon stub suspended
-/// behind a direct-remote peer link, and its suspended link reports an
-/// active slot on a Cast output — the slot a hand-off prompt offers to
-/// move. Commands the peer receives arrive on the peer receiver; commands
-/// the home Owner receives arrive on the home receiver.
-fn thin_client_app_with_cast_home_output() -> (
+/// A thin-client app on a packaged `mbvd` peer: the home Owner is the
+/// local-daemon stub, which advertises both output capabilities as the Local
+/// Owner does, suspended behind a direct-remote peer link whose hello
+/// carries neither (the packaged hello). Commands the peer receives arrive
+/// on the peer receiver; commands the home Owner receives arrive on the home
+/// receiver.
+fn thin_client_app_on_mbvd() -> (
     crate::app::App,
     mpsc::Receiver<mbv_ctrl::CtrlCmd>,
     mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
-    let (mut app, home_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx_and_compat(
-        make_audio_items(2),
-        mbv_ctrl::CtrlCompatibility::current(),
-    );
+    let mut home_compat = mbv_ctrl::CtrlCompatibility::current();
+    home_compat.supports_playback_output = true;
+    home_compat.supports_emby_session_output = true;
+    let (mut app, home_cmd_rx) =
+        make_local_daemon_app_stub_with_cmd_rx_and_compat(make_audio_items(2), home_compat);
     let (mut peer, _peer_rx, peer_cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
-    let mut peer_compat = mbv_ctrl::CtrlCompatibility::current();
-    peer_compat.supports_emby_session_output = true;
-    peer.set_ctrl_compatibility_for_test(peer_compat);
-    let sess = make_session("peer-owner", "mbv");
+    peer.set_ctrl_compatibility_for_test(mbv_ctrl::CtrlCompatibility::current());
+    let sess = make_session("mbvd-host", "mbv");
     let (_dropped_tx, attach_rx) = mpsc::channel();
     app.switch_to_direct_remote(
         &sess,
@@ -192,6 +192,19 @@ fn thin_client_app_with_cast_home_output() -> (
         attach_rx,
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
+    while home_cmd_rx.try_recv().is_ok() {}
+    while peer_cmd_rx.try_recv().is_ok() {}
+    (app, home_cmd_rx, peer_cmd_rx)
+}
+
+/// `thin_client_app_on_mbvd` whose suspended home link reports an active
+/// slot on a Cast output — the slot a hand-off prompt offers to move.
+fn thin_client_app_with_cast_home_output() -> (
+    crate::app::App,
+    mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+    mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+) {
+    let (app, home_cmd_rx, peer_cmd_rx) = thin_client_app_on_mbvd();
     let home = app.suspended_local.as_ref().unwrap();
     home.player
         .remote()
@@ -312,5 +325,45 @@ fn a_confirmed_local_detach_while_thin_client_hands_the_home_owner_back_to_local
         app.status.contains("Detached from cast target"),
         "the detach reports the hand-back, got {:?}",
         app.status
+    );
+}
+
+/// Regression: while this Client controls packaged `mbvd`, activating an
+/// Emby Session without a direct endpoint was refused with "This Player
+/// owner cannot select an Emby Session", because the gate read mbvd's hello
+/// instead of the local Owner's. The switch severs to the local Owner, so the
+/// local Owner's capability decides: the selection reaches the home Owner and
+/// mbvd receives nothing.
+#[test]
+fn a_session_activation_while_controlling_mbvd_selects_it_on_the_home_owner() {
+    let (mut app, home_cmd_rx, peer_cmd_rx) = thin_client_app_on_mbvd();
+    // Nothing plays on the home Owner, so no hand-off prompt comes first.
+    app.suspended_local
+        .as_ref()
+        .unwrap()
+        .player
+        .remote()
+        .update_status(|status| status.active = false);
+    let mut target = make_session("Living Room TV", "Emby");
+    target.device_id = "device-tv".into();
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(target.clone()))];
+
+    app.activate_session_target(&target);
+
+    assert!(peer_cmd_rx.try_recv().is_err(), "mbvd receives no command");
+    assert!(
+        matches!(
+            home_cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::EmbySession {
+                ref device_id,
+                ..
+            }) if device_id == "device-tv"
+        ),
+        "the home Owner selects the Session as its output, status {:?}",
+        app.status
+    );
+    assert!(
+        app.is_local_daemon() && app.suspended_local.is_none(),
+        "the activation severed mbvd and restored the home Owner"
     );
 }

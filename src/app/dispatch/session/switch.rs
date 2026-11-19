@@ -509,9 +509,12 @@ impl App {
     /// design D12). A Session that advertises a direct endpoint keeps the
     /// Direct remote control path; when that connect fails the Client reports
     /// the failure and, if the owner advertises `emby-session-output`, selects
-    /// the Session as the owner's playback output instead. A Session without a
-    /// direct endpoint is selected as the output only when the owner advertises
-    /// that capability; otherwise the Client warns and does nothing. The
+    /// the Session as the local Owner's playback output instead. A Session
+    /// without a direct endpoint is selected as the output only when the local
+    /// Owner advertises that capability; otherwise the Client warns and does
+    /// nothing. While this Client controls a peer (`mbvd` or another machine's
+    /// Owner), the peer's capabilities do not apply: the selection severs to
+    /// the local Owner, which hosts the output. The
     /// existing connection is severed without handing a Cast output back to
     /// Local, because the owner performs the Cast-to-Session hand-off itself
     /// (spec scenario "An Emby Session is selected while a cast target is
@@ -542,14 +545,16 @@ impl App {
         self.activate_session_target_without_hand_off(sess);
     }
 
-    /// Whether activating `sess` would hand off an active slot: the Owner
-    /// advertises `emby-session-output` (a selection it would reject hands
-    /// off nothing) and the shared continue-playback gate applies — a slot
-    /// is active on the local Owner's current output and the Session's
+    /// Whether activating `sess` would hand off an active slot: the local
+    /// Owner advertises `emby-session-output` (a selection it would reject
+    /// hands off nothing) and the shared continue-playback gate applies — a
+    /// slot is active on the local Owner's current output and the Session's
     /// device is not that output (spec "Selecting an output hands off the
-    /// active slot").
+    /// active slot"). A peer this Client controls (`mbvd` or another
+    /// machine's Owner) does not take part: the selection severs to the
+    /// local Owner first.
     fn session_hand_off_applies(&self, sess: &mbv_emby::SessionInfo) -> bool {
-        self.player.remote().supports_emby_session_output()
+        self.local_owner_supports_emby_session_output()
             && self.output_hand_off_applies(self.session_is_current_output(sess))
     }
 
@@ -650,7 +655,10 @@ impl App {
         };
 
         let name = session_display_name(sess);
-        if !self.player.remote().supports_emby_session_output() {
+        // The selection below severs to the local Owner before it is sent, so
+        // the local Owner's capability decides, never the capability of a
+        // peer this Client controls now (`mbvd` advertises none).
+        if !self.local_owner_supports_emby_session_output() {
             let warning = match direct_upgrade_error {
                 Some(error) => format!(
                     "Direct mbv control failed: {error}; this Player owner cannot select an Emby Session"

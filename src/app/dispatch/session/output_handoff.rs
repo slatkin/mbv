@@ -61,6 +61,42 @@ impl App {
         }
     }
 
+    /// The link to the local Owner, the Owner that every playback-output
+    /// selection lands on: the suspended home link while this Client is
+    /// attached to a peer (packaged `mbvd` or another machine's Owner), the
+    /// current link otherwise. A selection from F3 severs the peer link
+    /// first, so the peer's capabilities never decide whether a selection is
+    /// possible. `None` while attached to a peer with no home link left.
+    fn local_owner_link(&self) -> Option<&mbv_player::PlayerProxy> {
+        match (&self.suspended_local, &self.player_endpoint) {
+            (Some(suspended), _) => Some(&suspended.player),
+            (
+                None,
+                Some(
+                    mbv_remote_player::DaemonEndpoint::Tcp(_)
+                    | mbv_remote_player::DaemonEndpoint::Unix(_),
+                ),
+            ) => None,
+            (None, Some(mbv_remote_player::DaemonEndpoint::Local) | None) => Some(&self.player),
+        }
+    }
+
+    /// Whether the local Owner can host an Emby Session output. A peer this
+    /// Client controls does not take part: the selection severs to the local
+    /// Owner before it is sent.
+    pub(in crate::app) fn local_owner_supports_emby_session_output(&self) -> bool {
+        self.local_owner_link()
+            .is_some_and(|link| link.remote().supports_emby_session_output())
+    }
+
+    /// Whether the local Owner can host a Cast output (`playback-output`).
+    /// A peer this Client controls does not take part, as for
+    /// `local_owner_supports_emby_session_output`.
+    pub(in crate::app) fn local_owner_supports_playback_output(&self) -> bool {
+        self.local_owner_link()
+            .is_some_and(|link| link.remote().supports_playback_output())
+    }
+
     /// Whether the Session's device is the local Owner's current playback
     /// output (the no-op hand-off).
     pub(in crate::app) fn session_is_current_output(&self, sess: &SessionInfo) -> bool {

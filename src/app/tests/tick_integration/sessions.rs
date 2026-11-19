@@ -73,9 +73,10 @@ fn capability_owner_app(
     (app, cmd_rx)
 }
 
-/// An app whose owner advertises neither output capability — the Client
-/// compatibility a connection to packaged `mbvd` negotiates (spec scenario
-/// "Client connected to mbvd").
+/// An app whose owner advertises neither output capability. With a Local
+/// endpoint it is a local Owner that cannot host a remote output; with a
+/// peer endpoint it is the packaged `mbvd` hello, whose capabilities a Session
+/// activation never consults (it severs to the local Owner first).
 fn capabilityless_owner_app() -> (
     crate::app::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
@@ -480,10 +481,11 @@ fn a_capabilityless_owner_rebuild_offers_no_cast_row() {
     );
 }
 
-/// Contract: spec scenario "Client connected to mbvd" — with an owner
-/// compatibility that advertises neither output capability, an Emby row
-/// without a direct endpoint is not offered as an output selection: the
-/// activation warns and sends the owner nothing.
+/// Contract: a local Owner that advertises neither output capability is
+/// offered no Emby Session output: activating an Emby row without a direct
+/// endpoint warns and sends the owner nothing. (A peer's missing capability
+/// does not refuse the activation — see
+/// `a_session_activation_while_controlling_mbvd_selects_it_on_the_home_owner`.)
 #[test]
 fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
     let (mut app, cmd_rx) = capabilityless_owner_app();
