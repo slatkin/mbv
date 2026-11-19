@@ -303,6 +303,10 @@ fn route_search_key(
     match key.key.as_str() {
         "Escape" => {
             state.close_library_search();
+            // The collapsed control's panel closes with the search (user
+            // request 2026-11-19): the guard inside makes it a no-op while
+            // the field paints inline.
+            state.close_search_panel();
             KeyOutcome::Handled
         }
         "ArrowDown" => {
@@ -467,20 +471,24 @@ pub fn route_library_key(
     // the keyboard wherever the Library panel shows, before the open-field
     // checks — even while the filter holds it, where the DOM focus move closes
     // the filter the way any other focus move does. The chord arms the field
-    // only while a mounted element paints it: the Library Status bar mounts it
-    // with the Library panel, so in Mini with the Queue showing no field
-    // exists, and arming one that holds no element would leave the keyboard
-    // dead on its fact — the chord keeps its core effect there instead (design
-    // D9 of `move-playback-header-into-queue-footer`).
+    // only while a mounted element paints it: the top bar's Search control
+    // mounts it while it paints the field — inline, or inside its collapsed
+    // panel — so a collapsed-and-closed control holds no field, and the chord
+    // opens the panel instead: the field the panel paints mounts and takes
+    // the keyboard the next frame (user request 2026-11-19).
     if key.modifiers.ctrl_key
         && !key.meta_key
         && !key.modifiers.alt_key
         && !key.modifiers.shift_key
         && matches!(key.key.as_str(), "k" | "K")
-        && state.search_field_mounted()
     {
-        state.focus_search_field();
-        return KeyOutcome::Handled;
+        if state.search_collapsed() && !state.search_panel_open() {
+            state.open_search_panel();
+        }
+        if state.search_field_mounted() {
+            state.focus_search_field();
+            return KeyOutcome::Handled;
+        }
     }
     // (2) An open text field of the panel takes the keys. The Search field
     // routes first: its hold on the keyboard is DOM focus, which no panel key

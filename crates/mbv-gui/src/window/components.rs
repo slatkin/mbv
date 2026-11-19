@@ -36,6 +36,7 @@ pub mod library_list_notice;
 pub mod library_panel;
 pub mod library_podcasts_hero;
 pub mod library_podcasts_list;
+pub mod library_search_control;
 pub mod library_shows_hero;
 pub mod library_shows_list;
 pub mod library_shows_view_dropdown;

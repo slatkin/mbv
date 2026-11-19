@@ -63,6 +63,10 @@ pub struct LibraryUiState {
     /// override to stay shut (design D7's open and close). A new filter and a
     /// cleared one drop it.
     pub filter_closed: Vec<String>,
+    /// The top bar's Search control's window facts (user request 2026-11-19):
+    /// whether the bar is too narrow for the inline field, and whether the
+    /// collapsed panel paints.
+    pub search_control: SearchControlState,
     /// Whether the Narrow arrangement's Hero overlay is dismissed (design D4,
     /// D3): a pick paints it again, and Esc or a press on its backdrop closes
     /// it.
@@ -84,6 +88,7 @@ impl LibraryUiState {
             filter_open: false,
             filter: String::new(),
             collections: None,
+            search_control: SearchControlState::default(),
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
             // No pick has happened yet: the Narrow arrangement shows the list,
@@ -93,6 +98,20 @@ impl LibraryUiState {
             row_menu: None,
         }
     }
+}
+
+/// The top bar's Search control's window facts (user request 2026-11-19).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SearchControlState {
+    /// Whether the top bar is too narrow for the inline Search field: the
+    /// bar's measure writes it, and the collapsed control reads it — the
+    /// icon-and-panel form. A Reset UI State clears it, and the next measure
+    /// rewrite restores it.
+    pub collapsed: bool,
+    /// Whether the collapsed Search control's panel paints: the icon toggles
+    /// it, and a press outside it, Esc, and a result activation close it.
+    /// `false` while the field paints inline.
+    pub panel_open: bool,
 }
 
 /// The window's Library interaction store (D15): the port of `state.ts`'s
@@ -344,6 +363,70 @@ impl LibraryState {
     pub fn set_collections_filter(&self, filter: String) {
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.collections = Some(filter));
+    }
+
+    /// Record the top bar's narrowness (user request 2026-11-19): the bar's
+    /// measure effect writes its collapse decision on every change. A write
+    /// the value already holds changes nothing, so a re-measure that reads the
+    /// same width repaints nothing.
+    pub fn set_search_collapsed(&self, collapsed: bool) {
+        if self.search_collapsed() == collapsed {
+            return;
+        }
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            ui.search_control.collapsed = collapsed;
+            if !collapsed {
+                // The inline field is back: the panel state is not its own.
+                ui.search_control.panel_open = false;
+            }
+        });
+    }
+
+    /// Whether the top bar is too narrow for the inline Search field (user
+    /// request 2026-11-19): the key router reads it at `Ctrl+K`, and the
+    /// control paints the icon-and-panel form on it.
+    #[must_use]
+    pub fn search_collapsed(&self) -> bool {
+        self.ui.peek().search_control.collapsed
+    }
+
+    /// Open the collapsed Search control's panel (user request 2026-11-19):
+    /// the `Ctrl+K` chord on a collapsed bar, and the icon's press, land
+    /// here. The field the panel paints mounts on the fact, so the keyboard
+    /// arms the next frame.
+    pub fn open_search_panel(&self) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.search_control.panel_open = true);
+    }
+
+    /// Close the collapsed Search control's panel (user request 2026-11-19):
+    /// a press outside the panel, Esc, a result activation, and a second
+    /// press on the icon land here. A close while the field paints inline is
+    /// a no-op.
+    pub fn close_search_panel(&self) {
+        if !self.search_panel_open() {
+            return;
+        }
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.search_control.panel_open = false);
+    }
+
+    /// Whether the collapsed Search control's panel paints (user request
+    /// 2026-11-19).
+    #[must_use]
+    pub fn search_panel_open(&self) -> bool {
+        self.ui.peek().search_control.panel_open
+    }
+
+    /// Toggle the collapsed Search control's panel (user request 2026-11-19):
+    /// the icon's press.
+    pub fn toggle_search_panel(&self) {
+        if self.search_panel_open() {
+            self.close_search_panel();
+        } else {
+            self.open_search_panel();
+        }
     }
 
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):

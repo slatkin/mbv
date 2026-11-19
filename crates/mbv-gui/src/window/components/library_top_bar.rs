@@ -15,23 +15,35 @@
 //! shows the Library in place of the Queue while the Mini arrangement holds
 //! (design D8).
 //!
-//! The Search field is not here: it leads the Library Status bar's left side
-//! (design D9). The Settings control stays at the bar's right end
+//! The Search control sits at the bar's right end, before the Settings
+//! control (user request 2026-11-19): the route out of the Library Status
+//! bar, responsive to the bar's measured width — wide enough it paints the
+//! field inline, too narrow it paints the Search icon whose panel carries
+//! the field. The Settings control stays at the bar's trailing edge
 //! (add-gui-settings-screen design D11 *Mouse-centric*): a press opens the
 //! Settings screen at Services, so the pointer has its own way into the
 //! screen.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiLibraryTabFrame;
+use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::settings::GuiSettingsCommand;
+use crate::window::components::library_search_control::LibrarySearchControl;
 use crate::window::icons::{ChevronLeft, ChevronRight, ListVideo, Settings};
 use crate::window::input::f32_from_f64;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerZone;
 use crate::window::theme::{canvas_var, role_var};
+
+/// The bar width under which the Search control paints the icon-and-panel
+/// form (user request 2026-11-19): the bar's fixed controls alone — the Home
+/// and Playlists icons, the tab strip's minimum, the Settings control, and
+/// the paddings — leave less than this for the inline field beside them. A
+/// width of zero is a bar the layout has not measured yet, which paints the
+/// inline form: the first measure runs with the bar's real width.
+const SEARCH_COLLAPSE_BAR_WIDTH_PX: f32 = 560.0;
 
 /// The props of the Library top bar (the `LibraryTopBar` props, in
 /// order).
@@ -53,6 +65,11 @@ pub struct LibraryTopBarProps {
     /// control puts the Queue back.
     #[props(default)]
     pub on_destination_opened: Option<Callback<usize>>,
+    /// The carried Search facts while a search runs or its results hold
+    /// (design D9): the Search control's carried frame. `None` paints a
+    /// closed field.
+    #[props(default)]
+    pub search: Option<GuiSearchFrame>,
 }
 
 /// Home's own position in the destination order (design D2): the Home icon
@@ -100,6 +117,11 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     let mut strip_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let mut strip_width = use_signal(|| 0.0_f32);
     let mut first_tab = use_signal(|| 0_usize);
+    // The bar's own measured width: the Search control's collapse decision
+    // reads it (user request 2026-11-19), and the layout epoch re-measures it
+    // on every layout change, as the strip's re-measures do.
+    let mut bar_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    let bar_width = use_signal(|| 0.0_f32);
     let epoch = try_consume_context::<LayoutEpoch>().map(|epoch| epoch.0);
     use_effect(move || {
         // Reading the epoch re-measures the strip on every layout change.
@@ -117,6 +139,36 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                 strip_width.set(width);
             }
         });
+    });
+    use_effect(move || {
+        // Reading the epoch re-measures the bar on every layout change.
+        let _epoch = epoch.as_ref().map(Signal::cloned);
+        let mounted = bar_mounted.cloned();
+        let mut measure = bar_width;
+        spawn(async move {
+            let Some(event) = mounted else {
+                return;
+            };
+            let Ok(rect) = event.get_client_rect().await else {
+                return;
+            };
+            let width = f32_from_f64(rect.width());
+            if (*measure.peek() - width).abs() > 0.5 {
+                measure.set(width);
+            }
+        });
+    });
+    // The collapse decision (user request 2026-11-19): the store carries it,
+    // so the key router's `Ctrl+K` can open the collapsed control's panel.
+    // The effect re-runs on every measured width and writes the decision — a
+    // store write the fact already holds changes nothing. The zero-width
+    // first paint measures nothing yet and paints the inline form; the first
+    // real measure rewrites it.
+    let collapsed = bar_width.cloned() > 0.0 && bar_width.cloned() < SEARCH_COLLAPSE_BAR_WIDTH_PX;
+    let collapse_library = library.clone();
+    use_effect(move || {
+        let width = bar_width.cloned();
+        collapse_library.set_search_collapsed(width > 0.0 && width < SEARCH_COLLAPSE_BAR_WIDTH_PX);
     });
     // A new current tab, a new tab list, or a new strip width scrolls the
     // current tab into view. The held first tab reads through `peek`, so a
@@ -165,6 +217,9 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
             class: "flex flex-none items-center",
             "aria-label": "Libraries",
             "data-library-region": "topBar",
+            // The bar's own measured width: the Search control's collapse
+            // decision reads it (user request 2026-11-19).
+            onmounted: move |event: Event<MountedData>| bar_mounted.set(Some(event)),
             // The Library zone (design D7): the header is the Library's, so
             // the keys pressed over it route as they do over the column.
             "data-pointer-zone": PointerZone::Library.token(),
@@ -278,6 +333,13 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                         ChevronRight { size: 16 }
                     }
                 }
+            }
+            // The Search control, before the Settings control at the bar's
+            // right end (user request 2026-11-19): the responsive field-or-
+            // icon form over the carried Search facts.
+            LibrarySearchControl {
+                search: props.search.clone(),
+                collapsed,
             }
             // The Settings control at the bar's right end (design D11
             // *Mouse-centric*, the spec's *A Settings control in the top bar

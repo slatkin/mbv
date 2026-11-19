@@ -225,7 +225,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     // and the right-click item menu the window last opened.
     let list_section = library.sections.library_list.cloned();
     let detail_section = library.sections.library_detail.cloned();
-    let search = library.sections.search.cloned();
     let status = library.sections.status.cloned();
     let menu = library.sections.row_menu.cloned();
     let ui = library.ui.cloned();
@@ -411,7 +410,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                 current_tab,
                 list: list_section,
                 detail: detail_section,
-                search,
                 status,
             }
             if let Some((menu, row_menu)) = menu_open {

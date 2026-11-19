@@ -197,9 +197,13 @@ impl LibraryState {
     /// Activate the found row (design D12, row 12.1): Enter on the highlight,
     /// or the row's press. The command carries the row's stable id and item
     /// type as the frame painted them, and the core opens it. The pending
-    /// query send goes with it — an activation answers the query.
+    /// query send goes with it — an activation answers the query — and the
+    /// collapsed control's panel closes with it: the press lands inside the
+    /// panel, so no outside-press rule can close it there (user request
+    /// 2026-11-19).
     pub fn activate_search_row(&self, row: &GuiSearchRowFrame) {
         self.cancel_search_send();
+        self.close_search_panel();
         self.link.library(GuiLibraryCommand::SearchActivate {
             id: row.id.clone(),
             item_type: row.item_type.clone(),

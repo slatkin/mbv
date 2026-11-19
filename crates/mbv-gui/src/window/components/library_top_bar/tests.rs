@@ -178,6 +178,13 @@ impl Fixture {
 /// Build the document over the bar's props and let its first render and
 /// effects land.
 fn built(props: LibraryTopBarProps) -> Fixture {
+    built_at(1200, props)
+}
+
+/// Build the document over the bar's props at `width` logical pixels wide,
+/// so a test can drive the Search control's collapse decision with the
+/// viewport the bar would really measure.
+fn built_at(width: u32, props: LibraryTopBarProps) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -190,7 +197,7 @@ fn built(props: LibraryTopBarProps) -> Fixture {
             },
         ),
         DocumentConfig {
-            viewport: Some(Viewport::new(1200, 900, 1.0, ColorScheme::Light)),
+            viewport: Some(Viewport::new(width, 900, 1.0, ColorScheme::Light)),
             ua_stylesheets: vec![
                 blitz_dom::UserAgentStylesheet::default_sheet(),
                 blitz_dom::UserAgentStylesheet::parse(FIXTURE_CSS),
@@ -239,6 +246,7 @@ fn props(
         current_tab,
         home_active,
         on_destination_opened: None,
+        search: None,
     }
 }
 
@@ -409,18 +417,64 @@ fn a_press_on_the_playlists_control_toggles_the_screen_at_playlists() {
     );
 }
 
-/// Contract (design D9): the header paints no Search field — the field
-/// leads the Library Status bar instead.
+/// Contract (user request 2026-11-19): the Search control paints the field
+/// inline while the bar is wide enough, and paints no collapsed icon.
 #[test]
-fn the_bar_paints_no_search_field() {
+fn a_wide_bar_paints_the_search_field_inline() {
     let fixture = built(props(two_tabs(), Some(1), false));
 
     assert!(
-        !fixture.presents("[data-library-search-input]"),
-        "the field left the header"
+        fixture.presents("[data-library-search-input]"),
+        "the field paints inline"
+    );
+    assert_eq!(
+        fixture.text_of("[data-library-search-hint]"),
+        "Ctrl K",
+        "the chord's hint paints inside the field"
     );
     assert!(
-        !fixture.presents("[data-library-search-hint]"),
-        "the chord's hint left the header"
+        !fixture.presents("[data-library-search-control]"),
+        "no collapsed icon paints"
     );
+}
+
+/// Contract (user request 2026-11-19): a bar too narrow for the inline field
+/// paints the Search icon and no field; the icon's press opens the panel that
+/// carries the field, and a second press closes it.
+#[test]
+fn a_narrow_bar_collapses_the_search_control_to_its_icon() {
+    let mut fixture = built_at(400, props(two_tabs(), Some(1), false));
+
+    assert!(
+        fixture.presents("[data-library-search-control]"),
+        "the icon paints"
+    );
+    assert!(
+        !fixture.presents("[data-library-search-input]"),
+        "no inline field paints"
+    );
+    assert!(
+        !fixture.state.search.peek().mounted,
+        "the field is unmounted"
+    );
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.toggle_search_panel());
+    assert!(
+        fixture.presents("[data-library-search-panel]"),
+        "the panel paints"
+    );
+    assert!(
+        fixture.presents("[data-library-search-input]"),
+        "the panel carries the field"
+    );
+    assert!(fixture.state.search.peek().mounted, "the field mounts");
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.toggle_search_panel());
+    assert!(
+        !fixture.presents("[data-library-search-panel]"),
+        "the panel closes"
+    );
+    assert!(!fixture.state.search.peek().mounted, "the field unmounts");
 }

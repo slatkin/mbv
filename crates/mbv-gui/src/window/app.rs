@@ -16,7 +16,7 @@ use dioxus_native::winit::window::{Window, WindowId};
 use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
-use crate::bridge::frame::library::GuiLibraryTabFrame;
+use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::DomKey;
 use crate::bridge::pointer::DomPointerKind;
@@ -284,6 +284,9 @@ pub(crate) struct HeaderFacts {
     pub current_tab: Option<usize>,
     /// Whether the Home content is present, which the Home icon marks.
     pub home_active: bool,
+    /// The carried Search facts the top bar's Search control paints (user
+    /// request 2026-11-19).
+    pub search: Option<GuiSearchFrame>,
 }
 
 /// Read the header's facts from the sections the frame carries.
@@ -291,6 +294,7 @@ pub(crate) struct HeaderFacts {
 pub(crate) fn header_facts(sections: &Sections) -> HeaderFacts {
     let list = sections.library_list.cloned();
     let detail = sections.library_detail.cloned();
+    let search = sections.search.cloned();
     HeaderFacts {
         tabs: list
             .as_ref()
@@ -299,6 +303,9 @@ pub(crate) fn header_facts(sections: &Sections) -> HeaderFacts {
         current_tab: list.as_ref().and_then(|list| list.current_tab),
         home_active: library_pair(list.as_deref(), detail.as_deref())
             .is_some_and(|pair| matches!(pair, LibraryPair::Home(..))),
+        // The Search control's carried facts (user request 2026-11-19): the
+        // top bar paints them now, as the Status bar did before it.
+        search,
     }
 }
 
@@ -581,10 +588,14 @@ pub fn App() -> Element {
             },
             onpointerdown: move |event: PointerEvent| {
                 // A press outside the collection dropdown closes it and clears
-                // its filter text, wherever in the window the press lands
-                // (gui-collection-dropdown design D7). The close changes no
+                // its filter text, and a press outside the collapsed Search
+                // control's panel closes it, wherever in the window the press
+                // lands (gui-collection-dropdown design D7; user request
+                // 2026-11-19). The control's own surface stops this handler,
+                // so a press inside acts on the control. The close changes no
                 // pointer fact, so the press still reaches the core.
                 press_library.close_collections_dropdown();
+                press_library.close_search_panel();
                 input::on_pointer(DomPointerKind::Press, &event.data, &press_link);
             },
             onpointerup: move |event: PointerEvent| {
@@ -635,6 +646,7 @@ pub fn App() -> Element {
                             current_tab: header.current_tab,
                             home_active: header.home_active,
                             on_destination_opened: Some(on_destination_opened),
+                            search: header.search.clone(),
                         }
                     }
                     div {
