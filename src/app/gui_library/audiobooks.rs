@@ -60,7 +60,7 @@ impl App {
             );
             return;
         }
-        if self.tab.audiobookshelf_index() != Some(lib_idx) {
+        if !self.gui_abs_destination_active(lib_idx) {
             return;
         }
         self.clear_gui_abs_catalog_failed(lib_idx);
@@ -102,9 +102,12 @@ impl App {
     /// unloaded, then the effective pick's detail load once the catalog lands
     /// (gui-one-destination-ensure design D3) — so the default first book's
     /// Hero paints its chapters without a select. A `lib_idx` that names no
-    /// book library is a no-op, so the frame path can call it unguarded for
-    /// its destination.
+    /// book library, or no active destination, is a no-op, so the frame path
+    /// can call it unguarded for its destination.
     pub fn ensure_gui_abs_selection(&mut self, lib_idx: usize) {
+        if !self.gui_abs_destination_active(lib_idx) {
+            return;
+        }
         self.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
     }
 

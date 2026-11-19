@@ -95,12 +95,31 @@ impl App {
 /// repeated test the open steps carried becomes this assertion instead of a
 /// silent no-op. A `lib_idx` that names no library of the kind is still a
 /// no-op, through the steps' own destination guards.
+///
+/// The assertion states the premise; the app-facing entries hold it. See
+/// [`App::gui_abs_destination_active`] for the runtime half.
 fn debug_assert_active_destination(app: &App, lib_idx: usize) {
     debug_assert_eq!(
         app.tab.audiobookshelf_index(),
         Some(lib_idx),
         "the destination's load pass runs for the active tab only"
     );
+}
+
+impl App {
+    /// Whether the Audiobookshelf library `lib_idx` is the active tab — the one
+    /// rule the app-facing Audiobooks and Podcasts entries share (design D5;
+    /// review of units 2.4 and 2.5). The steps' loaders read the active tab's
+    /// browse state, so every entry must test the tab before it enters the
+    /// driver: the frame path only ever passes the active destination, but a
+    /// collection command carries the destination a stale frame painted, which
+    /// can name a podcast library the tab is not on. Testing it here rather
+    /// than in each entry keeps the rule in one place, and the steps'
+    /// `debug_assert_active_destination` then states the premise this guard
+    /// upholds.
+    pub(in crate::app::gui_library) fn gui_abs_destination_active(&self, lib_idx: usize) -> bool {
+        self.tab.audiobookshelf_index() == Some(lib_idx)
+    }
 }
 
 /// The Home destination's site: Home rows arrive with the shared Home data,

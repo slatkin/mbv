@@ -167,7 +167,7 @@ impl App {
             );
             return;
         }
-        if self.tab.audiobookshelf_index() != Some(lib_idx) {
+        if !self.gui_abs_destination_active(lib_idx) {
             return;
         }
         self.clear_gui_podcast_catalog_failed(lib_idx);
@@ -222,9 +222,15 @@ impl App {
     /// destination's one load pass — the show list's refresh while it is
     /// unloaded, the checked shows' scope commit, then All's one-shot shelf
     /// fetch and the bounded per-show fan-out (gui-one-destination-ensure
-    /// design D3). A `lib_idx` that names no podcast library is a no-op, so
-    /// the frame path can call it unguarded.
+    /// design D3). The collection commands install their set and then enter
+    /// here, so this is also where a stale frame's command for another podcast
+    /// library stops (review of units 2.4 and 2.5): a `lib_idx` that names no
+    /// podcast library, or no active destination, is a no-op, and an automatic
+    /// repaint always names the active one.
     pub fn ensure_gui_podcast_selection(&mut self, lib_idx: usize) {
+        if !self.gui_abs_destination_active(lib_idx) {
+            return;
+        }
         self.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
     }
 

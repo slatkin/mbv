@@ -226,6 +226,48 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     );
 }
 
+/// Add a second book library at index 2, so the frame path's entry can be
+/// asked for a book library the tab is not on.
+fn add_second_book_library(app: &mut App) {
+    let library = mbv_audiobookshelf::AudiobookshelfLibrary {
+        id: "lib-abs-books-b".into(),
+        name: "Audiobooks B".into(),
+        media_type: "book".into(),
+    };
+    app.audiobookshelf_libraries.push(library.clone());
+    app.audiobookshelf_book_browse
+        .push(AudiobookshelfBookBrowseState::new(library));
+}
+
+/// The frame path's entry stays inert for a book library that is not the
+/// active destination (review of gui-one-destination-ensure units 2.4 and
+/// 2.5): the entry tests the tab before it enters the driver, whose steps
+/// assert the pass runs for the active tab, so a `lib_idx` naming another
+/// book library starts no load and does not panic.
+#[test]
+fn the_frame_entry_on_another_book_library_starts_no_load() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = abs_app();
+    add_second_book_library(&mut app);
+
+    app.ensure_gui_abs_selection(2);
+
+    let stale = &app.audiobookshelf_book_browse[2];
+    assert_eq!(
+        stale.catalog_request, 0,
+        "the stale library started no catalog chain"
+    );
+    assert_eq!(
+        stale.next_detail_request, 0,
+        "no detail fetch started for the stale library"
+    );
+    assert_eq!(
+        book_state(&app).catalog_request,
+        0,
+        "the active library was not loaded through the stale index"
+    );
+}
+
 /// A restored Audiobooks destination starts its catalog load from one frame's
 /// load pass, with no open command (gui-one-destination-ensure design D3;
 /// spec `gui-client`, "A restored Audiobooks or Podcasts library loads its
