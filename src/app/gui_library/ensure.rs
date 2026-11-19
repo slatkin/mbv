@@ -89,6 +89,20 @@ impl App {
     }
 }
 
+/// The active-destination contract the Audiobooks and Podcasts steps share
+/// (design D5): the shelf loaders read the active tab's browse state, and the
+/// driver runs only for `gui_active_destination()`, which is that tab, so the
+/// repeated test the open steps carried becomes this assertion instead of a
+/// silent no-op. A `lib_idx` that names no library of the kind is still a
+/// no-op, through the steps' own destination guards.
+fn debug_assert_active_destination(app: &App, lib_idx: usize) {
+    debug_assert_eq!(
+        app.tab.audiobookshelf_index(),
+        Some(lib_idx),
+        "the destination's load pass runs for the active tab only"
+    );
+}
+
 /// The Home destination's site: Home rows arrive with the shared Home data,
 /// so every step is a no-op.
 #[derive(Debug)]
@@ -236,21 +250,34 @@ impl GuiDestinationLoads for EmbyLoads {
     }
 }
 
-/// The Audiobooks destination's site. The catalog refresh still belongs to
-/// `gui_abs_open` in this unit, so the root is a no-op; the effective pick's
-/// detail load is the selection step.
+/// The Audiobooks destination's site (design D3): the root step starts the
+/// book catalog's refresh when the catalog is unloaded in a loadable shape,
+/// the selection step starts the effective pick's detail load, and the
+/// dependents step has no work.
 #[derive(Debug)]
 struct AudiobooksLoads {
     lib_idx: usize,
 }
 
 impl GuiDestinationLoads for AudiobooksLoads {
-    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
+    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+        debug_assert_active_destination(app, self.lib_idx);
+        if !app.gui_abs_book_library(self.lib_idx) || !app.gui_abs_catalog_needs_load(self.lib_idx)
+        {
+            return GuiStepOutcome::Continue;
+        }
+        app.audiobookshelf_book_refresh();
+        GuiStepOutcome::LoadStarted
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        app.ensure_gui_abs_selection(self.lib_idx);
+        debug_assert_active_destination(app, self.lib_idx);
+        if !app.gui_abs_book_library(self.lib_idx) {
+            return GuiStepOutcome::Continue;
+        }
+        if let Some(book_id) = app.gui_abs_effective_pick(self.lib_idx) {
+            app.start_audiobookshelf_book_detail(book_id);
+        }
         GuiStepOutcome::Continue
     }
 
@@ -259,26 +286,42 @@ impl GuiDestinationLoads for AudiobooksLoads {
     }
 }
 
-/// The Podcasts destination's site. The show-list refresh still belongs to
-/// `gui_podcast_open` in this unit, so the root is a no-op; the existing
-/// selection pass — the scope commit, All's shelf, and the fan-out — runs
-/// whole in the selection step, and the later unit splits it.
+/// The Podcasts destination's site (design D3): the root step starts the show
+/// list's refresh when the list is unloaded in a loadable shape, the selection
+/// step commits the checked shows' scope, and the dependents step starts All's
+/// shelf fetch and the bounded per-show fan-out.
 #[derive(Debug)]
 struct PodcastsLoads {
     lib_idx: usize,
 }
 
 impl GuiDestinationLoads for PodcastsLoads {
-    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
+    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+        debug_assert_active_destination(app, self.lib_idx);
+        if !app.gui_podcast_library(self.lib_idx)
+            || !app.gui_podcast_catalog_needs_load(self.lib_idx)
+        {
+            return GuiStepOutcome::Continue;
+        }
+        app.audiobookshelf_refresh(false);
+        GuiStepOutcome::LoadStarted
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        app.ensure_gui_podcast_selection(self.lib_idx);
+        debug_assert_active_destination(app, self.lib_idx);
+        if !app.gui_podcast_library(self.lib_idx) {
+            return GuiStepOutcome::Continue;
+        }
+        app.commit_gui_podcast_effective_scope(self.lib_idx);
         GuiStepOutcome::Continue
     }
 
-    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
+    fn ensure_dependents(&self, app: &mut App) -> GuiStepOutcome {
+        debug_assert_active_destination(app, self.lib_idx);
+        if !app.gui_podcast_library(self.lib_idx) {
+            return GuiStepOutcome::Continue;
+        }
+        app.ensure_gui_podcast_dependents(self.lib_idx);
         GuiStepOutcome::Continue
     }
 }

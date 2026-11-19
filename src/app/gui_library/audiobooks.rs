@@ -12,6 +12,7 @@ use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item_for_id;
 
 use super::entry_list::picked_or_first;
+use super::tabs::GuiDestinationKind;
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 
@@ -47,7 +48,10 @@ impl App {
     /// single-flight and whose completion publishes the whole catalog. A
     /// catalog already loading, loaded, or owned by the startup's own fetch
     /// chain loads nothing, so no second chain ever walks beside the first.
-    /// A `lib_idx` that names no book library is an ignored command.
+    /// An open also retries a catalog whose load failed, because the frame
+    /// path's root step honours that failure until an open clears it (design
+    /// D4, Risks). A `lib_idx` that names no book library is an ignored
+    /// command.
     pub fn gui_abs_open(&mut self, lib_idx: usize) {
         if !self.gui_abs_book_library(lib_idx) {
             Self::log_ignored_library_command(
@@ -56,22 +60,13 @@ impl App {
             );
             return;
         }
-        let unloaded = self
-            .audiobookshelf_book_browse
-            .get(lib_idx)
-            .is_some_and(|state| {
-                // The in-flight page marks count as unloaded's negation: the
-                // startup chain's first page is already walking, and an open
-                // beside it would start a second chain (review of unit 9.1).
-                state.books.is_empty()
-                    && state.total == 0
-                    && state.loading_pages.is_empty()
-                    && state.replacement.is_none()
-            });
-        if !unloaded || self.tab.audiobookshelf_index() != Some(lib_idx) {
+        if self.tab.audiobookshelf_index() != Some(lib_idx) {
             return;
         }
-        self.audiobookshelf_book_refresh();
+        self.clear_gui_abs_catalog_failed(lib_idx);
+        if self.gui_abs_catalog_needs_load(lib_idx) {
+            self.audiobookshelf_book_refresh();
+        }
     }
 
     /// Select the book the Hero shows (row 9.1): the selection the core owns,
@@ -103,19 +98,50 @@ impl App {
 
     /// The frame-path trigger the GUI's frame runs for the active Audiobooks
     /// destination (row 9.1), the Shows frame path's counterpart: the
-    /// effective pick's detail load starts when the cache does not hold it
-    /// and nothing is fetching it, so the default first book's Hero paints
-    /// its chapters without a select. A `lib_idx` that names no book library
-    /// is a no-op, so the frame path can call it unguarded for its
-    /// destination.
+    /// destination's one load pass — the catalog's refresh while it is
+    /// unloaded, then the effective pick's detail load once the catalog lands
+    /// (gui-one-destination-ensure design D3) — so the default first book's
+    /// Hero paints its chapters without a select. A `lib_idx` that names no
+    /// book library is a no-op, so the frame path can call it unguarded for
+    /// its destination.
     pub fn ensure_gui_abs_selection(&mut self, lib_idx: usize) {
-        if !self.gui_abs_book_library(lib_idx) {
-            return;
-        }
-        if let Some(book_id) = self.gui_abs_effective_pick(lib_idx)
-            && self.tab.audiobookshelf_index() == Some(lib_idx)
-        {
-            self.start_audiobookshelf_book_detail(book_id);
+        self.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
+    }
+
+    /// Whether `lib_idx`'s book catalog is unloaded in a shape a catalog load
+    /// may start from (gui-one-destination-ensure design D3, Risks): an empty
+    /// list, a zero total, no page in flight, no replacement batch collecting,
+    /// and no failed mark. The in-flight page marks count as unloaded's
+    /// negation, because the startup chain's first page is already walking and
+    /// an open beside it would start a second chain (review of unit 9.1).
+    ///
+    /// The failed mark is load-bearing: `handle_audiobookshelf_books_fetched`
+    /// records a failure as `state.error` and aborts the replacement batch,
+    /// which leaves the list empty, the total zero, and no page in flight —
+    /// exactly the shape above — so without the mark a repaint would retry the
+    /// failed chain every frame. The frame path's root step and
+    /// [`Self::gui_abs_open`] both call this one rule, so the two starts cannot
+    /// drift.
+    pub(in crate::app::gui_library) fn gui_abs_catalog_needs_load(&self, lib_idx: usize) -> bool {
+        self.audiobookshelf_book_browse
+            .get(lib_idx)
+            .is_some_and(|state| {
+                state.books.is_empty()
+                    && state.total == 0
+                    && state.loading_pages.is_empty()
+                    && state.replacement.is_none()
+                    && state.error.is_none()
+            })
+    }
+
+    /// Clear the failed mark a user open retries from (design D4, Risks): the
+    /// loader's failure record is the browse state's `error` — the same fact
+    /// the projection paints as the list's failed state — so the frame path's
+    /// root step honours it and an open clears it. An automatic repaint never
+    /// clears it.
+    pub(in crate::app::gui_library) fn clear_gui_abs_catalog_failed(&mut self, lib_idx: usize) {
+        if let Some(state) = self.audiobookshelf_book_browse.get_mut(lib_idx) {
+            state.error = None;
         }
     }
 
