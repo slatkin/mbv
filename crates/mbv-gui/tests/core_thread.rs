@@ -236,10 +236,10 @@ impl Held {
         section_value(self.batch.toasts.as_ref(), "toasts")
     }
 
-    /// The newest live toast, `None` while none is live: the card the status
-    /// lines painted inline before the floating stack took it over.
+    /// The newest live toast, `None` while none is live: the card of the last
+    /// arrival, read off the list's tail.
     pub(crate) fn newest_toast(&self) -> Option<&GuiToast> {
-        self.toasts().newest()
+        self.toasts().0.last()
     }
 
     /// The Library list section (design D8), `None` while no presented

@@ -81,16 +81,6 @@ impl From<Vec<ToastCard>> for GuiToasts {
     }
 }
 
-impl GuiToasts {
-    /// The newest toast, `None` while none is live: the card of the last
-    /// arrival. A status line that still paints a toast inline reads it here
-    /// until it drops that paint (task row 2.4).
-    #[must_use]
-    pub fn newest(&self) -> Option<&GuiToast> {
-        self.0.last()
-    }
-}
-
 /// A live toast: its stable id, text, and severity. Mirrors `ToastCard`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiToast {

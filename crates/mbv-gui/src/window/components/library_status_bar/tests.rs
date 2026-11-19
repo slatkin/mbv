@@ -1,7 +1,8 @@
 //! Headless tests of the Library Status bar (D16): the contracts of
-//! `LibraryStatusBar.test.ts` — the location line, and the armed prefix or
-//! live toast painting while the location stays (design D9 of
-//! `move-playback-header-into-queue-footer`).
+//! `LibraryStatusBar.test.ts` — the location line, and the armed prefix
+//! painting while the location stays (design D9 of
+//! `move-playback-header-into-queue-footer`). The bar shows no toast: toasts
+//! show as floating cards over the window (`gui-floating-toasts`).
 //! The Search field's contracts are the top bar's Search control's now (user
 //! request 2026-11-19): they moved with the field to its component's suite.
 //! The location's own composition rules are `window/library/status/tests.rs`;
@@ -11,13 +12,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use blitz_dom::{Document as _, local_name};
+use blitz_dom::Document as _;
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::{LibraryStatusBar, LibraryStatusBarProps};
-use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToastSeverity};
+use crate::bridge::frame::chrome::GuiStatusBar;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiCollectionEntry,
     GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
@@ -27,7 +28,6 @@ use crate::bridge::frame::library::{
 };
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::SectionRef;
-use mbv_ui_model::toast::ToastId;
 
 /// The context handles the root hands the test: the layout epoch the
 /// re-measures read. The bar consumes no store of its own — the Search facts
@@ -131,7 +131,6 @@ fn music_props(status: GuiStatusBar) -> LibraryStatusBarProps {
         })),
         detail: Some(SectionRef::new(music_detail())),
         status,
-        toast: None,
     }
 }
 
@@ -157,7 +156,6 @@ fn status_bar_app(props: FixtureProps) -> Element {
         list,
         detail,
         status,
-        toast,
     } = props;
     rsx! {
         LibraryStatusBar {
@@ -166,7 +164,6 @@ fn status_bar_app(props: FixtureProps) -> Element {
             list,
             detail,
             status,
-            toast,
         }
     }
 }
@@ -215,20 +212,6 @@ impl Fixture {
             .text_content()
             .trim()
             .to_owned()
-    }
-
-    /// The `style` attribute of the first node the selector names.
-    fn style_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .expect("the node paints");
-        dom.get_node(id)
-            .expect("the node is in the document")
-            .attr(local_name!("style"))
-            .map(str::to_owned)
-            .unwrap_or_default()
     }
 }
 
@@ -291,40 +274,24 @@ fn the_bar_paints_the_location_and_no_key_hints() {
     );
 }
 
-/// Contract (`LibraryStatusBar.test.ts`): a live toast paints and keeps the
-/// location. Where the toast sits is design presentation, not a contract: no
-/// test asserts geometry (a test that pins a control's position broke CI
-/// twice on presentation-only moves; user decision 2026-11-19).
+/// Contract (`LibraryStatusBar.test.ts`, spec `gui-client` "A toast
+/// arrives"): the bar paints no toast node, and the location stays. No
+/// geometry assertions (a test that pins a control's position broke CI twice
+/// on presentation-only moves; user decision 2026-11-19).
 #[test]
-fn a_live_toast_paints_and_keeps_the_location() {
-    let mut props = music_props(idle());
-    props.toast = Some(GuiToast {
-        id: ToastId(1),
-        text: "Scanning 'Movies'...".to_owned(),
-        severity: GuiToastSeverity::Neutral,
-    });
-    let doc = built(props);
+fn the_bar_shows_no_toast_and_keeps_the_location() {
+    let doc = built(music_props(idle()));
 
-    assert!(
-        doc.text_of("[data-library-status-toast]")
-            .contains("Scanning 'Movies'..."),
-        "the toast text paints"
-    );
+    assert!(!doc.presents("[data-library-status-toast]"));
     assert!(
         doc.text_of("[data-library-status-location]")
             .contains("Music › Hip-Hop › Beastie Boys"),
         "the location stays"
     );
-    // The toast paints in its severity colour (the shared `toast_color`).
-    assert!(
-        doc.style_of("[data-library-status-toast]")
-            .contains("color: var(--mbv-textPrimary)"),
-        "the neutral toast paints its severity colour"
-    );
 }
 
 /// Contract (`LibraryStatusBar.test.ts`): an armed prefix paints and keeps
-/// the location. No geometry assertions (see the live-toast test's comment).
+/// the location. No geometry assertions (see the no-toast test's comment).
 #[test]
 fn an_armed_prefix_paints_and_keeps_the_location() {
     let doc = built(music_props(GuiStatusBar { prefix_armed: true }));
@@ -445,7 +412,6 @@ fn destination_props(
         })),
         detail: Some(SectionRef::new(detail)),
         status: idle(),
-        toast: None,
     }
 }
 

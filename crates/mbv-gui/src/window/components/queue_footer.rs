@@ -1,9 +1,9 @@
 //! The Queue footer (task 5.6, the port of `QueueFooter`): one 40 px
 //! band at the queue column's bottom, with the canvas's top border and side
 //! padding, that merges what the TUI paints as the queue footer's status
-//! pills and the Status bar's prefix and toast rows — the playback target and
-//! the collapse control, the queue source, the dirty mark, the prefix-armed
-//! state, the toasts, and the shown queue's totals.
+//! pills and the Status bar's prefix row — the playback target and the
+//! collapse control, the queue source, the dirty mark, the prefix-armed
+//! state, and the shown queue's totals.
 //!
 //! The left group leads with the two queue-wide controls the player panel's
 //! header used to paint (`move-playback-header-into-queue-footer` D1, D2): the
@@ -33,14 +33,11 @@
 //! cursor, or hover state; Esc and a press elsewhere close the popover through
 //! the core's key and pointer paths.
 //!
-//! The centre carries the armed prefix badge and the live toast. The badge is
-//! the same `PREFIX` badge the TUI's status row paints, and it drops while a
-//! toast is live — the TUI's pill-drop rule carried into the line. The toast
-//! paints inline in it, centred in its severity colour: the spec permits the
-//! footer to show toasts in the line or in a conventional GUI form. A live
-//! toast moves no layout: the line is always painted and the toast only fills
-//! its centre span. The centre is empty while the projection holds none of
-//! those states, as the canvas draws it.
+//! The centre carries the armed prefix badge and nothing else. The badge is
+//! the same `PREFIX` badge the TUI's status row paints, and it paints for as
+//! long as prefix mode stays armed: the line shows no toast, so no arrival
+//! drops it. The centre is empty while prefix mode is not armed, as the canvas
+//! draws it.
 //!
 //! The right group is the queue's times (gui-named-queues task 8.5, design
 //! D9): the marked rows' total beside the shown queue's total, so a reader
@@ -50,11 +47,11 @@
 //! neither sum. The footer carries no Player-owner label and no liveness dot:
 //! the shown queue's owner reads from the playback target at its left.
 //!
-//! The armed prefix and the live toast are each one fact, and each paints
-//! once a frame (design D10): while the Library panel shows, its Library
-//! Status bar replaces its hints with them, so this line paints neither and
-//! the band under the Library column owns them. While the Library panel
-//! does not show, this line paints them as the TUI's status row does.
+//! The armed prefix is one fact, and it paints once a frame (design D10):
+//! while the Library panel shows, its Library Status bar paints it, so this
+//! line paints none and the band under the Library column owns it. While the
+//! Library panel does not show, this line paints it as the TUI's status row
+//! does. Toasts show as floating cards over the window, never in this line.
 //!
 //! The band paints the canvas's type over the queue column's floor (mono
 //! 12 px, the 1 px `--ef-bg3` top border and the `--ef-bg0` fill design D2 and
@@ -82,7 +79,6 @@ use crate::window::layout::{
 };
 use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
-use crate::window::status::toast_color;
 use crate::window::theme::{EfToken, ef_var, role_var};
 use crate::window::time::format_duration_short;
 use crate::window::truncate::{TextStyle, Truncate};
@@ -91,8 +87,7 @@ use crate::window::truncate::{TextStyle, Truncate};
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct QueueFooterProps {
     /// Whether the Library panel shows beside this one: the Library Status
-    /// bar owns the armed prefix and live toast then, so the footer line
-    /// paints neither.
+    /// bar owns the armed prefix then, so the footer line does not paint it.
     #[props(default)]
     pub library_visible: bool,
 }
@@ -217,7 +212,6 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
     let footer = sections.footer.cloned();
     let summary = sections.summary.cloned();
     let status = sections.status.cloned();
-    let toast = sections.toasts.cloned().newest().cloned();
     let playback = sections.playback.cloned();
     // The target control's colour: the flag picks the local or the remote
     // role.
@@ -226,15 +220,9 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
     } else {
         role_var(GuiRole::PlaybackTargetLocalFg)
     };
-    // The toast this line paints: the newest live toast, or `None` while the
-    // Library panel shows and its Status bar paints it (design D10). The
-    // toast rides the `toasts` section (task row 2.1); the inline paint here
-    // stays until its own row removes it.
-    let toast = if props.library_visible { None } else { toast };
     // Whether this line paints the armed prefix badge: prefix mode is armed,
-    // no toast is live (the line's pill-drop rule), and the Library panel
-    // does not show (design D10).
-    let prefix = !props.library_visible && status.prefix_armed && toast.is_none();
+    // and the Library panel does not show (design D10).
+    let prefix = !props.library_visible && status.prefix_armed;
     // The queue's total, then the marked rows' total while rows are marked:
     // the marked one first, so a reader meets the selection beside the whole
     // queue (design D9).
@@ -248,7 +236,7 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
         // 1 px top border, and the canvas's mono type. The left group leads
         // with the playback target and the collapse control, then the queue's
         // source with its autosave and dirty states; the centre carries the
-        // prefix badge and the toast, and the right group the queue's totals.
+        // prefix badge, and the right group the queue's totals.
         // The open chooser's popover is the band's child, anchored above it.
         div {
             class: "relative flex items-center font-mono whitespace-nowrap",
@@ -357,10 +345,9 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                         }
                     }
                 }
-                // The centre: the armed prefix badge (dropped while a toast
-                // is live, the TUI's pill-drop rule), then the toast inline in
-                // the line in its severity colour (the footer-line toast form
-                // the spec permits); empty while neither is live.
+                // The centre: the armed prefix badge and nothing else; empty
+                // while prefix mode is not armed. Toasts show as floating
+                // cards, never in this line.
                 div {
                     class: "flex min-w-0 flex-1 items-center justify-center",
                     style: "gap: 12px; padding-inline: 16px;",
@@ -369,24 +356,6 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                             class: "shrink-0 font-bold",
                             style: "color: var(--mbv-accent);",
                             "PREFIX"
-                        }
-                    }
-                    {
-                        let toast_text = toast
-                            .clone()
-                            .map_or(String::new(), |toast| toast.text);
-                        let toast_css = toast
-                            .as_ref()
-                            .map_or(String::new(), |toast| {
-                                format!("color: {};", toast_color(toast.severity))
-                            });
-                        rsx! {
-                            Truncate {
-                                text: toast_text,
-                                class: "min-w-0 text-center".to_owned(),
-                                css: toast_css,
-                                style: TextStyle::mono(12.0, 400.0),
-                            }
                         }
                     }
                 }

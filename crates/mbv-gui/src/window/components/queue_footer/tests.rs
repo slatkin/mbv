@@ -1,8 +1,7 @@
 //! Headless tests of the Queue footer (D16): the contracts of
 //! `QueueFooter.test.ts` — the queue source and its dirty mark beside it, the
 //! totals at the line's right, the canvas band's paint, the icon-free source,
-//! the autosave and dirty icons, the armed prefix badge, the live toast
-//! painting inline and dropping the badge (the line's pill-drop rule), and the
+//! the autosave and dirty icons, the armed prefix badge, and the
 //! regions the band reports. The playback target and the collapse control
 //! moved here from the player panel's header
 //! (`move-playback-header-into-queue-footer` 3.1, 3.2, 4.1), so their
@@ -23,9 +22,7 @@ use rstest::rstest;
 
 use super::QueueFooter;
 use crate::art::GuiArtRef;
-use crate::bridge::frame::chrome::{
-    GuiFooterPill, GuiQueueFooter, GuiStatusBar, GuiToast, GuiToastSeverity, GuiToasts,
-};
+use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter, GuiStatusBar};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
     GuiPlayerControls, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey, GuiTransportAvailability,
@@ -38,7 +35,6 @@ use crate::window::channel::CoreLink;
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var};
-use mbv_ui_model::toast::ToastId;
 
 /// The footer frame the fixture paints: the `mix` playlist source, no autosave
 /// or dirty indicator.
@@ -147,8 +143,7 @@ fn active_pills() -> (Option<GuiFooterPill>, Option<GuiFooterPill>) {
 
 /// The layout rules the fixture resolves with, in place of the app
 /// stylesheet a real window loads (the same rules the Queue panel's and the
-/// player panel's harnesses use), so the toast's `Truncate` measure reads a
-/// laid-out width.
+/// player panel's harnesses use).
 const FIXTURE_CSS: &str = concat!(
     ".flex { display: flex; }",
     ".flex-col { flex-direction: column; }",
@@ -293,17 +288,6 @@ impl Fixture {
         self.lay_out();
     }
 
-    /// Paint the section's live toasts: the line paints the newest one inline
-    /// until its own row removes that paint (task row 2.1).
-    fn show_toasts(&mut self, toasts: GuiToasts) {
-        let mut sections = self.sections.clone();
-        self.doc
-            .vdom
-            .in_runtime(move || sections.toasts.set(toasts));
-        self.poll_until_idle();
-        self.lay_out();
-    }
-
     /// Paint the band's playback facts and, when one is up, the open chooser:
     /// the target control's host label and the popover's rows read them.
     fn show_playback(&mut self, playback: GuiQueuePlayback, overlay: Option<GuiOverlayFrame>) {
@@ -338,8 +322,7 @@ impl Fixture {
 }
 
 /// A fixture over the footer line alone, laid out into a 640×900 viewport
-/// with the queue tree's utilities, so the toast's `Truncate` measure reads
-/// a laid-out width and the toast paints whole.
+/// with the queue tree's utilities, so a measured cut reads a laid-out width.
 fn built() -> Fixture {
     let (sender, receiver) = channel();
     let handle = Rc::new(RefCell::new(None));
@@ -504,8 +487,9 @@ fn the_active_footer_states_paint_their_lucide_icons(
     assert_eq!(fixture.all("[data-footer-line] svg").len(), expected_glyphs);
 }
 
-// Contract (`QueueFooter.test.ts`): an armed frame renders the prefix
-// badge.
+/// Contract (`QueueFooter.test.ts`, spec `gui-client` "The prefix is armed",
+/// "The prefix is armed while a toast shows"): an armed frame renders the
+/// prefix badge, and the line shows no toast text.
 #[test]
 fn an_armed_frame_renders_the_prefix_badge() {
     let mut fixture = built();
@@ -515,29 +499,8 @@ fn an_armed_frame_renders_the_prefix_badge() {
         GuiStatusBar { prefix_armed: true },
     );
 
-    assert!(fixture.text().contains("PREFIX"));
-}
-
-/// Contract (`QueueFooter.test.ts`): a live toast paints inline in the line
-/// and drops the prefix badge — the line's pill-drop rule, the TUI's pill
-/// drop carried into the footer.
-#[test]
-fn a_live_toast_paints_inline_in_the_line_and_drops_the_prefix_badge() {
-    let mut fixture = built();
-    fixture.show(
-        footer_frame(),
-        summary(),
-        GuiStatusBar { prefix_armed: true },
-    );
-    fixture.show_toasts(GuiToasts(vec![GuiToast {
-        id: ToastId(1),
-        text: "Scanning 'Movies'...".to_owned(),
-        severity: GuiToastSeverity::Neutral,
-    }]));
-
     let text = fixture.text();
-    assert!(text.contains("Scanning 'Movies'..."), "{text}");
-    assert!(!text.contains("PREFIX"), "the prefix badge drops: {text}");
+    assert!(text.contains("PREFIX"), "{text}");
 }
 
 /// Contract (`move-playback-header-into-queue-footer` 3.1, spec `gui-client`

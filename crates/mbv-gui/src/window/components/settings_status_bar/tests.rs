@@ -1,25 +1,25 @@
 //! Headless test of the Settings status line (D16): the contract of
-//! `SettingsStatusBar.test.ts` — the line shows the armed prefix and the live
-//! toast together (the spec's *The Settings screen shows the toasts*).
+//! `SettingsStatusBar.test.ts` — the line shows the armed prefix (the spec's
+//! *The Settings screen shows the toasts* puts the toasts in floating cards
+//! over the screen, so the line shows none).
 
 use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::SettingsStatusBar;
-use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToastSeverity};
-use mbv_ui_model::toast::ToastId;
+use crate::bridge::frame::chrome::GuiStatusBar;
 
-/// The status line over the carried facts and toast, mounted once per case.
-fn painted(status: GuiStatusBar, toast: Option<GuiToast>) -> DioxusDocument {
+/// The status line over the carried facts, mounted once per case.
+fn painted(status: GuiStatusBar) -> DioxusDocument {
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
-            |(status, toast, section): (GuiStatusBar, Option<GuiToast>, String)| {
+            |(status, section): (GuiStatusBar, String)| {
                 rsx! {
-                    SettingsStatusBar { status, toast, section }
+                    SettingsStatusBar { status, section }
                 }
             },
-            (status, toast, "Playback".to_owned()),
+            (status, "Playback".to_owned()),
         ),
         DocumentConfig::default(),
     );
@@ -41,36 +41,32 @@ fn text_of(doc: &DioxusDocument, selector: &str) -> String {
         .to_owned()
 }
 
-/// Contract (`SettingsStatusBar.test.ts`): the status line shows the armed
-/// prefix and the live toast together.
+/// Contract (`SettingsStatusBar.test.ts`): with prefix mode armed the line
+/// shows the armed prefix, and carries no toast text.
 #[test]
-fn the_status_line_shows_the_prefix_and_the_toast_together() {
-    let doc = painted(
-        GuiStatusBar { prefix_armed: true },
-        Some(GuiToast {
-            id: ToastId(1),
-            text: "Setting refused".to_owned(),
-            severity: GuiToastSeverity::Warning,
-        }),
-    );
+fn the_status_line_shows_the_prefix_and_no_toast() {
+    let doc = painted(GuiStatusBar { prefix_armed: true });
 
     assert_eq!(text_of(&doc, "[data-settings-status-prefix]"), "PREFIX");
-    assert_eq!(
-        text_of(&doc, "[data-settings-status-toast]"),
-        "Setting refused"
-    );
+    assert!(!paints_a_toast(&doc), "the line paints no toast node");
 }
 
-/// Contract: with no prefix and no toast, the line paints
-/// its fixed key hints, and the shown section sits at the right.
+/// Whether the line paints a toast node: it paints none, since the floating
+/// stack owns the toasts.
+fn paints_a_toast(doc: &DioxusDocument) -> bool {
+    matches!(
+        doc.inner().query_selector("[data-settings-status-toast]"),
+        Ok(Some(_))
+    )
+}
+
+/// Contract: with no prefix armed, the line paints its fixed key hints, and
+/// the shown section sits at the right.
 #[test]
 fn the_quiet_line_paints_the_key_hints_and_the_section() {
-    let doc = painted(
-        GuiStatusBar {
-            prefix_armed: false,
-        },
-        None,
-    );
+    let doc = painted(GuiStatusBar {
+        prefix_armed: false,
+    });
 
     assert_eq!(
         doc.inner()
