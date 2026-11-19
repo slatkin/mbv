@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiSearchFrame, GuiSearchRowFrame};
+use crate::bridge::frame::library::GuiSearchFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::clock::TimerId;
 
@@ -204,12 +204,12 @@ impl LibraryState {
     /// collapsed control's panel closes with it: the press lands inside the
     /// panel, so no outside-press rule can close it there (user request
     /// 2026-11-19).
-    pub fn activate_search_row(&self, row: &GuiSearchRowFrame) {
+    pub fn activate_search_row(&self, id: &str, item_type: &str) {
         self.cancel_search_send();
         self.close_search_panel();
         self.link.library(GuiLibraryCommand::SearchActivate {
-            id: row.id.clone(),
-            item_type: row.item_type.clone(),
+            id: id.to_owned(),
+            item_type: item_type.to_owned(),
         });
     }
 
@@ -225,7 +225,7 @@ impl LibraryState {
             .iter()
             .find(|row| Some(&row.id) == held.as_ref())
         {
-            self.activate_search_row(row);
+            self.activate_search_row(&row.id, &row.item_type);
         }
     }
 

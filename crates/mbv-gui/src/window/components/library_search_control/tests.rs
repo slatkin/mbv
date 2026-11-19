@@ -22,7 +22,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The context handles the root hands the test: the Library store, the
 /// conditional-mount toggle the unmount test drives, and the collapse signal
@@ -75,10 +75,9 @@ fn control_app(props: FixtureProps) -> Element {
     use_effect(move || {
         state_for_effect.set_search_collapsed(collapsed.cloned());
     });
-    let search = state.sections.search.cloned();
     if show.cloned() {
         rsx! {
-            LibrarySearchControl { search, collapsed: collapsed.cloned() }
+            LibrarySearchControl { collapsed: collapsed.cloned() }
         }
     } else {
         rsx! {}
@@ -125,10 +124,11 @@ impl Fixture {
     }
 
     /// Carry a Search frame on the section, as the core's batch would, and
-    /// resolve the dropdown's laid-out boxes.
+    /// resolve the dropdown's laid-out boxes. The frame rides its one shared
+    /// handle, as the batch write builds it.
     fn set_search_frame(&mut self, frame: Option<GuiSearchFrame>) {
         let mut sections = self.state.sections.clone();
-        self.in_runtime(move || sections.search.set(frame));
+        self.in_runtime(move || sections.search.set(frame.map(SectionRef::new)));
         self.lay_out();
     }
 

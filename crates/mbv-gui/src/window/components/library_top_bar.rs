@@ -26,7 +26,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame};
+use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::playlists::GuiPlaylistsCommand;
 use crate::bridge::settings::GuiSettingsCommand;
@@ -75,11 +75,6 @@ pub struct LibraryTopBarProps {
     /// control puts the Queue back.
     #[props(default)]
     pub on_destination_opened: Option<Callback<usize>>,
-    /// The carried Search facts while a search runs or its results hold
-    /// (design D9): the Search control's carried frame. `None` paints a
-    /// closed field.
-    #[props(default)]
-    pub search: Option<GuiSearchFrame>,
 }
 
 /// Home's own position in the destination order (design D2): the Home icon
@@ -316,9 +311,8 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
             }
             // The Search control, before the Settings control at the bar's
             // right end (user request 2026-11-19): the responsive field-or-
-            // icon form over the carried Search facts.
+            // icon form. The control reads the Search section itself.
             LibrarySearchControl {
-                search: props.search.clone(),
                 collapsed,
             }
             // The Settings control at the bar's right end (design D11

@@ -85,8 +85,9 @@ pub struct Sections {
     /// The right-click item menu the window last opened, `None` while none
     /// is open.
     pub row_menu: Signal<Option<GuiLibraryRowMenuFrame>>,
-    /// The Search section's results, `None` while the field is closed.
-    pub search: Signal<Option<GuiSearchFrame>>,
+    /// The Search section's results, `None` while the field is closed, as the
+    /// one handle every reader clones.
+    pub search: Signal<Option<SectionRef<GuiSearchFrame>>>,
     /// The Settings screen, `None` while the screen is closed, as the one
     /// handle every reader clones.
     pub settings: Signal<Option<SectionRef<GuiSettingsFrame>>>,
@@ -219,7 +220,12 @@ impl Sections {
             shared_option,
         );
         write(batch.row_menu.as_ref(), &mut held.row_menu, self.row_menu);
-        write(batch.search.as_ref(), &mut held.search, self.search);
+        write_shared(
+            batch.search.as_ref(),
+            &mut held.search,
+            self.search,
+            shared_option,
+        );
         write_shared(
             batch.settings.as_ref(),
             &mut held.settings,
