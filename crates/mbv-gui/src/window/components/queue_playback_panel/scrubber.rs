@@ -59,16 +59,15 @@ pub struct ScrubberProps {
 
 /// The scrubber (`main` audits 9–12; `gui-queue-panel-redesign` design D4):
 /// one full-width row, 14 px tall at scale 1.0, holding the track, the played
-/// fill, the thumb, and the buffered range. The row's own rect is the
-/// `seekbar` region; a press resolves there in the core.
+/// fill, and the thumb. The row's own rect is the `seekbar` region; a press
+/// resolves there in the core.
 ///
 /// Every length in the row multiplies by the control rows' `--player-scale`
 /// (`gui-art-player-overlay` design D3): the rows shrink as one unit, so the
 /// track, the thumb, and the tip keep their places inside the row at any
 /// scale. The time tip above the row is not a row size and keeps its pixels.
 ///
-/// The played fraction and the buffered fraction are the playhead's; the
-/// hover facts are the frame's.
+/// The played fraction is the playhead's; the hover facts are the frame's.
 #[component]
 pub fn Scrubber(mut props: ScrubberProps) -> Element {
     let sections = consume_context::<Sections>();

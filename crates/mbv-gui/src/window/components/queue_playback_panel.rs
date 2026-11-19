@@ -17,7 +17,7 @@
 //! second file, `queue_playback_panel/art_stage.rs` (`gui-art-player-overlay`
 //! design D1, D8): the stage is the visual slot's wrapper, the media box owns
 //! the clip, the top layer holds the track chips and the episode badge, and
-//! the bottom layer holds the gradient and the control row. The panel
+//! the bottom layer holds the solid scrim and the control row. The panel
 //! keeps every mounted handle and reports the regions in one contribution.
 //!
 //! The scrubber — the track, the played fill, the thumb, and the time tip —

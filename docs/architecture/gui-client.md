@@ -520,7 +520,9 @@ box. It holds three siblings: the media box, the clipped one — so only the
 image is cut, and a track popover that hangs past the artwork's bottom
 paints in full — the absolute top layer, which holds the track chips at its
 left and the season-and-episode badge at its right and always shows, and the
-absolute bottom layer, which holds a gradient and the two control rows.
+absolute bottom layer, which holds the solid `rgb(0 0 0 / 0.6)` scrim (the
+`gui-queue-panel-redesign` design's gradient became the solid band at the
+live test) and the two control rows.
 While the image loads, the media box stays empty at the panel's width with a
 16:9 aspect, and both overlays paint on it as if the image were there; the
 box takes the image's own aspect when the image loads.

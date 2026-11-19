@@ -1,6 +1,6 @@
 //! Headless tests of the scrubber (`gui-queue-panel-redesign` design D4): the
-//! seek row's chrome (track, played fill, thumb), its hover time tip, its
-//! buffered range, and its clock-free bar. The rows are painted inside the
+//! seek row's chrome (track, played fill, thumb), its hover time tip, and
+//! its clock-free bar. The rows are painted inside the
 //! control rows, as the panel paints them, so the elapsed and `−remaining`
 //! clocks of the transport row are covered here too. The presses are not
 //! ported: they are the root input layer's contract (`window/input.rs`),
