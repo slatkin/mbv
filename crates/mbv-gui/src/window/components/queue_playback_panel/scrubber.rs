@@ -97,7 +97,12 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
     let track_top_px = (SEEK_ROW_HEIGHT_PX - track_px) / 2.0;
     let thumb_top_px = (SEEK_ROW_HEIGHT_PX - thumb_px) / 2.0;
     let track_radius_px = track_px / 2.0;
-    let row_style = format!("height: calc({SEEK_ROW_HEIGHT_PX}px * var(--player-scale));");
+    // The row answers the pointer by growing its track and showing its tip, so
+    // the shared veil stays off it: `--hover-veil: transparent` is the one
+    // exception the seekbar takes from the `box-shadow` rule.
+    let row_style = format!(
+        "height: calc({SEEK_ROW_HEIGHT_PX}px * var(--player-scale)); --hover-veil: transparent;"
+    );
     let track_style = format!(
         "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: {}; opacity: {TRACK_OPACITY}; border-radius: calc({track_radius_px}px * var(--player-scale));",
         ef_var(EfToken::Grey2)

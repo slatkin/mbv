@@ -17,7 +17,8 @@
 //! header paints the queue column's `--ef-*` tokens (design D1) and takes its
 //! hover fills from the design's own table: the bar answers the pointer with a
 //! raised fill and a brighter glyph rather than the canvas veil every other
-//! button takes, so `assets/app.css` excludes the header's buttons from it.
+//! button takes, so the bar sets `--hover-veil: transparent` and the shared
+//! veil (the `app.css` `box-shadow` rule) cannot wash that look.
 //!
 //! The bar clips no child: the switcher sits in its own positioning anchor and
 //! the Queue chooser's dropdown mounts inside it (design D8), so the card hangs
@@ -114,7 +115,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
         div {
             class: "flex items-center whitespace-nowrap",
             style: format!(
-                "height: var(--canvas-queue-header-height); padding: 0 12px; gap: 4px; background: {}; border-bottom: 1px solid {}; margin-inline: calc(var(--mbv-cell-col) * -2);",
+                "height: var(--canvas-queue-header-height); padding: 0 12px; gap: 4px; background: {}; border-bottom: 1px solid {}; margin-inline: calc(var(--mbv-cell-col) * -2); --hover-veil: transparent;",
                 ef_var(EfToken::Bg1),
                 ef_var(EfToken::Bg3)
             ),

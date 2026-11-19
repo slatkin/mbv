@@ -12,7 +12,8 @@
 //! edge is the switcher's and it drops four pixels under it (design D8), and it
 //! paints the design's own card and item chrome: a 34 px row in the raised fill
 //! on the cursor and under the pointer, so the two queue overlays read as one
-//! family.
+//! family. The card answers the pointer with those fills alone, so it sets
+//! `--hover-veil: transparent` and the shared veil does not wash them.
 //!
 //! Each row paints, in the design's order: the shown entry's check, the name —
 //! or the name open for edit — then at the trailing end the playing mark, the
@@ -143,7 +144,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
             role: "menu",
             "aria-label": "Queue chooser",
             style: format!(
-                "top: calc(100% + 4px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px;",
+                "top: calc(100% + 4px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
                 ef_var(EfToken::Bg2),
                 ef_var(EfToken::Bg4)
             ),

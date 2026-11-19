@@ -299,28 +299,19 @@
    up. The filter field's frame is a `label` around its `input`, so it takes
    the same veil while the pointer is on the field; the Settings forms' fields
    join through their `data-settings-field` marker (design
-   add-gui-settings-screen D11 *Pointer contract*). The seekbar is the one
-   control left out: it already answers the pointer by growing its track and
-   showing its time tip, and a veil over its row would tint them. */
+   add-gui-settings-screen D11 *Pointer contract*).
+   A control that paints its own pointer look sets `--hover-veil: transparent`
+   on itself or on an ancestor (the Queue header's bar, the Queue chooser's
+   card, the seekbar's row), so the shared glow does not wash the look and no
+   rule has to name the component. */
 button:not(:disabled):hover,
 [role='menuitem']:not([aria-disabled='true']):hover,
 [role='tab']:not([aria-disabled='true']):hover,
 [role='option']:hover,
+[role='slider']:hover,
 [data-settings-field]:not(:disabled):hover,
 label:has(> input:hover) {
-	box-shadow: inset 0 0 0 100vmax var(--canvas-hover-veil);
-}
-
-/* The Queue header's controls and the Queue chooser's items paint their own
-   hover (gui-queue-panel-redesign design D7, D8): the switcher takes a raised
-   fill and a brighter border, each icon button a raised fill and a brighter
-   glyph, and each chooser item the same raised fill as its cursor row. Those
-   looks are named by the components' own `hover:` utilities, and the veil
-   above would wash them, so these surfaces answer the pointer with the
-   design's colours alone. */
-[data-queue-header] button:not(:disabled):hover,
-[data-queue-chooser-menu] button:not(:disabled):hover {
-	box-shadow: none;
+	box-shadow: inset 0 0 0 100vmax var(--hover-veil, var(--canvas-hover-veil));
 }
 
 /* The Queue header's controls and the Queue chooser's items paint their own
