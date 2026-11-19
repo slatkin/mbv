@@ -78,7 +78,7 @@ impl ItemRow {
 
 /// The colour set one row paints in (the canvas's row states, design D9):
 /// the now-playing row paints the green title at weight 600 on the green
-/// fill, the active and marked rows the raised fill, the hovered row the hover
+/// fill, a marked row the raised fill, the hovered row the hover
 /// fill, the watched row the grey title its strike crosses in the darker
 /// token, and every other row no fill and the primary text. The ordinal, the
 /// track, and the partial fill are shared: the number is grey, the track the
@@ -97,7 +97,7 @@ pub(super) struct RowLook {
 
 /// The row's one look, so the row's fill and its cells read one precedence:
 /// the now-playing row's look is the playback fact and no hover displaces it,
-/// then the active and marked rows keep their raised fill under the pointer,
+/// then a marked row keeps its raised fill under the pointer,
 /// then the hovered row takes the hover fill. A hovered row paints the primary
 /// text: the pointer outranks the watched row's grey.
 pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
@@ -113,8 +113,7 @@ pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
             fill: ef_var(EfToken::Green),
         };
     }
-    let picked = queue.marks.contains(&row.slot) || queue.cursor == Some(row.slot);
-    let background = if picked {
+    let background = if queue.marks.contains(&row.slot) {
         Some(ef_var(EfToken::Bg3))
     } else if hovered {
         Some(ef_var(EfToken::Bg0))

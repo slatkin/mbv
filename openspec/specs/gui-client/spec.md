@@ -363,7 +363,7 @@ While the Search field, the Library filter, the Queue filter, or the collection 
 
 ### Requirement: The Queue is a ledger with one active row
 
-While the Queue holds slots, it SHALL have one active row, and the active row SHALL show at all times, wherever the pointer is. A press on a row, and the arrow, Page Up, Page Down, Home, and End keys over the Queue list box, SHALL move the active row. A hover SHALL NOT move it. Keys over the Queue list box SHALL act on the active row. The now-playing row, the active row, the hovered row, and each marked row SHALL be distinguishable.
+While the Queue holds slots, it SHALL have one active row, the row that keys act on. The active row SHALL NOT paint a selection indicator: only marked rows (a multi-selection) show as selected. A press on a row, and the arrow, Page Up, Page Down, Home, and End keys over the Queue list box, SHALL move the active row. A hover SHALL NOT move it. Keys over the Queue list box SHALL act on the active row. The now-playing row, the hovered row, and each marked row SHALL be distinguishable.
 
 #### Scenario: A hover does not move the active row
 
@@ -372,16 +372,17 @@ While the Queue holds slots, it SHALL have one active row, and the active row SH
 - **THEN** the third row stays the active row
 - **AND** the fifth row shows as hovered
 
-#### Scenario: The active row shows while the pointer is in the Library
+#### Scenario: The active row paints no selection indicator
 
-- **WHEN** the pointer moves from the Queue list box into the Library column
-- **THEN** the active row still shows as active
+- **GIVEN** the third Queue row is the active row and no row is marked
+- **THEN** the third row paints no selection fill unless it is the playing or hovered row
 
 #### Scenario: An arrow key over the Queue moves the active row
 
 - **GIVEN** the pointer rests over the Queue list box and the third row is the active row
 - **WHEN** the user presses Down
 - **THEN** the fourth row is the active row and it is fully visible
+- **AND** a marked row, and no other row, paints as selected
 
 #### Scenario: Enter plays the active row, not the hovered row
 
@@ -389,9 +390,9 @@ While the Queue holds slots, it SHALL have one active row, and the active row SH
 - **WHEN** the user presses Enter
 - **THEN** the third row plays
 
-#### Scenario: The playing row and the active row differ
+#### Scenario: The playing row and a marked row differ
 
-- **WHEN** the second row plays and the fourth row is the active row
+- **WHEN** the second row plays and the fourth row is marked
 - **THEN** each of the two rows shows its own state, and neither hides the other
 
 ### Requirement: Scrolling follows the cursor

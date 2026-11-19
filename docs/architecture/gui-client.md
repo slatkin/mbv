@@ -764,13 +764,14 @@ the now-playing row — so the bar adds no height. The shown queue's start
 slot carries the start mark: the filled play glyph while its queue plays,
 the outlined one while it is stopped or resting. A shown queue whose owner
 reports no start slot — a peer without `named-queues` — carries the playing
-mark on its observed active slot and no start mark. The rows paint four
-fills, and the four are distinct: the now-playing row fills
+mark on its observed active slot and no start mark. The rows paint three
+fills, and the three are distinct: the now-playing row fills
 `--ef-bg-green` with its green 600-weight title, a look no hover
-displaces; the active row — the frame's `cursor` slot, the row the Queue's
-Surface state names — and every marked row fill `--ef-bg3`, kept under the
-pointer too; a hovered row that is none of those fills `--ef-bg0`; and an
-ordinary row paints no fill of its own. A watched row paints `--ef-grey1`
+displaces; every marked row fills `--ef-bg3`, kept under the
+pointer too; a hovered row that is neither fills `--ef-bg0`; and an
+ordinary row paints no fill of its own. The frame's `cursor` slot paints
+nothing: only a multi-selection shows as selected, and the hover names the
+row a right-click acts on. A watched row paints `--ef-grey1`
 with the `--ef-bg5` strike, and a hovered watched row keeps the primary
 title. The looks need no focus fact, because the window holds none (ADR
 0040). The list paints no scrollbar column yet — the TUI
