@@ -176,15 +176,16 @@ impl App {
         // — for slotless output, whose title the Emby Session names — the
         // payload's item type. The Clients' title block paints its kind icon
         // from it.
-        let now_playing_media = match active_item {
-            Some(item) if item.is_audio() => NowPlayingMediaKind::Audio,
-            None if self
+        let now_playing_is_audio = match active_item {
+            Some(item) => item.is_audio(),
+            None => self
                 .emby_session_now_playing()
-                .is_some_and(|now_playing| now_playing.item_type == "Audio") =>
-            {
-                NowPlayingMediaKind::Audio
-            }
-            Some(_) | None => NowPlayingMediaKind::Video,
+                .is_some_and(|now_playing| now_playing.item_type == "Audio"),
+        };
+        let now_playing_media = if now_playing_is_audio {
+            NowPlayingMediaKind::Audio
+        } else {
+            NowPlayingMediaKind::Video
         };
         let episode_badge = active_item.and_then(|item| match item {
             mbv_queue::QueueItem::Emby(item) => episode_badge(item),

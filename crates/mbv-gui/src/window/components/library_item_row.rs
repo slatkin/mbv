@@ -25,6 +25,11 @@ use crate::window::library::shows_workspace::episode_progress;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
+/// The flat Library lists' top-level row title weight: the Music artist and
+/// TV series root rows paint 600, selected or not. Only nested rows stay at
+/// 400.
+pub const FLAT_ROW_TITLE_WEIGHT: f32 = 600.0;
+
 /// The trailing text's hook part: the date gutter or the duration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LibraryTrailPart {
@@ -119,9 +124,6 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     if let Some(background) = props.background.as_ref() {
         let _ = write!(row_style, " background: {background};");
     }
-    // Every flat list's top-level row carries the Music artist and TV series
-    // root weight: 600, selected or not. Only nested rows stay at 400.
-    let title_weight = 600.0;
     let title_attrs = vec![Attribute::new(
         library_attr(props.attr, "title"),
         "",
@@ -173,8 +175,11 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 style: "gap: 2px;",
                 Truncate {
                     text: props.title.clone(),
-                    css: format!("color: {}; font-weight: {title_weight};", props.title_color),
-                    style: TextStyle::sans(14.5, title_weight),
+                    css: format!(
+                        "color: {}; font-weight: {FLAT_ROW_TITLE_WEIGHT};",
+                        props.title_color
+                    ),
+                    style: TextStyle::sans(14.5, FLAT_ROW_TITLE_WEIGHT),
                     attrs: title_attrs,
                 }
                 if let Some(subtitle) = props.subtitle.clone() {

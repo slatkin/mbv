@@ -22,7 +22,7 @@ use dioxus_native::prelude::*;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowStateFrame};
 use crate::window::components::art_image::ArtImage;
-use crate::window::components::library_item_row::{mark, name_color};
+use crate::window::components::library_item_row::{FLAT_ROW_TITLE_WEIGHT, mark, name_color};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
@@ -111,9 +111,6 @@ fn paint_home_item_row(
         _ => None,
     };
     let title_color = name_color(&item.state);
-    // Every flat list's top-level row carries the Music artist and TV series
-    // root weight: 600, selected or not. Only nested rows stay at 400.
-    let title_weight = 600.0;
     let art = item.art.clone();
     let art_kind = art.as_ref().map(art_kind);
     let press_row = row.clone();
@@ -157,8 +154,10 @@ fn paint_home_item_row(
                 style: "gap: 2px;",
                 Truncate {
                     text: item.title.clone(),
-                    css: format!("color: {title_color}; font-weight: {title_weight};"),
-                    style: TextStyle::sans(14.5, title_weight),
+                    css: format!(
+                        "color: {title_color}; font-weight: {FLAT_ROW_TITLE_WEIGHT};"
+                    ),
+                    style: TextStyle::sans(14.5, FLAT_ROW_TITLE_WEIGHT),
                     attrs: vec![Attribute::new("data-library-home-title", "", None, false)],
                 }
                 if let Some(subtitle) = item.subtitle.clone() {

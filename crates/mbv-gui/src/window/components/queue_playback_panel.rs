@@ -3,7 +3,8 @@
 //! expanded canvas artboard's stage with its overlays, the title block with
 //! its media-kind icon, and the no-image column. The canvas, not the TUI
 //! band, is the reference; the paint uses the theme's roles and chrome fills
-//! through `--mbv-<name>` properties only (design D7).
+//! through `--mbv-<name>` properties only (design D7), but for the two
+//! media-kind icons: their accent sand is a fixed paint no role names.
 //!
 //! The stage is the block's topmost content: the panel paints no header row
 //! above it (`move-playback-header-into-queue-footer` D6), so the column's top
@@ -59,6 +60,25 @@ const KIND_ICON_SIZE: u16 = 28;
 /// The media-kind icon's colour: the panel accent's sand, the user's named
 /// hex for both kind icons (2026-11-20). No theme role names it.
 const KIND_ICON_COLOR: &str = "#DABC7F";
+
+/// The title block's leading icon (user request 2026-11-20): the eighth-notes
+/// pair for audio, the playing monitor for video, both in the accent sand.
+fn kind_icon(kind: NowPlayingMediaKind) -> Element {
+    let audio = kind == NowPlayingMediaKind::Audio;
+    rsx! {
+        if audio {
+            EighthNotes {
+                size: KIND_ICON_SIZE,
+                color: KIND_ICON_COLOR.to_owned(),
+            }
+        } else {
+            MonitorPlay {
+                size: KIND_ICON_SIZE,
+                color: KIND_ICON_COLOR.to_owned(),
+            }
+        }
+    }
+}
 
 /// The URL the artwork reference names, `None` while it names none (a
 /// `loading` reference paints no `img`, so no art answer can land for it).
@@ -333,21 +353,7 @@ pub fn QueuePlaybackPanel() -> Element {
                         ef_var(EfToken::Bg0),
                         ef_var(EfToken::Bg3)
                     ),
-                    // The block's leading edge carries the item's media-kind
-                    // icon (user request 2026-11-20): the eighth-notes pair
-                    // for audio, the playing monitor for video, both in the
-                    // accent sand.
-                    if playback.now_playing_media == NowPlayingMediaKind::Audio {
-                        EighthNotes {
-                            size: KIND_ICON_SIZE,
-                            color: KIND_ICON_COLOR.to_owned(),
-                        }
-                    } else {
-                        MonitorPlay {
-                            size: KIND_ICON_SIZE,
-                            color: KIND_ICON_COLOR.to_owned(),
-                        }
-                    }
+                    {kind_icon(playback.now_playing_media)}
                     div {
                         class: "flex min-w-0 flex-col",
                         style: "gap: 2px;",

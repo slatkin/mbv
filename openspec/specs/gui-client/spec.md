@@ -375,6 +375,7 @@ While the Queue holds slots, it SHALL have one active row, the row that keys act
 #### Scenario: The active row paints no selection indicator
 
 - **GIVEN** the third Queue row is the active row and no row is marked
+- **WHEN** the Queue paints its rows
 - **THEN** the third row paints no selection fill unless it is the playing or hovered row
 
 #### Scenario: An arrow key over the Queue moves the active row
@@ -382,7 +383,6 @@ While the Queue holds slots, it SHALL have one active row, the row that keys act
 - **GIVEN** the pointer rests over the Queue list box and the third row is the active row
 - **WHEN** the user presses Down
 - **THEN** the fourth row is the active row and it is fully visible
-- **AND** a marked row, and no other row, paints as selected
 
 #### Scenario: Enter plays the active row, not the hovered row
 
