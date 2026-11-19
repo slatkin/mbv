@@ -334,3 +334,21 @@ fn a_partial_progress_row_paints_the_same_height_as_an_unwatched_row() {
     assert_eq!(partial.height, unwatched.height);
     assert_eq!(partial.height, 34.0);
 }
+
+/// Contract (user report 2026-11-19, after `gui-queue-panel-redesign`): the
+/// first queue row does not touch the queue header — a gap sits between the
+/// header's bottom edge and the first row's top edge.
+#[test]
+fn the_first_row_sits_below_the_header_with_a_gap() {
+    let fixture = built_with_frame(queue_panel_app, queue(vec![item(1)]), summary(), None);
+
+    let header = fixture.rect_of("[data-queue-header]");
+    let row = fixture.rect_of("[data-slot]");
+
+    assert!(
+        row.y >= header.y + header.height + 8.0,
+        "header ends at {}, the first row starts at {}",
+        header.y + header.height,
+        row.y
+    );
+}

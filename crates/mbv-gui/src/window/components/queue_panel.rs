@@ -94,8 +94,8 @@ mod geometry;
 mod row_cells;
 
 use geometry::{
-    GRIP_SIZE_PX, GRIP_TOP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ghost_top, insertion, menu_top,
-    row_background, whole_rows,
+    GRIP_SIZE_PX, GRIP_TOP_PX, LIST_TOP_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ghost_top, insertion,
+    menu_top, row_background, whole_rows,
 };
 use row_cells::{ItemRow, RowCells, RowChrome, start_mark, tone};
 
@@ -460,7 +460,7 @@ pub fn QueuePanel() -> Element {
                 }
                 div {
                     class: "relative min-h-0 flex-1 overflow-hidden",
-                    style: "padding-inline: 8px; display: flex; flex-direction: column; gap: {ROW_GAP_PX}px;",
+                    style: "margin-top: {LIST_TOP_GAP_PX}px; padding-inline: 8px; display: flex; flex-direction: column; gap: {ROW_GAP_PX}px;",
                     "data-queue-list": "",
                     onmounted: move |event| list_mounted.set(Some(event)),
                     if queue.rows.is_empty() {

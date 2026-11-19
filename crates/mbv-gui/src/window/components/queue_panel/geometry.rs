@@ -15,6 +15,12 @@ pub(super) const ROW_HEIGHT_PX: u16 = 34;
 /// The gap between two stacked rows in logical pixels (design D9).
 pub(super) const ROW_GAP_PX: u16 = 2;
 
+/// The space between the queue header and the first row. It is the list box's
+/// top margin, not its padding: the list's measured height (the capacity) and
+/// the absolute ghost and row-menu offsets then stay relative to the first
+/// row's top edge.
+pub(super) const LIST_TOP_GAP_PX: u16 = 8;
+
 /// The distance from one row's top edge to the next's: the row plus its gap.
 const ROW_STRIDE_PX: u16 = ROW_HEIGHT_PX + ROW_GAP_PX;
 
