@@ -187,7 +187,7 @@ fn ChoiceBox(
             }
             Truncate {
                 text: label,
-                class: "min-w-0".to_owned(),
+                class: "min-w-0 flex-1".to_owned(),
                 style: TextStyle::sans(13.0, 400.0),
             }
         }

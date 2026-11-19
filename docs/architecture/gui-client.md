@@ -341,6 +341,15 @@ and bumps the layout epoch once, after the frame resolved the document. Only a
 first measure asks, so the re-measure it drives asks for nothing and a
 collapsed box settles after one bump.
 
+A `Truncate` box measures its own width, so that width must come from the
+layout, never from the text it paints. Give the box `min-w-0 flex-1` in a row,
+or `w-full` in a column, and give every flex ancestor up to a fixed-width one
+`min-w-0 flex-1` or `w-full` too. A box sized by its text keeps the cut of its
+first narrow measure: the cut text is the width it re-measures, so it never
+grows back when the room does. An ancestor that is content-sized is the usual
+cause (the now-playing title block, the Library workspace name cell, and the
+target chooser rows had it).
+
 ## Theme mapping
 
 The `theme` section's `GuiTheme` (`src/bridge/frame/theme.rs`) carries two

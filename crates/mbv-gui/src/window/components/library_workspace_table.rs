@@ -332,14 +332,14 @@ fn paint_name_button(
     rsx! {
         button {
             "type": "button",
-            class: "flex min-w-0 items-center",
+            class: "flex w-full min-w-0 items-center",
             style: "background: none; border: 0; padding: 0; text-align: left; cursor: pointer;",
             "aria-label": "{label}",
             onclick: move |_| on_press.call(row_id.clone()),
             ondoubleclick: move |_| on_play.call(double_click_id.clone()),
             ..name_attrs,
             span {
-                class: "flex min-w-0 items-center",
+                class: "flex min-w-0 flex-1 items-center",
                 style: "gap: 6px;",
                 if row.playing {
                     // The playing row's play glyph sits beside its title: a
@@ -351,7 +351,7 @@ fn paint_name_button(
                 }
                 Truncate {
                     text: row.name.clone(),
-                    class: "min-w-0".to_owned(),
+                    class: "min-w-0 flex-1".to_owned(),
                     css: format!("font-size: 13.5px; color: {color};"),
                     style: TextStyle::sans(13.5, 400.0),
                 }

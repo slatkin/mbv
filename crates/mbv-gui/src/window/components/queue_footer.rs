@@ -441,7 +441,7 @@ fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
                     rsx! {
                         button {
                             "type": "button",
-                            class: "flex items-center text-left",
+                            class: "flex w-full items-center text-left",
                             style: "padding: calc(var(--mbv-cell-row) / 4) calc(var(--mbv-cell-col) * 1); gap: var(--mbv-cell-col); color: {row_color};",
                             "data-choice": "{index}",
                             onmounted: {
@@ -470,6 +470,7 @@ fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
                             }
                             Truncate {
                                 text: choice.label.clone(),
+                                class: "min-w-0 flex-1".to_owned(),
                                 // The chooser button names no font size: the
                                 // label inherits the document's 16 px body face.
                                 style: TextStyle::sans(16.0, 400.0),

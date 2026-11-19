@@ -355,7 +355,7 @@ pub fn QueuePlaybackPanel() -> Element {
                     ),
                     {kind_icon(playback.now_playing_media)}
                     div {
-                        class: "flex min-w-0 flex-col",
+                        class: "flex min-w-0 flex-1 flex-col",
                         style: "gap: 2px;",
                         Truncate {
                             text: title.clone(),
