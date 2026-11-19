@@ -95,9 +95,9 @@ mod row_cells;
 
 use geometry::{
     GRIP_SIZE_PX, GRIP_TOP_PX, LIST_TOP_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ghost_top, insertion,
-    menu_top, row_background, whole_rows,
+    menu_top, whole_rows,
 };
-use row_cells::{ItemRow, RowCells, RowChrome, start_mark, tone};
+use row_cells::{ItemRow, RowCells, RowChrome, row_look, start_mark};
 
 #[cfg(test)]
 mod tests;
@@ -494,7 +494,8 @@ pub fn QueuePanel() -> Element {
                                             "8px".to_owned()
                                         }
                                     );
-                                    if let Some(background) = row_background(&item, &queue) {
+                                    let look = row_look(&item, &queue);
+                                    if let Some(background) = look.background {
                                         let _ = write!(button_style, " background: {background};");
                                     }
                                     let line = insertion
@@ -545,7 +546,7 @@ pub fn QueuePanel() -> Element {
                                                 },
                                                 RowCells {
                                                     row: cells_row,
-                                                    cell_tone: tone(&item, queue.hover),
+                                                    look,
                                                     chrome: if hovered { RowChrome::Hover } else { RowChrome::Row },
                                                     mark,
                                                 }
@@ -659,7 +660,7 @@ pub fn QueuePanel() -> Element {
                             style: "height: {ROW_HEIGHT_PX}px; padding-inline: 8px; gap: 10px; background: var(--canvas-ghost); border-radius: 6px; box-shadow: var(--canvas-ghost-shadow); transform: rotate(-1deg);",
                             RowCells {
                                 row: ghost_row.clone(),
-                                cell_tone: tone(ghost_row, queue.hover),
+                                look: row_look(ghost_row, &queue),
                                 chrome: RowChrome::Ghost,
                                 mark: None,
                             }

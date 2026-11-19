@@ -71,14 +71,17 @@ impl ItemRow {
     }
 }
 
-/// The colour set one row's cells paint in (the canvas's row states, design
-/// D9): the now-playing row paints the green title at weight 600, the hovered
-/// row the primary text, the watched row the grey title its strike crosses in
-/// the darker token, and every other row the primary text. The ordinal, the
+/// The colour set one row paints in (the canvas's row states, design D9):
+/// the now-playing row paints the green title at weight 600 on the green
+/// fill, the active and marked rows the raised fill, the hovered row the hover
+/// fill, the watched row the grey title its strike crosses in the darker
+/// token, and every other row no fill and the primary text. The ordinal, the
 /// track, and the partial fill are shared: the number is grey, the track the
-/// raised tier, and the fill orange at the watched and active rows alike.
+/// raised tier, and the fill orange except on the playing row.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct RowTone {
+pub(super) struct RowLook {
+    /// The row button's own fill, `None` for an ordinary resting row.
+    pub(super) background: Option<&'static str>,
     title: &'static str,
     weight: f32,
     strike: &'static str,
@@ -87,11 +90,16 @@ pub(super) struct RowTone {
     fill: &'static str,
 }
 
-/// The row's tone under the frame's hover: the now-playing row keeps its own
-/// title and fill, because its look is the playback fact, not a pointer's.
-pub(super) fn tone(row: &ItemRow, hover: Option<u64>) -> RowTone {
+/// The row's one look, so the row's fill and its cells read one precedence:
+/// the now-playing row's look is the playback fact and no hover displaces it,
+/// then the active and marked rows keep their raised fill under the pointer,
+/// then the hovered row takes the hover fill. A hovered row paints the primary
+/// text: the pointer outranks the watched row's grey.
+pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
+    let hovered = queue.hover == Some(row.slot);
     if row.state == GuiSemanticState::NowPlaying {
-        return RowTone {
+        return RowLook {
+            background: Some(ef_var(EfToken::BgGreen)),
             title: ef_var(EfToken::Green),
             weight: 600.0,
             strike: ef_var(EfToken::Bg5),
@@ -100,16 +108,21 @@ pub(super) fn tone(row: &ItemRow, hover: Option<u64>) -> RowTone {
             fill: ef_var(EfToken::Green),
         };
     }
-    let watched = row.state == GuiSemanticState::Played;
-    let hovered = hover == Some(row.slot);
-    // A hovered row paints the primary text: the pointer outranks the watched
-    // row's grey.
-    let title = if watched && !hovered {
+    let picked = queue.marks.contains(&row.slot) || queue.cursor == Some(row.slot);
+    let background = if picked {
+        Some(ef_var(EfToken::Bg3))
+    } else if hovered {
+        Some(ef_var(EfToken::Bg0))
+    } else {
+        None
+    };
+    let title = if row.state == GuiSemanticState::Played && !hovered {
         ef_var(EfToken::Grey1)
     } else {
         ef_var(EfToken::Fg)
     };
-    RowTone {
+    RowLook {
+        background,
         title,
         weight: 400.0,
         strike: ef_var(EfToken::Bg5),
@@ -175,7 +188,7 @@ pub(super) fn start_mark(queue: &GuiQueue, slot: u64) -> Option<StartMark> {
 #[derive(Props, Debug, Clone, PartialEq)]
 pub(super) struct RowCellsProps {
     pub(super) row: ItemRow,
-    pub(super) cell_tone: RowTone,
+    pub(super) look: RowLook,
     pub(super) chrome: RowChrome,
     pub(super) mark: Option<StartMark>,
 }
@@ -189,7 +202,7 @@ pub(super) struct RowCellsProps {
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
     let row = &props.row;
-    let cell_tone = &props.cell_tone;
+    let look = &props.look;
     let chrome = props.chrome;
     let progress = row_progress(row, &playhead);
     let progress_width = progress.map(|progress| progress.max(3));
@@ -201,7 +214,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         if chrome == RowChrome::Row {
             span {
                 class: "shrink-0 font-mono tabular-nums",
-                style: "width: 18px; font-size: 11px; color: {cell_tone.ordinal};",
+                style: "width: 18px; font-size: 11px; color: {look.ordinal};",
                 "data-ordinal": "",
                 {ordinal_text}
             }
@@ -241,7 +254,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 let title_color = if chrome == RowChrome::Ghost {
                     ef_var(EfToken::Fg).to_owned()
                 } else {
-                    cell_tone.title.to_owned()
+                    look.title.to_owned()
                 };
                 // The title is a row-flex item, so it grows into the row's
                 // free width: its measure must read the room the row has,
@@ -253,14 +266,14 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 };
                 let title_css = format!(
                     "font-size: 13.5px; font-weight: {}; text-decoration-color: {}; color: {};",
-                    cell_tone.weight, cell_tone.strike, title_color
+                    look.weight, look.strike, title_color
                 );
                 rsx! {
                     Truncate {
                         text: row.primary.clone(),
                         class: title_class.to_owned(),
                         css: title_css,
-                        style: TextStyle::sans(13.5, cell_tone.weight),
+                        style: TextStyle::sans(13.5, look.weight),
                     }
                 }
             }
@@ -273,11 +286,11 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
             // (design D9).
             span {
                 class: "absolute block",
-                style: "left: {PROGRESS_LEFT_PX}px; right: {PROGRESS_RIGHT_PX}px; bottom: {PROGRESS_BOTTOM_PX}px; height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; background: {cell_tone.track};",
+                style: "left: {PROGRESS_LEFT_PX}px; right: {PROGRESS_RIGHT_PX}px; bottom: {PROGRESS_BOTTOM_PX}px; height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; background: {look.track};",
                 "data-progress": "",
                 span {
                     class: "block",
-                    style: "height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; width: {width}%; background: {cell_tone.fill};",
+                    style: "height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; width: {width}%; background: {look.fill};",
                 }
             }
         }

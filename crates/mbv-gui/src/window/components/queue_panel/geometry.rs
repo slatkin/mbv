@@ -6,9 +6,7 @@
 //! apart (design D9), so a stacked row starts one 36 px stride below its
 //! neighbour.
 
-use super::row_cells::ItemRow;
-use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow, GuiSemanticState};
-use crate::window::theme::{EfToken, ef_var};
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow};
 
 /// The canvas's fixed queue row height in logical pixels (design D9).
 pub(in crate::window::components) const ROW_HEIGHT_PX: u16 = 34;
@@ -37,30 +35,6 @@ const ROW_HEIGHT: f32 = ROW_HEIGHT_PX as f32;
 /// is the box the grip paints, so the region is the control.
 pub(super) const GRIP_SIZE_PX: u16 = 14;
 pub(super) const GRIP_TOP_PX: f32 = (ROW_HEIGHT - GRIP_SIZE_PX as f32) / 2.0;
-
-/// Whether one item row paints the picked fill: the cursor slot — the GUI's
-/// active row, which bars at all times now that the window holds no focus
-/// fact — and every marked row do (design D9).
-fn picked(queue: &GuiQueue, slot: u64) -> bool {
-    queue.marks.contains(&slot) || queue.cursor == Some(slot)
-}
-
-/// The row's painted background (design D9): the now-playing row's green fill,
-/// which no hover displaces because that row's look is the playback fact, then
-/// the active and marked rows' raised fill — kept under the pointer too — then
-/// the hovered row's fill. An ordinary row paints no fill of its own.
-pub(super) fn row_background(row: &ItemRow, queue: &GuiQueue) -> Option<&'static str> {
-    if row.state == GuiSemanticState::NowPlaying {
-        return Some(ef_var(EfToken::BgGreen));
-    }
-    if picked(queue, row.slot) {
-        return Some(ef_var(EfToken::Bg3));
-    }
-    if queue.hover == Some(row.slot) {
-        return Some(ef_var(EfToken::Bg0));
-    }
-    None
-}
 
 /// The painted index of the item row holding `slot`, if it is a painted row.
 fn slot_index(queue: &GuiQueue, slot: u64) -> Option<usize> {
