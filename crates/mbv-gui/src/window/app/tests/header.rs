@@ -26,7 +26,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::super::{
-    MiniView, ROOT_STYLE, destination_pressed, header_facts, library_column_shows,
+    MiniView, ROOT_STYLE, destination_pressed, header_facts, library_column_shows, painted_view,
     queue_column_shows,
 };
 use crate::bridge::frame::library::{
@@ -47,6 +47,19 @@ use crate::window::sections::{SectionRef, Sections};
 /// The viewport the fixture paints at: a Wide window.
 const WIDTH: u32 = 1200;
 const HEIGHT: u32 = 900;
+
+// The Playlists screen takes the Library panel's slot, and Mini paints that
+// slot on the Library pick only: read through the mounted pick, the screen
+// opened into a Mini Queue view that never painted it, so the Queue kept the
+// window and the screen was unreachable there. The mounted pick is untouched,
+// so closing the screen returns to the Queue.
+#[test]
+fn mini_paints_the_playlists_screen_in_the_library_slot() {
+    let open = painted_view(MiniView::Queue, true);
+    assert!(!queue_column_shows(true, GuiArrangement::Mini, open));
+    assert!(library_column_shows(true, GuiArrangement::Mini, open));
+    assert_eq!(painted_view(MiniView::Queue, false), MiniView::Queue);
+}
 
 /// The screen the fixture paints: the two panels behind the global header, or
 /// the Settings screen in their place.

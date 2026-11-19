@@ -222,6 +222,22 @@ pub(crate) enum MiniView {
     Library,
 }
 
+/// The view the Mini arrangement paints (design D8): the mounted pick, except
+/// while the Playlists screen shows. That screen takes the Library panel's
+/// slot, and Mini paints that slot on the Library pick only, so the screen
+/// would open invisibly in the Queue view otherwise — its control and the
+/// `playlists_open` action reach it in every arrangement, and the mounted pick
+/// changes only on a destination press. The pick stays untouched, so closing
+/// the screen returns to it.
+#[must_use]
+pub(crate) fn painted_view(view: MiniView, playlists_open: bool) -> MiniView {
+    if playlists_open {
+        MiniView::Library
+    } else {
+        view
+    }
+}
+
 /// Whether the Queue column shows (design D8): every arrangement but Mini
 /// shows it beside the Library panel, and Mini shows the view's pick.
 #[must_use]
@@ -513,9 +529,10 @@ pub fn App() -> Element {
     let panel_shows = has_library_list || playlists_open;
     // The panel row's two columns (design D8): both in every arrangement but
     // Mini, which shows the Mini view's pick. The header's destination press
-    // flips that pick while Mini holds.
+    // flips that pick while Mini holds; the Playlists screen is the Library
+    // pick while it shows, whichever view is mounted.
     let mini_view = use_signal(MiniView::default);
-    let mini = mini_view.cloned();
+    let mini = painted_view(mini_view.cloned(), playlists_open);
     let queue_visible = queue_column_shows(panel_shows, arrangement, mini);
     let library_visible = library_column_shows(panel_shows, arrangement, mini);
     let two_columns = queue_visible && library_visible;
