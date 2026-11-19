@@ -42,16 +42,6 @@ impl App {
             })
     }
 
-    /// Open the Audiobooks destination `lib_idx` (row 9.1): a book catalog the
-    /// App's data holds unloaded starts the TUI's own book catalog load — the
-    /// refresh path the F5 press runs, whose replacement batch is
-    /// single-flight and whose completion publishes the whole catalog. A
-    /// catalog already loading, loaded, or owned by the startup's own fetch
-    /// chain loads nothing, so no second chain ever walks beside the first.
-    /// An open also retries a catalog whose load failed, because the frame
-    /// path's root step honours that failure until an open clears it (design
-    /// D4, Risks). A `lib_idx` that names no book library is an ignored
-    /// command.
     /// Open the Audiobooks library `lib_idx` (row 9.1; gui-one-destination-ensure
     /// design D4): the open clears a failed catalog mark, because a failed
     /// catalog retries on an open and not on a repaint, and then runs the
