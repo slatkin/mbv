@@ -491,6 +491,9 @@ impl App {
             Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.gui_abs_open(lib_idx),
             Some(GuiDestinationKind::Podcasts { lib_idx }) => self.gui_podcast_open(lib_idx),
             Some(GuiDestinationKind::Feeds) => self.gui_feeds_open(),
+            Some(GuiDestinationKind::Home) => {
+                self.ensure_gui_destination(GuiDestinationKind::Home);
+            }
             _ => {}
         }
     }
