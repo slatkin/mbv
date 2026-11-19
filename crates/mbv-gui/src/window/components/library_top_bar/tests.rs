@@ -3,10 +3,10 @@
 //! current mark, the open-destination and Settings presses' commands, the
 //! Library pointer zone the header carries (design D7 of
 //! `move-playback-header-into-queue-footer`), and the destination press the
-//! root reads for the Mini arrangement (design D8). The Search field and its
-//! dropdown moved to the Library Status bar with their contracts
-//! (`library_status_bar/tests.rs`). The core channel is a mock pair; no test
-//! opens a window, sleeps, or reaches the core.
+//! root reads for the Mini arrangement (design D8). The Search control and
+//! its contracts live in `library_search_control.rs` and its suite
+//! (`library_search_control/tests.rs`). The core channel is a mock pair; no
+//! test opens a window, sleeps, or reaches the core.
 
 use std::cell::RefCell;
 use std::rc::Rc;

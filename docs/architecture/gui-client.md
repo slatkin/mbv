@@ -880,14 +880,15 @@ a point anywhere on the line resolves to nothing. The spec permits the GUI to sh
 conventional GUI form that TUI geometry does not constrain, so a toast
 presentation outside the line is lawful. While the Library panel shows, the
 Library Status bar paints the same projection (`move-playback-header-`
-`into-queue-footer` D9): the Search field leads its left side with the `Ctrl K`
-hint, the armed prefix or the live toast paints after the field — the toast
-wins, as the footer line drops the badge while a toast is live — and the
-location stays flush right. The bar paints no key hints. The location names
-the destination, `All` or the checked collections' names, and the picked
-item, joined by the canvas's separator. The field mounts only while the
-Library panel shows, so in Mini with the Queue showing no bar paints the
-field and `Ctrl+K` keeps its core effect there.
+`into-queue-footer` D9): the armed prefix or the live toast paints at its
+left edge — the toast wins, as the footer line drops the badge while a
+toast is live — and the location stays flush right. The bar paints no key
+hints. The location names the destination, `All` or the checked
+collections' names, and the picked item, joined by the canvas's separator.
+No Search field paints here (user request 2026-11-19): the top bar's Search
+control paints it at the window's top edge in every screen but Settings, so
+the field and its `Ctrl+K` arm are not bound to the Library panel or its
+status bar.
 
 ## The Library panel
 
@@ -921,8 +922,12 @@ arrangement; the Settings screen mounts none. It paints the Home icon and
 one tab per presented Service library destination — its Home icon opens
 Home — and the Settings control at its right end; it carries the Library
 pointer zone, so a key pressed over it routes as over the Library column.
-The Search field is not in it: the field leads the Library Status bar's
-left side. `src/window/components/library_panel.rs` paints the destination's list (`LibraryList` with
+The Search control sits at its right end, before the Settings control
+(`src/window/components/library_search_control.rs`, user request
+2026-11-19): the bar's measure decides the form — wide enough it paints the
+field inline with its `Ctrl K` hint; too narrow it paints the Search icon
+whose press opens a dropdown panel that carries the same field, hint, and
+results, which open downward. `src/window/components/library_panel.rs` paints the destination's list (`LibraryList` with
 `LibraryLetterRail` in Music;
 `LibraryHomeList`, `LibraryShowsList`, `LibraryEmbyList`,
 `LibraryAudiobooksList`, `LibraryPodcastsList`, and `LibraryFeedsList`),
@@ -997,7 +1002,7 @@ narrows the list and the detail through `library_pair`
 match, so a mismatched pair paints nothing.
 
 `search` is the Search section (design D12, row 12.1):
-`Option<GuiSearchFrame>`, present while the Library Status bar's Search
+`Option<GuiSearchFrame>`, present while the top bar's Search control
 field — the field the `Ctrl+K` chord arms — holds a query or its rows, and `None`
 while it is closed. It rides its own section beside the
 Library sections, never inside them, because Search is
@@ -1475,13 +1480,16 @@ With no Settings frame, the Library chain runs. The order is:
    entry is the core's too, so every key is the core's while it holds the
    keyboard, with the `Queue` target wherever the pointer is — the keys the
    filter does not consume still reach the Queue leaf.
-2. The `Ctrl+K` chord arms the Search field: wherever the Library panel
-   shows, the Library Status bar mounts the field, and the field takes the
-   keyboard; in Mini with the Queue showing the Library Status bar does not
-   paint, so no field exists and the chord keeps its core effect there
+2. The `Ctrl+K` chord arms the Search field: the top bar's Search
+   control paints in every screen but Settings — above the Queue, the
+   Library panel, and the Playlists screen — so the chord arms the field
+   wherever a mounted element paints it; a collapsed-and-closed control
+   holds no field, so the chord opens its panel there instead, and on the
+   Settings screen, where no control mounts, it keeps its core effect
    (design D9 of `move-playback-header-into-queue-footer`).
-3. While a text field of the panel holds the keyboard, the field takes the
-   key: the Search field first — its hold is DOM focus, Esc closes its
+3. While a text field holds the keyboard, the field takes the
+   key: the Search field first — its hold is DOM focus, which it keeps
+   while it paints on any screen but Settings; Esc closes its
    results, the arrow keys move the highlight, and Enter activates the
    marked one — then the `/` filter, whose Esc closes it and Enter
    accepts it. The collection dropdown's own filter takes the typed keys,
