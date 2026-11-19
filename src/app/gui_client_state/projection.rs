@@ -14,20 +14,20 @@ use crate::app::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackP
 use crate::app::state::playback::ShownEntry;
 
 /// The Queue header's chooser facts for one read (spec `gui-queue-chooser`
-/// "The queue header holds the chooser and its controls"): the number of
-/// entries the Queue chooser lists, the name the chooser button shows, and
-/// whether the close control is disabled. The header shows the chooser only
-/// with two or more entries, and the close control acts on the only local
-/// queue only through a disabled control, so both facts come from the same
-/// entry list the dropdown paints.
+/// "The queue header holds the chooser and its controls"): the name the
+/// chooser button shows, the shown entry's slot count, and whether the close
+/// control is disabled. The header paints its switcher at all times, so it
+/// reads no entry count, and the close control acts on the only local queue
+/// only through a disabled control.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct QueueHeaderProjection {
-    /// Every entry the Queue chooser lists: the local Owner's Named queues in
-    /// queue order, then the connected peer Player owner when one is.
-    pub entries: usize,
     /// The name of the shown entry: the chooser button's label. Empty while
     /// the Owner's first queue list has not arrived, when no entry shows.
     pub shown_name: String,
+    /// The shown entry's slot count: the switcher's count chip (design D7 of
+    /// `gui-queue-panel-redesign`). It counts every slot of the shown queue,
+    /// because the Queue filter never narrows the queue itself.
+    pub shown_len: usize,
     /// Whether the close control is disabled: the only local queue has no
     /// close, and no entry has arrived to close yet. A shown peer entry is
     /// always closable, because closing it disconnects.
@@ -161,6 +161,11 @@ pub struct QueueChooserEntryProjection {
     /// it: playback is active and not paused. A stopped or paused current
     /// queue still holds the playhead but is not marked as playing.
     pub playing: bool,
+    /// The queue's slot count (design D8 of `gui-queue-panel-redesign`),
+    /// read from that queue's freshest view: the shown resting queue's live
+    /// view, the current queue's snapshot, another resting queue's published
+    /// length, or the peer's own view.
+    pub len: usize,
 }
 
 /// The rename draft an open Queue chooser holds, as the frame carries it: the
@@ -194,11 +199,11 @@ pub enum GuiConfirmButtonTone {
 
 impl App {
     /// The Queue header's chooser facts (spec `gui-queue-chooser` "The queue
-    /// header holds the chooser and its controls"): the chooser's entry count,
-    /// the shown entry's name, and whether the close control is disabled.
-    /// Read-only, and read from the same live entry list the chooser's keys
-    /// and presses resolve against, so the header and the dropdown cannot
-    /// disagree inside one tick.
+    /// header holds the chooser and its controls"): the shown entry's name and
+    /// slot count, and whether the close control is disabled. Read-only, and
+    /// read from the same live entry list the chooser's keys and presses
+    /// resolve against, so the header and the dropdown cannot disagree inside
+    /// one tick.
     #[must_use]
     pub fn gui_queue_header_projection(&self) -> QueueHeaderProjection {
         let entries = self.queue_chooser_entries();
@@ -208,8 +213,8 @@ impl App {
                 .find(|entry| entry.shown)
                 .map(|entry| entry.label.clone())
                 .unwrap_or_default(),
+            shown_len: self.displayed_queue().total_queue_len(),
             close_disabled: self.gui_close_disabled(),
-            entries: entries.len(),
         }
     }
 

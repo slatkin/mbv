@@ -27,21 +27,20 @@ use mbv::{App, QueuePlaybackProjection};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 
-use crate::art::{GuiArtRef, art_url, trickplay_path};
 use crate::bridge::frame::GuiAttachState;
+use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar};
 use crate::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
-    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile,
-    card_artwork_ref,
+    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, card_artwork_ref,
 };
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
+use crate::bridge::frame::scrubber_hover;
 use crate::bridge::frame::settings::GuiSettingsFrame;
 use crate::bridge::frame::theme::GuiTheme;
-use crate::bridge::frame::{GuiPanelToggles, scrubber_hover, scrubber_ticks};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 
 use self::deadlines::DeadlineMarks;
@@ -371,12 +370,8 @@ impl SectionLedger {
                 .as_ref()
                 .map(GuiOverlayFrame::from),
         );
-        let tile = Self::hover_tile(app, &playback, playback_surface);
-        self.hover.adopt(scrubber_hover(
-            playback_surface.scrubber_hover(),
-            &playback,
-            tile,
-        ));
+        self.hover
+            .adopt(scrubber_hover(playback_surface.scrubber_hover(), &playback));
         let artwork = card_artwork_ref(&app.queue_card_artwork());
         // The GUI-only facts (gui-art-player-overlay design D5, D7): the
         // auto-hide preference the core owns, and whether the shown local
@@ -473,33 +468,6 @@ impl SectionLedger {
         if marked.contains(&Section::Settings) {
             self.settings.adopt(GuiSettingsFrame::build(app, playback));
         }
-    }
-
-    /// The scrubber's hover tile this tick (task 6.7): the preview's tile
-    /// facts with the cached sheet's image reference (design D7). Leaving the
-    /// bar ends the hover episode, as `hover_tile` does.
-    fn hover_tile(
-        app: &mut App,
-        playback: &QueuePlaybackProjection,
-        surface: &QueuePlaybackSurface,
-    ) -> Option<GuiScrubberTile> {
-        let Some(fraction) = surface.scrubber_hover() else {
-            app.trickplay_hover_ended();
-            return None;
-        };
-        let ticks = scrubber_ticks(playback, fraction);
-        let preview = app.trickplay_preview_tile(ticks)?;
-        let sheet_key = preview.key.wire_key();
-        let sheet = art_url(&trickplay_path(&sheet_key));
-        Some(GuiScrubberTile {
-            sheet_key,
-            width: preview.width,
-            height: preview.height,
-            columns: preview.columns,
-            column: preview.column,
-            row: preview.row,
-            sheet: GuiArtRef::Image { src: sheet },
-        })
     }
 
     /// The batch of every slot the window does not hold, or `None` when the

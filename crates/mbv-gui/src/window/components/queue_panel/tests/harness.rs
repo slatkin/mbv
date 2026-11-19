@@ -71,8 +71,8 @@ pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
 
 /// The summary the fixture paints: two remaining rows, the queue's finish
 /// 43 minutes past the transport's finish, no filter, and the header's "One
-/// queue and no peer" facts (spec `gui-queue-chooser`) — one entry, so no
-/// chooser and a disabled close control.
+/// queue and no peer" facts (spec `gui-queue-chooser`) — one entry with 26
+/// slots and a disabled close control.
 pub(super) fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 2,
@@ -85,8 +85,8 @@ pub(super) fn summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 1,
             shown_name: "Default".to_owned(),
+            shown_len: 26,
             close_disabled: true,
         },
     }
@@ -98,8 +98,8 @@ pub(super) fn summary() -> GuiQueueSummary {
 pub(super) fn several_entries() -> GuiQueueSummary {
     GuiQueueSummary {
         header: GuiQueueHeaderFacts {
-            entries: 2,
             shown_name: "Kids".to_owned(),
+            shown_len: 4,
             close_disabled: false,
         },
         ..summary()
@@ -112,8 +112,8 @@ pub(super) fn several_entries() -> GuiQueueSummary {
 pub(super) fn chooser_summary() -> GuiQueueSummary {
     GuiQueueSummary {
         header: GuiQueueHeaderFacts {
-            entries: 3,
             shown_name: "Kids".to_owned(),
+            shown_len: 4,
             close_disabled: false,
         },
         ..summary()
@@ -121,10 +121,11 @@ pub(super) fn chooser_summary() -> GuiQueueSummary {
 }
 
 /// One entry of the open Queue chooser: its label, the local queue it shows
-/// (`None` for the peer), and its shown and current marks.
+/// (`None` for the peer), its slot count, and its shown and current marks.
 pub(super) fn chooser_entry(
     label: &str,
     queue: Option<u64>,
+    len: usize,
     shown: bool,
     current: bool,
 ) -> GuiQueueChooserEntry {
@@ -134,19 +135,20 @@ pub(super) fn chooser_entry(
         shown,
         current,
         playing: false,
+        len,
     }
 }
 
 /// The open Queue chooser the fixture paints (task 8.3): `Default` is current
 /// and `Kids` is shown, then the connected peer. `renaming` carries the draft
-/// the chooser holds.
+/// the chooser holds. The counts are the `gui-queue-chooser` spec's scenario.
 pub(super) fn queue_chooser(renaming: Option<GuiQueueChooserRename>) -> GuiOverlayFrame {
     GuiOverlayFrame::QueueChooser {
         cursor: 1,
         entries: vec![
-            chooser_entry("Default", Some(1), false, true),
-            chooser_entry("Kids", Some(2), true, false),
-            chooser_entry("living-room", None, false, false),
+            chooser_entry("Default", Some(1), 26, false, true),
+            chooser_entry("Kids", Some(2), 4, true, false),
+            chooser_entry("living-room", None, 9, false, false),
         ],
         renaming,
     }
@@ -160,9 +162,9 @@ pub(super) fn queue_chooser_playing() -> GuiOverlayFrame {
         entries: vec![
             GuiQueueChooserEntry {
                 playing: true,
-                ..chooser_entry("Default", Some(1), false, true)
+                ..chooser_entry("Default", Some(1), 26, false, true)
             },
-            chooser_entry("Kids", Some(2), true, false),
+            chooser_entry("Kids", Some(2), 4, true, false),
         ],
         renaming: None,
     }
@@ -180,7 +182,6 @@ pub(super) fn item(slot: u64) -> GuiQueueRow {
         duration: Some("3:12".to_owned()),
         kind: GuiMediaKind::Media,
         state: GuiSemanticState::Ordinary,
-        striped: false,
     }
 }
 
@@ -367,10 +368,6 @@ pub(super) fn playing() -> GuiQueuePlayback {
         now_playing_title: Some("Track title".to_owned()),
         parent_line: Some("The Show".to_owned()),
         episode_badge: Some("S2 · E5".to_owned()),
-        chapters: Vec::new(),
-        intro_mark: None,
-        credits_mark: None,
-        trickplay: None,
         availability: GuiTransportAvailability {
             stop: true,
             next: true,
@@ -488,6 +485,24 @@ impl Fixture {
         dom.query_selector_all(selector)
             .expect("the selector is valid")
             .into_iter()
+            .collect()
+    }
+
+    /// The marker attribute each node the selector names carries, in tree
+    /// order: the first of `markers` the node sets, so a test reads the order a
+    /// bar paints its parts in.
+    pub(super) fn marker_order(&self, selector: &str, markers: &[&str]) -> Vec<String> {
+        let dom = self.doc.inner();
+        dom.query_selector_all(selector)
+            .expect("the selector is valid")
+            .into_iter()
+            .filter_map(|id| {
+                let node = dom.get_node(id)?;
+                markers
+                    .iter()
+                    .find(|marker| node.attr(blitz_dom::LocalName::from(**marker)).is_some())
+                    .map(|marker| (*marker).to_owned())
+            })
             .collect()
     }
 

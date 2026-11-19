@@ -1,8 +1,8 @@
 //! The Queue panel's theme-token contract: what the recessed box paints once
 //! the window's `:root` rule has been applied. The reference front end
-//! left the six two-word chrome fills undefined, so the box, the zebra
-//! stripes, the footer band, and the compact strip painted no fill of their
-//! own and the queue column's backdrop showed through. The window's token
+//! left the six two-word chrome fills undefined, so the box, the footer band,
+//! and the compact strip painted no fill of their own and the queue column's
+//! backdrop showed through. The window's token
 //! source reproduces that set (`window/theme.rs`), and this test reads the
 //! resolved result rather than the rule's text.
 

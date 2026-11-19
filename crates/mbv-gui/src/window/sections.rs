@@ -278,8 +278,8 @@ fn fresh_summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 0,
             shown_name: String::new(),
+            shown_len: 0,
             close_disabled: true,
         },
     }
@@ -304,10 +304,6 @@ fn fresh_playback() -> GuiQueuePlayback {
         now_playing_title: None,
         parent_line: None,
         episode_badge: None,
-        chapters: Vec::new(),
-        intro_mark: None,
-        credits_mark: None,
-        trickplay: None,
         availability: GuiTransportAvailability {
             stop: false,
             next: false,

@@ -45,12 +45,6 @@ pub fn card_path(cache_key: &str) -> String {
     format!("card/{}", percent_encode(cache_key))
 }
 
-/// The request path for the trickplay sheet `wire_key` names (design D7).
-#[must_use]
-pub fn trickplay_path(wire_key: &str) -> String {
-    format!("trickplay/{}", percent_encode(wire_key))
-}
-
 /// One request the window's image load raised (design D7): the percent-encoded
 /// request path and the one-shot edge that answers it. Production wires the
 /// `reply` to the net provider's responder; the tests mock it, so
@@ -90,17 +84,16 @@ pub enum ArtResponse {
 }
 
 /// The path an art request names (design D7): the image-cache key a card
-/// names, the trickplay wire key a sheet names, or the placeholder.
+/// names, or the placeholder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ArtPath {
     Card(String),
-    Trickplay(String),
     Placeholder,
 }
 
-/// Parse a request path (design D7): the three forms only. A card or
-/// trickplay segment is percent-decoded; another prefix, a missing segment,
-/// or an undecodable one is malformed, and the request answers `Missing`.
+/// Parse a request path (design D7): the two forms only. A card segment is
+/// percent-decoded; another prefix, a missing segment, or an undecodable one
+/// is malformed, and the request answers `Missing`.
 pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
     if path == PLACEHOLDER_PATH {
         return Some(ArtPath::Placeholder);
@@ -108,7 +101,6 @@ pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
     let (kind, rest) = path.split_once('/')?;
     match kind {
         "card" => Some(ArtPath::Card(percent_decode(rest)?)),
-        "trickplay" => Some(ArtPath::Trickplay(percent_decode(rest)?)),
         _ => None,
     }
 }

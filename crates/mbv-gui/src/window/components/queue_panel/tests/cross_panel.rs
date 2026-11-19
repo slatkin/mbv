@@ -70,6 +70,7 @@ fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
         .expect("the chooser reports its rows");
     let before = &targets[..first_choice];
     for wanted in [
+        RegionTarget::Queue(QueueTargetId::QueueChooser),
         RegionTarget::Queue(QueueTargetId::Filter),
         RegionTarget::Queue(QueueTargetId::Slot(1)),
         RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
@@ -166,8 +167,9 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekForward),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Next),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar),
-            RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::QueueChooser),
             RegionTarget::Queue(QueueTargetId::NewQueue),
+            RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),

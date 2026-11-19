@@ -37,6 +37,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::Sections;
+use crate::window::theme::{EfToken, ef_var};
 
 /// The footer frame the fixture paints: the `mix` playlist source, no autosave
 /// or dirty indicator.
@@ -66,8 +67,8 @@ fn summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 1,
             shown_name: "Default".to_owned(),
+            shown_len: 26,
             close_disabled: true,
         },
     }
@@ -84,10 +85,6 @@ fn playing() -> GuiQueuePlayback {
         now_playing_title: Some("Track title".to_owned()),
         parent_line: None,
         episode_badge: None,
-        chapters: Vec::new(),
-        intro_mark: None,
-        credits_mark: None,
-        trickplay: None,
         availability: GuiTransportAvailability {
             stop: true,
             next: true,
@@ -409,7 +406,11 @@ fn the_line_paints_the_canvas_footer_band() {
     assert!(line.contains("padding-inline: 16px"), "{line}");
     assert!(line.contains("font-size: 12px"), "{line}");
     assert!(
-        line.contains("border-top: 1px solid var(--canvas-border)"),
+        line.contains(&format!("border-top: 1px solid {}", ef_var(EfToken::Bg3))),
+        "{line}"
+    );
+    assert!(
+        line.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
         "{line}"
     );
     let source = fixture.style_of("[data-footer-source]");

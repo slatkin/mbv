@@ -96,7 +96,7 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 - **THEN** the expanded panel shows, from top to bottom, the artwork with its overlays, the title, the queue header, the queue rows, and a footer line
 - **AND** the footer line's left shows the playback target with a chooser and the collapse control
 - **AND** the artwork shows the active item, with the track chips at its top left, the season and episode badge at its top right, and the player controls at its bottom
-- **AND** the player controls have play/pause at the scrubber's left, and previous, back 10 s, forward 30 s, and next between the scrubber's elapsed and remaining clocks
+- **AND** the player controls have two rows: the scrubber alone across the full width, and under it play/pause, previous, back 10 s, forward 30 s, and next at the left and the elapsed and remaining clocks at the right
 - **AND** the queue lists the slots in canonical order, marks the start slot, and numbers every row with its 1-based position in the queue
 
 #### Scenario: The Status bar projection holds a toast
@@ -464,12 +464,12 @@ The panel SHALL pick one of four states from its own size, not from the window s
 
 ### Requirement: The scrubber seeks and previews
 
-The scrubber SHALL show the progress, the chapter boundaries, the intro and credits marks, and a thumb, with the elapsed time and the remaining time with the finish clock. A press on the bar SHALL seek to that position. The back 10 s and forward 30 s chords SHALL do the same work as the transport buttons.
+The scrubber SHALL show the played progress and a thumb. It SHALL show no chapter boundaries and no intro or credits marks. The elapsed time and the remaining time show on the transport row. The whole scrubber row SHALL be the bar's hit area. A press on the bar SHALL seek to that position. While the pointer drags on the bar, the bar SHALL keep its hover state and the time tip SHALL follow the pointer. The back 10 s and forward 30 s chords SHALL do the same work as the transport buttons.
 
 #### Scenario: The pointer hovers the bar
 
-- **WHEN** the pointer is over the scrubber bar
-- **THEN** a preview shows the trickplay frame, the time at the pointer, and the chapter name
+- **WHEN** the pointer is over the scrubber row
+- **THEN** the bar shows its hover state and a tip shows the time at the pointer, with no trickplay frame and no chapter
 - **AND** focus and playback do not change
 
 #### Scenario: The bar is pressed
@@ -479,9 +479,20 @@ The scrubber SHALL show the progress, the chapter boundaries, the intro and cred
 
 #### Scenario: No trickplay frames exist
 
-- **GIVEN** the active item has no trickplay data
-- **WHEN** the pointer is over the scrubber bar
-- **THEN** the preview shows the time and the chapter without a frame
+- **GIVEN** the active item has trickplay data, or has none
+- **WHEN** the pointer is over the scrubber row
+- **THEN** the tip shows the time at the pointer and no frame, the same in both cases
+
+#### Scenario: The bar is dragged
+
+- **WHEN** the user drags on the bar
+- **THEN** the bar keeps its hover state and the time tip follows the pointer
+
+#### Scenario: The item has chapters
+
+- **GIVEN** the active item has chapters and intro and credits segments
+- **WHEN** the scrubber paints
+- **THEN** the bar shows no chapter boundary and no intro or credits mark
 
 ### Requirement: Track chips open popovers
 
@@ -505,12 +516,13 @@ The panel SHALL show one chip each for the video stream, the audio track, and th
 
 ### Requirement: The queue shows a row menu and drag reorder
 
-The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Rows SHALL have a fixed height of 30 px and SHALL carry the canvas's one-line row: its queue ordinal, its title line, and its progress where the state has one. A row SHALL carry no right-column value. The shown queue's start slot SHALL be marked as playing while its queue plays and as the start of playback while its queue is stopped or resting, and the two marks SHALL be distinct. A shown queue whose owner reports no start slot, such as a peer without named queues, SHALL carry the playing mark on its observed active slot, and no start mark. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
+The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Every row SHALL have the same fixed height and SHALL carry the canvas's one-line row: its queue ordinal, its title, and its progress where the state has one. A row's progress bar SHALL paint inside the row along its bottom and SHALL NOT add height to the row. A row SHALL carry no right-column value. The shown queue's start slot SHALL be marked as playing while its queue plays and as the start of playback while its queue is stopped or resting, and the two marks SHALL be distinct. A shown queue whose owner reports no start slot, such as a peer without named queues, SHALL carry the playing mark on its observed active slot, and no start mark. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
 
 #### Scenario: Rows show their state
 
 - **WHEN** the queue holds a watched row, the active row, and a row with partial progress
-- **THEN** the watched row is struck through, the active row is filled, and the partial row shows a thin progress bar under its title
+- **THEN** the watched row is struck through, the active row is filled, and the partial row shows a thin progress bar inside the row along its bottom
+- **AND** every row has the same height, the partial row included
 - **AND** each row carries its 1-based queue ordinal as the canvas paints it
 
 #### Scenario: The right column is switched
@@ -1050,10 +1062,6 @@ An Upcoming row in the Shows destination SHALL NOT select, play, or enqueue. A p
 
 - **WHEN** the pointer rests on an Upcoming row and the user presses Enter
 - **THEN** nothing plays and the queue does not change
-
-
-
-
 
 ### Requirement: The panel widths persist across launches
 

@@ -440,3 +440,4 @@ Every ctrl hello SHALL carry a wire identity: a short deterministic digest of th
 - **WHEN** a hello without a wire identity is decoded
 - **THEN** the decode SHALL succeed and the wire identity SHALL be empty
 - **THEN** the protocol version check SHALL decide compatibility as without this requirement, except where the local Owner gate refuses an empty wire identity
+

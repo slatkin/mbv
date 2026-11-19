@@ -45,15 +45,14 @@ pub use self::app::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace, GuiSurfaceLeaf,
     HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
-    PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
-    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueChooserEntryProjection,
-    QueueChooserRenameProjection, QueueEndOffsets, QueueFooterProjection, QueueHeaderProjection,
-    QueuePlaybackProjection, QueueStartProjection, QueueSummaryProjection, QueueSurfaceProjection,
-    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
-    RowMenuEntryProjection, SegmentMark, SetupSecret, ShellCommand, StartupWorkerDrain,
-    StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
-    TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent,
-    WorkspaceRelayout, compare_gui_date_order, resolve_router_outcome_with_focused,
+    PanelTogglesProjection, PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain,
+    QueueCardArtwork, QueueChooserEntryProjection, QueueChooserRenameProjection, QueueEndOffsets,
+    QueueFooterProjection, QueueHeaderProjection, QueuePlaybackProjection, QueueStartProjection,
+    QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget, RouterOutcome,
+    RouterOverlayState, RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SetupSecret,
+    ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
+    TrackChoice, TrackPopoverChoice, VisualIntent, WorkspaceRelayout, compare_gui_date_order,
+    resolve_router_outcome_with_focused,
 };
 pub use self::client_kind::ClientKind;
 pub use self::config::{Config, load_config};

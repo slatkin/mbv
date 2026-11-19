@@ -35,6 +35,114 @@ pub fn canvas_var(name: &str) -> String {
     format!("var(--canvas-{name})")
 }
 
+/// The Queue column's `--ef-*` palette names (design D1 of
+/// `gui-queue-panel-redesign`): the Everforest Dark Hard values the redesign's
+/// canvas names, which `assets/app.css` defines. A painter reads one through
+/// [`ef_var`], so a name the stylesheet does not define fails
+/// `every_ef_token_names_a_stylesheet_property` instead of painting nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EfToken {
+    Player,
+    BgDim,
+    Bg0,
+    Bg1,
+    Bg2,
+    Bg3,
+    Bg4,
+    Bg5,
+    BgGreen,
+    BgRed,
+    Fg,
+    Grey0,
+    Grey1,
+    Grey2,
+    Green,
+    Aqua,
+    Orange,
+    Red,
+}
+
+impl EfToken {
+    /// Every token, in the stylesheet's declaration order.
+    pub const ALL: [Self; 18] = [
+        Self::Player,
+        Self::BgDim,
+        Self::Bg0,
+        Self::Bg1,
+        Self::Bg2,
+        Self::Bg3,
+        Self::Bg4,
+        Self::Bg5,
+        Self::BgGreen,
+        Self::BgRed,
+        Self::Fg,
+        Self::Grey0,
+        Self::Grey1,
+        Self::Grey2,
+        Self::Green,
+        Self::Aqua,
+        Self::Orange,
+        Self::Red,
+    ];
+
+    /// The token's name after `--ef-`, such as `bg-green`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Player => "player",
+            Self::BgDim => "bg-dim",
+            Self::Bg0 => "bg0",
+            Self::Bg1 => "bg1",
+            Self::Bg2 => "bg2",
+            Self::Bg3 => "bg3",
+            Self::Bg4 => "bg4",
+            Self::Bg5 => "bg5",
+            Self::BgGreen => "bg-green",
+            Self::BgRed => "bg-red",
+            Self::Fg => "fg",
+            Self::Grey0 => "grey0",
+            Self::Grey1 => "grey1",
+            Self::Grey2 => "grey2",
+            Self::Green => "green",
+            Self::Aqua => "aqua",
+            Self::Orange => "orange",
+            Self::Red => "red",
+        }
+    }
+
+    /// The `var(--ef-<name>)` value a part paints in.
+    #[must_use]
+    pub const fn var(self) -> &'static str {
+        match self {
+            Self::Player => "var(--ef-player)",
+            Self::BgDim => "var(--ef-bg-dim)",
+            Self::Bg0 => "var(--ef-bg0)",
+            Self::Bg1 => "var(--ef-bg1)",
+            Self::Bg2 => "var(--ef-bg2)",
+            Self::Bg3 => "var(--ef-bg3)",
+            Self::Bg4 => "var(--ef-bg4)",
+            Self::Bg5 => "var(--ef-bg5)",
+            Self::BgGreen => "var(--ef-bg-green)",
+            Self::BgRed => "var(--ef-bg-red)",
+            Self::Fg => "var(--ef-fg)",
+            Self::Grey0 => "var(--ef-grey0)",
+            Self::Grey1 => "var(--ef-grey1)",
+            Self::Grey2 => "var(--ef-grey2)",
+            Self::Green => "var(--ef-green)",
+            Self::Aqua => "var(--ef-aqua)",
+            Self::Orange => "var(--ef-orange)",
+            Self::Red => "var(--ef-red)",
+        }
+    }
+}
+
+/// The `var(--ef-<name>)` value a Queue column part paints in. The const
+/// return lets a `const` and a plain style field hold it alike.
+#[must_use]
+pub const fn ef_var(token: EfToken) -> &'static str {
+    token.var()
+}
+
 /// A transport glyph's colour: its role while actionable, the muted role
 /// when not — the availability gate the TUI's glyph colours carry.
 #[must_use]
@@ -90,8 +198,8 @@ pub fn theme_style_rule(theme: Option<&GuiTheme>) -> String {
 /// rest. Those six properties were therefore never defined in the webview:
 /// each consumer's `var()` was invalid at computed-value time, which left a
 /// `background` transparent (the queue column's backdrop showed through the
-/// recessed box, the zebra stripes, the footer band, and the compact strip)
-/// and the scrubber thumb's `box-shadow` ring unpainted. Writing the
+/// recessed box, the footer band, and the compact strip) and the scrubber
+/// thumb's `box-shadow` ring unpainted. Writing the
 /// camelCase names here would paint four fills the reference build never
 /// painted, so the port reproduces its token set instead. The six fields
 /// stay on the DTO — they still name the surface mapping — and stay bound so

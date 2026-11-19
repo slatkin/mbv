@@ -97,8 +97,8 @@ A section whose content can be absent has an `Option` value, so a `null`
 clears it. The sections are: the pre-attach state (`attach`, `null` once the
 attach succeeds), the theme (`theme`, `GuiTheme`), the
 Queue viewport rows with their stable `QueueSlotId` raw numbers, the active
-row, marks, active slot, row hover, row drag, each item row's zebra parity,
-and the shown queue's start-mark facts — its start slot, whether it plays,
+row, marks, active slot, row hover, row drag, and the shown queue's
+start-mark facts — its start slot, whether it plays,
 and whether its owner reported a start slot (`queue`, `GuiQueue`), the Queue
 chooser facts the header's controls read, the filter text with its caret
 fact, and the totals the footer shows, beside the folded strip's remaining
@@ -108,7 +108,8 @@ Client core holds, with the UI-reset counter `ui_reset_epoch` beside them
 (`panel`, `GuiPanelToggles`), the open menu or popover (`overlay`,
 `Option<GuiOverlayFrame>`: the row menu with its entries, key hints, and
 destructive flags, the track popover, the playback-target chooser, the
-Queue chooser with its cursor, entries, and rename draft, the shared
+Queue chooser with its cursor, entries each with its slot count, and rename
+draft, the shared
 confirmation modal with its message and button row, and the
 daemon-lost recovery dialog with its diagnostics and recovery choices), the
 Queue playback projection (`playback`, `GuiQueuePlayback`), the scrubber's
@@ -158,8 +159,8 @@ pixels; only the TUI decodes, for its terminal graphics. The panel
 reports the slot's `visualSlot` region (the TUI's hit target), and the art
 element's resizes report the regions a swapped bitmap moved. Inside one
 report key the last region pushed wins, so the panel pushes `visualSlot`
-first and the transport buttons, the seekbar, the collapse control, and the
-playback target follow it, while the chips report
+first and the transport buttons and the seekbar follow it, while the chips
+and the footer's controls report
 under their own later keys — so a press on a control over the artwork lands
 on the control, not on the artwork. The section also carries the core's
 `auto_hide` preference, the fact the stage's `data-auto-hide` attribute
@@ -167,19 +168,10 @@ reads (below); the window derives the stage's `data-playing` fact from the
 playhead anchor.
 
 The scrubber's hover preview (`hover`) carries the pointer's fraction along
-the painted bar, the time it names, the covering chapter, and the trickplay
-tile at that position. The tile (`GuiScrubberTile`) names the thumbnail's
-place in its sheet — the sheet key, the thumbnail's pixel width and height,
-the sheet's columns, and the thumbnail's column and row — plus the sheet as an
-`image` reference whose URL is `mbv-art://localhost/trickplay/<key>`. The
-core carries the tile only once the sheet is cached (`App::trickplay_preview_tile`),
-so the reference names bytes the scheme answers at once. The `hover` section's
-compare carries the reference again only when the hovered sheet changes. The
-preview paints the tile by cropping the sheet as a CSS sprite, which loads the
-sheet by its URL; the window keeps no image of its own. A move away from the
-bar carries no hover. An item with no
-trickplay, a sheet not yet cached, or a tile the server does not hold paints
-the time and the chapter without a tile.
+the painted bar and the time it names (`GuiScrubberHover`); the covered
+chapter and the trickplay tile the old preview carried are gone
+(`gui-queue-panel-redesign` design D4, D5). A move away from the bar carries
+no hover.
 
 The window reaches the core through six methods on `CoreLink`
 (`src/window/channel.rs`). Each only pushes into the core channel:
@@ -285,9 +277,12 @@ A GUI list paints only the viewport: fixed-height rows, no native DOM
 scroll. The core's viewport decides which rows the `queue` section carries;
 wheel
 input goes to the core like any pointer event, so scroll follows the active
-row through the same Surface state rules as the TUI. The list's rows are 30
-logical pixels tall (`src/window/components/queue_panel.rs`), and the window measures the
-list's height and reports whole rows as capacity. `track_container_size`
+row through the same Surface state rules as the TUI. The list's rows are 34
+logical pixels tall with 2 px gaps — a 36 px stride
+(`src/window/components/queue_panel/geometry.rs`) — and the window measures
+the list's height and reports whole rows as capacity: a box fits
+`floor((height + gap) / stride)` rows, so a stacked row starts one stride
+below its neighbour. `track_container_size`
 (`src/window/layout.rs`) measures the panel container after each layout epoch
 and reports that size through the same reporter, so the state it paints and the
 capacity the core applies come from one measurement.
@@ -367,15 +362,19 @@ every focus state, and the TUI keeps its focus-reactive pick — so the
 `mbv-theme` surface table stays the one fill authority and a palette edit
 recolours the chrome together with the roles.
 
-The queue's canvas paint also uses colours that name no `mbv-theme` slot.
-`assets/app.css` carries them as GUI-local `--canvas-*` custom properties — the
-header, rows, footer, hover, row menu, popover, and drag chrome — and every
-component references a token, never a literal hex. No `theme.rs` remap rides
-along: `mbv-theme` stays the TUI's palette (`align-gui-with-design-canvas`
-decision DR9). One canvas value stays deliberately off the tokens: the
-panel background keeps its `mbv-theme` role (`#272e33`) while the canvas
-paints `#2d353b` — the change's accepted open risk, left for the user's
-live check.
+The queue column's paint names no `mbv-theme` slot, and
+`gui-queue-panel-redesign` gave it its own token set: `assets/app.css`
+declares the design's Everforest Dark Hard values as `--ef-*` custom
+properties — the player backdrop, the recessed list, the header bar, the
+row and hover fills, the row states, the seek bar's greys, and the text
+colours — and the column's components read those tokens, never a literal
+hex. The `--canvas-*` tokens remain where components still read them: the
+drag chrome the rows paint — the insertion line, the ghost, and the
+actions button — the row menu, popover, and modal chrome, the Library
+column's panels, and the typed-text colour tokens. A
+`--canvas-*` token no component reads any more is deleted. No `theme.rs`
+remap rides along: `mbv-theme` stays the TUI's palette
+(`align-gui-with-design-canvas` decision DR9).
 
 The theme is a gated section (design D4): the ledger marks it once at core
 start, so the first batch carries it; a palette change marks it again; and
@@ -410,8 +409,8 @@ kind to its token, and a plain segment inherits the line's own colour. A
 time or a date repeated down a list — a duration column, a Music tree row's
 year — paints at `--canvas-type-repeat-opacity`; a
 selected or current row keeps its own ink at full strength by painting
-without `repeat`. The scrubber's remaining clock is a time at 0.75, as the
-canvas draws it. A single-type field needs no segments: its painter names its
+without `repeat`. The transport row's remaining clock paints at 0.85
+opacity, as the design draws it. A single-type field needs no segments: its painter names its
 token (`--canvas-type-count` for an episode badge, `--canvas-type-secondary`
 for a parent line).
 
@@ -472,8 +471,8 @@ queue rather than from the painted rows, because the strip paints no queue
 list. The `q` toggle (`GuiPanelToggles.queueFolded`) paints the expanded
 artboard with the queue replaced by its one-line summary. A height of zero
 reads as "not measured yet" and paints the expanded artboard, so a restart
-does not flash a strip. `src/window/components/panel.rs` holds the artwork and the trickplay
-sheet above the state branches, because a frame re-carries each only when it
+does not flash a strip. `src/window/components/panel.rs` holds the artwork
+above the state branches, because a frame re-carries it only when it
 changed: a state that mounts on a later frame paints the value the expanded
 artboard already adopted.
 
@@ -521,7 +520,9 @@ box. It holds three siblings: the media box, the clipped one — so only the
 image is cut, and a track popover that hangs past the artwork's bottom
 paints in full — the absolute top layer, which holds the track chips at its
 left and the season-and-episode badge at its right and always shows, and the
-absolute bottom layer, which holds a gradient and the control row.
+absolute bottom layer, which holds the solid `rgb(0 0 0 / 0.6)` scrim (the
+`gui-queue-panel-redesign` design's gradient became the solid band at the
+live test) and the two control rows.
 While the image loads, the media box stays empty at the panel's width with a
 16:9 aspect, and both overlays paint on it as if the image were there; the
 box takes the image's own aspect when the image loads.
@@ -546,16 +547,20 @@ show it. The pointer-driven `:hover` is Blitz's, and a pointer that leaves
 the window unhovers the chain, so the controls hide. Auto-hide never hides
 the top layer: the chips and the badge show at all times.
 
-The control row scales with the artwork's height (design D3). Container
+The control rows scale with the artwork's height (design D3). Container
 queries are unimplemented in Blitz 0.3.0-beta.4 — `query_container_size`
 returns a default size — so `cq*` units do not resolve, and the window
 measures instead. The panel's effect reads the stage's mounted rect,
 computes `scale = min(1.0, (stage_height / 3.0) / BOTTOM_FULL_HEIGHT_PX)`,
 and holds it in a window `Signal<f32>`; this is layout, not interaction
-state. The bottom layer sets `--player-scale` from it, and its sizes — the
-button boxes, the glyph and font sizes, the gaps, and the scrubber's block
-height — are `calc(<px> * var(--player-scale))`, so the controls take no
-more than one third of the artwork's height at every height, with no floor.
+state. `BOTTOM_FULL_HEIGHT_PX` is the bottom layer's full height at scale
+1.0 — the 104 px the design names (`gui-queue-panel-redesign` design D3):
+the top pad, the 14 px seek row, the gap, the 44 px transport row, and the
+bottom pad. The bottom layer sets `--player-scale` from the scale, and its
+sizes — the button boxes, the glyph and font sizes, the gaps, the pads, and
+the seek row's height — are `calc(<px> * var(--player-scale))`, so the
+controls take no more than one third of the artwork's height at every
+height, with no floor.
 The stage height depends only on the panel width and the image aspect, never
 on the overlay, so there is no feedback loop; the scrubber's pointer math
 reads its own measured rect, so it stays correct at any scale.
@@ -581,17 +586,26 @@ press elsewhere. The GUI-only fact rides `GuiQueuePlayback.auto_hide` — the
 menu entry's checked mark reads it — and stays out of the shared
 `QueuePlaybackProjection`; no key chord rides with it.
 
-The scrubber paints the played fraction, the chapter boundaries, the intro
-and credits mark segments, the thumb, and the elapsed, remaining, and finish
-clock texts, all derived from the playhead anchor (below). A press on the
-bar seeks through the core.
+The seekbar paints the played fraction and the thumb,
+all derived from the playhead anchor (below); it carries no chapter ticks
+and no mark segments, and its clocks are the transport row's. The data the
+old bar read is deleted, not idle (design D5): the chapter, media-segment,
+and trickplay fetches are gone — the `EmbyClient` methods
+`get_item_chapters`, `get_media_segments`, `get_trickplay`, and
+`get_trickplay_tile`, the `App::playback_metadata` cache and the
+`playback_trickplay` sheet store that served them, the frame fields they
+filled, the `mbv-art` scheme answer for the sheet bytes, and the
+`EmbyChapter`, `EmbyMediaSegment`, and `EmbyTrickplayGrid` model types.
+The hover state and its time tip come from the core's `hover` section, not
+from `:hover`, so the track grows with the tip and the state survives a
+drag. A press on the bar seeks through the core.
 
 The window predicts the playhead between the `playhead` section's anchors
 (design D5 of `gui-change-driven-sections`). The core sends the anchor —
-`GuiPlayhead`: the active fact, the active slot, the position and runtime in
-ticks, and the paused fact — only on a changed fact or a new sample that
-drifted past the one-second tolerance, and it carries no timestamp, because
-the core and the window share no clock. The window stamps each anchor
+`GuiPlayhead`: the active fact, the active slot, the position, runtime
+in ticks, and the paused fact — only on a changed fact or a new sample that
+drifted past the one-second position tolerance, and it carries no timestamp, because the
+core and the window share no clock. The window stamps each anchor
 with its own monotonic clock at receipt: `apply_batch` (`src/window/app.rs`)
 calls `Playhead::stamp_if_new` (`src/window/playhead.rs`), which reads the clock
 through the `Times` seam. The window derives from that stamp until the next
@@ -602,9 +616,8 @@ and the active item's finish epoch. The frame clock advances the prediction
 only while the anchor is active and not paused (see *Clocks* above). The
 `minute` counter (`Playhead::minute`) moves the finish times while playback is
 paused, with no update from the core: one timer re-arms at each wall-clock
-minute. The panels read the derived signals: the scrubber's fill and clocks, the
-transport's finish clock (`format_wall_clock`, the zero-padded `HH:MM` in the
-window's local zone), the rail's ring and remaining time, the compact
+minute. The panels read the derived signals: the seekbar's fill, the transport's elapsed and remaining clocks, the rail's
+ring and remaining time, the compact
 strip's progress line, the folded line's finish
 clock — the wall clock at the summary's `tail_secs` past the active item's
 end, with the ` +1d` suffix when the finish lands past the local day; the
@@ -625,50 +638,76 @@ the scrubber hover's `time_label` (the pointer drives it, not the clock).
 the queue row DTO carries no NowPlaying progress — the window reads the
 playhead's played fraction for the row whose slot is the anchor's active
 slot. mbv has no playback-rate fact, so the anchor has no rate and a rate
-change re-anchors only through the drift rule. The bottom layer's row
-holds play/pause at the scrubber's left, and the scrubber's clock line
-carries previous, back 10 s, forward 30 s, and next between the two clocks,
-all as solid Lucide shapes with the availability that the colour carries. The top layer's
+change re-anchors only through the drift rule. The bottom layer's two rows
+split the controls (`gui-queue-panel-redesign` design D3): the seek row is
+the scrubber alone, and the whole row is the `seekbar` region; the
+transport row holds play/pause, previous, back 10 s, forward 30 s, and
+next at its left and the elapsed and `−remaining` clocks at its right, all
+as solid Lucide shapes with the availability that the colour carries. The top layer's
 chips line holds the video stream's resolved label, and the audio and
 subtitle chips, each opening its `trackPopover` overlay with the choices and
-the chosen one marked. The control row paints while the title shows, and the
-stopped state paints it without one (below).
+the chosen one marked. The control rows paint while the title shows, and the
+stopped state paints them without one (below).
 
 The stage and the no-image column are the panel's two arrangements (design
 D6). When the active item's art is `Placeholder` or absent, the panel paints
 no artwork box at all: under the header it shows the chips line, then the
-control row at scale 1.0 — always visible, whatever the auto-hide setting —
+control rows at scale 1.0 — always visible, whatever the auto-hide setting —
 then the title. The panel's right-click menu still carries the auto-hide
-entry and its setting. The stopped state (design D7) shows the control row
+entry and its setting. The stopped state (design D7) shows the control rows
 without a title: while a shown local queue holds slots and nothing plays,
 the frame's `can_start` fact is true while `now_playing_title` is `None`,
-and the panel paints, under the header, only the control row at scale 1.0 —
+and the panel paints, under the header, only the control rows at scale 1.0 —
 no stage, no chips line, no title — with the scrubber's empty track, which
 resolves no seek while nothing plays. A shown peer queue and an empty shown
-local queue leave `can_start` false, so no control row paints.
+local queue leave `can_start` false, so no control rows paint.
 
 The Queue panel's recessed box sits below the player block on the
 `queuePanel` fill, with its header row, its rows, and its bottom spacer. The
-header paints the Queue chooser button — only while the chooser lists two or
-more entries, and it names the shown entry — the filter control, the
-new-queue control, and the close control, and nothing else: no remaining
-count and no queue finish clock (the folded line keeps both). The close
-control is disabled on the only local queue, and a disabled control claims
-no pointer. The header's controls and each row report their own region: the
-chooser, the filter, the new control, and the close control report their
+header is a 48 px bar on `--ef-bg1` with a 1 px `--ef-bg3` bottom border
+(`--canvas-queue-header-height`), padding `0 12px`, and gap 4 px
+(`gui-queue-panel-redesign` design D7). Its controls paint in the design's
+order and nothing else: the `QUEUE` label — an 11 px letter-spaced small
+caption — the switcher, the new-queue control, the close control, a flex
+spacer, and the filter control at the trailing edge; no remaining count and
+no queue finish clock ride the bar (the folded line keeps both). The
+switcher is always a button, with no plain-title branch and no two-entry
+gate: it carries the list glyph, the shown entry's name — `Queue` while the
+name is empty — the shown queue's slot count in a mono count chip, and a
+chevron that points up while the chooser's dropdown is open. The count is
+`GuiQueueHeaderFacts.shown_len`, the shown queue's whole slot count; the
+filter narrows the painted rows, never the count. The icon buttons are
+32×32 with the muted glyph; a hover raises the fill and brightens the
+glyph, the enabled close control hovers the destructive fill and glyph, and
+the disabled close control keeps its opacity and claims no pointer. The
+header's controls and each row report their own region: the switcher, the
+filter, the new control, and the close control report their
 `queueChooser`, `filter`, `newQueue`, and `closeQueue` targets.
 
 ### The Queue chooser
 
-The chooser button opens the Queue chooser
-(`src/window/components/queue_chooser_menu.rs`), a dropdown painted under
-the header at the button's leading edge, in the row menu's canvas chrome.
-Its entries are the local Owner's Named queues in queue order, then one
-entry for the connected peer Player owner, named by the peer's own name
-(its device name, or the route or endpoint it connects by).
-The shown entry leads with a check, the current queue — the one that holds
-the playhead — trails with an accent dot, and the peer entry trails with
-the direct-peer brand mark, so a peer is never read as a local queue.
+The switcher opens the Queue chooser
+(`src/window/components/queue_chooser_menu.rs`), a dropdown card the header
+paints from the switcher's own anchor box: it hangs 4 px under the
+switcher, left-aligned on the switcher's leading edge, and paints over the
+queue rows below. The card is the design's own chrome
+(`gui-queue-panel-redesign` design D8): min-width 260 px on `--ef-bg2` with
+a 1 px `--ef-bg4` border, radius 8, 4 px padding, and 34 px items that take
+the raised fill on the chooser's cursor and under the pointer. Its entries
+are the local Owner's Named queues in queue order, then one entry for the
+connected peer Player owner, named by the peer's own name (its device name,
+or the route or endpoint it connects by). Each entry paints, in order: the
+check (`--ef-green`) on the shown entry, the name, then at the trailing end
+the playing mark (`AudioLines` in `--ef-aqua`) or the current queue — the
+one that holds the playhead — as an accent dot, or the direct-peer brand
+mark, so a peer is never read as a local queue; last, the queue's slot
+count in mono `--ef-grey2`, so a count never reads as a mark. The count
+rides the projection (`QueueChooserEntryProjection.len` and
+`GuiQueueChooserEntry.len`): the shown entry's is its own live view's slot
+count, the current queue's is its view's, any other resting queue's is the
+`NamedQueueEntry.len` the Owner keeps fresh, and the peer's is its remote
+view's slot count.
+
 Choosing an entry — a press on its row, or Enter on the chooser's cursor —
 shows it and starts, stops, and moves no playback; a press sends
 `PlaybackRequest::QueueChooserEntry` with the entry's own identity (the
@@ -711,28 +750,29 @@ entry disconnects and the peer keeps playing; a local queue closes, with a
 confirmation only on the playing current queue, because closing it stops
 playback; and after a close the panel shows the current local queue.
 
-The item rows zebra-stripe as the TUI's
-`media_list/wide.rs` walk paints them: the frame carries each row's parity —
-a grouped list alternates within each group from its first member, an
-ungrouped list throughout — and a striped row takes the `queueColumn` fill
-inside the box. Each row paints the canvas row: its padded mono ordinal in
-place of the date gutter, one title line over a 2 px progress track, with no
-right-column value and no second text line. The shown queue's start slot
-carries the start mark: the filled play glyph while its queue plays, the
-outlined one while it is stopped or resting. A shown queue whose owner
+The item rows carry no zebra stripe and no leading accent edge
+(`gui-queue-panel-redesign` design D9): the row's look comes from its
+state, and the hover veil stays the shared `button` look. Each row paints
+the design's row: its padded two-digit mono ordinal in place of the date
+gutter, one title line, with no right-column value and no second text
+line, at the fixed 34 logical pixel height with 2 px between rows. The
+progress bar is absolute inside the row along its bottom edge — 2 px tall,
+4 px above the bottom, inset 54 px left and 12 px right, on the raised
+tier's track with the orange fill for a partial row and the green fill for
+the now-playing row — so the bar adds no height. The shown queue's start
+slot carries the start mark: the filled play glyph while its queue plays,
+the outlined one while it is stopped or resting. A shown queue whose owner
 reports no start slot — a peer without `named-queues` — carries the playing
-mark on its observed active slot and no start mark. At the canvas's fixed 30
-logical pixel height, the rows paint four looks (ADR 0040), and the four
-are distinct. The active row — the frame's `cursor`
-slot, the row the Queue's Surface state names — always paints the
-`selected` fill and a 4 px leading accent edge, and the hover veil leaves
-them in place. A hovered row that is neither the active row nor a marked
-row paints no fill of its own: the shared hover veil is its whole hover
-look, the inset shadow the stylesheet paints on every hovered `button`
-(`assets/app.css`). A marked row paints the `selected` fill with no edge.
-The now-playing row keeps its own look: the play glyph beside its title,
-as *Text and icons* describes. The looks need no focus fact, because the
-window holds none. The list paints no scrollbar column yet — the TUI
+mark on its observed active slot and no start mark. The rows paint four
+fills, and the four are distinct: the now-playing row fills
+`--ef-bg-green` with its green 600-weight title, a look no hover
+displaces; the active row — the frame's `cursor` slot, the row the Queue's
+Surface state names — and every marked row fill `--ef-bg3`, kept under the
+pointer too; a hovered row that is none of those fills `--ef-bg0`; and an
+ordinary row paints no fill of its own. A watched row paints `--ef-grey1`
+with the `--ef-bg5` strike, and a hovered watched row keeps the primary
+title. The looks need no focus fact, because the window holds none (ADR
+0040). The list paints no scrollbar column yet — the TUI
 reserves one only while the list is focused and overflows.
 
 The row hover and the drag paint from the frame, and the window holds
@@ -803,9 +843,10 @@ a `daemonLost` region, and a press and a chord run the same
 with the restart's own diagnostic and the quit choice returns the run's
 quit decision to the core.
 
-The footer line paints below the box between gap rows on the
-`queueFooterBand` fill. Its left group leads with the two queue-wide
-controls the player panel's header used to paint
+The footer line paints below the box between gap rows on the design's
+footer fill (`--ef-bg0` with a 1 px `--ef-bg3` top border,
+`gui-queue-panel-redesign` design D2). Its left group leads with the two
+queue-wide controls the player panel's header used to paint
 (`move-playback-header-into-queue-footer` D1, D2): the playback target —
 its Cast glyph, host label, and chevron, compacted to the band's 28 px
 control height — then the collapse control with its muted `Maximize2` glyph.

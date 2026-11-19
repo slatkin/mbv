@@ -1,19 +1,40 @@
 //! One queue row's canvas cells (the `rowCells` snippet of
-//! `QueuePanel`): the padded queue ordinal, the one title line over its
-//! progress track, and the start mark. The row carries no right-column value
-//! (gui-named-queues task 8.4, design D9). The hovered row reserves the
-//! leading slot its sibling grip covers and the trailing space its sibling
+//! `QueuePanel`): the padded queue ordinal, the one title line, the start mark,
+//! and the thin progress bar painted inside the row along its bottom. The row
+//! carries no right-column value (gui-named-queues task 8.4, design D9) and the
+//! bar adds no height: it is positioned against the row's own box, below the
+//! title line (gui-queue-panel-redesign design D9). The hovered row reserves
+//! the leading slot its sibling grip covers and the trailing space its sibling
 //! actions button paints over, and the drag ghost paints the title and the
-//! percent only. The row's colours come through the queue-local `--canvas-*`
-//! tokens (U13).
+//! percent only. The row's colours come through the queue column's `--ef-*`
+//! tokens (design D1).
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiSemanticState};
+use crate::window::components::queue_panel::geometry::{
+    ORDINAL_COL_PX, ROW_CELL_GAP_PX, ROW_INSET_PX, START_MARK_SLOT_PX,
+};
 use crate::window::icons::Play;
 use crate::window::playhead::Playhead;
-use crate::window::theme::canvas_var;
+use crate::window::theme::{EfToken, ef_var};
 use crate::window::truncate::{TextStyle, Truncate};
+
+/// The left inset of the row's progress bar in logical pixels (design D9: 54
+/// from the row's leading edge): the row's inset, the ordinal's column, the
+/// cell gap, and the start mark's slot, so the bar starts under the title and
+/// never under a mark.
+const PROGRESS_LEFT_PX: u16 = ROW_INSET_PX + ORDINAL_COL_PX + ROW_CELL_GAP_PX + START_MARK_SLOT_PX;
+
+/// The right inset of the row's progress bar in logical pixels (design D9).
+const PROGRESS_RIGHT_PX: u16 = 12;
+
+/// The row's progress bar height in logical pixels (design D9).
+const PROGRESS_HEIGHT_PX: u16 = 2;
+
+/// The progress bar's distance from the row's bottom edge in logical pixels
+/// (design D9).
+const PROGRESS_BOTTOM_PX: u16 = 4;
 
 /// Which cells a row paints: the list row, the hovered row (the chrome
 /// replaces the ordinal), or the drag ghost (the title and the percent only).
@@ -31,8 +52,7 @@ pub(super) struct ItemRow {
     pub(super) slot: u64,
     ordinal: usize,
     primary: String,
-    state: GuiSemanticState,
-    pub(super) striped: bool,
+    pub(super) state: GuiSemanticState,
 }
 
 impl ItemRow {
@@ -44,66 +64,76 @@ impl ItemRow {
                 ordinal,
                 primary,
                 state,
-                striped,
                 ..
             } => Some(Self {
                 slot: *slot,
                 ordinal: *ordinal,
                 primary: primary.clone(),
                 state: state.clone(),
-                striped: *striped,
             }),
             _ => None,
         }
     }
 }
 
-/// The colour set one row's cells paint in (the canvas's row states): the
-/// filled active row reads the dark ink, the hovered row the canvas's hover
-/// text, the watched row the muted text with a strike, and every other row
-/// the canvas's row text.
+/// The colour set one row paints in (the canvas's row states, design D9):
+/// the now-playing row paints the green title at weight 600 on the green
+/// fill, the active and marked rows the raised fill, the hovered row the hover
+/// fill, the watched row the grey title its strike crosses in the darker
+/// token, and every other row no fill and the primary text. The ordinal, the
+/// track, and the partial fill are shared: the number is grey, the track the
+/// raised tier, and the fill orange except on the playing row.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct RowTone {
-    title: String,
+pub(super) struct RowLook {
+    /// The row button's own fill, `None` for an ordinary resting row.
+    pub(super) background: Option<&'static str>,
+    title: &'static str,
     weight: f32,
-    strike: String,
-    ordinal: String,
-    track: String,
-    fill: String,
+    strike: &'static str,
+    ordinal: &'static str,
+    track: &'static str,
+    fill: &'static str,
 }
 
-/// The row's tone under the frame's hover: the playing row keeps its own
-/// fill, because a highlight marks focus only.
-pub(super) fn tone(row: &ItemRow, hover: Option<u64>) -> RowTone {
+/// The row's one look, so the row's fill and its cells read one precedence:
+/// the now-playing row's look is the playback fact and no hover displaces it,
+/// then the active and marked rows keep their raised fill under the pointer,
+/// then the hovered row takes the hover fill. A hovered row paints the primary
+/// text: the pointer outranks the watched row's grey.
+pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
+    let hovered = queue.hover == Some(row.slot);
     if row.state == GuiSemanticState::NowPlaying {
-        return RowTone {
-            title: canvas_var("heading"),
+        return RowLook {
+            background: Some(ef_var(EfToken::BgGreen)),
+            title: ef_var(EfToken::Green),
             weight: 600.0,
-            strike: canvas_var("strike"),
-            ordinal: canvas_var("accent"),
-            track: canvas_var("track-current"),
-            fill: canvas_var("accent"),
+            strike: ef_var(EfToken::Bg5),
+            ordinal: ef_var(EfToken::Grey1),
+            track: ef_var(EfToken::Bg2),
+            fill: ef_var(EfToken::Green),
         };
     }
-    let watched = row.state == GuiSemanticState::Played;
-    let hovered = hover == Some(row.slot);
-    RowTone {
-        title: if hovered {
-            canvas_var("heading")
-        } else if watched {
-            canvas_var("muted")
-        } else {
-            canvas_var("text")
-        },
+    let picked = queue.marks.contains(&row.slot) || queue.cursor == Some(row.slot);
+    let background = if picked {
+        Some(ef_var(EfToken::Bg3))
+    } else if hovered {
+        Some(ef_var(EfToken::Bg0))
+    } else {
+        None
+    };
+    let title = if row.state == GuiSemanticState::Played && !hovered {
+        ef_var(EfToken::Grey1)
+    } else {
+        ef_var(EfToken::Fg)
+    };
+    RowLook {
+        background,
+        title,
         weight: 400.0,
-        strike: canvas_var("strike"),
-        ordinal: if hovered {
-            canvas_var("heading")
-        } else {
-            canvas_var("ordinal")
-        },
-        track: canvas_var("track"),
-        fill: canvas_var("partial"),
+        strike: ef_var(EfToken::Bg5),
+        ordinal: ef_var(EfToken::Grey1),
+        track: ef_var(EfToken::Bg2),
+        fill: ef_var(EfToken::Orange),
     }
 }
 
@@ -163,21 +193,21 @@ pub(super) fn start_mark(queue: &GuiQueue, slot: u64) -> Option<StartMark> {
 #[derive(Props, Debug, Clone, PartialEq)]
 pub(super) struct RowCellsProps {
     pub(super) row: ItemRow,
-    pub(super) cell_tone: RowTone,
+    pub(super) look: RowLook,
     pub(super) chrome: RowChrome,
     pub(super) mark: Option<StartMark>,
 }
 
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
-/// ordinal, the one title line over its progress track, and the start mark.
-/// The hovered row reserves the leading slot its sibling grip covers and the
-/// trailing space its sibling actions button paints over, and the drag ghost
-/// paints the title and the percent only.
+/// ordinal, the one title line, the start mark, and the progress bar painted
+/// inside the row's bottom edge. The hovered row reserves the leading slot its
+/// sibling grip covers and the trailing space its sibling actions button paints
+/// over, and the drag ghost paints the title and the percent only.
 #[component]
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
     let row = &props.row;
-    let cell_tone = &props.cell_tone;
+    let look = &props.look;
     let chrome = props.chrome;
     let progress = row_progress(row, &playhead);
     let progress_width = progress.map(|progress| progress.max(3));
@@ -189,7 +219,10 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         if chrome == RowChrome::Row {
             span {
                 class: "shrink-0 font-mono tabular-nums",
-                style: "width: 18px; font-size: 11px; color: {cell_tone.ordinal};",
+                style: format!(
+                    "width: {ORDINAL_COL_PX}px; font-size: 11px; color: {};",
+                    look.ordinal
+                ),
                 "data-ordinal": "",
                 {ordinal_text}
             }
@@ -202,71 +235,70 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
             }
         }
         span {
-            class: "flex min-w-0 flex-1 flex-col justify-center",
-            style: "gap: 3px;",
-            span {
-                class: "flex min-w-0 items-center",
-                style: "gap: 6px;",
-                // The start mark: the filled triangle while the shown queue
-                // plays, the outlined one while it is stopped or resting
-                // (design D9).
-                if let Some(mark) = mark {
-                    match mark {
-                        StartMark::Playing => rsx! {
-                            Play {
-                                size: 12,
-                                fill: canvas_var("accent"),
-                                color: canvas_var("accent"),
-                            }
-                        },
-                        StartMark::Start => rsx! {
-                            Play {
-                                size: 12,
-                                fill: "none".to_owned(),
-                                color: canvas_var("accent"),
-                            }
-                        },
-                    }
-                }
-                {
-                    let title_color = if chrome == RowChrome::Ghost {
-                        canvas_var("heading")
-                    } else {
-                        cell_tone.title.clone()
-                    };
-                    // The title is a row-flex item, so it grows into the row's
-                    // free width: its measure must read the room the row has,
-                    // not the width of the text it currently paints.
-                    let title_class = if row.state == GuiSemanticState::Played {
-                        "min-w-0 flex-1 line-through"
-                    } else {
-                        "min-w-0 flex-1"
-                    };
-                    let title_css = format!(
-                        "font-size: 13.5px; font-weight: {}; text-decoration-color: {}; color: {};",
-                        cell_tone.weight, cell_tone.strike, title_color
-                    );
-                    rsx! {
-                        Truncate {
-                            text: row.primary.clone(),
-                            class: title_class.to_owned(),
-                            css: title_css,
-                            style: TextStyle::sans(13.5, cell_tone.weight),
+            class: "flex min-w-0 flex-1 items-center",
+            style: "gap: 6px;",
+            // The start mark: the filled triangle while the shown queue
+            // plays, the outlined one while it is stopped or resting
+            // (design D9).
+            if let Some(mark) = mark {
+                match mark {
+                    StartMark::Playing => rsx! {
+                        Play {
+                            size: 12,
+                            fill: ef_var(EfToken::Green),
+                            color: ef_var(EfToken::Green).to_owned(),
                         }
+                    },
+                    StartMark::Start => rsx! {
+                        Play {
+                            size: 12,
+                            fill: "none".to_owned(),
+                            color: ef_var(EfToken::Green).to_owned(),
+                        }
+                    },
+                }
+            }
+            {
+                let title_color = if chrome == RowChrome::Ghost {
+                    ef_var(EfToken::Fg).to_owned()
+                } else {
+                    look.title.to_owned()
+                };
+                // The title is a row-flex item, so it grows into the row's
+                // free width: its measure must read the room the row has,
+                // not the width of the text it currently paints.
+                let title_class = if row.state == GuiSemanticState::Played {
+                    "min-w-0 flex-1 line-through"
+                } else {
+                    "min-w-0 flex-1"
+                };
+                let title_css = format!(
+                    "font-size: 13.5px; font-weight: {}; text-decoration-color: {}; color: {};",
+                    look.weight, look.strike, title_color
+                );
+                rsx! {
+                    Truncate {
+                        text: row.primary.clone(),
+                        class: title_class.to_owned(),
+                        css: title_css,
+                        style: TextStyle::sans(13.5, look.weight),
                     }
                 }
             }
-            if let Some(width) = progress_width
-                && chrome != RowChrome::Ghost
-            {
+        }
+        if let Some(width) = progress_width
+            && chrome != RowChrome::Ghost
+        {
+            // The row's progress bar: absolute against the row's own box, so it
+            // paints along the row's bottom without adding a line to the row
+            // (design D9).
+            span {
+                class: "absolute block",
+                style: "left: {PROGRESS_LEFT_PX}px; right: {PROGRESS_RIGHT_PX}px; bottom: {PROGRESS_BOTTOM_PX}px; height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; background: {look.track};",
+                "data-progress": "",
                 span {
-                    class: "block shrink-0",
-                    style: "height: 2px; border-radius: 1px; background: {cell_tone.track};",
-                    "data-progress": "",
-                    span {
-                        class: "block",
-                        style: "height: 2px; border-radius: 1px; width: {width}%; background: {cell_tone.fill};",
-                    }
+                    class: "block",
+                    style: "height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; width: {width}%; background: {look.fill};",
                 }
             }
         }
@@ -275,7 +307,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         {
             span {
                 class: "shrink-0 font-mono tabular-nums",
-                style: "font-size: 12px; color: var(--canvas-partial);",
+                style: format!("font-size: 12px; color: {};", ef_var(EfToken::Orange)),
                 "data-ghost-percent": "",
                 "{progress}%"
             }

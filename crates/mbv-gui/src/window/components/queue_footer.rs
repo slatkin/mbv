@@ -56,12 +56,10 @@
 //! the band under the Library column owns them. While the Library panel
 //! does not show, this line paints them as the TUI's status row does.
 //!
-//! The band paints the canvas's type and border (mono 12 px, a 1 px top
-//! border in the queue-local `--canvas-border` token) over the queue column's
-//! backdrop: the `queueFooterBand` name it carries is not part of the
-//! window's `--mbv-*` token set, so the band paints no fill of its own
-//! (`window/theme.rs::write_chrome` holds the rule and the reason), as the
-//! reference build painted it. The text keeps the secondary-title token
+//! The band paints the canvas's type over the queue column's floor (mono
+//! 12 px, the 1 px `--ef-bg3` top border and the `--ef-bg0` fill design D2 and
+//! D1 name of the redesign), so the footer reads as the column's own band under
+//! the list. The text keeps the secondary-title token
 //! (`--canvas-type-secondary`, the queue source is a secondary title) and the
 //! canvas's time token for the totals (design D14: the colour carries the data
 //! type). The slice's `GuiStatusBar` carries no volume,
@@ -85,7 +83,7 @@ use crate::window::layout::{
 use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::status::toast_color;
-use crate::window::theme::role_var;
+use crate::window::theme::{EfToken, ef_var, role_var};
 use crate::window::time::format_duration_short;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -255,7 +253,11 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
         // The open chooser's popover is the band's child, anchored above it.
         div {
             class: "relative flex items-center font-mono whitespace-nowrap",
-            style: "height: 40px; padding-inline: 16px; font-size: 12px; border-top: 1px solid var(--canvas-border); background: var(--mbv-queueFooterBand);",
+            style: format!(
+                "height: 40px; padding-inline: 16px; font-size: 12px; border-top: 1px solid {}; background: {};",
+                ef_var(EfToken::Bg3),
+                ef_var(EfToken::Bg0)
+            ),
             "data-footer-line": "",
             // The Queue zone (`gui-pointer-target-interaction` D1) reaches the
             // footer band: it sits under the Queue list box, outside the box's

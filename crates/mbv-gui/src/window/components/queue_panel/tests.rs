@@ -12,8 +12,12 @@
 //! presses are not ported: they are the root input layer's contract
 //! (`window/input.rs`), which the panel forwards to untouched. The core
 //! channel is a mock pair; the clocks are the injected recorders (D10); no
-//! test opens a window, sleeps, or reaches the core.
+//! test opens a window, sleeps, or reaches the core. The capacity contract's
+//! module sat undeclared since the Blitz port, so it never compiled; the
+//! redesign's 34 px row gave it a rule to state again
+//! (gui-queue-panel-redesign task 6.1).
 
+mod capacity;
 mod chooser;
 mod cross_panel;
 mod harness;

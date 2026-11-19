@@ -13,9 +13,9 @@ pub mod queue;
 pub mod settings;
 pub mod theme;
 
-use mbv::{PlaybackChapter, QueuePlaybackProjection};
+use mbv::QueuePlaybackProjection;
 
-use self::playback::{GuiScrubberHover, GuiScrubberTile};
+use self::playback::GuiScrubberHover;
 
 /// Why the window has no slice yet (design D9): one variant per Owner attach
 /// outcome, with the text `startup::run_local_instance` gives the TUI Client.
@@ -38,53 +38,30 @@ pub enum GuiAttachState {
     Failed(String),
 }
 
-/// The scrubber's hover preview the playback section carries (design D4; task
-/// 6.7 for the tile): the Surface state's hover fraction resolved to the time
-/// and chapter it names against the playback projection the tick reads, plus
-/// the tile the core thread resolved for the same position. `None` while the
-/// pointer is away from the bar.
+/// The scrubber's hover preview the playback section carries (design D4):
+/// the Surface state's hover fraction resolved to the time it names against
+/// the playback projection the tick reads. `None` while the pointer is away
+/// from the bar.
 pub(crate) fn scrubber_hover(
     fraction: Option<f64>,
     playback: &QueuePlaybackProjection,
-    tile: Option<GuiScrubberTile>,
 ) -> Option<GuiScrubberHover> {
     let fraction = fraction?;
     let ticks = scrubber_ticks(playback, fraction);
-    let chapter = covering_chapter(playback, ticks);
     Some(GuiScrubberHover {
         fraction,
         time_label: mbv_ui_model::ui_util::fmt_duration_short(
             ticks / mbv_emby_model::TICKS_PER_SECOND,
         ),
-        chapter: chapter.map(|(_, chapter)| chapter.name.clone()),
-        chapter_number: chapter.map(|(index, _)| index + 1),
-        tile,
     })
 }
 
-/// The tick the pointer's `fraction` along the painted bar names. The core
-/// thread resolves the same tick to pick the preview's trickplay tile, so
-/// both read this one conversion.
-#[must_use]
-pub fn scrubber_ticks(playback: &QueuePlaybackProjection, fraction: f64) -> i64 {
+/// The tick the pointer's `fraction` along the painted bar names, so the
+/// hover's time label reads the same conversion the painted bar does.
+fn scrubber_ticks(playback: &QueuePlaybackProjection, fraction: f64) -> i64 {
     mbv_emby_model::seconds_to_ticks(
         fraction * mbv_emby_model::ticks_to_seconds(playback.playback.runtime_ticks),
     )
-}
-
-/// The chapter that covers `ticks`, with its 1-based ordinal: the last
-/// boundary at or before it, the covering rule the TUI's chapter lookups
-/// share. The ordinal is the canvas preview's `Ch. 2` form.
-fn covering_chapter(
-    playback: &QueuePlaybackProjection,
-    ticks: i64,
-) -> Option<(usize, &PlaybackChapter)> {
-    playback
-        .chapters
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, chapter)| chapter.start_ticks <= ticks)
 }
 
 /// The canvas panel's collapse and queue-fold facts (design D10), mirroring

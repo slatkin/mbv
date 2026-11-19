@@ -7,8 +7,12 @@ use std::collections::BTreeMap;
 
 use rstest::rstest;
 
-use super::{glyph_color, role_property, theme_style_rule};
+use super::{EfToken, ef_var, glyph_color, role_property, theme_style_rule};
 use crate::bridge::frame::theme::{GuiChrome, GuiRgb, GuiRole, GuiTheme};
+
+/// The stylesheet the app loads, read so a palette name the Rust side writes
+/// must exist there.
+const APP_CSS: &str = include_str!("../../../assets/app.css");
 
 /// A theme with two roles and a full chrome fixture.
 fn fixture_theme() -> GuiTheme {
@@ -146,6 +150,21 @@ fn the_theme_rule_declares_the_reference_property_set() {
 #[test]
 fn an_absent_theme_writes_nothing() {
     assert_eq!(theme_style_rule(None), "");
+}
+
+/// Contract (design D1 of `gui-queue-panel-redesign`): every `--ef-*` token the
+/// typed accessor names is a property `assets/app.css` defines, so a painter
+/// cannot name a token that compiles and paints nothing.
+#[test]
+fn every_ef_token_names_a_stylesheet_property() {
+    for token in EfToken::ALL {
+        assert!(
+            APP_CSS.contains(&format!("--ef-{}:", token.name())),
+            "{} is not a property in app.css",
+            token.name()
+        );
+        assert_eq!(ef_var(token), format!("var(--ef-{})", token.name()));
+    }
 }
 
 /// A transport glyph paints its role while actionable and the muted role

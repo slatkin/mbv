@@ -8,6 +8,7 @@ use rstest::rstest;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiQueueScroll, GuiSemanticState};
+use crate::window::theme::{EfToken, ef_var};
 
 /// Contract (`QueuePanel.test.ts`): a frame with slots renders its rows — the
 /// item rows' titles and the structural heading among them, and one
@@ -99,11 +100,11 @@ fn expected_fills(expected: Option<(u64, &str)>) -> Vec<Option<String>> {
         .collect()
 }
 
-/// Contract (`QueuePanel.test.ts`): the rows paint the watched, active, and
-/// partial-progress states — the watched row strikes its title through in
-/// the canvas's strike colour, the playing row keeps its own fill, carries the
-/// filled start mark, and weights its title 600, and the track under the title
-/// fills to max(percent, 3)%.
+/// Contract (`QueuePanel.test.ts`, `gui-queue-panel-redesign` design D9): the
+/// rows paint the watched, active, and partial-progress states — the watched
+/// row paints its title grey and crosses it with the darker strike colour, the
+/// now-playing row fills green, carries the filled start mark, and paints its
+/// title green at weight 600, and the progress bar fills to max(percent, 3)%.
 #[test]
 fn the_rows_paint_the_watched_active_and_partial_progress_states() {
     let rows = vec![
@@ -127,16 +128,27 @@ fn the_rows_paint_the_watched_active_and_partial_progress_states() {
     assert!(watched.is_some_and(|class| class.contains("line-through")));
     let watched_style = fixture.style_of("[data-slot=\"1\"] .truncate");
     assert!(
-        watched_style.contains("text-decoration-color: var(--canvas-strike)"),
+        watched_style.contains(&format!("text-decoration-color: {}", ef_var(EfToken::Bg5))),
+        "{watched_style}"
+    );
+    assert!(
+        watched_style.contains(&format!("color: {}", ef_var(EfToken::Grey1))),
         "{watched_style}"
     );
 
     let playing_row = fixture.style_of("[data-slot=\"2\"]");
-    assert!(!playing_row.contains("background"), "{playing_row}");
+    assert!(
+        playing_row.contains(&format!("background: {}", ef_var(EfToken::BgGreen))),
+        "{playing_row}"
+    );
     assert!(fixture.presents("[data-slot=\"2\"] svg"));
     let playing_title = fixture.style_of("[data-slot=\"2\"] .truncate");
     assert!(
         playing_title.contains("font-weight: 600"),
+        "{playing_title}"
+    );
+    assert!(
+        playing_title.contains(&format!("color: {}", ef_var(EfToken::Green))),
         "{playing_title}"
     );
 
@@ -180,40 +192,32 @@ fn a_long_title_regrows_when_the_row_gets_room() {
     assert_eq!(fixture.text_of("[data-slot=\"1\"] .truncate"), title);
 }
 
-/// Contract (`QueuePanel.test.ts`, design D7): the active row paints the
-/// canvas picked fill and its 4 px leading accent edge with no focus fact —
-/// the window holds none — and a marked row paints the same fill with no
-/// edge, playing or not.
+/// Contract (`gui-queue-panel-redesign` design D9): the active row and a marked
+/// row paint the raised fill with no focus fact — the window holds none — and
+/// no leading accent stripe paints on either.
 #[test]
-fn the_active_and_marked_rows_paint_the_canvas_picked_fill() {
-    let rows = vec![item(1), in_state(item(2), GuiSemanticState::NowPlaying)];
+fn the_active_and_marked_rows_paint_the_raised_fill() {
+    let rows = vec![item(1), item(2)];
     let mut rows_frame = queue(rows);
-    rows_frame.active = Some(2);
     rows_frame.cursor = Some(1);
     rows_frame.marks = vec![2];
     let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
 
-    assert!(
-        fixture
-            .style_of("[data-slot=\"1\"]")
-            .contains("background: var(--canvas-selected)")
-    );
-    let edge = fixture.style_of("[data-active-edge=\"1\"]");
-    assert!(edge.contains("width: 4px"), "{edge}");
-    assert!(edge.contains("background: var(--canvas-accent)"), "{edge}");
-    assert!(
-        fixture
-            .style_of("[data-slot=\"2\"]")
-            .contains("background: var(--canvas-selected)")
-    );
-    assert!(!fixture.presents("[data-active-edge=\"2\"]"));
+    for slot in [1, 2] {
+        let style = fixture.style_of(&format!("[data-slot=\"{slot}\"]"));
+        assert!(
+            style.contains(&format!("background: {}", ef_var(EfToken::Bg3))),
+            "{style}"
+        );
+    }
+    assert!(!fixture.presents("[data-active-edge]"));
 }
 
-/// Contract (`QueuePanel.test.ts`, design D7): a hovered row that is not the
-/// active row paints no picked fill and no edge, so the active row keeps its
-/// treatment while the pointer rests on its neighbour.
+/// Contract (`gui-queue-panel-redesign` design D9): a hovered row that is not
+/// the active row paints the hover fill, while the active row keeps its raised
+/// fill under the pointer resting on its neighbour.
 #[test]
-fn the_hovered_row_paints_no_active_treatment() {
+fn the_hovered_row_paints_the_hover_fill() {
     let mut rows_frame = queue(vec![item(1), item(2)]);
     rows_frame.cursor = Some(1);
     rows_frame.hover = Some(2);
@@ -221,24 +225,22 @@ fn the_hovered_row_paints_no_active_treatment() {
 
     let hovered = fixture.style_of("[data-slot=\"2\"]");
     assert!(
-        !hovered.contains("background: var(--canvas-selected)"),
+        hovered.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
         "{hovered}"
     );
-    assert!(!fixture.presents("[data-active-edge=\"2\"]"));
     assert!(
         fixture
             .style_of("[data-slot=\"1\"]")
-            .contains("background: var(--canvas-selected)"),
+            .contains(&format!("background: {}", ef_var(EfToken::Bg3))),
         "the active row keeps its fill"
     );
-    assert!(fixture.presents("[data-active-edge=\"1\"]"));
 }
 
 /// Contract (`QueuePanel.test.ts`, the Menus artboard B.3): the hovered row
 /// alone paints the grip and the actions button — the grip's six dots in the
-/// leading slot, the 30 px actions box in the canvas's fill and radius over the
-/// empty space at the row's trailing end, the row filled with the hover colour,
-/// and its title ellipsised in the hover text.
+/// leading slot, the row-height actions box in the canvas's fill and radius over
+/// the empty space at the row's trailing end, the row filled with the hover
+/// colour, and its title ellipsised in the hover text.
 #[test]
 fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
     let rows = vec![item(1), item(2), item(3)];
@@ -258,10 +260,10 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
         Some("Row actions")
     );
     let actions_style = fixture.style_of("[data-actions]");
-    assert!(actions_style.contains("width: 30px"), "{actions_style}");
-    assert!(actions_style.contains("height: 30px"), "{actions_style}");
+    assert!(actions_style.contains("width: 34px"), "{actions_style}");
+    assert!(actions_style.contains("height: 34px"), "{actions_style}");
     assert!(
-        actions_style.contains("border-radius: 4px"),
+        actions_style.contains("border-radius: 6px"),
         "{actions_style}"
     );
     assert!(
@@ -270,18 +272,22 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
     );
 
     // The hovered row reserves the button's width at its trailing end and
-    // paints no fill of its own (design D7): the veil every hovered `button`
-    // paints (`assets/app.css`) is its hover look, and the picked fill stays
-    // with the active and marked rows.
+    // paints the hover fill (design D9).
     let row_style = fixture.style_of("[data-slot=\"2\"]");
     assert!(
-        row_style.contains("padding-inline: 4px 34px"),
+        row_style.contains("padding-inline: 4px 36px"),
         "{row_style}"
     );
-    assert!(!row_style.contains("background"), "{row_style}");
-    assert!(row_style.contains("border-radius: 4px"), "{row_style}");
+    assert!(
+        row_style.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
+        "{row_style}"
+    );
+    assert!(row_style.contains("border-radius: 6px"), "{row_style}");
     let title = fixture.style_of("[data-slot=\"2\"] .truncate");
-    assert!(title.contains("color: var(--canvas-heading)"), "{title}");
+    assert!(
+        title.contains(&format!("color: {}", ef_var(EfToken::Fg))),
+        "{title}"
+    );
 }
 
 /// Contract (user request 2026-11-17): a list longer than its viewport paints
@@ -316,4 +322,43 @@ fn a_list_that_fits_paints_no_scroll_bar() {
     );
 
     assert!(!fixture.presents("[data-scrollbar]"));
+}
+
+/// Contract (`gui-queue-panel-redesign` task 6.2, spec `gui-client` "Rows show
+/// their state"): a row with partial progress paints exactly the height of a
+/// row without it — the bar lives inside the row's own box and adds no line.
+#[test]
+fn a_partial_progress_row_paints_the_same_height_as_an_unwatched_row() {
+    let rows = vec![
+        item(1),
+        in_state(
+            renamed(item(2), "Partial"),
+            GuiSemanticState::Active { progress: Some(42) },
+        ),
+    ];
+    let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
+
+    assert!(fixture.presents("[data-slot=\"2\"] [data-progress]"));
+    let unwatched = fixture.rect_of("[data-slot=\"1\"]");
+    let partial = fixture.rect_of("[data-slot=\"2\"]");
+    assert_eq!(partial.height, unwatched.height);
+    assert_eq!(partial.height, 34.0);
+}
+
+/// Contract (user report 2026-11-19, after `gui-queue-panel-redesign`): the
+/// first queue row does not touch the queue header — a gap sits between the
+/// header's bottom edge and the first row's top edge.
+#[test]
+fn the_first_row_sits_below_the_header_with_a_gap() {
+    let fixture = built_with_frame(queue_panel_app, queue(vec![item(1)]), summary(), None);
+
+    let header = fixture.rect_of("[data-queue-header]");
+    let row = fixture.rect_of("[data-slot]");
+
+    assert!(
+        row.y >= header.y + header.height + 8.0,
+        "header ends at {}, the first row starts at {}",
+        header.y + header.height,
+        row.y
+    );
 }

@@ -273,6 +273,9 @@ pub struct GuiQueueChooserEntry {
     pub current: bool,
     /// Whether this entry is the current queue while the local Owner plays it.
     pub playing: bool,
+    /// The queue's slot count, painted at the entry's trailing end (design D8
+    /// of `gui-queue-panel-redesign`).
+    pub len: usize,
 }
 
 impl From<&QueueChooserEntryProjection> for GuiQueueChooserEntry {
@@ -283,6 +286,7 @@ impl From<&QueueChooserEntryProjection> for GuiQueueChooserEntry {
             shown: entry.shown,
             current: entry.current,
             playing: entry.playing,
+            len: entry.len,
         }
     }
 }

@@ -119,8 +119,8 @@ impl Times for FakeTimes {
     }
 }
 
-/// The queue the panel screens paint: three rows, the cursor on the first, the
-/// second playing and hovered, and the stripes' zebra parity.
+/// The queue the panel screens paint: three rows, the cursor on the first, and
+/// the second playing and hovered.
 fn queue() -> GuiQueue {
     GuiQueue {
         rows: vec![
@@ -151,12 +151,11 @@ fn row(slot: u64, state: GuiSemanticState) -> GuiQueueRow {
         duration: Some("3:12".to_owned()),
         kind: GuiMediaKind::Media,
         state,
-        striped: slot.is_multiple_of(2),
     }
 }
 
 /// The queue summary the header paints: the remaining count, the tail offset,
-/// and the queue's total time, with one local queue so the chooser is absent.
+/// and the queue's total time, with one local queue and no peer.
 fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 2,
@@ -169,8 +168,8 @@ fn summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 1,
             shown_name: "Default".to_owned(),
+            shown_len: 26,
             close_disabled: true,
         },
     }
@@ -186,10 +185,6 @@ fn playing(art: GuiArtRef) -> GuiQueuePlayback {
         now_playing_title: Some("Track title".to_owned()),
         parent_line: Some("The Show".to_owned()),
         episode_badge: Some("S2 · E5".to_owned()),
-        chapters: Vec::new(),
-        intro_mark: None,
-        credits_mark: None,
-        trickplay: None,
         availability: GuiTransportAvailability {
             stop: true,
             next: true,

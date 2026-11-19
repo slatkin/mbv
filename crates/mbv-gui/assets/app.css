@@ -122,9 +122,6 @@
 	--canvas-ink: #232a2e; /* the active row's dark text and progress fill */
 	--canvas-segment-active: #475258; /* the switch's active segment */
 	--canvas-ordinal: #7f897d; /* the row ordinal */
-	--canvas-strike: #56635f; /* the watched row's strike-through */
-	--canvas-track: #414b50; /* the progress track */
-	--canvas-track-current: #7d9460; /* the active row's progress track */
 	--canvas-muted: #9da9a0; /* the second header line, inactive segments, watched text, Length values */
 	--canvas-text: #d3c6aa; /* the row title */
 	--canvas-heading: #e9e1cc; /* the header's heading, active segment, hovered row text, and drag ghost text */
@@ -167,9 +164,9 @@
 	   paints, so a bare ghost button, a picked row, and an accent Play button
 	   each answer the pointer in their own colour. */
 	--canvas-hover-veil: color-mix(in srgb, #d3c6aa 14%, transparent);
-	/* The canvas header's two lines over the 44 px filter control, between
-	   12 px and 8 px of padding. */
-	--canvas-queue-header-height: 64px;
+	/* The Queue header bar's height (gui-queue-panel-redesign design D7): one
+	   row of 32 px controls in a 48 px bar. */
+	--canvas-queue-header-height: 48px;
 	/* The GUI's data types (add-gui-settings-screen design D14): weight and size
 	   carry hierarchy and colour carries the type. Each type names one token
 	   that aliases the hue the palette already carried, except the secondary
@@ -183,6 +180,32 @@
 	--canvas-type-secondary: #d699b6; /* a secondary title: a series, a show, a parent */
 	--canvas-type-role: var(--canvas-owner); /* #dbbc7f: a role and a character */
 	--canvas-type-repeat-opacity: 0.65; /* a time or date repeated down a list */
+}
+
+/* The Queue column's Everforest Dark Hard tokens (gui-queue-panel-redesign
+   design D1): the values the redesign's canvas names, under the `--ef-`
+   prefix the canvas uses. The Queue column's components read these tokens;
+   the Library column is out of scope and keeps the `--canvas-*` set, whose
+   names describe the roles they held before this change. */
+:root {
+	--ef-player: #15191b; /* the player backdrop */
+	--ef-bg-dim: var(--canvas-queue-column); /* the queue list, recessed */
+	--ef-bg0: var(--canvas-library-column); /* the title block, the footer, a hovered row */
+	--ef-bg1: #2e383c; /* the queue header bar, the count chip */
+	--ef-bg2: #374145; /* the switcher at rest, the menu, the row progress track */
+	--ef-bg3: #414b50; /* rules, a hovered control, the active row, an active or hovered menu item */
+	--ef-bg4: #495156; /* the controls' borders */
+	--ef-bg5: #4f5b58; /* a hovered border, the strike line */
+	--ef-bg-green: #3c4841; /* the now-playing row */
+	--ef-bg-red: #4c3743; /* a hovered close control */
+	--ef-fg: var(--canvas-text); /* the primary text */
+	--ef-grey0: #7a8478; /* the open switcher's border */
+	--ef-grey1: #859289; /* the row numbers, a watched title */
+	--ef-grey2: var(--canvas-muted); /* the secondary text, the glyphs, the seek track's base */
+	--ef-green: var(--canvas-accent); /* the played fill, the play button, the now-playing text, a check */
+	--ef-aqua: var(--canvas-insertion); /* the playing mark in the menu */
+	--ef-orange: var(--canvas-partial); /* the partial-progress fill */
+	--ef-red: var(--canvas-destructive); /* the parent line, a destructive entry */
 }
 
 @theme inline {
@@ -276,17 +299,49 @@
    up. The filter field's frame is a `label` around its `input`, so it takes
    the same veil while the pointer is on the field; the Settings forms' fields
    join through their `data-settings-field` marker (design
-   add-gui-settings-screen D11 *Pointer contract*). The seekbar is the one
-   control left out: it already answers the pointer with the trickplay tile
-   preview, and a veil over its 60 px box would tint the elapsed and remaining
-   labels with it. */
+   add-gui-settings-screen D11 *Pointer contract*).
+   A control that paints its own pointer look sets `--hover-veil: transparent`
+   on itself or on an ancestor (the Queue header's bar, the Queue chooser's
+   card, the seekbar's row), so the shared glow does not wash the look and no
+   rule has to name the component. */
 button:not(:disabled):hover,
 [role='menuitem']:not([aria-disabled='true']):hover,
 [role='tab']:not([aria-disabled='true']):hover,
 [role='option']:hover,
+[role='slider']:hover,
 [data-settings-field]:not(:disabled):hover,
 label:has(> input:hover) {
-	box-shadow: inset 0 0 0 100vmax var(--canvas-hover-veil);
+	box-shadow: inset 0 0 0 100vmax var(--hover-veil, var(--canvas-hover-veil));
+}
+
+/* The Queue header's controls and the Queue chooser's items paint their own
+   hover (gui-queue-panel-redesign design D7, D8): the switcher takes a raised
+   fill and a brighter border, each icon button a raised fill and a brighter
+   glyph, the enabled close the destructive pair, and each chooser item the
+   raised fill its cursor row paints. The colours read the `--ef-*` palette
+   through `window/theme.rs::ef_var`, so the rules live here rather than in
+   `hover:` utilities whose class names a scanner must see as literals. */
+[data-queue-header] button {
+	color: var(--ef-grey2);
+}
+[data-queue-header] button:not(:disabled):hover {
+	background-color: var(--ef-bg3);
+	color: var(--ef-fg);
+}
+[data-queue-header] [data-queue-chooser] {
+	background-color: var(--ef-bg2);
+	border-color: var(--ef-bg4);
+}
+[data-queue-header] [data-queue-chooser]:hover {
+	background-color: var(--ef-bg3);
+	border-color: var(--ef-bg5);
+}
+[data-queue-header] [data-close-queue]:not(:disabled):hover {
+	background-color: var(--ef-bg-red);
+	color: var(--ef-red);
+}
+[data-queue-chooser-menu] [data-chooser-entry]:hover {
+	background-color: var(--ef-bg3);
 }
 
 /* The transport's seek labels: the `−10` / `+30` seconds text answers the

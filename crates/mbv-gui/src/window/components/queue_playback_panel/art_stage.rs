@@ -1,7 +1,7 @@
 //! The player stage and its overlay layers (`gui-art-player-overlay` design
-//! D1, D6, D8): the stage wrapper, the clipped media box, the top layer with
-//! the track chips and the episode badge, and the bottom layer with its
-//! gradient and the control row.
+//! D1, D6, D8; `gui-queue-panel-redesign` design D2, D3): the stage wrapper,
+//! the clipped media box, the top layer with the track chips and the episode
+//! badge, and the bottom layer with its scrim and the control rows.
 //!
 //! The stage is the visual slot: a `relative` wrapper with no clip that
 //! carries the `visualSlot` region, so the panel reports one region for the
@@ -10,8 +10,8 @@
 //! absolute siblings over the media box; a press on a control lands on the
 //! control's own region, which the panel pushes after the stage's (design D4).
 //!
-//! The control row is one component ([`ControlRow`]) because two
-//! arrangements paint it: the stage's bottom layer, and the no-image column
+//! The control rows are one component ([`ControlRow`]) because two
+//! arrangements paint them: the stage's bottom layer, and the no-image column
 //! the panel paints for `Placeholder` and `None` artwork, where no stage
 //! exists (design D6, D7). [`ChipsAndBadge`] is shared the same way: the top
 //! layer holds it, and the no-image column paints it as its own line.
@@ -22,8 +22,8 @@
 //! unit while the no-image column paints it at full size.
 //!
 //! The auto-hide control is not here: the player panel's right-click menu
-//! carries it (gui-player-overlay-menu), so the bottom layer paints one
-//! row and the stage's height limit names that row alone.
+//! carries it (gui-player-overlay-menu), so the bottom layer paints the two
+//! rows of the design and the stage's height limit names those rows alone.
 
 use dioxus_native::prelude::*;
 
@@ -34,19 +34,43 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::track_chips::TrackChips;
 use crate::window::icons::{Pause, Play, SkipBack, SkipForward};
-use crate::window::theme::{glyph_color, role_var};
+use crate::window::playhead::Playhead;
+use crate::window::theme::{EfToken, ef_var, glyph_color, role_var};
+use crate::window::time::minus;
 
-use super::scrubber::Scrubber;
+use super::scrubber::{SEEK_ROW_HEIGHT_PX, Scrubber};
 
 #[cfg(test)]
 mod tests;
 
-/// The bottom layer's full height at scale 1.0 (design D3): the layer's own
-/// 6 px top pad over the scrubber block's 6 px pad, the 24 px bar, the 30 px
-/// clock line, and the 2 px tail pad. The scale's one-third share is
-/// measured against this height, and the pad scales with the row, so the
-/// layer takes no more than one third of the stage at every height.
-pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 68.0;
+/// The transport row's height at scale 1.0 (design D3): the play/pause
+/// circle's 44 px, the row's tallest control.
+const TRANSPORT_ROW_HEIGHT_PX: f32 = 44.0;
+
+/// The bottom layer's top pad at scale 1.0 (design D3): the room the seek
+/// row's hover time tip paints in, above the bar and over the artwork.
+const BOTTOM_PAD_TOP_PX: f32 = 18.0;
+
+/// The gap between the seek row and the transport row at scale 1.0.
+const BOTTOM_ROW_GAP_PX: f32 = 16.0;
+
+/// The bottom layer's bottom pad at scale 1.0.
+const BOTTOM_PAD_BOTTOM_PX: f32 = 12.0;
+
+/// The bottom layer's side pad at scale 1.0: the seek row and the transport
+/// row share one inset, so the bar and the play control start on one edge.
+const BOTTOM_SIDE_PAD_PX: f32 = 16.0;
+
+/// The bottom layer's full height at scale 1.0 (design D3): the top pad, the
+/// 14 px seek row, the gap, the 44 px transport row, and the bottom pad —
+/// the 104 px the canvas names. The scale's one-third share is measured
+/// against this height, and every pad scales with the rows, so the layer
+/// takes no more than one third of the stage at every height.
+pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = BOTTOM_PAD_TOP_PX
+    + SEEK_ROW_HEIGHT_PX
+    + BOTTOM_ROW_GAP_PX
+    + TRANSPORT_ROW_HEIGHT_PX
+    + BOTTOM_PAD_BOTTOM_PX;
 
 /// The control row's scale for a stage `stage_height` px tall (design D3):
 /// the row takes at most a third of the stage and never grows past its full
@@ -120,7 +144,7 @@ impl std::fmt::Debug for ArtStageProps {
 
 /// The stage: the visual slot's `relative` wrapper with no clip, holding the
 /// clipped media box and the two absolute overlay layers. The top layer paints
-/// the chips and the badge at all times; the bottom layer paints the gradient
+/// the chips and the badge at all times; the bottom layer paints the scrim
 /// and the control row.
 #[component]
 pub fn ArtStage(props: ArtStageProps) -> Element {
@@ -146,7 +170,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
     rsx! {
         div {
             class: "stage relative w-full max-w-full",
-            style: "background: var(--mbv-secondary);",
+            style: format!("background: {};", ef_var(EfToken::Player)),
             "data-target": "visualSlot",
             // Each attribute is present only while its fact holds and absent
             // otherwise, never `"false"`: the stylesheet's selectors test
@@ -173,7 +197,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             }
             div {
                 class: "bottom absolute inset-x-0 bottom-0",
-                style: "padding-top: calc(6px * var(--player-scale)); background: rgb(0 0 0 / 0.6); --player-scale: {scale};",
+                style: "background: rgb(0 0 0 / 0.6); --player-scale: {scale};",
                 ControlRow {
                     paused: props.paused,
                     availability: props.availability,
@@ -239,15 +263,18 @@ impl std::fmt::Debug for ControlRowProps {
     }
 }
 
-/// The control row: play/pause and the scrubber, whose own clock line
-/// carries the transport controls between the elapsed and `−remaining`
-/// labels. The stage's bottom layer paints it over the artwork at the
-/// measured `--player-scale`, and the no-image column paints it under its
-/// chips line at full size (design D3, D6). The stopped state paints it
-/// alone (design D7); the scrubber then paints its empty track, because the
+/// The player controls (design D3): the seek row, then the transport row.
+/// The seek row is the [`Scrubber`] alone, full width; the transport row
+/// carries play/pause, previous, back 10 s, forward 30 s, and next at its
+/// left and the elapsed and `−remaining` clocks at its right. The stage's
+/// bottom layer paints the rows over the artwork at the measured
+/// `--player-scale`, and the no-image column paints them under its chips
+/// line at full size (design D3, D6). The stopped state paints them alone
+/// (design D7); the scrubber then paints its empty track, because the
 /// playhead predicts no progress.
 #[component]
 pub fn ControlRow(props: ControlRowProps) -> Element {
+    let playhead = consume_context::<Playhead>();
     let mut play_pause_mounted = props.rows.play_pause;
     let mut prev_mounted = props.rows.previous;
     let mut seek_back_mounted = props.rows.seek_back;
@@ -256,11 +283,23 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
     let seekbar_mounted = props.rows.seekbar;
     let glyph = glyph_color(props.availability.previous, GuiRole::TextPrimary);
     let next_glyph = glyph_color(props.availability.next, GuiRole::TextPrimary);
-    // The transport controls ride the scrubber's clock line, between the two
-    // clocks, so they sit tight under the bar.
+    // The clocks are the playhead's prediction (design D5 of
+    // `gui-art-player-overlay`); the remaining label dims slightly (0.85) to
+    // stay secondary, as it did on the scrubber's clock line.
+    let elapsed = playhead.elapsed.cloned();
+    let remaining = playhead.remaining.cloned();
+    // The two rows share the layer's insets, and the gap takes the pad the
+    // canvas gives the space between the bar and the transport.
+    let column_style = format!(
+        "padding: calc({BOTTOM_PAD_TOP_PX}px * var(--player-scale)) calc({BOTTOM_SIDE_PAD_PX}px * var(--player-scale)) calc({BOTTOM_PAD_BOTTOM_PX}px * var(--player-scale)); gap: calc({BOTTOM_ROW_GAP_PX}px * var(--player-scale));"
+    );
+    let transport_style =
+        format!("height: calc({TRANSPORT_ROW_HEIGHT_PX}px * var(--player-scale));");
+    // The transport controls sit together at the row's left, tight under the
+    // bar; the clocks take the row's trailing edge.
     let transport = rsx! {
         div {
-            class: "flex items-center justify-center",
+            class: "flex items-center",
             style: "gap: calc(4px * var(--player-scale));",
             button {
                 "type": "button",
@@ -314,34 +353,52 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
     };
     rsx! {
         div {
-            class: "flex items-center",
-            style: "gap: calc(8px * var(--player-scale)); padding: 0 calc(8px * var(--player-scale));",
-            button {
-                "type": "button",
-                class: "flex flex-none items-center justify-center rounded-full",
-                style: "width: calc(56px * var(--player-scale)); height: calc(56px * var(--player-scale)); background: var(--mbv-accent);",
-                "data-target": "playPause",
-                "aria-label": if props.paused { "Play" } else { "Pause" },
-                onmounted: move |event| play_pause_mounted.set(Some(event)),
-                if props.paused {
-                    Play {
-                        class: "player-play-glyph",
-                        size: 22,
-                        fill: role_var(GuiRole::TextOnAccent),
-                        color: role_var(GuiRole::TextOnAccent),
-                    }
-                } else {
-                    Pause {
-                        class: "player-play-glyph",
-                        size: 22,
-                        fill: role_var(GuiRole::TextOnAccent),
-                        color: role_var(GuiRole::TextOnAccent),
+            class: "flex flex-col",
+            style: "{column_style}",
+            Scrubber { seekbar_mounted }
+            div {
+                class: "flex items-center",
+                style: "{transport_style} gap: calc(8px * var(--player-scale));",
+                button {
+                    "type": "button",
+                    class: "flex flex-none items-center justify-center rounded-full",
+                    style: format!(
+                        "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale)); background: {};",
+                        ef_var(EfToken::Green)
+                    ),
+                    "data-target": "playPause",
+                    "aria-label": if props.paused { "Play" } else { "Pause" },
+                    onmounted: move |event| play_pause_mounted.set(Some(event)),
+                    if props.paused {
+                        Play {
+                            class: "player-play-glyph",
+                            size: 22,
+                            fill: role_var(GuiRole::TextOnAccent),
+                            color: role_var(GuiRole::TextOnAccent),
+                        }
+                    } else {
+                        Pause {
+                            class: "player-play-glyph",
+                            size: 22,
+                            fill: role_var(GuiRole::TextOnAccent),
+                            color: role_var(GuiRole::TextOnAccent),
+                        }
                     }
                 }
-            }
-            div {
-                class: "min-w-0 flex-1",
-                Scrubber { seekbar_mounted, center: transport }
+                {transport}
+                div {
+                    class: "flex min-w-0 flex-1 items-center justify-end font-mono tabular-nums",
+                    style: "gap: calc(12px * var(--player-scale)); font-size: calc(12px * var(--player-scale));",
+                    "data-clocks": "",
+                    span {
+                        style: format!("color: {};", ef_var(EfToken::Fg)),
+                        "{elapsed}"
+                    }
+                    span {
+                        style: format!("color: {}; opacity: 0.85;", ef_var(EfToken::Fg)),
+                        "{minus(&remaining)}"
+                    }
+                }
             }
         }
     }

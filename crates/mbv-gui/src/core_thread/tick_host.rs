@@ -9,10 +9,7 @@
 
 use std::time::Instant;
 
-use mbv::{
-    App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome,
-    TrickplaySheetKey,
-};
+use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
 use mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
@@ -20,10 +17,6 @@ use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
 use super::{CoreInput, CoreThread};
 use crate::art::{ArtPath, ArtRequest, ArtResponse, parse_path};
 use crate::sections::{DrainHook, marks_for_hook};
-
-/// The MIME type the trickplay sheets' JPEG bytes declare (design D7): the
-/// cache holds the server's sheet bytes unchanged.
-const TRICKPLAY_SHEET_MIME: &str = "image/jpeg";
 
 /// Whether a pointer event marks the gated sections (design D3 rule 1): a
 /// press or a right press. A gesture resolves on its press, and an outside
@@ -51,12 +44,12 @@ impl CoreThread {
     }
 
     /// Answer one art request (design D7 of `gui-change-driven-sections`):
-    /// the path parses to one of the three forms, and the answer reads only
-    /// the two read-only cache queries — never `queue_card_artwork`,
-    /// `gui_library_artwork`, or `trickplay_preview_tile`, whose projections
-    /// start fetches. A malformed path, an unknown key, or an empty cache
-    /// entry answers `Missing`. The request sets no mark and no
-    /// `input_received`: it changes no section the window paints.
+    /// the path parses to one of the two forms, and the answer reads only the
+    /// read-only cache query — never `queue_card_artwork` or
+    /// `gui_library_artwork`, whose projections start fetches. A malformed
+    /// path, an unknown key, or an empty cache entry answers `Missing`. The
+    /// request sets no mark and no `input_received`: it changes no section
+    /// the window paints.
     fn answer_art(&mut self, request: ArtRequest) {
         let response = match parse_path(&request.path) {
             Some(ArtPath::Placeholder) => ArtResponse::Found {
@@ -71,12 +64,6 @@ impl CoreThread {
                         bytes: source.bytes,
                     })
             }
-            Some(ArtPath::Trickplay(wire)) => TrickplaySheetKey::from_wire_key(&wire)
-                .and_then(|key| self.app.trickplay_sheet_bytes(&key))
-                .map_or(ArtResponse::Missing, |bytes| ArtResponse::Found {
-                    mime: TRICKPLAY_SHEET_MIME,
-                    bytes: bytes.to_vec(),
-                }),
             None => ArtResponse::Missing,
         };
         (request.reply)(response);

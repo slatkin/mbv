@@ -130,7 +130,7 @@ impl GuiQueueDrag {
         let ordinal = queue
             .item_index_of(drag.slot_id)
             .map_or(0, |index| index + 1);
-        let ghost = GuiQueueRow::from_painted(row, false, ordinal);
+        let ghost = GuiQueueRow::from_painted(row, ordinal);
         Some(Self {
             slot: drag.slot_id.raw(),
             ghost,
@@ -149,7 +149,7 @@ impl GuiQueueDrag {
 
 impl GuiQueue {
     /// Projects the Queue Surface state: the rows of a viewport `viewport_rows`
-    /// tall, with the cursor, marks, active slot, and zebra parity. The
+    /// tall, with the cursor, marks, and active slot. The
     /// summary's filter text narrows the projected rows locally — the library's
     /// one word-local acceptance rule (`mbv-text`) decides what matches, and the
     /// Surface state and the canonical queue stay whole. `start` names the
@@ -181,32 +181,12 @@ impl GuiQueue {
             let viewport = queue.list().resolve_viewport(viewport_rows.max(1));
             (viewport.offset, viewport.height)
         };
-        // The zebra alternation the one shared rule paints
-        // (`mbv-ui-model` `media_list::zebra_striped`): a grouped list
-        // alternates within each group from its first member, an ungrouped
-        // list alternates throughout, seeded by the viewport offset and
-        // flipped per item row — headings and spacers keep the box's own
-        // fill and do not flip. The parity rides the row so the stripe stays
-        // stable while the viewport moves; under a filter it re-seeds over
-        // the kept rows, whose list the window paints.
         let scroll = GuiQueueScroll::of(viewport.0, viewport.1, kept.len());
-        let grouped = kept
-            .iter()
-            .any(|row| matches!(row, MediaListRow::Heading { .. }));
-        let mut striped = viewport.0 % 2 == 1;
         let rows_dto = kept
             .iter()
-            .enumerate()
             .skip(viewport.0)
             .take(viewport.1)
-            .map(|(source_row, row)| {
-                let striped = mbv_ui_model::media_list::zebra_striped(
-                    row,
-                    source_row,
-                    |index| kept[index],
-                    grouped,
-                    &mut striped,
-                );
+            .map(|row| {
                 // The canvas's row number is the slot's canonical queue
                 // position, not its index in the painted viewport: the
                 // filter keeps the number a row carried before it.
@@ -214,7 +194,7 @@ impl GuiQueue {
                     .selectable_target()
                     .and_then(|target| queue.item_index_of(*target))
                     .map_or(0, |index| index + 1);
-                GuiQueueRow::from_painted(row, striped, ordinal)
+                GuiQueueRow::from_painted(row, ordinal)
             })
             .collect();
         Self {
@@ -303,9 +283,6 @@ pub enum GuiQueueRow {
         duration: Option<String>,
         kind: GuiMediaKind,
         state: GuiSemanticState,
-        /// The row's zebra parity: the TUI's alternation paints the odd
-        /// item rows in the `QueueColumn` fill inside the recessed box.
-        striped: bool,
     },
     /// A structural heading row.
     Heading { text: String },
@@ -359,23 +336,24 @@ pub struct GuiQueueSummary {
     pub marked_partial: bool,
     /// The Queue chooser facts the header's controls read (design D9 of
     /// `gui-named-queues`). They travel as one group because each of the
-    /// header's four controls is a function of them: the chooser button's
-    /// presence and label, and the close control's state.
+    /// header's controls is a function of them: the switcher's label and
+    /// count, and the close control's state.
     pub header: GuiQueueHeaderFacts,
 }
 
-/// The Queue header's chooser facts for one frame (design D9 of
-/// `gui-named-queues`, spec `gui-queue-chooser` "The queue header holds the
-/// chooser and its controls"): what the header's controls paint.
+/// The Queue header's chooser facts for one frame (design D7 of
+/// `gui-queue-panel-redesign`, spec `gui-queue-chooser` "The queue header holds
+/// the chooser and its controls"): what the header's controls paint. The
+/// switcher paints at all times, so these facts carry no entry count.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueHeaderFacts {
-    /// Every entry the Queue chooser lists: the local Owner's Named queues in
-    /// queue order, then the connected peer Player owner when one is. The
-    /// header shows the chooser only with two or more entries.
-    pub entries: usize,
-    /// The name of the shown entry: the chooser button's label. Empty while
-    /// no entry shows.
+    /// The name of the shown entry: the switcher's label. Empty while no entry
+    /// shows, which the header paints as `Queue`.
     pub shown_name: String,
+    /// The shown entry's slot count: the switcher's count chip (design D7 of
+    /// `gui-queue-panel-redesign`). The Queue filter narrows no count, so it
+    /// counts every slot of the shown queue.
+    pub shown_len: usize,
     /// Whether the close control is disabled: the only local queue has no
     /// close (spec `gui-queue-chooser` "The close control closes the shown
     /// entry").
@@ -405,8 +383,8 @@ impl GuiQueueSummary {
             marked_secs: summary.marked_secs,
             marked_partial: summary.marked_partial,
             header: GuiQueueHeaderFacts {
-                entries: header.entries,
                 shown_name: header.shown_name.clone(),
+                shown_len: header.shown_len,
                 close_disabled: header.close_disabled,
             },
         }
@@ -414,11 +392,10 @@ impl GuiQueueSummary {
 }
 
 impl GuiQueueRow {
-    /// Builds one display row from a `MediaListRow`, its painted zebra state,
-    /// and its 1-based canonical queue position (`ordinal`; structural rows
-    /// ignore it).
+    /// Builds one display row from a `MediaListRow` and its 1-based canonical
+    /// queue position (`ordinal`; structural rows ignore it).
     #[must_use]
-    pub fn from_painted(row: &MediaListRow<QueueSlotId>, striped: bool, ordinal: usize) -> Self {
+    pub fn from_painted(row: &MediaListRow<QueueSlotId>, ordinal: usize) -> Self {
         match row {
             MediaListRow::Item {
                 target,
@@ -437,7 +414,6 @@ impl GuiQueueRow {
                 duration: duration.clone(),
                 kind: GuiMediaKind::from(*kind),
                 state: GuiSemanticState::from(semantic_state),
-                striped,
             },
             MediaListRow::Heading { text } => Self::Heading { text: text.clone() },
             MediaListRow::Spacer => Self::Spacer,

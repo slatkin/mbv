@@ -7,6 +7,10 @@ use blitz_dom::local_name;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueueInsertion, GuiSemanticState};
+use crate::window::components::queue_panel::geometry::{
+    LIST_TOP_GAP_PX, MENU_OVERLAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX,
+};
+use crate::window::theme::{EfToken, ef_var};
 
 /// Contract (`QueuePanel.test.ts`, the Menus artboard B.2): the open row
 /// menu paints the canvas chrome — a 230 px card in the menu fill, border,
@@ -106,7 +110,7 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
     assert!(ghost_style.contains("right: -6px"), "{ghost_style}");
     let card = fixture.style_of("[data-ghost] div");
     assert!(card.contains("background: var(--canvas-ghost)"), "{card}");
-    assert!(card.contains("border-radius: 4px"), "{card}");
+    assert!(card.contains("border-radius: 6px"), "{card}");
     assert!(card.contains("transform: rotate(-1deg)"), "{card}");
     assert!(
         card.contains("box-shadow: var(--canvas-ghost-shadow)"),
@@ -114,7 +118,7 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
     );
     let ghost_title = fixture.style_of("[data-ghost] .truncate");
     assert!(
-        ghost_title.contains("color: var(--canvas-heading)"),
+        ghost_title.contains(&format!("color: {}", ef_var(EfToken::Fg))),
         "{ghost_title}"
     );
     assert!(
@@ -123,8 +127,9 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
     );
 
     let line = fixture.style_of("[data-insertion]");
-    // The `after` anchor: the line pins to the row's bottom edge, not its top.
-    assert!(line.contains("bottom: 0;"), "{line}");
+    // The `after` anchor: the line pins to the row's bottom edge — in the 2 px
+    // gap under it, where the drop lands — not to its top.
+    assert!(line.contains("top: 34px;"), "{line}");
     assert!(!line.contains("top: 0;"), "{line}");
     assert!(line.contains("margin: 0 8px"), "{line}");
     assert!(line.contains("border-radius: 1px"), "{line}");
@@ -153,7 +158,9 @@ fn the_drag_ghost_paints_no_percent_when_the_dragged_row_has_no_progress() {
 
 /// Contract (`QueuePanel.test.ts`): the open menu overlaps the bottom edge
 /// of the row its anchorSlot names — the second painted row — not the
-/// hovered row's and not the cursor row's.
+/// hovered row's and not the cursor row's. The top counts the list box's gap
+/// under the header (a 2026-11-19 fix: the offset had left it out, so the menu
+/// sat 8 px high).
 #[test]
 fn the_open_menu_overlaps_the_bottom_edge_of_the_row_its_anchor_slot_names() {
     let rows = vec![item(1), item(2), item(3)];
@@ -162,9 +169,12 @@ fn the_open_menu_overlaps_the_bottom_edge_of_the_row_its_anchor_slot_names() {
     rows_frame.cursor = Some(1);
     let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), Some(row_menu()));
 
+    let below = LIST_TOP_GAP_PX + 2 * (ROW_HEIGHT_PX + ROW_GAP_PX) - MENU_OVERLAP_PX;
     let menu_style = fixture.style_of("[data-row-menu]");
     assert!(
-        menu_style.contains("top: calc(var(--canvas-queue-header-height) + 54px)"),
+        menu_style.contains(&format!(
+            "top: calc(var(--canvas-queue-header-height) + {below}px)"
+        )),
         "{menu_style}"
     );
 }

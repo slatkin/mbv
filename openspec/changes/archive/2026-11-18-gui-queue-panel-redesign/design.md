@@ -1,5 +1,12 @@
 # Design
 
+## Outcome notes (2026-11-19, after implementation)
+
+Two parts of this design were implemented and then removed before the merge, at the user's live-test decision; the code that ships differs from the PDF here:
+
+- **The buffered position (D6) is out.** It was implemented per D6, broke playback (a status that carried the cache end stopped playback one second after start), and was reverted whole in `9567cff30`. The ctrl wire, the fixtures, `openspec/specs/ctrl-protocol/spec.md`, and the scrubber carry no buffered position; `specs/ctrl-protocol/spec.md` in this change was withdrawn with it.
+- **The scrim is the solid band (D3).** The design's transparent-to-0.6 gradient was replaced by the solid `rgb(0 0 0 / 0.6)` fill in `1ae8596d6` after the live test.
+
 ## Context
 
 See `proposal.md` for the motivation and `specs/` for the behavior. The visual reference is `assets/queue-panel-redesign.pdf` (two pages: the full column mock, then the token table and the annotated parts 02–06). Its numbers are the paint numbers this design names.
@@ -69,11 +76,11 @@ From top to bottom (PDF part 06): the stage on `--ef-player`; the title block on
 1. **Seek row**: `Scrubber` alone, full width, 14 px tall at scale 1.0. The whole row is the `seekbar` region (`data-target="seekbar"` moves from the inner bar box to the row element).
 2. **Transport row**: play/pause (round, `--ef-green` fill, 44 px), previous, −10, +30, next at the left; elapsed and `−remaining` at the right (mono, `--ef-fg`, remaining at reduced opacity as today).
 
-The scrim is 104 px at scale 1.0 (PDF part 04: "scrim 104 tall"), a vertical gradient from transparent to `rgb(0 0 0 / 0.6)`. `BOTTOM_FULL_HEIGHT_PX` becomes `104.0`; `player_scale` and the one-third rule do not change. `Scrubber` loses its `center` prop and its clock line; the clocks move to the transport row. Both rows multiply their sizes by `var(--player-scale)` as today.
+The scrim is 104 px at scale 1.0 (PDF part 04: "scrim 104 tall"). The PDF draws a vertical gradient from transparent to `rgb(0 0 0 / 0.6)`; the live test kept the solid `rgb(0 0 0 / 0.6)` fill instead (see the outcome notes). `BOTTOM_FULL_HEIGHT_PX` becomes `104.0`; `player_scale` and the one-third rule do not change. `Scrubber` loses its `center` prop and its clock line; the clocks move to the transport row. Both rows multiply their sizes by `var(--player-scale)` as today.
 
 ### D4. Seekbar paint and hover
 
-At rest: a 4 px track, radius 2, `--ef-grey2` at 28 %; the buffered range at 42 %; the played fill `--ef-green`; a 14 px thumb, `--ef-green` with a 2 px `--ef-bg-dim` ring, as the PDF draws it. While the `hover` section is `Some` (pointer over the row, also during a scrub drag): the track is 6 px, the thumb 16 px, and the time tip paints above the pointer position with `hover.time_label` in mono on `--ef-bg2`. The hover state comes from the core's `hover` section, not from `:hover`, so the time tip and the track grow together and survive the drag.
+At rest: a 4 px track, radius 2, `--ef-grey2` at 28 %; the played fill `--ef-green`; a 14 px thumb, `--ef-green` with a 2 px `--ef-bg-dim` ring, as the PDF draws it. While the `hover` section is `Some` (pointer over the row, also during a scrub drag): the track is 6 px, the thumb 16 px, and the time tip paints above the pointer position with `hover.time_label` in mono on `--ef-bg2`. The hover state comes from the core's `hover` section, not from `:hover`, so the time tip and the track grow together and survive the drag.
 
 No chapter ticks, no intro or credits blocks, no hover line, no trickplay tile, no chapter label.
 
@@ -89,12 +96,9 @@ With D4, the frame's `chapters`, `intro_mark`, `credits_mark`, `trickplay`, and 
 
 *Alternative:* keep the fetches for a later inline-video change (#989). Rejected: the repository rule is to delete dead code, and git keeps it.
 
-### D6. Buffered position end to end
+### D6. Buffered position end to end (removed after implementation)
 
-- `mbv_ctrl::PlayerStatus` gains `#[serde(default)] pub buffered_ticks: i64` (0 = unknown). Per `docs/recipes.md` "Add a ctrl protocol variant": no version bump; a new `CTRL_CAP_BUFFERED_POSITION = "buffered-position"` with a doc comment, re-exported, advertised by the Owner through `CtrlHello`/`DaemonHelloCaps`, with a `supports_buffered_position` accessor and a handshake case; the wire round-trip test and the `protocol/ctrl/v10/` fixtures and schemas regenerate (`MBV_PROTOCOL_BLESS=1`). The Owner sends the field to every Client: an older Client ignores an unknown field, so no per-connection gate is needed.
-- `mbv-player` observes mpv's `demuxer-cache-time` (`Format::Double`, seconds of media time) on the next free observe id and stores `seconds_to_ticks(value)` in `status.buffered_ticks`; it resets to 0 on a new file, as `position_ticks` does.
-- A Cast receiver or an Emby Session output leaves the field 0.
-- `mbv_ui_model::playback::PlaybackState` gains `buffered_ticks: i64`; every constructor sets it (0 where no local player reports it). `GuiPlayhead` carries it; the window's `Playhead` exposes `buffered_fraction` = `clamp(buffered / runtime)`, painted as is (not predicted). The scrubber paints the buffered range only when the fraction is above the played fraction.
+This decision was implemented as written — `PlayerStatus.buffered_ticks`, the `buffered-position` capability, the `demuxer-cache-time` observation, the `PlaybackState`/`GuiPlayhead`/`buffered_fraction` plumbing, and the seekbar's buffered range — and then reverted whole in `9567cff30` because it broke playback: playback stopped one second after start. Nothing of it ships. The wire, the fixtures, and `openspec/specs/ctrl-protocol/spec.md` stay as they were before this change, and the scrubber paints no buffered range (D4 above). The PDF's buffered range stays unimplemented; a later change may take it up with the lesson that a status carrying the cache end was live-tested first, before the paint depends on it.
 
 ### D7. Queue header
 
@@ -124,11 +128,9 @@ States: the now-playing row fills `--ef-bg-green`, title `--ef-green` weight 600
 
 ## Risks / Trade-offs
 
-- [mpv's `demuxer-cache-time` is unavailable for some sources (it reports an error before the demuxer starts)] → The observer leaves 0, so no buffered range paints.
-- [The cache end can be behind the playhead after a seek] → The window paints the range only when it is ahead of the played fraction (D6).
 - [Losing the trickplay preview and the chapter and segment marks loses information on Emby episodes] → Accepted: the design shows a time tip and a tick-free bar.
 - [A 48 px header and 34 px rows change the queue's viewport capacity] → Capacity comes from the measured list height and the stride, so paging and scroll clamp follow.
 
 ## Migration Plan
 
-None. `buffered_ticks` reads as 0 from an older Owner; a newer Owner's field is ignored by an older Client.
+None. The ctrl wire is unchanged, so an Owner and its Clients from before this change interoperate as before.

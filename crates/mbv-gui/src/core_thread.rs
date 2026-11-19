@@ -741,12 +741,11 @@ impl CoreThread {
     }
 
     /// Run the per-tick prologue and send the batch of the sections this tick
-    /// changed (design D2). The Queue Surface sync and the active item's
-    /// metadata fetch run first, because the ledger's sections read what they
-    /// adopt or start; the sink gets a batch only when the ledger has one.
+    /// changed (design D2). The Queue Surface sync runs first, because the
+    /// ledger's sections read what it adopts; the sink gets a batch only when
+    /// the ledger has one.
     fn send_sections(&mut self) {
         self.sync_queue_surface();
-        self.app.fetch_playback_metadata();
         let batch = self.ledger.collect(SectionSources {
             app: &mut self.app,
             queue: &self.queue,

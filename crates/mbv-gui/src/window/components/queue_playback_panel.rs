@@ -17,15 +17,15 @@
 //! second file, `queue_playback_panel/art_stage.rs` (`gui-art-player-overlay`
 //! design D1, D8): the stage is the visual slot's wrapper, the media box owns
 //! the clip, the top layer holds the track chips and the episode badge, and
-//! the bottom layer holds the gradient and the control row. The panel
+//! the bottom layer holds the solid scrim and the control row. The panel
 //! keeps every mounted handle and reports the regions in one contribution.
 //!
-//! The scrubber — the 6 px track, the intro and credits blocks, the played
-//! fill, the chapter ticks, the thumb, the hover preview, and the clocks — is
-//! this module's third file, `queue_playback_panel/scrubber.rs` (task 5.3):
-//! the component paints it in the control row, and its slider box
-//! is the `seekbar` region of this panel's one report, so the panel holds the
-//! element handle the scrubber sets on mount.
+//! The scrubber — the track, the played fill, the thumb, and the time tip —
+//! is this module's third file, `queue_playback_panel/scrubber.rs` (task
+//! 5.3; `gui-queue-panel-redesign` design D4): the component paints it as
+//! the control rows' seek row, and that row is the `seekbar` region of this
+//! panel's one report, so the panel holds the element handle the scrubber
+//! sets on mount.
 //!
 //! A press on the bar or a button forwards like every other pointer event:
 //! the component interprets no gesture, it reports its regions and the core
@@ -42,6 +42,7 @@ use crate::window::layout::LayoutContribution;
 use crate::window::layout::{LayoutEpoch, LayoutKey, LayoutReporter, element_region};
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
+use crate::window::theme::{EfToken, ef_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
 mod art_stage;
@@ -260,11 +261,14 @@ pub fn QueuePlaybackPanel() -> Element {
         rsx! {
             div {
                 class: "flex flex-col",
-                style: "padding: 10px 16px 0;",
-                ChipsAndBadge {
-                    chips: playback.track_chips.clone(),
-                    overlay: sections.overlay.cloned(),
-                    episode_badge: playback.episode_badge.clone(),
+                style: "padding: 10px 0 0;",
+                div {
+                    style: "padding: 0 16px;",
+                    ChipsAndBadge {
+                        chips: playback.track_chips.clone(),
+                        overlay: sections.overlay.cloned(),
+                        episode_badge: playback.episode_badge.clone(),
+                    }
                 }
                 ControlRow {
                     paused,
@@ -302,24 +306,29 @@ pub fn QueuePlaybackPanel() -> Element {
             style: "--player-scale: 1;",
             if let Some(title) = playback.now_playing_title.as_ref() {
                 {art_section}
-                // The title at the canvas's 18 px/600 and its parent line in
-                // the canvas link style at 13 px (`main` audit 8). The canvas
-                // draws the parent line as an `<a href="#">`, but the GUI
-                // presents no surface to go to: the static line carries no
-                // region and the press is a no-op.
+                // The title block of the canvas's layering (design D2): the
+                // panel fill, its 16/20/18 insets, the rule that separates it
+                // from the queue header, the title in the canvas's 18 px/600
+                // foreground, and the parent line in the canvas link red
+                // (`main` audit 8). The canvas draws the parent line as an
+                // `<a href="#">`, but the GUI presents no surface to go to:
+                // the static line carries no region and the press is a no-op.
                 div {
                     class: "flex min-w-0 flex-col",
-                    style: "padding: 14px 16px 6px; gap: 2px;",
+                    style: format!(
+                        "padding: 16px 20px 18px; gap: 2px; background: {}; border-bottom: 1px solid {};",
+                        ef_var(EfToken::Bg0),
+                        ef_var(EfToken::Bg3)
+                    ),
                     Truncate {
                         text: title.clone(),
-                        css: "font-size: 18px; font-weight: 600; color: {role_var(GuiRole::PlaybackTitleFg)};"
-                            .to_owned(),
+                        css: format!("font-size: 18px; font-weight: 600; color: {};", ef_var(EfToken::Fg)),
                         style: TextStyle::sans(18.0, 600.0),
                     }
                     if let Some(parent_line) = playback.parent_line.as_ref() {
                         Truncate {
                             text: parent_line.clone(),
-                            css: "font-size: 13px; color: var(--canvas-type-secondary);".to_owned(),
+                            css: format!("font-size: 13px; color: {};", ef_var(EfToken::Red)),
                             style: TextStyle::sans(13.0, 400.0),
                         }
                     }
