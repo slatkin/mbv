@@ -251,8 +251,12 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
         button {
             "type": "button",
             class: "flex w-full items-center overflow-hidden",
+            // The painted sizes carry the row's format: the title at 14 px
+            // and the subtitle at 12 px, matching the measure styles. Without
+            // the button's font-size the two lines inherit the DOM's 16 px
+            // default and paint larger than every other list row.
             style: format!(
-                "height: {height}px; padding: 0 8px; gap: 10px; border: 0; border-radius: 4px; text-align: left;"
+                "height: {height}px; padding: 0 8px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14px;"
             ),
             "data-library-shows-row": "flat",
             "data-library-shows-row-id": "{id}",
@@ -284,7 +288,7 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
                     Truncate {
                         text: subtitle,
                         class: "min-w-0 w-full".to_owned(),
-                        css: "color: var(--canvas-muted); font-weight: 400;".to_owned(),
+                        css: "font-size: 12px; color: var(--canvas-muted); font-weight: 400;".to_owned(),
                         style: TextStyle::sans(12.0, 400.0),
                     }
                 }
