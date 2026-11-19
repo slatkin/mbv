@@ -191,8 +191,10 @@ The window reaches the core through six methods on `CoreLink`
   drag, the vertical delta's sign picks the wheel direction, and an event the
   neutral vocabulary cannot represent drops. A `cancel` is the one kind no
   button or position decides: the window sends it when the window loses the
-  gesture — a `pointercancel`, a `pointerleave` with a button held, or the
-  window's blur — and the core drops the drag state and sends no move.
+  gesture — a `pointercancel` or a `pointerleave` — and the core drops the
+  drag state and the double-click pair and sends no move. An element's blur
+  sends none: Blitz blurs the root on every click that moves the focus, and a
+  forwarded blur erased the double-click pair on each press.
 - `layout(LayoutReport)`: whole visible rows per list, the painted
   regions with their semantic target ids, and the panel container's painted
   size in logical pixels (`src/bridge/layout.rs`).
@@ -215,9 +217,8 @@ every keydown that the window does not leave to a focused text field, so no
 browser-style default runs, and it converts a wheel delta in lines or pages to
 logical pixels before it sends. A keydown meets the window's key router first
 (the Settings screen's steps, then the Library panel's), and only a key the
-router leaves to the core reaches the `key` method. A lost gesture — a `pointercancel`, a
-`pointerleave` with a button held, or the window's blur — forwards the
-`cancel` kind. The core's `PointerGestureState` recognizes
+router leaves to the core reaches the `key` method. A lost gesture — a `pointercancel` or a
+`pointerleave` — forwards the `cancel` kind; a blur does not. The core's `PointerGestureState` recognizes
 the gesture; a recognized gesture's point resolves against the combined hit
 map of the last `LayoutReport`, and `App::route_gui_pointer` receives the
 surface that owns the region as its leaf. A point in no reported region

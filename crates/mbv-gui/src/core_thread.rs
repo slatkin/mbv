@@ -485,9 +485,10 @@ impl CoreThread {
         // drag end, or a press on no reported region still cancels an armed
         // prefix; the pointer arm itself delivers nothing else.
         self.app.route_gui_input(GuiInput::Pointer(event), None);
-        // A cancelled gesture (the window lost the pointer, the pointer left
-        // the window with a button held, or the window lost focus) drops the
-        // drag state without a move (add-tauri-gui-client row 6.5, finding
+        // A cancelled gesture (the window lost the pointer, or the pointer
+        // left the window; never an element's blur, which every press on a
+        // row causes) drops the drag state and the double-click pair without
+        // a move (add-tauri-gui-client row 6.5, finding
         // P1-2): the release that would have ended the drag never arrives.
         if event.kind == PointerKind::Cancel {
             self.pointer_at = None;

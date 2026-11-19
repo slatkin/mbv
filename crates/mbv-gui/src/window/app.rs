@@ -550,7 +550,6 @@ pub fn App() -> Element {
     let wheel_link = CoreLink::clone(&link);
     let cancel_link = CoreLink::clone(&link);
     let leave_link = CoreLink::clone(&link);
-    let blur_link = CoreLink::clone(&link);
     // The divider drag's handlers hold their own copies (D4).
     let mut drag_release = divider_drag;
     let mut drag_cancel = divider_drag;
@@ -630,9 +629,10 @@ pub fn App() -> Element {
             onpointerleave: move |event: PointerEvent| {
                 input::on_pointer_leave(&event.data, &leave_link);
             },
-            onblur: move |_: FocusEvent| {
-                input::on_blur(&blur_link);
-            },
+            // No `onblur` here: Blitz blurs this root whenever a click moves
+            // the focus off it (every press on a Queue row does), so a blur
+            // is not the window losing the pointer, and forwarding it as a
+            // `cancel` erased the core's double-click pair on every press.
             if connected && attach.is_none() {
                 div {
                     // The window's one column (design D7): the global header

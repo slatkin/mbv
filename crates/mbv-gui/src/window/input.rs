@@ -139,26 +139,14 @@ pub fn dom_wheel(event: &WheelData, viewport_height: f64) -> DomPointer {
     pointer
 }
 
-/// A cancelled gesture as a [`DomPointer`]: a `pointercancel`, a
-/// `pointerleave` (with or without a button held), or the window's blur. The
-/// window lost the pointer, so a release may never arrive: the core drops the
-/// drag state, clears its hover state, and sends no move. A blur carries no
-/// pointer fields, so the position and button fall to neutral placeholders.
+/// A cancelled gesture as a [`DomPointer`]: a `pointercancel` or a
+/// `pointerleave` (with or without a button held). The window lost the
+/// pointer, so a release may never arrive: the core drops the drag state and
+/// the double-click pair, clears its hover state, and sends no move. An
+/// element's blur is not one: Blitz blurs the root on every click that moves
+/// the focus, so no blur forwards a cancel.
 #[must_use]
-pub fn dom_cancel(event: Option<&(impl PointerInteraction + InteractionLocation)>) -> DomPointer {
-    let Some(event) = event else {
-        return DomPointer {
-            kind: DomPointerKind::Cancel,
-            button: -1,
-            buttons: 0,
-            x: 0.0,
-            y: 0.0,
-            meta_key: false,
-            modifiers: DomModifiers::default(),
-            delta_x: 0.0,
-            delta_y: 0.0,
-        };
-    };
+pub fn dom_cancel(event: &(impl PointerInteraction + InteractionLocation)) -> DomPointer {
     let mut pointer = pointer_fields(DomPointerKind::Cancel, event);
     pointer.delta_x = 0.0;
     pointer.delta_y = 0.0;
@@ -215,20 +203,14 @@ pub fn on_contextmenu<T: 'static>(event: &Event<T>) {
 /// The `pointercancel` forward (D8): the window lost the gesture, so the
 /// neutral cancel goes to the core.
 pub fn on_pointer_cancel(event: &PointerData, link: &CoreLink) {
-    send_pointer(dom_cancel(Some(event)), link);
+    send_pointer(dom_cancel(event), link);
 }
 
 /// The `pointerleave` forward (D8): the pointer left the window, so the drag
 /// it was carrying (if any) and every hover it armed drop — an unbuttoned
 /// leave arms no release either, but the hover would stay set without this.
 pub fn on_pointer_leave(event: &PointerData, link: &CoreLink) {
-    send_pointer(dom_cancel(Some(event)), link);
-}
-
-/// The blur forward (D8): the window lost the pointer, so the neutral cancel
-/// with the neutral placeholders goes to the core.
-pub fn on_blur(link: &CoreLink) {
-    send_pointer(dom_cancel(None::<&PointerData>), link);
+    send_pointer(dom_cancel(event), link);
 }
 
 /// Send one [`DomPointer`] to the core when the neutral vocabulary can

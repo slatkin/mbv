@@ -14,8 +14,8 @@ use dioxus_html::input_data::{MouseButton, MouseButtonSet};
 use dioxus_native::prelude::*;
 
 use super::{
-    KeyOutcome, KeyRoute, dom_cancel, dom_pointer, dom_wheel, forward_every_key, on_blur,
-    on_keydown, on_pointer, on_pointer_cancel,
+    KeyOutcome, KeyRoute, dom_cancel, dom_pointer, dom_wheel, forward_every_key, on_keydown,
+    on_pointer, on_pointer_cancel,
 };
 use crate::bridge::keys::KeyTarget;
 use crate::bridge::pointer::DomPointerKind;
@@ -413,27 +413,12 @@ fn a_pointer_leave_forwards_the_cancel_too(#[case] button: i16, #[case] buttons:
         modifiers: Modifiers::empty(),
     };
 
-    let cancelled = dom_cancel(Some(&pointer));
+    let cancelled = dom_cancel(&pointer);
 
     assert_eq!(cancelled.kind, DomPointerKind::Cancel);
     assert_eq!(cancelled.button, button);
     assert_eq!(cancelled.buttons, buttons);
     assert_eq!((cancelled.x, cancelled.y), (7.0, 9.0));
-}
-
-/// Contract 7 (task 3.3): a blur carries no pointer fields, so the neutral
-/// cancel's placeholders go to the core.
-#[test]
-fn a_blur_forwards_the_neutral_cancel() {
-    let (link, receiver) = link();
-
-    on_blur(&link);
-
-    let CoreInput::Pointer(event) = one_input(&receiver) else {
-        panic!("the cancel reached the core as a pointer")
-    };
-    assert_eq!(event.kind, PointerKind::Cancel);
-    assert_eq!((event.position.x, event.position.y), (0.0, 0.0));
 }
 
 /// A coordinate or delta that is not finite, or that lies outside `f32`'s

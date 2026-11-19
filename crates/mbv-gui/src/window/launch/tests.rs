@@ -7,6 +7,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use blitz_dom::Document as _;
+use blitz_dom::LocalName;
 use blitz_traits::events::{
     BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, Point, PointerCoords,
     PointerDetails, UiEvent,
@@ -251,10 +252,13 @@ fn a_pre_hit_clock_ahead_of_the_frame_freezes_its_transition() {
 /// window's one `keydown` handler, with a queue row as a `button` beside a text
 /// field.
 fn root_app() -> Element {
+    let mut blurred = use_signal(|| false);
     rsx! {
         main {
             id: "{ROOT_ELEMENT_ID}",
             tabindex: 0,
+            "data-blurred": blurred().then_some(""),
+            onblur: move |_| blurred.set(true),
             onkeydown: move |_| {},
             input { "data-field": "", r#type: "text" }
             button { "type": "button", "data-row": "", "row" }
@@ -375,6 +379,30 @@ fn a_click_that_blitz_clears_the_focus_of_leaves_the_window_root_focused() {
         doc.inner().get_focussed_node_id(),
         Some(root),
         "the root takes the keyboard back"
+    );
+}
+
+/// Regression (2026-11-19, a double-click on a Queue row did nothing): a click
+/// on a row blurs the window root, so the root's `blur` is not the window
+/// losing the pointer. The root forwarded its blur as a `cancel`, which clears
+/// the core's double-click pair, so no second press ever paired with the first
+/// and the press log never held a `double-click`. The root must not forward a
+/// blur; this pins the premise that makes the forward wrong.
+#[test]
+fn a_row_click_blurs_the_window_root() {
+    let (mut doc, root) = root_document();
+    doc.inner.borrow_mut().set_focus_to(root);
+    let row = node_of(&doc, "[data-row]");
+
+    click(&mut doc, row);
+    doc.poll(None);
+
+    assert!(
+        doc.inner()
+            .get_node(root)
+            .and_then(|node| node.attr(LocalName::from("data-blurred")))
+            .is_some(),
+        "the row click blurred the root, so a root `onblur` fires on every press"
     );
 }
 
