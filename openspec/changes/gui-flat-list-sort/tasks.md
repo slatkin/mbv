@@ -19,10 +19,10 @@ already owns the contract.
 
 ## 3. Projections sort by the active sort
 
-- [ ] 3.1 Plain Emby and Emby feed-group projections (`src/app/gui_library/emby_projection.rs`, `emby.rs`): sort per design D6. Set `GuiEmbyRow.sort_letter` only under a name sort, and carry `gui_list_sort_frame(GuiSortTarget::Library(lib_idx))` on the projection. Verify with `cargo nextest run -p mbv`.
-- [ ] 3.2 Audiobooks projection (`src/app/gui_library/audiobooks_projection.rs`): sort per design D6 for Title, Author, Newest, and Oldest, using `added_at_ms` for the dates. Make `GuiAudiobooksRow.sort_letter` an `Option<char>` that is set only under a name sort, from the compared key. Carry the sort frame. Verify with `cargo nextest run -p mbv`.
-- [ ] 3.3 Podcasts and Feeds projections (`podcasts_projection.rs`, `feeds_projection.rs`, `entry_list.rs`): sort per design D6. Add `GuiEntryRow.sort_letter: Option<char>`, set only under Title. Carry the sort frame on the entry-list projection. Verify with `cargo nextest run -p mbv`.
-- [ ] 3.4 Shows New (`shows_projection.rs`, `gui_shows_new_rows`): sort per design D6 before the de-duplication. Add `GuiShowsRow.sort_letter: Option<char>`, set only under Title on New rows and `None` on Upcoming rows. Carry the sort frame on `GuiShowsProjection` only while the view is New. Verify with `cargo nextest run -p mbv`.
+- [x] 3.1 Plain Emby and Emby feed-group projections (`src/app/gui_library/emby_projection.rs`, `emby.rs`): sort per design D6. Set `GuiEmbyRow.sort_letter` only under a name sort, and carry `gui_list_sort_frame(GuiSortTarget::Library(lib_idx))` on the projection. Verify with `cargo nextest run -p mbv`.
+- [x] 3.2 Audiobooks projection (`src/app/gui_library/audiobooks_projection.rs`): sort per design D6 for Title, Author, Newest, and Oldest, using `added_at_ms` for the dates. Make `GuiAudiobooksRow.sort_letter` an `Option<char>` that is set only under a name sort, from the compared key. Carry the sort frame. Verify with `cargo nextest run -p mbv`.
+- [x] 3.3 Podcasts and Feeds projections (`podcasts_projection.rs`, `feeds_projection.rs`, `entry_list.rs`): sort per design D6. Add `GuiEntryRow.sort_letter: Option<char>`, set only under Title. Carry the sort frame on the entry-list projection. Verify with `cargo nextest run -p mbv`.
+- [x] 3.4 Shows New (`shows_projection.rs`, `gui_shows_new_rows`): sort per design D6 before the de-duplication. Add `GuiShowsRow.sort_letter: Option<char>`, set only under Title on New rows and `None` on Upcoming rows. Carry the sort frame on `GuiShowsProjection` only while the view is New. Verify with `cargo nextest run -p mbv`.
 
 ## 4. Launch persistence
 
