@@ -38,12 +38,14 @@ impl DeadlineMarks {
 
     /// Sample the App's deadline and playhead facts and mark what changed. The
     /// navigation gate marks on its opening (not idle to idle), because that is
-    /// the Hero neighbour warm-up's deadline; its closing is not a mark. The
-    /// retry query and the playhead mark the Library section. The target choices
-    /// mark the Settings section.
+    /// the Hero neighbour warm-up's deadline and the row fetches' own pass
+    /// (gui-delineated-rows design D7); its closing is not a mark. The retry
+    /// query and the playhead mark the Library section, and a retry that came
+    /// due re-queues the interrupted in-view row keys (invariant 27). The target
+    /// choices mark the Settings section.
     pub(super) fn sample(
         &mut self,
-        app: &App,
+        app: &mut App,
         playback: &QueuePlaybackProjection,
         now: Instant,
         marked: &mut HashSet<Section>,
@@ -51,10 +53,12 @@ impl DeadlineMarks {
         let idle = app.gui_navigation_idle();
         if idle && !self.navigation_idle {
             marked.insert(Section::Library);
+            app.gui_queue_in_view_row_fetches();
         }
         self.navigation_idle = idle;
         if app.gui_art_retry_due(self.art_retry_checked, now) {
             marked.insert(Section::Library);
+            app.gui_queue_in_view_row_fetches();
         }
         self.art_retry_checked = self.art_retry_checked.max(now);
         let playhead = app.gui_playhead_marks();

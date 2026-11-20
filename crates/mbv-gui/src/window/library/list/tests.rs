@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::bridge::frame::library::GuiArtistKey;
+use crate::bridge::frame::library::{GuiRowArtFrame, GuiRowMediaKindFrame};
 
 /// The track Brand Nubian's album holds.
 fn all_for_one() -> GuiMusicTrackFrame {
@@ -23,6 +24,8 @@ fn all_for_one() -> GuiMusicTrackFrame {
 /// album whose tracks the content does not hold.
 fn tribe() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a3".to_owned()),
         name: "A Tribe Called Quest".to_owned(),
         sort_letter: 'A',
@@ -40,6 +43,8 @@ fn tribe() -> GuiMusicArtistFrame {
 /// cached tracklist.
 fn beastie() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
@@ -79,6 +84,8 @@ fn beastie() -> GuiMusicArtistFrame {
 /// content holds.
 fn brand() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a2".to_owned()),
         name: "Brand Nubian".to_owned(),
         sort_letter: 'B',

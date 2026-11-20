@@ -19,7 +19,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame,
     GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame,
+    GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::GuiSectionBatch;
@@ -191,6 +191,8 @@ fn scroll_facts(state: &LibraryState) -> String {
 fn movies() -> Vec<GuiEmbyRowFrame> {
     vec![
         GuiEmbyRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "m1".to_owned(),
             title: "Alien".to_owned(),
             subtitle: Some("1979".to_owned()),
@@ -199,6 +201,8 @@ fn movies() -> Vec<GuiEmbyRowFrame> {
             kind: GuiEmbyRowKindFrame::Media,
         },
         GuiEmbyRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "m2".to_owned(),
             title: "Amélie".to_owned(),
             subtitle: Some("2001".to_owned()),
@@ -207,6 +211,8 @@ fn movies() -> Vec<GuiEmbyRowFrame> {
             kind: GuiEmbyRowKindFrame::Media,
         },
         GuiEmbyRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "m3".to_owned(),
             title: "Brazil".to_owned(),
             subtitle: Some("1985".to_owned()),
@@ -221,6 +227,8 @@ fn movies() -> Vec<GuiEmbyRowFrame> {
 fn feed_rows() -> Vec<GuiEmbyRowFrame> {
     vec![
         GuiEmbyRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "f1".to_owned(),
             title: "Family".to_owned(),
             subtitle: None,
@@ -229,6 +237,8 @@ fn feed_rows() -> Vec<GuiEmbyRowFrame> {
             kind: GuiEmbyRowKindFrame::Collection,
         },
         GuiEmbyRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "f2".to_owned(),
             title: "Fargo".to_owned(),
             subtitle: None,

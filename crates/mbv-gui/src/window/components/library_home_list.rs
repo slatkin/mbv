@@ -19,8 +19,8 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::art::GuiArtRef;
-use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowStateFrame};
+use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url};
+use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowStateFrame, GuiRowArtFrame};
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_item_row::{FLAT_ROW_TITLE_WEIGHT, mark, name_color};
 use crate::window::components::library_list_header::LibraryListHeader;
@@ -48,6 +48,22 @@ fn home_menu_item_id(id: &GuiHomeRowIdFrame) -> Option<String> {
 }
 
 /// The artwork kind word the art box's hook paints (`data-library-home-art`).
+/// The art reference a row art frame paints (gui-delineated-rows design D4):
+/// the cached image or the loading fill, the bundled placeholder for a source
+/// that answered with no image, and no art box for a row kind with no art
+/// source. The row's thumb fitting (design D2) arrives with the shared row
+/// part.
+fn row_art_ref(art: &GuiRowArtFrame) -> Option<GuiArtRef> {
+    match art {
+        GuiRowArtFrame::Image { art, .. } => Some(art.clone()),
+        GuiRowArtFrame::Loading => Some(GuiArtRef::Loading),
+        GuiRowArtFrame::Missing => Some(GuiArtRef::Placeholder {
+            src: art_url(PLACEHOLDER_PATH),
+        }),
+        GuiRowArtFrame::NoSource => None,
+    }
+}
+
 fn art_kind(art: &GuiArtRef) -> &'static str {
     match art {
         GuiArtRef::Image { .. } => "image",
@@ -111,7 +127,7 @@ fn paint_home_item_row(
         _ => None,
     };
     let title_color = name_color(&item.state);
-    let art = item.art.clone();
+    let art = row_art_ref(&item.art);
     let art_kind = art.as_ref().map(art_kind);
     let press_row = row.clone();
     let press_library = library.clone();

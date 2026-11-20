@@ -10,8 +10,8 @@ use mbv::{
 use mbv_queue::QueueItemContentId;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
-use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
 /// The Home destination's list part (design D8): whether the first fetch has
@@ -96,9 +96,10 @@ pub struct GuiHomeItemRowFrame {
     pub kind: GuiHomeRowKindFrame,
     /// The row's state, with the Continue Watching resume progress.
     pub state: GuiHomeRowStateFrame,
-    /// The row's artwork, present exactly while the row's item obtains art
-    /// from the image cache.
-    pub art: Option<GuiArtRef>,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// One Home row's stable identity, mirroring `mbv::GuiHomeRowId` (design
@@ -177,7 +178,8 @@ impl From<&GuiHomeItemRow> for GuiHomeItemRowFrame {
             date: item.date.clone(),
             kind: GuiHomeRowKindFrame::from(item.kind),
             state: GuiHomeRowStateFrame::from(&item.state),
-            art: item.art.as_ref().map(GuiArtRef::from),
+            art: GuiRowArtFrame::from(&item.art),
+            media: GuiRowMediaKindFrame::from(item.media),
         }
     }
 }

@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::bridge::frame::library::GuiHomeRowStateFrame;
+use crate::bridge::frame::library::{GuiRowArtFrame, GuiRowMediaKindFrame};
 
 /// One episode row of a season, as the frame carries it.
 fn episode(id: &str, name: &str) -> GuiShowsEpisodeRowFrame {
@@ -27,6 +28,8 @@ fn series(
     seasons: Vec<crate::bridge::frame::library::GuiShowsSeasonFrame>,
 ) -> GuiShowsSeriesFrame {
     GuiShowsSeriesFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         sort_letter,
@@ -217,6 +220,8 @@ fn the_rail_holds_the_first_series_row_under_each_letter_and_disables_the_rest()
 /// One flat New or Upcoming row, as the frame carries it.
 fn flat_row(id: &str, title: &str) -> GuiShowsRowFrame {
     GuiShowsRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some("The Beginning".to_owned()),

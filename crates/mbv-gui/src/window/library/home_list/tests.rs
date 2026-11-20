@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::bridge::frame::library::GuiHomeItemRowFrame;
+use crate::bridge::frame::library::GuiRowMediaKindFrame;
 use crate::window::library::list::{ListWindow, list_window};
 
 /// The `Continue watching` row the fixture carries: an Emby item with its
@@ -17,7 +18,8 @@ fn continued() -> GuiHomeItemRowFrame {
         date: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Active { progress: Some(42) },
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -30,7 +32,8 @@ fn watched() -> GuiHomeItemRowFrame {
         date: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Played,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -43,7 +46,8 @@ fn added() -> GuiHomeItemRowFrame {
         date: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 

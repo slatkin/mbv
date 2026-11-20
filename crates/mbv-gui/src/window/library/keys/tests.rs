@@ -16,7 +16,8 @@ use super::route_library_key;
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
-    GuiMusicList, GuiMusicTrackFrame, GuiShowsDetail, GuiShowsList,
+    GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail,
+    GuiShowsList,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::{DomKey, DomModifiers};
@@ -321,6 +322,8 @@ fn collections() -> GuiCollections {
 /// The Beastie Boys artist: one album with a cached tracklist, one without.
 fn beastie() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
@@ -346,6 +349,8 @@ fn beastie() -> GuiMusicArtistFrame {
 /// The Brand Nubian artist: one album, closed under the artist.
 fn brand() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a2".to_owned()),
         name: "Brand Nubian".to_owned(),
         sort_letter: 'B',

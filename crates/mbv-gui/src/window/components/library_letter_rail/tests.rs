@@ -19,7 +19,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryLetterRail;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
-    GuiMusicArtistFrame, GuiMusicList,
+    GuiMusicArtistFrame, GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -177,6 +177,8 @@ fn built(letters: Vec<RailLetter>) -> Fixture {
 /// hold.
 fn beastie() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
@@ -193,6 +195,8 @@ fn beastie() -> GuiMusicArtistFrame {
 /// The Brand Nubian artist: one album, closed under the artist.
 fn brand() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a2".to_owned()),
         name: "Brand Nubian".to_owned(),
         sort_letter: 'B',

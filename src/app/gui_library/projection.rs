@@ -14,6 +14,7 @@ use mbv_ui_model::music_grouping::ArtistKey;
 use mbv_ui_model::sort_filter::strip_article;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
+use super::artwork::{GuiRowArt, GuiRowMediaKind};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::collection_command::GuiCollectionSite;
 use super::{GuiGroupAlbums, GuiMusicCollectionSite};
@@ -33,6 +34,10 @@ pub struct GuiMusicArtist {
     pub sort_letter: char,
     /// The artist's albums in the union's order.
     pub albums: Vec<GuiMusicAlbum>,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// One album row of the Music list, and the Hero's picked album (design D5).
@@ -342,6 +347,8 @@ impl App {
                     name: artist.clone(),
                     sort_letter: sort_letter(artist),
                     albums: Vec::new(),
+                    art: GuiRowArt::NoSource,
+                    media: GuiRowMediaKind::Audio,
                 });
                 let position = artists.len() - 1;
                 positions.insert(key, position);

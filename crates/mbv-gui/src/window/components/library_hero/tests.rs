@@ -35,7 +35,8 @@ use super::{
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
     GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
-    GuiMusicMenuEntryFrame, GuiMusicTrackFrame, GuiMusicTrackTotalFrame,
+    GuiMusicMenuEntryFrame, GuiMusicTrackFrame, GuiMusicTrackTotalFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -209,6 +210,8 @@ fn hero() -> GuiMusicHeroFrame {
 /// that owns the picked album, whose union albums Shuffle artist names.
 fn artists(facts: &GuiMusicHeroFrame) -> Vec<GuiMusicArtistFrame> {
     vec![GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',

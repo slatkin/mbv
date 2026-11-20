@@ -21,7 +21,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryAudiobooksList;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
-    GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -267,6 +267,8 @@ fn built(list: GuiAudiobooksList, detail: GuiAudiobooksDetail) -> Fixture {
 fn catalog() -> Vec<GuiAudiobooksRowFrame> {
     vec![
         GuiAudiobooksRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "b1".to_owned(),
             title: "Aftermath".to_owned(),
             subtitle: Some("Bill Wyman".to_owned()),
@@ -274,6 +276,8 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             sort_letter: 'A',
         },
         GuiAudiobooksRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "b2".to_owned(),
             title: "Audition".to_owned(),
             subtitle: Some("Ryu Murakami".to_owned()),
@@ -281,6 +285,8 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             sort_letter: 'A',
         },
         GuiAudiobooksRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "b3".to_owned(),
             title: "Blindsight".to_owned(),
             subtitle: Some("Peter Watts".to_owned()),

@@ -16,7 +16,7 @@ use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
     GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
-    GuiMusicTrackFrame,
+    GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
@@ -137,6 +137,8 @@ fn music_detail(hero: Option<GuiMusicHeroFrame>) -> GuiLibraryDetail {
 /// One artist with no albums.
 fn artist(id: &str, index: usize) -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: crate::bridge::frame::library::GuiArtistKey::Service(format!("{id}-{index}")),
         name: format!("Artist {index}"),
         sort_letter: 'A',
@@ -250,6 +252,8 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
     let mut artists: Vec<GuiMusicArtistFrame> =
         (0..20).map(|index| artist("filler", index)).collect();
     artists.push(GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a2".to_owned()),
         name: "Brand Nubian".to_owned(),
         sort_letter: 'B',

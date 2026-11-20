@@ -19,7 +19,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEntryRowFrame,
     GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -233,6 +234,8 @@ fn entry(
     state: GuiHomeRowStateFrame,
 ) -> GuiEntryRowFrame {
     GuiEntryRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),

@@ -44,7 +44,6 @@ pub use self::gui_client_state::{
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
-pub use self::gui_library::GuiLibraryCommand;
 pub use self::gui_library::{
     GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
     GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,
@@ -66,6 +65,10 @@ pub use self::gui_library::{
     GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal, GuiPlayheadMarks, GuiPodcastEpisodeId, GuiPodcastsHero,
     GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow,
+};
+pub use self::gui_library::{
+    GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
+    artist_rows_in_view_id,
 };
 pub use self::gui_playlists::{
     GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,

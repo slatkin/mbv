@@ -17,8 +17,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiDestinationList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList,
-    GuiShowsSeasonFrame, GuiShowsSeasonPillFrame, GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
+    GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail,
+    GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList, GuiShowsSeasonFrame,
+    GuiShowsSeasonPillFrame, GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -231,6 +232,8 @@ fn episode(id: &str, name: &str) -> GuiShowsEpisodeRowFrame {
 fn shows_tree() -> Vec<GuiShowsSeriesFrame> {
     vec![
         GuiShowsSeriesFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s1".to_owned(),
             title: "Atlanta".to_owned(),
             sort_letter: 'A',
@@ -242,6 +245,8 @@ fn shows_tree() -> Vec<GuiShowsSeriesFrame> {
             }],
         },
         GuiShowsSeriesFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s2".to_owned(),
             title: "The Bear".to_owned(),
             sort_letter: 'B',

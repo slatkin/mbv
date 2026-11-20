@@ -18,6 +18,7 @@ use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_model::ui_util::row_date;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind, queue_item_media_kind};
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -50,6 +51,39 @@ impl GuiHomeRowId {
     #[must_use]
     pub fn is_continue(&self) -> bool {
         matches!(self, Self::Continue(_))
+    }
+
+    /// The id this row takes in `RowsInView` (gui-delineated-rows design D7):
+    /// one opaque string the window sends and the core matches its own Home
+    /// rows by, so the row art set never names a position. A `Continue`
+    /// watching row carries its Emby item id; a `Recently added` row carries
+    /// the queue item's content id, provider first.
+    #[must_use]
+    pub fn rows_in_view_id(&self) -> String {
+        match self {
+            Self::Continue(item_id) => format!("continue:{item_id}"),
+            Self::Recent(content_id) => format!("recent:{}", content_id_text(content_id)),
+        }
+    }
+}
+
+/// The text a queue item's content id takes inside a `RowsInView` Home id
+/// (design D7): one provider word, then the provider's own identity fields.
+fn content_id_text(id: &QueueItemContentId) -> String {
+    match id {
+        QueueItemContentId::Emby(value) => format!("emby:{value}"),
+        QueueItemContentId::Feed(value) => format!("feed:{value}"),
+        QueueItemContentId::Audiobookshelf {
+            library_item_id,
+            episode_id,
+        } => format!(
+            "audiobookshelf:{}:{library_item_id}:{episode_id}",
+            library_item_id.len()
+        ),
+        QueueItemContentId::AudiobookshelfBook { library_item_id } => {
+            format!("audiobookshelfBook:{library_item_id}")
+        }
+        QueueItemContentId::Twitch(value) => format!("twitch:{value}"),
     }
 }
 
@@ -91,12 +125,12 @@ pub struct GuiHomeItemRow {
     /// constructor derives, which carries the Continue Watching resume
     /// progress.
     pub state: MediaSemanticState,
-    /// The row's artwork, display-encoded for Emby items only: the
-    /// Audiobookshelf and Feed rows paint without art in Phase 2 (the
-    /// USER-APPROVED Home design). A `Some` carries the cached art, the
-    /// placeholder, or the loading state, exactly as the queue card
-    /// resolves it.
-    pub art: Option<GuiLibraryArtwork>,
+    /// The row's art (gui-delineated-rows design D4): the cached row image,
+    /// a fetch in flight, a source with no image, or a row kind with no art
+    /// source.
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// The selected row's Hero facts (design D12): one title, ordered meta rows
@@ -309,11 +343,15 @@ impl App {
         };
         let kind = home_item_kind(item);
         let state = MediaSemanticState::from_queue_item(item);
+        let media = queue_item_media_kind(item);
         let art = match item {
             // Emby rows fetch their card art through the image cache; the
             // other providers paint without art in Phase 2.
-            QueueItem::Emby(emby) => Some(self.gui_home_row_artwork(emby)),
-            _ => None,
+            QueueItem::Emby(emby) => {
+                let artwork = self.gui_home_row_artwork(emby);
+                self.gui_row_art_from_artwork(Some(&artwork))
+            }
+            _ => GuiRowArt::NoSource,
         };
         GuiHomeItem {
             item: item.clone(),
@@ -325,6 +363,7 @@ impl App {
                 kind,
                 state,
                 art,
+                media,
             },
         }
     }

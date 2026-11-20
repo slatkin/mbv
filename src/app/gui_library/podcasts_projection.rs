@@ -26,6 +26,7 @@ use mbv_ui_msg::PodcastEpisodeTarget;
 use std::collections::HashSet;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind};
 use super::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
 };
@@ -339,7 +340,7 @@ impl App {
     /// catalog the TUI's podcast owner builds for its own hero
     /// (`PodcastContent::selected_episode_item`), the description included.
     /// `None` when the per-show cache no longer carries the episode.
-    fn gui_podcast_hero_item(
+    pub(in crate::app::gui_library) fn gui_podcast_hero_item(
         &self,
         lib_idx: usize,
         episode: &GuiPodcastEpisodeId,
@@ -394,6 +395,8 @@ fn podcast_row(
         subtitle: show.map(|show| show.title.clone()),
         date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
+        art: GuiRowArt::NoSource,
+        media: GuiRowMediaKind::Audio,
     }
 }
 

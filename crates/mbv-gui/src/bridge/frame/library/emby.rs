@@ -8,8 +8,8 @@ use mbv::{
     GuiCollections, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
 
-use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
 /// The plain Emby-library destination's list part (row 8.1; design D8): the
@@ -78,6 +78,10 @@ pub struct GuiEmbyRowFrame {
     pub sort_letter: Option<char>,
     /// The row's kind.
     pub kind: GuiEmbyRowKindFrame,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// The Hero's facts for the selected row (row 8.1), with no Workspace: a
@@ -158,6 +162,8 @@ impl From<&GuiEmbyRow> for GuiEmbyRowFrame {
             date: row.date.clone(),
             sort_letter: row.sort_letter,
             kind: GuiEmbyRowKindFrame::from(row.kind),
+            art: GuiRowArtFrame::from(&row.art),
+            media: GuiRowMediaKindFrame::from(row.media),
         }
     }
 }

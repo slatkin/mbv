@@ -20,6 +20,7 @@ use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind};
 use super::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiCollections, compare_gui_date_order,
 };
@@ -58,6 +59,10 @@ pub struct GuiEmbyRow {
     pub sort_letter: Option<char>,
     /// The row's kind.
     pub kind: GuiEmbyRowKind,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// One credit of the movie's credits table (design D17, Q7): the shared
@@ -490,6 +495,8 @@ fn plain_row(item: &EmbyItem) -> GuiEmbyRow {
         date: None,
         sort_letter: Some(sort_letter(effective_sort_str(item))),
         kind: row_kind(item),
+        art: GuiRowArt::NoSource,
+        media: emby_media_kind(item),
     }
 }
 
@@ -506,6 +513,8 @@ fn feed_row(item: &EmbyItem, date: Option<String>, programme: Option<String>) ->
         date,
         sort_letter: None,
         kind: row_kind(item),
+        art: GuiRowArt::NoSource,
+        media: emby_media_kind(item),
     }
 }
 

@@ -18,6 +18,7 @@ use mbv_queue::FeedEntry;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
+use super::artwork::{GuiRowArt, feed_media_kind};
 use super::collection::{GuiCollectionTarget, compare_gui_date_order};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
@@ -201,6 +202,8 @@ impl App {
                 .map(str::to_string),
             date: row_date(entry.pub_date_secs),
             state: MediaSemanticState::from_feed_entry(entry),
+            art: GuiRowArt::NoSource,
+            media: feed_media_kind(entry),
         }
     }
 

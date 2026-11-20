@@ -19,8 +19,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryShowsList;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiShowsDetail, GuiShowsList,
-    GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
+    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiShowsDetail, GuiShowsList, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -276,6 +276,8 @@ fn shows_detail(selected: Option<&str>) -> GuiShowsDetail {
 fn tree() -> Vec<GuiShowsSeriesFrame> {
     vec![
         GuiShowsSeriesFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s1".to_owned(),
             title: "Atlanta".to_owned(),
             sort_letter: 'A',
@@ -287,6 +289,8 @@ fn tree() -> Vec<GuiShowsSeriesFrame> {
             }],
         },
         GuiShowsSeriesFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s3".to_owned(),
             title: "Better Call Saul".to_owned(),
             sort_letter: 'B',
@@ -350,6 +354,8 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them(
 /// no rail letter.
 fn new_view_rows() -> Vec<GuiShowsRowFrame> {
     vec![GuiShowsRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: "new:e1".to_owned(),
         title: "Pilot".to_owned(),
         subtitle: Some("Atlanta".to_owned()),
@@ -424,6 +430,8 @@ fn an_expandable_node_paints_its_open_state_as_aria_expanded() {
 #[test]
 fn a_node_that_does_not_open_paints_no_aria_expanded() {
     let series = GuiShowsSeriesFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: "s9".to_owned(),
         title: "Fixed".to_owned(),
         sort_letter: 'A',

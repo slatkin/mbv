@@ -26,7 +26,7 @@ use super::LibraryList;
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail,
     GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail,
-    GuiMusicList, GuiMusicTrackFrame,
+    GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
@@ -245,6 +245,8 @@ fn built(list: &GuiMusicList, detail: &GuiMusicDetail) -> Fixture {
 /// The Beastie Boys artist: one album with a cached tracklist, one without.
 fn beastie() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
@@ -275,6 +277,8 @@ fn beastie() -> GuiMusicArtistFrame {
 /// The Brand Nubian artist: one album, closed under the artist.
 fn brand() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a2".to_owned()),
         name: "Brand Nubian".to_owned(),
         sort_letter: 'B',

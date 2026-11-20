@@ -17,6 +17,7 @@ use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind};
 use super::home::GuiArtShape;
 use super::projection::sort_letter;
 use super::request::GuiSectionRequest;
@@ -42,6 +43,10 @@ pub struct GuiShowsRow {
     pub date: Option<String>,
     /// Whether the row takes no select, play, or enqueue.
     pub display_only: bool,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// One series node of the All series tree (design D14): the series row, its
@@ -64,6 +69,10 @@ pub struct GuiShowsSeries {
     /// The series' seasons in the detail's order; empty while the detail has
     /// not landed.
     pub seasons: Vec<GuiShowsSeasonNode>,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// One season node under a series (design D14): the season row and its
@@ -321,6 +330,8 @@ impl App {
                     subtitle,
                     date: row_date(mbv_ui_model::home_latest::provider_timestamp_secs(&item)),
                     display_only: false,
+                    art: GuiRowArt::NoSource,
+                    media: GuiRowMediaKind::Video,
                 }
             })
             .collect()
@@ -354,6 +365,8 @@ impl App {
                     )),
                     date: row_date(secs),
                     display_only: true,
+                    art: GuiRowArt::NoSource,
+                    media: GuiRowMediaKind::Video,
                 }
             })
             .collect()
@@ -399,6 +412,8 @@ impl App {
                     sort_letter: sort_letter(effective_sort_str(item)),
                     expandable: detail.is_none_or(|detail| !detail.seasons.is_empty()),
                     seasons,
+                    art: GuiRowArt::NoSource,
+                    media: GuiRowMediaKind::Video,
                 }
             })
             .collect()

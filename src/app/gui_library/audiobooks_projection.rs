@@ -18,6 +18,7 @@ use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_item;
 use mbv_ui_model::ui_util::fmt_duration_gutter;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind};
 use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
 use crate::app::App;
@@ -39,6 +40,10 @@ pub struct GuiAudiobooksRow {
     /// sort key — the surname the list sorts by — or `#` for a digit- or
     /// symbol-led surname.
     pub sort_letter: char,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// The book Hero's facts (row 9.1): the shared `hero_content_abs_book`
@@ -289,6 +294,8 @@ fn book_row(book: &mbv_audiobookshelf::AudiobookshelfBook) -> GuiAudiobooksRow {
             .filter(|author| !author.is_empty()),
         duration: gutter(book.duration_seconds),
         sort_letter: sort_letter(&book.author_sort_key),
+        art: GuiRowArt::NoSource,
+        media: GuiRowMediaKind::Audio,
     }
 }
 

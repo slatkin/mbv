@@ -12,9 +12,8 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 use mbv_queue::QueueItemContentId;
 
-use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
-    GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame,
+    GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiRowArtFrame,
 };
 use crate::window::library::list::{GeometryRow, filter_match};
 
@@ -44,9 +43,10 @@ pub struct HomeItemRow {
     pub item_kind: GuiHomeRowKindFrame,
     /// The row's state, with the Continue Watching resume progress.
     pub state: GuiHomeRowStateFrame,
-    /// The row's artwork, present exactly while the row's item obtains art
-    /// from the image cache.
-    pub art: Option<GuiArtRef>,
+    /// The row's art (gui-delineated-rows design D4): the cached row image and
+    /// the fit its pixels ask for, a fetch in flight, a source with no image,
+    /// or a row kind with no art source.
+    pub art: GuiRowArtFrame,
 }
 
 /// One painted row of the flat Home list (design D12). The `id` is the row's

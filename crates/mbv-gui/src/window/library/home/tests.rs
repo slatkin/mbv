@@ -17,7 +17,7 @@ use mbv_queue::QueueItemContentId;
 
 use crate::bridge::frame::library::{
     GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame,
-    GuiHomeRowStateFrame,
+    GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 
 use crate::bridge::sections::GuiSectionBatch;
@@ -109,7 +109,8 @@ fn continued() -> GuiHomeItemRowFrame {
         date: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -122,7 +123,8 @@ fn added() -> GuiHomeItemRowFrame {
         date: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 

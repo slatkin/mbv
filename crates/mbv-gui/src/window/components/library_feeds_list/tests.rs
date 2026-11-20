@@ -22,7 +22,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryFeedsList;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -268,6 +268,8 @@ fn built(list: GuiFeedsList, detail: GuiFeedsDetail) -> Fixture {
 fn entries() -> Vec<GuiEntryRowFrame> {
     vec![
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s1::e1".to_owned(),
             title: "Entry A".to_owned(),
             subtitle: Some("Sub One".to_owned()),
@@ -275,6 +277,8 @@ fn entries() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s2::e2".to_owned(),
             title: "Entry B".to_owned(),
             subtitle: Some("Sub Two".to_owned()),
@@ -282,6 +286,8 @@ fn entries() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Played,
         },
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s1::e3".to_owned(),
             title: "Entry C".to_owned(),
             subtitle: Some("Sub One".to_owned()),

@@ -23,7 +23,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryPodcastsList;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail,
-    GuiLibraryList, GuiPodcastsDetail, GuiPodcastsList,
+    GuiLibraryList, GuiPodcastsDetail, GuiPodcastsList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -269,6 +269,8 @@ fn built(list: GuiPodcastsList, detail: GuiPodcastsDetail) -> Fixture {
 fn episodes() -> Vec<GuiEntryRowFrame> {
     vec![
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "e1:ep1".to_owned(),
             title: "Episode A".to_owned(),
             subtitle: Some("Show One".to_owned()),
@@ -276,6 +278,8 @@ fn episodes() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "e2:ep2".to_owned(),
             title: "Episode B".to_owned(),
             subtitle: Some("Show Two".to_owned()),
@@ -283,6 +287,8 @@ fn episodes() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Played,
         },
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "e3:ep3".to_owned(),
             title: "Episode C".to_owned(),
             subtitle: Some("Show One".to_owned()),

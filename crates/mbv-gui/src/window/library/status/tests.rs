@@ -6,7 +6,8 @@ use super::*;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionEntry, GuiEmbyDetail, GuiEmbyList,
     GuiEmbyRowKindFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeHeroFrame,
-    GuiHomeList, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicList, GuiShowsDetail, GuiShowsList,
+    GuiHomeList, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicList, GuiRowArtFrame,
+    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsList,
 };
 
 /// The fixture's tabs: Music at place 1, Audiobooks at place 2.
@@ -86,6 +87,8 @@ fn music_detail(picked: Option<GuiMusicHeroFrame>) -> GuiLibraryDetail {
 /// One plain-mode Emby row.
 fn emby_row(id: &str, title: &str, sort_letter: Option<char>) -> GuiEmbyRowFrame {
     GuiEmbyRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some("1979".to_owned()),
@@ -152,6 +155,8 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
             loading: false,
             failed: false,
             rows: vec![GuiEmbyRowFrame {
+                art: GuiRowArtFrame::NoSource,
+                media: GuiRowMediaKindFrame::Video,
                 id: "v1".to_owned(),
                 title: "Holiday".to_owned(),
                 subtitle: None,
@@ -179,6 +184,8 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
             failed: false,
             rows: vec![
                 GuiAudiobooksRowFrame {
+                    art: GuiRowArtFrame::NoSource,
+                    media: GuiRowMediaKindFrame::Audio,
                     id: "b1".to_owned(),
                     title: "Dune".to_owned(),
                     subtitle: Some("Frank Herbert".to_owned()),
@@ -186,6 +193,8 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
                     sort_letter: 'D',
                 },
                 GuiAudiobooksRowFrame {
+                    art: GuiRowArtFrame::NoSource,
+                    media: GuiRowMediaKindFrame::Audio,
                     id: "b2".to_owned(),
                     title: "Hyperion".to_owned(),
                     subtitle: Some("Dan Simmons".to_owned()),
@@ -224,6 +233,8 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
             loading: false,
             failed: false,
             rows: vec![GuiEntryRowFrame {
+                art: GuiRowArtFrame::NoSource,
+                media: GuiRowMediaKindFrame::Video,
                 id: "sub1:guid12".to_owned(),
                 title: "The Long Road Home".to_owned(),
                 subtitle: Some("Bits and Bites".to_owned()),
@@ -277,6 +288,8 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
             upcoming_failed: false,
             rows: vec![
                 GuiShowsRowFrame {
+                    art: GuiRowArtFrame::NoSource,
+                    media: GuiRowMediaKindFrame::Video,
                     display_only: false,
                     id: "s1".to_owned(),
                     title: "Atlanta".to_owned(),
@@ -285,6 +298,8 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
                     sort_letter: Some('A'),
                 },
                 GuiShowsRowFrame {
+                    art: GuiRowArtFrame::NoSource,
+                    media: GuiRowMediaKindFrame::Video,
                     display_only: false,
                     id: "s2".to_owned(),
                     title: "The Bear".to_owned(),

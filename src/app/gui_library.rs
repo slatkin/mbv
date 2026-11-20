@@ -25,6 +25,7 @@ mod podcasts;
 mod podcasts_projection;
 mod projection;
 mod request;
+mod rows_in_view;
 mod search;
 mod shows;
 mod shows_projection;
@@ -33,7 +34,9 @@ mod store;
 mod tabs;
 mod tv;
 
-pub use self::artwork::GuiLibraryArtwork;
+pub use self::artwork::{
+    GuiLibraryArtwork, GuiRowArt, GuiRowMediaKind, GuiRowSource, artist_rows_in_view_id,
+};
 pub use self::audiobooks::GuiAudiobooksSelection;
 pub use self::audiobooks_projection::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
@@ -87,6 +90,33 @@ pub use self::tv::GuiTvShowsSelection;
 use mbv_ui_model::settings::PanelFocus;
 
 use crate::app::App;
+
+/// The Library list whose rows a `RowsInView` set names (gui-delineated-rows
+/// design D7): the destination list the ids belong to, so the core resolves
+/// each id against its own data. It lives beside the command because the
+/// window's `PointerList` is not visible to the core, and its Tracklist and
+/// Workspace arms carry no thumbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GuiRowArtScope {
+    /// The Home flat list's item rows.
+    Home,
+    /// A plain Emby library's list rows.
+    Emby,
+    /// The Music list's artist rows.
+    Music,
+    /// The Shows All list's series rows.
+    ShowsSeries,
+    /// The Shows New list's flat episode rows.
+    ShowsNew,
+    /// The Shows Upcoming list's flat premiere rows.
+    ShowsUpcoming,
+    /// The Podcasts list's episode rows.
+    Podcasts,
+    /// The Audiobooks list's book rows.
+    Audiobooks,
+    /// The Feeds list's entry rows.
+    Feeds,
+}
 
 /// One request from the GUI Library panel's window content (design D2): the
 /// `library` command carries it into the Client core, and
@@ -252,6 +282,14 @@ pub enum GuiLibraryCommand {
     SearchActivate { id: String, item_type: String },
     /// Close the Search results (design D12, row 12.1): Esc in the field.
     SearchClose,
+    /// Report the stable ids of the rows `scope`'s list paints, plus its
+    /// overscan (gui-delineated-rows design D7): the core stores the latest set
+    /// per list and queues the row art fetches once navigation is idle. The
+    /// ids are the frames' own row ids, never coordinates.
+    RowsInView {
+        scope: GuiRowArtScope,
+        ids: Vec<String>,
+    },
     /// Open the URL in the user's browser (the Hero's `IMDb` link, TUI
     /// parity): the scheme gate runs in the core, because the url comes
     /// from the window — only an http or https URL reaches the opener, and
@@ -370,6 +408,9 @@ impl App {
             command @ (GuiLibraryCommand::SearchQuery { .. }
             | GuiLibraryCommand::SearchActivate { .. }
             | GuiLibraryCommand::SearchClose) => self.apply_gui_search_command(command),
+            GuiLibraryCommand::RowsInView { scope, ids } => {
+                self.apply_gui_rows_in_view(scope, ids);
+            }
             GuiLibraryCommand::OpenUrl { url } => Self::open_gui_library_url(&url),
         }
     }

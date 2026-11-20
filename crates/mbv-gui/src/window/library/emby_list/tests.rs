@@ -5,11 +5,13 @@
 //! the geometry is asserted without a layout.
 
 use super::*;
-use crate::bridge::frame::library::GuiEmbyRowKindFrame;
+use crate::bridge::frame::library::{GuiEmbyRowKindFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 
 /// One plain-mode row: the name-sorted library's row under its rail letter.
 fn plain(id: &str, title: &str, sort_letter: char) -> GuiEmbyRowFrame {
     GuiEmbyRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some("1999".to_owned()),
@@ -23,6 +25,8 @@ fn plain(id: &str, title: &str, sort_letter: char) -> GuiEmbyRowFrame {
 /// gutter.
 fn feed(id: &str, title: &str, date: &str) -> GuiEmbyRowFrame {
     GuiEmbyRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: None,

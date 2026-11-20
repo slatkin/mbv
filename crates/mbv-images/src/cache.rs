@@ -368,6 +368,15 @@ impl ImageCache {
             .insert(key, Instant::now() + self.interrupted_fetch_retry_delay);
     }
 
+    /// Clear every interrupted key's waiting time, as a test's passed retry
+    /// would: no cache entry is written, so the next reserve may start the key
+    /// again (invariant 27). A test that must observe the retry without waiting
+    /// the delay calls this instead of sleeping.
+    #[cfg(any(test, feature = "test"))]
+    pub fn pass_interrupted_fetch_retries_for_test(&mut self) {
+        self.interrupted_fetches.clear();
+    }
+
     pub fn complete_fetch(&mut self, key: String, entry: CachedImage) {
         self.card_image_loading.remove(&key);
         self.interrupted_fetches.remove(&key);

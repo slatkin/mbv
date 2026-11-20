@@ -237,6 +237,7 @@ impl App {
             visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
             visualizer_glyph: init.visualizer_glyph,
             queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
+            gui_rows_in_view: std::collections::HashMap::new(),
             gui_home_selection: None,
             gui_tv_shows: std::collections::HashMap::new(),
             gui_emby_libs: std::collections::HashMap::new(),

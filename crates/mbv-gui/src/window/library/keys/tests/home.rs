@@ -22,7 +22,8 @@ fn continued_row() -> GuiHomeItemRowFrame {
         date: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -35,7 +36,8 @@ fn added_row() -> GuiHomeItemRowFrame {
         date: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 

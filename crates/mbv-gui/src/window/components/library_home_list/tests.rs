@@ -22,10 +22,10 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use mbv_queue::QueueItemContentId;
 
 use super::LibraryHomeList;
-use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiHomeDetail, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
     GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -276,7 +276,8 @@ fn continued_with_art() -> GuiHomeItemRowFrame {
         date: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Active { progress: Some(42) },
-        art: Some(GuiArtRef::Loading),
+        art: GuiRowArtFrame::Loading,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -289,7 +290,8 @@ fn played() -> GuiHomeItemRowFrame {
         date: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Played,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -302,7 +304,8 @@ fn added() -> GuiHomeItemRowFrame {
         date: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 

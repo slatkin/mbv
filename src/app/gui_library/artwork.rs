@@ -3,6 +3,9 @@
 //! neighbour warm that fills the cache around the pick. The fetches
 //! are issued here, as the TUI's hero projection issues its own, so the window
 //! content never requests an image itself.
+//!
+//! `rows` holds the top-level row art model (gui-delineated-rows design D4): the
+//! art state each row paints, its Hero artwork source, and the row cache read.
 
 use mbv_components::library_panel::content::{
     ArtworkShape, ArtworkSource, painted_shape_for_pixels,
@@ -12,6 +15,15 @@ use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
 use crate::app::App;
 use mbv_images::SourceImage;
+
+mod rows;
+
+pub use self::rows::{GuiRowArt, GuiRowMediaKind, GuiRowSource, artist_rows_in_view_id};
+pub(in crate::app::gui_library) use self::rows::{
+    artist_id_row_source, catalog_book_row_source, emby_media_kind, emby_row_source,
+    episode_row_source, feed_media_kind, feed_row_source, queue_item_media_kind,
+    upcoming_row_source,
+};
 
 /// The neighbour warm window's bounds (the TUI's grouped-Music rule,
 /// `openspec/specs/music-library-hero/spec.md`): one entry behind the picked
@@ -222,6 +234,31 @@ impl App {
             &types,
         );
         self.resolve_gui_art(cache_key)
+    }
+
+    /// The row art a Hero-style artwork state resolves to (gui-delineated-rows
+    /// design D4): the Home row's at-once card fetch mapped into the shared row
+    /// art model, so the window paints one row vocabulary until the row's own
+    /// source fills it (unit 3b).
+    #[must_use]
+    pub(in crate::app::gui_library) fn gui_row_art_from_artwork(
+        &self,
+        artwork: Option<&GuiLibraryArtwork>,
+    ) -> GuiRowArt {
+        match artwork {
+            Some(GuiLibraryArtwork::Image { key, .. }) => GuiRowArt::Image {
+                square: self
+                    .images
+                    .image(key)
+                    .and_then(mbv_images::CachedImage::dimensions)
+                    .is_some_and(|(width, height)| {
+                        painted_shape_for_pixels(width, height) == ArtworkShape::Square
+                    }),
+                key: key.clone(),
+            },
+            Some(GuiLibraryArtwork::Loading) => GuiRowArt::Loading,
+            Some(GuiLibraryArtwork::Placeholder) | None => GuiRowArt::Missing,
+        }
     }
 
     /// The cached art under `cache_key`, as the server sent it, or the empty

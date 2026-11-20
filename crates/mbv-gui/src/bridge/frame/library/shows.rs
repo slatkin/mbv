@@ -11,7 +11,7 @@ use mbv::{
 };
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use super::{GuiArtShapeFrame, GuiHomeRowStateFrame};
+use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
 /// The Shows destination's list part (add-gui-library-panel design D12, the
@@ -73,6 +73,10 @@ pub struct GuiShowsSeriesFrame {
     /// The series' seasons in the detail's order; empty while the detail has
     /// not landed.
     pub seasons: Vec<GuiShowsSeasonFrame>,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// One season node under a series (design D14), the Music album node's
@@ -109,6 +113,10 @@ pub struct GuiShowsRowFrame {
     /// Whether the row takes no select, play, or enqueue (design D9): an
     /// Upcoming premiere is display-only.
     pub display_only: bool,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// The Hero's facts for the selected row (design D12), with the series
@@ -220,6 +228,8 @@ impl From<&GuiShowsRow> for GuiShowsRowFrame {
             date: row.date.clone(),
             sort_letter: None,
             display_only: row.display_only,
+            art: GuiRowArtFrame::from(&row.art),
+            media: GuiRowMediaKindFrame::from(row.media),
         }
     }
 }
@@ -236,6 +246,8 @@ impl From<&GuiShowsSeries> for GuiShowsSeriesFrame {
                 .iter()
                 .map(GuiShowsSeasonFrame::from)
                 .collect(),
+            art: GuiRowArtFrame::from(&series.art),
+            media: GuiRowMediaKindFrame::from(series.media),
         }
     }
 }

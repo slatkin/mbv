@@ -8,7 +8,7 @@
 
 use mbv::GuiEntryRow;
 
-use super::GuiHomeRowStateFrame;
+use super::{GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 
 /// One row of a collection-scoped destination's entry list (rows 10.1, 11.1). The
 /// identity is the entry's stable Service identity, as one opaque string a
@@ -30,6 +30,10 @@ pub struct GuiEntryRowFrame {
     /// The row's played state, with the resume percent on a partly played
     /// entry.
     pub state: GuiHomeRowStateFrame,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 impl From<&GuiEntryRow> for GuiEntryRowFrame {
@@ -40,6 +44,8 @@ impl From<&GuiEntryRow> for GuiEntryRowFrame {
             subtitle: row.subtitle.clone(),
             date: row.date.clone(),
             state: GuiHomeRowStateFrame::from(&row.state),
+            art: GuiRowArtFrame::from(&row.art),
+            media: GuiRowMediaKindFrame::from(row.media),
         }
     }
 }

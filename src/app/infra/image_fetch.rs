@@ -237,6 +237,49 @@ impl App {
         }
         Some(cache_key)
     }
+
+    /// The configured Audiobookshelf server's URL, or `None` with no Service
+    /// setup: the row cache key's server identity (design D6).
+    pub(in crate::app) fn audiobookshelf_server_url(&self) -> Option<String> {
+        self.config
+            .lock()
+            .unwrap()
+            .audiobookshelf_setup
+            .as_ref()
+            .map(|setup| setup.server_url.clone())
+    }
+
+    /// The `Row` request for one Audiobookshelf cover (design D6): the row
+    /// cache key holding the library item's update time, the book's width or
+    /// the podcast cover's, and the Service credentials. `None` with no server
+    /// configured or no stored credential.
+    pub(in crate::app) fn audiobookshelf_row_request(
+        &self,
+        library_item_id: &str,
+        book: bool,
+        updated_at_ms: u64,
+    ) -> Option<mbv_images::ImageFetchReq> {
+        let setup = self.config.lock().unwrap().audiobookshelf_setup.clone()?;
+        let api_key = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)?;
+        Some(mbv_images::ImageFetchReq {
+            cache_key: mbv_images::abs_row_cache_key(
+                &setup.server_url,
+                library_item_id,
+                updated_at_ms,
+            ),
+            item_id: library_item_id.to_string(),
+            series_id: String::new(),
+            types: Vec::new(),
+            source: mbv_images::ImageSource::Audiobookshelf {
+                server_url: setup.server_url,
+                api_key,
+            },
+            rendition: mbv_images::ImageRendition::Row(mbv_images::RowRendition {
+                square: !book,
+                emby: None,
+            }),
+        })
+    }
 }
 
 mod fetch;

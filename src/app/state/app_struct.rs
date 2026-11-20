@@ -303,6 +303,14 @@ pub struct App {
     /// GUI Library's right-click item menu): the item the row-menu command
     /// last named. The TUI never reads it.
     pub(in crate::app) gui_library_row_menu_target: Option<String>,
+    /// The latest `RowsInView` set per Library list (gui-delineated-rows design
+    /// D7): the stable row ids the window last painted with its overscan. The
+    /// core queues a `Row` fetch for each in-view row of the active
+    /// destination's list once navigation is idle, and re-queues an interrupted
+    /// key while its row is still in its set (invariant 27). The TUI never
+    /// reads it.
+    pub(in crate::app) gui_rows_in_view:
+        std::collections::HashMap<crate::app::gui_library::GuiRowArtScope, Vec<String>>,
     /// The Home row the GUI Library's Hero shows (design D2, D12): the row
     /// the select command last named, as the Home-stable id the Home paths
     /// resolve. A row whose item the Home data no longer carries falls back

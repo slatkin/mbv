@@ -19,7 +19,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiPodcastsDetail, GuiPodcastsHeroFrame,
-    GuiPodcastsList,
+    GuiPodcastsList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -215,6 +215,8 @@ fn episode(
     state: GuiHomeRowStateFrame,
 ) -> GuiEntryRowFrame {
     GuiEntryRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),

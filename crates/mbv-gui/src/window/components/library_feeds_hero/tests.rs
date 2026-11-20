@@ -26,7 +26,7 @@ use super::{FeedsAction, LibraryFeedsHero, act};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail,
     GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -55,6 +55,8 @@ fn hero(art_shape: GuiArtShapeFrame) -> GuiFeedsHeroFrame {
 /// The carried Feeds rows: one merged entry, `extra` the test's own rows.
 fn rows(extra: Vec<GuiEntryRowFrame>) -> Vec<GuiEntryRowFrame> {
     let mut rows = vec![GuiEntryRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: "sub1:guid12".to_owned(),
         title: "The Long Road Home".to_owned(),
         subtitle: Some("Bits and Bites".to_owned()),
@@ -483,6 +485,8 @@ fn the_hero_paints_the_frame_header_above_its_artwork() {
 fn the_list_band_holds_the_feed_entries_alone() {
     let extra = vec![
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "sub1:guid11".to_owned(),
             title: "Earlier Walk".to_owned(),
             subtitle: Some("Bits and Bites".to_owned()),
@@ -490,6 +494,8 @@ fn the_list_band_holds_the_feed_entries_alone() {
             state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "sub2:guid20".to_owned(),
             title: "Other Feed".to_owned(),
             subtitle: Some("Elsewhere".to_owned()),

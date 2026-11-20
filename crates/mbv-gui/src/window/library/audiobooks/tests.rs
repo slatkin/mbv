@@ -13,7 +13,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
-    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
@@ -112,6 +112,8 @@ fn book(
     sort_letter: char,
 ) -> GuiAudiobooksRowFrame {
     GuiAudiobooksRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),
