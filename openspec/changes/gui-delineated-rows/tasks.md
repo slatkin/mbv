@@ -40,5 +40,5 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; verify all pass.
-- [ ] 5.2 Run `openspec validate gui-delineated-rows --strict`; verify it passes.
+- [x] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; verify all pass.
+- [x] 5.2 Run `openspec validate gui-delineated-rows --strict`; verify it passes.
