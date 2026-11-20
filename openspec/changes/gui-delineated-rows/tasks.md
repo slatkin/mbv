@@ -2,10 +2,10 @@
 
 ## 1. Queue row
 
-- [ ] 1.1 Set the queue row geometry to design D3 in `queue_panel/geometry.rs` (`ROW_HEIGHT_PX` 40, `ROW_GAP_PX` 0, ordinal column 28, right column 96, padding 10) and the row's 1 px divider and square corners (now-playing radius 4) in `queue_panel.rs`; verify `cargo nextest run -p mbv-gui queue_panel` passes with the capacity and ghost-offset tests updated to the new stride.
-- [ ] 1.2 Replace the in-row progress bar in `queue_panel/row_cells.rs` with the progress ring after the title (design D3: SVG, `stroke-dasharray`, track `Bg2`, fill `Orange`, now playing `Green`), driven by the unchanged `row_progress`; verify a render test asserts the ring on a partial row and on the now-playing row and no ring on a new or played row.
-- [ ] 1.3 Paint the frame's `duration` in the right column for every row state, and delete the start mark (`StartMark`, `start_mark`, its `Play` glyph) from the row; remove `GuiQueue::start`, `GuiQueue::playing`, `GuiQueue::start_slot_reported`, `QueueStartProjection`, `gui_queue_start_projection`, and the tests that cite the retired start-mark scenarios (design D3); verify a render test asserts the duration on new, partial, played, and now-playing rows and no start mark on a stopped queue's start slot.
-- [ ] 1.4 Update the `queue_panel.rs` module docs and `docs/architecture/gui-client.md` queue-row text to the new row; verify no doc still names the in-row progress bar or the start mark.
+- [x] 1.1 Set the queue row geometry to design D3 in `queue_panel/geometry.rs` (`ROW_HEIGHT_PX` 40, `ROW_GAP_PX` 0, ordinal column 28, right column 96, padding 10) and the row's 1 px divider and square corners (now-playing radius 4) in `queue_panel.rs`; verify `cargo nextest run -p mbv-gui queue_panel` passes with the capacity and ghost-offset tests updated to the new stride.
+- [x] 1.2 Replace the in-row progress bar in `queue_panel/row_cells.rs` with the progress ring after the title (design D3: SVG, `stroke-dasharray`, track `Bg2`, fill `Orange`, now playing `Green`), driven by the unchanged `row_progress`; verify a render test asserts the ring on a partial row and on the now-playing row and no ring on a new or played row.
+- [x] 1.3 Paint the frame's `duration` in the right column for every row state, and delete the start mark (`StartMark`, `start_mark`, its `Play` glyph) from the row; remove `GuiQueue::start`, `GuiQueue::playing`, `GuiQueue::start_slot_reported`, `QueueStartProjection`, `gui_queue_start_projection`, and the tests that cite the retired start-mark scenarios (design D3); verify a render test asserts the duration on new, partial, played, and now-playing rows and no start mark on a stopped queue's start slot.
+- [x] 1.4 Update the `queue_panel.rs` module docs and `docs/architecture/gui-client.md` queue-row text to the new row; verify no doc still names the in-row progress bar or the start mark.
 
 ## 2. Row art model and Service requests
 
