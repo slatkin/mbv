@@ -2,21 +2,21 @@
 
 ## 1. Publishers in `mbv-desktop`
 
-- [ ] 1.1 Add the pure Client publishing rule to `crates/mbv-desktop/src/mpris.rs` (or
+- [x] 1.1 Add the pure Client publishing rule to `crates/mbv-desktop/src/mpris.rs` (or
   `mpris/rule.rs` if the file split is taken): inputs "attached endpoint is Local" and the local
   Owner's `Option<PlayerStatus>`; publish only when the endpoint is not Local and the local status
   is not `Playing` (`active && !paused`); `None` counts as not `Playing` (design D3). Verify with
   one `src` `#[case]` table whose rows have distinct outcomes: Local endpoint → no name; remote with
   local `Playing` → no name; remote with local `Paused` → name; remote with no local status → name.
   No D-Bus in tests (issue #757 rule).
-- [ ] 1.2 Add `mbv_desktop::mpris::start_owner` behind `#[cfg(not(test))]`: serve
+- [x] 1.2 Add `mbv_desktop::mpris::start_owner` behind `#[cfg(not(test))]`: serve
   `MediaPlayer2`/`MediaPlayer2Player` on a session connection, claim `org.mpris.MediaPlayer2.mbv`
   with `ReplaceExisting | DoNotQueue` and without `AllowReplacement`, take the status from the
   passed `Arc<Mutex<PlayerStatus>>`, send transport through the passed
   `mpsc::Sender<TransportCommand>`, resolve art through the passed resolver, and run the existing
   500 ms publisher loop (design D2). A failed connection logs and parks; a failed claim logs and
   retries on the next tick (design D6). Verify with `cargo check -p mbv-desktop`.
-- [ ] 1.3 Change the Client entry point `mbv_desktop::mpris::start` and `rebind` (design D4): the
+- [x] 1.3 Change the Client entry point `mbv_desktop::mpris::start` and `rebind` (design D4): the
   connection serves the interfaces without requesting a name; `MprisSource` gains the rule closure,
   set by `start` and `rebind`; the 500 ms loop requests `org.mpris.MediaPlayer2.mbv.instance<pid>`
   (`std::process::id()`) when the rule turns true, calls `Connection::release_name` when it turns
