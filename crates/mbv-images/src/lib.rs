@@ -253,6 +253,10 @@ pub fn emby_row_cache_key(item_id: &str, image: Option<&RowEmbyImage>) -> String
     )
 }
 
+/// Prefix of every Audiobookshelf row cache key (design D6), so a Service
+/// setup change can drop them with the other Audiobookshelf entries.
+pub const ABS_ROW_CACHE_KEY_PREFIX: &str = "row:abs:";
+
 /// Cache key for an Audiobookshelf row cover (design D6):
 /// `row:abs:{server_hash}:{library_item_id}:{updated_at}`, where
 /// `{updated_at}` is the library item's update time in milliseconds (`0` when
@@ -261,7 +265,7 @@ pub fn emby_row_cache_key(item_id: &str, image: Option<&RowEmbyImage>) -> String
 #[must_use]
 pub fn abs_row_cache_key(server_url: &str, library_item_id: &str, updated_at_ms: u64) -> String {
     format!(
-        "{ROW_IMAGE_CACHE_KEY_PREFIX}abs:{:016x}:{library_item_id}:{updated_at_ms}",
+        "{ABS_ROW_CACHE_KEY_PREFIX}{:016x}:{library_item_id}:{updated_at_ms}",
         server_hash(server_url)
     )
 }
