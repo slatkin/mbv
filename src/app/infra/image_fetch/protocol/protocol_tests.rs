@@ -1,5 +1,6 @@
 use super::super::App;
-use super::{FetchedBytes, decode_fetched, emby_type_url, first_image, request_failure};
+use super::emby::{emby_type_url, first_image};
+use super::{FetchedBytes, decode_fetched, request_failure};
 use crate::app::tests::make_app_stub;
 use mbv_images::{
     CachedImage, ImageDecode, ImageFetchOutcome, ImageRendition, RowEmbyImage, RowRendition,
