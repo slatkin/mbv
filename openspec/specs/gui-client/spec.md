@@ -87,7 +87,7 @@ The GUI Client SHALL NOT start, embed, or control mpv directly. It SHALL send pl
 
 ### Requirement: The first GUI slice presents the player panel of the design canvas
 
-The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The window SHALL show the top bar as one global header across the full window width, above the Library panel and the Queue column, in every arrangement; the Settings screen SHALL show no global header. The panel SHALL show no header row above its artwork: the artwork SHALL be the panel's topmost content, directly under the global header. The footer line SHALL show the playback-target chooser and the collapse control at its left edge. The GUI Client SHALL paint no now-playing status word on any surface. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. The footer line SHALL show the total time of the shown queue and, while rows are marked, the total time of the marked rows. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the top bar carries only the destination tabs that the GUI Client presents, and the Library Status bar carries the Search field only once Search is presented.
+The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The window SHALL show the top bar as one global header across the full window width, above the Library panel and the Queue column, in every arrangement; the Settings screen SHALL show no global header. The panel SHALL show no header row above its artwork: the artwork SHALL be the panel's topmost content, directly under the global header. The footer line SHALL show the playback-target chooser and the collapse control at its left edge. The GUI Client SHALL paint no now-playing status word on any surface. The footer line SHALL show the prefix-armed state while the Library panel does not show; while the Library panel shows, the Library Status bar shows it. No status line SHALL show toasts: they show as floating cards (`gui-toasts`). The footer line SHALL show the total time of the shown queue and, while rows are marked, the total time of the marked rows. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the top bar carries only the destination tabs that the GUI Client presents, and the Library Status bar carries the Search field only once Search is presented.
 
 #### Scenario: The queue has slots
 
@@ -101,8 +101,14 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 
 #### Scenario: The Status bar projection holds a toast
 
-- **WHEN** the shared Status bar projection holds a toast
-- **THEN** the GUI Client shows the toast in the Library Status bar while the Library panel shows, and otherwise in the footer line or in a conventional GUI form
+- **WHEN** a toast is presented
+- **THEN** the GUI Client shows it as a floating card, and neither the footer line nor the Library Status bar shows it
+
+#### Scenario: The prefix is armed while a toast shows
+
+- **GIVEN** a toast shows
+- **WHEN** the user arms prefix mode while the Library panel does not show
+- **THEN** the footer line shows the armed state
 
 #### Scenario: The prefix is armed
 
@@ -138,7 +144,7 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 - **WHEN** the expanded panel paints the footer line
 - **THEN** the left line shows the playback-target chooser and the collapse control, then the queue's existing source text — the playlist text the frame carries — without a leading icon, the right line shows the shown queue's total time, and the line uses the canvas footer's type and border
 - **AND** the footer shows no Player-owner label and no liveness dot
-- **AND** the prefix, toast, autosave, and dirty states still paint in the footer line when they are active and the Library panel does not show
+- **AND** the prefix, autosave, and dirty states still paint in the footer line when they are active and the Library panel does not show
 
 #### Scenario: The footer's target chooser opens above the band
 
@@ -718,6 +724,37 @@ When the Client core's keyboard router resolves a destination step in the GUI Cl
 - **WHEN** the user presses Tab
 - **THEN** the next presented destination opens
 
+### Requirement: Every Library destination loads its content from the frame
+
+The GUI Client SHALL load the active Library destination's content from its frame, with no tab click, for every destination kind: Music, Shows, plain Emby libraries, Audiobooks, Podcasts, Feeds, and Home. For each destination the loads SHALL run in one order: the root list, then the selection, then the content that depends on the selection. A destination that has no work for a step SHALL still take that step as a no-op.
+
+#### Scenario: A restored Shows or Emby library loads its root list
+- **GIVEN** the GUI Client starts with a Shows or plain Emby library as its saved destination
+- **WHEN** the window paints its first frame for that destination
+- **THEN** the library's root list load starts with no tab click
+- **AND** the default selection's detail loads once the root list lands
+
+#### Scenario: A restored Audiobooks or Podcasts library loads its catalog
+- **GIVEN** the GUI Client starts with an Audiobooks or Podcasts library as its saved destination and its catalog is not loaded
+- **WHEN** the window paints its first frame for that destination
+- **THEN** the catalog load starts with no tab click
+- **AND** the selection's loads start after the catalog lands
+
+#### Scenario: A repaint starts no second load
+- **GIVEN** a destination's root load is in flight, or its content is loaded
+- **WHEN** the frame paints again
+- **THEN** no second request for the same content starts
+
+#### Scenario: A failed load is not retried by a repaint
+- **GIVEN** a destination's load failed
+- **WHEN** the frame paints again
+- **THEN** the load is not started again
+- **AND** a press on the destination's tab or on its failed collection starts it again
+
+#### Scenario: A tab press and a frame load the same content
+- **WHEN** the user presses a destination's tab
+- **THEN** the destination loads the same content, in the same order, as the frame does for a restored destination
+
 ### Requirement: The Library keys act on the hovered row
 
 While the pointer is over the Library column, the window content SHALL take the Library keys. `/` opens the list filter. Enter plays the hovered row, `n` plays it next, and `a` adds it to the queue; with no hovered row they do nothing. While the pointer is over the destination's list, the arrow, Page Up, Page Down, Home, and End keys scroll that list. Every key that the window content does not take SHALL go to the Client core's keyboard router.
@@ -1231,7 +1268,7 @@ The window SHALL show a top bar with a Home icon and the destination tabs as its
 
 ### Requirement: The Library Status bar shows hints and the location
 
-While the Library panel shows, a Library Status bar SHALL show under the Library column: the Search field on the left, and the location on the right: the destination, All or the names of the checked collections, and the picked item. The bar SHALL show no key hints. While prefix mode is armed or a toast is active, that SHALL paint after the Search field, and the field and the location SHALL stay.
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the Search field on the left, and the location on the right: the destination, All or the names of the checked collections, and the picked item. The bar SHALL show no key hints. While prefix mode is armed, the armed state SHALL paint after the Search field, and the field and the location SHALL stay. The bar SHALL show no toast.
 
 #### Scenario: Music has an album picked
 
@@ -1247,8 +1284,8 @@ While the Library panel shows, a Library Status bar SHALL show under the Library
 
 #### Scenario: A toast arrives
 
-- **WHEN** the shared Status bar projection holds a toast while the Library panel shows
-- **THEN** the toast paints after the Search field until it ends, and the field and the location stay
+- **WHEN** a toast is presented while the Library panel shows
+- **THEN** the Library Status bar does not show it and does not change
 
 ### Requirement: Artwork comes from the core's image cache
 
