@@ -193,6 +193,22 @@ impl App {
         }
     }
 
+    /// The Hero's artwork for an Audiobookshelf cover source: the
+    /// Service-scoped hero cover key (a book's or a show's), fetched and read
+    /// from the image cache. `None` with no Audiobookshelf server configured.
+    pub(in crate::app::gui_library) fn gui_abs_cover_art(
+        &mut self,
+        library_item_id: &str,
+        book: bool,
+    ) -> Option<GuiLibraryArtwork> {
+        let cache_key = if book {
+            self.audiobookshelf_book_cover_key(library_item_id)?
+        } else {
+            self.audiobookshelf_cover_key(library_item_id)?
+        };
+        Some(self.resolve_gui_art(&cache_key))
+    }
+
     /// The Home Hero's artwork under the artwork policy's declared source
     /// (add-gui-library-panel design D12): the policy chain and cache key
     /// the TUI hero fetches, fetched here and read from the image cache.

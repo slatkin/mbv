@@ -10,7 +10,7 @@
 //! its row art is one cache read per row, never a fetch — so the TUI's own
 //! projections and paint do not change.
 
-use mbv_components::library_panel::content::ArtworkShape;
+use mbv_components::library_panel::content::{ArtworkShape, ArtworkSource};
 use mbv_components::library_panel::hero::hero_content_queue;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::{QueueItem, QueueItemContentId};
@@ -377,10 +377,16 @@ impl App {
             .find_map(|item| (item.id() == selected).then_some(*item))?;
         let content = hero_content_queue(&item.item);
         // The artwork rides the artwork policy's declared source: an Emby
-        // source is the fetched chain, and the Audiobookshelf covers and the
-        // undeclared arms paint without art in Phase 2 (the USER-APPROVED
-        // Home design).
-        let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
+        // source is the fetched chain, an Audiobookshelf cover is the
+        // Service-scoped cover the Podcasts and Audiobooks Heroes read, and
+        // an undeclared arm (a feed entry) paints without art.
+        let art = match content.facts.artwork.source.as_ref() {
+            Some(ArtworkSource::AudiobookshelfCover {
+                library_item_id,
+                book,
+            }) => self.gui_abs_cover_art(library_item_id, *book),
+            source => self.gui_emby_hero_art(source),
+        };
         let art_shape =
             artwork_shape(self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()));
         Some(GuiHomeHero {
