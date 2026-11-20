@@ -12,9 +12,13 @@
 //! thumb, and the press, double-click, and context handlers; it never restates
 //! the look. Every part paints `data-library-<attr>-<part>`, and the thumb adds
 //! `data-library-<attr>-thumb` with its art state and
-//! `data-library-<attr>-thumb-progress`. A top-level tree node — a Music artist
-//! or a Shows series — also names its open state, so the part paints the one
-//! caret (`LibraryRowNode`).
+//! `data-library-<attr>-thumb-progress`. A top-level tree node passes
+//! `tree_open` where it is a tree parent: the part then carries `tree-parent`,
+//! its `aria-expanded`, the `tree-trailing` mark on its trailing text, and the
+//! shared `TreeHint` at its trailing end, and its double-click toggles the node
+//! through `on_toggle` instead of playing it (gui-tree-double-click design D4).
+//! No row paints a caret: the open state shows as the children under the row,
+//! and the hover hint names the gesture (design D2).
 //!
 //! [`paint_item_row`] paints one row of a flat entry list — Podcasts and Feeds
 //! — from its carried entry, so the two lists keep one row painter.
@@ -29,7 +33,8 @@ use crate::bridge::frame::library::{
 };
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_attr::library_attr;
-use crate::window::icons::{ChevronRight, EighthNotes, MonitorPlay};
+use crate::window::components::tree_hint::TreeHint;
+use crate::window::icons::{EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
 use crate::window::library::shows_workspace::episode_progress;
 use crate::window::theme::canvas_var;
@@ -56,38 +61,6 @@ pub const THUMB_RADIUS_PX: f32 = 3.0;
 
 /// The media kind icon's size inside a thumb with no image (design D2).
 pub const THUMB_ICON_PX: u16 = 16;
-
-/// The caret's box width before a tree node's thumb (design D1).
-pub const NODE_CARET_WIDTH_PX: f32 = 18.0;
-
-/// The open state of a top-level tree node (design D1): the Music artist row
-/// and the Shows series row open and close, and their row paints the caret in
-/// that state. Every other top-level row paints none.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LibraryRowNode {
-    /// The node paints closed: its caret points right.
-    Closed,
-    /// The node paints open: its caret points down.
-    Open,
-}
-
-impl LibraryRowNode {
-    /// The caret's rotation in degrees, as the canvas paints it.
-    fn rotation(self) -> i32 {
-        match self {
-            LibraryRowNode::Closed => 0,
-            LibraryRowNode::Open => 90,
-        }
-    }
-
-    /// The open state word the row's `aria-expanded` carries.
-    fn expanded(self) -> &'static str {
-        match self {
-            LibraryRowNode::Closed => "false",
-            LibraryRowNode::Open => "true",
-        }
-    }
-}
 
 /// The thumb's progress track and fill height, along the box's bottom edge
 /// (design D2).
@@ -157,14 +130,22 @@ pub struct LibraryItemRowProps {
     /// thumb yet.
     #[props(default)]
     pub thumb: Option<LibraryRowThumb>,
-    /// The node's open state (design D1), `None` on a row that is no tree
-    /// node. It paints the row's caret and its `aria-expanded`.
+    /// The row's open state as a tree parent (gui-tree-double-click design D4),
+    /// `None` on a row that is no tree parent. `Some(open)` adds the
+    /// `tree-parent` class and the row's `aria-expanded`, marks its trailing
+    /// text `tree-trailing`, paints the shared [`TreeHint`], and turns the
+    /// row's double-click into [`Self::on_toggle`].
     #[props(default)]
-    pub node: Option<LibraryRowNode>,
-    /// A press on the row.
+    pub tree_open: Option<bool>,
+    /// A press on the row: it picks the row's item.
     pub on_press: Callback<()>,
-    /// A double-click on the row: the play path.
+    /// A double-click on the row.
     pub on_play: Callback<()>,
+    /// A double-click on a tree parent: it opens or closes the node, in place
+    /// of [`Self::on_play`] (gui-tree-double-click design D4). `None` while the
+    /// row is no tree parent.
+    #[props(default)]
+    pub on_toggle: Option<Callback<()>>,
     /// A right-press on the row, with the pointer's client position; `None`
     /// while the row names no item a menu could open.
     #[props(default)]
@@ -200,10 +181,10 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             false,
         ));
     }
-    if let Some(node) = props.node {
+    if let Some(open) = props.tree_open {
         row_attrs.push(Attribute::new(
             "aria-expanded",
-            node.expanded(),
+            if open { "true" } else { "false" },
             None,
             false,
         ));
@@ -243,18 +224,31 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
         .thumb
         .as_ref()
         .map(|thumb| paint_thumb(props.attr, thumb, props.progress));
-    let caret = props.node.map(paint_caret);
+    // A tree parent's row look (gui-tree-double-click design D2, D4): the hover
+    // hint and its trailing-text swap ride the `tree-parent` class, and the
+    // double-click toggles the node in place of playing it.
+    let (row_class, trail_class) = if props.tree_open.is_some() {
+        (
+            "tree-parent relative flex w-full items-center overflow-hidden",
+            "tree-trailing flex-none font-mono tabular-nums",
+        )
+    } else {
+        (
+            "relative flex w-full items-center overflow-hidden",
+            "flex-none font-mono tabular-nums",
+        )
+    };
+    let on_double_click = props.on_toggle.unwrap_or(props.on_play);
     let on_press = props.on_press;
-    let on_play = props.on_play;
     let on_context = props.on_context;
 
     rsx! {
         button {
             "type": "button",
-            class: "relative flex w-full items-center overflow-hidden",
+            class: "{row_class}",
             style: "{row_style}",
             onclick: move |_| on_press.call(()),
-            ondoubleclick: move |_| on_play.call(()),
+            ondoubleclick: move |_| on_double_click.call(()),
             oncontextmenu: move |event: MouseEvent| {
                 if let Some(on_context) = on_context {
                     event.prevent_default();
@@ -264,9 +258,6 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 }
             },
             ..row_attrs,
-            if let Some(caret) = caret {
-                {caret}
-            }
             if let Some(thumb) = thumb {
                 {thumb}
             }
@@ -293,28 +284,14 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             }
             if let Some(trail) = props.trail.clone().filter(|trail| !trail.is_empty()) {
                 span {
-                    class: "flex-none font-mono tabular-nums",
+                    class: "{trail_class}",
                     style: "font-size: 12px; color: var(--canvas-muted);",
                     ..trail_attrs,
                     "{trail}"
                 }
             }
-        }
-    }
-}
-
-/// A tree node's caret (design D1): the one chevron every expandable
-/// top-level row paints, rotated down while the node is open.
-fn paint_caret(node: LibraryRowNode) -> Element {
-    let angle = node.rotation();
-    rsx! {
-        span {
-            class: "flex flex-none items-center justify-center",
-            style: "width: {NODE_CARET_WIDTH_PX}px; color: var(--canvas-muted);",
-            span {
-                class: "flex",
-                style: "transform: rotate({angle}deg); transition: transform 120ms ease;",
-                ChevronRight { size: 10, stroke_width: 3.0 }
+            if let Some(open) = props.tree_open {
+                TreeHint { open }
             }
         }
     }

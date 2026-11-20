@@ -12,9 +12,10 @@
 //! list stays fast. The open and closed nodes and the filter text are the
 //! window content's own in [`crate::window::library::shows`] (design D1); the
 //! scroll offset and the viewport are the Shows list's scroll store (design
-//! D9). A press on a node opens or closes it and selects it for the Hero, a
-//! press on a leaf selects it, a double-click on an episode plays
-//! it, and a right-click opens the item menu, as the Music list's rows do. The
+//! D9). A press on a node selects it for the Hero, a double-click on an
+//! expandable node opens or closes it, a press on a leaf selects it, a
+//! double-click on an episode plays it, and a right-click opens the item menu,
+//! as the Music list's rows do (gui-tree-double-click design D1, D2). The
 //! list keeps no cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2). The series rows are top-level rows and
 //! paint through the shared row part with their art thumb; their season and
@@ -28,13 +29,14 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiShowsList;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowNode, LibraryRowThumb, LibraryTrailPart, mark,
+    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, mark,
 };
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::components::tree_hint::TreeHint;
 use crate::window::input::f32_from_f64;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
 use crate::window::library::shows_list::{ShowsFlatRow, ShowsListRow, shows_letter_rail};
@@ -61,15 +63,18 @@ fn is_selected_row(row: &ShowsListRow, selected: Option<&str>) -> bool {
     row_source_id(row).is_some_and(|source_id| Some(source_id) == selected)
 }
 
-/// The row's indentation: the Music tree's depths — the season under its series
-/// and the episode under its season. A series row is a top-level row and paints
-/// through the shared row part, so its own inset is never read.
+/// The row's indentation (gui-tree-double-click design D2): the Music tree's
+/// depths — the season under its series and the episode under its season. A
+/// series row is a top-level row and paints through the shared row part, so its
+/// own inset is never read.
 fn row_inset(row: &ShowsListRow) -> &'static str {
     match row {
-        ShowsListRow::Series(_) => "4px",
-        ShowsListRow::Season(_) => "22px",
-        ShowsListRow::Episode(_) => "40px",
-        ShowsListRow::Heading(_) | ShowsListRow::Flat(_) => "8px",
+        ShowsListRow::Season(_) => "26px",
+        ShowsListRow::Episode(_) => "44px",
+        // The top-level rows: a series paints through the shared row part, so
+        // its own inset is never read, and a heading and a flat row sit at the
+        // list's own inset.
+        ShowsListRow::Series(_) | ShowsListRow::Heading(_) | ShowsListRow::Flat(_) => "8px",
     }
 }
 
@@ -110,35 +115,11 @@ fn row_background(row: &ShowsListRow, selected: Option<&str>) -> Option<String> 
     is_selected_row(row, selected).then(|| canvas_var("library-raise"))
 }
 
-/// The open node's caret: the former chevron svg, whose rotation names the
-/// open state.
-fn paint_chevron(open: bool) -> Element {
-    let angle = if open { 90 } else { 0 };
-    rsx! {
-        span {
-            class: "flex flex-none items-center justify-center",
-            style: "width: 18px; color: var(--canvas-muted);",
-            ..mark("data-library-shows-chevron", true),
-            svg {
-                width: "10",
-                height: "10",
-                view_box: "0 0 24 24",
-                fill: "none",
-                stroke: "currentColor",
-                stroke_width: "3",
-                stroke_linecap: "round",
-                stroke_linejoin: "round",
-                "aria-hidden": "true",
-                style: "transform: rotate({angle}deg);",
-                path { d: "m9 5 7 7-7 7" }
-            }
-        }
-    }
-}
-
 /// A top-level series row (gui-delineated-rows design D1): the shared row part
-/// over the series' name, its node caret, and its art thumb. A press opens or
-/// closes the node and selects it; the series has no double-click path.
+/// over the series' name and its art thumb. An expandable series is a tree
+/// parent (gui-tree-double-click design D1, D2, D4), so it paints no caret: its
+/// press selects it, its double-click toggles the node, and its hover shows the
+/// hint. A series that does not expand takes no double-click.
 fn paint_shows_series(
     row: &ShowsListRow,
     library: &LibraryState,
@@ -151,6 +132,11 @@ fn paint_shows_series(
     let selected_row = is_selected_row(row, selected);
     let press_row = row.clone();
     let press_library = library.clone();
+    let toggle_id = row.id().to_owned();
+    let toggle_library = library.clone();
+    let on_toggle = series
+        .expandable
+        .then(|| Callback::new(move |()| toggle_library.toggle_shows_node(&toggle_id)));
     let menu_id = row_source_id(row).map(str::to_owned);
     let menu_library = library.clone();
     rsx! {
@@ -171,13 +157,10 @@ fn paint_shows_series(
                 art: series.art.clone(),
                 media: series.media,
             }),
-            node: series.expandable.then_some(if series.open {
-                LibraryRowNode::Open
-            } else {
-                LibraryRowNode::Closed
-            }),
+            tree_open: series.expandable.then_some(series.open),
             on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
             on_play: Callback::new(|()| {}),
+            on_toggle,
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library.open_row_menu_at(menu_id.clone(), x, y);
             })),
@@ -185,9 +168,11 @@ fn paint_shows_series(
     }
 }
 
-/// A nested season node row under an open series (design D1): the chevron, the
-/// name, and the press that opens or closes the node and selects it. It keeps
-/// its own painter and height.
+/// A nested season node row under an open series (design D1): the name and the
+/// press that selects it. An expandable season is a tree parent
+/// (gui-tree-double-click design D1, D2), so it paints no caret: its
+/// double-click toggles the node and its hover shows the hint. It keeps its own
+/// painter and height.
 fn paint_shows_season(
     row: &ShowsListRow,
     library: &LibraryState,
@@ -216,6 +201,13 @@ fn paint_shows_season(
     let name_color = row_name_color(shows, row);
     let press_row = row.clone();
     let press_library = library.clone();
+    let toggle_node = expandable.then(|| row.id().to_owned());
+    let toggle_library = library.clone();
+    let row_class = if expandable {
+        "tree-parent flex w-full items-center overflow-hidden"
+    } else {
+        "flex w-full items-center overflow-hidden"
+    };
     let menu_id = row_source_id(row).map(str::to_owned);
     let menu_library = library.clone();
     // The expandable node's `aria-expanded` names the open state (the former client
@@ -244,11 +236,16 @@ fn paint_shows_season(
     rsx! {
         button {
             "type": "button",
-            class: "flex w-full items-center overflow-hidden",
+            class: "{row_class}",
             style: "{style}",
             "data-library-shows-row": "{kind}",
             "data-library-shows-row-id": "{row.id()}",
             onclick: move |_| press_library.press_shows_row(&press_row),
+            ondoubleclick: move |_| {
+                if let Some(node_id) = toggle_node.as_deref() {
+                    toggle_library.toggle_shows_node(node_id);
+                }
+            },
             oncontextmenu: move |event: MouseEvent| {
                 event.prevent_default();
                 let coordinates = event.client_coordinates();
@@ -259,20 +256,14 @@ fn paint_shows_season(
                 );
             },
             ..row_marks,
-            if expandable {
-                // The chevron's rotation: the open node's caret points down.
-                { paint_chevron(open) }
-            } else {
-                span {
-                    class: "flex flex-none items-center justify-center",
-                    style: "width: 18px; color: var(--canvas-muted);",
-                }
-            }
             Truncate {
                 text: title.clone(),
                 class: "min-w-0 flex-1".to_owned(),
                 css: format!("color: {name_color}; font-weight: {weight};"),
                 style: TextStyle::sans(14.5, weight),
+            }
+            if expandable {
+                TreeHint { open }
             }
         }
     }

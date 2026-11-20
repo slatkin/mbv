@@ -1,8 +1,8 @@
 //! Headless tests of the Shows list (D16): the contracts of
 //! `LibraryShowsList.test.ts` — the series list paints its letter headings and
-//! series tree with the A–Z rail beside them, a press on a series node opens
-//! it and selects it, and a press sends the select command with the row's
-//! stable id. The IPC of the earlier tests is the mock core
+//! series tree with the A–Z rail beside them, a press on a series node selects
+//! it and leaves it closed, a toggle opens it, and a press sends the select
+//! command with the row's stable id. The IPC of the earlier tests is the mock core
 //! link here; a headless document cannot fire a DOM click, so the press,
 //! play, and jump contracts ride the state methods the component's own
 //! handlers call one line each. The core channel is a mock pair; no test
@@ -339,6 +339,17 @@ fn press_row(fixture: &mut Fixture, id: &str) {
     fixture.in_runtime(move || state.press_shows_row(&row));
 }
 
+/// Toggle the node of `id`, as the row's double-click handler does.
+fn toggle_row(fixture: &mut Fixture, id: &str) {
+    let row = row_of(fixture, id);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || {
+        if let Some(node_id) = row.as_node() {
+            state.toggle_shows_node(node_id);
+        }
+    });
+}
+
 /// Contract (`LibraryShowsList.test.ts`): the All series mode paints the
 /// letter headings and the A–Z rail beside the list, and the rail's B is
 /// enabled because a painted series row carries it.
@@ -388,7 +399,7 @@ fn the_series_row_paints_a_thumb_and_its_nested_season_row_paints_none() {
     let mut fixture = built(shows_frame(tree()), shows_detail(None));
     fixture.measure(300.0);
 
-    press_row(&mut fixture, "shows-series:s1");
+    toggle_row(&mut fixture, "shows-series:s1");
 
     assert!(
         fixture
@@ -505,7 +516,7 @@ fn an_expandable_node_paints_its_open_state_as_aria_expanded() {
         "the closed series paints aria-expanded false"
     );
 
-    press_row(&mut fixture, "shows-series:s1");
+    toggle_row(&mut fixture, "shows-series:s1");
 
     assert_eq!(
         fixture.attr_of(
@@ -543,15 +554,38 @@ fn a_node_that_does_not_open_paints_no_aria_expanded() {
     );
 }
 
-/// Contract (`LibraryShowsList.test.ts`): a press on a series node opens it
-/// — its seasons paint under it — and the press still selects the series for
-/// the Hero.
+/// Contract (`LibraryShowsList.test.ts`, gui-tree-double-click design D1): a
+/// press on a series node selects it for the Hero and leaves the node closed.
 #[test]
-fn a_press_on_a_series_node_opens_it_and_selects_it() {
+fn a_press_on_a_series_node_selects_it_and_leaves_it_closed() {
     let mut fixture = built(shows_frame(tree()), shows_detail(None));
     fixture.measure(300.0);
 
     press_row(&mut fixture, "shows-series:s1");
+
+    assert_eq!(
+        painted_rows(&fixture),
+        ["shows-series:s1".to_owned(), "shows-series:s3".to_owned()],
+        "the pressed series stays closed and paints no season"
+    );
+    assert_eq!(
+        fixture.library_commands(),
+        [mbv::GuiLibraryCommand::ShowsSelect {
+            lib_idx: 0,
+            row: "s1".to_owned(),
+        }],
+        "the press selects the series"
+    );
+}
+
+/// Contract (gui-tree-double-click design D1): a double-click on a series node
+/// opens it, so its seasons paint under it.
+#[test]
+fn a_toggle_on_a_series_node_opens_it() {
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
+    fixture.measure(300.0);
+
+    toggle_row(&mut fixture, "shows-series:s1");
 
     assert_eq!(
         painted_rows(&fixture),
@@ -560,15 +594,7 @@ fn a_press_on_a_series_node_opens_it_and_selects_it() {
             "shows-season:s1:se1".to_owned(),
             "shows-series:s3".to_owned(),
         ],
-        "the pressed series paints open with its season under it"
-    );
-    assert_eq!(
-        fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowsSelect {
-            lib_idx: 0,
-            row: "s1".to_owned(),
-        }],
-        "the press still selects the series"
+        "the toggled series paints open with its season under it"
     );
 }
 

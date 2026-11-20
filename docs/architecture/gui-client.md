@@ -1944,9 +1944,26 @@ no image paints the media kind's `EighthNotes` or `MonitorPlay` icon on
 `--canvas-muted`. The row's resume percent paints in 3 px along the box's
 bottom edge, on `--canvas-thumb-track` under `--canvas-partial`, and no row
 paints a progress run under itself. A top-level tree node — a Music artist row
-or a Shows series row — also names its open state, and the part paints the one
-caret and the row's `aria-expanded`. Nested rows keep their own painters and
-heights: a Music album or track, and a Shows season or episode.
+or a Shows series row — also names its open state (`gui-tree-double-click`
+design D1 to D3). A press on a tree parent row picks it and opens or closes
+nothing; its double-click opens the row when it is closed and closes it when
+it is open, and plays nothing. No tree row paints an open-or-closed glyph or
+keeps a spacer where one stood: the nested rows' indent comes only from the
+row inset (Music artist 8 px, album 26 px, track 44 px; Shows series 8 px,
+season 26 px, episode 44 px; Playlists playlist 8 px, item 32 px). The part
+carries the row's `aria-expanded`, and while the pointer rests on the row it
+shows the shared `TreeHint`
+(`crates/mbv-gui/src/window/components/tree_hint.rs`) — `Double-click to
+expand` when the row is closed, `Double-click to collapse` when it is open —
+in place of the row's trailing text, through the row's `tree-parent` class
+and the `.tree-parent:hover` rule in `assets/app.css`. The rule is one for
+every GUI tree parent: a Music album, a Shows season, and a Playlists
+playlist paint their own rows and take the same press, the same double-click,
+the same `aria-expanded`, and the same hint, while a leaf row — a track, an
+episode, or a playlist item — takes none of them. A double-click on a leaf
+row still plays the row's item, as its Enter play does. Nested rows keep
+their own painters and heights: a Music album or track, and a Shows season
+or episode.
 
 Every row frame carries `GuiRowArtFrame` — the cached image and the fit its own
 pixels ask for, a fetch in flight, a source that answered with no image, or a
