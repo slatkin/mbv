@@ -45,7 +45,7 @@ impl FeedPlatform {
 }
 ```
 
-`lib.rs` adds `mod platform;` and `pub use self::platform::FeedPlatform;`, and makes `url_authority_and_path` `pub(crate)` so that the new module reuses it.
+`lib.rs` adds `mod platform;` and `pub use self::platform::FeedPlatform;`. `url_authority_and_path` stays private and untouched, as does `normalize_feed_url`. `platform.rs` has its own private `host_and_path` instead, which takes the host after the last `@` of the authority and before the port, because `url_authority_and_path` returns the userinfo as the host (so `https://youtube.com@evil.example/` must not read as YouTube).
 
 The host rule: lowercase the host. A host matches a domain when it equals the domain or ends with `.` plus the domain. So `feeds.soundcloud.com` matches `soundcloud.com`, and `notyoutube.com` does not match `youtube.com`.
 
@@ -105,7 +105,7 @@ pub fn ServiceMarkIcon(mark: ServiceMark, #[props(default = 18)] size: u16) -> E
 
 Every match on `ServiceMark` and `FeedPlatform` is exhaustive, with no wildcard.
 
-- `Rss` paints the Lucide `Rss` component from `window/icons.rs` (stroke icon).
+- `Rss` paints the Lucide `Rss` component from `window/icons.rs` (stroke icon). The Lucide icon shell takes no extra attributes, so the RSS mark carries its `role`, `aria-label`, and `data-library-list-mark` on a wrapping span.
 - Every other mark paints a filled simple-icons path on a 24 × 24 view box, in the `TargetBrandIcon` way: `fill="currentColor"` and the colour on the svg's `style: "color: …"`.
 - The svg carries `role="img"`, an `aria-label` with the Service or platform name, and `data-library-list-mark="<slug>"` with the simple-icons slug (`rss` for RSS). Tests read that hook.
 - The Emby path moves to one `pub(crate) const EMBY_PATH` in `service_mark.rs`. `brand_icons.rs` `TargetBrand::Emby` reads it, so the path exists once.

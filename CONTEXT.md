@@ -52,6 +52,10 @@ Setup generation:
 A per-Service counter that rises in order. It guards late async setup completions. Every replace, retry, and setup attempt raises it. A completion applies only when its generation matches the current run.
 _Avoid_: setup version, auth generation, connection ID
 
+Service mark:
+The brand mark that names a Service destination in the GUI Library list header, in place of a text title. An Emby destination shows the Emby mark. An Audiobookshelf destination shows the Audiobookshelf mark. On the Feeds tab, the mark is the Feed platform's mark when every checked FeedSubscription shares one, and the RSS mark in every other case. Home and the Playlists screen show a text title instead. It is not the Multi-selection *Mark*.
+_Avoid_: Mark (that is Multi-selection membership), badge, logo
+
 Owner admission / Service eligibility:
 The rule by which a Player owner accepts a QueueItem into its Bound queue. It tests media kind, that is audio against video. It tests whether the required Remote Service setup and credential are loaded in that owner process. It tests whether ctrl peers negotiated transport for that item kind. Audio-only owners admit only the audio subset of a mixed submission. `daemon_admits` (`crates/mbv-daemon`) owns the per-Service rule.
 _Avoid_: owner capability, queue capability, supported kinds
@@ -695,6 +699,10 @@ _Avoid_: feed config, channel, subscription config
 FeedKind:
 The Audio or Video classification of a FeedSubscription. It is inferred from enclosure MIME types when present (mixed or absent defaults to Video). The user can edit it. It governs queue admission for entries that carry no MIME type of their own.
 _Avoid_: feed type, media type, category
+
+Feed platform:
+The known service that serves a FeedSubscription. mbv reads it from the subscription's URL alone, with no network request. The known platforms are YouTube, SoundCloud, Spreaker, Audioboom, Patreon, Substack, Spotify (the Spotify for Creators feed host), Odysee, PeerTube, and Internet Archive. Nine show by their host. PeerTube shows by its feed path and filter parameter, because every PeerTube instance has its own host. A generic feed has no Feed platform. It differs from the *Emby homevideos feed view*, which always shows the Emby mark.
+_Avoid_: feed source, feed provider, platform (unqualified)
 
 FeedEntry:
 One parsed item from a subscribed feed. Identity is guid, else enclosure-URL hash, else title plus pub-date hash. It carries enclosure URL, link, mime type, pub_date, duration in Emby ticks, description, and the normalized subscription URL as `feed_id`. That URL is the stable identity used by local feed-entry state. Each entry carries local `position_ticks` and `played` playback state. It is restored from the local state directory and updated on playback lifecycle events (stop, pause, seek, EOF). Entries never report progress to Emby. Queued FeedEntries are owned snapshots. Deletion of the subscription leaves them playable for the life of the Bound queue.
