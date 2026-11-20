@@ -1992,5 +1992,5 @@ in-view rows' `Row` fetches once navigation is idle
 (`src/app/gui_library/rows_in_view.rs`). Row cache keys carry the Service's
 change value (`row:{item_id}:{type}:{tag}`, and
 `row:abs:{server_hash}:{library_item_id}:{updated_at}`), the cache keeps its own
-256-entry row LRU, and row fetches take at most 4 of the 6 fetch slots, so a
+512-entry row LRU, and row fetches take at most 4 of the 6 fetch slots, so a
 Hero fetch always has one.

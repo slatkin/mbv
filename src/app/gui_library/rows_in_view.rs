@@ -34,10 +34,27 @@ impl App {
         scope: GuiRowArtScope,
         ids: Vec<String>,
     ) {
+        self.touch_gui_in_view_row_images(scope, &ids);
         self.gui_rows_in_view.insert(scope, ids);
         self.stamp_navigation();
         self.drop_pending_row_fetches();
         self.gui_queue_in_view_row_fetches();
+    }
+
+    /// Mark the cached image of every in-view row as read, so the row cache
+    /// evicts rows the window scrolled past before rows it still paints. It
+    /// runs on every set, ahead of the idle gate, because a scroll is the
+    /// moment the cache fills.
+    fn touch_gui_in_view_row_images(&mut self, scope: GuiRowArtScope, ids: &[String]) {
+        let keys: Vec<String> = ids
+            .iter()
+            .filter_map(|id| self.gui_row_source(scope, id))
+            .filter_map(|source| self.gui_row_fetch_req(&source))
+            .map(|req| req.cache_key)
+            .collect();
+        for key in keys {
+            self.images.touch_row_image(&key);
+        }
     }
 
     /// Queue a `Row` fetch for every in-view row of the active list (design D7):

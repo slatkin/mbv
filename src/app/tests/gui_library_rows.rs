@@ -169,3 +169,44 @@ fn a_set_of_another_list_queues_nothing() {
         "the Emby row is not in the Feeds list's set"
     );
 }
+
+/// A cached image of one pixel, enough for the row budget to count it.
+fn cached_pixel() -> mbv_images::CachedImage {
+    mbv_images::CachedImage {
+        img: Some(image::DynamicImage::ImageRgba8(
+            image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])),
+        )),
+        source: None,
+        protocols: std::collections::HashMap::new(),
+        cover_box: None,
+        applied_logo_key: None,
+    }
+}
+
+/// The 2026-11-20 TV Library thumbnail reload: a `RowsInView` set marks its
+/// cached rows as read, so the row budget evicts a row the window scrolled past
+/// before the row it still paints, even when the painted row was cached first.
+#[test]
+fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
+    let painted = tagged_movie("m-1", "t1");
+    let mut app = app_with_rows(vec![painted.clone()]);
+    let key = row_key(&painted);
+    app.images.complete_fetch(key.clone(), cached_pixel());
+    for index in 0..511 {
+        app.images
+            .complete_fetch(format!("row:filler:{index}"), cached_pixel());
+    }
+
+    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
+        scope: GuiRowArtScope::Emby,
+        ids: vec![painted.id.clone()],
+    });
+    app.images
+        .complete_fetch("row:filler:overflow".to_owned(), cached_pixel());
+
+    assert!(app.images.is_cached(&key), "the in-view row stays cached");
+    assert!(
+        !app.images.is_cached("row:filler:0"),
+        "the oldest untouched row is evicted instead"
+    );
+}

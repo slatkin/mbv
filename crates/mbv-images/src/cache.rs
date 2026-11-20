@@ -12,7 +12,7 @@ const INTERRUPTED_FETCH_RETRY_DELAY: Duration = Duration::from_secs(10);
 /// How many row images the memory cache keeps (design D8): a fixed budget,
 /// separate from `image_cache_size`, so a long scroll never evicts a Hero or
 /// queue-card image.
-const ROW_IMAGE_CACHE_CAPACITY: usize = 256;
+const ROW_IMAGE_CACHE_CAPACITY: usize = 512;
 
 /// How many of the image fetch slots row fetches may hold (design D7). The
 /// other slots stay free for a Hero or queue-card fetch, which starts first.
@@ -388,6 +388,21 @@ impl ImageCache {
         self.card_image_states.insert(key, entry);
     }
 
+    /// Mark the cached row image `key` as read now, so the row budget evicts
+    /// by last read and not by insertion order: a row the window still paints
+    /// outlives rows it scrolled past. A key that is not a cached row image
+    /// changes nothing.
+    pub fn touch_row_image(&mut self, key: &str) {
+        if !crate::is_row_cache_key(key) || !self.card_image_states.contains_key(key) {
+            return;
+        }
+        if let Some(position) = self.row_image_lru.iter().position(|cached| cached == key)
+            && let Some(held) = self.row_image_lru.remove(position)
+        {
+            self.row_image_lru.push_back(held);
+        }
+    }
+
     /// Record `key` as the newest entry of its budget's recency queue and drop
     /// the entries that overflow it. Row images have their own budget (design
     /// D8): a row insert evicts row entries only, and a Hero/card insert only
@@ -678,7 +693,7 @@ mod tests {
         }
     }
 
-    /// Design D8: row images have their own 256-entry budget. Filling it
+    /// Design D8: row images have their own 512-entry budget. Filling it
     /// evicts row entries only, so a Hero or queue-card image survives a long
     /// scroll.
     #[test]
@@ -696,6 +711,25 @@ mod tests {
         assert!(
             !cache.is_cached(&row_req(0).cache_key),
             "the oldest row image at the row budget was evicted"
+        );
+    }
+
+    /// A row image the window read last survives the budget that evicts the
+    /// older inserts: eviction follows the last read, not the insertion order
+    /// (the 2026-11-20 TV Library thumbnail reload).
+    #[test]
+    fn a_touched_row_image_outlives_older_untouched_ones() {
+        let mut cache = cache(1);
+        insert_rows(&mut cache, ROW_IMAGE_CACHE_CAPACITY);
+        let oldest = row_req(0).cache_key;
+        cache.touch_row_image(&oldest);
+
+        cache.complete_fetch(row_req(ROW_IMAGE_CACHE_CAPACITY).cache_key, image());
+
+        assert!(cache.is_cached(&oldest), "the read row stays");
+        assert!(
+            !cache.is_cached(&row_req(1).cache_key),
+            "the least recently read row is evicted"
         );
     }
 
