@@ -260,6 +260,7 @@ impl PlaybackRun {
             let _ = self.event_tx.send(PlayerEvent::CommandRejected(reason));
             return;
         };
+        let mut all_loaded = true;
         for (item, source) in items.iter().zip(sources) {
             let url = mpv_url_for_queue_item(source, &self.server_url, &self.token);
             let opts = mpv_load_opts(item, resume_source(item));
@@ -267,6 +268,7 @@ impl PlaybackRun {
                 "loadfile",
                 &[url.as_str(), "append-play", "-1", opts.as_str()],
             ) {
+                all_loaded = false;
                 tracing::warn!(name: "player.queue_append.load_failed", target: "player", error = %e, "mpv loadfile failed while appending");
             }
         }
@@ -278,5 +280,9 @@ impl PlaybackRun {
                 .map(|(slot_id, item)| ExecSlot { slot_id, item })
                 .collect(),
         );
+        // mpv reports each load as its own count change, after the copy holds
+        // the final length. A failed load leaves a real mismatch, which the
+        // drift handler must see and the Owner repairs by resubmitting.
+        self.pending_append_count = all_loaded.then(|| self.queue_len());
     }
 }

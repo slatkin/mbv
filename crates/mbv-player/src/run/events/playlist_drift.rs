@@ -54,6 +54,9 @@ impl PlaybackRun {
             self.settle_transition_count(count);
             return;
         }
+        if self.settle_append_count(count) {
+            return;
+        }
         let old_n = self.queue_len();
         if count == old_n {
             return;
@@ -77,6 +80,25 @@ impl PlaybackRun {
             self.pending_initial_playlist_layout = false;
         }
         tracing::debug!(name: "player.playlist_count.ignored", target: "player", count, "ignoring transient playlist count during queue transition");
+    }
+
+    /// The run's own append lands one `loadfile` at a time, and mpv reports
+    /// each as a count change after the copy holds the final length. A count
+    /// short of the append's target is one of those steps, so it is not drift;
+    /// the first count at or past the target ends the window. Returns whether
+    /// the observation was the append's own.
+    fn settle_append_count(&mut self, count: usize) -> bool {
+        let Some(target) = self.pending_append_count else {
+            return false;
+        };
+        if count >= target {
+            self.pending_append_count = None;
+        }
+        if count < target {
+            tracing::debug!(name: "player.playlist_count.append_step", target: "player", count, expected = target, "ignoring intermediate playlist count of the run's own append");
+            return true;
+        }
+        false
     }
 
     fn apply_external_shrink(&mut self, count: usize, old_n: usize) {

@@ -97,6 +97,13 @@ pub(crate) struct PlaybackRun {
     pub(crate) tracks_initialized: bool,
     pub(crate) item_lifecycle: ItemLifecycleState,
     pub(crate) pending_initial_playlist_layout: bool,
+    /// The `playlist-count` the run's own append is heading toward, set after
+    /// every `loadfile append-play` of one append succeeded. mpv reports each
+    /// load as its own count change on later run loop iterations, while the
+    /// queue copy already holds the final length; those intermediate counts
+    /// are the run's own surgery, not external drift (invariant 35). The first
+    /// observed count at or past the target clears it.
+    pub(crate) pending_append_count: Option<usize>,
     pub(crate) mark_played_id: Option<ItemId>,
     pub(crate) osd_title: String,
     pub(crate) last_mouse_osd: Option<Instant>,

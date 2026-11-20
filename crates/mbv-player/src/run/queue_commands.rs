@@ -14,6 +14,11 @@ impl PlaybackRun {
             return;
         }
         let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
+        // A removal inside an append's count window lowers the count the
+        // append is heading toward by the same one entry.
+        self.pending_append_count = self
+            .pending_append_count
+            .map(|target| target.saturating_sub(1));
         if active_slot_id == Some(slot_id) {
             self.close_prepared_source();
             self.queue.remove_active_slot_confirmed(slot_id);

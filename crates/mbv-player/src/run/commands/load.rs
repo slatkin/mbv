@@ -154,6 +154,9 @@ impl PlaybackRun {
         // drift handler would then delete the copy the plan just replaced
         // (local-daemon.log 2026-11-08T19:33:53, the GUI queue fix).
         self.pending_initial_playlist_layout = true;
+        // The rebuild replaces the copy, so an earlier append's target count
+        // names a queue that no longer exists.
+        self.pending_append_count = None;
 
         // Loading new items should always start playing, even if mpv was
         // left paused on the previous item (reused-window fast path).
