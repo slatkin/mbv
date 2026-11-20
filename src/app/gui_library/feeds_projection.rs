@@ -14,12 +14,13 @@
 //! the projection reads `App` data only.
 
 use mbv_components::library_panel::hero::hero_content_feed;
+use mbv_feed::FeedPlatform;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
 use super::artwork::{feed_media_kind, feed_row_source};
-use super::collection::{GuiCollectionTarget, compare_gui_date_order};
+use super::collection::{GuiCollectionTarget, GuiCollections, compare_gui_date_order};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use crate::app::App;
@@ -121,6 +122,23 @@ pub struct GuiFeedsHero {
     /// feed policy, which has no source for either, so the Hero paints its
     /// placeholder.
     pub art_shape: GuiArtShape,
+}
+
+/// The Feed platform every checked subscription shares (gui-library-header-
+/// service-marks design D2): `None` for All, for no checked subscription, for
+/// subscriptions of different platforms, and for a checked subscription whose
+/// URL shows no known platform. The header's Feed mark follows this one answer,
+/// so a Client paints it and no other site derives the rule.
+#[must_use]
+pub fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform> {
+    if collections.all {
+        return None;
+    }
+    let mut checked = collections.entries.iter().filter(|entry| entry.checked);
+    let platform = FeedPlatform::of_url(&checked.next()?.key)?;
+    checked
+        .all(|entry| FeedPlatform::of_url(&entry.key) == Some(platform))
+        .then_some(platform)
 }
 
 /// The Feeds projection the GUI Library panel paints (row 11.1) — the

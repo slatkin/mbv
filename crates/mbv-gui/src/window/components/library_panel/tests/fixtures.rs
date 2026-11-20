@@ -318,6 +318,7 @@ pub(super) fn feeds_sections(
                 },
                 loading: false,
                 failed: false,
+                platform: None,
                 rows: vec![GuiEntryRowFrame {
                     art: GuiRowArtFrame::NoSource,
                     media: GuiRowMediaKindFrame::Video,

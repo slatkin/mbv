@@ -232,6 +232,7 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
             },
             loading: false,
             failed: false,
+            platform: None,
             rows: vec![GuiEntryRowFrame {
                 art: GuiRowArtFrame::NoSource,
                 media: GuiRowMediaKindFrame::Video,

@@ -324,6 +324,7 @@ fn frame(rows: Vec<GuiEntryRowFrame>, loading: bool) -> GuiFeedsList {
         },
         loading,
         failed: false,
+        platform: None,
         rows,
     }
 }

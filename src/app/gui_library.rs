@@ -57,7 +57,9 @@ pub use self::emby_projection::{
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
-pub use self::feeds_projection::{GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow};
+pub use self::feeds_projection::{
+    GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, gui_feeds_platform,
+};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,

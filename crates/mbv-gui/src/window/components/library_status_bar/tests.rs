@@ -472,6 +472,7 @@ fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
         },
         loading: false,
         failed: false,
+        platform: None,
         rows: vec![GuiEntryRowFrame {
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Video,

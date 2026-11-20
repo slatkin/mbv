@@ -64,7 +64,7 @@ pub use self::gui_library::{
     GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab,
     GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal, GuiPlayheadMarks, GuiPodcastEpisodeId, GuiPodcastsHero,
-    GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow,
+    GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow, gui_feeds_platform,
 };
 pub use self::gui_library::{
     GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
