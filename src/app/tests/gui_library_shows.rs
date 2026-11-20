@@ -163,8 +163,8 @@ fn presenting_an_empty_shows_root_starts_the_root_load_once_without_an_open_dest
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
 
-    app.ensure_gui_shows_workspace(0);
-    app.ensure_gui_shows_workspace(0);
+    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
 
     assert_eq!(app.libs[0].nav_stack.len(), 1, "one root level is started");
     let root = &app.libs[0].nav_stack[0];

@@ -23,6 +23,7 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
+use super::tabs::GuiDestinationKind;
 use crate::app::state::events::{FeedHomeVideoSelectionFailed, LibEvent};
 use crate::app::{App, FeedHomeVideoSelection};
 
@@ -182,16 +183,16 @@ impl App {
         })
     }
 
-    /// Open the plain Emby library `lib_idx` (row 8.1): the root list loads
-    /// through the TUI's own activation — the tab settlement's
-    /// `activate_library_position`, which starts the root listing or the
-    /// saved-position restore — and the root-list store's fetch starts beside
-    /// it, because the TUI path cannot serve the full flat list the letter
-    /// rail reads (the module doc). A feed-view library's root is the folder
-    /// listing the feed group view already owns; its checked folders' items
-    /// load through [`App::ensure_gui_emby_selection`], the frame path's
-    /// shown-pass trigger. A `lib_idx` that names no plain Emby library is an
-    /// ignored command.
+    /// Open the Emby library `lib_idx` (row 8.1; gui-one-destination-ensure
+    /// design D4): the open clears the failed root mark a plain library's list
+    /// may hold — a failed list retries on an open, not on a repaint — and then
+    /// runs the destination's load pass, whose root step starts the root-list
+    /// store's fetch (the TUI path cannot serve the full flat list the letter
+    /// rail reads, the module doc) and whose selection step starts a feed-view
+    /// library's checked folders' fetches. The TUI's own activation, the tab
+    /// settlement's `activate_library_position`, still starts the root listing
+    /// or the saved-position restore here. A `lib_idx` that names no plain Emby
+    /// library is an ignored command.
     pub fn gui_emby_open(&mut self, lib_idx: usize) {
         if !self.gui_emby_library(lib_idx) {
             Self::log_ignored_library_command(
@@ -206,15 +207,15 @@ impl App {
         if !self.is_feed_home_video_library(lib_idx) {
             // A failed list retries on an open (the failure "stays failed
             // until the library is opened again"), so the open clears the
-            // failed mark the frame path's fetch would otherwise honour.
+            // failed mark the root step's fetch would otherwise honour.
             if matches!(
                 self.gui_emby_roots.get(&lib_idx),
                 Some(GuiEmbyRootItems::Failed)
             ) {
                 self.gui_emby_roots.remove(&lib_idx);
             }
-            self.fetch_gui_emby_root_items(lib_idx);
         }
+        self.ensure_gui_destination(GuiDestinationKind::Library { lib_idx });
     }
 
     /// Select the row the Hero shows (row 8.1): the selection the core owns,
@@ -306,23 +307,6 @@ impl App {
         self.ensure_gui_emby_feed_fetch(lib_idx);
     }
 
-    /// The shown-pass trigger the GUI frame path runs for the active plain
-    /// Emby library destination (row 8.1): a feed-view library's checked set
-    /// fetches the first target it is missing (design D3), and a plain
-    /// library's root list fetches when the store holds no list. A `lib_idx`
-    /// that names no plain Emby library is a no-op, so the frame path can
-    /// call it unguarded for its destination.
-    pub fn ensure_gui_emby_selection(&mut self, lib_idx: usize) {
-        if !self.gui_emby_library(lib_idx) {
-            return;
-        }
-        if self.is_feed_home_video_library(lib_idx) {
-            self.ensure_gui_emby_feed_fetch(lib_idx);
-        } else {
-            self.fetch_gui_emby_root_items(lib_idx);
-        }
-    }
-
     /// Start the first fetch the GUI's checked set is missing (design D3):
     /// the first target — All, or the first checked folder — with no cache
     /// entry and no terminal failure mark, while no fetch is outstanding.
@@ -333,7 +317,7 @@ impl App {
     /// TUI keeps its own selection. The targets iterate the checked set's
     /// borrowed keys, and All is one cache probe, so the per-frame ensure
     /// clones nothing for the walk.
-    fn ensure_gui_emby_feed_fetch(&mut self, lib_idx: usize) {
+    pub(in crate::app::gui_library) fn ensure_gui_emby_feed_fetch(&mut self, lib_idx: usize) {
         // The GUI owns this library's results from the first frame it shows:
         // the claim marks them as the GUI's own, which the result arm's
         // second acceptance rule reads. The claim is not a stored selection,

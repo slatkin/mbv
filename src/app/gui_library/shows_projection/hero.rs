@@ -130,7 +130,7 @@ impl App {
     /// stored choice while the detail holds it, else the first season — the
     /// season pills start on the first season and are not kept across a
     /// series change. `None` while the detail holds no season.
-    pub(super) fn gui_shows_selected_season(
+    pub(in crate::app::gui_library) fn gui_shows_selected_season(
         &self,
         lib_idx: usize,
         series_id: &str,

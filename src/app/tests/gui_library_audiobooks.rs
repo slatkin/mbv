@@ -190,16 +190,17 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
     );
 }
 
-/// The frame path's ensure loads the default pick's detail (row 9.1): with no
-/// select, the catalog's first book is the pick and its detail fetch starts
-/// once; an ensure of a cached pick starts nothing.
+/// The frame path's load pass loads the default pick's detail (row 9.1; the
+/// one driver pass of gui-one-destination-ensure design D3): with no select,
+/// the catalog's first book is the pick and its detail fetch starts once; a
+/// second pass of a cached pick starts nothing.
 #[test]
 fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.audiobookshelf_book_browse[0].books = vec![book("book-a", "A Book")];
 
-    app.ensure_gui_abs_selection(0);
+    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
     let _ = app
         .channels
         .lib_rx
@@ -217,11 +218,139 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     while app.drain_lib_event() {}
     assert!(book_state(&app).detail_cache.contains_key("book-a"));
 
-    app.ensure_gui_abs_selection(0);
+    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
     assert_eq!(
         book_state(&app).next_detail_request,
         request,
-        "a cached pick's ensure started no second fetch"
+        "a cached pick's pass started no second fetch"
+    );
+}
+
+/// Add a second book library at index 2, so the frame path's entry can be
+/// asked for a book library the tab is not on.
+fn add_second_book_library(app: &mut App) {
+    let library = mbv_audiobookshelf::AudiobookshelfLibrary {
+        id: "lib-abs-books-b".into(),
+        name: "Audiobooks B".into(),
+        media_type: "book".into(),
+    };
+    app.audiobookshelf_libraries.push(library.clone());
+    app.audiobookshelf_book_browse
+        .push(AudiobookshelfBookBrowseState::new(library));
+}
+
+/// The open entry stays inert for a book library that is not the active
+/// destination (review of gui-one-destination-ensure units 2.4 and 2.5): the
+/// entry tests the tab before it enters the driver, whose steps assert the pass
+/// runs for the active tab, so a `lib_idx` naming another book library starts no
+/// load and does not panic.
+#[test]
+fn the_open_entry_on_another_book_library_starts_no_load() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = abs_app();
+    add_second_book_library(&mut app);
+
+    app.gui_abs_open(2);
+
+    let stale = &app.audiobookshelf_book_browse[2];
+    assert_eq!(
+        stale.catalog_request, 0,
+        "the stale library started no catalog chain"
+    );
+    assert_eq!(
+        stale.next_detail_request, 0,
+        "no detail fetch started for the stale library"
+    );
+    assert_eq!(
+        book_state(&app).catalog_request,
+        0,
+        "the active library was not loaded through the stale index"
+    );
+}
+
+/// A restored Audiobooks destination starts its catalog load from one frame's
+/// load pass, with no open command (gui-one-destination-ensure design D3;
+/// spec `gui-client`, "A restored Audiobooks or Podcasts library loads its
+/// catalog"): the root step arms the catalog's replacement batch, and the
+/// pass ends there, so the pick's detail waits for the catalog to land.
+#[test]
+fn a_restored_audiobooks_destination_starts_its_catalog_load() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = abs_app();
+
+    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+
+    let state = book_state(&app);
+    assert_eq!(
+        state.catalog_request, 1,
+        "the frame began one catalog chain"
+    );
+    assert!(
+        state.replacement.is_some(),
+        "the catalog's replacement batch is collecting"
+    );
+    assert_eq!(
+        state.next_detail_request, 0,
+        "the pass ended at the root load, so the pick's detail waits"
+    );
+}
+
+/// One frame's load pass for library 0's book catalog, as the catalog request
+/// serial it left: an armed replacement batch bumps the serial.
+fn pass_catalog_request(app: &mut App) -> u64 {
+    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    app.audiobookshelf_book_browse[0].catalog_request
+}
+
+/// A repaint beside an in-flight catalog starts no second chain
+/// (gui-one-destination-ensure design D3, Risks; spec `gui-client`, "A repaint
+/// starts no second load"): the root step keeps the open step's unloaded
+/// guard, which counts the in-flight page marks and the collecting replacement
+/// batch, so the frame's pass while the startup chain walks — and while a
+/// refresh collects — arms nothing beside them.
+#[test]
+fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = abs_app();
+    app.audiobookshelf_book_browse[0].loading_pages.insert(0);
+
+    assert_eq!(
+        pass_catalog_request(&mut app),
+        0,
+        "the startup chain's in-flight page started no second chain"
+    );
+
+    app.audiobookshelf_book_browse[0].loading_pages.clear();
+    let armed = app.audiobookshelf_book_browse[0].begin_catalog_replacement();
+    assert_eq!(
+        pass_catalog_request(&mut app),
+        armed,
+        "the collecting replacement batch started no second chain"
+    );
+}
+
+/// A failed catalog load is not retried by a repaint, and an open retries it
+/// (gui-one-destination-ensure design Risks; spec `gui-client`, "A failed load
+/// is not retried by a repaint"): the loader leaves the failure in the browse
+/// state's `error` beside the still-unloaded list, the frame's root step
+/// honours that mark, and the open clears it.
+#[test]
+fn a_failed_catalog_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = abs_app();
+    app.audiobookshelf_book_browse[0].error = Some("the catalog failed to load".into());
+
+    assert_eq!(
+        pass_catalog_request(&mut app),
+        0,
+        "the repaint honoured the failed mark"
+    );
+
+    app.gui_abs_open(0);
+    assert_eq!(
+        book_state(&app).catalog_request,
+        1,
+        "the open cleared the failed mark and retried the catalog"
     );
 }
 

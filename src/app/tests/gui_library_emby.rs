@@ -219,7 +219,7 @@ fn opening_a_feed_view_library_loads_its_default_selection() {
 
     app.gui_emby_open(0);
     land_root_listing(&mut app);
-    app.ensure_gui_emby_selection(0);
+    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
     land_shown_selection(&mut app);
 
     let items = app.feed_home_video_selected_items(0);
@@ -330,7 +330,7 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
         None,
         "the first fetch retired its mark"
     );
-    app.ensure_gui_emby_selection(0);
+    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
     assert_eq!(
         app.libs[0].feed_home_video.as_ref().unwrap().fetching,
         Some(FeedHomeVideoSelection::Folder("folder-2".into())),

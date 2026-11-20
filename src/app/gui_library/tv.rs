@@ -12,6 +12,7 @@
 use mbv_queue::TvContentMode;
 
 use super::App;
+use super::tabs::GuiDestinationKind;
 
 /// The GUI Library's Shows selection (design D12, D8): per Shows library, the
 /// selected series and the selected season. The season is never kept across a
@@ -36,11 +37,11 @@ impl App {
             .is_some_and(|lib| lib.library.collection_type == "tvshows")
     }
 
-    /// Open the Shows library `lib_idx` (design D12, D8): the series list —
-    /// the GUI's one view mode — loads through the shared activation path and
-    /// the TUI's own mode load, so a library whose TUI default or saved
-    /// position is another mode lands the series list here. A `lib_idx` that
-    /// names no Shows library is an ignored command.
+    /// Open the Shows library `lib_idx` (design D12, D8; gui-one-destination-ensure
+    /// design D4): the GUI's one view mode is the All series list, so the open
+    /// forces that mode and then runs the destination's load pass. The TUI's
+    /// own activation, which an empty stack needs, is the pass's root step. A
+    /// `lib_idx` that names no Shows library is an ignored command.
     pub fn gui_tv_open(&mut self, lib_idx: usize) {
         if !self.gui_tv_library(lib_idx) {
             Self::log_ignored_library_command(
@@ -49,6 +50,17 @@ impl App {
             );
             return;
         }
+        self.apply_tv_letter_mode(lib_idx, &TvContentMode::All);
+        self.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
+    }
+
+    /// Start the Shows library's root load (gui-one-destination-ensure design
+    /// D3): the shared activation path when the stack holds no level, then the
+    /// TUI's own All-mode load, so a library whose TUI default or saved
+    /// position is another mode lands the series list. The pass's root step
+    /// calls this, and so the GUI's frame keeps the one root load however the
+    /// destination opened.
+    pub(in crate::app::gui_library) fn load_gui_shows_root(&mut self, lib_idx: usize) {
         if self.libs[lib_idx].nav_stack.is_empty() {
             self.activate_library_position(lib_idx);
         }

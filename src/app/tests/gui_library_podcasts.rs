@@ -14,7 +14,6 @@
 use super::*;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
-
 mod data_path;
 
 /// Press one show in the Podcasts destination's collection dropdown.
@@ -241,6 +240,53 @@ fn two_checked_shows_merge_their_episodes_in_date_order() {
         podcast_state(&app).committed_show_pill,
         None,
         "several checked shows commit the every-show scope, the same loads as All"
+    );
+}
+
+/// Add a second podcast library at index 2, so a stale frame's collection
+/// command can name a podcast library the tab is not on.
+fn add_second_podcast_library(app: &mut App) {
+    let library = mbv_audiobookshelf::AudiobookshelfLibrary {
+        id: "lib-abs-podcasts-b".into(),
+        name: "Podcasts B".into(),
+        media_type: "podcast".into(),
+    };
+    app.audiobookshelf_libraries.push(library.clone());
+    app.audiobookshelf_browse
+        .push(AudiobookshelfBrowseState::new(library));
+}
+
+/// A collection command that names a podcast library other than the active
+/// destination starts no load and does not panic (review of
+/// gui-one-destination-ensure units 2.4 and 2.5): the shared collection path
+/// installs the set for the library it names, as it always did, and the
+/// destination's load pass stays inert instead of entering the driver, whose
+/// steps assert the pass runs for the active tab.
+#[test]
+fn a_collection_command_on_another_podcast_library_starts_no_load() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = podcast_app();
+    add_second_podcast_library(&mut app);
+
+    toggle_show(&mut app, 2, "show-a");
+
+    let stale = &app.audiobookshelf_browse[2];
+    assert_eq!(
+        stale.catalog_request, 0,
+        "the stale library started no catalog chain"
+    );
+    assert_eq!(
+        stale.committed_show_pill, None,
+        "the stale library's scope was not committed"
+    );
+    assert!(
+        stale.detail_loading_ids.is_empty(),
+        "no per-show fetch started"
+    );
+    assert!(
+        !app.audiobookshelf_shelf_requested
+            .contains("lib-abs-podcasts-b"),
+        "no shelf fetch started"
     );
 }
 

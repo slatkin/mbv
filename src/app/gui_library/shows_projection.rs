@@ -409,7 +409,10 @@ impl App {
     /// first series row — the Hero default, so the Hero paints as soon as the
     /// series list lands and the detail load can start for it before any
     /// select does. `None` while the root list holds no series.
-    fn gui_shows_default_series(&self, lib_idx: usize) -> Option<String> {
+    pub(in crate::app::gui_library) fn gui_shows_default_series(
+        &self,
+        lib_idx: usize,
+    ) -> Option<String> {
         let in_root = |series_id: &str| {
             self.libs
                 .get(lib_idx)
@@ -433,30 +436,6 @@ impl App {
             })
     }
 
-    /// Start the Shows root load and the selected series' detail and season
-    /// loads when their caches do not hold them (design D14): the frame path
-    /// calls this for the Shows destination, so a launch restored onto Shows
-    /// — which never runs the `OpenDestination` click — still paints the series
-    /// list, and the default first series' Hero paints its season pills and
-    /// episodes without a select. `gui_tv_open` owns the root step; this call
-    /// only starts it once, when no root level or no settled All list exists.
-    /// Both series fetches deduplicate what is in flight or cached.
-    pub fn ensure_gui_shows_workspace(&mut self, lib_idx: usize) {
-        if self.gui_shows_root_needs_load(lib_idx) {
-            self.gui_tv_open(lib_idx);
-        }
-        let Some(series_id) = self.gui_shows_default_series(lib_idx) else {
-            return;
-        };
-        if !self.series_detail_cache.contains_key(&series_id) {
-            self.fetch_series_detail(&series_id);
-            return;
-        }
-        if let Some(season_id) = self.gui_shows_selected_season(lib_idx, &series_id) {
-            self.fetch_series_season_episodes(series_id, season_id);
-        }
-    }
-
     /// Whether the frame path must start the Shows root load: no root level
     /// yet, or a settled root that is not the All series list. A root already
     /// loading is left alone so a repaint never starts a second request, and
@@ -469,7 +448,7 @@ impl App {
     /// project no series row and leave the tree blank (the live defect of
     /// 2026-11-18: a launch restored onto Shows painted nothing until a
     /// destination click forced the All list).
-    fn gui_shows_root_needs_load(&self, lib_idx: usize) -> bool {
+    pub(in crate::app::gui_library) fn gui_shows_root_needs_load(&self, lib_idx: usize) -> bool {
         if !self.gui_tv_library(lib_idx) {
             return false;
         }

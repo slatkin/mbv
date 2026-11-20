@@ -12,6 +12,7 @@ mod collection;
 mod collection_command;
 mod emby;
 mod emby_projection;
+pub(in crate::app) mod ensure;
 mod entry_list;
 mod feeds;
 mod feeds_projection;
@@ -476,21 +477,32 @@ impl App {
         }
     }
 
-    /// The open step the active destination's kind needs (design D12): the
-    /// Shows destination forces its one view mode and starts its root load
-    /// when the stack holds no level, the plain Emby-library destination
-    /// starts its root-list load (row 8.1), and the Feeds destination settles
-    /// its stored selection (row 11.1, whose entries the shared startup fetch
-    /// already fills). The other destinations' loads ride the tab settlement
-    /// and the frame path.
+    /// The open step the active destination's kind needs (design D12;
+    /// gui-one-destination-ensure design D2, D4): the destination's user-action
+    /// work, then its one load pass. The Shows destination forces its one view
+    /// mode, the plain Emby library clears a failed root mark, and the
+    /// Audiobooks, Podcasts, and Feeds destinations log an ignored command;
+    /// every destination's loads are the pass's own steps, so an open starts no
+    /// load of its own. Home and Music have no user-action work. The match names
+    /// every destination kind and every absent case, so a new kind does not
+    /// compile until it states its open step.
     fn open_gui_active_destination(&mut self) {
         match self.gui_active_destination() {
+            // No presented destination: the open names nothing to open.
+            None => {}
+            // Home's rows ride the shared Home data and Music's loads are all
+            // the pass's selection step (design D3), so neither has user-action
+            // work and the pass alone is their open step.
+            Some(GuiDestinationKind::Home | GuiDestinationKind::Music { .. }) => {
+                self.ensure_gui_active_destination();
+            }
+            // Feeds' entries ride the shared startup fetch, so its pass is a
+            // no-op and its open only reports an absent tab.
+            Some(GuiDestinationKind::Feeds) => self.gui_feeds_open(),
             Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
             Some(GuiDestinationKind::Library { lib_idx }) => self.gui_emby_open(lib_idx),
             Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.gui_abs_open(lib_idx),
             Some(GuiDestinationKind::Podcasts { lib_idx }) => self.gui_podcast_open(lib_idx),
-            Some(GuiDestinationKind::Feeds) => self.gui_feeds_open(),
-            _ => {}
         }
     }
 

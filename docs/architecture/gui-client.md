@@ -999,6 +999,19 @@ The `library` mark (design D3) names the pass. The pass makes one projection
 call per destination, so the three slots share one build, and each slot keeps
 its own compare. A build that matches the slot's last built value sends nothing.
 
+The frame path owns the destination's load order. The `GuiDestinationLoads`
+trait (`src/app/gui_library/ensure.rs`) gives every destination the same three
+steps in one fixed order: the root list, then the selection, then the
+dependent content. A destination with no work for a step states that step as a
+no-op, so a new destination cannot skip a step. The driver,
+`App::ensure_gui_active_destination`, runs the steps for the active
+destination. Two callers reach it: `build` in
+`crates/mbv-gui/src/sections/library.rs`, which runs the pass before the parts
+are built, and the destination's open step (`open_gui_active_destination` in
+`src/app/gui_library.rs`), which runs its user-action work first and then the
+driver. So every presented Library destination loads from the frame with no
+click.
+
 The window keeps one signal per section: `libraryList`, `libraryDetail`, and
 `rowMenu` in `src/window/sections.rs`. The four large sections (`library_list`,
 `library_detail`, `queue`, and `settings`) are held as `SectionRef` — a shared
@@ -1096,9 +1109,9 @@ expandable. `GuiShowsDetail`'s `selected` carries the core's selected series
 as the frame painted it — the series id — with the first node as the default,
 so the Hero paints as soon as a list lands, and a stored id the list no
 longer carries falls back to that first node. The `hero` is present exactly
-while a series is selected; `ensure_gui_shows_workspace` loads the selected
-series' detail and its selected season's episodes on the frame path, so the
-Workspace paints without a season press.
+while a series is selected; the driver's Shows steps run in order — the root
+load, then the default series' detail, then the selected season's episodes —
+so the Workspace paints without a season press.
 
 That hero carries the TUI series producer's facts —
 `hero_content_series_with_episode`'s genre, year range (else the release

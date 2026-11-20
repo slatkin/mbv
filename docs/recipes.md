@@ -159,5 +159,8 @@ and `docs/invariants/06-queue-progress-application-sites.md` first.
    GUI Client has no site for a surface it does not present: an unported
    surface stays absent, never a stub (the `gui-client` spec). When the
    destination's surface is ported, `docs/architecture/gui-client.md`
-   lists its sites.
+   lists its sites. In the GUI Client, give the destination a
+   `GuiDestinationLoads` site; the driver `App::ensure_gui_active_destination`
+   then runs its loads in the one fixed order — root list, then selection,
+   then dependents — with a stated no-op for a step that has no work.
 8. **Vocabulary.** Add the new terms to `CONTEXT.md`.

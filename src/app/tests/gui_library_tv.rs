@@ -195,8 +195,9 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
 /// The frame path's ensure loads the selected series' first season without a
 /// select (design D14): D12's chain landed the detail and stopped there, so
 /// the first season was selected but never fetched and the Hero's Workspace
-/// painted empty. `ensure_gui_shows_workspace` starts the season load the
-/// cached detail already makes possible, and a later frame reads the episodes.
+/// painted empty. The destination driver's Shows pass starts the season load
+/// the cached detail already makes possible, and a later frame reads the
+/// episodes.
 #[test]
 fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -227,7 +228,7 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
         },
     );
 
-    app.ensure_gui_shows_workspace(0);
+    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
     land(&mut app);
 
     let episodes = &app.series_detail_cache["series-a"].episodes["season-1"];
@@ -321,9 +322,9 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
 
     // The frame ensure reloads the root as the All series list, once: the
     // second pass finds the All list and starts no second request.
-    app.ensure_gui_shows_workspace(0);
+    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
     land(&mut app);
-    app.ensure_gui_shows_workspace(0);
+    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
 
     assert_eq!(
         app.gui_shows_projection(0)

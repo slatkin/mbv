@@ -21,6 +21,7 @@ use super::collection::{
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::podcasts_projection::GuiPodcastEpisodeId;
+use super::tabs::GuiDestinationKind;
 
 use crate::app::App;
 
@@ -148,14 +149,14 @@ impl App {
             })
     }
 
-    /// Open the Podcasts destination `lib_idx` (row 10.1): an unloaded show
-    /// catalog starts the TUI's own show-list load — the refresh path the F5
-    /// press runs, whose replacement batch is single-flight and whose
-    /// completion publishes the whole catalog — and the selection's loads
-    /// start through the frame path's ensure below. A catalog already
-    /// loading, loaded, or owned by the startup's own fetch chain loads
-    /// nothing here, so no second chain walks beside the first. A `lib_idx`
-    /// that names no podcast library is an ignored command.
+    /// Open the Podcasts destination `lib_idx` (row 10.1; gui-one-destination-ensure
+    /// design D4): the open clears a failed catalog mark — a failed catalog
+    /// retries on an open and not on a repaint (design D4, Risks) — and then runs
+    /// the destination's load pass, whose root step starts the TUI's own
+    /// show-list refresh while the catalog is unloaded. A catalog already
+    /// loading, loaded, or owned by the startup's own fetch chain loads nothing,
+    /// so no second chain walks beside the first. A `lib_idx` that names no
+    /// podcast library is an ignored command.
     pub fn gui_podcast_open(&mut self, lib_idx: usize) {
         if !self.gui_podcast_library(lib_idx) {
             Self::log_ignored_library_command(
@@ -164,21 +165,7 @@ impl App {
             );
             return;
         }
-        if self.tab.audiobookshelf_index() != Some(lib_idx) {
-            return;
-        }
-        let unloaded = self
-            .audiobookshelf_browse
-            .get(lib_idx)
-            .is_some_and(|state| {
-                state.shows.is_empty() && state.total == 0 && state.replacement.is_none()
-            });
-        if unloaded {
-            // The show list only: the All shelf and the per-show episodes
-            // are the selection's loads, which the ensure starts through the
-            // same shared guards the shell's projection pass uses.
-            self.audiobookshelf_refresh(false);
-        }
+        self.clear_gui_podcast_catalog_failed(lib_idx);
         self.ensure_gui_podcast_selection(lib_idx);
     }
 
@@ -219,28 +206,86 @@ impl App {
             .picked_episode = Some(target.clone());
     }
 
-    /// The frame-path trigger the GUI's frame runs for the active Podcasts
-    /// destination (row 10.1), the Audiobooks frame path's counterpart: the
-    /// checked shows' scope is committed to the browse state the
-    /// fan-out reads, and the loads the selection needs start — All's
-    /// one-shot shelf fetch and every listed show's episodes, or the one
-    /// checked show's episodes. Every guard here is idempotent (the shelf's request
-    /// set, the fan-out's cached and in-flight skips, the scope's
-    /// compare-before-write), so the frame path runs it on every frame. A
-    /// `lib_idx` that names no podcast library, or a destination that is not
-    /// the active one, is a no-op, so the frame path can call it unguarded.
-    pub fn ensure_gui_podcast_selection(&mut self, lib_idx: usize) {
-        if !self.gui_podcast_library(lib_idx) || self.tab.audiobookshelf_index() != Some(lib_idx) {
+    /// The app-facing entry into the Podcasts destination's load pass (row
+    /// 10.1; gui-one-destination-ensure design D5): the show list's refresh
+    /// while it is unloaded, the checked shows' scope commit, then All's
+    /// one-shot shelf fetch and the bounded per-show fan-out (design D3). The
+    /// collection commands install their set and then enter here, and the open
+    /// step enters here after its failed-mark clear, so this is also where a
+    /// stale frame's command for another podcast library stops (review of units
+    /// 2.4 and 2.5): a `lib_idx` that names no podcast library, or no active
+    /// destination, is a no-op, and an automatic repaint always names the
+    /// active one.
+    pub(in crate::app::gui_library) fn ensure_gui_podcast_selection(&mut self, lib_idx: usize) {
+        if !self.gui_abs_destination_active(lib_idx) {
             return;
         }
+        self.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
+    }
+
+    /// Whether `lib_idx`'s show catalog is unloaded in a shape a show-list load
+    /// may start from (gui-one-destination-ensure design D3, Risks): an empty
+    /// list, a zero total, no page in flight, no replacement batch collecting,
+    /// and no failed mark. The in-flight page marks count as unloaded's
+    /// negation, as the books destination's rule has it: the startup chain's
+    /// first page is already walking, and a load beside it would start a
+    /// second chain.
+    ///
+    /// The failed mark is load-bearing: `handle_audiobookshelf_shows_fetched`
+    /// records a failure as `state.error` and aborts the replacement batch,
+    /// which leaves the list empty, the total zero, and no page in flight —
+    /// exactly the shape above — so without the mark a repaint would retry the
+    /// failed chain every frame. The frame path's root step and
+    /// [`Self::gui_podcast_open`] both call this one rule, so the two starts
+    /// cannot drift.
+    pub(in crate::app::gui_library) fn gui_podcast_catalog_needs_load(
+        &self,
+        lib_idx: usize,
+    ) -> bool {
+        self.audiobookshelf_browse
+            .get(lib_idx)
+            .is_some_and(|state| {
+                state.shows.is_empty()
+                    && state.total == 0
+                    && state.loading_pages.is_empty()
+                    && state.replacement.is_none()
+                    && state.error.is_none()
+            })
+    }
+
+    /// Clear the failed mark a user open retries from (design D4, Risks): the
+    /// loader's failure record is the browse state's `error` — the same fact
+    /// the projection paints as the list's failed state — so the frame path's
+    /// root step honours it and an open clears it. An automatic repaint never
+    /// clears it.
+    pub(in crate::app::gui_library) fn clear_gui_podcast_catalog_failed(&mut self, lib_idx: usize) {
+        if let Some(state) = self.audiobookshelf_browse.get_mut(lib_idx) {
+            state.error = None;
+        }
+    }
+
+    /// Commit the checked shows' scope the bounded fan-out reads — the
+    /// selection step of the destination's one load pass (gui-one-destination-ensure
+    /// design D3; gui-collection-dropdown design D2). Exactly one
+    /// checked show scopes the fan-out to that show, and All or several checked
+    /// shows need every listed show.
+    pub(in crate::app) fn commit_gui_podcast_effective_scope(&mut self, lib_idx: usize) {
         let set = self.gui_podcast_effective_set(lib_idx);
-        let all = set.is_all();
         let single_show = match set.as_ref() {
             GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.first().cloned(),
             _ => None,
         };
         self.commit_gui_podcast_show_scope(lib_idx, single_show.as_deref());
-        if all
+    }
+
+    /// Start the loads the committed selection depends on — the dependents step
+    /// of the destination's one load pass (gui-one-destination-ensure design
+    /// D3, row 10.1): All's one-shot shelf fetch, then every required show's
+    /// episodes through the bounded fan-out, or the one checked show's. Every
+    /// guard is idempotent (the shelf's request set, the fan-out's cached and
+    /// in-flight skips), so a later pass loads nothing.
+    pub(in crate::app) fn ensure_gui_podcast_dependents(&mut self, lib_idx: usize) {
+        if self.gui_podcast_effective_set(lib_idx).is_all()
             && let Some(library_id) = self
                 .audiobookshelf_libraries
                 .get(lib_idx)

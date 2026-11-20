@@ -35,7 +35,7 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
     ));
     app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
 
-    app.ensure_gui_emby_selection(0);
+    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
     assert!(
         app.gui_emby_libs
             .get(&0)
@@ -106,7 +106,7 @@ fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
         "the failed fetch retired its in-flight mark"
     );
 
-    app.ensure_gui_emby_selection(0);
+    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
     assert_eq!(
         http.request_count(),
         fetched,
