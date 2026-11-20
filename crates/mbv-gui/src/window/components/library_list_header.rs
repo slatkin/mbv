@@ -1,20 +1,25 @@
 //! The Library list's header (`replace-tauri-with-blitz` task 7.2, the port
 //! of `LibraryListHeader`; add-gui-library-panel design D7, D14): the
-//! canvas's list title, the destination's collection dropdown on the title's
-//! line, and the `/` filter field under both. Every destination paints this one
-//! header, so the column cannot drift between tabs: a destination passes its
-//! title, its collections frame when it has one, a selection label when it
-//! wants one, and its own filter state.
+//! canvas's list heading, the destination's collection dropdown on the
+//! heading's line, and the `/` filter field under both. Every destination
+//! paints this one header, so the column cannot drift between tabs: a
+//! destination passes its heading, its collections frame when it has one, a
+//! selection label when it wants one, and its own filter state.
 //!
-//! The dropdown rides the title line's right end (gui-collection-dropdown
+//! The heading is a Service mark or Home's text title (gui-library-header-
+//! service-marks design D5): a Service destination names itself by its mark,
+//! because the tab bar already names the destination in words, and Home keeps
+//! its title. Either paints at the left end of the heading line.
+//!
+//! The dropdown rides the heading line's right end (gui-collection-dropdown
 //! design D6a, user override): it paints at the line's right end, so the panel
 //! paints no selector row above the list, and the selection label is not
 //! painted while the trigger names the selection itself. The label paints only
 //! where it is non-empty: a plain Emby library and the Shows destination pass
 //! an empty one, because the UI is not verbose.
 //!
-//! `title_attr` and `label_attr` name a destination's own attributes, so a
-//! destination's tests keep a per-tab hook beside the shared ones.
+//! `label_attr` names a destination's own attribute, so a destination's tests
+//! keep a per-tab hook beside the shared ones.
 
 use dioxus_native::prelude::*;
 
@@ -23,30 +28,38 @@ use mbv::{GuiCollections, GuiShowsView};
 use crate::window::components::library_collection_dropdown::LibraryCollectionDropdown;
 use crate::window::components::library_filter_field::LibraryFilterField;
 use crate::window::components::library_shows_view_dropdown::LibraryShowsViewDropdown;
+use crate::window::service_mark::{ServiceMark, ServiceMarkIcon};
+
+/// What a destination paints at the left end of its heading line (design
+/// D5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LibraryListHeading {
+    /// A Service destination: its Service mark, and no text.
+    Mark(ServiceMark),
+    /// Home: its text title.
+    Title(String),
+}
 
 /// The props of the list header (the `LibraryListHeader` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryListHeaderProps {
-    /// The list's title, as the canvas names the column.
-    pub title: String,
-    /// The destination's own title attribute, when it has one.
-    #[props(default)]
-    pub title_attr: Option<&'static str>,
-    /// The carried selection's label, painted on the title's line only when
+    /// The list's heading, as the destination names itself.
+    pub heading: LibraryListHeading,
+    /// The carried selection's label, painted on the heading's line only when
     /// it is non-empty and the destination paints no collection dropdown.
     pub label: String,
     /// The destination's own label attribute, when it has one.
     #[props(default)]
     pub label_attr: Option<&'static str>,
     /// The destination's collection selector, when it has one (design D6a):
-    /// the dropdown paints on the title's line after the title, and the label
-    /// is not painted, because the trigger names the selection.
+    /// the dropdown paints on the heading's line after the heading, and the
+    /// label is not painted, because the trigger names the selection.
     #[props(default)]
     pub collections: Option<GuiCollections>,
     /// The Shows destination's single-choice view, when it paints one
     /// (gui-collection-dropdown design D8): the dropdown goes on the same
-    /// title line and is not a collection selector.
+    /// heading line and is not a collection selector.
     #[props(default)]
     pub view: Option<GuiShowsView>,
     /// The filter text the field paints.
@@ -65,8 +78,7 @@ pub struct LibraryListHeaderProps {
 #[component]
 pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
     let LibraryListHeaderProps {
-        title,
-        title_attr,
+        heading,
         label,
         label_attr,
         collections,
@@ -77,10 +89,7 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
         on_input,
         on_accept,
     } = props;
-    // The destination's own title and label attributes, when it has one.
-    let title_attrs = title_attr.map_or(Vec::new(), |name| {
-        vec![Attribute::new(name, "", None, false)]
-    });
+    // The destination's own label attribute, when it has one.
     let label_attrs = label_attr.map_or(Vec::new(), |name| {
         vec![Attribute::new(name, "", None, false)]
     });
@@ -93,15 +102,19 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
             div {
                 class: "flex items-center justify-between",
                 style: "gap: 12px;",
-                span {
-                    style: "font-size: 14px; font-weight: 600; color: var(--canvas-heading);",
-                    "data-library-list-title": "",
-                    ..title_attrs,
-                    "{title}"
+                match heading {
+                    LibraryListHeading::Mark(mark) => rsx! { ServiceMarkIcon { mark } },
+                    LibraryListHeading::Title(title) => rsx! {
+                        span {
+                            style: "font-size: 14px; font-weight: 600; color: var(--canvas-heading);",
+                            "data-library-list-title": "",
+                            "{title}"
+                        }
+                    },
                 }
                 if let Some(collections) = collections {
-                    // The dropdown paints the title line's right end (design
-                    // D6a): the trigger after the title, at the line's end.
+                    // The dropdown paints the heading line's right end (design
+                    // D6a): the trigger after the heading, at the line's end.
                     LibraryCollectionDropdown { collections }
                 } else if let Some(view) = view {
                     LibraryShowsViewDropdown { view }

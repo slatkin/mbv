@@ -25,13 +25,14 @@ use crate::window::components::library_item_row::{
 };
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
-use crate::window::components::library_list_header::LibraryListHeader;
+use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::emby_list::{EmbyListRow, emby_letter_rail};
 use crate::window::library::parts::{library_emby_detail, library_emby_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
+use crate::window::service_mark::ServiceMark;
 use crate::window::theme::canvas_var;
 
 /// The row kind word the item row's hook paints (`data-library-emby-row`).
@@ -182,13 +183,14 @@ pub fn LibraryEmbyList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-emby-list-column": "",
-            // The Music list's header (design D15, user override): the
-            // library's name and the `/` filter field, and no selection
-            // label — the plain list is the whole library.
+            // The Music list's header (design D15, user override): the library
+            // is an Emby destination, so its Emby mark names it and the `/`
+            // filter field narrows it, with no selection label — the plain
+            // list is the whole library.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: frame.map_or(String::new(), |frame| frame.library_name.clone()),
+                    heading: LibraryListHeading::Mark(ServiceMark::Emby),
                     label: String::new(),
                     collections,
                     filter: emby_ui.filter.clone(),

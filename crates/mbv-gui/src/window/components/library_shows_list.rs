@@ -32,7 +32,7 @@ use crate::window::components::library_item_row::{
 };
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
-use crate::window::components::library_list_header::LibraryListHeader;
+use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::input::f32_from_f64;
@@ -41,6 +41,7 @@ use crate::window::library::shows_list::{ShowsFlatRow, ShowsListRow, shows_lette
 use crate::window::library::shows_workspace::is_played_episode;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
+use crate::window::service_mark::ServiceMark;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -450,13 +451,6 @@ pub fn LibraryShowsList() -> Element {
     // list does: the Shows list paints no collection selector (design D8), so
     // the placeholder names the whole library.
     let filter_placeholder = "Filter shows".to_owned();
-    let list_title = frame.map_or("Series", |frame| {
-        if frame.view == mbv::GuiShowsView::All {
-            "Series"
-        } else {
-            frame.view.label()
-        }
-    });
 
     // The list's two DOM facts report to the scroll store (design D9), and
     // the rows paint over the interaction state this render read.
@@ -503,14 +497,14 @@ pub fn LibraryShowsList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-shows-list-column": "",
-            // The Music list's header (design D14, user override): the title
-            // and the `/` filter field, and no selection label — the UI is
-            // not verbose.
+            // The Music list's header (design D14, user override): the Shows
+            // destination is an Emby destination, so its Emby mark names it
+            // under every view (gui-library-header-service-marks design D5),
+            // and the view dropdown names the view; no title repeats it.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: list_title.to_owned(),
-                    title_attr: Some("data-library-shows-list-title"),
+                    heading: LibraryListHeading::Mark(ServiceMark::Emby),
                     label: String::new(),
                     view: frame.map(|frame| frame.view),
                     filter: shows_ui.filter.clone(),

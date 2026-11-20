@@ -31,7 +31,7 @@ use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowNode, LibraryRowThumb, LibraryTrailPart,
 };
 use crate::window::components::library_letter_rail::LibraryLetterRail;
-use crate::window::components::library_list_header::LibraryListHeader;
+use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::components::typed_text::TypedText;
@@ -43,6 +43,7 @@ use crate::window::library::list::{
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
+use crate::window::service_mark::ServiceMark;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -395,7 +396,9 @@ pub fn LibraryList() -> Element {
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: "Artists".to_owned(),
+                    // Music is an Emby destination: its Emby mark names it
+                    // (gui-library-header-service-marks design D5).
+                    heading: LibraryListHeading::Mark(ServiceMark::Emby),
                     // The carried selector names the selection itself, so the
                     // header paints no selection label (design D6a).
                     label: String::new(),

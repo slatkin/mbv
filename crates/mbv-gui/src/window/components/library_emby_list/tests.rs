@@ -585,9 +585,9 @@ fn the_list_paints_the_library_header_without_the_selection_label() {
     fixture.measure(300.0);
 
     assert_eq!(
-        fixture.text_of("[data-library-list-title]"),
-        "Movies",
-        "the header names the library"
+        fixture.attr_of("[data-library-list-mark]", "data-library-list-mark"),
+        Some("emby".to_owned()),
+        "the header marks the library's Service"
     );
     assert!(
         !fixture.presents("[data-library-selection-label]"),
