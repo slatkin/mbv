@@ -338,11 +338,12 @@ impl App {
                 )
             });
         } else {
-            items.sort_by_cached_key(|item| {
-                (
-                    std::cmp::Reverse(mbv_ui_model::home_latest::emby_date_added_secs(item)),
-                    item.id.clone(),
+            items.sort_by(|a, b| {
+                sort.compare_date(
+                    mbv_ui_model::home_latest::emby_date_added_secs(a),
+                    mbv_ui_model::home_latest::emby_date_added_secs(b),
                 )
+                .then_with(|| a.id.cmp(&b.id))
             });
         }
         let mut seen = std::collections::HashSet::new();
