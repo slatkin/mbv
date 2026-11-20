@@ -1,10 +1,9 @@
 //! The Queue panel's row-paint contracts (`QueuePanel.test.ts`): the frame's
 //! viewport rows, the empty-queue state, the watched, active, and
-//! partial-progress states, the start mark, the canvas one-liner, the four row
-//! looks, and the hovered row's chrome.
+//! partial-progress states, the progress ring, the right column's duration, the
+//! canvas one-liner, the four row looks, and the hovered row's chrome.
 
 use blitz_dom::local_name;
-use rstest::rstest;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiQueueScroll, GuiSemanticState};
@@ -47,82 +46,89 @@ fn an_empty_frame_renders_the_empty_queue_state() {
     assert_eq!(fixture.all("[data-slot]").len(), 0);
 }
 
-/// Contract (design D9 of `gui-named-queues`, spec `gui-client` "A stopped
-/// queue marks its start slot", "Play turns the start mark into the playing
-/// mark", "A peer queue marks its playing row", "The right column is
-/// switched"): the mark is one row in two states — filled while the queue
-/// plays, outlined while a queue that reports its start slot is stopped or
-/// resting — and a queue that reports no start slot (a peer without
-/// `named-queues`) marks its observed active slot as the playing row while it
-/// plays and paints no outlined mark. No other row carries a mark or a
-/// runtime.
-#[rstest]
-#[case::reported_stopped(Some(3), false, true, Some((3, "none")))]
-#[case::reported_playing(Some(3), true, true, Some((3, "currentColor")))]
-#[case::reported_without_a_slot(None, false, true, None)]
-#[case::observed_active_stopped(Some(2), false, false, None)]
-#[case::observed_active_playing(Some(2), true, false, Some((2, "currentColor")))]
-fn the_start_slot_carries_the_filled_or_outlined_mark(
-    #[case] start: Option<u64>,
-    #[case] playing: bool,
-    #[case] start_slot_reported: bool,
-    #[case] expected: Option<(u64, &str)>,
-) {
-    let mut rows = queue(vec![item(1), item(2), item(3)]);
-    rows.start = start;
-    rows.playing = playing;
-    rows.start_slot_reported = start_slot_reported;
-    let fixture = built_with_frame(queue_panel_app, rows, summary(), None);
+/// Contract (spec `gui-client` "The right column is switched", design D3 of
+/// `gui-delineated-rows`): every row state paints the item's duration in its
+/// right column, and a stopped queue's start slot paints no start mark — no
+/// row carries a state glyph before its title.
+#[test]
+fn every_row_paints_its_duration_and_no_row_paints_a_start_mark() {
+    let rows = vec![
+        renamed(item(1), "New"),
+        in_state(
+            renamed(item(2), "Partial"),
+            GuiSemanticState::Active { progress: Some(42) },
+        ),
+        in_state(renamed(item(3), "Watched"), GuiSemanticState::Played),
+        in_state(renamed(item(4), "Playing"), GuiSemanticState::NowPlaying),
+    ];
+    let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
 
-    assert_eq!(marks(&fixture), expected_fills(expected));
+    assert_eq!(durations(&fixture), vec![Some("3:12".to_owned()); 4]);
     assert!(
-        !fixture.text().contains("3:12"),
-        "no row paints its runtime"
+        !fixture.presents("[data-slot=\"1\"] svg"),
+        "no row paints a start mark"
     );
 }
 
-/// The fill attribute of each of the three fixture rows' mark, `None` where
-/// the row paints no mark.
-fn marks(fixture: &Fixture) -> Vec<Option<String>> {
-    (1..=3_u64)
-        .map(|slot| fixture.attr_of(&format!("[data-slot=\"{slot}\"] svg"), local_name!("fill")))
+/// The right column's text of each of the four fixture rows, `None` where the
+/// row paints no duration.
+fn durations(fixture: &Fixture) -> Vec<Option<String>> {
+    (1..=4_u64)
+        .map(|slot| {
+            fixture
+                .presents(&format!("[data-slot=\"{slot}\"] [data-duration]"))
+                .then(|| fixture.text_of(&format!("[data-slot=\"{slot}\"] [data-duration]")))
+        })
         .collect()
 }
 
-/// The fills `marks` expects for a lone mark on `expected`'s slot.
-fn expected_fills(expected: Option<(u64, &str)>) -> Vec<Option<String>> {
-    (1..=3_u64)
+/// Contract (spec `gui-client` "Rows show their state", design D3): the row's
+/// progress ring paints after the title — on a partial row and on the
+/// now-playing row, which follows the playhead — and a new or watched row
+/// carries none. The `data-progress` value is the percent the ring fills to.
+#[test]
+fn only_a_row_with_progress_paints_the_ring() {
+    let rows = vec![
+        renamed(item(1), "New"),
+        in_state(
+            renamed(item(2), "Partial"),
+            GuiSemanticState::Active { progress: Some(42) },
+        ),
+        in_state(renamed(item(3), "Watched"), GuiSemanticState::Played),
+        in_state(renamed(item(4), "Playing"), GuiSemanticState::NowPlaying),
+    ];
+    let fixture = built_with_anchor(queue_panel_app, queue(rows), summary(), 4);
+
+    assert_eq!(
+        ring_percents(&fixture),
+        vec![None, Some("42".to_owned()), None, Some("30".to_owned())]
+    );
+}
+
+/// The `data-progress` value of each of the four fixture rows' ring, `None`
+/// where the row paints no ring.
+fn ring_percents(fixture: &Fixture) -> Vec<Option<String>> {
+    (1..=4_u64)
         .map(|slot| {
-            expected
-                .filter(|(marked, _)| *marked == slot)
-                .map(|(_, fill)| fill.to_owned())
+            fixture.attr_of(
+                &format!("[data-slot=\"{slot}\"] [data-progress]"),
+                blitz_dom::LocalName::from("data-progress"),
+            )
         })
         .collect()
 }
 
 /// Contract (`QueuePanel.test.ts`, `gui-queue-panel-redesign` design D9): the
-/// rows paint the watched, active, and partial-progress states — the watched
-/// row paints its title grey and crosses it with the darker strike colour, the
-/// now-playing row fills green, carries the filled start mark, and paints its
-/// title green at weight 600, and the progress bar fills to max(percent, 3)%.
+/// rows paint the watched and now-playing states — the watched row paints its
+/// title grey and crosses it with the darker strike colour, and the now-playing
+/// row fills green and paints its title green at weight 600.
 #[test]
-fn the_rows_paint_the_watched_active_and_partial_progress_states() {
+fn the_rows_paint_the_watched_and_now_playing_states() {
     let rows = vec![
         in_state(renamed(item(1), "Watched"), GuiSemanticState::Played),
         in_state(renamed(item(2), "Playing"), GuiSemanticState::NowPlaying),
-        in_state(
-            renamed(item(3), "Partial"),
-            GuiSemanticState::Active { progress: Some(42) },
-        ),
-        in_state(
-            renamed(item(4), "Started"),
-            GuiSemanticState::Active { progress: Some(1) },
-        ),
     ];
-    let mut rows_frame = queue(rows);
-    rows_frame.start = Some(2);
-    rows_frame.playing = true;
-    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
+    let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
 
     let watched = fixture.attr_of("[data-slot=\"1\"] .truncate", local_name!("class"));
     assert!(watched.is_some_and(|class| class.contains("line-through")));
@@ -141,7 +147,10 @@ fn the_rows_paint_the_watched_active_and_partial_progress_states() {
         playing_row.contains(&format!("background: {}", ef_var(EfToken::BgGreen))),
         "{playing_row}"
     );
-    assert!(fixture.presents("[data-slot=\"2\"] svg"));
+    assert!(
+        playing_row.contains("border-radius: 4px"),
+        "the now-playing row alone rounds its corners: {playing_row}"
+    );
     let playing_title = fixture.style_of("[data-slot=\"2\"] .truncate");
     assert!(
         playing_title.contains("font-weight: 600"),
@@ -151,16 +160,11 @@ fn the_rows_paint_the_watched_active_and_partial_progress_states() {
         playing_title.contains(&format!("color: {}", ef_var(EfToken::Green))),
         "{playing_title}"
     );
-
-    let partial = fixture.style_of("[data-slot=\"3\"] [data-progress] span");
-    assert!(partial.contains("width: 42%"), "{partial}");
-    let started = fixture.style_of("[data-slot=\"4\"] [data-progress] span");
-    assert!(started.contains("width: 3%"), "{started}");
 }
 
 /// Contract (`QueuePanel.test.ts`): the row paints the canvas one-liner —
-/// its padded ordinal, one title line, and the value; no second line, no
-/// date gutter, and no play marker.
+/// its padded ordinal, one title line, and the right column's duration; no
+/// second line, no date gutter, and no state glyph.
 #[test]
 fn the_row_paints_the_canvas_one_liner() {
     let row = with_details(renamed(item(1), "Nether Zone"), "Peep Show", "mon 08");
@@ -168,6 +172,7 @@ fn the_row_paints_the_canvas_one_liner() {
 
     assert!(fixture.presents("button[data-slot=\"1\"]"));
     assert_eq!(fixture.text_of("[data-slot=\"1\"] [data-ordinal]"), "01");
+    assert_eq!(fixture.text_of("[data-slot=\"1\"] [data-duration]"), "3:12");
     let text = fixture.text();
     assert!(text.contains("Nether Zone"), "{text}");
     assert!(!text.contains("Peep Show"), "{text}");
@@ -255,8 +260,8 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
         Some("Row actions")
     );
     let actions_style = fixture.style_of("[data-actions]");
-    assert!(actions_style.contains("width: 34px"), "{actions_style}");
-    assert!(actions_style.contains("height: 34px"), "{actions_style}");
+    assert!(actions_style.contains("width: 40px"), "{actions_style}");
+    assert!(actions_style.contains("height: 40px"), "{actions_style}");
     assert!(
         actions_style.contains("border-radius: 6px"),
         "{actions_style}"
@@ -270,14 +275,14 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
     // paints the hover fill (design D9).
     let row_style = fixture.style_of("[data-slot=\"2\"]");
     assert!(
-        row_style.contains("padding-inline: 4px 36px"),
+        row_style.contains("padding-inline: 4px 42px"),
         "{row_style}"
     );
     assert!(
         row_style.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
         "{row_style}"
     );
-    assert!(row_style.contains("border-radius: 6px"), "{row_style}");
+    assert!(row_style.contains("border-radius: 0px"), "{row_style}");
     let title = fixture.style_of("[data-slot=\"2\"] .truncate");
     assert!(
         title.contains(&format!("color: {}", ef_var(EfToken::Fg))),
@@ -317,24 +322,6 @@ fn a_list_that_fits_paints_no_scroll_bar() {
     );
 
     assert!(!fixture.presents("[data-scrollbar]"));
-}
-
-/// Contract (`gui-queue-panel-redesign` task 6.2, spec `gui-client` "Rows show
-/// their state"): a row with partial progress paints its progress bar. The
-/// bar's box inside the row is design presentation, not a contract: no test
-/// asserts geometry (user decision 2026-11-19).
-#[test]
-fn a_partial_progress_row_paints_its_progress() {
-    let rows = vec![
-        item(1),
-        in_state(
-            renamed(item(2), "Partial"),
-            GuiSemanticState::Active { progress: Some(42) },
-        ),
-    ];
-    let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
-
-    assert!(fixture.presents("[data-slot=\"2\"] [data-progress]"));
 }
 
 /// Contract (user report 2026-11-19, after `gui-queue-panel-redesign`): the

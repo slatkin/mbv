@@ -1,43 +1,40 @@
-//! One queue row's canvas cells (the `rowCells` snippet of
-//! `QueuePanel`): the padded queue ordinal, the one title line, the start mark,
-//! and the thin progress bar painted inside the row along its bottom. The row
-//! carries no right-column value (gui-named-queues task 8.4, design D9) and the
-//! bar adds no height: it is positioned against the row's own box, below the
-//! title line (gui-queue-panel-redesign design D9). The hovered row reserves
-//! the leading slot its sibling grip covers and the trailing space its sibling
-//! actions button paints over, and the drag ghost paints the title and the
-//! percent only. The row's colours come through the queue column's `--ef-*`
-//! tokens (design D1).
+//! One queue row's canvas cells (the `rowCells` snippet of `QueuePanel`): the
+//! padded queue ordinal, the one title line, the progress ring after it, and
+//! the right column's duration. The row carries no second line, and the ring
+//! adds no height: it sits in the row's own line, after the title (design D3 of
+//! `gui-delineated-rows`). The hovered row reserves the leading slot its
+//! sibling grip covers and the trailing space its sibling actions button paints
+//! over, and the drag ghost paints the title, the ring, and the percent only.
+//! The row's colours come through the queue column's `--ef-*` tokens (design D1
+//! of `gui-queue-panel-redesign`).
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiSemanticState};
-use crate::window::components::queue_panel::geometry::{
-    ORDINAL_COL_PX, ROW_CELL_GAP_PX, ROW_INSET_PX, START_MARK_SLOT_PX,
-};
-use crate::window::icons::Play;
+use crate::window::components::queue_panel::geometry::{ORDINAL_COL_PX, RIGHT_COL_PX};
 use crate::window::playhead::Playhead;
 use crate::window::theme::{EfToken, ef_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The left inset of the row's progress bar in logical pixels (design D9: 54
-/// from the row's leading edge): the row's inset, the ordinal's column, the
-/// cell gap, and the start mark's slot, so the bar starts under the title and
-/// never under a mark.
-const PROGRESS_LEFT_PX: u16 = ROW_INSET_PX + ORDINAL_COL_PX + ROW_CELL_GAP_PX + START_MARK_SLOT_PX;
+/// The progress ring's box in logical pixels (design D3).
+const RING_SIZE_PX: u16 = 14;
 
-/// The right inset of the row's progress bar in logical pixels (design D9).
-const PROGRESS_RIGHT_PX: u16 = 12;
+/// The ring's radius in logical pixels (design D3): the box's half, less the
+/// stroke's outward half.
+const RING_RADIUS_PX: u16 = 6;
 
-/// The row's progress bar height in logical pixels (design D9).
-const PROGRESS_HEIGHT_PX: u16 = 2;
+/// The ring's stroke width in logical pixels (design D3).
+const RING_STROKE_PX: f32 = 2.5;
 
-/// The progress bar's distance from the row's bottom edge in logical pixels
-/// (design D9).
-const PROGRESS_BOTTOM_PX: u16 = 4;
+/// The ring's circumference in logical pixels: `2π × 6`.
+const RING_CIRCUMFERENCE_PX: f32 = 37.7;
+
+/// The ghost's percent in logical pixels of type.
+const GHOST_PERCENT_PX: f32 = 12.0;
 
 /// Which cells a row paints: the list row, the hovered row (the chrome
-/// replaces the ordinal), or the drag ghost (the title and the percent only).
+/// replaces the ordinal), or the drag ghost (the title, the ring, and the
+/// percent only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RowChrome {
     Row,
@@ -52,6 +49,9 @@ pub(super) struct ItemRow {
     pub(super) slot: u64,
     ordinal: usize,
     primary: String,
+    /// The item's duration text, which the right column paints in every row
+    /// state (design D3); `None` while the frame knows no runtime.
+    duration: Option<String>,
     pub(super) state: GuiSemanticState,
 }
 
@@ -63,12 +63,14 @@ impl ItemRow {
                 slot,
                 ordinal,
                 primary,
+                duration,
                 state,
                 ..
             } => Some(Self {
                 slot: *slot,
                 ordinal: *ordinal,
                 primary: primary.clone(),
+                duration: duration.clone(),
                 state: state.clone(),
             }),
             _ => None,
@@ -76,13 +78,14 @@ impl ItemRow {
     }
 }
 
-/// The colour set one row paints in (the canvas's row states, design D9):
+/// The colour set one row paints in (the canvas's row states, design D3):
 /// the now-playing row paints the green title at weight 600 on the green
 /// fill, a marked row the raised fill, the hovered row the hover
 /// fill, the watched row the grey title its strike crosses in the darker
-/// token, and every other row no fill and the primary text. The ordinal, the
-/// track, and the partial fill are shared: the number is grey, the track the
-/// raised tier, and the fill orange except on the playing row.
+/// token, and every other row no fill and the primary text. The ordinal and
+/// the right column are shared: the number and the duration are grey. The
+/// ring's track and fill are shared too: the track the raised tier and the
+/// fill orange except on the playing row.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct RowLook {
     /// The row button's own fill, `None` for an ordinary resting row.
@@ -136,16 +139,17 @@ pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
     }
 }
 
-/// The playhead's played fraction as the row track paints it: the whole
+/// The playhead's played fraction as the row's ring paints it: the whole
 /// percent, so the store's per-frame prediction re-renders the one row only
-/// when its painted percent moves (design D5).
+/// when its painted percent moves (design D5 of `gui-queue-panel-redesign`).
 fn playhead_percent(playhead: &Playhead) -> i64 {
     mbv_emby_model::saturating_i64_from_f64((playhead.fraction.cloned() * 100.0).round())
 }
 
 /// The row's progress percentage, where its state carries one: an active row
 /// keeps the frame's percent, and the playing row paints the playhead's
-/// predicted percent (design D5) while its slot is the active slot.
+/// predicted percent (design D5 of `gui-queue-panel-redesign`) while its slot
+/// is the active slot.
 fn row_progress(row: &ItemRow, playhead: &Playhead) -> Option<i64> {
     match row.state {
         GuiSemanticState::NowPlaying => {
@@ -160,48 +164,74 @@ fn row_progress(row: &ItemRow, playhead: &Playhead) -> Option<i64> {
     }
 }
 
-/// The start mark a row paints (design D9): the shown queue's start slot is
-/// one row in two states, filled while that queue plays and outlined while it
-/// is stopped or resting, so the two marks stay distinct.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum StartMark {
-    /// The start slot of the queue that plays: the filled mark.
-    Playing,
-    /// The start slot of a stopped or resting queue: the outlined mark.
-    Start,
+/// The ring's played arc in logical pixels: the percent of the circumference,
+/// clamped to the circle (design D3).
+fn ring_arc(percent: i64) -> f32 {
+    let clamped = percent.clamp(0, 100);
+    let percent = f32::from(u16::try_from(clamped).unwrap_or(0));
+    RING_CIRCUMFERENCE_PX * percent / 100.0
 }
 
-/// The start mark the row of `slot` paints, if any: only the shown queue's
-/// start slot carries one. A queue that reports a start slot marks it filled
-/// while it plays and outlined while it is stopped or resting. A queue that
-/// reports no start slot — a peer without `named-queues` — marks its observed
-/// active slot as the playing row while it plays and carries no outlined mark
-/// (design D9).
-pub(super) fn start_mark(queue: &GuiQueue, slot: u64) -> Option<StartMark> {
-    if queue.start != Some(slot) {
-        return None;
+/// The row's progress ring (design D3): the track circle in the row's track
+/// token under the played arc in the row's fill token, turned so the arc starts
+/// at the top. Each circle names `currentColor` and carries its token in its
+/// own computed `color`: Blitz serialises the inline svg to usvg for painting,
+/// and usvg cannot parse a `var()` in a `stroke` attribute (it drops the
+/// stroke), while the serialiser resolves `currentColor` per element — the
+/// collapsed rail's proven ring form.
+fn progress_ring(look: &RowLook, percent: i64) -> Element {
+    let arc = ring_arc(percent);
+    let centre = f32::from(RING_SIZE_PX) / 2.0;
+    rsx! {
+        span {
+            class: "relative shrink-0",
+            style: "width: {RING_SIZE_PX}px; height: {RING_SIZE_PX}px;",
+            "data-progress": "{percent}",
+            svg {
+                class: "absolute inset-0 -rotate-90",
+                view_box: "0 0 {RING_SIZE_PX} {RING_SIZE_PX}",
+                width: "{RING_SIZE_PX}",
+                height: "{RING_SIZE_PX}",
+                "aria-hidden": "true",
+                circle {
+                    cx: "{centre}",
+                    cy: "{centre}",
+                    r: "{RING_RADIUS_PX}",
+                    fill: "none",
+                    stroke: "currentColor",
+                    style: "color: {look.track};",
+                    "stroke-width": "{RING_STROKE_PX}",
+                }
+                circle {
+                    cx: "{centre}",
+                    cy: "{centre}",
+                    r: "{RING_RADIUS_PX}",
+                    fill: "none",
+                    stroke: "currentColor",
+                    style: "color: {look.fill};",
+                    "stroke-width": "{RING_STROKE_PX}",
+                    "stroke-linecap": "round",
+                    "stroke-dasharray": "{arc} {RING_CIRCUMFERENCE_PX}",
+                }
+            }
+        }
     }
-    if queue.playing {
-        return Some(StartMark::Playing);
-    }
-    queue.start_slot_reported.then_some(StartMark::Start)
 }
 
-/// The props of one row's cells: the item row, its tone, which chrome paints
-/// it, and its start mark while it carries one.
+/// The props of one row's cells: the item row, its tone, and which chrome
+/// paints it.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub(super) struct RowCellsProps {
     pub(super) row: ItemRow,
     pub(super) look: RowLook,
     pub(super) chrome: RowChrome,
-    pub(super) mark: Option<StartMark>,
 }
 
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
-/// ordinal, the one title line, the start mark, and the progress bar painted
-/// inside the row's bottom edge. The hovered row reserves the leading slot its
-/// sibling grip covers and the trailing space its sibling actions button paints
-/// over, and the drag ghost paints the title and the percent only.
+/// ordinal, the one title line with its progress ring, and the right column's
+/// duration. The hovered row reserves the leading slot its sibling grip covers
+/// and the trailing space its sibling actions button paints over, and the drag
+/// ghost paints the title, the ring, and the percent only.
 #[component]
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
@@ -209,15 +239,14 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let look = &props.look;
     let chrome = props.chrome;
     let progress = row_progress(row, &playhead);
-    let progress_width = progress.map(|progress| progress.max(3));
-    let mark = props.mark.filter(|_| chrome == RowChrome::Row);
+    let duration = row.duration.clone();
     let ordinal = row.ordinal;
     let ordinal_text = format!("{ordinal:02}");
 
     rsx! {
         if chrome == RowChrome::Row {
             span {
-                class: "shrink-0 font-mono tabular-nums",
+                class: "shrink-0 text-right font-mono tabular-nums",
                 style: format!(
                     "width: {ORDINAL_COL_PX}px; font-size: 11px; color: {};",
                     look.ordinal
@@ -236,27 +265,6 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         span {
             class: "flex min-w-0 flex-1 items-center",
             style: "gap: 6px;",
-            // The start mark: the filled triangle while the shown queue
-            // plays, the outlined one while it is stopped or resting
-            // (design D9).
-            if let Some(mark) = mark {
-                match mark {
-                    StartMark::Playing => rsx! {
-                        Play {
-                            size: 12,
-                            fill: ef_var(EfToken::Green),
-                            color: ef_var(EfToken::Green).to_owned(),
-                        }
-                    },
-                    StartMark::Start => rsx! {
-                        Play {
-                            size: 12,
-                            fill: "none".to_owned(),
-                            color: ef_var(EfToken::Green).to_owned(),
-                        }
-                    },
-                }
-            }
             {
                 let title_color = if chrome == RowChrome::Ghost {
                     ef_var(EfToken::Fg).to_owned()
@@ -284,21 +292,26 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                     }
                 }
             }
+            if let Some(percent) = progress {
+                // The row's only progress mark: the ring after the title, on
+                // the row's own line (design D3).
+                {progress_ring(look, percent)}
+            }
         }
-        if let Some(width) = progress_width
-            && chrome != RowChrome::Ghost
+        if chrome != RowChrome::Ghost
+            && let Some(duration) = duration
         {
-            // The row's progress bar: absolute against the row's own box, so it
-            // paints along the row's bottom without adding a line to the row
-            // (design D9).
+            // The right column: the item's duration in every row state
+            // (design D3). The hovered row paints it under the actions button
+            // its sibling places over this column.
             span {
-                class: "absolute block",
-                style: "left: {PROGRESS_LEFT_PX}px; right: {PROGRESS_RIGHT_PX}px; bottom: {PROGRESS_BOTTOM_PX}px; height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; background: {look.track};",
-                "data-progress": "",
-                span {
-                    class: "block",
-                    style: "height: {PROGRESS_HEIGHT_PX}px; border-radius: 1px; width: {width}%; background: {look.fill};",
-                }
+                class: "shrink-0 text-right font-mono tabular-nums",
+                style: format!(
+                    "width: {RIGHT_COL_PX}px; font-size: 12px; color: {};",
+                    ef_var(EfToken::Grey1)
+                ),
+                "data-duration": "",
+                {duration}
             }
         }
         if chrome == RowChrome::Ghost
@@ -306,7 +319,10 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         {
             span {
                 class: "shrink-0 font-mono tabular-nums",
-                style: format!("font-size: 12px; color: {};", ef_var(EfToken::Orange)),
+                style: format!(
+                    "font-size: {GHOST_PERCENT_PX}px; color: {};",
+                    ef_var(EfToken::Orange)
+                ),
                 "data-ghost-percent": "",
                 "{progress}%"
             }

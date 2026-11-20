@@ -106,7 +106,7 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
     assert!(fixture.text().contains("Dragged track"));
     assert!(!fixture.presents("[data-ghost] [data-ordinal]"));
     assert_eq!(fixture.text_of("[data-ghost-percent]"), "5%");
-    assert!(ghost_style.contains("left: 28px"), "{ghost_style}");
+    assert!(ghost_style.contains("left: 38px"), "{ghost_style}");
     assert!(ghost_style.contains("right: -6px"), "{ghost_style}");
     let card = fixture.style_of("[data-ghost] div");
     assert!(card.contains("background: var(--canvas-ghost)"), "{card}");
@@ -122,14 +122,18 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
         "{ghost_title}"
     );
     assert!(
-        !fixture.presents("[data-ghost] svg"),
-        "the ghost paints no start mark"
+        fixture.presents("[data-ghost] [data-progress]"),
+        "the ghost paints the ring"
+    );
+    assert!(
+        !fixture.presents("[data-ghost] [data-duration]"),
+        "the ghost paints no right column"
     );
 
     let line = fixture.style_of("[data-insertion]");
-    // The `after` anchor: the line pins to the row's bottom edge — in the 2 px
-    // gap under it, where the drop lands — not to its top.
-    assert!(line.contains("top: 34px;"), "{line}");
+    // The `after` anchor: the line pins to the row's bottom edge — on the
+    // divider under it, where the drop lands — not to its top.
+    assert!(line.contains("top: 40px;"), "{line}");
     assert!(!line.contains("top: 0;"), "{line}");
     assert!(line.contains("margin: 0 8px"), "{line}");
     assert!(line.contains("border-radius: 1px"), "{line}");
@@ -154,6 +158,7 @@ fn the_drag_ghost_paints_no_percent_when_the_dragged_row_has_no_progress() {
 
     assert!(fixture.presents("[data-ghost]"));
     assert!(!fixture.presents("[data-ghost-percent]"));
+    assert!(!fixture.presents("[data-ghost] [data-progress]"));
 }
 
 /// Contract (`QueuePanel.test.ts`): the open menu overlaps the bottom edge

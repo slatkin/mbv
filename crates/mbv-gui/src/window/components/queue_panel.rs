@@ -77,7 +77,7 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry};
-use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow};
+use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow, GuiSemanticState};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
 use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
@@ -99,7 +99,7 @@ use geometry::{
     ROW_CELL_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ROW_INSET_PX, ghost_top, insertion, menu_top,
     whole_rows,
 };
-use row_cells::{ItemRow, RowCells, RowChrome, row_look, start_mark};
+use row_cells::{ItemRow, RowCells, RowChrome, row_look};
 
 #[cfg(test)]
 mod tests;
@@ -111,6 +111,13 @@ mod tests;
 /// canvas's type — a display-sized medium weight in the `emptyQueueFg` role
 /// — as a missing visual does.
 const EMPTY_QUEUE_TEXT: &str = "¯\\_(ツ)_/¯";
+
+/// The row's corner radius in logical pixels (design D3): the rows are square,
+/// and the now-playing row alone rounds its corners.
+const ROW_RADIUS_PX: u16 = 0;
+
+/// The now-playing row's corner radius in logical pixels (design D3).
+const PLAYING_ROW_RADIUS_PX: u16 = 4;
 
 /// The hovered row's trailing inset: the actions button's width plus the 2 px
 /// gap it leaves at the row's edge, so the title measures into the room the
@@ -495,8 +502,13 @@ pub fn QueuePanel() -> Element {
                                     // The row's inline size: the fixed row height and
                                     // the radius the canvas draws, with the trailing
                                     // room the hovered row's actions button needs.
+                                    let radius = if item.state == GuiSemanticState::NowPlaying {
+                                        PLAYING_ROW_RADIUS_PX
+                                    } else {
+                                        ROW_RADIUS_PX
+                                    };
                                     let mut button_style = format!(
-                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: 6px;",
+                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: {radius}px;",
                                         if hovered {
                                             format!("4px {HOVERED_TRAILING_PAD_PX}px")
                                         } else {
@@ -525,7 +537,6 @@ pub fn QueuePanel() -> Element {
                                             )
                                         });
                                     let cells_row = item.clone();
-                                    let mark = start_mark(&queue, slot);
                                     let mut slot_slot = slot_handles;
                                     let mut grip_slot = grip_mounted;
                                     let mut actions_slot = actions_mounted;
@@ -557,8 +568,16 @@ pub fn QueuePanel() -> Element {
                                                     row: cells_row,
                                                     look,
                                                     chrome: if hovered { RowChrome::Hover } else { RowChrome::Row },
-                                                    mark,
                                                 }
+                                            }
+                                            // The 1 px divider under the row (design D3):
+                                            // the rows sit flush (`ROW_GAP_PX` 0), so the
+                                            // line is the row's own bottom edge and adds no
+                                            // height to it.
+                                            span {
+                                                class: "pointer-events-none absolute right-0 left-0",
+                                                style: "bottom: 0; height: 1px; background: {canvas_var(\"border\")};",
+                                                "data-divider": "",
                                             }
                                             if let Some((line_position, line_at)) = line {
                                                 // The drag's insertion line, anchored on this
@@ -673,7 +692,6 @@ pub fn QueuePanel() -> Element {
                                 row: ghost_row.clone(),
                                 look: row_look(ghost_row, &queue),
                                 chrome: RowChrome::Ghost,
-                                mark: None,
                             }
                         }
                     }

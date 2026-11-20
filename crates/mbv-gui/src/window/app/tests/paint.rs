@@ -134,9 +134,6 @@ fn queue() -> GuiQueue {
         marks: Vec::new(),
         active: Some(2),
         hover: Some(2),
-        start: Some(2),
-        playing: true,
-        start_slot_reported: true,
         drag: None,
         scroll: None,
     }

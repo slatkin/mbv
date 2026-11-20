@@ -14,9 +14,9 @@ pub use self::app_stub::{
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_failed_emby_setup,
     stub_app_with_local_daemon_events, stub_app_with_open_row_menu,
     stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
-    stub_app_with_playing_start_slot, stub_app_with_prefix_and_toast, stub_app_with_queue,
-    stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit, stub_app_with_track_choices,
-    stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_queue_and_cmd_rx,
+    stub_app_with_rebound_quit, stub_app_with_track_choices, stub_app_with_track_popover,
+    stub_app_with_unsaved_queue,
 };
 mod infra;
 mod input;
@@ -100,7 +100,7 @@ pub use self::queue_playback_projection::{
     TrackChoice,
 };
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
-pub use self::queue_surface::{QueueStartProjection, QueueSurfaceProjection};
+pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;

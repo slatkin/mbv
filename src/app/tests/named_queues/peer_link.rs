@@ -457,30 +457,3 @@ fn the_connection_is_lost_shows_the_current_queue() {
         "the active row rests on the shown queue's start slot"
     );
 }
-
-/// A peer that reports no start slot marks its playing row: `start` falls back
-/// to the observed active slot, so the row keeps the playing mark and no row
-/// carries an outlined start mark (design D9, spec `gui-client` "A peer queue
-/// marks its playing row").
-#[test]
-fn a_peer_queue_marks_its_playing_row() {
-    let (app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
-    let queue = app.displayed_queue();
-    assert!(
-        queue.start_slot_id().is_none(),
-        "the peer reports no start slot"
-    );
-
-    let start = app.gui_queue_start_projection();
-
-    assert_eq!(
-        start.start,
-        queue.active_slot_id().map(mbv_queue::QueueSlotId::raw),
-        "the observed active slot stands in for the missing start slot"
-    );
-    assert!(start.playing, "the peer's queue plays");
-    assert!(
-        !start.start_slot_reported,
-        "the peer reports no start slot, so the rows paint no outlined mark"
-    );
-}
