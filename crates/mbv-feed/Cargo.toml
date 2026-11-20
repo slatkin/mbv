@@ -27,3 +27,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 mbv-config = { path = "../mbv-config", features = ["test"] }
+rstest.workspace = true
