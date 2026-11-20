@@ -12,14 +12,14 @@ use super::CoreThread;
 
 /// How far the saved GUI launch location's restore has come (add-gui-library-
 /// panel design D9). A start with no saved location restores
-/// [`mbv_config::GuiLaunchState::first_launch`] through the same phases.
+/// [`mbv_config::first_launch`] through the same phases.
 pub(super) enum GuiLaunchRestore {
-    /// The saved location, or a fresh launch's first-choice default, waiting
-    /// for the catalog's presented destination.
+    /// The saved location, or a fresh launch's default, waiting for the
+    /// catalog's presented destination.
     Destination(mbv_config::GuiLaunchState),
-    /// The destination is open, applying the saved entries as their
+    /// Home is open, applying the saved entries as their
     /// destination identities resolve. `destination` is the identity of the
-    /// destination the first phase opened: a mid-restore tab switch abandons
+    /// destination the first phase found active: a mid-restore tab switch abandons
     /// any unresolved entries, so saved sets never land under a destination
     /// the user moved to.
     Collections {
@@ -31,16 +31,12 @@ pub(super) enum GuiLaunchRestore {
 }
 
 impl CoreThread {
-    /// Advance the launch location's restore (design D9): open the saved
-    /// destination — a start with no saved location opens the first presented
-    /// one, through [`mbv_config::GuiLaunchState::first_launch`] — once the
-    /// catalog lands, then apply every saved collection set through its own
-    /// destination and target, so a destination the first phase did not open
-    /// still restores. A mid-restore tab switch abandons unresolved entries.
-    /// A saved destination the settled catalog no longer holds opens
-    /// nothing: the restore finishes, so a library that appears later cannot
-    /// move the tab under the user. Idempotent, so the catalog and library
-    /// drains call it whenever their content can complete a phase.
+    /// Advance the launch location's restore (design D9): once the catalog
+    /// lands, apply every saved collection set through its own destination
+    /// and target. Home is the destination every start opens on, whatever
+    /// destination the file holds. A mid-restore tab switch abandons
+    /// unresolved entries. Idempotent, so the catalog and library drains call
+    /// it whenever their content can complete a phase.
     pub(crate) fn restore_launch_location(&mut self) {
         let (state, destination) = match &self.launch_restore {
             GuiLaunchRestore::Done => return,
@@ -49,12 +45,6 @@ impl CoreThread {
                 let destination = match self.app.open_gui_launch_destination(&state) {
                     GuiLaunchOpen::Retry => return,
                     GuiLaunchOpen::Opened(destination) => destination,
-                    GuiLaunchOpen::Unmatched => {
-                        // The saved destination is gone: the restore finishes
-                        // so a late destination never moves the tab.
-                        self.launch_restore = GuiLaunchRestore::Done;
-                        return;
-                    }
                 };
                 (state, destination)
             }

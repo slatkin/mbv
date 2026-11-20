@@ -16,7 +16,6 @@ use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::ServiceKind;
-use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 
 use crate::{TestCore, test_core_with, test_emby_client};
@@ -27,10 +26,6 @@ const MUSIC_LIBRARY: (&str, &str) = ("lib-music", "Music");
 /// The id of a Shows library tab the GUI presents as its own destination
 /// (row 7.1).
 const SHOWS_LIBRARY: (&str, &str) = ("lib-shows", "Shows");
-
-/// The id and name of a plain Emby (Movies) library the GUI presents (row
-/// 8.1).
-const MOVIES_LIBRARY: (&str, &str) = ("lib-movies", "Movies");
 
 /// The id of the Audiobookshelf podcast library the seeded catalog holds.
 const PODCASTS_LIBRARY: &str = "lib-abs-podcasts";
@@ -104,17 +99,6 @@ fn podcasts_position(test: &mut TestCore) -> usize {
         .find(|tab| tab.label == "Podcasts")
         .map(|tab| tab.position)
         .expect("the presented tabs carry the Podcasts tab")
-}
-
-/// Seed the grouped Music library and one plain Emby (Movies) library the
-/// GUI presents (row 8.1), and leave Home active.
-fn seed_music_and_movies(app: &mut mbv::App, http: &MockHttp) {
-    seed_music(app, http);
-    app.push_gui_library_tab_for_test(EmbyItem::folder(
-        MOVIES_LIBRARY.0.into(),
-        MOVIES_LIBRARY.1.into(),
-        "movies".into(),
-    ));
 }
 
 /// Send one Library command, as the `library` command's bridge translation
@@ -223,32 +207,19 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
     );
 }
 
-/// A start with no saved location opens the first presented destination with
-/// Library Panel focus. No choice is saved, so the destination shows its first
-/// group, which one group always selects (design D6). Regression for the live
-/// finding that a fresh launch left the Library panel unreachable.
-#[test]
-fn a_fresh_launch_opens_the_first_presented_destination() {
-    let _guard = TestStateDirGuard::new();
-
-    let mut test = core_with_seeded_catalog(seed_music_and_shows);
-
-    let app = test.core.app_mut();
-    assert_eq!(app.tab_for_test(), TabSelection::EmbyLibrary(0));
-    assert_eq!(app.gui_panel_focus(), PanelFocus::Library);
-    assert_eq!(
-        app.gui_library_groups_for_test(0),
-        None,
-        "a fresh launch opens on the first group"
-    );
+/// The identity the saved location names for an Audiobookshelf library.
+fn abs_identity(library_id: &str) -> TabIdentity {
+    TabIdentity::ServiceLibrary {
+        kind: ServiceKind::Audiobookshelf,
+        library_id: library_id.to_string(),
+    }
 }
 
-/// A location saved on Shows opens Shows and leaves it the active destination
-/// (add-gui-library-panel design D9, row 7.1, row 13.1): the GUI presents the
-/// Shows destinations now, so the matching presented library opens and no
-/// saved-destination fallback exists to take another destination.
+/// Every start opens on Home, whatever destination the saved location holds;
+/// the sticky part of the location is each destination's own selection, which
+/// `a_saved_resting_destination_restores_before_the_user_opens_it` owns.
 #[test]
-fn a_location_saved_on_shows_opens_shows() {
+fn every_start_opens_on_home_whatever_destination_was_saved() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
@@ -260,194 +231,7 @@ fn a_location_saved_on_shows_opens_shows() {
 
     let mut test = core_with_seeded_catalog(seed_music_and_shows);
 
-    let app = test.core.app_mut();
-    let shows_index = app
-        .libs_for_test()
-        .iter()
-        .position(|tab| tab.library.id == SHOWS_LIBRARY.0)
-        .expect("the catalog holds the Shows library");
-    assert_ne!(
-        shows_index, 0,
-        "the saved destination is not the catalog's first library"
-    );
-    assert_eq!(
-        app.tab_for_test(),
-        TabSelection::EmbyLibrary(shows_index),
-        "the saved Shows destination restored"
-    );
-    assert_eq!(
-        app.gui_active_destination(),
-        Some(mbv::GuiDestinationKind::Shows {
-            lib_idx: shows_index
-        }),
-        "the restored destination is the active one"
-    );
-}
-
-/// A saved destination the settled catalog no longer holds opens nothing
-/// (add-gui-library-panel design D9, row 13.1): the presented set holds the
-/// Music and Shows libraries, so the saved identity matches none of them, the
-/// deleted fallback would have opened Music, and the restore finishes instead
-/// of waiting for a destination that never lands.
-#[test]
-fn a_saved_destination_the_catalog_lost_opens_nothing() {
-    let _guard = TestStateDirGuard::new();
-    save_gui_launch_state(&GuiLaunchState {
-        version: GUI_LAUNCH_STATE_VERSION,
-        destination: library_identity("lib-gone"),
-        collections: Vec::new(),
-        shows_view: mbv_config::GuiLaunchShowsView::All,
-    })
-    .unwrap();
-
-    let mut test = core_with_seeded_catalog(seed_music_and_shows);
-
-    assert_eq!(
-        test.core.app_mut().tab_for_test(),
-        TabSelection::Home,
-        "the saved destination opens no destination the location did not name"
-    );
-}
-
-/// A destination that lands after the restore finished never moves the tab
-/// (add-gui-library-panel design D9, row 13.1): the presented set settles
-/// without the saved identity, so the restore is done, and the library the
-/// catalog publishes later does not become the active destination under the
-/// user.
-#[test]
-fn a_destination_presented_after_the_restore_finished_does_not_move_the_tab() {
-    let _guard = TestStateDirGuard::new();
-    save_gui_launch_state(&GuiLaunchState {
-        version: GUI_LAUNCH_STATE_VERSION,
-        destination: library_identity("lib-gone"),
-        collections: Vec::new(),
-        shows_view: mbv_config::GuiLaunchShowsView::All,
-    })
-    .unwrap();
-
-    let mut test = core_with_seeded_catalog(seed_music_and_shows);
-    assert_eq!(
-        test.core.app_mut().tab_for_test(),
-        TabSelection::Home,
-        "the vanished identity opens nothing"
-    );
-
-    // The library the saved location named arrives after the restore finished.
-    test.core
-        .app_mut()
-        .push_gui_library_tab_for_test(EmbyItem::folder(
-            "lib-gone".into(),
-            "Gone".into(),
-            "music".into(),
-        ));
-    assert!(test.core.step());
-
-    assert_eq!(
-        test.core.app_mut().tab_for_test(),
-        TabSelection::Home,
-        "a finished restore never moves the tab to a late destination"
-    );
-}
-
-/// A saved Audiobookshelf destination waits while its catalog can still land
-/// (add-gui-library-panel design D9, row 9.1, row 13.1): the Audiobookshelf
-/// libraries are published and the startup is still running, so the restore
-/// does not open the destination yet.
-#[test]
-fn a_saved_audiobooks_destination_waits_while_the_catalog_is_pending() {
-    let _guard = TestStateDirGuard::new();
-    save_gui_launch_state(&GuiLaunchState {
-        version: GUI_LAUNCH_STATE_VERSION,
-        destination: abs_identity("lib-abs-books"),
-        collections: Vec::new(),
-        shows_view: mbv_config::GuiLaunchShowsView::All,
-    })
-    .unwrap();
-
-    let mut test = core_with_seeded_catalog(|app, _http| {
-        app.seed_gui_abs_libraries_for_test();
-        app.mark_gui_abs_catalog_pending_for_test();
-    });
-
-    assert_eq!(
-        test.core.app_mut().tab_for_test(),
-        TabSelection::Home,
-        "a pending catalog is not a catalog the destination is gone from"
-    );
-}
-
-/// A location saved on a plain Emby (Movies) library opens it
-/// (add-gui-library-panel row 8.1): the plain Emby-library destinations join
-/// the presented set, so the matching presented library restores through the
-/// same two-phase path.
-#[test]
-fn a_location_saved_on_a_movies_library_opens_it() {
-    let _guard = TestStateDirGuard::new();
-    save_gui_launch_state(&GuiLaunchState {
-        version: GUI_LAUNCH_STATE_VERSION,
-        destination: library_identity(MOVIES_LIBRARY.0),
-        collections: Vec::new(),
-        shows_view: mbv_config::GuiLaunchShowsView::All,
-    })
-    .unwrap();
-
-    let mut test = core_with_seeded_catalog(seed_music_and_movies);
-
-    let app = test.core.app_mut();
-    let movies_index = app
-        .libs_for_test()
-        .iter()
-        .position(|tab| tab.library.id == MOVIES_LIBRARY.0)
-        .expect("the catalog holds the Movies library");
-    assert_ne!(
-        movies_index, 0,
-        "the saved destination is not the catalog's first library"
-    );
-    assert_eq!(
-        app.tab_for_test(),
-        TabSelection::EmbyLibrary(movies_index),
-        "the saved Movies destination restored"
-    );
-}
-
-/// The identity the saved location names for an Audiobookshelf library.
-fn abs_identity(library_id: &str) -> TabIdentity {
-    TabIdentity::ServiceLibrary {
-        kind: ServiceKind::Audiobookshelf,
-        library_id: library_id.to_string(),
-    }
-}
-
-/// Seed one Audiobookshelf book library the GUI presents, with no Emby
-/// library at all: the Audiobooks destination is the presented one
-/// (add-gui-library-panel row 9.1; row 10.1 presents Podcasts beside it).
-fn seed_abs(app: &mut mbv::App, _http: &MockHttp) {
-    app.seed_gui_abs_libraries_for_test();
-}
-
-/// A location saved on an Audiobookshelf book library opens it
-/// (add-gui-library-panel design D9, row 9.1): the Audiobooks destinations
-/// join the presented set, so the matching presented library restores through
-/// the same first phase, whose resolution waits for the Audiobookshelf
-/// catalog to settle instead of giving up while it can still land.
-#[test]
-fn a_location_saved_on_audiobooks_opens_it() {
-    let _guard = TestStateDirGuard::new();
-    save_gui_launch_state(&GuiLaunchState {
-        version: GUI_LAUNCH_STATE_VERSION,
-        destination: abs_identity("lib-abs-books"),
-        collections: Vec::new(),
-        shows_view: mbv_config::GuiLaunchShowsView::All,
-    })
-    .unwrap();
-
-    let mut test = core_with_seeded_catalog(seed_abs);
-
-    assert_eq!(
-        test.core.app_mut().tab_for_test(),
-        TabSelection::AudiobookshelfLibrary(0),
-        "the saved Audiobooks destination restored"
-    );
+    assert_eq!(test.core.app_mut().tab_for_test(), TabSelection::Home);
 }
 
 /// A saved entry of a resting destination installs before the user opens it

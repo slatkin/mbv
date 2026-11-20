@@ -280,9 +280,8 @@ impl CoreThread {
         // The GUI's own launch location (design D9), read once before the
         // first step: the TUI's launch state never moves this Client's tab,
         // and this file is the only location it restores. A start with no
-        // saved location — or one that fails to load — restores the Client's
-        // first-choice rules through the same restore path: the first presented
-        // destination, and no saved collection sets.
+        // saved location — or one that fails to load — restores no saved
+        // collection sets. Every start opens on Home, whatever the file holds.
         let launch_restore = GuiLaunchRestore::Destination(
             mbv_config::load_gui_launch_state().unwrap_or_else(mbv_config::first_launch),
         );

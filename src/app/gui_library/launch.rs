@@ -40,52 +40,42 @@ impl App {
         }
     }
 
-    /// Open the destination a saved location names (design D9): the presented
-    /// destination whose identity matches. A location saved on Home — the
-    /// state [`mbv_config::first_launch`] carries, so a start with no saved
-    /// location and one whose file failed to load — opens the first presented
-    /// destination. [`GuiLaunchOpen::Opened`] carries the opened destination's
-    /// identity as the saved file carries it. [`GuiLaunchOpen::Retry`] means a
-    /// catalog can still land, so the
-    /// caller retries on the drain that delivers one. [`GuiLaunchOpen::Unmatched`]
-    /// means a destination is presented and the saved identity's Service has
-    /// settled without it: nothing opens, so a saved location never moves the
-    /// user to a destination it did not name, and the caller finishes the
-    /// restore instead of waiting for a destination that never lands.
+    /// Finish the launch location's first phase: Home stays the destination
+    /// every start opens on, whatever destination the saved location holds,
+    /// so this opens nothing. It waits only for the catalog: once a
+    /// destination is presented, the per-library lists the saved sets and the
+    /// saved Shows view apply to exist. [`GuiLaunchOpen::Opened`] carries the
+    /// active destination's identity, as the saved file carries it, so a tab
+    /// switch before the sets land abandons them. [`GuiLaunchOpen::Retry`]
+    /// means no catalog has landed, so the caller retries on the drain that
+    /// delivers one.
     pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> GuiLaunchOpen {
-        let resolved = self.launch_destination(&state.destination);
+        if self.presented_destinations().is_empty() {
+            return GuiLaunchOpen::Retry;
+        }
         // The catalog has landed, so the Shows destination's two per-library
         // lists are requested now, once per launch (gui-collection-dropdown
         // design D9). Both requests are idempotent, so a later catalog landing
         // re-requests nothing.
-        if !matches!(resolved, LaunchDestination::Pending) {
-            self.spawn_gui_shows_sections();
-        }
-        let kind = match resolved {
-            LaunchDestination::Pending => return GuiLaunchOpen::Retry,
-            LaunchDestination::Unmatched => return GuiLaunchOpen::Unmatched,
-            LaunchDestination::Open(kind) => kind,
-        };
-        let Some(position) = self.gui_destination_position(kind) else {
-            return GuiLaunchOpen::Unmatched;
-        };
-        self.set_library_tab(position);
+        self.spawn_gui_shows_sections();
         self.restore_gui_shows_view(state.shows_view);
         GuiLaunchOpen::Opened(self.gui_launch_destination())
     }
 
-    /// Apply the saved Shows view to an opened Shows destination (design D14):
-    /// the file's field is separate from the collection entries, and a
-    /// destination that is not Shows ignores it. A view the session already
-    /// chose is not overwritten.
+    /// Apply the saved Shows view to every presented Shows destination
+    /// (design D14): the file's field is separate from the collection
+    /// entries, and Home is the opened destination, so no Shows destination
+    /// is active to take it. A view the session already chose is not
+    /// overwritten.
     fn restore_gui_shows_view(&mut self, view: GuiLaunchShowsView) {
-        let Some(GuiDestinationKind::Shows { lib_idx }) = self.gui_active_destination() else {
-            return;
-        };
-        if self.gui_shows_views.contains_key(&lib_idx) {
-            return;
+        for kind in self.presented_destinations() {
+            let GuiDestinationKind::Shows { lib_idx } = kind else {
+                continue;
+            };
+            if !self.gui_shows_views.contains_key(&lib_idx) {
+                self.set_gui_shows_view(lib_idx, shows_view(view));
+            }
         }
-        self.set_gui_shows_view(lib_idx, shows_view(view));
     }
 
     /// The saved Shows view (design D14): the active Shows destination's
@@ -416,19 +406,16 @@ impl App {
                 .any(|kind| self.gui_destination_position(*kind) == Some(position))
     }
 
-    /// The presented destination a saved location names (design D9), or why
-    /// none opens: the presented destination whose identity matches, never a
-    /// substitute for one the presented set does not hold, because every
-    /// destination the GUI serves is presented now. A location saved on Home
-    /// names the first presented destination, since Home is the state a start
-    /// with no saved location carries.
+    /// The presented destination a saved collection entry names (design D9),
+    /// or why none resolves: the presented destination whose identity matches,
+    /// never a substitute for one the presented set does not hold, because
+    /// every destination the GUI serves is presented now.
     ///
     /// The restore waits only while a catalog can still land: the saved
     /// identity's own Service still connecting, or no destination presented at
     /// all. Once a destination is presented and the saved identity's Service
     /// has settled, an identity the presented set does not hold is gone, and
-    /// the caller finishes the restore rather than waiting for it — a wait
-    /// that would move the tab of a late-present destination under the user.
+    /// the caller finishes the restore rather than waiting for it.
     fn launch_destination(&self, destination: &TabIdentity) -> LaunchDestination {
         let saved = match destination {
             TabIdentity::ServiceLibrary { kind, library_id } => Some((*kind, library_id.as_str())),
@@ -445,14 +432,6 @@ impl App {
         // waits for one, and the window stays interactive meanwhile.
         if presented.is_empty() {
             return LaunchDestination::Pending;
-        }
-        // A start with no saved location opens the first presented
-        // destination (design D9's `first_launch`).
-        if *destination == TabIdentity::Home {
-            return presented
-                .first()
-                .copied()
-                .map_or(LaunchDestination::Pending, LaunchDestination::Open);
         }
         // The Feeds destination names no library: the saved identity matches
         // the presented kind or nothing, and the subscriptions land with the
@@ -525,23 +504,17 @@ impl App {
     }
 }
 
-/// What the saved destination's first phase found (add-gui-library-panel
-/// design D9): the saved destination opened, a catalog can still land, or a
-/// settled catalog holds no such destination.
+/// What the launch location's first phase found (add-gui-library-panel
+/// design D9): the start opened on Home, or no catalog has landed yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiLaunchOpen {
-    /// No destination is presented yet, or the saved identity's Service is
-    /// still connecting: the caller retries on the drain that delivers a
-    /// destination.
+    /// No destination is presented yet: the caller retries on the drain that
+    /// delivers a destination.
     Retry,
-    /// The saved destination opened, and its saved collection sets apply to
-    /// this identity, as the saved file carries it.
+    /// The start is open on the active destination (Home), and the saved
+    /// collection sets apply while it stays active. The identity is the
+    /// saved file's.
     Opened(TabIdentity),
-    /// A destination is presented and the saved identity's Service has
-    /// settled without it: nothing opens, so the saved location never moves
-    /// the user to a destination it did not name, and the caller finishes the
-    /// restore.
-    Unmatched,
 }
 
 /// A saved destination's resolution inside this module (design D9).

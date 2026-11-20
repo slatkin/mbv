@@ -213,6 +213,10 @@ fn the_frame_carries_the_book_list_after_the_open() {
 #[test]
 fn the_select_command_moves_the_hero_and_workspace() {
     let (mut test, _cmd_rx) = seeded_audiobooks_core();
+    send_library(
+        &mut test,
+        mbv_gui::bridge::library::GuiLibraryCommand::OpenDestination { position: 1 },
+    );
 
     send_library(
         &mut test,

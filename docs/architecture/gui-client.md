@@ -1639,23 +1639,17 @@ saves it at orderly exit before `client_exit_teardown`, and never while the
 window is open.
 
 The restore runs in two phases (`GuiLaunchRestore`,
-`CoreThread::restore_launch_location`). The first phase opens the saved
-destination once a presented one holds its identity — no destination takes
-its place: one the presented set does not hold opens nothing, and the
-phase keeps waiting while its parts can land, the Audiobookshelf catalog
-and the feed subscriptions. A start with no saved location — or one that
-fails
-to load — restores through the same path (`mbv_config::first_launch`):
-its Home destination resolves to the first presented one, with no saved
-collection choice, so the Library panel is
-reachable from the first launch. The
-second phase applies the saved
-collection choice once the destination's collection catalog lands, and applies
-the saved `shows_view` to an opened Shows destination: it matches
-the saved destination and target, retains only the saved ids the catalog still
-holds, and installs the checked set and date order through the shared
-collection path. An emptied set, a saved All, or no saved entry leaves All
-selected. The
+`CoreThread::restore_launch_location`). Every start opens on Home: the first
+phase opens no destination and ignores the saved one, and only waits until a
+presented destination exists, so the saved selections have lists to land in.
+A start with no saved location — or one that fails to load — restores the
+same way (`mbv_config::first_launch`), with no saved collection choice. The
+second phase applies the saved collection choice once the destination's
+collection catalog lands, and applies the saved `shows_view` to every
+presented Shows destination: it matches the saved destination and target,
+retains only the saved ids the catalog still holds, and installs the checked
+set and date order through the shared collection path. An emptied set, a saved
+All, or no saved entry leaves All selected. The
 restore applies to a destination that holds no choice and never clobbers one
 the session already made. A mid-restore tab switch abandons the saved sets rather than landing
 them under another destination. The restore is idempotent, so the catalog and

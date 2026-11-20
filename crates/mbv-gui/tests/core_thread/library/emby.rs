@@ -75,9 +75,13 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
 
     // The mocked bootstrap drains on the first tick; the catalog's one
-    // presented destination is the Movies library, and the launch restore's
-    // first-presented open activates it.
+    // presented destination is the Movies library, and the start stays on
+    // Home until the user opens it.
     assert!(test.core.step());
+    send_library(
+        &mut test,
+        GuiLibraryCommand::OpenDestination { position: 1 },
+    );
     let frame = test.held();
     let (list, detail) =
         emby_parts(&frame).expect("the open Movies destination presents its content");
@@ -199,6 +203,10 @@ fn movies_hero_frame(items: Vec<EmbyItem>) -> Held {
     );
     let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
     assert!(test.core.step());
+    send_library(
+        &mut test,
+        GuiLibraryCommand::OpenDestination { position: 1 },
+    );
     pump_until_emby(&mut test, |list, _| list.failed, "the failed root fetch");
     test.core.app_mut().seed_gui_emby_roots_for_test(0, items);
     send_library(

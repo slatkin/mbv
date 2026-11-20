@@ -192,12 +192,11 @@ fn the_presented_tabs_include_the_feeds_destination() {
     );
 }
 
-/// A saved Feeds location restores to the feed tab and applies no saved
-/// checked set (row 11.1, contract b).
+/// A saved Feeds location applies no saved checked set (row 11.1, contract b).
 #[test]
-fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_selection() {
+fn a_saved_feeds_location_applies_no_saved_selection() {
     let mut app = fetched_feeds_app();
-    app.tab = TabSelection::Home;
+    app.tab = TabSelection::Feeds;
     let saved = GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::Feeds,
@@ -205,16 +204,10 @@ fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_selection() {
         shows_view: mbv_config::GuiLaunchShowsView::All,
     };
 
-    let opened = match app.open_gui_launch_destination(&saved) {
-        crate::app::GuiLaunchOpen::Opened(opened) => opened,
-        other => panic!("the feed tab resolves the saved Feeds destination: {other:?}"),
+    let crate::app::GuiLaunchOpen::Opened(opened) = app.open_gui_launch_destination(&saved) else {
+        panic!("the feed tab is presented, so the start has opened");
     };
 
-    assert_eq!(
-        app.tab,
-        TabSelection::Feeds,
-        "the saved Feeds destination restored"
-    );
     assert!(
         app.restore_gui_launch_collections(&saved, &opened),
         "the Feeds destination needs no retry"

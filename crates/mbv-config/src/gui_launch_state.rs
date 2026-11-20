@@ -137,10 +137,8 @@ pub fn save_gui_launch_state(state: &GuiLaunchState) -> Result<(), LaunchStateEr
 }
 
 /// The location a start without a saved one restores (design D9): the
-/// restore takes the same open path a saved location takes, and its Home
-/// destination opens the first presented destination, so a fresh launch
-/// lands on one. The identity is Home — no Service library, which resolves
-/// to the first presented destination — with no saved collection sets, so the
+/// restore takes the same open path a saved location takes, and every start
+/// opens on Home. The identity is Home, with no saved collection sets, so the
 /// restore selects nothing for any destination and each opens on its default
 /// first group (design D6's single-select pills; see
 /// `restore_gui_launch_collections`).

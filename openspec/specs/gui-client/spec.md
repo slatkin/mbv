@@ -1212,19 +1212,25 @@ The Queue panel's column width and the Wide list column's width that the user dr
 
 ### Requirement: The GUI Client keeps its own launch location
 
-At orderly exit the GUI Client SHALL save its launch location: the active destination and the selected collection of each Grouped Music destination. It SHALL save no Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. A launch location saved before this change SHALL still load, and its saved Panel focus SHALL change nothing. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL open no other destination.
+At orderly exit the GUI Client SHALL save its launch location: the selected collection of each Grouped Music destination and the other per-destination selections it keeps. It SHALL save no Panel focus. At start it SHALL restore each destination's saved selection; a destination with no saved selection SHALL open on its first group. Every start SHALL open on Home, whatever destination the GUI Client was on at exit; the saved destination SHALL change nothing, and a destination the user has not opened SHALL still hold its restored selection when the user opens it. A launch location saved before this change SHALL still load, and its saved Panel focus SHALL change nothing. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open.
 
 #### Scenario: The GUI and the TUI exit in turn
 
 - **GIVEN** the TUI exits on Shows, and the GUI Client later exits on Music
 - **WHEN** the TUI and the GUI Client each start again
-- **THEN** the TUI starts on Shows and the GUI Client starts on Music
+- **THEN** the TUI starts on Shows and the GUI Client starts on Home
 
 #### Scenario: An older launch location loads
 
 - **GIVEN** a launch location that an earlier GUI Client saved on Music with Queue focus
 - **WHEN** the GUI Client starts
-- **THEN** it restores Music, and no panel shows as focused
+- **THEN** it opens on Home, Music still holds its saved collection, and no panel shows as focused
+
+#### Scenario: A saved selection waits behind Home
+
+- **GIVEN** the GUI Client exited on Shows after the user chose a Music collection
+- **WHEN** the GUI Client starts and the user opens Music
+- **THEN** Home was the first page shown, and Music opens on the saved collection
 
 ### Requirement: The Music list is the canvas tree
 

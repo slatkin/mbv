@@ -372,7 +372,7 @@ fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
 /// the Podcasts one, and the restore applies no saved checked set because the
 /// Podcasts destination saves nothing (the spec's persistence rule).
 #[test]
-fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it() {
+fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_selection() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
@@ -395,7 +395,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it
         "the active podcast destination's kind is the Podcasts one"
     );
 
-    app.tab = TabSelection::Home;
+    app.tab = TabSelection::AudiobookshelfLibrary(1);
     let saved = GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::ServiceLibrary {
@@ -405,15 +405,9 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it
         collections: Vec::new(),
         shows_view: mbv_config::GuiLaunchShowsView::All,
     };
-    let opened = match app.open_gui_launch_destination(&saved) {
-        crate::app::GuiLaunchOpen::Opened(opened) => opened,
-        other => panic!("the settled catalog resolves the saved library: {other:?}"),
+    let crate::app::GuiLaunchOpen::Opened(opened) = app.open_gui_launch_destination(&saved) else {
+        panic!("the catalog is presented, so the start has opened");
     };
-    assert_eq!(
-        app.tab,
-        TabSelection::AudiobookshelfLibrary(1),
-        "the saved Podcasts destination restored"
-    );
     assert!(
         app.restore_gui_launch_collections(&saved, &opened),
         "the Podcasts destination applies no saved pill and needs no retry"

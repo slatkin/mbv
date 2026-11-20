@@ -154,8 +154,7 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows_on_the_tick() {
 }
 
 /// The mocked bootstrap's catalog presents the Shows destination, and the
-/// open that follows it (the restore's own first-presented open, or the
-/// open-destination command) finds the Shows frame (row 7.1, design D12;
+/// open-destination command that follows it finds the Shows frame (row 7.1, design D12;
 /// gui-collection-dropdown design D8): the GUI paints the series list alone,
 /// so no mode pill rides the frame, and — the series load still under way or
 /// failed against the no-URL stub client — no series and no Hero yet.
@@ -169,9 +168,13 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
     let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
 
     // The mocked bootstrap drains on the first tick; the catalog's one
-    // presented destination is the Shows library, and the launch restore's
-    // first-presented open activates it.
+    // presented destination is the Shows library, and the start stays on
+    // Home until the user opens it.
     assert!(test.core.step());
+    send_library(
+        &mut test,
+        mbv_gui::bridge::library::GuiLibraryCommand::OpenDestination { position: 1 },
+    );
     let frame = test.held();
     let (list, detail) =
         shows_parts(&frame).expect("the open Shows destination presents its content");
