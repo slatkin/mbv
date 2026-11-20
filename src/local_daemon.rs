@@ -205,6 +205,24 @@ pub(crate) fn spawn_detached(
     }
 }
 
+/// The Local role's Player-ready hook: starts the Owner's MPRIS publisher for
+/// local playback (owner-mpris-fallback design D5) and stores the handle the
+/// Tray reads when it starts. The packaged `mbvd` passes a no-op hook, so it
+/// starts no publisher, and test builds construct neither publisher.
+fn owner_player_ready_hook(
+    player_handle: std::sync::Arc<std::sync::Mutex<Option<mbv_daemon::DaemonPlayerHandle>>>,
+) -> Box<dyn FnOnce(mbv_daemon::DaemonPlayerHandle)> {
+    Box::new(move |handle| {
+        #[cfg(not(test))]
+        mbv_desktop::mpris::start_owner(
+            std::sync::Arc::clone(&handle.status),
+            handle.transport_tx.clone(),
+            crate::config::image_disk_cache_path,
+        );
+        *player_handle.lock().unwrap() = Some(handle);
+    })
+}
+
 /// Entered via the hidden `mbv --__local-daemon` self-spawn. Never returns.
 pub fn run_local_daemon_main() -> ! {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -288,9 +306,7 @@ pub fn run_local_daemon_main() -> ! {
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Local),
         false,
         mbv_daemon::DaemonRuntimeHooks {
-            on_player_ready: Box::new(move |handle| {
-                *player_handle.lock().unwrap() = Some(handle);
-            }),
+            on_player_ready: owner_player_ready_hook(player_handle),
             on_tray_ready: Box::new(move |shutdown_tx| {
                 let handle = player_handle_for_tray.lock().unwrap().clone()?;
                 mbv_desktop::tray::spawn(

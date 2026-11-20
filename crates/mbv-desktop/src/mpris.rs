@@ -496,117 +496,199 @@ async fn poll_status(
     snapshot_poll: Arc<Mutex<PlayerStatus>>,
     art_path: fn(&str) -> Option<std::path::PathBuf>,
 ) {
-    let mut last_status = String::new();
-    let mut last_metadata_key = (String::new(), String::new(), String::new(), String::new());
-    let mut last_pos_seconds: i64 = -1;
-    let mut last_vol: i64 = -1;
-    // Whether this connection believes it holds `name`. Both publishers start
-    // unclaimed: the Owner's rule always holds, so it claims on the first tick
-    // and never releases, while a Client claims and releases its instance name
-    // as its rule turns.
-    let mut held = false;
+    let mut claim = NameClaim::default();
+    let mut cache = SignalCache::empty();
 
     loop {
         tokio::time::sleep(Duration::from_millis(500)).await;
         // Re-read the source every tick so a rebind takes effect immediately.
-        let is_disconnected = source_poll
-            .lock()
-            .unwrap()
-            .disconnected
-            .as_ref()
-            .is_some_and(|disconnected| disconnected());
-        let publish = (source_poll.lock().unwrap().publish)();
-        let raw = (source_poll.lock().unwrap().status)();
-
-        let s = effective_status(raw, is_disconnected);
-        let cur_status = match (s.active, s.paused) {
-            (false, _) => "Stopped",
-            (true, true) => "Paused",
-            (true, false) => "Playing",
+        let (status, tick) = read_tick(&source_poll, art_path);
+        let publish = tick.publish;
+        *snapshot_poll.lock().unwrap() = status;
+        // A name that has just appeared on the bus reports its full state:
+        // drop the change caches so nothing is suppressed by a value carried
+        // over from before.
+        if claim.sync(&conn, &name, publish).await {
+            cache = SignalCache::empty();
         }
-        .to_string();
-        let cur_pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
-        // Include the resolved cache path so artwork appearing mid-track
-        // triggers a metadata change instead of remaining absent.
-        let art_key =
-            resolve_art_url(&s.art_item_id, &s.art_album_id, art_path).unwrap_or_default();
-        let cur_metadata_key = (s.title.clone(), s.artist.clone(), s.album.clone(), art_key);
-        let cur_vol = s.volume;
-        *snapshot_poll.lock().unwrap() = s;
+        // A publisher that holds no name emits nothing, and one whose rule says
+        // no stays silent even while a failed release leaves it on the bus.
+        if !publish || !claim.held {
+            continue;
+        }
+        emit_changes(&conn, &tick, &mut cache).await;
+    }
+}
 
-        if publish && !held {
-            match claim_name(&conn, &name).await {
-                Ok(RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner) => {
-                    held = true;
-                    // A name that has just appeared on the bus reports its
-                    // full state: drop the change caches so nothing is
-                    // suppressed by a value carried over from before.
-                    last_status = String::new();
-                    last_metadata_key =
-                        (String::new(), String::new(), String::new(), String::new());
-                    last_pos_seconds = -1;
-                    last_vol = -1;
-                }
-                Ok(reply) => tracing::debug!(
+/// One polling tick's published values, read from the live source.
+#[cfg(not(test))]
+struct TickView {
+    /// Whether the source's publish rule holds (design D3).
+    publish: bool,
+    status_name: &'static str,
+    metadata_key: (String, String, String, String),
+    position_seconds: i64,
+    volume: i64,
+}
+
+/// Reads the live source once and derives the values this tick publishes.
+#[cfg(not(test))]
+fn read_tick(
+    source: &MprisHandle,
+    art_path: fn(&str) -> Option<std::path::PathBuf>,
+) -> (PlayerStatus, TickView) {
+    let (disconnected, publish, raw) = {
+        let source = source.lock().unwrap();
+        (
+            source.disconnected.as_ref().is_some_and(|signal| signal()),
+            (source.publish)(),
+            (source.status)(),
+        )
+    };
+    let status = effective_status(raw, disconnected);
+    let status_name = match (status.active, status.paused) {
+        (false, _) => "Stopped",
+        (true, true) => "Paused",
+        (true, false) => "Playing",
+    };
+    let position_us = status.position_ticks * 1_000_000 / TICKS_PER_SECOND;
+    // Include the resolved cache path so artwork appearing mid-track triggers
+    // a metadata change instead of remaining absent.
+    let art_key =
+        resolve_art_url(&status.art_item_id, &status.art_album_id, art_path).unwrap_or_default();
+    let tick = TickView {
+        publish,
+        status_name,
+        metadata_key: (
+            status.title.clone(),
+            status.artist.clone(),
+            status.album.clone(),
+            art_key,
+        ),
+        position_seconds: position_us / 1_000_000,
+        volume: status.volume,
+    };
+    (status, tick)
+}
+
+/// The values the last published tick signalled, so a tick signals only
+/// changes. An empty cache differs from every tick.
+#[cfg(not(test))]
+struct SignalCache {
+    status: String,
+    metadata_key: (String, String, String, String),
+    position_seconds: i64,
+    volume: i64,
+}
+
+#[cfg(not(test))]
+impl SignalCache {
+    fn empty() -> Self {
+        Self {
+            status: String::new(),
+            metadata_key: (String::new(), String::new(), String::new(), String::new()),
+            position_seconds: -1,
+            volume: -1,
+        }
+    }
+}
+
+/// Whether this connection believes it holds its bus name. Both publishers
+/// start unclaimed: the Owner's rule always holds, so it claims on the first
+/// tick and never releases, while a Client claims and releases its instance
+/// name as its rule turns.
+#[cfg(not(test))]
+#[derive(Default)]
+struct NameClaim {
+    held: bool,
+}
+
+#[cfg(not(test))]
+impl NameClaim {
+    /// Keeps the claim in step with the publish rule, and answers whether the
+    /// name was just claimed -- whose first publish reports the full state. A
+    /// refused claim or release is logged and retried on the next tick.
+    async fn sync(&mut self, conn: &zbus::Connection, name: &str, publish: bool) -> bool {
+        if publish && !self.held {
+            return self.claim(conn, name).await;
+        }
+        if self.held && !publish {
+            self.release(conn, name).await;
+        }
+        false
+    }
+
+    async fn claim(&mut self, conn: &zbus::Connection, name: &str) -> bool {
+        match claim_name(conn, name).await {
+            Ok(RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner) => {
+                self.held = true;
+                true
+            }
+            Ok(reply) => {
+                tracing::debug!(
                     name: "mpris.name.not_claimed",
                     target: "mpris",
                     bus_name = %name,
                     reply = %reply,
                     "MPRIS name stays with its current owner; retrying next tick"
-                ),
-                Err(e) => tracing::debug!(
+                );
+                false
+            }
+            Err(e) => {
+                tracing::debug!(
                     name: "mpris.name.claim_failed",
                     target: "mpris",
                     bus_name = %name,
                     error = %e,
                     "MPRIS name claim failed; retrying next tick"
-                ),
-            }
-        } else if held && !publish {
-            match conn.release_name(name.as_str()).await {
-                Ok(_) => held = false,
-                Err(e) => tracing::debug!(
-                    name: "mpris.name.release_failed",
-                    target: "mpris",
-                    bus_name = %name,
-                    error = %e,
-                    "MPRIS name release failed; retrying next tick"
-                ),
+                );
+                false
             }
         }
-        // A publisher that holds no name emits nothing, and one whose rule says
-        // no stays silent even while a failed release leaves it on the bus.
-        if !held || !publish {
-            continue;
-        }
+    }
 
-        let Ok(iface_ref) = conn
-            .object_server()
-            .interface::<_, MediaPlayer2Player>("/org/mpris/MediaPlayer2")
-            .await
-        else {
-            continue;
-        };
-        let ctxt = iface_ref.signal_emitter();
-        let iface = iface_ref.get().await;
+    async fn release(&mut self, conn: &zbus::Connection, name: &str) {
+        match conn.release_name(name).await {
+            Ok(_) => self.held = false,
+            Err(e) => tracing::debug!(
+                name: "mpris.name.release_failed",
+                target: "mpris",
+                bus_name = %name,
+                error = %e,
+                "MPRIS name release failed; retrying next tick"
+            ),
+        }
+    }
+}
 
-        if cur_status != last_status {
-            last_status = cur_status;
-            let _ = iface.playback_status_changed(ctxt).await;
-        }
-        if cur_metadata_key != last_metadata_key {
-            last_metadata_key = cur_metadata_key;
-            let _ = iface.metadata_changed(ctxt).await;
-        }
-        let current_pos_seconds = cur_pos_us / 1_000_000;
-        if (current_pos_seconds - last_pos_seconds).abs() >= 5 {
-            last_pos_seconds = current_pos_seconds;
-            let _ = iface.position_changed(ctxt).await;
-        }
-        if cur_vol != last_vol {
-            last_vol = cur_vol;
-            let _ = iface.volume_changed(ctxt).await;
-        }
+/// Signals whatever property changed since the last published tick.
+#[cfg(not(test))]
+async fn emit_changes(conn: &zbus::Connection, tick: &TickView, cache: &mut SignalCache) {
+    let Ok(iface_ref) = conn
+        .object_server()
+        .interface::<_, MediaPlayer2Player>("/org/mpris/MediaPlayer2")
+        .await
+    else {
+        return;
+    };
+    let ctxt = iface_ref.signal_emitter();
+    let iface = iface_ref.get().await;
+
+    if cache.status != tick.status_name {
+        cache.status = tick.status_name.to_string();
+        let _ = iface.playback_status_changed(ctxt).await;
+    }
+    if cache.metadata_key != tick.metadata_key {
+        cache.metadata_key = tick.metadata_key.clone();
+        let _ = iface.metadata_changed(ctxt).await;
+    }
+    if (tick.position_seconds - cache.position_seconds).abs() >= 5 {
+        cache.position_seconds = tick.position_seconds;
+        let _ = iface.position_changed(ctxt).await;
+    }
+    if cache.volume != tick.volume {
+        cache.volume = tick.volume;
+        let _ = iface.volume_changed(ctxt).await;
     }
 }
 

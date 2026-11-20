@@ -226,12 +226,38 @@ impl App {
             let status_player = self.player.clone();
             let send_player = self.player.clone();
             let disconnect_player = self.player.clone();
+            let publish = self.mpris_publish_rule();
             mbv_desktop::mpris::rebind(
                 handle,
                 move || status_player.status_snapshot(),
                 move |transport| send_player.send_transport(transport),
                 Some(move || disconnect_player.is_remote_disconnected()),
+                publish,
             );
+        }
+    }
+
+    /// The Client publishing rule's inputs (owner-mpris-fallback design D3):
+    /// whether the attached endpoint is the local Owner, and the suspended
+    /// local link's status.
+    ///
+    /// The suspended link is read live, because the local Owner can start or
+    /// stop playing while this Client controls a remote Player owner. A
+    /// disconnected link, like an absent one, reports no local status: the
+    /// Client cannot observe local playback, and the Owner publishes its own
+    /// name either way.
+    fn mpris_publish_rule(&self) -> impl Fn() -> bool + Send + Sync + 'static {
+        let endpoint_is_local = self.is_local_daemon();
+        let suspended_local = self
+            .suspended_local
+            .as_ref()
+            .map(|session| session.player.clone());
+        move || {
+            let local_status = suspended_local
+                .as_ref()
+                .filter(|player| !player.is_remote_disconnected())
+                .map(PlayerProxy::status_snapshot);
+            mbv_desktop::mpris::client_publishes(endpoint_is_local, local_status.as_ref())
         }
     }
 
