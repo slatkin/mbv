@@ -1,11 +1,12 @@
 //! Headless tests of the plain Emby-library list's row model (D16): the
-//! contracts of `emby-list.test.ts` — the plain mode's letter headings over
-//! its name-sorted rows with the A–Z rail, and the feed-group mode's flat
-//! date-ordered rows with no heading and no rail. The model is plain data, so
-//! the geometry is asserted without a layout.
+//! contracts of `emby-list.test.ts` — the letter headings over a name-sorted
+//! list with its A–Z rail, and the flat date-sorted rows with no heading and
+//! no rail (gui-flat-list-sort design D8). The model is plain data, so the
+//! geometry is asserted without a layout.
 
 use super::*;
 use crate::bridge::frame::library::{GuiEmbyRowKindFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
+use crate::window::library::list::{LETTER_ROW_HEIGHT, carries_letters, lettered_rail};
 
 /// One plain-mode row: the name-sorted library's row under its rail letter.
 fn plain(id: &str, title: &str, sort_letter: char) -> GuiEmbyRowFrame {
@@ -48,17 +49,17 @@ fn movies() -> Vec<GuiEmbyRowFrame> {
 }
 
 /// The painted row's kind.
-fn kind_of(row: &EmbyListRow) -> &'static str {
+fn kind_of(row: &LetteredRow<EmbyItemRow>) -> &'static str {
     match row {
-        EmbyListRow::Heading { .. } => "heading",
-        EmbyListRow::Item(_) => "item",
+        LetteredRow::Heading(_) => "heading",
+        LetteredRow::Item(_) => "item",
     }
 }
 
-// The plain mode paints a letter heading over each run of rows.
+// A name-sorted list paints a letter heading over each run of rows.
 #[test]
-fn the_plain_mode_paints_a_letter_heading_over_each_run_of_rows() {
-    let painted = build_emby_rows(&movies(), false, "");
+fn a_name_sorted_list_paints_a_letter_heading_over_each_run_of_rows() {
+    let painted = build_emby_rows(&movies(), "");
 
     let kinds: Vec<&str> = painted.iter().map(kind_of).collect();
     assert_eq!(
@@ -68,17 +69,17 @@ fn the_plain_mode_paints_a_letter_heading_over_each_run_of_rows() {
         ]
     );
     assert_eq!(painted[0].top(), 0.0);
-    assert_eq!(painted[1].top(), EMBY_HEADING_ROW_HEIGHT);
+    assert_eq!(painted[1].top(), LETTER_ROW_HEIGHT);
     let heights: Vec<f32> = painted.iter().map(GeometryRow::height).collect();
     assert!(heights.contains(&EMBY_ROW_HEIGHT));
 }
 
-// The feed-group mode paints flat rows with their date and no heading.
+// A date-sorted list's rows carry no letter, so they paint flat with their
+// date and no heading.
 #[test]
-fn the_feed_group_mode_paints_flat_rows_with_their_date_and_no_heading() {
+fn a_date_sorted_list_paints_flat_rows_with_their_date_and_no_heading() {
     let painted = build_emby_rows(
         &[feed("f1", "Family", "1998"), feed("f2", "Fargo", "1996")],
-        true,
         "",
     );
 
@@ -87,8 +88,8 @@ fn the_feed_group_mode_paints_flat_rows_with_their_date_and_no_heading() {
     let dates: Vec<Option<&str>> = painted
         .iter()
         .map(|row| match row {
-            EmbyListRow::Item(item) => item.row.date.as_deref(),
-            EmbyListRow::Heading { .. } => None,
+            LetteredRow::Item(item) => item.row.date.as_deref(),
+            LetteredRow::Heading(_) => None,
         })
         .collect();
     assert_eq!(dates, [Some("1998"), Some("1996")]);
@@ -98,7 +99,7 @@ fn the_feed_group_mode_paints_flat_rows_with_their_date_and_no_heading() {
 // The rail holds the first row under each letter and disables the rest.
 #[test]
 fn the_rail_holds_the_first_row_under_each_letter_and_disables_the_rest() {
-    let rail = emby_letter_rail(&build_emby_rows(&movies(), false, ""));
+    let rail = lettered_rail(&build_emby_rows(&movies(), ""));
     let letter = |letter: char| {
         rail.iter()
             .find(|entry| entry.letter == letter)
@@ -110,10 +111,14 @@ fn the_rail_holds_the_first_row_under_each_letter_and_disables_the_rest() {
     assert_eq!(letter('C'), None);
 }
 
-// The feed-group rows carry no letter, so every rail letter is disabled.
+// A date-sorted list's rows carry no letter, so every rail letter is
+// disabled and no rail paints.
 #[test]
-fn the_feed_group_rows_carry_no_letter_so_every_rail_letter_is_disabled() {
-    let rail = emby_letter_rail(&build_emby_rows(&[feed("f1", "Family", "1998")], true, ""));
+fn a_date_sorted_lists_rows_carry_no_letter_so_every_rail_letter_is_disabled() {
+    let rows = build_emby_rows(&[feed("f1", "Family", "1998")], "");
+    let rail = lettered_rail(&rows);
+
+    assert!(!carries_letters(&rows));
 
     assert!(rail.iter().all(|letter| letter.row_id.is_none()));
 }

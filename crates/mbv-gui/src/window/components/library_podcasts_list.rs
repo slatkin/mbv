@@ -1,9 +1,9 @@
 //! The Podcasts list (`replace-tauri-with-blitz` task 7.7, the port of
 //! `LibraryPodcastsList`; add-gui-library-panel design D12, row
-//! 10.1): the checked collections' flat episode rows — the episode's title
-//! over its
-//! show, and the publish date in the gutter — with no letter headings,
-//! because the list is sorted by date, and so no letter rail.
+//! 10.1): the checked collections' episode rows — the episode's title over its
+//! show, and the publish date in the gutter — under their letter headings and
+//! the A–Z rail while the list sorts by title, and flat under a date sort
+//! (gui-flat-list-sort design D8).
 //!
 //! The rows paint at the fixed heights of
 //! [`crate::window::library::podcasts_list`] over native scroll, and only
@@ -22,19 +22,39 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
+use crate::window::components::library_letter_heading::LibraryLetterHeading;
+use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_podcasts_detail, library_podcasts_list};
 use crate::window::library::podcasts_list::{PODCASTS_ROW_HEIGHT, PodcastsItemRow};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
 
-/// One painted row of the flat list: the episode row. The row's press selects
-/// the episode the Hero shows, a double-click plays it, and a right-press
-/// opens the row menu.
+/// One painted row of the flat list: the letter heading, or the episode row.
 fn paint_podcasts_row(
+    row: &LetteredRow<PodcastsItemRow>,
+    library: &LibraryState,
+    selected: Option<&str>,
+) -> Element {
+    match row {
+        LetteredRow::Heading(heading) => rsx! {
+            LibraryLetterHeading {
+                attr: "podcasts",
+                letter: heading.letter.to_string(),
+                height: heading.height,
+            }
+        },
+        LetteredRow::Item(row) => paint_podcasts_item(row, library, selected),
+    }
+}
+
+/// One painted episode row: the row's press selects the episode the Hero
+/// shows, a double-click plays it, and a right-press opens the row menu.
+fn paint_podcasts_item(
     row: &PodcastsItemRow,
     library: &LibraryState,
     selected: Option<&str>,
@@ -97,10 +117,13 @@ pub fn LibraryPodcastsList() -> Element {
     // (gui-flat-list-sort design D7).
     let sort = frame.and_then(|frame| frame.sort.clone());
 
-    // The painted rows of the flat list (row 10.1): the same model
-    // [`crate::window::library::podcasts`] builds from the carried content,
-    // narrowed by the filter's text.
+    // The painted rows of the flat list (row 10.1; gui-flat-list-sort design
+    // D8): the same model [`crate::window::library::podcasts`] builds from the
+    // carried content, narrowed by the filter's text. A name sort paints letter
+    // headings and the rail, and a date sort paints neither.
     let rows = library.podcasts_rows();
+    let rail = lettered_rail(&rows);
+    let paints_rail = carries_letters(&rows);
 
     // The list's two DOM facts report to the scroll store (design D9), the rows
     // in view report to the core for their row art fetches (gui-delineated-rows
@@ -121,13 +144,16 @@ pub fn LibraryPodcastsList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Podcasts, ids);
         })),
-        move |row: &PodcastsItemRow| {
+        move |row: &LetteredRow<PodcastsItemRow>| {
             paint_podcasts_row(row, &paint_library, paint_selected.as_deref())
         },
     );
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The rail's press scrolls the list to the letter's first episode (design
+    // D7).
+    let jump_library = library.clone();
 
     rsx! {
         div {
@@ -173,7 +199,19 @@ pub fn LibraryPodcastsList() -> Element {
                     }),
                 }
             }
-            {virtual_list}
+            div {
+                class: "flex min-h-0 flex-1",
+                style: "overflow: hidden;",
+                {virtual_list}
+                if paints_rail {
+                    LibraryLetterRail {
+                        letters: rail,
+                        jump: Some(Callback::new(move |letter: char| {
+                            jump_library.jump_podcasts_to_letter(letter);
+                        })),
+                    }
+                }
+            }
         }
     }
 }

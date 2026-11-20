@@ -369,16 +369,29 @@ fn painted_rows(fixture: &Fixture) -> Vec<String> {
 }
 
 /// The painted item row of `id`, as the press handler takes it.
-fn row_of(fixture: &mut Fixture, id: &str) -> crate::window::library::emby_list::EmbyListRow {
+fn row_of(
+    fixture: &mut Fixture,
+    id: &str,
+) -> crate::window::library::list::LetteredRow<crate::window::library::emby_list::EmbyItemRow> {
     let id = id.to_owned();
     fixture.compute(move |state| {
         state
             .emby_rows()
             .iter()
-            .find(|row| row.id() == id)
+            .find(|row| row_id(row) == id)
             .cloned()
             .expect("the row paints")
     })
+}
+
+/// The union row's stable id, heading or item.
+fn row_id(
+    row: &crate::window::library::list::LetteredRow<crate::window::library::emby_list::EmbyItemRow>,
+) -> &str {
+    match row {
+        crate::window::library::list::LetteredRow::Heading(heading) => &heading.id,
+        crate::window::library::list::LetteredRow::Item(item) => &item.id,
+    }
 }
 
 /// Press the row of `id`, as the row's press handler does.

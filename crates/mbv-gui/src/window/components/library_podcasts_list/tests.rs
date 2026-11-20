@@ -359,8 +359,12 @@ fn row_of(
         state
             .podcasts_rows()
             .iter()
-            .find(|row| row.id == id)
-            .cloned()
+            .find_map(|row| match row {
+                crate::window::library::list::LetteredRow::Item(item) if item.id == id => {
+                    Some(item.clone())
+                }
+                _ => None,
+            })
             .expect("the row paints")
     })
 }

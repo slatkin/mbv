@@ -326,17 +326,31 @@ fn painted_rows(fixture: &Fixture) -> Vec<String> {
 fn row_of(
     fixture: &mut Fixture,
     id: &str,
-) -> crate::window::library::audiobooks_list::AudiobooksListRow {
+) -> crate::window::library::list::LetteredRow<
+    crate::window::library::audiobooks_list::AudiobooksItemRow,
+> {
     let id = id.to_owned();
     fixture.compute(move |state| {
         let filter = state.audiobooks_ui.peek().filter.clone();
         state
             .audiobooks_rows(&filter)
             .iter()
-            .find(|row| row.id() == id)
+            .find(|row| row_id(row) == id)
             .cloned()
             .expect("the row paints")
     })
+}
+
+/// The union row's stable id, heading or item.
+fn row_id(
+    row: &crate::window::library::list::LetteredRow<
+        crate::window::library::audiobooks_list::AudiobooksItemRow,
+    >,
+) -> &str {
+    match row {
+        crate::window::library::list::LetteredRow::Heading(heading) => &heading.id,
+        crate::window::library::list::LetteredRow::Item(item) => &item.id,
+    }
 }
 
 /// Press the row of `id`, as the row's press handler does.

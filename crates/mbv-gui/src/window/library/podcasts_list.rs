@@ -1,42 +1,30 @@
 //! The Podcasts list's row model (`add-gui-library-panel` design D12, row
-//! 10.1, the port of `lib/library/podcasts-list.ts`): the active pill's flat
-//! episode rows — no letter headings, because the list is sorted by date, and
-//! so no letter rail. The list paints fixed-height rows over native scroll
-//! and only the rows in view, as the Shows and Home lists do, and the keys act
-//! on the row the pointer marks (`gui-pointer-target-interaction` D2). The
-//! model is plain data over fixed heights, so the geometry is asserted without
-//! a layout, which the headless tests do not run.
+//! 10.1, the port of `lib/library/podcasts-list.ts`): the active pill's
+//! episode rows, under their letter headings and the A–Z rail while the list
+//! sorts by title, and flat while it sorts by date (gui-flat-list-sort design
+//! D8). The list paints fixed-height rows over native scroll and only the rows
+//! in view, as the Shows and Home lists do, and the keys act on the row the
+//! pointer marks (`gui-pointer-target-interaction` D2). The model is plain data
+//! over fixed heights, so the geometry is asserted without a layout, which the
+//! headless tests do not run.
 
 use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEntryRowFrame;
-use crate::window::library::list::{FlatItem, GeometryRow, LIBRARY_ROW_HEIGHT, build_flat_rows};
-
-/// The fields of a carried entry row the flat list reads (design D12): the
-/// stable id and the title the filter narrows on. The Feeds list paints the
-/// same entry rows, so the impl lives here once for both destinations.
-impl FlatItem for GuiEntryRowFrame {
-    fn row_id(&self) -> &str {
-        &self.id
-    }
-
-    fn row_title(&self) -> &str {
-        &self.title
-    }
-}
+use crate::window::library::list::{
+    GeometryRow, LIBRARY_ROW_HEIGHT, LetteredRow, SortLetter, build_lettered_rows, filter_match,
+};
 
 /// The episode row's height in logical pixels (gui-delineated-rows design D2):
 /// the shared top-level row part's height, which paints the episode's
 /// two-line title and its date gutter.
 pub const PODCASTS_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 
-/// One painted row of the Podcasts list (design D12). The list is one flat
-/// episode list in core order — newest first with undated episodes last — so
-/// every painted row is an item row: the `id` is the row's stable identity as
-/// one opaque string, the pointer marker's value, the each-block's key, and the
-/// id the scroll geometry reads. There is no heading and no rail to step over.
+/// One painted item row of the Podcasts list (design D12). The `id` is the
+/// row's stable identity as one opaque string, the pointer marker's value, the
+/// each-block's key, and the id the scroll geometry reads.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PodcastsItemRow {
     /// The row's stable key: the pointer marker's value, the each-block's key,
@@ -64,23 +52,37 @@ impl GeometryRow for PodcastsItemRow {
     }
 }
 
-/// The painted rows of the Podcasts list (design D12): the frame's episode
-/// rows at one height, with no heading and no letter, in the core's order —
-/// the latest pill's merged newest-first order, or a show's own episodes. The
-/// filter narrows the rows to the titles that contain its text, without case
-/// (design D7's filter rule). Every row carries its top edge and height, so
-/// the list paints a window of rows over native scroll.
+impl SortLetter for PodcastsItemRow {
+    fn sort_letter(&self) -> Option<char> {
+        self.row.sort_letter
+    }
+}
+
+/// The painted rows of the Podcasts list (design D12; gui-flat-list-sort
+/// design D8): the frame's episode rows at one height, in the core's order,
+/// each under the letter heading of its rail letter while the sort compares a
+/// name — and flat, with no heading and no rail, under a date sort. The filter
+/// narrows the rows to the titles that contain its text, without case (design
+/// D7's filter rule). Every row carries its top edge and height, so the list
+/// paints a window of rows over native scroll.
 #[must_use]
-pub fn build_podcasts_rows(rows: &[GuiEntryRowFrame], filter: &str) -> Vec<PodcastsItemRow> {
-    build_flat_rows(rows, PODCASTS_ROW_HEIGHT, filter)
-        .into_iter()
-        .map(|flat| PodcastsItemRow {
-            id: flat.id,
-            row: flat.row.clone(),
-            top: flat.top,
-            height: flat.height,
-        })
-        .collect()
+pub fn build_podcasts_rows(
+    rows: &[GuiEntryRowFrame],
+    filter: &str,
+) -> Vec<LetteredRow<PodcastsItemRow>> {
+    build_lettered_rows(
+        rows,
+        PODCASTS_ROW_HEIGHT,
+        "podcasts-letter",
+        |row| filter_match(&row.title, filter),
+        |row| row.sort_letter,
+        |row, top, height| PodcastsItemRow {
+            id: row.id.clone(),
+            row: row.clone(),
+            top,
+            height,
+        },
+    )
 }
 
 /// The rows the memo handed back last, with the cheap key and the interaction
@@ -95,7 +97,7 @@ struct PodcastsMemoEntry {
     /// equal rows and the hit test never compares the union.
     revision: Option<u64>,
     filter: String,
-    rows: Arc<[PodcastsItemRow]>,
+    rows: Arc<[LetteredRow<PodcastsItemRow>]>,
 }
 
 /// The Podcasts rows, memoized on the carried rows and the filter (design
@@ -123,7 +125,7 @@ impl PodcastsRowsMemo {
         revision: Option<u64>,
         rows: &[GuiEntryRowFrame],
         filter: &str,
-    ) -> Arc<[PodcastsItemRow]> {
+    ) -> Arc<[LetteredRow<PodcastsItemRow>]> {
         // `peek`, never `read`: a caller inside an effect that writes the
         // memo (a filter's scroll clamp) would re-queue itself on the write
         // below otherwise.
@@ -133,7 +135,7 @@ impl PodcastsRowsMemo {
         {
             return Arc::clone(&entry.rows);
         }
-        let built: Arc<[PodcastsItemRow]> = build_podcasts_rows(rows, filter).into();
+        let built: Arc<[LetteredRow<PodcastsItemRow>]> = build_podcasts_rows(rows, filter).into();
         let mut last = self.last;
         last.set(Some(PodcastsMemoEntry {
             revision,

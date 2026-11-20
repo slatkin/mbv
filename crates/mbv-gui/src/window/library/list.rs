@@ -12,10 +12,14 @@
 //! scroll geometry every list shares lives in [`geometry`].
 
 mod geometry;
+mod lettered;
 
 pub use geometry::{
     GeometryRow, ListMove, ListWindow, ROWS_IN_VIEW_OVERSCAN, clamp_scroll_top, list_window,
     move_index, rows_height, rows_in_view_ids, scroll_step, scroll_top_to_show_cursor,
+};
+pub use lettered::{
+    LetterHeading, LetteredRow, SortLetter, build_lettered_rows, carries_letters, lettered_rail,
 };
 
 use crate::bridge::frame::library::{
@@ -440,77 +444,6 @@ impl RowBuilder {
         self.top += height;
         self.rows.push(row);
     }
-}
-
-/// One painted row of a flat fixed-height list (design D12): the carried
-/// item under its stable id, at `top` for `height`, so the window and the
-/// scroll geometry read it like every other list's rows. `Kind` carries a
-/// list's row discriminator when its union names one; the plain lists leave
-/// it `()`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FlatRow<Item, Kind = ()> {
-    /// The row's stable id.
-    pub id: String,
-    /// The row's top edge from the list's first row.
-    pub top: f32,
-    /// The row's painted height.
-    pub height: f32,
-    /// The carried item the row paints.
-    pub row: Item,
-    /// The row discriminator a list's union names, `()` for the plain lists.
-    pub kind: Kind,
-}
-
-/// The fields of a flat list's carried item the row model reads (design D12):
-/// the stable id and the title the filter narrows on.
-pub trait FlatItem {
-    /// The row's stable id.
-    fn row_id(&self) -> &str;
-
-    /// The title the filter narrows on.
-    fn row_title(&self) -> &str;
-}
-
-/// The painted rows of a flat fixed-height list (design D12): the carried
-/// items in their order — a date-sorted list keeps the order the frame
-/// carried — each `row_height` tall, narrowed to the titles that contain
-/// `filter`'s text without case (design D7's filter rule). Every row carries
-/// its top edge and height, so the list paints a window of rows over native
-/// scroll.
-#[must_use]
-pub fn build_flat_rows<'a, Item: FlatItem>(
-    rows: &'a [Item],
-    row_height: f32,
-    filter: &str,
-) -> Vec<FlatRow<&'a Item>> {
-    build_flat_rows_with_kind(rows, row_height, filter, ())
-}
-
-/// The painted rows of a flat list whose row union discriminates on a kind:
-/// the Emby feed-group rows are items beside the plain mode's headings, and
-/// the Shows Latest and Upcoming rows are flats beside the series tree.
-#[must_use]
-pub fn build_flat_rows_with_kind<'a, Item: FlatItem, Kind: Clone>(
-    rows: &'a [Item],
-    row_height: f32,
-    filter: &str,
-    kind: Kind,
-) -> Vec<FlatRow<&'a Item, Kind>> {
-    let mut top = 0.0;
-    rows.iter()
-        .filter(|row| filter_match(row.row_title(), filter))
-        .map(|row| {
-            let flat = FlatRow {
-                id: row.row_id().to_owned(),
-                row,
-                top,
-                height: row_height,
-                kind: kind.clone(),
-            };
-            top += row_height;
-            flat
-        })
-        .collect()
 }
 
 /// One letter of the rail (design D7): the letter and the first artist row

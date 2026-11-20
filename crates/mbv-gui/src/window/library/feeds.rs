@@ -25,7 +25,9 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::feeds_list::FeedsItemRow;
-use crate::window::library::list::{ListMove, scroll_step};
+use crate::window::library::list::{
+    LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
+};
 use crate::window::library::parts::library_feeds_list;
 
 use super::list_state::ListUiState;
@@ -49,7 +51,7 @@ impl LibraryState {
     /// rows borrow the section's carried frame through the memo's revision
     /// key — a keydown copies none of it.
     #[must_use]
-    pub fn feeds_rows(&self) -> Arc<[FeedsItemRow]> {
+    pub fn feeds_rows(&self) -> Arc<[LetteredRow<FeedsItemRow>]> {
         let list = self.sections.library_list.peek();
         let Some(feeds) = library_feeds_list(list.as_deref()) else {
             return Arc::from([]);
@@ -64,10 +66,10 @@ impl LibraryState {
     /// id names no entry. `None` while no painted row carries the id.
     #[must_use]
     pub fn feeds_row_at(&self, row_id: &str) -> Option<FeedsItemRow> {
-        self.feeds_rows()
-            .iter()
-            .find(|row| row.id == row_id)
-            .cloned()
+        self.feeds_rows().iter().find_map(|row| match row {
+            LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
+            _ => None,
+        })
     }
 
     /// The Hero's feed entry the pointer's marker names (design D1, D2): the
@@ -163,6 +165,19 @@ impl LibraryState {
         let rows = self.feeds_rows();
         let held = *self.scrolls.feeds.peek();
         set_scroll_top(self.scrolls.feeds, &rows, scroll_step(&rows, held, mv));
+    }
+
+    /// Jump to a letter of the rail (design D7; gui-flat-list-sort design D8):
+    /// the list scrolls so the first entry under the letter paints fully. A
+    /// letter without rows changes nothing.
+    pub fn jump_feeds_to_letter(&self, letter: char) {
+        let rows = self.feeds_rows();
+        let view = *self.scrolls.feeds.peek();
+        let Some((_, scroll_top)) = jump_to_letter(&lettered_rail(&rows), &rows, letter, view)
+        else {
+            return;
+        };
+        set_scroll_top(self.scrolls.feeds, &rows, scroll_top);
     }
 
     /// Report the list's measured viewport height (design D12): the rows in

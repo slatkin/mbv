@@ -23,8 +23,10 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::emby_list::{EmbyItemRow, EmbyListRow, emby_letter_rail};
-use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
+use crate::window::library::emby_list::EmbyItemRow;
+use crate::window::library::list::{
+    LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
+};
 use crate::window::library::parts::library_emby_list;
 
 use super::list_state::ListUiState;
@@ -50,20 +52,19 @@ impl LibraryState {
         library_emby_list(list.as_deref()).map(|emby| emby.lib_idx)
     }
 
-    /// The painted rows of the carried Emby content (row 8.1): the plain
-    /// mode's rows under their letter headings, or the feed-group mode's flat
-    /// rows, narrowed by the state's filter text. No carried Emby content
-    /// paints no rows.
+    /// The painted rows of the carried Emby content (row 8.1; gui-flat-list-sort
+    /// design D8): the rows under their letter headings while the sort compares
+    /// a name, flat under a date sort, narrowed by the state's filter text. No
+    /// carried Emby content paints no rows.
     #[must_use]
-    pub fn emby_rows(&self) -> Arc<[EmbyListRow]> {
+    pub fn emby_rows(&self) -> Arc<[LetteredRow<EmbyItemRow>]> {
         let list = self.sections.library_list.peek();
         let Some(frame) = library_emby_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
         let filter = self.emby_ui.peek().filter.clone();
-        self.emby_rows_memo
-            .rows(revision, frame.feed_group, &frame.rows, &filter)
+        self.emby_rows_memo.rows(revision, &frame.rows, &filter)
     }
 
     /// The row the pointer's marker names (design D1, D2): the marker carries
@@ -74,7 +75,7 @@ impl LibraryState {
     pub fn emby_row_at(&self, row_id: &str) -> Option<EmbyItemRow> {
         let rows = self.emby_rows();
         rows.iter().find_map(|row| match row {
-            EmbyListRow::Item(item) if item.id == row_id => Some(item.clone()),
+            LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
             _ => None,
         })
     }
@@ -103,8 +104,8 @@ impl LibraryState {
     /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
     /// the previous row, as a Music pick's do. A heading names no row, so its
     /// select changes nothing.
-    pub fn select_emby_row(&self, row: &EmbyListRow) {
-        let EmbyListRow::Item(item) = row else {
+    pub fn select_emby_row(&self, row: &LetteredRow<EmbyItemRow>) {
+        let LetteredRow::Item(item) = row else {
             return;
         };
         let Some(lib_idx) = self.emby_lib_idx() else {
@@ -123,7 +124,7 @@ impl LibraryState {
 
     /// Press a row (row 8.1): the press selects the row the Hero shows, as a
     /// Home press does. A heading names no row, so its press changes nothing.
-    pub fn press_emby_row(&self, row: &EmbyListRow) {
+    pub fn press_emby_row(&self, row: &LetteredRow<EmbyItemRow>) {
         self.select_emby_row(row);
     }
 
@@ -178,7 +179,7 @@ impl LibraryState {
     pub fn jump_emby_to_letter(&self, letter: char) {
         let rows = self.emby_rows();
         let view = *self.scrolls.emby.peek();
-        let Some((_, scroll_top)) = jump_to_letter(&emby_letter_rail(&rows), &rows, letter, view)
+        let Some((_, scroll_top)) = jump_to_letter(&lettered_rail(&rows), &rows, letter, view)
         else {
             return;
         };

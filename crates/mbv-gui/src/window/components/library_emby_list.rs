@@ -1,8 +1,9 @@
 //! The plain Emby-library list (`replace-tauri-with-blitz` task 7.7, the
 //! port of `LibraryEmbyList`; add-gui-library-panel design D12, row
-//! 8.1): the plain mode's name-sorted rows under their letter headings, with
-//! the A–Z letter rail beside them, and the feed-group mode's flat rows with
-//! their date gutter and no rail. The item rows are top-level rows and paint
+//! 8.1): the name-sorted rows under their letter headings, with the A–Z
+//! letter rail beside them, and the date-sorted rows flat with their date
+//! gutter and no rail (gui-flat-list-sort design D8). The item rows are
+//! top-level rows and paint
 //! through the shared row part with their art thumb (gui-delineated-rows design
 //! D1); the rows the list paints are also the row art set the core fetches
 //! (design D7).
@@ -28,7 +29,8 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::emby_list::{EmbyListRow, emby_letter_rail};
+use crate::window::library::emby_list::EmbyItemRow;
+use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_emby_detail, library_emby_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
@@ -45,16 +47,20 @@ fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
 
 /// One painted row of the list: the letter heading
 /// or the item row.
-fn paint_emby_row(row: &EmbyListRow, library: &LibraryState, selected: Option<&str>) -> Element {
+fn paint_emby_row(
+    row: &LetteredRow<EmbyItemRow>,
+    library: &LibraryState,
+    selected: Option<&str>,
+) -> Element {
     match row {
-        EmbyListRow::Heading { letter, height, .. } => rsx! {
+        LetteredRow::Heading(heading) => rsx! {
             LibraryLetterHeading {
                 attr: "emby",
-                letter: letter.to_string(),
-                height: *height,
+                letter: heading.letter.to_string(),
+                height: heading.height,
             }
         },
-        EmbyListRow::Item(item) => {
+        LetteredRow::Item(item) => {
             let selected_row = selected == Some(item.id.as_str());
             let background = selected_row.then(|| canvas_var("library-raise"));
             let press_row = row.clone();
@@ -145,9 +151,12 @@ pub fn LibraryEmbyList() -> Element {
     // share one sort frame.
     let sort = frame.and_then(|frame| frame.sort.clone());
 
-    // The rail's A–Z letters over the painted rows (row 8.1): the plain mode
-    // paints it, and the date-ordered feed-group mode paints none.
-    let rail = emby_letter_rail(&rows);
+    // The rail's A–Z letters over the painted rows (row 8.1), and whether the
+    // rows carry any letter at all (gui-flat-list-sort design D8): a name sort
+    // paints the rail, and a date sort — the feed-group mode's default —
+    // paints none.
+    let rail = lettered_rail(&rows);
+    let paints_rail = carries_letters(&rows);
 
     let selected = detail.and_then(|detail| detail.selected.clone());
 
@@ -171,12 +180,10 @@ pub fn LibraryEmbyList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Emby, ids);
         })),
-        move |row: &EmbyListRow| paint_emby_row(row, &paint_library, paint_selected.as_deref()),
+        move |row: &LetteredRow<EmbyItemRow>| {
+            paint_emby_row(row, &paint_library, paint_selected.as_deref())
+        },
     );
-
-    // The plain mode paints the rail (row 8.1); the feed-group mode's
-    // date-ordered rows paint none.
-    let paints_rail = frame.is_some_and(|frame| !frame.feed_group);
 
     // The rail's press scrolls the list to the letter's first row (design
     // D7): the rail's keyboard path is the `/` filter.

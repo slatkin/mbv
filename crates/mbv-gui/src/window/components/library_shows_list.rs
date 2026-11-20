@@ -487,10 +487,11 @@ pub fn LibraryShowsList() -> Element {
         },
     );
 
-    // The All view paints the rail (design D12): its series tree sorts by name,
-    // so it has letters to jump to. The date-sorted New and Upcoming views show
-    // no rail (spec "The letter rail jumps a name-sorted list").
-    let paints_rail = frame.is_some_and(|frame| frame.view == mbv::GuiShowsView::All);
+    // The rail paints exactly while the rows carry letters (gui-flat-list-sort
+    // design D8): the All view's series tree, and the New view while its sort
+    // compares a name. The date-sorted views show no heading and no rail (spec
+    // "The letter rail jumps a name-sorted list").
+    let paints_rail = rows.iter().any(|row| row.letter().is_some());
 
     // The rail's press scrolls to the letter's first row (design D7).
     let jump_library = library.clone();

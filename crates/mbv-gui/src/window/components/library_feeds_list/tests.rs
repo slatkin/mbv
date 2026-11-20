@@ -352,8 +352,12 @@ fn row_of(fixture: &mut Fixture, id: &str) -> crate::window::library::feeds_list
         state
             .feeds_rows()
             .iter()
-            .find(|row| row.id == id)
-            .cloned()
+            .find_map(|row| match row {
+                crate::window::library::list::LetteredRow::Item(item) if item.id == id => {
+                    Some(item.clone())
+                }
+                _ => None,
+            })
             .expect("the row paints")
     })
 }

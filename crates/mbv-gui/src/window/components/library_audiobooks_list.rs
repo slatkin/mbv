@@ -32,7 +32,8 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::audiobooks_list::{AudiobooksListRow, audiobooks_letter_rail};
+use crate::window::library::audiobooks_list::AudiobooksItemRow;
+use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
@@ -42,19 +43,19 @@ use crate::window::theme::canvas_var;
 /// One painted row of the list: the letter heading
 /// or the book row.
 fn paint_audiobooks_row(
-    row: &AudiobooksListRow,
+    row: &LetteredRow<AudiobooksItemRow>,
     library: &LibraryState,
     selected: Option<&str>,
 ) -> Element {
     match row {
-        AudiobooksListRow::Heading { letter, height, .. } => rsx! {
+        LetteredRow::Heading(heading) => rsx! {
             LibraryLetterHeading {
                 attr: "abs",
-                letter: letter.to_string(),
-                height: *height,
+                letter: heading.letter.to_string(),
+                height: heading.height,
             }
         },
-        AudiobooksListRow::Item(item) => {
+        LetteredRow::Item(item) => {
             let selected_row = selected == Some(item.id.as_str());
             let press_row = row.clone();
             let press_library = library.clone();
@@ -123,7 +124,11 @@ pub fn LibraryAudiobooksList() -> Element {
     let rows = library.audiobooks_rows(&audiobooks_ui.filter.clone());
 
     // The rail's A–Z letters over the painted rows (row 9.1).
-    let rail = audiobooks_letter_rail(&rows);
+    let rail = lettered_rail(&rows);
+
+    // The rail paints exactly while the rows carry letters (gui-flat-list-sort
+    // design D8): a name sort paints it, and a date sort paints none.
+    let paints_rail = carries_letters(&rows);
 
     // The sort control the header paints last on the heading's line
     // (gui-flat-list-sort design D7).
@@ -150,7 +155,7 @@ pub fn LibraryAudiobooksList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Audiobooks, ids);
         })),
-        move |row: &AudiobooksListRow| {
+        move |row: &LetteredRow<AudiobooksItemRow>| {
             paint_audiobooks_row(row, &paint_library, paint_selected.as_deref())
         },
     );
@@ -206,11 +211,13 @@ pub fn LibraryAudiobooksList() -> Element {
                 class: "flex min-h-0 flex-1",
                 style: "overflow: hidden;",
                 {virtual_list}
-                LibraryLetterRail {
-                    letters: rail,
-                    jump: Some(Callback::new(move |letter: char| {
-                        jump_library.jump_audiobooks_to_letter(letter);
-                    })),
+                if paints_rail {
+                    LibraryLetterRail {
+                        letters: rail,
+                        jump: Some(Callback::new(move |letter: char| {
+                            jump_library.jump_audiobooks_to_letter(letter);
+                        })),
+                    }
                 }
             }
         }

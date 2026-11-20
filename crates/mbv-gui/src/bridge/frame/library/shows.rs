@@ -113,7 +113,7 @@ pub struct GuiShowsRowFrame {
     /// The gutter date on a flat row; `None` on a series row.
     pub date: Option<String>,
     /// The row's rail letter (design D7), or `#`; `None` on the date-sorted
-    /// flat rows, whose list shows no rail.
+    /// flat rows, which paint under no heading and no rail
     pub sort_letter: Option<char>,
     /// Whether the row takes no select, play, or enqueue (design D9): an
     /// Upcoming premiere is display-only.
