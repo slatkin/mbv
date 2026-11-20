@@ -34,16 +34,20 @@ const OWNER_NAME: &str = "org.mpris.MediaPlayer2.mbv";
 ///
 /// # Panics
 ///
-/// The publisher thread panics if `status`'s mutex is poisoned, like every
-/// other reader of that cell.
+/// This call and the publisher thread panic if `status`'s mutex is poisoned,
+/// like every other reader of that cell.
 pub fn start_owner(
     status: Arc<Mutex<PlayerStatus>>,
     transport_tx: mpsc::Sender<TransportCommand>,
     art_path: fn(&str) -> Option<PathBuf>,
 ) {
-    let status_for_source = Arc::clone(&status);
+    // The property getters read this snapshot, never the live cell: the poll
+    // writes the snapshot every tick, so sharing the live cell would let a
+    // poll that read the status before a Player update write the older value
+    // back over it.
+    let snapshot = Arc::new(Mutex::new(status.lock().unwrap().clone()));
     let source: MprisHandle = Arc::new(Mutex::new(MprisSource {
-        status: Box::new(move || status_for_source.lock().unwrap().clone()),
+        status: Box::new(move || status.lock().unwrap().clone()),
         send: Box::new(move |transport| {
             if let Err(e) = transport_tx.send(transport) {
                 tracing::debug!(
@@ -59,7 +63,5 @@ pub fn start_owner(
         // it reports `Stopped`, like any other publisher of this crate.
         publish: Box::new(|| true),
     }));
-    // The live cell doubles as the property snapshot: the Owner's readers see
-    // the daemon's current status rather than a copy up to one tick old.
-    spawn_publisher(OWNER_NAME.to_string(), source, status, art_path);
+    spawn_publisher(OWNER_NAME.to_string(), source, snapshot, art_path);
 }
