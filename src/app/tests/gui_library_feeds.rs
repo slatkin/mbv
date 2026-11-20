@@ -513,3 +513,56 @@ fn a_resume_position_without_a_duration_stays_active_with_no_percent() {
         "the position without a duration is an Active row with no percent"
     );
 }
+
+/// One seeded entry of the subscription `feed_id`, its kind the entry's own
+/// declared `FeedKind` when it carries one.
+fn seeded_entry(
+    guid: &str,
+    pub_date_secs: u64,
+    kind: Option<mbv_queue::FeedKind>,
+) -> mbv_queue::FeedEntry {
+    mbv_queue::FeedEntry {
+        guid: guid.into(),
+        title: guid.into(),
+        enclosure_url: Some(format!("https://example.test/{guid}.mp3")),
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: Some(pub_date_secs),
+        feed_kind: kind,
+        feed_id: Some(FEED_A.into()),
+        position_ticks: 0,
+        played: false,
+    }
+}
+
+/// A feed entry's row paints no art, because the feed artwork policy declares
+/// no source, and shows its media kind from the entry's declared `FeedKind`
+/// (gui-delineated-rows design D4, D5): a podcast feed is audio and every other
+/// entry is video.
+#[test]
+fn a_feed_row_paints_no_art_and_its_declared_media_kind() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
+    app.feed_tab.all_entries = vec![
+        seeded_entry("audio-entry", 300, Some(mbv_queue::FeedKind::Audio)),
+        seeded_entry("video-entry", 200, Some(mbv_queue::FeedKind::Video)),
+    ];
+    app.tab = TabSelection::Feeds;
+
+    let projection = app.gui_feeds_projection();
+
+    assert_eq!(
+        projection.rows[0].art,
+        GuiRowArt::NoSource,
+        "the feed artwork policy declares no source"
+    );
+    assert_eq!(projection.rows[0].media, GuiRowMediaKind::Audio);
+    assert_eq!(projection.rows[1].media, GuiRowMediaKind::Video);
+    assert_eq!(
+        app.images.card_image_fetch_calls(),
+        0,
+        "a row with no source reserves no fetch"
+    );
+}

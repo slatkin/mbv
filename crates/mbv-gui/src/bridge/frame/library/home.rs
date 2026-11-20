@@ -88,9 +88,10 @@ pub struct GuiHomeItemRowFrame {
     /// The row's secondary label: the item's own title on a split row;
     /// `None` on an unsplit row.
     pub subtitle: Option<String>,
-    /// The gutter date, the shared projection's `day month` text; `None` on
-    /// a `Continue watching` row and on an item with no parseable date.
-    pub date: Option<String>,
+    /// The row's trailing text (gui-delineated-rows design D2): the time left
+    /// on a `Continue watching` row, and the projection's `day month` gutter
+    /// date on a `Recently added` one. `None` when the row has neither.
+    pub trailing: Option<String>,
     /// The row's kind (`collection` when the row targets a container the
     /// play path refuses, `media` on a playable leaf).
     pub kind: GuiHomeRowKindFrame,
@@ -175,7 +176,7 @@ impl From<&GuiHomeItemRow> for GuiHomeItemRowFrame {
             id: GuiHomeRowIdFrame::from(&item.id),
             title: item.title.clone(),
             subtitle: item.subtitle.clone(),
-            date: item.date.clone(),
+            trailing: item.trailing.clone(),
             kind: GuiHomeRowKindFrame::from(item.kind),
             state: GuiHomeRowStateFrame::from(&item.state),
             art: GuiRowArtFrame::from(&item.art),

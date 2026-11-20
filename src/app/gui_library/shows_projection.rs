@@ -17,7 +17,7 @@ use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
-use super::artwork::{GuiRowArt, GuiRowMediaKind};
+use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_row_source, upcoming_row_source};
 use super::home::GuiArtShape;
 use super::projection::sort_letter;
 use super::request::GuiSectionRequest;
@@ -324,13 +324,14 @@ impl App {
                     Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
                     None => (parts.title.text.clone(), None),
                 };
+                let art = self.gui_row_art(emby_row_source(&episode).as_ref());
                 GuiShowsRow {
                     id: episode.id,
                     title,
                     subtitle,
                     date: row_date(mbv_ui_model::home_latest::provider_timestamp_secs(&item)),
                     display_only: false,
-                    art: GuiRowArt::NoSource,
+                    art,
                     media: GuiRowMediaKind::Video,
                 }
             })
@@ -355,6 +356,8 @@ impl App {
             .into_iter()
             .map(|premiere| {
                 let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
+                let series = self.gui_shows_series_item(premiere.series_id.as_str());
+                let art = self.gui_row_art(Some(&upcoming_row_source(premiere, series.as_ref())));
                 GuiShowsRow {
                     id: premiere.stable_key(),
                     title: premiere.series_name.clone(),
@@ -365,7 +368,7 @@ impl App {
                     )),
                     date: row_date(secs),
                     display_only: true,
-                    art: GuiRowArt::NoSource,
+                    art,
                     media: GuiRowMediaKind::Video,
                 }
             })
@@ -412,7 +415,7 @@ impl App {
                     sort_letter: sort_letter(effective_sort_str(item)),
                     expandable: detail.is_none_or(|detail| !detail.seasons.is_empty()),
                     seasons,
-                    art: GuiRowArt::NoSource,
+                    art: self.gui_row_art(emby_row_source(item).as_ref()),
                     media: GuiRowMediaKind::Video,
                 }
             })

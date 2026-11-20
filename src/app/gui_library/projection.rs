@@ -14,7 +14,7 @@ use mbv_ui_model::music_grouping::ArtistKey;
 use mbv_ui_model::sort_filter::strip_article;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
-use super::artwork::{GuiRowArt, GuiRowMediaKind};
+use super::artwork::{GuiRowArt, GuiRowMediaKind, artist_row_source};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::collection_command::GuiCollectionSite;
 use super::{GuiGroupAlbums, GuiMusicCollectionSite};
@@ -347,7 +347,7 @@ impl App {
                     name: artist.clone(),
                     sort_letter: sort_letter(artist),
                     albums: Vec::new(),
-                    art: GuiRowArt::NoSource,
+                    art: self.music_artist_row_art(key),
                     media: GuiRowMediaKind::Audio,
                 });
                 let position = artists.len() - 1;
@@ -372,6 +372,16 @@ impl App {
             year: year.to_string(),
             tracks: tracks.map(|tracks| gui_music_tracks(tracks)),
             total: tracks.map(|tracks| track_total(tracks)),
+        }
+    }
+
+    /// One artist row's art (gui-delineated-rows design D5): a Service-named
+    /// artist shows its own `Primary` image, read from the row cache alone, and
+    /// the fallback identity — a name the Service never named — has no source.
+    pub(in crate::app) fn music_artist_row_art(&self, key: &ArtistKey) -> GuiRowArt {
+        match key {
+            ArtistKey::Service(id) => self.gui_row_art(Some(&artist_row_source(id))),
+            ArtistKey::Fallback(_) => GuiRowArt::NoSource,
         }
     }
 

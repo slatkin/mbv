@@ -10,7 +10,6 @@
 use mbv_components::library_panel::content::{
     ArtworkShape, ArtworkSource, painted_shape_for_pixels,
 };
-use mbv_emby_model::EmbyItem;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
 use crate::app::App;
@@ -20,9 +19,9 @@ mod rows;
 
 pub use self::rows::{GuiRowArt, GuiRowMediaKind, GuiRowSource, artist_rows_in_view_id};
 pub(in crate::app::gui_library) use self::rows::{
-    artist_id_row_source, catalog_book_row_source, emby_media_kind, emby_row_source,
-    episode_row_source, feed_media_kind, feed_row_source, queue_item_media_kind,
-    upcoming_row_source,
+    artist_id_row_source, artist_row_source, catalog_book_row_source, catalog_show_row_source,
+    emby_media_kind, emby_row_source, episode_row_source, feed_media_kind, feed_row_source,
+    queue_item_media_kind, upcoming_row_source,
 };
 
 /// The neighbour warm window's bounds (the TUI's grouped-Music rule,
@@ -148,28 +147,6 @@ impl App {
         self.resolve_gui_art(&cache_key)
     }
 
-    /// One Home row's card art (add-gui-library-panel design D12, the
-    /// USER-APPROVED GUI Home design): the queue card's chain and cache
-    /// key for `item` — the now-playing card's conventions, so a Home row
-    /// whose item plays shares its cache entry — fetched here and read from
-    /// the image cache. A fetch in flight paints the
-    /// loading fill, and a fetch that resolved empty paints the
-    /// placeholder — the queue card's resolution.
-    pub(in crate::app::gui_library) fn gui_home_row_artwork(
-        &mut self,
-        item: &EmbyItem,
-    ) -> GuiLibraryArtwork {
-        let cache_key = crate::app::state::projection::card::card_cache_key(item);
-        let types = crate::app::state::projection::card::card_image_types(item);
-        self.fetch_card_image(
-            cache_key.clone(),
-            item.id.clone(),
-            item.series_id.clone(),
-            types,
-        );
-        self.resolve_gui_art(&cache_key)
-    }
-
     /// The Hero's art box: the declared policy arm, re-armed by the fetched
     /// image's own pixels once the cache holds them — the rule the TUI's
     /// [`mbv_components::library_panel::HeroArtwork::painted_shape`] applies
@@ -234,31 +211,6 @@ impl App {
             &types,
         );
         self.resolve_gui_art(cache_key)
-    }
-
-    /// The row art a Hero-style artwork state resolves to (gui-delineated-rows
-    /// design D4): the Home row's at-once card fetch mapped into the shared row
-    /// art model, so the window paints one row vocabulary until the row's own
-    /// source fills it (unit 3b).
-    #[must_use]
-    pub(in crate::app::gui_library) fn gui_row_art_from_artwork(
-        &self,
-        artwork: Option<&GuiLibraryArtwork>,
-    ) -> GuiRowArt {
-        match artwork {
-            Some(GuiLibraryArtwork::Image { key, .. }) => GuiRowArt::Image {
-                square: self
-                    .images
-                    .image(key)
-                    .and_then(mbv_images::CachedImage::dimensions)
-                    .is_some_and(|(width, height)| {
-                        painted_shape_for_pixels(width, height) == ArtworkShape::Square
-                    }),
-                key: key.clone(),
-            },
-            Some(GuiLibraryArtwork::Loading) => GuiRowArt::Loading,
-            Some(GuiLibraryArtwork::Placeholder) | None => GuiRowArt::Missing,
-        }
     }
 
     /// The cached art under `cache_key`, as the server sent it, or the empty

@@ -98,7 +98,7 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
                         id: row_id.clone(),
                         title: "Better Call Saul".to_owned(),
                         subtitle: None,
-                        date: None,
+                        trailing: None,
                         kind: GuiHomeRowKindFrame::Media,
                         state: GuiHomeRowStateFrame::Ordinary,
                         art: GuiRowArtFrame::NoSource,

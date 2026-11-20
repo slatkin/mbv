@@ -215,7 +215,7 @@ pub fn build_home_rows(rows: &[GuiHomeRowFrame], filter: &str) -> Vec<HomeListRo
                         row_id: item.id.clone(),
                         title: item.title.clone(),
                         subtitle: item.subtitle.clone(),
-                        date: item.date.clone(),
+                        date: item.trailing.clone(),
                         item_kind: item.kind,
                         state: item.state.clone(),
                         art: item.art.clone(),

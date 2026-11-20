@@ -7,7 +7,7 @@
 //! (`App::gui_row_art`), and only the in-view path (`super::super::rows_in_view`)
 //! queues a `Row` fetch.
 
-use mbv_audiobookshelf::AudiobookshelfBook;
+use mbv_audiobookshelf::{AudiobookshelfBook, AudiobookshelfShow};
 use mbv_components::library_panel::HeroArtwork;
 use mbv_components::library_panel::content::{
     ArtworkShape, ArtworkSource, painted_shape_for_pixels,
@@ -199,6 +199,28 @@ pub(in crate::app::gui_library) fn catalog_book_row_source(
         library_item_id: book.library_item_id.clone(),
         book: true,
         updated_at_ms: book.updated_at_ms,
+    })
+}
+
+/// The row source of a podcast show's catalog record (design D5), for a caller
+/// that holds the record rather than an episode's queue item: the episode
+/// artwork policy names the parent show's cover, so the show's own record keys
+/// the row. A show that declares no cover names no source.
+#[must_use]
+pub(in crate::app::gui_library) fn catalog_show_row_source(
+    show: &AudiobookshelfShow,
+) -> Option<GuiRowSource> {
+    let cover_declared = show
+        .cover_path
+        .as_deref()
+        .is_some_and(|cover| !cover.is_empty());
+    if !cover_declared {
+        return None;
+    }
+    Some(GuiRowSource::Audiobookshelf {
+        library_item_id: show.library_item_id.clone(),
+        book: false,
+        updated_at_ms: show.updated_at_ms,
     })
 }
 

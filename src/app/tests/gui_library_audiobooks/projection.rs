@@ -627,3 +627,46 @@ fn the_book_hero_restores_the_narrator_year_and_description() {
         "the description rides as the overview, with its URL stripped"
     );
 }
+
+/// A book row shows the cover the book artwork policy names (gui-delineated-
+/// rows design D4, D5), under the Service-scoped row key that holds the
+/// catalog record's last update time, and paints the audio media kind.
+#[test]
+fn a_book_row_shows_its_cover() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app(
+        &[(
+            "book-a",
+            "Austen's End",
+            Some("Jane Austen"),
+            "austen",
+            7200.0,
+            Some("cover.jpg"),
+        )],
+        &[],
+        &[],
+        None,
+    );
+    let server = app
+        .audiobookshelf_server_url()
+        .expect("the app names its Audiobookshelf server");
+    let key = mbv_images::abs_row_cache_key(&server, "book-a", 0);
+    let cover = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        128,
+        192,
+        image::Rgba([20, 40, 60, 255]),
+    ));
+    app.seed_card_image_for_test(key.clone(), cover);
+
+    let projection = app.gui_audiobooks_projection(0);
+
+    assert_eq!(
+        projection.rows[0].art,
+        GuiRowArt::Image {
+            key: key.clone(),
+            square: false
+        },
+        "the row shows the cached book cover under its row key"
+    );
+    assert_eq!(projection.rows[0].media, GuiRowMediaKind::Audio);
+}

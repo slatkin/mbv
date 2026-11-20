@@ -156,7 +156,10 @@ impl App {
     /// The Shows root list's series item `series_id` names, from any library's
     /// root level: the declared tags a series row and an Upcoming row's series
     /// image are addressed by.
-    fn gui_shows_series_item(&self, series_id: &str) -> Option<EmbyItem> {
+    pub(in crate::app::gui_library) fn gui_shows_series_item(
+        &self,
+        series_id: &str,
+    ) -> Option<EmbyItem> {
         self.libs
             .iter()
             .filter_map(|lib| lib.nav_stack.last())

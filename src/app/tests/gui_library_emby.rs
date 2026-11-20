@@ -717,3 +717,45 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
         "a BoxSet row names a container, so the Hero paints nothing"
     );
 }
+
+/// A row image for the cache, as a thumbnail rendition would decode: a
+/// landscape still at the Emby row's size.
+fn row_image() -> image::DynamicImage {
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        128,
+        72,
+        image::Rgba([20, 40, 60, 255]),
+    ))
+}
+
+/// A plain list row paints the art its item's Hero artwork policy declares
+/// (gui-delineated-rows design D4, D5): a row whose item declares an image
+/// shows the cached row image with its item's media kind, and a row whose item
+/// declares none is the no-source state.
+#[test]
+fn the_plain_mode_rows_paint_their_row_art() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut tagged = movie_item("m-1", "A Movie", 1999, 0);
+    tagged.image_tags.thumb = "t1".into();
+    let key = mbv_images::row::emby_row_request(&tagged, false).cache_key;
+    let untagged = movie_item("m-2", "B Movie", 0, 0);
+    let mut app = plain_movies_app(vec![tagged, untagged]);
+    app.seed_card_image_for_test(key.clone(), row_image());
+
+    let projection = app.gui_emby_projection(0);
+
+    assert_eq!(
+        projection.rows[0].art,
+        GuiRowArt::Image {
+            key: key.clone(),
+            square: false
+        },
+        "a tagged row shows its cached row image"
+    );
+    assert_eq!(projection.rows[0].media, GuiRowMediaKind::Video);
+    assert_eq!(
+        projection.rows[1].art,
+        GuiRowArt::NoSource,
+        "an item that declares no image has no source"
+    );
+}

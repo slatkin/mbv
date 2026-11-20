@@ -18,7 +18,7 @@ use mbv_queue::FeedEntry;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
-use super::artwork::{GuiRowArt, feed_media_kind};
+use super::artwork::{feed_media_kind, feed_row_source};
 use super::collection::{GuiCollectionTarget, compare_gui_date_order};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
@@ -188,7 +188,9 @@ impl App {
 
     /// One row of the active list (row 11.1): the TUI feed row's facts — the
     /// entry title, its subscription's name, and the publish date in the
-    /// right-aligned gutter — with the row's played state.
+    /// right-aligned gutter — with the row's played state, the art its
+    /// artwork policy declares (gui-delineated-rows design D5: none, so the
+    /// row is the no-source state), and the media kind that state shows.
     fn gui_feeds_row(&self, entry: &FeedEntry) -> GuiFeedsRow {
         GuiFeedsRow {
             id: GuiFeedEntryId::new(
@@ -202,7 +204,7 @@ impl App {
                 .map(str::to_string),
             date: row_date(entry.pub_date_secs),
             state: MediaSemanticState::from_feed_entry(entry),
-            art: GuiRowArt::NoSource,
+            art: self.gui_row_art(feed_row_source(entry).as_ref()),
             media: feed_media_kind(entry),
         }
     }

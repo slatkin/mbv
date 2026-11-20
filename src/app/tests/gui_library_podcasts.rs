@@ -515,3 +515,40 @@ fn stale_podcast_ids_change_nothing() {
         "a stale select leaves the pick as it was"
     );
 }
+
+/// A podcast row shows its show's cover (gui-delineated-rows design D4, D5):
+/// the episode artwork policy names the parent show's cover, under the
+/// Service-scoped row key holding the show's last update time, and the row
+/// paints the audio media kind.
+#[test]
+fn a_podcast_row_shows_its_show_cover() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    let server = app
+        .audiobookshelf_server_url()
+        .expect("the app names its Audiobookshelf server");
+    let key = mbv_images::abs_row_cache_key(&server, "show-b", 0);
+    let cover = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        72,
+        72,
+        image::Rgba([20, 40, 60, 255]),
+    ));
+    app.seed_card_image_for_test(key.clone(), cover);
+
+    let projection = app.gui_podcasts_projection(1);
+
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("Show B"),
+        "the newest row belongs to the show whose cover it shows"
+    );
+    assert_eq!(
+        projection.rows[0].art,
+        GuiRowArt::Image {
+            key: key.clone(),
+            square: true
+        },
+        "the episode row shows the cached show cover"
+    );
+    assert_eq!(projection.rows[0].media, GuiRowMediaKind::Audio);
+}
