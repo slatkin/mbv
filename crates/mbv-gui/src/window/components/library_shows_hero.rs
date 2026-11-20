@@ -5,7 +5,7 @@
 //! header band is the series — its genre, years, season count, and network —
 //! and the detail block is the series' Primary poster beside the selected
 //! season and the series' overview. The Workspace is the list band: the
-//! season pills, with the core's selected season pressed, and that season's
+//! season dropdown, with the core's selected season as its label, and that season's
 //! episodes as rows. The Latest mode's Hero is the selected episode's facts
 //! and carries no Workspace, and the Upcoming mode carries no Hero at all, so
 //! the pane paints nothing there.
@@ -23,6 +23,9 @@ use crate::bridge::frame::library::{
     GuiShowsWorkspaceFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
+use crate::window::components::library_dropdown::{
+    LibraryDropdown, LibraryDropdownMarker, LibraryDropdownRow,
+};
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{
@@ -32,6 +35,7 @@ use crate::window::components::library_workspace_table::{
 use crate::window::library::hero::{
     HeroLayoutFacts, hero_layout, join_meta_rows, label_segments, plain_segments,
 };
+use crate::window::library::list::filter_match;
 use crate::window::library::parts::library_shows_detail;
 use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
@@ -140,43 +144,74 @@ fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
     WorkspaceRowState::Active
 }
 
-/// One season pill: the core's selected season pressed, a press sending the
-/// select-season command. The one pill button the panel paints
-/// (add-gui-library-panel design D6, D15): a destination supplies the pill's
-/// name, its selected state, its own attributes, and the press; it never
-/// restates the pill's look. The selected pill fills in the source tone.
-fn paint_season(
-    season: &GuiShowsSeasonPillFrame,
+/// The season rows the open dropdown paints under `filter`: the seasons whose
+/// name matches by the Library filter's rule, in the core's order, with the
+/// core's selected season marked.
+fn season_rows(seasons: &[GuiShowsSeasonPillFrame], filter: &str) -> Vec<LibraryDropdownRow> {
+    seasons
+        .iter()
+        .filter(|season| filter_match(&season.name, filter))
+        .map(|season| LibraryDropdownRow {
+            key: season.season_id.clone(),
+            label: season.name.clone(),
+            selected: season.selected,
+        })
+        .collect()
+}
+
+/// The season dropdown (user request 2026-11-20, replacing one pill per
+/// season): the shared Library dropdown, leading the Workspace band, with the
+/// core's selected season as its label and one radio row per season. A series
+/// can hold many seasons, so the open popover carries a filter field. A row
+/// press sends the select-season command and closes the popover.
+fn paint_season_dropdown(
+    seasons: &[GuiShowsSeasonPillFrame],
     lib_idx: usize,
     library: &LibraryState,
 ) -> Element {
-    let season_library = library.clone();
-    let season_id = season.season_id.clone();
-    let selected = season.selected;
-    let (border, background, color, weight) = if selected {
-        (
-            "1px solid var(--canvas-source)",
-            "var(--canvas-source)",
-            "var(--canvas-ink)",
-            600,
-        )
-    } else {
-        (
-            "1px solid var(--canvas-border)",
-            "none",
-            "var(--canvas-text)",
-            400,
-        )
-    };
+    let filter = library.ui.cloned().shows_seasons;
+    let open = filter.is_some();
+    let rows = season_rows(seasons, filter.as_deref().unwrap_or_default());
+    let label = seasons
+        .iter()
+        .find(|season| season.selected)
+        .map_or_else(|| "Season".to_owned(), |season| season.name.clone());
+
+    let toggle_library = library.clone();
+    let on_toggle = Callback::new(move |()| toggle_library.toggle_shows_seasons_dropdown());
+    let inside_library = library.clone();
+    let on_inside_press = Callback::new(move |()| {
+        inside_library.close_library_row_menu();
+        inside_library.close_collections_dropdown();
+    });
+    let filter_library = library.clone();
+    let on_filter =
+        Callback::new(move |text: String| filter_library.set_shows_seasons_filter(text));
+    let select_library = library.clone();
+    let on_select = Callback::new(move |season_id: String| {
+        select_season(&select_library, lib_idx, &season_id);
+        select_library.close_shows_seasons_dropdown();
+    });
+
     rsx! {
-        button {
-            "type": "button",
-            class: "flex flex-none items-center whitespace-nowrap",
-            style: "height: 32px; gap: 5px; padding: 0 12px; border-radius: 16px; font-size: 14px; font-weight: {weight}; border: {border}; background: {background}; color: {color};",
-            "aria-pressed": "{selected}",
-            "data-library-shows-season": season.season_id.clone(),
-            onclick: move |_| select_season(&season_library, lib_idx, &season_id),
-            "{season.name}"
+        LibraryDropdown {
+            label,
+            open,
+            rows,
+            marker: LibraryDropdownMarker::Radio,
+            aria_label: "Seasons",
+            trigger_attr: "data-library-shows-seasons-trigger",
+            menu_attr: "data-library-shows-seasons-menu",
+            row_attr: "data-library-shows-season",
+            mark_attr: "data-library-shows-season-mark",
+            filter,
+            filter_placeholder: Some("Find a season"),
+            filter_attr: Some("data-library-shows-seasons-filter"),
+            on_toggle,
+            on_select,
+            on_filter,
+            on_inside_press,
+            align_end: false,
         }
     }
 }
@@ -367,15 +402,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                 class: "flex flex-col",
                 style: "gap: 10px;",
                 "data-library-shows-workspace": "",
-                div {
-                    class: "flex flex-wrap items-center",
-                    role: "group",
-                    "aria-label": "Seasons",
-                    style: "gap: 6px;",
-                    for season in workspace.seasons.iter() {
-                        { paint_season(season, lib_idx, &workspace_library) }
-                    }
-                }
+                { paint_season_dropdown(&workspace.seasons, lib_idx, &workspace_library) }
                 LibraryWorkspaceTable {
                     root: "data-library-shows-episodes",
                     label: "Episodes",

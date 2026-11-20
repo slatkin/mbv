@@ -607,6 +607,7 @@ pub fn App() -> Element {
                 // so a press inside acts on the control. The close changes no
                 // pointer fact, so the press still reaches the core.
                 press_library.close_collections_dropdown();
+                press_library.close_shows_seasons_dropdown();
                 press_library.close_search_panel();
                 input::on_pointer(DomPointerKind::Press, &event.data, &press_link);
             },

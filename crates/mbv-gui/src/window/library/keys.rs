@@ -105,6 +105,17 @@ fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyO
     types_into_filter(key).then_some(KeyOutcome::Text)
 }
 
+/// Route a key while the Shows Hero's season dropdown is open: Esc closes it
+/// and clears its filter text, and its filter field, which always mounts with
+/// the popover, takes the typed keys and Backspace wherever the pointer is.
+fn route_seasons_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+    if key.key == "Escape" && bare(key) {
+        state.close_shows_seasons_dropdown();
+        return Some(KeyOutcome::Handled);
+    }
+    types_into_filter(key).then_some(KeyOutcome::Text)
+}
+
 /// Route a key while an open text field of the panel holds the keyboard (design
 /// D3, step 2; gui-collection-dropdown design D7): the list's `/` filter takes
 /// every key, and the collection dropdown's own filter takes the typed keys,
@@ -113,15 +124,22 @@ fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyO
 fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     // The facts are copied out of the store: a route may write it, and a held
     // read would meet that write.
-    let (filter_open, collections_open) = {
+    let (filter_open, collections_open, seasons_open) = {
         let ui = state.ui.peek();
-        (ui.filter_open, ui.collections.is_some())
+        (
+            ui.filter_open,
+            ui.collections.is_some(),
+            ui.shows_seasons.is_some(),
+        )
     };
     if filter_open {
         return Some(route_filter_key(state, key));
     }
     if collections_open {
         return route_collections_open_key(state, key);
+    }
+    if seasons_open {
+        return route_seasons_open_key(state, key);
     }
     None
 }

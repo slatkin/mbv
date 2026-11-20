@@ -93,6 +93,7 @@ fn press_in_panel(library: &LibraryState) {
     if library.ui.peek().collections.is_some() {
         library.close_collections_dropdown();
     }
+    library.close_shows_seasons_dropdown();
 }
 
 /// Whether the pair's detail part paints a Hero (design D4, D12): every

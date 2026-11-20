@@ -205,7 +205,7 @@ fn paint_shows_season(
     let toggle_node = expandable.then(|| row.id().to_owned());
     let toggle_library = library.clone();
     let row_class = if expandable {
-        "tree-parent flex w-full items-center overflow-hidden"
+        "tree-parent relative flex w-full items-center"
     } else {
         "flex w-full items-center overflow-hidden"
     };

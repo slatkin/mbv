@@ -1,7 +1,7 @@
 //! Headless tests of the Shows Hero (D16): the contracts of
 //! `LibraryShowsHero.test.ts` — the artwork box per art shape, the series in
 //! the header band and the selected season's detail beside its poster, the
-//! season pills with the core's selection pressed, the selected season's
+//! season dropdown naming the core's selection, the selected season's
 //! episode rows with their played state, the Latest mode's Hero with no
 //! Workspace, and the commands the season press, the episode gestures, and
 //! the Hero's buttons send. The IPC of the earlier tests is the mock
@@ -409,21 +409,21 @@ fn the_hero_paints_the_series_in_the_header_and_the_season_s_detail_beside_its_p
     );
 }
 
-/// Contract (`LibraryShowsHero.test.ts`): the Workspace paints the season
-/// pills with the core selection pressed.
+/// Contract (user request 2026-11-20): the Workspace paints one season
+/// dropdown, not a pill per season. Its trigger names the core's selected
+/// season, and the closed popover paints no season row.
 #[test]
-fn the_workspace_paints_the_season_pills_with_the_core_selection_pressed() {
+fn the_workspace_paints_one_season_dropdown_naming_the_core_selection() {
     let fixture = built_series();
 
     assert_eq!(
-        fixture.all_texts("[data-library-shows-season]"),
-        vec!["Season 1".to_owned(), "Season 2".to_owned()],
-        "the season pills paint in the frame's order"
+        fixture.all_texts("[data-library-shows-seasons-trigger]"),
+        vec!["Season 1".to_owned()],
+        "the trigger names the core's selected season"
     );
-    assert_eq!(
-        fixture.all_attrs("[data-library-shows-season]", "aria-pressed"),
-        vec!["true".to_owned(), "false".to_owned()],
-        "the core's selected season is the pressed one"
+    assert!(
+        fixture.all_texts("[data-library-shows-season]").is_empty(),
+        "the closed dropdown paints no season row"
     );
 }
 

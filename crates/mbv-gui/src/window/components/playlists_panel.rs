@@ -448,7 +448,7 @@ fn playlist_node(
             class: "flex flex-col",
             button {
                 "type": "button",
-                class: "tree-parent flex w-full items-center text-left",
+                class: "tree-parent relative flex w-full items-center text-left",
                 style: row_style(selected, 0),
                 "aria-expanded": "{is_open}",
                 "data-playlists-row": "playlist",

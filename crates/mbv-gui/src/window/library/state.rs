@@ -526,6 +526,7 @@ impl LibraryState {
             ui.item_menu_open = false;
             ui.row_menu = None;
             ui.collections = None;
+            ui.shows_seasons = None;
         });
     }
 

@@ -229,7 +229,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     // double-click toggles the node in place of playing it.
     let (row_class, trail_class) = if props.tree_open.is_some() {
         (
-            "tree-parent relative flex w-full items-center overflow-hidden",
+            "tree-parent relative flex w-full items-center",
             "tree-trailing flex-none font-mono tabular-nums",
         )
     } else {

@@ -242,7 +242,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     rsx! {
         button {
             "type": "button",
-            class: "tree-parent flex w-full items-center overflow-hidden",
+            class: "tree-parent relative flex w-full items-center",
             style: "{style}",
             "aria-expanded": "{open}",
             "data-library-row": "album",

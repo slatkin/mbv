@@ -1125,7 +1125,7 @@ That hero carries the TUI series producer's facts —
 `hero_content_series_with_episode`'s genre, year range (else the release
 date), season count, and network rows, no duration row while the Workspace
 has no focus, and the artwork policy's landscape arm — plus `workspace`: the
-detail's season pills (`season_id`, `name`, `selected`), `selected_season`
+detail's seasons (`season_id`, `name`, `selected`, painted as a dropdown), `selected_season`
 (the stored choice while the detail still holds it, else the first season,
 because the pills start on the first season and are never kept across a
 series change), and that season's `episodes`. The Workspace-focus overlay
@@ -1925,7 +1925,9 @@ block (art, selected unit, actions, overview), and the list band (the movie's
 credits table and the IMDb button).
 `LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play, Play next, and Add to queue buttons,
-`LibraryPillButton` the Shows Workspace's season pills, `LibraryItemRow` the
+`LibraryDropdown` the Shows Workspace's season dropdown (a radio row per
+season and a filter field, one open state in `LibraryUiState.shows_seasons`),
+`LibraryItemRow` the
 top-level rows of every list, `LibraryLetterHeading` the letter and section
 headings, and `LibraryVirtualList` the scroller of every list. Home still
 paints `LibraryHeroSummary`.
@@ -1960,8 +1962,10 @@ carries the row's `aria-expanded`, and while the pointer rests on the row it
 shows the shared `TreeHint`
 (`crates/mbv-gui/src/window/components/tree_hint.rs`) — `Double-click to
 expand` when the row is closed, `Double-click to collapse` when it is open —
-in place of the row's trailing text, through the row's `tree-parent` class
-and the `.tree-parent:hover` rule in `assets/app.css`. The rule is one for
+as a tooltip card under the row's bottom edge, through the row's `tree-parent`
+class and the `.tree-parent:hover` rule in `assets/app.css`. The row is the
+card's positioning box and does not clip it, and the row's trailing text stays
+visible. The rule is one for
 every GUI tree parent: a Music album, a Shows season, and a Playlists
 playlist paint their own rows and take the same press, the same double-click,
 the same `aria-expanded`, and the same hint, while a leaf row — a track, an
