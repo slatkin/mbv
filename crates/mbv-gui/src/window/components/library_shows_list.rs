@@ -31,7 +31,7 @@ use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart, mark,
 };
-use crate::window::components::library_letter_heading::LibraryLetterHeading;
+use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -402,13 +402,7 @@ fn paint_shows_row(
     selected: Option<&str>,
 ) -> Element {
     match row {
-        ShowsListRow::Heading(heading) => rsx! {
-            LibraryLetterHeading {
-                attr: "shows",
-                letter: heading.letter.to_string(),
-                height: heading.height,
-            }
-        },
+        ShowsListRow::Heading(heading) => paint_letter_heading("shows", heading),
         ShowsListRow::Series(_) => paint_shows_series(row, library, shows, selected),
         ShowsListRow::Season(_) => paint_shows_season(row, library, shows, selected),
         ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected),

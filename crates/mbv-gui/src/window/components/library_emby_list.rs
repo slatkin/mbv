@@ -24,7 +24,7 @@ use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart,
 };
-use crate::window::components::library_letter_heading::LibraryLetterHeading;
+use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -53,13 +53,7 @@ fn paint_emby_row(
     selected: Option<&str>,
 ) -> Element {
     match row {
-        LetteredRow::Heading(heading) => rsx! {
-            LibraryLetterHeading {
-                attr: "emby",
-                letter: heading.letter.to_string(),
-                height: heading.height,
-            }
-        },
+        LetteredRow::Heading(heading) => paint_letter_heading("emby", heading),
         LetteredRow::Item(item) => {
             let selected_row = selected == Some(item.id.as_str());
             let background = selected_row.then(|| canvas_var("library-raise"));

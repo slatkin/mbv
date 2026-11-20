@@ -1,12 +1,13 @@
 //! The letter heading of an alphabetical Library list
 //! (`replace-tauri-with-blitz` task 7.2, the port of
 //! `LibraryLetterHeading`; add-gui-library-panel design D15): the one
-//! heading the Emby and Audiobooks lists paint between letter groups. `attr`
-//! names the destination's own hook.
+//! heading every lettered list paints between letter groups. `attr` names
+//! the destination's own hook.
 
 use dioxus_native::prelude::*;
 
 use crate::window::components::library_attr::library_attr;
+use crate::window::library::list::LetterHeading;
 
 /// The props of the letter heading (the `LibraryLetterHeading` props,
 /// in order).
@@ -36,6 +37,19 @@ pub fn LibraryLetterHeading(props: LibraryLetterHeadingProps) -> Element {
             style: "height: {props.height}px; padding: 0 8px 2px; font-size: 12px; color: var(--canvas-type-label);",
             ..letter_attrs,
             "{props.letter}"
+        }
+    }
+}
+
+/// One painted letter heading over the row model's heading (design D15): the
+/// five lettered lists share this one paint, so a heading cannot drift
+/// between them. `attr` names the destination's own hook.
+pub fn paint_letter_heading(attr: &'static str, heading: &LetterHeading) -> Element {
+    rsx! {
+        LibraryLetterHeading {
+            attr,
+            letter: heading.letter.to_string(),
+            height: heading.height,
         }
     }
 }

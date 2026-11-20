@@ -21,7 +21,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
-use crate::window::components::library_letter_heading::LibraryLetterHeading;
+use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -40,13 +40,7 @@ fn paint_feeds_row(
     selected: Option<&str>,
 ) -> Element {
     match row {
-        LetteredRow::Heading(heading) => rsx! {
-            LibraryLetterHeading {
-                attr: "feeds",
-                letter: heading.letter.to_string(),
-                height: heading.height,
-            }
-        },
+        LetteredRow::Heading(heading) => paint_letter_heading("feeds", heading),
         LetteredRow::Item(row) => paint_feeds_item(row, library, selected),
     }
 }

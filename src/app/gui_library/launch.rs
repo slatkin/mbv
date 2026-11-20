@@ -99,14 +99,9 @@ impl App {
             let Some(order) = entry.order else {
                 continue;
             };
-            let saved_sort = state
-                .sorts
-                .iter()
-                .any(|saved| saved.destination == entry.destination);
-            if saved_sort {
-                // A saved sort wins over the entry's older date order.
-                continue;
-            }
+            // A saved sort wins over the entry's older date order: the loop
+            // above installed it, so `install_saved_sort` holds the slot and
+            // this install changes nothing.
             self.install_saved_sort(&entry.destination, date_sort(order));
         }
     }

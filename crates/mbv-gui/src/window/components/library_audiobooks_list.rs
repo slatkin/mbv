@@ -27,7 +27,7 @@ use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart,
 };
-use crate::window::components::library_letter_heading::LibraryLetterHeading;
+use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -48,13 +48,7 @@ fn paint_audiobooks_row(
     selected: Option<&str>,
 ) -> Element {
     match row {
-        LetteredRow::Heading(heading) => rsx! {
-            LibraryLetterHeading {
-                attr: "abs",
-                letter: heading.letter.to_string(),
-                height: heading.height,
-            }
-        },
+        LetteredRow::Heading(heading) => paint_letter_heading("abs", heading),
         LetteredRow::Item(item) => {
             let selected_row = selected == Some(item.id.as_str());
             let press_row = row.clone();

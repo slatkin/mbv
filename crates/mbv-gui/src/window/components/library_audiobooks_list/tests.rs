@@ -27,6 +27,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
+use crate::window::library::list::GeometryRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
@@ -335,22 +336,10 @@ fn row_of(
         state
             .audiobooks_rows(&filter)
             .iter()
-            .find(|row| row_id(row) == id)
+            .find(|row| row.id() == id)
             .cloned()
             .expect("the row paints")
     })
-}
-
-/// The union row's stable id, heading or item.
-fn row_id(
-    row: &crate::window::library::list::LetteredRow<
-        crate::window::library::audiobooks_list::AudiobooksItemRow,
-    >,
-) -> &str {
-    match row {
-        crate::window::library::list::LetteredRow::Heading(heading) => &heading.id,
-        crate::window::library::list::LetteredRow::Item(item) => &item.id,
-    }
 }
 
 /// Press the row of `id`, as the row's press handler does.

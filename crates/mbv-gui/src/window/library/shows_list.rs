@@ -305,10 +305,10 @@ pub fn build_shows_rows(
     match view {
         GuiShowsView::All => series_shows_rows(series, filter, tree),
         GuiShowsView::New | GuiShowsView::Upcoming => {
-            let needle = filter.trim().to_lowercase();
+            // The filter's empty text keeps every row (`filter_match`'s own
+            // rule), so no separate emptiness test rides here.
             let keeps = |row: &GuiShowsRowFrame| {
-                needle.is_empty()
-                    || filter_match(&row.title, filter)
+                filter_match(&row.title, filter)
                     || row
                         .subtitle
                         .as_deref()
