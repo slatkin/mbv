@@ -10,9 +10,9 @@
 //! forwards like every other pointer event — the core resolves it against the
 //! hit map. The card is a child of the switcher's own anchor box, so its leading
 //! edge is the switcher's and it drops four pixels under it (design D8), and it
-//! paints the design's own card and item chrome: a 34 px row in the raised fill
-//! on the cursor and under the pointer, so the two queue overlays read as one
-//! family. The card answers the pointer with those fills alone, so it sets
+//! paints the design's own card and item chrome: a queue-row-height entry in the
+//! raised fill on the cursor and under the pointer, so the two queue overlays
+//! read as one family. The card answers the pointer with those fills alone, so it sets
 //! `--hover-veil: transparent` and the shared veil does not wash them.
 //!
 //! Each row paints, in the design's order: the shown entry's check, the name —

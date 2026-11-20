@@ -97,9 +97,7 @@ A section whose content can be absent has an `Option` value, so a `null`
 clears it. The sections are: the pre-attach state (`attach`, `null` once the
 attach succeeds), the theme (`theme`, `GuiTheme`), the
 Queue viewport rows with their stable `QueueSlotId` raw numbers, the active
-row, marks, active slot, row hover, row drag, and the shown queue's
-start-mark facts — its start slot, whether it plays,
-and whether its owner reported a start slot (`queue`, `GuiQueue`), the Queue
+row, marks, active slot, row hover, and row drag (`queue`, `GuiQueue`), the Queue
 chooser facts the header's controls read, the filter text with its caret
 fact, and the totals the footer shows, beside the folded strip's remaining
 count, next item title, and finish tail (`summary`, `GuiQueueSummary`), the collapse and queue-fold
@@ -702,8 +700,9 @@ paints from the switcher's own anchor box: it hangs 4 px under the
 switcher, left-aligned on the switcher's leading edge, and paints over the
 queue rows below. The card is the design's own chrome
 (`gui-queue-panel-redesign` design D8): min-width 260 px on `--ef-bg2` with
-a 1 px `--ef-bg4` border, radius 8, 4 px padding, and 34 px items that take
-the raised fill on the chooser's cursor and under the pointer. Its entries
+a 1 px `--ef-bg4` border, radius 8, 4 px padding, and items at the queue
+rows' height and gap (40 px, 0 px apart) that take the raised fill on the
+chooser's cursor and under the pointer. Its entries
 are the local Owner's Named queues in queue order, then one entry for the
 connected peer Player owner, named by the peer's own name (its device name,
 or the route or endpoint it connects by). Each entry paints, in order: the
@@ -763,18 +762,21 @@ playback; and after a close the panel shows the current local queue.
 The item rows carry no zebra stripe and no leading accent edge
 (`gui-queue-panel-redesign` design D9): the row's look comes from its
 state, and the hover veil stays the shared `button` look. Each row paints
-the design's row: its padded two-digit mono ordinal in place of the date
-gutter, one title line, with no right-column value and no second text
-line, at the fixed 34 logical pixel height with 2 px between rows. The
-progress bar is absolute inside the row along its bottom edge — 2 px tall,
-4 px above the bottom, inset 54 px left and 12 px right, on the raised
-tier's track with the orange fill for a partial row and the green fill for
-the now-playing row — so the bar adds no height. The shown queue's start
-slot carries the start mark: the filled play glyph while its queue plays,
-the outlined one while it is stopped or resting. A shown queue whose owner
-reports no start slot — a peer without `named-queues` — carries the playing
-mark on its observed active slot and no start mark. The rows paint three
-fills, and the three are distinct: the now-playing row fills
+the design's delineated row (`gui-delineated-rows` design D3): its
+right-aligned two-digit mono ordinal in a 28 px column, one title line, and
+the item's duration in a 96 px right column in every row state, at the
+fixed 40 logical pixel height with no gap between rows, 10 px padding, and
+a 1 px `--canvas-border` divider under each row. The rows are square, and
+the now-playing row alone rounds its corners (radius 4). A row with
+progress — a partial row, and the now-playing row, whose ring follows the
+playhead — carries the progress ring after its title: a 14 px svg in the
+collapsed rail's two-circle form, the track in `--ef-bg2` and the played arc
+in `--ef-orange`, or `--ef-green` on the now-playing row, each circle
+naming `currentColor` with its token in its own computed `color`, because
+usvg drops a `var()` in a `stroke` attribute. The ring is the row's only
+progress mark and adds no height, no row paints a start mark, and no row
+paints a time left. The rows paint three fills, and the three are distinct:
+the now-playing row fills
 `--ef-bg-green` with its green 600-weight title, a look no hover
 displaces; every marked row fills `--ef-bg3`, kept under the
 pointer too; a hovered row that is neither fills `--ef-bg0`; and an
@@ -814,8 +816,9 @@ whose answer carries the removal. The menu anchors on the first marked
 slot. `GuiQueue.drag` carries the
 dragged row's content as the ghost, the final index the drop leaves it at,
 and the insertion line's stable-slot anchor; the ghost floats at that line
-— with no ordinal, and the dragged row's painted percent — and the dragged
-row keeps its in-place paint (the canvas keeps it lit). The core owns the
+— with no ordinal and no right column, painted with the dragged row's ring
+and percent — and the dragged row keeps its in-place paint (the canvas keeps
+it lit). The core owns the
 gesture and the drop index, and it sends
 one move request to the Owner on release. `Alt+J` and `Alt+K` ask the core
 for the same move on the active row. A `cancel` pointer kind

@@ -1,21 +1,24 @@
 //! The Queue panel (`replace-tauri-with-blitz` task 5.5, the port of
-//! `QueuePanel`): the canvas header (`QueueHeader`), the redesign's fixed
-//! 34 px rows, 2 px apart, with no native DOM scroll — the core owns scroll
-//! and sends the viewport rows to paint — and the canvas footer line is
-//! `QueueFooter`'s. The component measures the list and reports the whole
-//! rows it fits plus the painted regions through the shared layout reporter.
+//! `QueuePanel`): the canvas header (`QueueHeader`), the delineated fixed
+//! 40 px rows, flush against one another, with no native DOM scroll — the core
+//! owns scroll and sends the viewport rows to paint — and the canvas footer
+//! line is `QueueFooter`'s. The component measures the list and reports the
+//! whole rows it fits plus the painted regions through the shared layout
+//! reporter.
 //!
 //! The rows paint the canvas's states from the frame's per-row
-//! `GuiSemanticState` (design D9 of `gui-queue-panel-redesign`): a watched
-//! (`played`) row strikes its grey title through, the now-playing row fills
-//! green and paints its title in green at weight 600, a partial-progress row
-//! (and the playing row) fills the thin progress track inside the row's
-//! bottom edge, and no row adds height for it. Every row leads with its padded
-//! queue ordinal and carries one title line — no right-column value, no
-//! second line, and no date gutter, as the canvas's row draws. The shown
-//! queue's start slot carries the start mark: a filled triangle while that
-//! queue plays and an outlined one while it is stopped or resting (task 8.4,
-//! design D9). The rows paint three fills: the now-playing row's green fill, a
+//! `GuiSemanticState` (design D9 of `gui-queue-panel-redesign`, restyled by
+//! design D3 of `gui-delineated-rows`): a watched (`played`) row strikes its
+//! grey title through, the now-playing row fills green and paints its title in
+//! green at weight 600, and a row with progress — a partial row, and the
+//! playing row, which follows the playhead — carries the progress ring after
+//! its title. The ring is the row's only progress mark and adds no height. A
+//! 1 px `--canvas-border` divider runs under every row, so the flush rows read
+//! apart without a gap. Every row leads with its padded queue ordinal, carries
+//! one title line, and paints the item's duration in its right column in every
+//! state — no second line, no date gutter, no time left, and no state glyph.
+//! The rows are square-cornered, and the now-playing row alone rounds its
+//! corners. The rows paint three fills: the now-playing row's green fill, a
 //! marked row's raised fill, and the hovered row's own fill; every other row
 //! paints none. The cursor slot paints nothing: only a multi-selection shows as
 //! selected. A marked row's look needs no focus fact: the window holds no focus,
@@ -28,8 +31,9 @@
 //! of the row's one button, over slots the row reserves, so no control nests
 //! in it — and `queue.drag` carries the drag ghost's content and the insertion
 //! line's stable-slot anchor. The ghost floats at the line the drop would
-//! insert at, with no ordinal and the dragged row's percent when it has one;
-//! the dragged row no longer dims in place (the canvas keeps it lit). Every
+//! insert at, with no ordinal, no right column, and the dragged row's ring and
+//! percent when it has progress; the dragged row no longer dims in place (the
+//! canvas keeps it lit). Every
 //! pointer press, move, and release forwards through the shared input
 //! installer — the core owns the gesture, the drop index, and the move
 //! request.
