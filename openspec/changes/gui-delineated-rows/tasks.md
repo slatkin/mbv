@@ -30,9 +30,9 @@
 
 ## 4. Library top-level row in the window
 
-- [ ] 4.1 Add the thumb to `LibraryItemRow` (design D1, D2: box, cover or centred-square image, kind icon for `Missing`/`NoSource`, thumb progress track and fill, the new `--canvas-thumb-track` token in `assets/app.css`), set the top-level row look (56 px, divider, title weight 400), and delete the under-row run; verify render tests for each art state, the square fit, the progress bar, and a title-only row.
-- [ ] 4.2 Send `RowsInView` from `library_virtual_list` with the painted ids plus 4 rows of overscan each time the set changes; verify a window test that a scroll sends the new set and an unchanged set sends nothing.
-- [ ] 4.3 Paint Home item rows through `LibraryItemRow`, delete `paint_home_item_row`'s own row look, and set the Home section heading look (design D2) and the Home row height constant; verify the Home list tests pass with the shared part's hooks.
+- [x] 4.1 Add the thumb to `LibraryItemRow` (design D1, D2: box, cover or centred-square image, kind icon for `Missing`/`NoSource`, thumb progress track and fill, the new `--canvas-thumb-track` token in `assets/app.css`), set the top-level row look (56 px, divider, title weight 400), and delete the under-row run; verify render tests for each art state, the square fit, the progress bar, and a title-only row.
+- [x] 4.2 Send `RowsInView` from `library_virtual_list` with the painted ids plus 4 rows of overscan each time the set changes; verify a window test that a scroll sends the new set and an unchanged set sends nothing.
+- [x] 4.3 Paint Home item rows through `LibraryItemRow`, delete `paint_home_item_row`'s own row look, and set the Home section heading look (design D2) and the Home row height constant; verify the Home list tests pass with the shared part's hooks.
 - [ ] 4.4 Paint the Emby, Podcasts, Audiobooks, and Feeds list rows with their frame's `art` and `media`, and update their row-height constants; verify each list's existing render test asserts the thumb hook.
 - [ ] 4.5 Paint the Music artist rows and the Shows series rows through `LibraryItemRow` (nested album, track, season, and episode rows unchanged) and update the top-level row heights in their height tables; verify render tests that the top-level row has a thumb and a nested row has none, and the letter-rail jump test passes with the new heights.
 - [ ] 4.6 Paint the Shows New and Upcoming rows (`paint_shows_flat`) through `LibraryItemRow` with their art; verify the Shows New and Upcoming render tests assert the thumb hook.
