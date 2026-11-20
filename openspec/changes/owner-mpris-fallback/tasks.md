@@ -43,7 +43,7 @@
 
 ## 3. Finish
 
-- [ ] 3.1 Run `cargo fmt --all`. Keep `mpris.rs` under 800 lines; apply the design's file split if
+- [x] 3.1 Run `cargo fmt --all`. Keep `mpris.rs` under 800 lines; apply the design's file split if
   the new code would take it past the limit.
 - [ ] 3.2 Update the comments that place MPRIS only in the Client so they name both publishers and
   both bus names: the header comment of `crates/mbv-desktop/src/mpris.rs`, the module doc of
