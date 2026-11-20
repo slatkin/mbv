@@ -6,8 +6,8 @@ place of the artist-row parts of 2.2 and the series-row parts of 3.2.
 
 ## 1. The shared hint part
 
-- [ ] 1.1 Add `crates/mbv-gui/src/window/components/tree_hint.rs` with `TreeHint { open: bool }` (design D3): one span, class `tree-hint`, mark `data-tree-hint`, muted canvas tone, 12 px, `flex-none`, no wrap, text `Double-click to expand` when closed and `Double-click to collapse` when open. Register it in `components.rs`. Verify: a `#[case]` test (closed, open) in `tree_hint/tests.rs` checks the text and the mark, and `cargo nextest run -p mbv-gui tree_hint` passes.
-- [ ] 1.2 Add the hover rule to `crates/mbv-gui/assets/app.css` (design D3): `.tree-hint` hidden, `.tree-parent:hover .tree-hint` shown, `.tree-parent:hover .tree-trailing` hidden, with a comment that names this change and design D3. Regenerate the committed `app.generated.css` with `make gui-css` (Tailwind CLI v4.3.5, as the Makefile names it). Verify: `make gui-css` succeeds, `rg -c "tree-hint" crates/mbv-gui/assets/app.generated.css` finds the rule, and `cargo check -p mbv-gui` passes.
+- [x] 1.1 Add `crates/mbv-gui/src/window/components/tree_hint.rs` with `TreeHint { open: bool }` (design D3): one span, class `tree-hint`, mark `data-tree-hint`, muted canvas tone, 12 px, `flex-none`, no wrap, text `Double-click to expand` when closed and `Double-click to collapse` when open. Register it in `components.rs`. Verify: a `#[case]` test (closed, open) in `tree_hint/tests.rs` checks the text and the mark, and `cargo nextest run -p mbv-gui tree_hint` passes.
+- [x] 1.2 Add the hover rule to `crates/mbv-gui/assets/app.css` (design D3): `.tree-hint` hidden, `.tree-parent:hover .tree-hint` shown, `.tree-parent:hover .tree-trailing` hidden, with a comment that names this change and design D3. Regenerate the committed `app.generated.css` with `make gui-css` (Tailwind CLI v4.3.5, as the Makefile names it). Verify: `make gui-css` succeeds, `rg -c "tree-hint" crates/mbv-gui/assets/app.generated.css` finds the rule, and `cargo check -p mbv-gui` passes.
 
 ## 2. Music list
 
