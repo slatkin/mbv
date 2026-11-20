@@ -32,11 +32,11 @@ impl FlatItem for GuiEmbyRowFrame {
 /// The letter heading row's height in logical pixels (design D12): the Music
 /// list's letter heading, which the plain list reuses.
 pub const EMBY_HEADING_ROW_HEIGHT: f32 = LETTER_ROW_HEIGHT;
-/// The item row's height in logical pixels: the room a row's title, its
-/// secondary label, and the feed-group list's date gutter paint into. Both
-/// modes paint at this one height, so a mode switch changes the rows and never
-/// their geometry.
-pub const EMBY_ROW_HEIGHT: f32 = 40.0;
+/// The item row's height in logical pixels: the shared top-level row part's
+/// height (gui-delineated-rows design D2), so the virtual-list geometry and
+/// the painted rows agree. Both modes paint at this one height, so a mode
+/// switch changes the rows and never their geometry.
+pub const EMBY_ROW_HEIGHT: f32 = 56.0;
 
 /// One painted row the keys may act on (row 8.1): every item row, a folder and
 /// a boxset included, because the folder-play rule plays a collection row. A

@@ -214,11 +214,25 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
+    /// The `RowsInView` reports the core link received, in send order.
+    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+                    Some(command)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The Library commands the core link received, in send order.
     fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
+                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -268,7 +282,7 @@ fn built(list: GuiEmbyList, detail: GuiEmbyDetail) -> Fixture {
 fn movies() -> Vec<GuiEmbyRowFrame> {
     vec![
         GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
+            art: GuiRowArtFrame::Loading,
             media: GuiRowMediaKindFrame::Video,
             id: "m1".to_owned(),
             title: "Alien".to_owned(),
@@ -395,6 +409,40 @@ fn the_plain_mode_paints_letter_headings_its_rows_and_the_rail_beside_them() {
         fixture.attr_of("[data-library-rail-letter=\"B\"]", "disabled"),
         None,
         "the rail's B is enabled by the row under it"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-emby-row-id=\"m1\"] [data-library-emby-thumb]",
+            "data-library-emby-thumb"
+        ),
+        ["loading".to_owned()],
+        "the item row paints the shared part's thumb with its art state"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-emby-row-id=\"m2\"] [data-library-emby-thumb]",
+            "data-library-emby-thumb"
+        ),
+        ["none".to_owned()],
+        "a row with no art source paints the no-source thumb"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): the list reports the rows it
+/// paints under its own scope, so the core queues their row art without a
+/// coordinate.
+#[test]
+fn the_list_reports_the_rows_in_view_under_the_emby_scope() {
+    let mut fixture = built(emby_frame(false, movies()), emby_detail(&movies()));
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.reported_rows_in_view().last(),
+        Some(&mbv::GuiLibraryCommand::RowsInView {
+            scope: mbv::GuiRowArtScope::Emby,
+            ids: vec!["m1".to_owned(), "m2".to_owned(), "m3".to_owned()],
+        }),
+        "the report names the painted rows under the Emby scope"
     );
 }
 

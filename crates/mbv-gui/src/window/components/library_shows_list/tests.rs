@@ -198,11 +198,25 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
+    /// The `RowsInView` reports the core link received, in send order.
+    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+                    Some(command)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The Library commands the core link received, in send order.
     fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
+                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -276,7 +290,7 @@ fn shows_detail(selected: Option<&str>) -> GuiShowsDetail {
 fn tree() -> Vec<GuiShowsSeriesFrame> {
     vec![
         GuiShowsSeriesFrame {
-            art: GuiRowArtFrame::NoSource,
+            art: GuiRowArtFrame::Loading,
             media: GuiRowMediaKindFrame::Video,
             id: "s1".to_owned(),
             title: "Atlanta".to_owned(),
@@ -348,13 +362,52 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them(
         None,
         "the rail's B is enabled by the series row under it"
     );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-shows-row-id=\"shows-series:s1\"] [data-library-shows-thumb]",
+            "data-library-shows-thumb"
+        ),
+        ["loading".to_owned()],
+        "the series row paints the shared part's thumb with its art state"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-shows-row-id=\"shows-series:s3\"] [data-library-shows-thumb]",
+            "data-library-shows-thumb"
+        ),
+        ["none".to_owned()],
+        "a series row with no art source paints the no-source thumb"
+    );
+}
+
+/// Contract (gui-delineated-rows design D1): a series row is a top-level row and
+/// paints the shared part's thumb, while the season row nested under it keeps
+/// its own painter and paints none.
+#[test]
+fn the_series_row_paints_a_thumb_and_its_nested_season_row_paints_none() {
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
+    fixture.measure(300.0);
+
+    press_row(&mut fixture, "shows-series:s1");
+
+    assert!(
+        fixture
+            .presents("[data-library-shows-row-id=\"shows-series:s1\"] [data-library-shows-thumb]"),
+        "the top-level series row paints its thumb"
+    );
+    assert!(
+        !fixture.presents(
+            "[data-library-shows-row-id=\"shows-season:s1:se1\"] [data-library-shows-thumb]"
+        ),
+        "the nested season row paints no thumb"
+    );
 }
 
 /// The New view's flat rows (design D8): one episode row, date-sorted, carrying
 /// no rail letter.
 fn new_view_rows() -> Vec<GuiShowsRowFrame> {
     vec![GuiShowsRowFrame {
-        art: GuiRowArtFrame::NoSource,
+        art: GuiRowArtFrame::Loading,
         media: GuiRowMediaKindFrame::Video,
         id: "new:e1".to_owned(),
         title: "Pilot".to_owned(),
@@ -381,6 +434,46 @@ fn the_date_sorted_view_paints_no_rail() {
     assert!(
         !fixture.presents("[data-library-region=\"rail\"]"),
         "the date-sorted view paints no rail"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-shows-row-id=\"new:e1\"] [data-library-shows-thumb]",
+            "data-library-shows-thumb"
+        ),
+        ["loading".to_owned()],
+        "the flat New row paints the shared part's thumb with its art state"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): the list reports the rows it
+/// paints under the scope its visible view names, so the core queues their row
+/// art without a coordinate.
+#[rstest::rstest]
+#[case(mbv::GuiShowsView::All, mbv::GuiRowArtScope::ShowsSeries)]
+#[case(mbv::GuiShowsView::New, mbv::GuiRowArtScope::ShowsNew)]
+#[case(mbv::GuiShowsView::Upcoming, mbv::GuiRowArtScope::ShowsUpcoming)]
+fn the_list_reports_the_rows_in_view_under_the_views_scope(
+    #[case] view: mbv::GuiShowsView,
+    #[case] scope: mbv::GuiRowArtScope,
+) {
+    let frame = GuiShowsList {
+        view,
+        rows: new_view_rows(),
+        ..shows_frame(tree())
+    };
+    let mut fixture = built(frame, shows_detail(None));
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture
+            .reported_rows_in_view()
+            .last()
+            .map(|command| match command {
+                mbv::GuiLibraryCommand::RowsInView { scope, .. } => *scope,
+                _ => panic!("the report is a row set"),
+            }),
+        Some(scope),
+        "the report names the scope of the view the list paints"
     );
 }
 

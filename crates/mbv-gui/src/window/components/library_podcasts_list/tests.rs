@@ -214,11 +214,25 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
+    /// The `RowsInView` reports the core link received, in send order.
+    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+                    Some(command)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The Library commands the core link received, in send order.
     fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
+                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -269,7 +283,7 @@ fn built(list: GuiPodcastsList, detail: GuiPodcastsDetail) -> Fixture {
 fn episodes() -> Vec<GuiEntryRowFrame> {
     vec![
         GuiEntryRowFrame {
-            art: GuiRowArtFrame::NoSource,
+            art: GuiRowArtFrame::Loading,
             media: GuiRowMediaKindFrame::Audio,
             id: "e1:ep1".to_owned(),
             title: "Episode A".to_owned(),
@@ -389,6 +403,44 @@ fn the_flat_list_paints_its_date_gutter_with_no_heading_and_no_rail() {
             .text_of("[data-library-podcasts-row-id=\"e1:ep1\"] [data-library-podcasts-subtitle]"),
         "Show One",
         "the episode title paints over its show"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-podcasts-row-id=\"e1:ep1\"] [data-library-podcasts-thumb]",
+            "data-library-podcasts-thumb"
+        ),
+        ["loading".to_owned()],
+        "the episode row paints the shared part's thumb with its art state"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-podcasts-row-id=\"e2:ep2\"] [data-library-podcasts-thumb]",
+            "data-library-podcasts-thumb"
+        ),
+        ["none".to_owned()],
+        "a row with no art source paints the no-source thumb"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): the list reports the rows it
+/// paints under its own scope, so the core queues their row art without a
+/// coordinate.
+#[test]
+fn the_list_reports_the_rows_in_view_under_the_podcasts_scope() {
+    let mut fixture = built(frame(episodes(), false, false), detail(None));
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.reported_rows_in_view().last(),
+        Some(&mbv::GuiLibraryCommand::RowsInView {
+            scope: mbv::GuiRowArtScope::Podcasts,
+            ids: vec![
+                "e1:ep1".to_owned(),
+                "e2:ep2".to_owned(),
+                "e3:ep3".to_owned()
+            ],
+        }),
+        "the report names the painted rows under the Podcasts scope"
     );
 }
 

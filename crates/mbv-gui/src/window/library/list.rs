@@ -1,18 +1,29 @@
 //! The Library list's row model (`add-gui-library-panel` design D7, the port
-//! of `lib/library/list.ts`): the canvas tree of artists, albums, and tracks,
-//! the 24 px letter headings above the first artist of each letter, the rows
-//! in view, the scroll geometry, and the A–Z letter rail. The list paints
+//! of `lib/library/list.ts`; gui-delineated-rows design D1, D2): the canvas
+//! tree of artists, albums, and tracks, the 24 px letter headings above the
+//! first artist of each letter, the rows in view, the scroll geometry, and the
+//! A–Z letter rail. The artist rows are top-level rows: they carry their art
+//! and paint through the shared row part at its height, while the nested album
+//! and track rows keep their own painters and heights. The list paints
 //! fixed-height rows over native scroll, and the window content owns the open
 //! nodes and the filter (design D1), while the scroll store owns the scroll
 //! (design D9). This module is plain data:
 //! [`super::state`] applies it and the components paint it. Keeping it apart
 //! from both keeps the geometry testable without a layout.
 
-use crate::bridge::frame::library::{GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicTrackFrame};
+use crate::bridge::frame::library::{
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicTrackFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
+};
 
 /// The canvas's letter heading height in logical pixels (design D7).
 pub const LETTER_ROW_HEIGHT: f32 = 24.0;
-/// The canvas's artist and album row height in logical pixels.
+/// The canvas's artist row height in logical pixels (gui-delineated-rows design
+/// D2): the artist is a top-level row, so it paints through the shared row part
+/// at that part's height.
+pub const ARTIST_ROW_HEIGHT: f32 = 56.0;
+/// The canvas's album row height in logical pixels: a nested row keeps its own
+/// height (design D1).
 pub const NODE_ROW_HEIGHT: f32 = 30.0;
 /// The canvas's track row height in logical pixels.
 pub const TRACK_ROW_HEIGHT: f32 = 28.0;
@@ -58,6 +69,13 @@ pub enum LibraryRow {
         item_id: Option<String>,
         /// Whether the row paints open.
         open: bool,
+        /// The row's art (gui-delineated-rows design D4): the artist's cached
+        /// image and the fit its pixels ask for, a fetch in flight, a source
+        /// with no image, or a kind with no art source.
+        art: GuiRowArtFrame,
+        /// The media kind the row's thumb shows while it holds no image
+        /// (design D4).
+        media: GuiRowMediaKindFrame,
     },
     /// An album row under an open artist, open or closed.
     Album {
@@ -380,8 +398,10 @@ fn push_letter_and_artist(
                 crate::bridge::frame::library::GuiArtistKey::Fallback(_) => None,
             },
             open: artist_open,
+            art: artist.art.clone(),
+            media: artist.media,
         },
-        NODE_ROW_HEIGHT,
+        ARTIST_ROW_HEIGHT,
     );
     builder.artist_open = artist_open;
 }

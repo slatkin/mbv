@@ -7,7 +7,6 @@
 
 use super::*;
 use crate::bridge::frame::library::GuiHomeRowStateFrame;
-use crate::bridge::frame::library::{GuiRowArtFrame, GuiRowMediaKindFrame};
 
 /// One episode row of a season, as the frame carries it.
 fn episode(id: &str, name: &str) -> GuiShowsEpisodeRowFrame {
@@ -231,10 +230,10 @@ fn flat_row(id: &str, title: &str) -> GuiShowsRowFrame {
     }
 }
 
-// The flat New and Upcoming rows paint at the two-line height their format
-// was built for (gui-collection-dropdown D9): the old Home item rows' 48 px,
-// whose two title lines fit — not the one-line track row's 28 px, which
-// clipped them illegibly (the live defect of 2026-11-18).
+// The flat New and Upcoming rows paint at the shared top-level row part's
+// height (gui-delineated-rows D2), whose two title lines fit — not the
+// one-line track row's 28 px, which clipped them illegibly (the live defect
+// of 2026-11-18).
 #[test]
 fn the_flat_rows_paint_at_the_two_line_height() {
     let rows = vec![flat_row("n1", "Alfred"), flat_row("n2", "Bridgerton")];

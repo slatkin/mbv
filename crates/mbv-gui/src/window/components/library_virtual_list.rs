@@ -128,7 +128,11 @@ pub fn library_virtual_list<R: GeometryRow>(
     rsx! {
         ol {
             class: "min-h-0 flex-1",
-            style: "overflow-y: auto; list-style: none; margin: 0; padding: {padding};",
+            // The list frame's top rule (gui-delineated-rows design D2): the
+            // 1 px line over the list's first row, which every destination's
+            // rows sit under. `border-box` keeps the rule inside the frame the
+            // rows' geometry measures.
+            style: "overflow-y: auto; list-style: none; margin: 0; box-sizing: border-box; border-top: 1px solid var(--canvas-border); padding: {padding};",
             onmounted: move |event: Event<MountedData>| list_mounted.set(Some(event)),
             onscroll: move |event: ScrollEvent| on_scroll.call(f32_from_f64(event.scroll_top())),
             ..list_attrs,

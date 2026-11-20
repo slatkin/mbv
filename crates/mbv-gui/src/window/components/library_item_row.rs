@@ -12,7 +12,9 @@
 //! thumb, and the press, double-click, and context handlers; it never restates
 //! the look. Every part paints `data-library-<attr>-<part>`, and the thumb adds
 //! `data-library-<attr>-thumb` with its art state and
-//! `data-library-<attr>-thumb-progress`.
+//! `data-library-<attr>-thumb-progress`. A top-level tree node — a Music artist
+//! or a Shows series — also names its open state, so the part paints the one
+//! caret (`LibraryRowNode`).
 //!
 //! [`paint_item_row`] paints one row of a flat entry list — Podcasts and Feeds
 //! — from its carried entry, so the two lists keep one row painter.
@@ -27,7 +29,7 @@ use crate::bridge::frame::library::{
 };
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_attr::library_attr;
-use crate::window::icons::{EighthNotes, MonitorPlay};
+use crate::window::icons::{ChevronRight, EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
 use crate::window::library::shows_workspace::episode_progress;
 use crate::window::theme::canvas_var;
@@ -57,6 +59,38 @@ pub const THUMB_RADIUS_PX: f32 = 3.0;
 
 /// The media kind icon's size inside a thumb with no image (design D2).
 pub const THUMB_ICON_PX: u16 = 16;
+
+/// The caret's box width before a tree node's thumb (design D1).
+pub const NODE_CARET_WIDTH_PX: f32 = 18.0;
+
+/// The open state of a top-level tree node (design D1): the Music artist row
+/// and the Shows series row open and close, and their row paints the caret in
+/// that state. Every other top-level row paints none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LibraryRowNode {
+    /// The node paints closed: its caret points right.
+    Closed,
+    /// The node paints open: its caret points down.
+    Open,
+}
+
+impl LibraryRowNode {
+    /// The caret's rotation in degrees, as the canvas paints it.
+    fn rotation(self) -> i32 {
+        match self {
+            LibraryRowNode::Closed => 0,
+            LibraryRowNode::Open => 90,
+        }
+    }
+
+    /// The open state word the row's `aria-expanded` carries.
+    fn expanded(self) -> &'static str {
+        match self {
+            LibraryRowNode::Closed => "false",
+            LibraryRowNode::Open => "true",
+        }
+    }
+}
 
 /// The thumb's progress track and fill height, along the box's bottom edge
 /// (design D2).
@@ -126,6 +160,10 @@ pub struct LibraryItemRowProps {
     /// thumb yet.
     #[props(default)]
     pub thumb: Option<LibraryRowThumb>,
+    /// The node's open state (design D1), `None` on a row that is no tree
+    /// node. It paints the row's caret and its `aria-expanded`.
+    #[props(default)]
+    pub node: Option<LibraryRowNode>,
     /// A press on the row.
     pub on_press: Callback<()>,
     /// A double-click on the row: the play path.
@@ -165,6 +203,14 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             false,
         ));
     }
+    if let Some(node) = props.node {
+        row_attrs.push(Attribute::new(
+            "aria-expanded",
+            node.expanded(),
+            None,
+            false,
+        ));
+    }
     // The top-level row look (design D2): the fixed height, the tight padding,
     // the square corners, and the 1 px divider under the row. `border-box`
     // keeps the divider inside the row height the list's geometry holds.
@@ -200,6 +246,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
         .thumb
         .as_ref()
         .map(|thumb| paint_thumb(props.attr, thumb, props.progress));
+    let caret = props.node.map(paint_caret);
     let on_press = props.on_press;
     let on_play = props.on_play;
     let on_context = props.on_context;
@@ -220,6 +267,9 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 }
             },
             ..row_attrs,
+            if let Some(caret) = caret {
+                {caret}
+            }
             if let Some(thumb) = thumb {
                 {thumb}
             }
@@ -251,6 +301,23 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                     ..trail_attrs,
                     "{trail}"
                 }
+            }
+        }
+    }
+}
+
+/// A tree node's caret (design D1): the one chevron every expandable
+/// top-level row paints, rotated down while the node is open.
+fn paint_caret(node: LibraryRowNode) -> Element {
+    let angle = node.rotation();
+    rsx! {
+        span {
+            class: "flex flex-none items-center justify-center",
+            style: "width: {NODE_CARET_WIDTH_PX}px; color: var(--canvas-muted);",
+            span {
+                class: "flex",
+                style: "transform: rotate({angle}deg); transition: transform 120ms ease;",
+                ChevronRight { size: 10, stroke_width: 3.0 }
             }
         }
     }

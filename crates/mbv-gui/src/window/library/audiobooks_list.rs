@@ -21,9 +21,9 @@ use crate::window::library::list::{
 /// The letter heading row's height in logical pixels (design D12, row 9.1):
 /// the Music list's letter heading, which the book list reuses.
 pub const AUIB_HEADING_ROW_HEIGHT: f32 = LETTER_ROW_HEIGHT;
-/// The book row's height in logical pixels: the room a row's title, its author
-/// line, and the duration gutter paint into.
-pub const AUIB_ROW_HEIGHT: f32 = 40.0;
+/// The book row's height in logical pixels: the shared top-level row part's
+/// height (gui-delineated-rows design D2).
+pub const AUIB_ROW_HEIGHT: f32 = 56.0;
 
 /// One painted item row: a book (row 9.1). A heading names no book.
 #[derive(Debug, Clone, PartialEq)]

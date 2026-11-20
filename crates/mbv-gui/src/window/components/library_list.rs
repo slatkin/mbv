@@ -5,7 +5,10 @@
 //! artist, album, and track rows under its letter headings, and the A–Z
 //! letter rail beside it. The rows paint at the canvas's fixed heights over
 //! native scroll, and only the rows in view paint, so a long artist list
-//! stays fast.
+//! stays fast. The artist rows are top-level rows and paint through the shared
+//! row part with their art thumb; the album and track rows under them keep
+//! their own painters (gui-delineated-rows design D1). The rows it paints are
+//! also the row art set the core fetches (design D7).
 //!
 //! The open nodes and the filter text are window-content state in
 //! [`crate::window::library::state`] (design D1), the scroll offset and the
@@ -23,6 +26,10 @@ use std::rc::Rc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
+use crate::bridge::library::GuiRowArtScopeFrame;
+use crate::window::components::library_item_row::{
+    LibraryItemRow, LibraryRowNode, LibraryRowThumb, LibraryTrailPart,
+};
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -47,16 +54,11 @@ fn is_picked(row: &LibraryRow, picked: Option<&str>) -> bool {
     }
 }
 
-/// A row's indent: the canvas's tree inset by depth, the letter heading's
-/// own padding included.
-fn row_padding(row: &LibraryRow) -> &'static str {
-    match row {
-        LibraryRow::Letter(_) => "0 8px 2px",
-        LibraryRow::Artist { .. } => "0 8px 0 4px",
-        LibraryRow::Album { .. } => "0 8px 0 22px",
-        LibraryRow::Track { .. } => "0 8px 0 40px",
-    }
-}
+/// A nested album row's indent: the canvas's tree inset by depth, the letter
+/// heading's own padding included.
+const ALBUM_PADDING: &str = "0 8px 0 22px";
+/// A nested track row's indent.
+const TRACK_PADDING: &str = "0 8px 0 40px";
 
 /// The letter heading above the first artist of the letter (the former client
 /// letter branch).
@@ -86,8 +88,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
         return rsx! {};
     };
     let style = format!(
-        "height: {TRACK_ROW_HEIGHT}px; padding: {}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
-        row_padding(row),
+        "height: {TRACK_ROW_HEIGHT}px; padding: {TRACK_PADDING}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     let press_row = row.clone();
@@ -134,99 +135,145 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     }
 }
 
-/// One painted row of the canvas tree: the letter
-/// heading, the track row, or the artist and album node row.
+/// One painted row of the canvas tree: the letter heading, the track row, the
+/// shared part's artist row (gui-delineated-rows design D1), or the nested
+/// album node.
 fn paint_library_row(row: &LibraryRow, library: &LibraryState, picked: Option<&str>) -> Element {
     let picked_row = is_picked(row, picked);
     match row {
         LibraryRow::Letter(base) => paint_letter_row(base.letter),
         LibraryRow::Track { .. } => paint_track_row(row, library, picked_row),
-        LibraryRow::Artist {
-            base, name, open, ..
-        }
-        | LibraryRow::Album {
-            base, name, open, ..
-        } => {
-            let kind = match row {
-                LibraryRow::Artist { .. } => "artist",
-                _ => "album",
-            };
-            let color = match row {
-                LibraryRow::Artist { .. } => canvas_var("heading"),
-                _ => canvas_var("text"),
-            };
-            let weight = if matches!(row, LibraryRow::Artist { .. }) {
-                600.0
+        LibraryRow::Artist { .. } => paint_artist_row(row, library, picked_row),
+        LibraryRow::Album { .. } => paint_album_row(row, library, picked_row),
+    }
+}
+
+/// A top-level artist row (gui-delineated-rows design D1): the shared row part
+/// over the artist's name, its node caret, and its art thumb. A double-click on
+/// an artist only opens it, so the row names no play path.
+fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
+    let LibraryRow::Artist {
+        base,
+        name,
+        open,
+        art,
+        media,
+        ..
+    } = row
+    else {
+        return rsx! {};
+    };
+    let press_row = row.clone();
+    let press_library = library.clone();
+    let menu_library = library.clone();
+    let item_id = LibraryState::action_item_id(row);
+    rsx! {
+        LibraryItemRow {
+            attr: "",
+            kind: "artist".to_owned(),
+            id: base.id.clone(),
+            height: base.height,
+            title: name.clone(),
+            subtitle: None,
+            trail: None,
+            trail_part: LibraryTrailPart::Date,
+            title_color: canvas_var("text"),
+            background: picked_row.then(|| canvas_var("library-raise")),
+            selected: picked_row,
+            progress: None,
+            thumb: Some(LibraryRowThumb {
+                art: art.clone(),
+                media: *media,
+            }),
+            node: Some(if *open {
+                LibraryRowNode::Open
             } else {
-                400.0
-            };
-            let year = match row {
-                LibraryRow::Album { year, .. } if !year.is_empty() => Some(year.clone()),
-                _ => None,
-            };
-            let style = format!(
-                "height: {NODE_ROW_HEIGHT}px; padding: {}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
-                row_padding(row),
-                if picked_row { "4px" } else { "0" }
-            );
-            let press_row = row.clone();
-            let press_library = library.clone();
-            let menu_library = library.clone();
-            let item_id = LibraryState::action_item_id(row);
-            let rotate = if *open { 90 } else { 0 };
-            rsx! {
-                button {
-                    "type": "button",
-                    class: "flex w-full items-center overflow-hidden",
-                    style: "{style}",
-                    "aria-expanded": "{open}",
-                    "data-library-row": "{kind}",
-                    "data-library-row-id": "{base.id}",
-                    onclick: move |_| press_library.press_library_row(&press_row),
-                    oncontextmenu: move |event: MouseEvent| {
-                        event.prevent_default();
-                        let coordinates = event.client_coordinates();
-                        menu_library.open_row_menu_at(
-                            item_id.clone(),
-                            f32_from_f64(coordinates.x),
-                            f32_from_f64(coordinates.y),
-                        );
+                LibraryRowNode::Closed
+            }),
+            on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
+            on_play: Callback::new(|()| {}),
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
+                menu_library.open_row_menu_at(item_id.clone(), x, y);
+            })),
+        }
+    }
+}
+
+/// A nested album row under an open artist: the canvas's tree node, which keeps
+/// its own painter and height (gui-delineated-rows design D1).
+fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
+    let LibraryRow::Album {
+        base,
+        name,
+        year,
+        open,
+        ..
+    } = row
+    else {
+        return rsx! {};
+    };
+    let color = canvas_var("text");
+    let year = (!year.is_empty()).then(|| year.clone());
+    let style = format!(
+        "height: {NODE_ROW_HEIGHT}px; padding: {ALBUM_PADDING}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
+        if picked_row { "4px" } else { "0" }
+    );
+    let press_row = row.clone();
+    let press_library = library.clone();
+    let menu_library = library.clone();
+    let item_id = LibraryState::action_item_id(row);
+    let rotate = if *open { 90 } else { 0 };
+    rsx! {
+        button {
+            "type": "button",
+            class: "flex w-full items-center overflow-hidden",
+            style: "{style}",
+            "aria-expanded": "{open}",
+            "data-library-row": "album",
+            "data-library-row-id": "{base.id}",
+            onclick: move |_| press_library.press_library_row(&press_row),
+            oncontextmenu: move |event: MouseEvent| {
+                event.prevent_default();
+                let coordinates = event.client_coordinates();
+                menu_library.open_row_menu_at(
+                    item_id.clone(),
+                    f32_from_f64(coordinates.x),
+                    f32_from_f64(coordinates.y),
+                );
+            },
+            span {
+                class: "flex flex-none items-center justify-center",
+                style: "width: 18px; color: {color};",
+                span {
+                    class: "flex",
+                    style: "transform: rotate({rotate}deg); transition: transform 120ms ease;",
+                    ChevronRight { size: 10, stroke_width: 3.0 }
+                }
+            }
+            Truncate {
+                text: name.clone(),
+                class: "min-w-0 flex-1".to_owned(),
+                css: format!("color: {color}; font-weight: 400.0;"),
+                style: TextStyle::sans(14.5, 400.0),
+            }
+            if let Some(year) = year {
+                // A year repeats down the tree, so it paints the date
+                // token at the repeat opacity; the picked album keeps
+                // its own ink (design D14).
+                span {
+                    class: "flex-none font-mono tabular-nums",
+                    style: if picked_row {
+                        "font-size: 12px; color: var(--canvas-muted);"
+                    } else {
+                        "font-size: 12px;"
                     },
-                    span {
-                        class: "flex flex-none items-center justify-center",
-                        style: "width: 18px; color: {color};",
-                        span {
-                            class: "flex",
-                            style: "transform: rotate({rotate}deg); transition: transform 120ms ease;",
-                            ChevronRight { size: 10, stroke_width: 3.0 }
-                        }
-                    }
-                    Truncate {
-                        text: name.clone(),
-                        class: "min-w-0 flex-1".to_owned(),
-                        css: format!("color: {color}; font-weight: {weight};"),
-                        style: TextStyle::sans(14.5, weight),
-                    }
-                    if let Some(year) = year {
-                        // A year repeats down the tree, so it paints the date
-                        // token at the repeat opacity; the picked album keeps
-                        // its own ink (design D14).
-                        span {
-                            class: "flex-none font-mono tabular-nums",
-                            style: if picked_row {
-                                "font-size: 12px; color: var(--canvas-muted);"
-                            } else {
-                                "font-size: 12px;"
-                            },
-                            "data-library-row-year": "",
-                            TypedText {
-                                segments: vec![GuiMetaSegmentFrame {
-                                    text: year,
-                                    kind: GuiMetaKindFrame::Date,
-                                }],
-                                repeat: !picked_row,
-                            }
-                        }
+                    "data-library-row-year": "",
+                    TypedText {
+                        segments: vec![GuiMetaSegmentFrame {
+                            text: year,
+                            kind: GuiMetaKindFrame::Date,
+                        }],
+                        repeat: !picked_row,
                     }
                 }
             }
@@ -316,10 +363,13 @@ pub fn LibraryList() -> Element {
     // The rail's A–Z letters over the painted rows.
     let rail = letter_rail(&rows);
 
-    // The list's two DOM facts report to the scroll store (design D9), and
-    // the rows paint over the interaction state this render read.
+    // The list's two DOM facts report to the scroll store (design D9), the
+    // artist rows in view report to the core for their row art fetches
+    // (gui-delineated-rows design D7), and the rows paint over the interaction
+    // state this render read.
     let measure_library = library.clone();
     let scroll_library = library.clone();
+    let art_library = library.clone();
     let paint_library = library.clone();
     let virtual_list = library_virtual_list(
         rows.as_ref(),
@@ -329,7 +379,9 @@ pub fn LibraryList() -> Element {
         "0 0 0 8px",
         Callback::new(move |height: f32| measure_library.measure_library_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_library_list(top)),
-        None,
+        Some(Callback::new(move |ids: Vec<String>| {
+            art_library.report_rows_in_view(GuiRowArtScopeFrame::Music, ids);
+        })),
         |row: &LibraryRow| paint_library_row(row, &paint_library, picked.as_deref()),
     );
 

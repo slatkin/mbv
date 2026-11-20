@@ -269,5 +269,5 @@ fn a_press_on_a_letter_scrolls_the_list_to_its_first_row() {
 
     fixture.compute(|state| state.jump_to_letter('B'));
 
-    assert_eq!(fixture.state.music_scroll.peek().scroll_top, 14.0);
+    assert_eq!(fixture.state.music_scroll.peek().scroll_top, 40.0);
 }

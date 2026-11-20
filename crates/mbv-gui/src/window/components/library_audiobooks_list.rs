@@ -3,7 +3,10 @@
 //! 9.1): the catalog's book rows in the TUI's sort — author sort key, then
 //! title — under their letter headings, with the A–Z letter rail beside
 //! them. No second mode rides on the destination and no pill row: the rail
-//! replaces the TUI's surname buckets.
+//! replaces the TUI's surname buckets. The book rows are top-level rows and
+//! paint through the shared row part with their art thumb (gui-delineated-rows
+//! design D1); the rows the list paints are also the row art set the core
+//! fetches (design D7).
 //!
 //! The rows paint at the fixed heights of
 //! [`crate::window::library::audiobooks_list`] over native scroll, and only
@@ -20,7 +23,10 @@
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart};
+use crate::bridge::library::GuiRowArtScopeFrame;
+use crate::window::components::library_item_row::{
+    LibraryItemRow, LibraryRowThumb, LibraryTrailPart,
+};
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
@@ -69,6 +75,10 @@ fn paint_audiobooks_row(
                     background: selected_row.then(|| canvas_var("library-raise")),
                     selected: selected_row,
                     progress: None,
+                    thumb: Some(LibraryRowThumb {
+                        art: item.row.art.clone(),
+                        media: item.row.media,
+                    }),
                     on_press: Callback::new(move |()| {
                         press_library.press_audiobooks_row(&press_row);
                     }),
@@ -116,10 +126,12 @@ pub fn LibraryAudiobooksList() -> Element {
 
     let selected = detail.and_then(|detail| detail.selected.clone());
 
-    // The list's two DOM facts report to the scroll store (design D9), and
-    // the rows paint over the section this render read.
+    // The list's two DOM facts report to the scroll store (design D9), the rows
+    // in view report to the core for their row art fetches (gui-delineated-rows
+    // design D7), and the rows paint over the section this render read.
     let measure_library = library.clone();
     let scroll_library = library.clone();
+    let art_library = library.clone();
     let paint_library = library.clone();
     let paint_selected = selected.clone();
     let virtual_list = library_virtual_list(
@@ -130,7 +142,9 @@ pub fn LibraryAudiobooksList() -> Element {
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_audiobooks_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_audiobooks_list(top)),
-        None,
+        Some(Callback::new(move |ids: Vec<String>| {
+            art_library.report_rows_in_view(GuiRowArtScopeFrame::Audiobooks, ids);
+        })),
         move |row: &AudiobooksListRow| {
             paint_audiobooks_row(row, &paint_library, paint_selected.as_deref())
         },
