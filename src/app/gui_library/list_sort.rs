@@ -72,6 +72,13 @@ impl GuiListSort {
     }
 }
 
+/// The key a Title sort compares (design D6): the title or sort name
+/// lowercased, so two keys that differ only in case tie.
+#[must_use]
+pub(in crate::app::gui_library) fn gui_title_sort_key(name: &str) -> String {
+    name.to_lowercase()
+}
+
 /// The flat list one sort belongs to (design D2), as the commands and the
 /// frames name it: the index is the library's index in the core's catalog,
 /// Emby's `libs` or the Audiobookshelf libraries', as the destination kinds

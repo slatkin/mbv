@@ -1,10 +1,11 @@
 //! The GUI Library's Podcasts projection (add-gui-library-panel design D12,
 //! row 10.1): the interim collection pill row of All and one pill per show,
-//! the selection's episode list in the stored date order — the shared
-//! `compare_gui_date_order` rule, newest first with undated episodes last
-//! while Newest — the core's selected episode, and its Hero. All merges every
-//! listed show's episodes; a checked set merges the checked shows'. The list
-//! shows no letter rail, because it is sorted by date. The Hero is the shared
+//! the selection's episode list in the list's sort — Title orders the episode
+//! titles, and the date sorts use the shared `compare_gui_date_order` rule,
+//! newest first with undated episodes last while Newest — the core's selected
+//! episode, and its Hero. All merges every listed show's episodes; a checked
+//! set merges the checked shows'. The list shows the letter rail exactly while
+//! its sort is a name sort. The Hero is the shared
 //! `hero_content_abs_episode` producer's facts — the episode title, the show,
 //! the duration, and the publish date — its description, and the parent
 //! show's Square cover, which the Service-scoped cover chain caches. The
@@ -26,13 +27,14 @@ use mbv_ui_msg::PodcastEpisodeTarget;
 use std::collections::HashSet;
 
 use super::GuiLibraryArtwork;
+use super::GuiListSort;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowMediaKind, catalog_show_row_source};
-use super::collection::{
-    GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
-};
+use super::collection::{GuiCollectionSet, GuiCollectionTarget, compare_gui_date_order};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
+use super::list_sort::gui_title_sort_key;
+use super::projection::sort_letter;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
 use mbv_ui_model::meta::MetaSegment;
@@ -164,13 +166,13 @@ pub struct GuiPodcastsHero {
 /// The Podcasts projection the GUI Library panel paints (row 10.1) — the
 /// shared collection-scoped entry-list projection over the collection selector
 /// and Hero: All and the shows with their checked state, the selection's
-/// episode rows, the core's selected episode, and its Hero. No letter rail
-/// rides here — the list is sorted by date — and no Workspace.
+/// episode rows, the core's selected episode, and its Hero. No Workspace rides
+/// here.
 pub type GuiPodcastsProjection = GuiEntryListProjection<GuiPodcastsHero>;
 
 impl App {
     /// The Podcasts projection the GUI Library panel paints (row 10.1): the
-    /// collection selector, the selection's episode rows in the list's date
+    /// collection selector, the selection's episode rows in the list's sort
     /// order, the selected episode, and its Hero. A `lib_idx` that names no
     /// podcast library projects the empty projection, as the frame's gate
     /// excludes that destination anyway.
@@ -182,12 +184,10 @@ impl App {
         // The one effective-set read the frame takes: the rows read the set
         // it borrows, so the frame never recomputes the retention.
         let set = self.gui_podcast_effective_set(lib_idx);
-        let order = self
-            .gui_list_sort(GuiSortTarget::Podcasts(lib_idx))
-            .date_order()
-            .unwrap_or_default();
+        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Podcasts(lib_idx));
+        let sort = sort_frame.active;
         let collections = self.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
-        let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, set.as_ref(), order);
+        let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, set.as_ref(), sort);
         let selected = self.gui_podcast_selected(lib_idx, &rows);
         let hero = selected
             .as_deref()
@@ -198,6 +198,7 @@ impl App {
             loading,
             failed,
             rows,
+            sort: Some(sort_frame),
             selected,
             hero,
         }
@@ -222,15 +223,17 @@ impl App {
     /// The selection's episode rows with the view's loading and failure
     /// states (row 10.1; gui-collection-dropdown design D2, D4): All merges
     /// every listed show's cached episodes, and a checked set merges the
-    /// checked shows' — both sorted by the stored date order, newest first
-    /// with undated rows last while Newest. The loading state is the
-    /// catalog's pages in flight, plus the active view's own episode fetches,
-    /// the TUI's `pill_fetch_in_flight` rule.
+    /// checked shows' — both ordered by `sort` (design D6): the episode title
+    /// under Title, with the date newest as its second key, else the publish
+    /// date through the shared date order, undated rows last while Newest.
+    /// Every order's last tie-break is the episode identity. The loading
+    /// state is the catalog's pages in flight, plus the active view's own
+    /// episode fetches, the TUI's `pill_fetch_in_flight` rule.
     fn gui_podcast_rows(
         &self,
         lib_idx: usize,
         set: &GuiCollectionSet,
-        order: GuiDateOrder,
+        sort: GuiListSort,
     ) -> (Vec<GuiPodcastsRow>, bool, bool) {
         let Some(state) = self.audiobookshelf_browse.get(lib_idx) else {
             return (Vec::new(), true, false);
@@ -266,9 +269,27 @@ impl App {
                 visible
             }
         };
-        episodes.sort_by(|left, right| {
-            compare_gui_date_order(left.published_at, right.published_at, order)
-        });
+        if sort.is_name_sort() {
+            episodes.sort_by_cached_key(|episode| {
+                (
+                    gui_title_sort_key(&episode.title),
+                    episode.published_at.is_none(),
+                    std::cmp::Reverse(episode.published_at.unwrap_or_default()),
+                    episode.library_item_id.clone(),
+                    episode.episode_id.clone(),
+                )
+            });
+        } else {
+            let order = sort.date_order().unwrap_or_default();
+            episodes.sort_by(|left, right| {
+                compare_gui_date_order(left.published_at, right.published_at, order).then_with(
+                    || {
+                        (left.library_item_id.as_str(), left.episode_id.as_str())
+                            .cmp(&(right.library_item_id.as_str(), right.episode_id.as_str()))
+                    },
+                )
+            });
+        }
         let fetching = match set {
             GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
                 let show_id = keys.first().map(String::as_str).unwrap_or_default();
@@ -278,7 +299,7 @@ impl App {
         };
         let rows = episodes
             .iter()
-            .map(|episode| podcast_row(self, state, episode))
+            .map(|episode| podcast_row(self, state, episode, sort))
             .collect();
         (
             rows,
@@ -383,13 +404,15 @@ impl App {
 
 /// One row of the active list (row 10.1): the TUI podcast row's facts —
 /// the episode title, the parent show's title, and the publish date in the
-/// right-aligned gutter — with the row's played state and the show cover the
-/// episode artwork policy names (gui-delineated-rows design D5), read from
-/// the cache alone.
+/// right-aligned gutter — with the row's played state, the rail letter the
+/// list's name sort gives it (design D6), and the show cover the episode
+/// artwork policy names (gui-delineated-rows design D5), read from the cache
+/// alone.
 fn podcast_row(
     app: &App,
     state: &AudiobookshelfBrowseState,
     episode: &AudiobookshelfDownloadedEpisode,
+    sort: GuiListSort,
 ) -> GuiPodcastsRow {
     let show = show_of(state, &episode.library_item_id);
     let progress = state
@@ -403,6 +426,7 @@ fn podcast_row(
         subtitle: show.map(|show| show.title.clone()),
         date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
+        sort_letter: sort.is_name_sort().then(|| sort_letter(&episode.title)),
         art,
         media: GuiRowMediaKind::Audio,
     }

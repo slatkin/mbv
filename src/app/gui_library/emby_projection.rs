@@ -1,12 +1,14 @@
 //! The GUI Library's plain Emby-library projection (add-gui-library-panel
 //! design D12, the USER-APPROVED GUI Emby-library design, row 8.1): a plain
-//! library's flat name-sorted list with its rail letters and no pills, a
+//! library's flat list — the server's name order under the Title sort, else
+//! the date order — with its rail letters under a name sort and no pills, a
 //! feed-view library's interim pill row of All and each folder with the
-//! checked folders' merged, date-ordered list and no rail, the core's selected
-//! row, and the selected row's Hero — the shared Emby hero producer's facts
-//! with no Workspace. The row and label rules are the TUI's own (`row_for` and
-//! the All view's gutter, `crates/mbv-components/src/emby_library_content.rs`),
-//! so the two Clients cannot drift, and the projection reads `App` data only.
+//! checked folders' merged list in the library's list sort, the core's
+//! selected row, and the selected row's Hero — the shared Emby hero producer's
+//! facts with no Workspace. The row and label rules are the TUI's own
+//! (`row_for` and the All view's gutter,
+//! `crates/mbv-components/src/emby_library_content.rs`), so the two Clients
+//! cannot drift, and the projection reads `App` data only.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -20,12 +22,15 @@ use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
+use super::GuiListSort;
+use super::GuiListSortFrame;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source};
 use super::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiCollections, compare_gui_date_order,
 };
 use super::home::{GuiArtShape, artwork_shape};
+use super::list_sort::gui_title_sort_key;
 use super::projection::sort_letter;
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
@@ -54,9 +59,9 @@ pub struct GuiEmbyRow {
     /// The gutter date (feed-group mode): the TUI row's trailing gutter, the
     /// production year. `None` in plain mode, whose year rides `subtitle`.
     pub date: Option<String>,
-    /// The row's rail letter (design D7): the first letter of the
-    /// article-stripped sort name, or `#`. Set only in plain mode; the
-    /// date-ordered feed list shows no rail.
+    /// The row's rail letter (design D6): the first letter of the
+    /// article-stripped sort name, or `#`. Set exactly while the list's sort
+    /// is a name sort, so a date-ordered list shows no rail.
     pub sort_letter: Option<char>,
     /// The row's kind.
     pub kind: GuiEmbyRowKind,
@@ -149,10 +154,15 @@ pub struct GuiEmbyProjection {
     /// feed-group mode's fetches report through the feed state's own
     /// loading, so only the plain mode's store names a failure here.
     pub failed: bool,
-    /// The active list's rows in the list's order: the store's name-sorted
-    /// root list in plain mode, the selected group's items in the server's
-    /// date order in the feed-group mode.
+    /// The active list's rows in the list's order: the store's root list in
+    /// plain mode — the server's `SortName` order under the Title sort, else
+    /// the date order — and the selected group's items under the feed-group
+    /// mode's sort.
     pub rows: Vec<GuiEmbyRow>,
+    /// The active list's sort control (design D7): the target a press names,
+    /// its active sort, and the choices the library offers. The plain mode
+    /// and the feed-group mode share it.
+    pub sort: Option<GuiListSortFrame>,
     /// The core's selected row (design D2, row 8.1): the row the select
     /// command last named while the list still carries it, else the first
     /// row — the Hero default, so the Hero paints as soon as a list lands.
@@ -241,16 +251,36 @@ impl App {
             .unwrap_or_default()
     }
 
-    /// The plain mode's projection (row 8.1): the root-list store's rows in
-    /// the server's `SortName` order, each with its rail letter and no pill,
-    /// and the selected row's Hero.
+    /// The plain mode's projection (row 8.1): the root-list store's rows —
+    /// the server's `SortName` order under the Title sort, else the date
+    /// order — each with its rail letter only while the sort is a name sort,
+    /// and no pill, and the selected row's Hero.
     fn gui_emby_plain_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
         let (items, loading, failed) = match self.gui_emby_roots.get(&lib_idx) {
             Some(super::GuiEmbyRootItems::Loaded(items)) => (items.as_slice(), false, false),
             Some(super::GuiEmbyRootItems::Loading) | None => (&[][..], true, false),
             Some(super::GuiEmbyRootItems::Failed) => (&[][..], false, true),
         };
-        let rows: Vec<GuiEmbyRow> = items.iter().map(|item| plain_row(self, item)).collect();
+        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Library(lib_idx));
+        let sort = sort_frame.active;
+        let mut items: Vec<&EmbyItem> = items.iter().collect();
+        // Under the Title sort the store's own `SortName` order stands
+        // (design D6); the date sorts order the same items here, so no
+        // fetch backs a sort change.
+        if let Some(order) = sort.date_order() {
+            items.sort_by(|left, right| {
+                compare_gui_date_order(
+                    emby_date_added_secs(left),
+                    emby_date_added_secs(right),
+                    order,
+                )
+                .then_with(|| left.id.cmp(&right.id))
+            });
+        }
+        let rows: Vec<GuiEmbyRow> = items
+            .into_iter()
+            .map(|item| plain_row(self, item, emby_row_letter(item, sort)))
+            .collect();
         let selected = self.gui_emby_selected(lib_idx, &rows);
         let hero = selected
             .as_ref()
@@ -265,6 +295,7 @@ impl App {
             loading,
             failed,
             rows,
+            sort: Some(sort_frame),
             selected,
             hero,
         }
@@ -284,7 +315,9 @@ impl App {
         let collection_names = feed_collection_names(set.as_ref(), &folders);
         let programmes: HashMap<&str, &str> =
             folders.iter().map(|(id, name)| (*id, *name)).collect();
-        let (items, loading) = self.gui_emby_feed_items(lib_idx, set.as_ref());
+        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Library(lib_idx));
+        let sort = sort_frame.active;
+        let (items, loading) = self.gui_emby_feed_items(lib_idx, set.as_ref(), sort);
         let rows: Vec<GuiEmbyRow> = items
             .iter()
             .map(|item| {
@@ -293,6 +326,7 @@ impl App {
                     item,
                     feed_row_date(item),
                     programme_of(item, &programmes),
+                    emby_row_letter(item, sort),
                 )
             })
             .collect();
@@ -310,29 +344,38 @@ impl App {
             loading,
             failed: false,
             rows,
+            sort: Some(sort_frame),
             selected,
             hero,
         }
     }
 
-    /// The GUI's feed-group list (design D3, D4): the cached items of `set`'s
-    /// targets, merged and de-duplicated by item id, and sorted by date added
-    /// through the shared date order — undated items last in both orders,
-    /// then by id. `set` is the projection's one effective-set read. The
-    /// second value is whether the list is still landing: the root listing
-    /// pending, or a target with no cache entry yet, which is the fetch the
-    /// ensure step starts. The items are borrowed from the cache, so a frame
-    /// clones no item.
+    /// The GUI's feed-group list (design D3, D4, D6): the cached items of
+    /// `set`'s targets, merged and de-duplicated by item id, and ordered by
+    /// `sort` — the article-stripped sort name under the Title sort, else the
+    /// date added through the shared date order with undated items last in
+    /// both orders. Every sort's last tie-break is the item id. `set` is the
+    /// projection's one effective-set read. The second value is whether the
+    /// list is still landing: the root listing pending, or a target with no
+    /// cache entry yet, which is the fetch the ensure step starts. The items
+    /// are borrowed from the cache, so a frame clones no item.
     pub(in crate::app) fn gui_emby_feed_items(
         &self,
         lib_idx: usize,
         set: &GuiCollectionSet,
+        sort: GuiListSort,
     ) -> (Vec<&EmbyItem>, bool) {
         let (mut items, landing) = self.gui_emby_feed_gathered(lib_idx, set);
-        let order = self
-            .gui_list_sort(GuiSortTarget::Library(lib_idx))
-            .date_order()
-            .unwrap_or_default();
+        if sort.is_name_sort() {
+            items.sort_by_cached_key(|item| {
+                (
+                    gui_title_sort_key(effective_sort_str(item)),
+                    item.id.clone(),
+                )
+            });
+            return (items, landing);
+        }
+        let order = sort.date_order().unwrap_or_default();
         items.sort_by(|left, right| {
             compare_gui_date_order(
                 emby_date_added_secs(left),
@@ -499,37 +542,48 @@ impl App {
 /// replaces the TUI's letter-range pill row, and the row carries no gutter
 /// date — and the row art its item's Hero artwork policy declares
 /// (gui-delineated-rows design D5), read from the cache alone.
-fn plain_row(app: &App, item: &EmbyItem) -> GuiEmbyRow {
+fn plain_row(app: &App, item: &EmbyItem, sort_letter: Option<char>) -> GuiEmbyRow {
     GuiEmbyRow {
         id: item.id.clone(),
         title: row_title(item),
         subtitle: row_secondary(item),
         date: None,
-        sort_letter: Some(sort_letter(effective_sort_str(item))),
+        sort_letter,
         kind: row_kind(item),
         art: app.gui_row_art(emby_row_source(item).as_ref()),
         media: emby_media_kind(item),
     }
 }
 
+/// The rail letter an Emby row carries (design D6): the first letter of the
+/// article-stripped sort name, which is the key both Emby sorts compare,
+/// while the list's sort is a name sort — and no letter under a date sort,
+/// so the rail follows one fact the core derives.
+fn emby_row_letter(item: &EmbyItem, sort: GuiListSort) -> Option<char> {
+    sort.is_name_sort()
+        .then(|| sort_letter(effective_sort_str(item)))
+}
+
 /// One row of the feed-group lists (row 8.1): the TUI row's primary label,
 /// the programme (root folder) the item sits in underneath it — the user
 /// rule of 2026-12-30, so a flat All row names the programme it belongs to
 /// — the gutter date (the New list's date added, the All and folder lists'
-/// production year), no rail letter, and the row art its item's Hero artwork
-/// policy declares (gui-delineated-rows design D5), read from the cache alone.
+/// production year), the rail letter only while the list's sort is a name
+/// sort, and the row art its item's Hero artwork policy declares
+/// (gui-delineated-rows design D5), read from the cache alone.
 fn feed_row(
     app: &App,
     item: &EmbyItem,
     date: Option<String>,
     programme: Option<String>,
+    sort_letter: Option<char>,
 ) -> GuiEmbyRow {
     GuiEmbyRow {
         id: item.id.clone(),
         title: row_title(item),
         subtitle: programme,
         date,
-        sort_letter: None,
+        sort_letter,
         kind: row_kind(item),
         art: app.gui_row_art(emby_row_source(item).as_ref()),
         media: emby_media_kind(item),

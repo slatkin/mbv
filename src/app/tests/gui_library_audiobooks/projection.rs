@@ -87,7 +87,11 @@ fn the_projection_carries_the_rows_letters_and_the_default_pick() {
         ["book-a", "book-b", "book-c"],
         "the rows are the catalog"
     );
-    let letters: Vec<char> = projection.rows.iter().map(|row| row.sort_letter).collect();
+    let letters: Vec<char> = projection
+        .rows
+        .iter()
+        .filter_map(|row| row.sort_letter)
+        .collect();
     assert_eq!(
         letters,
         ['A', 'F', '#'],
