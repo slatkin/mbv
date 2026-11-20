@@ -26,18 +26,18 @@
 
 ## 2. Wiring
 
-- [ ] 2.1 Start the Owner publisher in `src/local_daemon.rs`'s `on_player_ready` hook with the
+- [x] 2.1 Start the Owner publisher in `src/local_daemon.rs`'s `on_player_ready` hook with the
   `DaemonPlayerHandle`'s status and transport sender and `crate::config::image_disk_cache_path` as
   the art resolver (design D5), keeping the handle stored for the tray as today. Confirm the
   packaged entry (`crates/mbvd/src/main.rs`) still passes a no-op hook. Verify with
   `cargo check --workspace`.
-- [ ] 2.2 Pass the rule's inputs from the Client: `start_mpris`
+- [x] 2.2 Pass the rule's inputs from the Client: `start_mpris`
   (`src/app/state/construct/remote.rs`) and `rebind_mpris_to_current_player`
   (`src/app/dispatch/session/switch.rs`) build the rule closure from whether `player_endpoint` is
   `DaemonEndpoint::Local` and from the suspended local link's `status_snapshot`, with a
   disconnected or absent link giving no local status (design D3). Verify with
   `cargo check --workspace`.
-- [ ] 2.3 Confirm test builds stay clean: no test constructs either publisher, no test claims a
+- [x] 2.3 Confirm test builds stay clean: no test constructs either publisher, no test claims a
   real bus name, and `cargo clippy --workspace --all-targets -- -D warnings` passes with no lint
   suppression added.
 
