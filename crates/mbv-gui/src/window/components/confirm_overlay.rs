@@ -115,28 +115,28 @@ pub fn ConfirmOverlay(props: ConfirmOverlayProps) -> Element {
             div {
                 class: "flex flex-col",
                 style: format!(
-                    "{MENU_CARD_STYLE} padding: 21px; gap: 16px; max-width: 442px;"
+                    "{MENU_CARD_STYLE} padding: 19px; gap: 14px; max-width: 398px;"
                 ),
                 p {
-                    style: "font-size: 17px; color: var(--canvas-heading);",
+                    style: "font-size: 14px; color: var(--canvas-heading);",
                     "{props.message}"
                 }
                 div {
                     class: "flex justify-end",
-                    style: "gap: 10px;",
+                    style: "gap: 9px;",
                     for (index, button) in props.buttons.iter().enumerate() {
                         button {
                             "type": "button",
                             "data-confirm-button": "{index}",
                             class: "flex items-center",
-                            style: "gap: 8px; padding: 5px 13px; border-radius: 5px; font-size: 16px; background: {BUTTON_FILL}; color: {button_color(button.tone)};",
+                            style: "gap: 7px; padding: 4px 12px; border-radius: 5px; font-size: 14px; background: {BUTTON_FILL}; color: {button_color(button.tone)};",
                             onmounted: move |event| {
                                 mounted_buttons.write().insert(index, event);
                             },
                             span { "{button.label}" }
                             span {
                                 class: "font-mono tabular-nums",
-                                style: "font-size: 14px;",
+                                style: "font-size: 12px;",
                                 "{button.keys}"
                             }
                         }
