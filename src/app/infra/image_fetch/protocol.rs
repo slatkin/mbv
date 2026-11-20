@@ -630,7 +630,7 @@ fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> Fetched
         ImageSource::Audiobookshelf {
             server_url,
             api_key,
-        } => fetch_audiobookshelf_image(&cache_key, &server_url, &api_key, &item_id),
+        } => fetch_audiobookshelf_image(&cache_key, &server_url, &api_key, &item_id, &rendition),
         ImageSource::Emby => fetch_emby_image(
             &cache_key, &item_id, &series_id, &types, &rendition, emby_url, token,
         ),
@@ -642,6 +642,7 @@ fn fetch_audiobookshelf_image(
     server_url: &str,
     api_key: &str,
     item_id: &str,
+    rendition: &ImageRendition,
 ) -> FetchedBytes {
     if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
         return FetchedBytes::Bytes(cached);
@@ -649,11 +650,24 @@ fn fetch_audiobookshelf_image(
     let Ok(client) = mbv_audiobookshelf::AudiobookshelfClient::new(server_url) else {
         return FetchedBytes::Missing;
     };
-    let result = client.cover_bounded(
-        api_key,
-        item_id,
-        mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
-    );
+    let bound = mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND;
+    let result = match rendition {
+        // The Square arm is a podcast cover, and the landscape/portrait arm a
+        // book cover (design D6): each asks for its row width.
+        ImageRendition::Row(row) if row.square => client.row_cover_bounded(
+            api_key,
+            item_id,
+            mbv_audiobookshelf::ROW_PODCAST_COVER_WIDTH,
+            bound,
+        ),
+        ImageRendition::Row(_) => client.row_cover_bounded(
+            api_key,
+            item_id,
+            mbv_audiobookshelf::ROW_BOOK_COVER_WIDTH,
+            bound,
+        ),
+        ImageRendition::Hero => client.cover_bounded(api_key, item_id, bound),
+    };
     match result {
         Ok(bytes) => {
             crate::config::write_image_disk_cache(cache_key, &bytes);

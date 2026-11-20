@@ -305,6 +305,25 @@ fn parse_date_text(text: &str) -> Option<u64> {
     }
     u64::try_from(dt.unix_timestamp()).ok()
 }
+/// The width of a book's row cover request (design D6): 2x the 64 x 36 row
+/// box's width.
+pub const ROW_BOOK_COVER_WIDTH: u32 = 128;
+
+/// The width of a podcast's row cover request (design D6): 2x the 36 x 36
+/// square row box.
+pub const ROW_PODCAST_COVER_WIDTH: u32 = 72;
+
+/// The row-sized cover path for one library item (design D6): `width` is the
+/// row cover's 2x painted width and the response is JPEG, so the request never
+/// carries the full-size `raw=1` parameter.
+#[must_use]
+pub fn row_cover_path(library_item_id: &str, width: u32) -> String {
+    format!(
+        "/api/items/{}/cover?width={width}&format=jpeg",
+        mbv_net::encode_path_segment(library_item_id)
+    )
+}
+
 impl AudiobookshelfClient {
     /// Runs `f` against a cloned client on a bounded worker thread. All
     /// `*_bounded` wrappers below differ only in the args they capture and
@@ -385,6 +404,17 @@ impl AudiobookshelfClient {
         let key = key.to_owned();
         let id = library_item_id.to_owned();
         self.bounded(bound, move |client| client.cover(&key, &id))
+    }
+    pub fn row_cover_bounded(
+        &self,
+        key: &str,
+        library_item_id: &str,
+        width: u32,
+        bound: Duration,
+    ) -> Result<Vec<u8>, AudiobookshelfError> {
+        let key = key.to_owned();
+        let id = library_item_id.to_owned();
+        self.bounded(bound, move |client| client.row_cover(&key, &id, width))
     }
     pub(super) fn get(
         &self,
@@ -555,10 +585,16 @@ impl AudiobookshelfClient {
             .collect())
     }
     fn cover(&self, key: &str, id: &str) -> Result<Vec<u8>, AudiobookshelfError> {
-        let response = self.get(
+        self.cover_bytes(
             key,
             &format!("/api/items/{}/cover", mbv_net::encode_path_segment(id)),
-        )?;
+        )
+    }
+    fn row_cover(&self, key: &str, id: &str, width: u32) -> Result<Vec<u8>, AudiobookshelfError> {
+        self.cover_bytes(key, &row_cover_path(id, width))
+    }
+    fn cover_bytes(&self, key: &str, path: &str) -> Result<Vec<u8>, AudiobookshelfError> {
+        let response = self.get(key, path)?;
         let mut bytes = Vec::new();
         response
             .into_body()

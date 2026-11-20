@@ -13,6 +13,7 @@ mod catalog;
 pub use catalog::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
     AudiobookshelfShelf, AudiobookshelfShelfEntry, AudiobookshelfShow, AudiobookshelfShowPage,
+    ROW_BOOK_COVER_WIDTH, ROW_PODCAST_COVER_WIDTH, row_cover_path,
 };
 #[cfg(test)]
 pub(crate) use catalog::{

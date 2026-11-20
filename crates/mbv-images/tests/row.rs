@@ -4,7 +4,7 @@
 
 use mbv_emby_model::EmbyImageTags;
 use mbv_images::row::emby_row_request_for;
-use mbv_images::{ImageRendition, RowEmbyImage, RowRendition};
+use mbv_images::{ImageRendition, RowEmbyImage, RowRendition, abs_row_cache_key};
 
 #[test]
 fn a_declared_tag_selects_its_kind_and_keys_the_request_by_the_tag() {
@@ -56,4 +56,22 @@ fn a_series_addressed_row_takes_the_series_tag_not_the_items_own() {
 
     assert_eq!(request.cache_key, "row:episode-1:Thumb:series-thumb");
     assert_eq!(request.series_id, "series-1");
+}
+
+#[test]
+fn an_abs_row_key_changes_with_the_library_items_update_time() {
+    let first = abs_row_cache_key("https://abs.example", "book-1", 1_700_000_000_000);
+    let unchanged = abs_row_cache_key("https://abs.example", "book-1", 1_700_000_000_000);
+    let changed_art = abs_row_cache_key("https://abs.example", "book-1", 1_700_000_000_001);
+
+    assert_eq!(first, unchanged);
+    assert_ne!(first, changed_art);
+    assert!(
+        first.starts_with("row:abs:"),
+        "a row key lives in the row namespace"
+    );
+    assert!(
+        first.ends_with(":book-1:1700000000000"),
+        "the key names the library item and its update time"
+    );
 }

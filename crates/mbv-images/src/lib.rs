@@ -253,6 +253,31 @@ pub fn emby_row_cache_key(item_id: &str, image: Option<&RowEmbyImage>) -> String
     )
 }
 
+/// Cache key for an Audiobookshelf row cover (design D6):
+/// `row:abs:{server_hash}:{library_item_id}:{updated_at}`, where
+/// `{updated_at}` is the library item's update time in milliseconds (`0` when
+/// the catalog has none). A cover upload updates the item, so a new update
+/// time makes a new key and changed art never reuses old bytes.
+#[must_use]
+pub fn abs_row_cache_key(server_url: &str, library_item_id: &str, updated_at_ms: u64) -> String {
+    format!(
+        "{ROW_IMAGE_CACHE_KEY_PREFIX}abs:{:016x}:{library_item_id}:{updated_at_ms}",
+        server_hash(server_url)
+    )
+}
+
+/// A stable, compact server identity for a row cache key (design D6's
+/// `server_hash`): FNV-1a over the server URL, so the key stays short and holds
+/// none of the URL's own separators.
+fn server_hash(server_url: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in server_url.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 /// A pending card-image fetch, queued when the in-flight limit is reached.
 pub struct ImageFetchReq {
     pub cache_key: String,
