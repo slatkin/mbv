@@ -202,31 +202,7 @@ impl GuiHomeRowIdFrame {
     /// row its queue item's content id, provider first.
     #[must_use]
     pub fn rows_in_view_id(&self) -> String {
-        match self {
-            Self::Continue(item_id) => format!("continue:{item_id}"),
-            Self::Recent(content_id) => format!("recent:{}", content_id_text(content_id)),
-        }
-    }
-}
-
-/// The text a queue item's content id takes inside a `RowsInView` Home id
-/// (design D7), the core's encoding: one provider word, then the provider's own
-/// identity fields.
-fn content_id_text(id: &QueueItemContentId) -> String {
-    match id {
-        QueueItemContentId::Emby(value) => format!("emby:{value}"),
-        QueueItemContentId::Feed(value) => format!("feed:{value}"),
-        QueueItemContentId::Audiobookshelf {
-            library_item_id,
-            episode_id,
-        } => format!(
-            "audiobookshelf:{}:{library_item_id}:{episode_id}",
-            library_item_id.len()
-        ),
-        QueueItemContentId::AudiobookshelfBook { library_item_id } => {
-            format!("audiobookshelfBook:{library_item_id}")
-        }
-        QueueItemContentId::Twitch(value) => format!("twitch:{value}"),
+        mbv::GuiHomeRowId::from(&crate::bridge::library::GuiHomeRowId::from(self)).rows_in_view_id()
     }
 }
 

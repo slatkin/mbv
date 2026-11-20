@@ -16,12 +16,12 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEntryRowFrame;
-use crate::window::library::list::{GeometryRow, build_flat_rows};
+use crate::window::library::list::{GeometryRow, LIBRARY_ROW_HEIGHT, build_flat_rows};
 
 /// The entry row's height in logical pixels (gui-delineated-rows design D2):
 /// the shared top-level row part's height, which paints the entry's two-line
 /// title and its date gutter.
-pub const FEEDS_ROW_HEIGHT: f32 = 56.0;
+pub const FEEDS_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 
 /// One painted row of the Feeds list (design D12). The list is one flat
 /// entry list in core order — newest first with undated entries last — so

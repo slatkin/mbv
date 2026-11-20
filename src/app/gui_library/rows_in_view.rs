@@ -111,7 +111,7 @@ impl App {
                 episode_row_source(&item, updated_at)
             }
             GuiRowArtScope::Audiobooks => {
-                let lib_idx = self.gui_active_book_library_index()?;
+                let lib_idx = self.gui_audiobooks_destination()?;
                 let state = self.audiobookshelf_book_browse.get(lib_idx)?;
                 let book = state.books.iter().find(|book| book.library_item_id == id)?;
                 catalog_book_row_source(book)
@@ -180,14 +180,6 @@ impl App {
     fn gui_active_podcast_library_index(&self) -> Option<usize> {
         match self.gui_active_destination() {
             Some(super::GuiDestinationKind::Podcasts { lib_idx }) => Some(lib_idx),
-            _ => None,
-        }
-    }
-
-    /// The active Audiobooks library's index (design D7).
-    fn gui_active_book_library_index(&self) -> Option<usize> {
-        match self.gui_active_destination() {
-            Some(super::GuiDestinationKind::Audiobooks { lib_idx }) => Some(lib_idx),
             _ => None,
         }
     }

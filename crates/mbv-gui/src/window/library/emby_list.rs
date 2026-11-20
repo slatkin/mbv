@@ -13,8 +13,8 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEmbyRowFrame;
 use crate::window::library::list::{
-    FlatItem, GeometryRow, LETTER_ROW_HEIGHT, RailLetter, build_flat_rows, filter_match,
-    letter_rail_by,
+    FlatItem, GeometryRow, LETTER_ROW_HEIGHT, LIBRARY_ROW_HEIGHT, RailLetter, build_flat_rows,
+    filter_match, letter_rail_by,
 };
 
 /// The fields of a carried Emby row the flat feed-group list reads (design
@@ -36,7 +36,7 @@ pub const EMBY_HEADING_ROW_HEIGHT: f32 = LETTER_ROW_HEIGHT;
 /// height (gui-delineated-rows design D2), so the virtual-list geometry and
 /// the painted rows agree. Both modes paint at this one height, so a mode
 /// switch changes the rows and never their geometry.
-pub const EMBY_ROW_HEIGHT: f32 = 56.0;
+pub const EMBY_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 
 /// One painted row the keys may act on (row 8.1): every item row, a folder and
 /// a boxset included, because the folder-play rule plays a collection row. A

@@ -25,10 +25,13 @@ use crate::bridge::frame::library::{
 
 /// The canvas's letter heading height in logical pixels (design D7).
 pub const LETTER_ROW_HEIGHT: f32 = 24.0;
-/// The canvas's artist row height in logical pixels (gui-delineated-rows design
-/// D2): the artist is a top-level row, so it paints through the shared row part
-/// at that part's height.
-pub const ARTIST_ROW_HEIGHT: f32 = 56.0;
+/// The top-level row's height in logical pixels (gui-delineated-rows design
+/// D2): every destination's row constant reads it, so a list's geometry and
+/// its painted rows share one height.
+pub const LIBRARY_ROW_HEIGHT: f32 = 56.0;
+/// The canvas's artist row height in logical pixels (design D2): the artist is
+/// a top-level row, so it paints through the shared row part at that height.
+pub const ARTIST_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 /// The canvas's album row height in logical pixels: a nested row keeps its own
 /// height (design D1).
 pub const NODE_ROW_HEIGHT: f32 = 30.0;

@@ -16,14 +16,14 @@ use crate::bridge::frame::library::{
     GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiRowArtFrame,
     GuiRowMediaKindFrame,
 };
-use crate::window::library::list::{GeometryRow, filter_match};
+use crate::window::library::list::{GeometryRow, LIBRARY_ROW_HEIGHT, filter_match};
 
 /// The section heading row's height in logical pixels: the letter heading
 /// height's look, scaled to the section name.
 pub const HOME_HEADING_ROW_HEIGHT: f32 = 28.0;
 /// The item row's height in logical pixels: the room the shared top-level row
 /// part paints into (gui-delineated-rows design D2).
-pub const HOME_ITEM_ROW_HEIGHT: f32 = 56.0;
+pub const HOME_ITEM_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 /// The spacer row's height between two non-empty sections (design D12).
 pub const HOME_SPACER_ROW_HEIGHT: f32 = 20.0;
 

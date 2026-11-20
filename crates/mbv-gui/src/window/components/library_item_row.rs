@@ -35,10 +35,7 @@ use crate::window::library::shows_workspace::episode_progress;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The top-level row's height in logical pixels (gui-delineated-rows design
-/// D2): every destination's row constant reads it, so a list's geometry and
-/// its painted rows share one height.
-pub const LIBRARY_ROW_HEIGHT: f32 = 56.0;
+pub use crate::window::library::list::LIBRARY_ROW_HEIGHT;
 
 /// The top-level row's title weight (design D2): 400 at every selection state,
 /// as the canvas paints it.

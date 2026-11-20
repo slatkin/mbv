@@ -181,6 +181,23 @@ pub(in crate::app::gui_library) fn feed_row_source(entry: &FeedEntry) -> Option<
     policy_row_source(&feed_artwork_policy(entry), 0)
 }
 
+/// The row source of a catalog record's cover (design D5): `None` when the
+/// record declares no cover, else its library item keyed by its update time.
+fn catalog_cover_row_source(
+    library_item_id: &str,
+    cover_path: Option<&str>,
+    book: bool,
+    updated_at_ms: u64,
+) -> Option<GuiRowSource> {
+    cover_path
+        .is_some_and(|cover| !cover.is_empty())
+        .then(|| GuiRowSource::Audiobookshelf {
+            library_item_id: library_item_id.to_owned(),
+            book,
+            updated_at_ms,
+        })
+}
+
 /// The row source of a book catalog record (design D5), for a caller that holds
 /// the record rather than its queue item: the same book artwork policy over the
 /// record's cover, keyed by its update time.
@@ -188,18 +205,12 @@ pub(in crate::app::gui_library) fn feed_row_source(entry: &FeedEntry) -> Option<
 pub(in crate::app::gui_library) fn catalog_book_row_source(
     book: &AudiobookshelfBook,
 ) -> Option<GuiRowSource> {
-    let cover_declared = book
-        .cover_path
-        .as_deref()
-        .is_some_and(|cover| !cover.is_empty());
-    if !cover_declared {
-        return None;
-    }
-    Some(GuiRowSource::Audiobookshelf {
-        library_item_id: book.library_item_id.clone(),
-        book: true,
-        updated_at_ms: book.updated_at_ms,
-    })
+    catalog_cover_row_source(
+        &book.library_item_id,
+        book.cover_path.as_deref(),
+        true,
+        book.updated_at_ms,
+    )
 }
 
 /// The row source of a podcast show's catalog record (design D5), for a caller
@@ -210,18 +221,12 @@ pub(in crate::app::gui_library) fn catalog_book_row_source(
 pub(in crate::app::gui_library) fn catalog_show_row_source(
     show: &AudiobookshelfShow,
 ) -> Option<GuiRowSource> {
-    let cover_declared = show
-        .cover_path
-        .as_deref()
-        .is_some_and(|cover| !cover.is_empty());
-    if !cover_declared {
-        return None;
-    }
-    Some(GuiRowSource::Audiobookshelf {
-        library_item_id: show.library_item_id.clone(),
-        book: false,
-        updated_at_ms: show.updated_at_ms,
-    })
+    catalog_cover_row_source(
+        &show.library_item_id,
+        show.cover_path.as_deref(),
+        false,
+        show.updated_at_ms,
+    )
 }
 
 /// The media kind an Emby item's row shows without art (design D4).
@@ -361,19 +366,19 @@ impl App {
         &self,
         library_item_id: &str,
     ) -> u64 {
-        let show = self
-            .audiobookshelf_browse
+        self.audiobookshelf_browse
             .iter()
             .flat_map(|state| state.shows.iter())
             .find(|show| show.library_item_id == library_item_id)
-            .map(|show| show.updated_at_ms);
-        let book = self
-            .audiobookshelf_book_browse
-            .iter()
-            .flat_map(|state| state.books.iter())
-            .find(|book| book.library_item_id == library_item_id)
-            .map(|book| book.updated_at_ms);
-        show.or(book).unwrap_or(0)
+            .map(|show| show.updated_at_ms)
+            .or_else(|| {
+                self.audiobookshelf_book_browse
+                    .iter()
+                    .flat_map(|state| state.books.iter())
+                    .find(|book| book.library_item_id == library_item_id)
+                    .map(|book| book.updated_at_ms)
+            })
+            .unwrap_or(0)
     }
 }
 

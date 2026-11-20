@@ -20,7 +20,8 @@ use crate::bridge::frame::library::{
     GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::window::library::list::{
-    GeometryRow, LETTER_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter, TRACK_ROW_HEIGHT, letter_rail_by,
+    GeometryRow, LETTER_ROW_HEIGHT, LIBRARY_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter,
+    TRACK_ROW_HEIGHT, letter_rail_by,
 };
 
 /// The letter heading row's height in logical pixels: the Music list's letter
@@ -29,7 +30,7 @@ pub const SHOWS_HEADING_ROW_HEIGHT: f32 = LETTER_ROW_HEIGHT;
 /// The series row's height in logical pixels (gui-delineated-rows design D2):
 /// the series is a top-level row, so it paints through the shared row part at
 /// that part's height.
-pub const SHOWS_SERIES_ROW_HEIGHT: f32 = 56.0;
+pub const SHOWS_SERIES_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 /// The season row's height: the Music node row's, because a season is a nested
 /// row and keeps its own painter (design D1).
 pub const SHOWS_SEASON_ROW_HEIGHT: f32 = NODE_ROW_HEIGHT;
@@ -40,7 +41,7 @@ pub const SHOWS_EPISODE_ROW_HEIGHT: f32 = TRACK_ROW_HEIGHT;
 /// and date gutter replace the old Home item row's format (gui-collection-dropdown
 /// D9, the live defect of 2026-11-18: the New and Upcoming rows painted cut
 /// off).
-pub const SHOWS_FLAT_ROW_HEIGHT: f32 = 56.0;
+pub const SHOWS_FLAT_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 
 /// The tree's open and closed node keys (design D14): the Music tree's rule.
 /// `open` holds the nodes the user opened, and `closed` holds the nodes the
