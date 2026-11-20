@@ -156,20 +156,6 @@ impl Fixture {
         matches!(self.doc.inner().query_selector(selector), Ok(Some(_)))
     }
 
-    /// The trimmed text of the first node the selector names.
-    fn text_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_node(id)
-            .expect("the node is in the document")
-            .text_content()
-            .trim()
-            .to_owned()
-    }
-
     /// The attribute of the first node the selector names.
     fn attr_of(&self, selector: &str, attribute: &str) -> Option<String> {
         let dom = self.doc.inner();
