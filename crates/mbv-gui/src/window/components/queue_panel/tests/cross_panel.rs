@@ -171,8 +171,8 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
         ]
     );
 }

@@ -1,6 +1,7 @@
 //! The Queue header (task 5.6, the port of `QueueHeader`; rewritten by design
 //! D7 of `gui-queue-panel-redesign`): the 48 px bar over the Queue rows. It
-//! paints one row of controls in the design's order — the Queue switcher, the
+//! paints one row of controls in the design's order — the playback target
+//! control (user request 2026-11-20), the Queue switcher, the
 //! new-queue control, the close control, a spacer, and the filter control at
 //! the trailing edge — and nothing else (spec
 //! `gui-queue-chooser` "The queue header holds the chooser and its controls").
@@ -40,6 +41,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::window::components::queue_panel::geometry::{CONTROL_PX, HEADER_HEIGHT_PX};
+use crate::window::components::queue_target_control::QueueTargetControl;
 use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
 use crate::window::theme::{EfToken, ef_var};
 
@@ -117,6 +119,10 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 ef_var(EfToken::Bg3)
             ),
             "data-queue-header": "",
+            // The playback target control (user request 2026-11-20): it leads
+            // the bar, to the left of the Queue switcher, and owns its own
+            // chooser popover and region reports.
+            QueueTargetControl {}
             // The Queue switcher and its dropdown's anchor (design D7, D8): the
             // button names the shown entry, counts its slots, and opens the
             // dropdown; the card mounts inside this box, so its leading edge is

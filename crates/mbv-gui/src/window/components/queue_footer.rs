@@ -5,33 +5,22 @@
 //! collapse control, the queue source, the dirty mark, the prefix-armed
 //! state, and the shown queue's totals.
 //!
-//! The left group leads with the two queue-wide controls the player panel's
-//! header used to paint (`move-playback-header-into-queue-footer` D1, D2): the
-//! playback target, whose press opens the core's chooser, then the collapse
-//! control, whose press runs the same toggle as the `z` chord. Both compact to
-//! the band's 28 px control height; the target keeps its Cast glyph, host
-//! label, and chevron, and the collapse control keeps its aria-label, its
-//! `Collapse panel (z)` title, and its muted `Maximize2` glyph. Then the queue
-//! source and its state follow: the autosave indicator (while save-on-consume
-//! is on for a saved playlist), the playlist text, and the dirty mark (while
-//! the queue differs from its saved playlist), which sits beside the source it
+//! The left group leads with the collapse control that the player panel's
+//! header used to paint (`move-playback-header-into-queue-footer` D1, D2),
+//! whose press runs the same toggle as the `z` chord. It compacts to the
+//! band's 28 px control height, keeps its aria-label and its
+//! `Collapse panel (z)` title, and paints a muted `ChevronsRight` glyph — the
+//! inverse of the collapsed rail's `ChevronsLeft` expand control (user request
+//! 2026-11-20). The playback target control moved to the Queue header
+//! (`queue_target_control.rs`, user request 2026-11-20). Then the queue source
+//! and its state follow: the autosave indicator (while save-on-consume is on
+//! for a saved playlist), the playlist text, and the dirty mark (while the
+//! queue differs from its saved playlist), which sits beside the source it
 //! describes. The canvas paints the source as plain text with no leading icon,
 //! and the text reports no hit region — the GUI presents no playlists surface,
 //! so a press on it would have nowhere to go, and a reported target that can
 //! never fire is a lie in the layout report. (The TUI's pill opens its
 //! Playlists overlay.)
-//!
-//! The chooser's popover is this band's, anchored above it (`bottom-full`,
-//! D3): the band sits at the window's bottom edge, so the popover opens upward
-//! from the pressed control instead of down. Each row reports its
-//! `targetChoice` index — the core resolves a row press against the same live
-//! choice list the frame carries — under a second report key the band owns,
-//! first inserted when the chooser opens: the band mounts after the queue
-//! panel, so its own key lands after the queue rows in the merged report, and
-//! the chooser's key lands after the band's — the hit map's last push wins
-//! where a row paints over a queue row beneath it. The window holds no open,
-//! cursor, or hover state; Esc and a press elsewhere close the popover through
-//! the core's key and pointer paths.
 //!
 //! The centre carries the armed prefix badge and nothing else. The badge is
 //! the same `PREFIX` badge the TUI's status row paints, and it paints for as
@@ -45,7 +34,7 @@
 //! marked total paints only while rows are marked — `Sel` names it — and a sum
 //! over an unknown runtime carries a `+` as a lower bound. The filter narrows
 //! neither sum. The footer carries no Player-owner label and no liveness dot:
-//! the shown queue's owner reads from the playback target at its left.
+//! the shown queue's owner reads from the playback target in the Queue header.
 //!
 //! The armed prefix is one fact, and it paints once a frame (design D10):
 //! while the Library panel shows, its Library Status bar paints it, so this
@@ -61,19 +50,14 @@
 //! canvas's time token for the totals (design D14: the colour carries the data
 //! type). The slice's `GuiStatusBar` carries no volume,
 //! mute, or visual-mode content, so the line paints no interactive status pill.
-//! It reports the playback target's and the collapse control's regions, and the
-//! open chooser's rows under its own second key, through the shared layout
-//! reporter, so the merged report accounts for the mounted surface.
+//! It reports the collapse control's region through the shared layout reporter,
+//! so the merged report accounts for the mounted surface.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::overlay::GuiOverlayFrame;
-use crate::bridge::frame::playback::{GuiTargetChoice, GuiTargetKey};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
-use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
-use crate::window::components::row_handle::record_row_handle;
-use crate::window::icons::{Cast, Check, ChevronDown, Maximize2, Monitor, SaveCheck, SaveOff};
+use crate::window::icons::{ChevronsRight, SaveCheck, SaveOff};
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
 };
@@ -81,7 +65,6 @@ use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var, role_var};
 use crate::window::time::format_duration_short;
-use crate::window::truncate::{TextStyle, Truncate};
 
 /// The props of the Queue footer (the `QueueFooter` props).
 #[derive(Props, Debug, Clone, PartialEq)]
@@ -104,70 +87,42 @@ fn footer_time(secs: i64, partial: bool) -> String {
 }
 
 /// The Queue footer: the canvas footer band, painted from the `footer`,
-/// `status`, `summary`, `playback`, and `overlay` sections. Every paint that
-/// moved a region reports — the band's contribution carries the playback
-/// target's and the collapse control's regions, and the open chooser's rows
-/// report under the band's second key.
+/// `status`, and `summary` sections. Every paint that moved a region reports —
+/// the band's contribution carries the collapse control's region.
 #[component]
 pub fn QueueFooter(props: QueueFooterProps) -> Element {
     let sections = consume_context::<Sections>();
     let epoch = consume_context::<LayoutEpoch>();
     let reporter = consume_context::<LayoutReporter>();
     let key = use_hook(LayoutKey::next);
-    let chooser_key = use_hook(LayoutKey::next);
 
-    let mut target_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let mut collapse_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The open chooser's painted rows, by their choice index (the former client
-    // `querySelectorAll('[data-choice]')`).
-    let chooser_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
     // No region outlives the band: the contributions retract on unmount, as
     // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
-    // The playback target chooser: the overlay section's `targetChooser`
-    // variant, `None` while another overlay (or none) is up.
-    let chooser = match sections.overlay.cloned() {
-        Some(GuiOverlayFrame::TargetChooser { cursor, choices }) => Some((cursor, choices)),
-        _ => None,
-    };
-
     let watch_footer = sections.footer;
     let watch_summary = sections.summary;
     let watch_status = sections.status;
-    let watch_playback = sections.playback;
-    let watch_overlay = sections.overlay;
     let watch_epoch = epoch.0;
     use_effect(move || {
         let _footer = watch_footer.cloned();
         let _summary = watch_summary.cloned();
         let _status = watch_status.cloned();
-        let _playback = watch_playback.cloned();
-        let overlay_open = watch_overlay.cloned();
         let _epoch = watch_epoch.cloned();
-        // Reading the overlay registers the chooser's rows, which appear and
-        // disappear with that section; the chooser's key retracts while none
-        // is open.
-        let chooser_open = matches!(
-            overlay_open.as_ref(),
-            Some(GuiOverlayFrame::TargetChooser { .. })
-        );
-        let rows = chooser_rows.cloned();
-        let target = target_mounted.cloned();
         let collapse = collapse_mounted.cloned();
         let mut effect_reporter = reporter.clone();
         spawn(async move {
-            // The band's own regions, in paint order: the playback target,
-            // then the collapse control.
             let mut regions: Vec<LayoutRegion> = Vec::new();
-            for (mounted, id) in [
-                (target, QueuePlaybackTargetId::PlaybackTarget),
-                (collapse, QueuePlaybackTargetId::Collapse),
-            ] {
-                if let Some(mounted) = mounted {
-                    regions.extend(element_region(&mounted, RegionTarget::QueuePlayback(id)).await);
-                }
+            if let Some(mounted) = collapse {
+                regions.extend(
+                    element_region(
+                        &mounted,
+                        RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
+                    )
+                    .await,
+                );
             }
             effect_reporter.report_layout(
                 key,
@@ -176,50 +131,16 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                     regions,
                 },
             );
-            if chooser_open {
-                let mut chooser_regions: Vec<LayoutRegion> = Vec::new();
-                for (index, mounted) in rows.iter().enumerate() {
-                    if let Some(mounted) = mounted {
-                        chooser_regions.extend(
-                            element_region(
-                                mounted,
-                                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(
-                                    index,
-                                )),
-                            )
-                            .await,
-                        );
-                    }
-                }
-                effect_reporter.report_layout(
-                    chooser_key,
-                    LayoutContribution {
-                        lists: Vec::new(),
-                        regions: chooser_regions,
-                    },
-                );
-            } else {
-                effect_reporter.retract_layout(chooser_key);
-            }
         });
     });
 
     use_drop(move || {
         drop_reporter.retract_layout(key);
-        drop_reporter.retract_layout(chooser_key);
     });
 
     let footer = sections.footer.cloned();
     let summary = sections.summary.cloned();
     let status = sections.status.cloned();
-    let playback = sections.playback.cloned();
-    // The target control's colour: the flag picks the local or the remote
-    // role.
-    let target_color = if playback.host_is_remote {
-        role_var(GuiRole::PlaybackTargetRemoteFg)
-    } else {
-        role_var(GuiRole::PlaybackTargetLocalFg)
-    };
     // Whether this line paints the armed prefix badge: prefix mode is armed,
     // and the Library panel does not show (design D10).
     let prefix = !props.library_visible && status.prefix_armed;
@@ -251,18 +172,6 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
             // own element, so it carries the marker too — and the popover,
             // which opens above it, stays in the zone with it.
             "data-pointer-zone": PointerZone::Queue.token(),
-            if let Some((cursor, choices)) = chooser {
-                // The playback-target chooser: the core's live choice list,
-                // the attached output marked with a check. The rows report
-                // their `targetChoice` indices under the band's chooser key,
-                // last over every region beneath them (the module comment
-                // names why).
-                TargetChooserPopover {
-                    cursor,
-                    choices,
-                    chooser_rows,
-                }
-            }
             // The band's content: the left, centre, and right groups, clipped
             // to the band. The popover is the band's own child, outside this
             // clipped box, so the clip never cuts it.
@@ -277,35 +186,13 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                     style: "gap: 12px;",
                     button {
                         "type": "button",
-                        class: "flex min-w-0 items-center",
-                        style: "height: 28px; padding: 0 8px; gap: 6px; color: {target_color};",
-                        "data-target": "playbackTarget",
-                        "aria-label": "Cast to device",
-                        onmounted: move |event| target_mounted.set(Some(event)),
-                        Cast { size: 18, stroke_width: 1.8, color: "currentColor" }
-                        if !playback.host.is_empty() {
-                            // The name paints as plain clipped text, never
-                            // through `Truncate`: this box is sized by the
-                            // text it paints, so a measured cut would shrink
-                            // the box and ratchet the name down to `…` on the
-                            // next session switch (b3c8d874b's rule, kept on
-                            // the control's move).
-                            span {
-                                class: "min-w-0 overflow-hidden whitespace-nowrap",
-                                "{playback.host}"
-                            }
-                        }
-                        ChevronDown { size: 12, color: "currentColor" }
-                    }
-                    button {
-                        "type": "button",
                         class: "flex shrink-0 items-center justify-center",
                         style: "width: 28px; height: 28px;",
                         "data-target": "collapse",
                         "aria-label": "Collapse panel",
                         title: "Collapse panel (z)",
                         onmounted: move |event| collapse_mounted.set(Some(event)),
-                        Maximize2 { size: 18, stroke_width: 1.8, color: role_var(GuiRole::TextMuted) }
+                        ChevronsRight { size: 18, stroke_width: 1.8, color: role_var(GuiRole::TextMuted) }
                     }
                     if let Some(autosave) = footer.autosave.as_ref() {
                         SaveCheck {
@@ -388,94 +275,6 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                         style: "color: var(--canvas-type-time);",
                         "data-footer-total": "",
                         "{total}"
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// The open playback-target chooser's props: the core's cursor and live
-/// choice list, and the row handles the band's chooser regions read.
-#[derive(Props, Clone, PartialEq)]
-struct TargetChooserPopoverProps {
-    /// The core's cursor row.
-    cursor: usize,
-    /// The choices the frame's `targetChoices` list carries.
-    choices: Vec<GuiTargetChoice>,
-    /// The painted rows' mounted events, by their choice index.
-    chooser_rows: Signal<Vec<Option<Event<MountedData>>>>,
-}
-
-impl std::fmt::Debug for TargetChooserPopoverProps {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TargetChooserPopoverProps")
-            .field("cursor", &self.cursor)
-            .field("choices", &self.choices)
-            .finish_non_exhaustive()
-    }
-}
-
-/// The chooser's popover, anchored above the footer band (design D3): the
-/// band sits at the window's bottom edge, so the popover opens upward from the
-/// pressed control, its left edge on the control's. Each row's `onmounted`
-/// hands its event to the band's chooser-regions signal, under the row's
-/// `data-choice` index.
-#[component]
-fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
-    rsx! {
-        div {
-            class: "absolute bottom-full z-20 flex min-w-56 flex-col rounded-md border py-1 shadow-md",
-            // The band's mono 12 px type is not the popover's: it keeps the
-            // 16 px body face its rows painted in the header, which is the
-            // face the rows' `Truncate` measure names.
-            style: "margin-bottom: 4px; left: 16px; font-family: var(--font-sans); font-size: 16px; background: var(--mbv-popover); border-color: var(--mbv-border);",
-            "data-target-chooser": "",
-            for (index, choice) in props.choices.iter().enumerate() {
-                {
-                    let row_color = if index == props.cursor {
-                        role_var(GuiRole::TextFocusAccent)
-                    } else {
-                        role_var(GuiRole::TextPrimary)
-                    };
-                    rsx! {
-                        button {
-                            "type": "button",
-                            class: "flex w-full items-center text-left",
-                            style: "padding: calc(var(--mbv-cell-row) / 4) calc(var(--mbv-cell-col) * 1); gap: var(--mbv-cell-col); color: {row_color};",
-                            "data-choice": "{index}",
-                            onmounted: {
-                                let chooser_rows = props.chooser_rows;
-                                move |event| record_row_handle(chooser_rows, index, event)
-                            },
-                            span {
-                                class: "flex w-4 shrink-0 justify-center",
-                                if choice.is_active {
-                                    Check { size: 14, color: role_var(GuiRole::Accent) }
-                                }
-                            }
-                            match &choice.key {
-                                GuiTargetKey::Local => rsx! {
-                                    Monitor { size: 14, color: role_var(GuiRole::PlaybackTargetLocalFg) }
-                                },
-                                GuiTargetKey::Cast(_) => rsx! {
-                                    TargetBrandIcon { brand: TargetBrand::Cast }
-                                },
-                                GuiTargetKey::Emby(_) if choice.is_direct_peer => rsx! {
-                                    TargetBrandIcon { brand: TargetBrand::DirectPeer }
-                                },
-                                GuiTargetKey::Emby(_) => rsx! {
-                                    TargetBrandIcon { brand: TargetBrand::Emby }
-                                },
-                            }
-                            Truncate {
-                                text: choice.label.clone(),
-                                class: "min-w-0 flex-1".to_owned(),
-                                // The chooser button names no font size: the
-                                // label inherits the document's 16 px body face.
-                                style: TextStyle::sans(16.0, 400.0),
-                            }
-                        }
                     }
                 }
             }

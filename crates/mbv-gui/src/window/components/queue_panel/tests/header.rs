@@ -9,7 +9,7 @@ use rstest::rstest;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
-use crate::bridge::layout::{QueueTargetId, RegionTarget};
+use crate::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 use crate::window::components::queue_panel::geometry::HEADER_HEIGHT_PX;
 
 /// The stylesheet the app loads, read so the header's height token must match
@@ -85,6 +85,7 @@ fn a_one_entry_header_paints_the_switcher_its_count_and_the_design_order() {
             RegionTarget::Queue(QueueTargetId::QueueChooser),
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
         ],
         "the switcher always claims a pointer, the disabled close control none"
     );
@@ -119,6 +120,7 @@ fn several_entries_paints_the_switcher_with_the_shown_name_and_the_close_control
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::CloseQueue),
             RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
         ]
     );
 }

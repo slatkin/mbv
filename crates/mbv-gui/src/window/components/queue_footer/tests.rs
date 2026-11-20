@@ -27,7 +27,7 @@ use crate::art::GuiArtRef;
 use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter, GuiStatusBar};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
-    GuiPlayerControls, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey, GuiTransportAvailability,
+    GuiPlayerControls, GuiQueuePlayback, GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::frame::theme::GuiRole;
@@ -97,27 +97,6 @@ fn playing() -> GuiQueuePlayback {
         track_chips: None,
         target_choices: Vec::new(),
         controls: GuiPlayerControls::default(),
-    }
-}
-
-/// The open playback-target chooser: two choices, the first attached.
-fn chooser() -> GuiOverlayFrame {
-    GuiOverlayFrame::TargetChooser {
-        cursor: 0,
-        choices: vec![
-            GuiTargetChoice {
-                key: GuiTargetKey::Emby("session-1".to_owned()),
-                label: "Living room".to_owned(),
-                is_active: true,
-                is_direct_peer: false,
-            },
-            GuiTargetChoice {
-                key: GuiTargetKey::Cast("receiver-1".to_owned()),
-                label: "Kitchen speaker".to_owned(),
-                is_active: false,
-                is_direct_peer: false,
-            },
-        ],
     }
 }
 
@@ -473,8 +452,8 @@ fn the_source_text_paints_with_no_leading_icon() {
 /// Lucide icons — the autosave glyph and the dirty glyph, one each, beside the
 /// band's two control glyphs.
 #[rstest]
-#[case::no_pills(None, 3)]
-#[case::active_pills(Some(active_pills()), 5)]
+#[case::no_pills(None, 1)]
+#[case::active_pills(Some(active_pills()), 3)]
 fn the_active_footer_states_paint_their_lucide_icons(
     #[case] pills: Option<(Option<GuiFooterPill>, Option<GuiFooterPill>)>,
     #[case] expected_glyphs: usize,
@@ -508,36 +487,28 @@ fn an_armed_frame_renders_the_prefix_badge() {
 
 /// Contract (`move-playback-header-into-queue-footer` 3.1, spec `gui-client`
 /// "The footer paints the queue's source text"): the band's left group leads
-/// with the playback target and the collapse control, then the queue's
-/// source text.
+/// with the collapse control, then the queue's source text. The playback target
+/// moved to the Queue header (user request 2026-11-20).
 #[test]
-fn the_band_leads_with_the_playback_target_and_the_collapse_control() {
+fn the_band_leads_with_the_collapse_control() {
     let mut fixture = built();
     fixture.show_playback(playing(), None);
     fixture.show(footer_frame(), summary(), idle_status());
 
-    let target = fixture
-        .text_of("[data-target=\"playbackTarget\"]")
-        .trim()
-        .to_owned();
-    assert_eq!(target, "poo", "the target control paints its host label");
-    let target_at = fixture.order_of("[data-target=\"playbackTarget\"]");
     let collapse_at = fixture.order_of("[data-target=\"collapse\"]");
     let source_at = fixture.order_of("[data-footer-source]");
-    assert!(target_at < collapse_at, "the target leads the collapse");
-    assert!(collapse_at < source_at, "the controls lead the source");
+    assert!(collapse_at < source_at, "the control leads the source");
+    assert!(!fixture.presents("[data-target=\"playbackTarget\"]"));
 }
 
 /// Contract (`move-playback-header-into-queue-footer` D2): the moved controls
-/// compact to the band — a 28 px control height, the collapse control's
-/// aria-label and `Collapse panel (z)` title, and the target's chevron.
+/// compact to the band — a 28 px control height and the collapse control's
+/// aria-label and `Collapse panel (z)` title.
 #[test]
 fn the_moved_controls_compact_to_the_band() {
     let mut fixture = built();
     fixture.show(footer_frame(), summary(), idle_status());
 
-    let target = fixture.style_of("[data-target=\"playbackTarget\"]");
-    assert!(target.contains("height: 28px"), "{target}");
     let collapse = fixture.style_of("[data-target=\"collapse\"]");
     assert!(collapse.contains("height: 28px"), "{collapse}");
     assert!(
@@ -552,24 +523,6 @@ fn the_moved_controls_compact_to_the_band() {
         fixture.attr_of("[data-target=\"collapse\"]", local_name!("title")),
         Some("Collapse panel (z)".to_owned())
     );
-}
-
-/// Contract (`move-playback-header-into-queue-footer` D3, spec `gui-client`
-/// "The footer's target chooser opens above the band"): the chooser's popover
-/// opens upward from the control and lists the live choice list.
-#[test]
-fn the_target_chooser_opens_above_the_band() {
-    let mut fixture = built();
-    fixture.show_playback(playing(), Some(chooser()));
-
-    let popover = fixture
-        .attr_of("[data-target-chooser]", local_name!("class"))
-        .expect("the popover paints");
-    assert!(popover.contains("bottom-full"), "{popover}");
-    assert!(!popover.contains("top-full"), "{popover}");
-    let text = fixture.text();
-    assert!(text.contains("Living room"), "{text}");
-    assert!(text.contains("Kitchen speaker"), "{text}");
 }
 
 /// Contract (`move-playback-header-into-queue-footer` D5, spec `gui-client`
@@ -589,8 +542,7 @@ fn no_surface_paints_a_now_playing_status_word() {
 }
 
 /// Contract (`move-playback-header-into-queue-footer` 3.2, design D4): the
-/// band's contribution reports the playback target's and the collapse
-/// control's regions, in paint order.
+/// band's contribution reports the collapse control's region.
 #[test]
 fn the_band_reports_the_moved_controls_regions() {
     let mut fixture = built();
@@ -604,9 +556,6 @@ fn the_band_reports_the_moved_controls_regions() {
             .iter()
             .map(|region| region.target)
             .collect::<Vec<_>>(),
-        vec![
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
-        ]
+        vec![RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse)]
     );
 }

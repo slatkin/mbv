@@ -257,6 +257,20 @@ pub fn ChevronsLeft(props: IconProps) -> Element {
     )
 }
 
+/// The Lucide `chevrons-right` icon: the inverse of [`ChevronsLeft`].
+#[component]
+pub fn ChevronsRight(props: IconProps) -> Element {
+    icon_shell(
+        "chevrons-right",
+        &[],
+        &props,
+        rsx! {
+            path { d: "m6 17 5-5-5-5" }
+            path { d: "m13 17 5-5-5-5" }
+        },
+    )
+}
+
 /// The Lucide `clock` icon.
 #[component]
 pub fn Clock(props: IconProps) -> Element {

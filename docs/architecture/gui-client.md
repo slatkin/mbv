@@ -862,23 +862,26 @@ quit decision to the core.
 
 The footer line paints below the box between gap rows on the design's
 footer fill (`--ef-bg0` with a 1 px `--ef-bg3` top border,
-`gui-queue-panel-redesign` design D2). Its left group leads with the two
-queue-wide controls the player panel's header used to paint
-(`move-playback-header-into-queue-footer` D1, D2): the playback target —
-its Cast glyph, host label, and chevron, compacted to the band's 28 px
-control height — then the collapse control with its muted `Maximize2` glyph.
-After them follow the autosave indicator (while save-on-consume is on for a
-saved playlist), the queue's source text with no leading icon, and the dirty
-mark beside the source it describes; its centre carries the armed `PREFIX`
-badge; and its right group
-carries the shown queue's totals — the marked rows' total, named `Sel`,
-while rows are marked, beside the queue total, each with a `+` while its sum
-carries an unknown runtime. The filter narrows no total. The footer names no
-Player owner and paints no liveness dot: the shown queue's owner reads from
-the playback target at its left edge. The target's press opens the target
-chooser as a popover anchored above the band (D3), under a second report key
-the footer owns, so a press on a popover row wins over the queue row beneath
-it (D4); the collapse control's press runs the same toggle as the `z` chord.
+`gui-queue-panel-redesign` design D2). Its left group leads with the
+collapse control the player panel's header used to paint
+(`move-playback-header-into-queue-footer` D1, D2), at the band's 28 px control
+height with a muted `ChevronsRight` glyph — the inverse of the collapsed rail's
+`ChevronsLeft` expand control. After it follow the autosave indicator (while
+save-on-consume is on for a saved playlist), the queue's source text with no
+leading icon, and the dirty mark beside the source it describes; its centre
+carries the armed `PREFIX` badge; and its right group carries the shown queue's
+totals — the marked rows' total, named `Sel`, while rows are marked, beside the
+queue total, each with a `+` while its sum carries an unknown runtime. The
+filter narrows no total. The footer names no Player owner and paints no
+liveness dot: the shown queue's owner reads from the playback target in the
+Queue header. The playback target control leads the Queue header, to the left
+of the Queue switcher (`queue_target_control.rs`, user request 2026-11-20): its
+glyph is the one the chooser paints for the attached choice (the local
+monitor, or the Cast, Emby, or direct-peer mark), never a fixed Cast glyph. Its
+press opens the target chooser as a popover hung under the control, under a
+second report key the control owns, so a press on a popover row wins over the
+queue row beneath it (D4); the collapse control's press runs the same toggle as
+the `z` chord.
 No surface paints the now-playing status word (D5): the footer carries no
 status fact, and the `playback` section no longer carries one.
 

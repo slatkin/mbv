@@ -3,7 +3,7 @@
 //! container-size shape, and the shared whole-rows rule.
 
 use super::harness::*;
-use crate::bridge::layout::{ListId, ListRows, QueueTargetId, RegionTarget};
+use crate::bridge::layout::{ListId, ListRows, QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 
 /// Contract (`QueuePanel.test.ts`): the regions carry the header, slot,
 /// grip, actions, and menu-entry ids, menu last — the header's controls lead in
@@ -28,6 +28,7 @@ fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last()
             RegionTarget::Queue(QueueTargetId::Slot(2)),
             RegionTarget::Queue(QueueTargetId::RowGrip(2)),
             RegionTarget::Queue(QueueTargetId::RowActions(2)),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(0)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(1)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(2)),
@@ -79,6 +80,7 @@ fn the_report_carries_the_queue_lists_capacity_shape() {
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::Slot(7)),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
         ]
     );
     assert_eq!(report.container_size.width, 0.0);
