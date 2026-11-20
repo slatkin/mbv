@@ -23,8 +23,8 @@ place of the artist-row parts of 2.2 and the series-row parts of 3.2.
 
 ## 4. Playlists screen
 
-- [ ] 4.1 In `crates/mbv-gui/src/window/components/playlists_panel.rs`, add `fn toggle_command(is_open: bool, id: &str) -> GuiPlaylistsCommand` (`Collapse` when open, `Open { id }` when closed). Make the playlist row's `onclick` only set the pick, and its `ondoubleclick` send `toggle_command(..)` in place of `Play` (design D1). Remove the chevron span and the `ChevronDown` and `ChevronRight` imports. Add class `tree-parent` and `aria-expanded` to the row button, class `tree-trailing` to the item-count span, and `TreeHint { open: is_open }` as the last child. Update the module doc comment. Verify: `cargo check -p mbv-gui`.
-- [ ] 4.2 Add a `#[case]` table to `crates/mbv-gui/src/window/components/playlists_panel/tests.rs` for `toggle_command` with two cases: closed sends `Open { id }`, open sends `Collapse`. Verify: `cargo nextest run -p mbv-gui playlists_panel` passes.
+- [x] 4.1 In `crates/mbv-gui/src/window/components/playlists_panel.rs`, add `fn toggle_command(is_open: bool, id: &str) -> GuiPlaylistsCommand` (`Collapse` when open, `Open { id }` when closed). Make the playlist row's `onclick` only set the pick, and its `ondoubleclick` send `toggle_command(..)` in place of `Play` (design D1). Remove the chevron span and the `ChevronDown` and `ChevronRight` imports. Add class `tree-parent` and `aria-expanded` to the row button, class `tree-trailing` to the item-count span, and `TreeHint { open: is_open }` as the last child. Update the module doc comment. Verify: `cargo check -p mbv-gui`.
+- [x] 4.2 Add a `#[case]` table to `crates/mbv-gui/src/window/components/playlists_panel/tests.rs` for `toggle_command` with two cases: closed sends `Open { id }`, open sends `Collapse`. Verify: `cargo nextest run -p mbv-gui playlists_panel` passes.
 
 ## 5. Merge order with `gui-delineated-rows`
 
