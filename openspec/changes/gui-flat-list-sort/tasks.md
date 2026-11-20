@@ -38,8 +38,8 @@ already owns the contract.
 
 ## 6. Close out
 
-- [ ] 6.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify that all three pass.
-- [ ] 6.2 Run `make check-code-file-lines`, and split any file over 800 lines along its responsibility seam. Commit. Verify that `git status` shows a clean worktree.
+- [x] 6.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify that all three pass.
+- [x] 6.2 Run `make check-code-file-lines`, and split any file over 800 lines along its responsibility seam. Commit. Verify that `git status` shows a clean worktree.
 
 ## Workflow follow-up
 
