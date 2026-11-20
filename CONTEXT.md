@@ -507,7 +507,7 @@ A *GUI Library panel* dropdown that narrows the list to one or more content sets
 _Avoid_: multi-pill, filter pill, collection pill
 
 Letter rail:
-The A to Z column beside a name-sorted *GUI Library panel* list. A press jumps the list to the first row of that letter. A letter with no rows is disabled.
+The A to Z column beside a *GUI Library panel* list. It shows while the list's *List sort* is a name sort, Title or Author; a date sort shows no rail. A press jumps the list to the first row of that letter. A letter with no rows is disabled.
 _Avoid_: alphabet bar, jump bar
 
 Library Status bar:
@@ -521,6 +521,10 @@ _Avoid_: application popup, Sidebar, full-window overlay, separate detail block
 Library playback panel:
 The root-composed Panel that paints the playback transport in the Library column when the Queue column is hidden.
 _Avoid_: player strip
+
+List sort:
+The single-choice order of a flat *GUI Library panel* list: Title, Author on Audiobooks, Newest, or Oldest. Exactly one is active per destination, and it is sticky per destination.
+_Avoid_: date order (for the control), sort pill
 
 Queue playback panel:
 The root-composed Panel in the Queue column. It owns the visual slot and transport when the Queue column is visible; the TUI also owns the header row above the artwork: the playback-target indicator and the right-aligned status word, with the now-playing title between them. The GUI paints no header row: the artwork is the panel's topmost content, directly under the window's global header (the Library top bar, mounted in app.rs), and the playback-target control, the collapse control, and the target chooser live in the Queue footer band; no GUI surface paints the now-playing status word. It remains while idle, when the visual slot and transport collapse.
