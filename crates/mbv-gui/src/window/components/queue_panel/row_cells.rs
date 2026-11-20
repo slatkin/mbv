@@ -307,10 +307,18 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
             // The right column: the item's duration in every row state
             // (design D3). The hovered row paints it under the actions button
             // its sibling places over this column.
+            // The hovered row's column shrinks to its text, so the title
+            // grows into the room the fixed column left empty (user request
+            // 2026-11-20); the sibling actions button still bounds the row.
             span {
                 class: "shrink-0 text-right font-mono tabular-nums",
                 style: format!(
-                    "width: {RIGHT_COL_PX}px; font-size: 12px; color: {};",
+                    "{} font-size: 12px; color: {};",
+                    if chrome == RowChrome::Hover {
+                        String::new()
+                    } else {
+                        format!("width: {RIGHT_COL_PX}px;")
+                    },
                     ef_var(EfToken::Grey1)
                 ),
                 "data-duration": "",

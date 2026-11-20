@@ -297,17 +297,17 @@ fn the_scroller_and_its_rows_carry_the_pointer_markers() {
 }
 
 /// Contract (gui-delineated-rows design D7): the shell reports the ids of the
-/// rows it paints plus four rows of overscan either side, and a scroll reports
-/// the new set.
+/// rows it paints plus the overscan either side (wider than this ten-row list),
+/// and a scroll reports the new set.
 #[test]
 fn the_shell_reports_the_painted_rows_with_their_overscan() {
     let mut fixture = built();
     assert_eq!(
         fixture.reported.borrow()[0],
-        [
-            "row-0", "row-1", "row-2", "row-3", "row-4", "row-5", "row-6", "row-7"
-        ],
-        "the first window reports its rows plus the four below"
+        (0..10)
+            .map(|index| format!("row-{index}"))
+            .collect::<Vec<_>>(),
+        "the first window reports its rows plus the overscan below"
     );
 
     let mut scroll_top = fixture.scroll_top;
@@ -334,7 +334,7 @@ fn an_unchanged_row_set_reports_nothing() {
 
     assert_eq!(
         fixture.reported.borrow().len(),
-        1,
-        "only the scroll that changed the row set reports it"
+        0,
+        "scrolls that leave the row set unchanged report nothing"
     );
 }

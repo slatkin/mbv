@@ -9,8 +9,9 @@ use crate::window::library::scroll::ListScroll;
 
 /// The rows a `RowsInView` report adds above and below the painted window
 /// (gui-delineated-rows design D7): the row art of the rows just outside the
-/// viewport is fetched too, so a small scroll paints no empty thumb.
-pub const ROWS_IN_VIEW_OVERSCAN: usize = 4;
+/// viewport is fetched too, so a scroll of up to a screen paints no empty
+/// thumb (user request 2026-11-20: 4 rows left empty boxes on a fast scroll).
+pub const ROWS_IN_VIEW_OVERSCAN: usize = 16;
 
 /// The geometry the scroll and window geometry read (`add-gui-library-panel`
 /// design D7, D12): the stable id, the top edge from the list's first row, and
