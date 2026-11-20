@@ -163,13 +163,14 @@ pub fn LibraryAudiobooksList() -> Element {
             "data-library-abs-list-column": "",
             // The Music list's header (design D15): the destination is an
             // Audiobookshelf destination, so its mark names it
-            // (gui-library-header-service-marks design D5), `All` is the whole
-            // catalog, and the `/` filter field narrows it.
+            // (gui-library-header-service-marks design D5), and the `/` filter
+            // field narrows it. The whole catalog is the default scope, so the
+            // header paints no label for it.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
                     heading: LibraryListHeading::Mark(ServiceMark::Audiobookshelf),
-                    label: "All".to_owned(),
+                    label: String::new(),
                     filter: audiobooks_ui.filter.clone(),
                     placeholder: "Filter books".to_owned(),
                     aria_label: "Filter books".to_owned(),

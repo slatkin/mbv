@@ -100,8 +100,11 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
             style: "padding: 14px 16px 10px; gap: 10px;",
             "data-library-list-header": "",
             div {
-                class: "flex items-center justify-between",
-                style: "gap: 12px;",
+                class: "flex flex-none items-center justify-between",
+                // The line is as tall as the dropdown trigger (28px) whether or
+                // not the destination paints one, so the filter field under it
+                // sits at one height on every tab.
+                style: "gap: 12px; min-height: 28px;",
                 match heading {
                     LibraryListHeading::Mark(mark) => rsx! { ServiceMarkIcon { mark } },
                     LibraryListHeading::Title(title) => rsx! {

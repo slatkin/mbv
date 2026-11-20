@@ -552,9 +552,8 @@ fn the_list_paints_the_audiobooks_header() {
         Some("audiobookshelf".to_owned()),
         "the header marks the destination's Service"
     );
-    assert_eq!(
-        fixture.text_of("[data-library-selection-label]"),
-        "All",
-        "the whole catalog is the carried scope"
+    assert!(
+        !fixture.presents("[data-library-selection-label]"),
+        "the whole catalog is the default scope, so no label names it"
     );
 }
