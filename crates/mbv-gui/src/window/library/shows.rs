@@ -115,8 +115,9 @@ impl LibraryState {
     /// loads its detail), a season sends the season select (the core loads its
     /// episodes), and a flat row sends the flat select — the command whose
     /// stored value the Hero paints. An episode leaf changes nothing in the
-    /// core: the series Hero owns its episode Workspace. A select repaints
-    /// the Narrow arrangement's Hero overlay and closes an open menu, because
+    /// core: the series Hero owns its episode Workspace. A select never
+    /// opens the Narrow arrangement's Hero overlay (only View Detail does) and
+    /// closes an open menu, because
     /// the facts they paint belong to the previous row, as a Music pick's do.
     /// A heading names no row, so its select changes nothing.
     pub fn select_shows_row(&self, row: &ShowsListRow) {
@@ -147,7 +148,6 @@ impl LibraryState {
         self.link.library(command);
         let mut ui = self.ui;
         ui.with_mut(|ui| {
-            ui.hero_dismissed = false;
             ui.item_menu_open = false;
             ui.row_menu = None;
         });

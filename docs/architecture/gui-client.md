@@ -1566,7 +1566,8 @@ tab, or the Home icon while the Home content is present — puts the Queue
 back, and a press on a different destination keeps the Library showing.
 Outside Mini the view is unaffected: every other arrangement paints both
 columns. Narrow mounts both panels, and
-a picked item opens the Hero as an overlay over the list. Wide mounts both
+the row menu's View Detail entry opens the Hero as an overlay over the list;
+a press or a pick never does. Wide mounts both
 panels with the Hero beside the list — the list at the left edge of the
 Library panel, the Hero pane to its right. The Queue panel keeps its four states
 inside every arrangement, and a resize across a threshold moves no active

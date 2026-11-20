@@ -93,6 +93,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     );
     let press_row = row.clone();
     let press_library = library.clone();
+    let menu_row = row.clone();
     let menu_library = library.clone();
     let play_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
@@ -107,6 +108,9 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
             onclick: move |_| press_library.press_library_row(&press_row),
             oncontextmenu: move |event: MouseEvent| {
                 event.prevent_default();
+                // A right-click selects the row first, as a press does, so the
+                // menu's View Detail opens the Hero for this row.
+                menu_library.press_library_row(&menu_row);
                 let coordinates = event.client_coordinates();
                 menu_library.open_row_menu_at(
                     item_id.clone(),
@@ -197,7 +201,9 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
                 toggle_library.toggle_library_node(&toggle_row);
             })),
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
-                menu_library.open_row_menu_at(item_id.clone(), x, y);
+                // An artist press picks no item, so its menu offers no View
+                // Detail.
+                menu_library.open_row_menu_without_detail_at(item_id.clone(), x, y);
             })),
         }
     }
@@ -229,6 +235,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     let press_library = library.clone();
     let toggle_row = row.clone();
     let toggle_library = library.clone();
+    let menu_row = row.clone();
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
     rsx! {
@@ -242,6 +249,9 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
             onclick: move |_| press_library.press_library_row(&press_row),
             oncontextmenu: move |event: MouseEvent| {
                 event.prevent_default();
+                // A right-click selects the row first, as a press does, so the
+                // menu's View Detail opens the Hero for this row.
+                menu_library.press_library_row(&menu_row);
                 let coordinates = event.client_coordinates();
                 menu_library.open_row_menu_at(
                     item_id.clone(),

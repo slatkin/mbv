@@ -97,8 +97,8 @@ impl LibraryState {
     }
 
     /// Select the row (design D12): the select command the core stores, whose
-    /// frame paints the Hero. A select repaints the Narrow arrangement's Hero
-    /// overlay and closes an open menu, because the facts they paint belong to
+    /// frame paints the Hero. A select never opens the Narrow arrangement's
+    /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
     /// the previous episode, as a Music pick's do.
     pub fn select_podcasts_row(&self, row: &PodcastsItemRow) {
         let Some(lib_idx) = self.podcasts_lib_idx() else {
@@ -110,7 +110,6 @@ impl LibraryState {
         });
         let mut ui = self.ui;
         ui.with_mut(|ui| {
-            ui.hero_dismissed = false;
             ui.item_menu_open = false;
             ui.row_menu = None;
         });

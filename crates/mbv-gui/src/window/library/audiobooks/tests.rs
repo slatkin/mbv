@@ -196,9 +196,9 @@ fn painted_rows(state: &LibraryState) -> Arc<[AudiobooksListRow]> {
     state.audiobooks_rows(&filter)
 }
 
-// A press selects the book and repaints the Hero overlay.
+// A press selects the book.
 #[test]
-fn a_press_selects_the_book_and_repaints_the_hero_overlay() {
+fn a_press_selects_the_book() {
     let (_facts, rx) = run(|state, _facts| {
         carry(state, Some("b1"));
         let row = painted_rows(state)
@@ -230,9 +230,10 @@ fn a_press_on_a_heading_selects_nothing() {
     assert_eq!(commands(&rx), []);
 }
 
-// A press repaints the Hero overlay and closes an open item menu.
+// A press never opens the Hero overlay (only the row menu's View Detail does)
+// and closes an open item menu.
 #[test]
-fn a_press_repaints_the_hero_overlay_and_closes_an_open_item_menu() {
+fn a_press_keeps_the_hero_overlay_dismissed_and_closes_an_open_item_menu() {
     let (facts, rx) = run(|state, facts| {
         carry(state, Some("b1"));
         let row = painted_rows(state)[1].clone();
@@ -240,7 +241,7 @@ fn a_press_repaints_the_hero_overlay_and_closes_an_open_item_menu() {
         state.press_audiobooks_row(&row);
         facts.lock().expect("facts").push(ui_facts(state));
     });
-    assert!(facts[0].contains("dismissed=false"));
+    assert!(facts[0].contains("dismissed=true"));
     assert!(facts[0].contains("item_menu_open=false"));
     assert_eq!(
         commands(&rx),

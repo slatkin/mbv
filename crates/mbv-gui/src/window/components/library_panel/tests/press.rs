@@ -26,6 +26,29 @@ fn the_item_menu_paints_on_a_destination_that_is_not_music() {
     );
 }
 
+/// Contract (user request 2026-11-20): in the Narrow arrangement the
+/// right-click menu leads with View Detail, and View Detail is the only way
+/// the Hero overlay opens — the menu closes and the overlay paints.
+#[test]
+fn view_detail_opens_the_narrow_hero_overlay() {
+    let mut fixture = built(GuiArrangement::Narrow);
+    let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.open_library_row_menu("al1".to_owned(), 40.0, 60.0));
+    fixture.carry_row_menu("al1");
+
+    assert_eq!(fixture.text_of("[data-menu-entry]"), "View Detail");
+    assert!(!fixture.presents("[data-library-region=\"heroOverlay\"]"));
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.view_library_detail());
+
+    assert!(fixture.presents("[data-library-region=\"heroOverlay\"]"));
+    assert!(!fixture.presents("[data-row-menu]"));
+}
+
 /// Contract: the right-click item menu carries the pointer position it opened
 /// at (the `RowMenu` state), and the card paints while it is up. Where the
 /// card sits on screen is design presentation, not a contract: no test asserts

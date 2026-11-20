@@ -252,6 +252,9 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             oncontextmenu: move |event: MouseEvent| {
                 if let Some(on_context) = on_context {
                     event.prevent_default();
+                    // A right-click selects the row first, as a press does, so
+                    // the menu's View Detail opens the Hero for this row.
+                    on_press.call(());
                     let coordinates = event.client_coordinates();
                     on_context
                         .call((f32_from_f64(coordinates.x), f32_from_f64(coordinates.y)));

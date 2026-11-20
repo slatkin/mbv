@@ -209,6 +209,7 @@ fn paint_shows_season(
         "flex w-full items-center overflow-hidden"
     };
     let menu_id = row_source_id(row).map(str::to_owned);
+    let menu_row = row.clone();
     let menu_library = library.clone();
     // The expandable node's `aria-expanded` names the open state (the former client
     // `undefined` painted none); the marks beyond it paint only while they
@@ -248,6 +249,9 @@ fn paint_shows_season(
             },
             oncontextmenu: move |event: MouseEvent| {
                 event.prevent_default();
+                // A right-click selects the row first, as a press does, so the
+                // menu's View Detail opens the Hero for this row.
+                menu_library.press_shows_row(&menu_row);
                 let coordinates = event.client_coordinates();
                 menu_library.open_row_menu_at(
                     menu_id.clone(),
@@ -339,6 +343,7 @@ fn paint_shows_episode(
     let play_id = episode.source_id.clone();
     let play_library = library.clone();
     let menu_id = episode.source_id.clone();
+    let menu_row = row.clone();
     let menu_library = library.clone();
     rsx! {
         button {
@@ -351,6 +356,9 @@ fn paint_shows_episode(
             ondoubleclick: move |_| play_library.play_shows_row(&play_id),
             oncontextmenu: move |event: MouseEvent| {
                 event.prevent_default();
+                // A right-click selects the row first, as a press does, so the
+                // menu's View Detail opens the Hero for this row.
+                menu_library.press_shows_row(&menu_row);
                 let coordinates = event.client_coordinates();
                 menu_library.open_row_menu_at(
                     Some(menu_id.clone()),

@@ -39,6 +39,9 @@ pub struct RowMenu {
     pub x: f32,
     /// The pointer's client y when the menu opened.
     pub y: f32,
+    /// Whether the menu offers View Detail: `false` for a row whose press
+    /// picks no item (a Music artist row), which has no Hero to open.
+    pub detail: bool,
 }
 
 /// The Library panel's interaction state (`state.ts`'s `LibraryUiState`).
@@ -74,8 +77,8 @@ pub struct LibraryUiState {
     /// collapsed panel paints.
     pub search_control: SearchControlState,
     /// Whether the Narrow arrangement's Hero overlay is dismissed (design D4,
-    /// D3): a pick paints it again, and Esc or a press on its backdrop closes
-    /// it.
+    /// D3): only the row menu's View Detail paints it again — a press or a pick
+    /// never does — and Esc or a press on its backdrop closes it.
     pub hero_dismissed: bool,
     /// Whether the picked item's menu is open (design D8): More actions opens
     /// it, a chosen entry runs and closes it, and Esc closes it.
@@ -98,8 +101,8 @@ impl LibraryUiState {
             search_control: SearchControlState::default(),
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
-            // No pick has happened yet: the Narrow arrangement shows the list,
-            // not an overlay Hero for the core's default row.
+            // No View Detail has happened yet: the Narrow arrangement shows
+            // the list, not an overlay Hero for the core's default row.
             hero_dismissed: true,
             item_menu_open: false,
             row_menu: None,
@@ -488,7 +491,7 @@ impl LibraryState {
 
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
     /// a picked item, an arrangement that overlays rather than splits, and no
-    /// dismissal since that pick. The Hero is the Music Hero, the Home Hero, the
+    /// dismissal since the row menu's View Detail. The Hero is the Music Hero, the Home Hero, the
     /// Shows Hero, or a plain Emby library's Hero (design D12), whichever
     /// destination is active. Esc and a press on the backdrop close it. The
     /// `arrangement` is the one value the window hands both this predicate's
@@ -546,7 +549,7 @@ impl LibraryState {
     }
 
     /// Close the Narrow Hero overlay (design D3): Esc while it paints, and a press
-    /// on its backdrop. A later pick paints it again.
+    /// on its backdrop. A later View Detail paints it again.
     pub fn close_library_hero(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {
@@ -579,13 +582,22 @@ impl LibraryState {
     /// pointer position, and a chosen entry sends its index for that item. The
     /// Hero's own menu closes with it — one menu is up at a time.
     pub fn open_library_row_menu(&self, item_id: String, x: f32, y: f32) {
+        self.open_row_menu(item_id, x, y, true);
+    }
+
+    fn open_row_menu(&self, item_id: String, x: f32, y: f32, detail: bool) {
         self.link.library(GuiLibraryCommand::RowMenu {
             item_id: item_id.clone(),
         });
         let mut ui = self.ui;
         ui.with_mut(|ui| {
             ui.item_menu_open = false;
-            ui.row_menu = Some(RowMenu { item_id, x, y });
+            ui.row_menu = Some(RowMenu {
+                item_id,
+                x,
+                y,
+                detail,
+            });
         });
     }
 
@@ -599,6 +611,27 @@ impl LibraryState {
         if let Some(item_id) = item_id {
             self.open_library_row_menu(item_id, x, y);
         }
+    }
+
+    /// Open the item menu of a row whose press picks no item (a Music artist
+    /// row): the same menu without View Detail, because the Hero has no item
+    /// to show for the row.
+    pub fn open_row_menu_without_detail_at(&self, item_id: Option<String>, x: f32, y: f32) {
+        if let Some(item_id) = item_id {
+            self.open_row_menu(item_id, x, y, false);
+        }
+    }
+
+    /// View Detail, the row menu's entry (user request 2026-11-20): the menu
+    /// closes and the Narrow Hero overlay paints for the row the right-click
+    /// selected. It is the only way the overlay opens.
+    pub fn view_library_detail(&self) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            ui.hero_dismissed = false;
+            ui.item_menu_open = false;
+            ui.row_menu = None;
+        });
     }
 
     /// Close the right-click item menu: a chosen entry closes it, and so do Esc,

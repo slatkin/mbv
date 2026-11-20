@@ -88,8 +88,8 @@ impl LibraryState {
 
     /// Send the detail of the item a row picks (design D7): the core stores it and
     /// the next frame carries the Hero. No command for a row that names no item. A
-    /// pick paints the Narrow arrangement's Hero overlay again (design D4) and closes
-    /// the item menu the previous item opened.
+    /// pick never opens the Narrow arrangement's Hero overlay (only the row menu's
+    /// View Detail does) and closes the item menu the previous item opened.
     fn show_detail(&self, item_id: Option<String>) {
         let Some(item_id) = item_id else {
             return;
@@ -97,7 +97,6 @@ impl LibraryState {
         self.link.library(GuiLibraryCommand::ShowDetail { item_id });
         let mut ui = self.ui;
         ui.with_mut(|ui| {
-            ui.hero_dismissed = false;
             ui.item_menu_open = false;
             ui.row_menu = None;
         });

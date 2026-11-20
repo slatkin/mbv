@@ -159,8 +159,8 @@ impl Fixture {
         self.poll_until_idle();
     }
 
-    /// Pick a row, as a press or a cursor move does: the Narrow overlay
-    /// paints again.
+    /// Open the Narrow overlay, as the row menu's View Detail does: the only
+    /// way it paints.
     fn pick(&mut self) {
         let mut ui = self.state.ui;
         self.in_runtime(move || ui.with_mut(|ui| ui.hero_dismissed = false));

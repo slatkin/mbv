@@ -194,6 +194,24 @@ fn hero_painter(
     })
 }
 
+/// The index View Detail reports. The core's entries report their own
+/// shared-builder index, which is far below it, so a press names View Detail
+/// and no core entry.
+const VIEW_DETAIL_INDEX: usize = usize::MAX;
+
+/// The View Detail entry (user request 2026-11-20): the window paints it first
+/// in the row menu while the Hero would be an overlay, because right-clicking
+/// it is the only way the Narrow Hero opens.
+fn view_detail_entry() -> GuiRowMenuEntry {
+    GuiRowMenuEntry {
+        label: "View Detail".to_owned(),
+        key_hint: None,
+        destructive: false,
+        checked: None,
+        index: Some(VIEW_DETAIL_INDEX),
+    }
+}
+
 /// The right-click menu's entries in the row menu's entry shape: the
 /// Library's entries carry no destructive flag, and the entry's own
 /// `index` — the core's shared-builder order — rides in the frame the
@@ -419,8 +437,16 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                     // shared-builder order), so the press names the entry it
                     // painted.
                     let on_select = Callback::new(move |index: usize| {
-                        menu_library.run_library_row_menu_entry(index);
+                        if index == VIEW_DETAIL_INDEX {
+                            menu_library.view_library_detail();
+                        } else {
+                            menu_library.run_library_row_menu_entry(index);
+                        }
                     });
+                    let mut entries = row_menu_entries(&menu.entries);
+                    if row_menu.detail && arrangement == GuiArrangement::Narrow && !overlay_open {
+                        entries.insert(0, view_detail_entry());
+                    }
                     let top = format!("{}px", row_menu.y);
                     let left = format!("{}px", row_menu.x);
                     rsx! {
@@ -435,7 +461,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                             },
                             QueueRowMenu {
                                 cursor: None,
-                                entries: row_menu_entries(&menu.entries),
+                                entries,
                                 top,
                                 left: Some(left),
                                 on_select: Some(on_select),
