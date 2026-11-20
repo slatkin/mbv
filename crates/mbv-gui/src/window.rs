@@ -22,6 +22,7 @@ pub mod playhead;
 pub mod pointer_target;
 pub mod resize;
 pub mod sections;
+pub mod service_mark;
 pub mod settings;
 pub mod status;
 pub mod theme;

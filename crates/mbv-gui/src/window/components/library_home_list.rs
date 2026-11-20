@@ -23,7 +23,7 @@ use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart, name_color,
 };
-use crate::window::components::library_list_header::LibraryListHeader;
+use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
@@ -190,13 +190,13 @@ pub fn LibraryHomeList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-home-list-column": "",
-            // The Music list's header (design D15): the list names itself, the
-            // carried list is the whole destination, and the `/` filter field
-            // narrows it.
+            // The Music list's header (design D15): Home keeps its text title
+            // (gui-library-header-service-marks design D5), the carried list is
+            // the whole destination, and the `/` filter field narrows it.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: "Home".to_owned(),
+                    heading: LibraryListHeading::Title("Home".to_owned()),
                     label: "All".to_owned(),
                     filter: filter.clone(),
                     placeholder: "Filter home".to_owned(),

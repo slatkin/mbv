@@ -436,11 +436,14 @@ The window reads no font from disk at runtime. `assets/app.css` sets
 `mbv-art` scheme, which the net provider answers.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
-`src/window/icons.rs` only (the Lucide set, drawn as inline SVG), with one
-exception: a playback-target chooser row paints the brand mark of its target
-kind (`src/window/brand_icons.rs`, whose three paths are simple-icons', CC0) for
-Emby, Google Cast, and the mpv Player owner, because Lucide carries no brand
-glyph. The transport controls and the playback-target indicator are Lucide
+`src/window/icons.rs` only (the Lucide set, drawn as inline SVG), with two
+exceptions, both because Lucide carries no brand glyph: a playback-target
+chooser row paints the brand mark of its target kind (`src/window/brand_icons.rs`)
+for Emby, Google Cast, and the mpv Player owner, and a Library list header
+paints its destination's Service mark (`src/window/service_mark.rs`), the RSS
+mark excepted because it stays the Lucide `Rss` icon. Both painters draw
+simple-icons paths (CC0); `brand_icons.rs` keeps the chooser marks and reads
+the Emby path from `service_mark.rs`, so the Emby path exists once. The transport controls and the playback-target indicator are Lucide
 icons. The shown queue's start slot shows the canvas's play glyph
 beside its title, in the accent colour: filled while its queue plays, and
 outlined while it is stopped or resting (the `queue` section still names
@@ -947,8 +950,9 @@ the destination's Hero (`LibraryHero` with `LibraryTracklist` in Music;
 `LibraryEmbyHero`, `LibraryAudiobooksHero`, `LibraryPodcastsHero`, and
 `LibraryFeedsHero`), and `LibraryStatusBar`. The panel paints no selector
 row and no pills region between `LibraryTopBar` and the list. Each list
-paints its own header: `LibraryListHeader` paints the list title line — the
-title and, where one applies, the dropdown — on that line. Music, Podcasts,
+paints its own header: `LibraryListHeader` paints the heading line — the
+destination's Service mark, or Home's text title alone, and, where one
+applies, the dropdown — on that line. Music, Podcasts,
 Feeds, and an Emby feed-group library paint `LibraryCollectionDropdown` with
 the collection frame; Shows paints its single-choice view dropdown over the
 same prop-driven presentation (no filter strip, no date order). A plain Emby,

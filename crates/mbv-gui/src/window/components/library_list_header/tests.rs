@@ -1,10 +1,11 @@
-//! Headless tests of the list header's title line (gui-collection-dropdown
+//! Headless tests of the list header's heading line (gui-collection-dropdown
 //! design D6a, user override, spec "The collection dropdown sits in the list
-//! header and no pill row remains"): the title line paints the list title and
-//! then the collection dropdown's trigger at the line's right end, and the
-//! selection label paints only where it is non-empty and no trigger names the
-//! selection. The core channel is a mock pair; no test opens a window, sleeps,
-//! or reaches the core.
+//! header and no pill row remains"; gui-library-header-service-marks design
+//! D5, D6): the heading line paints the destination's Service mark or its text
+//! title and then the collection dropdown's trigger at the line's right end,
+//! and the selection label paints only where it is non-empty and no trigger
+//! names the selection. The core channel is a mock pair; no test opens a
+//! window, sleeps, or reaches the core.
 
 use std::sync::{Arc, mpsc};
 
@@ -13,18 +14,19 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::LibraryListHeader;
+use super::{LibraryListHeader, LibraryListHeading};
 use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollections};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
+use crate::window::service_mark::ServiceMark;
 
 /// The layout rules the fixture resolves with, in place of the app stylesheet a
-/// real window loads: the utilities the title line and the dropdown size their
-/// boxes with, and the header's own width so the right-aligned toggle has a
-/// line to sit at the end of.
+/// real window loads: the utilities the heading line and the dropdown size
+/// their boxes with, and the header's own width so the right-aligned toggle has
+/// a line to sit at the end of.
 const FIXTURE_CSS: &str = concat!(
     ".flex { display: flex; }",
     ".flex-col { flex-direction: column; }",
@@ -40,10 +42,12 @@ const FIXTURE_CSS: &str = concat!(
     "[data-library-list-header] { width: 600px; }",
 );
 
-/// The harness's props: the carried collections and the selection label.
+/// The harness's props: the heading, the carried collections, and the
+/// selection label.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
+    heading: LibraryListHeading,
     collections: Option<GuiCollections>,
     label: String,
 }
@@ -53,6 +57,7 @@ struct FixtureProps {
 fn header_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
+        heading,
         collections,
         label,
     } = props;
@@ -69,7 +74,7 @@ fn header_app(props: FixtureProps) -> Element {
     provide_context(state);
     rsx! {
         LibraryListHeader {
-            title: "Podcasts".to_owned(),
+            heading,
             label,
             collections,
             filter: String::new(),
@@ -91,6 +96,19 @@ impl Fixture {
         matches!(self.doc.inner().query_selector(selector), Ok(Some(_)))
     }
 
+    /// The attribute of the first node the selector names.
+    fn attr_of(&self, selector: &str, attribute: &str) -> Option<String> {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_node(id)
+            .expect("the node is in the document")
+            .attr(blitz_dom::LocalName::from(attribute))
+            .map(str::to_owned)
+    }
+
     /// The trimmed text of the first node the selector names.
     fn text_of(&self, selector: &str) -> String {
         let dom = self.doc.inner();
@@ -106,15 +124,20 @@ impl Fixture {
     }
 }
 
-/// Build the document over the carried collections and the selection label and
-/// resolve its layout.
-fn built_with_label(collections: Option<GuiCollections>, label: String) -> Fixture {
+/// Build the document over the heading, the carried collections, and the
+/// selection label and resolve its layout.
+fn built_with(
+    heading: LibraryListHeading,
+    collections: Option<GuiCollections>,
+    label: String,
+) -> Fixture {
     let (sender, _receiver) = mpsc::channel::<CoreInput>();
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
             header_app,
             FixtureProps {
                 sender,
+                heading,
                 collections,
                 label,
             },
@@ -133,8 +156,18 @@ fn built_with_label(collections: Option<GuiCollections>, label: String) -> Fixtu
     Fixture { doc }
 }
 
+/// Build the document over the carried collections and the selection label,
+/// under a Service mark heading.
+fn built_with_label(collections: Option<GuiCollections>, label: String) -> Fixture {
+    built_with(
+        LibraryListHeading::Mark(ServiceMark::Rss),
+        collections,
+        label,
+    )
+}
+
 /// Build the document over the carried collections and the default `All`
-/// selection label.
+/// selection label, under a Service mark heading.
 fn built(collections: Option<GuiCollections>) -> Fixture {
     built_with_label(collections, "All".to_owned())
 }
@@ -154,16 +187,35 @@ fn podcasts_frame() -> GuiCollections {
     }
 }
 
-/// Contract (design D6a, user override): the title line paints the list title
-/// and the collections trigger. Where the trigger sits on the line is design
-/// presentation, not a contract: no test asserts geometry (user decision
-/// 2026-11-19).
+/// Contract (design D6a, user override; gui-library-header-service-marks
+/// design D5): the heading line paints the destination's Service mark and the
+/// collections trigger, and no text title. Where the trigger sits on the line
+/// is design presentation, not a contract: no test asserts geometry (user
+/// decision 2026-11-19).
 #[test]
-fn the_title_line_paints_the_title_and_the_trigger() {
+fn the_heading_line_paints_the_mark_and_the_trigger() {
     let fixture = built(Some(podcasts_frame()));
 
-    assert_eq!(fixture.text_of("[data-library-list-title]"), "Podcasts");
+    assert_eq!(
+        fixture.attr_of("[data-library-list-mark]", "data-library-list-mark"),
+        Some("rss".to_owned())
+    );
+    assert!(!fixture.presents("[data-library-list-title]"));
     assert_eq!(fixture.text_of("[data-library-collections-trigger]"), "All");
+}
+
+/// Contract (gui-library-header-service-marks design D5, D6): a `Title`
+/// heading paints its text and no Service mark, as Home does.
+#[test]
+fn a_title_heading_paints_the_title_and_no_mark() {
+    let fixture = built_with(
+        LibraryListHeading::Title("Home".to_owned()),
+        None,
+        "All".to_owned(),
+    );
+
+    assert_eq!(fixture.text_of("[data-library-list-title]"), "Home");
+    assert!(!fixture.presents("[data-library-list-mark]"));
 }
 
 /// Contract (design D6a): the header paints no selection label while the

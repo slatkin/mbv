@@ -9,12 +9,20 @@
 
 use super::*;
 use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, TabIdentity};
+use mbv_feed::FeedPlatform;
 use mbv_ui_model::media_list::MediaSemanticState;
+use rstest::rstest;
 
 /// The two subscriptions the tests configure: the feed identity is the URL,
 /// as the fetch stamps it on every entry.
 const FEED_A: &str = "https://example.test/a";
 const FEED_B: &str = "https://example.test/b";
+
+/// A `YouTube` channel feed and a generic podcast feed, the two subscription
+/// URLs the Feed-mark tests check.
+const YOUTUBE_FEED: &str = "https://www.youtube.com/feeds/videos.xml?channel_id=UCabc";
+const YOUTUBE_FEED_B: &str = "https://www.youtube.com/feeds/videos.xml?channel_id=UCdef";
+const GENERIC_FEED: &str = "https://example.test/generic";
 
 /// A stub `App` whose two subscriptions' fetches have landed, with the feed
 /// tab active: `a-old` (100) and `a-new` (300) for the first, `b-mid` (200)
@@ -34,6 +42,59 @@ fn fetched_feeds_app() -> App {
     app.send_gui_feed_fetch_result_for_test(1, &[("b-mid", Some(200)), ("b-undated", None)]);
     assert!(app.drain_feed_tab_results(), "both results drained");
     app
+}
+
+/// A stub `App` holding one `YouTube` subscription and one generic podcast
+/// subscription, with the Feeds tab active and nothing checked, so a test owns
+/// every check it makes.
+fn platform_feeds_app() -> App {
+    let mut app = make_app_stub();
+    app.seed_gui_feeds_for_test(&[("YouTube", YOUTUBE_FEED), ("Podcast", GENERIC_FEED)]);
+    app.tab = TabSelection::Feeds;
+    app
+}
+
+/// The Feed platform the checked subscriptions share (gui-library-header-
+/// service-marks design D2, D6; the `gui-client` spec's contract "the Feeds
+/// mark follows the checked subscriptions"): one platform's checked
+/// subscriptions share its mark, and a checked generic subscription leaves
+/// none.
+#[rstest]
+#[case::only_youtube_checked(&[YOUTUBE_FEED], Some(FeedPlatform::YouTube))]
+#[case::youtube_and_generic_checked(&[YOUTUBE_FEED, GENERIC_FEED], None)]
+fn the_feeds_platform_follows_the_checked_subscriptions(
+    #[case] checked: &[&str],
+    #[case] expected: Option<FeedPlatform>,
+) {
+    let mut app = platform_feeds_app();
+
+    for subscription in checked {
+        toggle_subscription(&mut app, subscription);
+    }
+
+    assert_eq!(
+        gui_feeds_platform(&app.gui_feeds_projection().collections),
+        expected,
+        "the checked subscriptions decide the Feed platform"
+    );
+}
+
+/// All over `YouTube`-only subscriptions shares no Feed platform (design D6; the
+/// contract "the Feeds mark follows the checked subscriptions"): the merged
+/// view is not one selection of one platform, so the header keeps the RSS mark.
+#[test]
+fn all_over_youtube_only_subscriptions_shares_no_feeds_platform() {
+    let mut app = make_app_stub();
+    app.seed_gui_feeds_for_test(&[("YouTube A", YOUTUBE_FEED), ("YouTube B", YOUTUBE_FEED_B)]);
+    app.tab = TabSelection::Feeds;
+
+    let collections = app.gui_feeds_projection().collections;
+
+    assert!(
+        collections.all,
+        "the selection starts on All, so no subscription is checked"
+    );
+    assert_eq!(gui_feeds_platform(&collections), None);
 }
 
 /// Press one subscription in the Feeds destination's collection dropdown.

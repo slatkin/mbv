@@ -3757,6 +3757,7 @@ dependencies = [
  "mbv-net",
  "mbv-queue",
  "mbv-text",
+ "rstest",
  "serde",
  "serde_json",
  "time",

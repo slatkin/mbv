@@ -548,9 +548,9 @@ fn the_list_paints_the_audiobooks_header() {
     fixture.measure(300.0);
 
     assert_eq!(
-        fixture.text_of("[data-library-list-title]"),
-        "Audiobooks",
-        "the header names the list"
+        fixture.attr_of("[data-library-list-mark]", "data-library-list-mark"),
+        Some("audiobookshelf".to_owned()),
+        "the header marks the destination's Service"
     );
     assert_eq!(
         fixture.text_of("[data-library-selection-label]"),

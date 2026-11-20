@@ -29,13 +29,14 @@ use crate::window::components::library_item_row::{
 };
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
-use crate::window::components::library_list_header::LibraryListHeader;
+use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::audiobooks_list::{AudiobooksListRow, audiobooks_letter_rail};
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
+use crate::window::service_mark::ServiceMark;
 use crate::window::theme::canvas_var;
 
 /// One painted row of the list: the letter heading
@@ -160,12 +161,14 @@ pub fn LibraryAudiobooksList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-abs-list-column": "",
-            // The Music list's header (design D15): the list names itself,
-            // `All` is the whole catalog, and the `/` filter field narrows it.
+            // The Music list's header (design D15): the destination is an
+            // Audiobookshelf destination, so its mark names it
+            // (gui-library-header-service-marks design D5), `All` is the whole
+            // catalog, and the `/` filter field narrows it.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: "Audiobooks".to_owned(),
+                    heading: LibraryListHeading::Mark(ServiceMark::Audiobookshelf),
                     label: "All".to_owned(),
                     filter: audiobooks_ui.filter.clone(),
                     placeholder: "Filter books".to_owned(),

@@ -22,13 +22,14 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
-use crate::window::components::library_list_header::LibraryListHeader;
+use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::parts::{library_podcasts_detail, library_podcasts_list};
 use crate::window::library::podcasts_list::{PODCASTS_ROW_HEIGHT, PodcastsItemRow};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
+use crate::window::service_mark::ServiceMark;
 
 /// One painted row of the flat list: the episode row. The row's press selects
 /// the episode the Hero shows, a double-click plays it, and a right-press
@@ -128,13 +129,15 @@ pub fn LibraryPodcastsList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-podcasts-list-column": "",
-            // The Music list's header (design D15): the list names itself, the
-            // checked collections are the carried scope, and the `/` filter field
+            // The Music list's header (design D15): the destination is an
+            // Audiobookshelf destination, so its mark names it
+            // (gui-library-header-service-marks design D5), the checked
+            // collections are the carried scope, and the `/` filter field
             // narrows it.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: "Podcasts".to_owned(),
+                    heading: LibraryListHeading::Mark(ServiceMark::Audiobookshelf),
                     label: selection_label.clone(),
                     label_attr: Some("data-library-podcasts-selection-label"),
                     collections,

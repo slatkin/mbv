@@ -52,7 +52,7 @@ pub use self::app::{
     RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SetupSecret, ShellCommand,
     StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice,
     TrackPopoverChoice, VisualIntent, WorkspaceRelayout, artist_rows_in_view_id,
-    compare_gui_date_order, resolve_router_outcome_with_focused,
+    compare_gui_date_order, gui_feeds_platform, resolve_router_outcome_with_focused,
 };
 pub use self::client_kind::ClientKind;
 pub use self::config::{Config, load_config};
@@ -61,6 +61,7 @@ pub use self::owner_link::{
     refusal_text, start_owner,
 };
 pub use self::startup::run;
+pub use mbv_feed::FeedPlatform;
 pub use mbv_images::ImageDecode;
 pub use mbv_ui_model::toast::{ToastCard, ToastId};
 pub use mbv_ui_msg::TrackChipKind;

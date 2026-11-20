@@ -20,13 +20,14 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
-use crate::window::components::library_list_header::LibraryListHeader;
+use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::feeds_list::{FEEDS_ROW_HEIGHT, FeedsItemRow};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
+use crate::window::service_mark::ServiceMark;
 
 /// One painted row of the flat list: the entry row.
 /// A feed entry names no right-click menu — the former row paints none.
@@ -75,10 +76,15 @@ pub fn LibraryFeedsList() -> Element {
     // label — All, the one checked name, or the count with the noun.
     let selection_label = frame.map_or_else(|| "All".to_owned(), |frame| frame.collections.label());
 
-    // The collection dropdown the header paints on the title's line (design
+    // The collection dropdown the header paints on the heading's line (design
     // D6a): the destination's carried selector, which names the selection
     // itself, so the header paints no selection label beside it.
     let collections = frame.map(|frame| frame.collections.clone());
+
+    // The heading marks the Feed platform every checked subscription shares,
+    // and RSS while the tab's frame has not landed
+    // (gui-library-header-service-marks design D5).
+    let mark = ServiceMark::feeds(frame.and_then(|frame| frame.platform));
 
     // The painted rows of the flat list (row 11.1): the same model
     // [`crate::window::library::feeds`] builds from the carried content,
@@ -114,13 +120,14 @@ pub fn LibraryFeedsList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-feeds-list-column": "",
-            // The Music list's header (design D15): the list names itself, the
-            // checked collections are the carried scope, and the `/` filter field
-            // narrows it.
+            // The Music list's header (design D15): the Feed platform's mark
+            // names the destination, the checked collections are the carried
+            // scope, and the `/` filter field narrows it
+            // (gui-library-header-service-marks design D5).
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: "Feeds".to_owned(),
+                    heading: LibraryListHeading::Mark(mark),
                     label: selection_label.clone(),
                     label_attr: Some("data-library-feeds-selection-label"),
                     collections,

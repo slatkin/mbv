@@ -324,6 +324,7 @@ fn frame(rows: Vec<GuiEntryRowFrame>, loading: bool) -> GuiFeedsList {
         },
         loading,
         failed: false,
+        platform: None,
         rows,
     }
 }
@@ -550,9 +551,9 @@ fn the_list_paints_the_feeds_header_with_the_collections_trigger() {
     fixture.measure(300.0);
 
     assert_eq!(
-        fixture.text_of("[data-library-list-title]"),
-        "Feeds",
-        "the header names the list"
+        fixture.attr_of("[data-library-list-mark]", "data-library-list-mark"),
+        Some("rss".to_owned()),
+        "the header marks the Feed platform, RSS while the selection is All"
     );
     assert_eq!(
         fixture.text_of("[data-library-collections-trigger]"),

@@ -268,6 +268,7 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
                         },
                         loading: false,
                         failed: false,
+                        platform: None,
                         rows,
                     }),
                 }),

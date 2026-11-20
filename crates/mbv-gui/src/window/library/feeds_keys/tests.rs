@@ -332,6 +332,7 @@ fn feeds_content_selected(
             collections: collections(pill_selection),
             loading: false,
             failed: false,
+            platform: None,
             rows: rows.to_owned(),
         }),
     };

@@ -7,7 +7,7 @@
 //! The row frame is the shared entry-list one (`entry_list.rs`); the Hero and
 //! the frame struct are the destination's own.
 
-use mbv::{GuiCollections, GuiFeedsHero, GuiFeedsProjection};
+use mbv::{FeedPlatform, GuiCollections, GuiFeedsHero, GuiFeedsProjection};
 
 use super::GuiArtShapeFrame;
 use super::entry_list::GuiEntryRowFrame;
@@ -28,6 +28,11 @@ pub struct GuiFeedsList {
     /// subscription flashes the TUI's toast and keeps its previous entries —
     /// so this is always `false`.
     pub failed: bool,
+    /// The Feed platform every checked subscription shares
+    /// (gui-library-header-service-marks design D3): the header's Feed mark,
+    /// and `None` for All, for a mixed or generic check set, and for an empty
+    /// one, where the header keeps the RSS mark.
+    pub platform: Option<FeedPlatform>,
     /// The selected subscriptions' entry rows (design D1, D2): All merges
     /// every subscription's entries, a checked set merges the checked
     /// subscriptions', both in the stored date order with undated entries
@@ -78,6 +83,7 @@ impl GuiFeedsList {
             collections: projection.collections.clone(),
             loading: projection.loading,
             failed: projection.failed,
+            platform: mbv::gui_feeds_platform(&projection.collections),
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),
         }
     }

@@ -11,10 +11,13 @@ use mbv_text::html::decode_entities;
 
 mod date;
 mod error;
+mod platform;
 #[doc(inline)]
 pub use self::date::parse_pub_date_secs;
 #[doc(inline)]
 pub use self::error::FeedError;
+#[doc(inline)]
+pub use self::platform::FeedPlatform;
 
 fn fetch_feed_body(url: &str) -> Result<String, FeedError> {
     tls_agent(None)
