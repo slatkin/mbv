@@ -19,8 +19,6 @@ use std::thread;
 use std::time::Duration;
 
 #[cfg(not(test))]
-use zbus::fdo::{RequestNameFlags, RequestNameReply};
-#[cfg(not(test))]
 use zbus::zvariant;
 #[cfg(not(test))]
 use zbus::{connection, interface};
@@ -33,10 +31,23 @@ use mbv_ctrl::player::PlayerStatus;
 use mbv_emby_model::{TICKS_PER_SECOND, saturating_i64_from_f64};
 
 #[cfg(not(test))]
+use claim::{NameClaim, instance_name};
+#[cfg(not(test))]
+use metadata::make_metadata;
+#[cfg(not(test))]
+use tick::{SignalCache, emit_changes, read_tick};
+
+#[cfg(not(test))]
+mod claim;
+#[cfg(not(test))]
+mod metadata;
+#[cfg(not(test))]
 mod owner;
 mod rule;
 #[cfg(test)]
 mod tests;
+#[cfg(not(test))]
+mod tick;
 
 #[cfg(not(test))]
 pub use owner::start_owner;
@@ -205,68 +216,6 @@ fn us_to_seconds(microseconds: i64) -> f64 {
     microseconds as f64 / 1_000_000.0
 }
 
-/// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
-/// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
-/// it's cloned/called every poll tick without hesitation; kept independent of
-/// the D-Bus connection.
-#[cfg(not(test))]
-fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
-    if disconnected {
-        s.active = false;
-    }
-    s
-}
-
-#[cfg(not(test))]
-fn make_metadata(
-    s: &PlayerStatus,
-    art_path: fn(&str) -> Option<std::path::PathBuf>,
-) -> HashMap<String, zvariant::Value<'static>> {
-    make_metadata_with_art_resolver(s, art_path)
-}
-
-#[cfg(not(test))]
-fn make_metadata_with_art_resolver(
-    s: &PlayerStatus,
-    resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
-) -> HashMap<String, zvariant::Value<'static>> {
-    let mut m = HashMap::new();
-    let track_id = zvariant::ObjectPath::try_from(if s.active && !s.title.is_empty() {
-        "/org/mpris/MediaPlayer2/TrackList/Track1"
-    } else {
-        "/org/mpris/MediaPlayer2/TrackList/NoTrack"
-    })
-    .unwrap();
-    m.insert("mpris:trackid".to_string(), zvariant::Value::new(track_id));
-    if s.active && !s.title.is_empty() {
-        m.insert(
-            "xesam:title".to_string(),
-            zvariant::Value::new(s.title.clone()),
-        );
-        if s.runtime_ticks > 0 {
-            let length_us = s.runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
-            m.insert("mpris:length".to_string(), zvariant::Value::new(length_us));
-        }
-        if let Some(art_url) = resolve_art_url(&s.art_item_id, &s.art_album_id, resolve_path) {
-            m.insert("mpris:artUrl".to_string(), zvariant::Value::new(art_url));
-        }
-        if !s.artist.is_empty() {
-            m.insert(
-                "xesam:artist".to_string(),
-                zvariant::Value::new(vec![s.artist.clone()]),
-            );
-        }
-        if !s.album.is_empty() {
-            m.insert(
-                "xesam:album".to_string(),
-                zvariant::Value::new(s.album.clone()),
-            );
-        }
-    }
-    m
-}
-
-#[cfg(not(test))]
 #[cfg(not(test))]
 impl MediaPlayer2Player {
     /// Reads a fresh status snapshot through the source's closure and drops
@@ -518,202 +467,6 @@ async fn poll_status(
         }
         emit_changes(&conn, &tick, &mut cache).await;
     }
-}
-
-/// One polling tick's published values, read from the live source.
-#[cfg(not(test))]
-struct TickView {
-    /// Whether the source's publish rule holds (design D3).
-    publish: bool,
-    status_name: &'static str,
-    metadata_key: (String, String, String, String),
-    position_seconds: i64,
-    volume: i64,
-}
-
-/// Reads the live source once and derives the values this tick publishes.
-#[cfg(not(test))]
-fn read_tick(
-    source: &MprisHandle,
-    art_path: fn(&str) -> Option<std::path::PathBuf>,
-) -> (PlayerStatus, TickView) {
-    let (disconnected, publish, raw) = {
-        let source = source.lock().unwrap();
-        (
-            source.disconnected.as_ref().is_some_and(|signal| signal()),
-            (source.publish)(),
-            (source.status)(),
-        )
-    };
-    let status = effective_status(raw, disconnected);
-    let status_name = match (status.active, status.paused) {
-        (false, _) => "Stopped",
-        (true, true) => "Paused",
-        (true, false) => "Playing",
-    };
-    let position_us = status.position_ticks * 1_000_000 / TICKS_PER_SECOND;
-    // Include the resolved cache path so artwork appearing mid-track triggers
-    // a metadata change instead of remaining absent.
-    let art_key =
-        resolve_art_url(&status.art_item_id, &status.art_album_id, art_path).unwrap_or_default();
-    let tick = TickView {
-        publish,
-        status_name,
-        metadata_key: (
-            status.title.clone(),
-            status.artist.clone(),
-            status.album.clone(),
-            art_key,
-        ),
-        position_seconds: position_us / 1_000_000,
-        volume: status.volume,
-    };
-    (status, tick)
-}
-
-/// The values the last published tick signalled, so a tick signals only
-/// changes. An empty cache differs from every tick.
-#[cfg(not(test))]
-struct SignalCache {
-    status: String,
-    metadata_key: (String, String, String, String),
-    position_seconds: i64,
-    volume: i64,
-}
-
-#[cfg(not(test))]
-impl SignalCache {
-    fn empty() -> Self {
-        Self {
-            status: String::new(),
-            metadata_key: (String::new(), String::new(), String::new(), String::new()),
-            position_seconds: -1,
-            volume: -1,
-        }
-    }
-}
-
-/// Whether this connection believes it holds its bus name. Both publishers
-/// start unclaimed: the Owner's rule always holds, so it claims on the first
-/// tick and never releases, while a Client claims and releases its instance
-/// name as its rule turns.
-#[cfg(not(test))]
-#[derive(Default)]
-struct NameClaim {
-    held: bool,
-}
-
-#[cfg(not(test))]
-impl NameClaim {
-    /// Keeps the claim in step with the publish rule, and answers whether the
-    /// name was just claimed -- whose first publish reports the full state. A
-    /// refused claim or release is logged and retried on the next tick.
-    async fn sync(&mut self, conn: &zbus::Connection, name: &str, publish: bool) -> bool {
-        if publish && !self.held {
-            return self.claim(conn, name).await;
-        }
-        if self.held && !publish {
-            self.release(conn, name).await;
-        }
-        false
-    }
-
-    async fn claim(&mut self, conn: &zbus::Connection, name: &str) -> bool {
-        match claim_name(conn, name).await {
-            Ok(RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner) => {
-                self.held = true;
-                true
-            }
-            Ok(reply) => {
-                tracing::debug!(
-                    name: "mpris.name.not_claimed",
-                    target: "mpris",
-                    bus_name = %name,
-                    reply = %reply,
-                    "MPRIS name stays with its current owner; retrying next tick"
-                );
-                false
-            }
-            Err(e) => {
-                tracing::debug!(
-                    name: "mpris.name.claim_failed",
-                    target: "mpris",
-                    bus_name = %name,
-                    error = %e,
-                    "MPRIS name claim failed; retrying next tick"
-                );
-                false
-            }
-        }
-    }
-
-    async fn release(&mut self, conn: &zbus::Connection, name: &str) {
-        match conn.release_name(name).await {
-            Ok(_) => self.held = false,
-            Err(e) => tracing::debug!(
-                name: "mpris.name.release_failed",
-                target: "mpris",
-                bus_name = %name,
-                error = %e,
-                "MPRIS name release failed; retrying next tick"
-            ),
-        }
-    }
-}
-
-/// Signals whatever property changed since the last published tick.
-#[cfg(not(test))]
-async fn emit_changes(conn: &zbus::Connection, tick: &TickView, cache: &mut SignalCache) {
-    let Ok(iface_ref) = conn
-        .object_server()
-        .interface::<_, MediaPlayer2Player>("/org/mpris/MediaPlayer2")
-        .await
-    else {
-        return;
-    };
-    let ctxt = iface_ref.signal_emitter();
-    let iface = iface_ref.get().await;
-
-    if cache.status != tick.status_name {
-        cache.status = tick.status_name.to_string();
-        let _ = iface.playback_status_changed(ctxt).await;
-    }
-    if cache.metadata_key != tick.metadata_key {
-        cache.metadata_key = tick.metadata_key.clone();
-        let _ = iface.metadata_changed(ctxt).await;
-    }
-    if (tick.position_seconds - cache.position_seconds).abs() >= 5 {
-        cache.position_seconds = tick.position_seconds;
-        let _ = iface.position_changed(ctxt).await;
-    }
-    if cache.volume != tick.volume {
-        cache.volume = tick.volume;
-        let _ = iface.volume_changed(ctxt).await;
-    }
-}
-
-/// Claims `name` for this connection (owner-mpris-fallback design D2/D4).
-///
-/// `ReplaceExisting | DoNotQueue` without `AllowReplacement`: the Owner takes
-/// the fixed name from a Client of an older build that still holds it at
-/// upgrade time, and no later claim can take the name from the Owner. A
-/// Client's instance name carries its process id, so no other publisher holds
-/// it.
-#[cfg(not(test))]
-async fn claim_name(conn: &zbus::Connection, name: &str) -> Result<RequestNameReply, zbus::Error> {
-    conn.request_name_with_flags(
-        name,
-        RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
-    )
-    .await
-}
-
-/// The Client's instance bus name (design D1): the MPRIS Bus Name Policy asks
-/// for a unique identifier that does not begin with a digit, which
-/// `instance<pid>` satisfies.
-#[cfg(not(test))]
-fn instance_name() -> String {
-    format!("org.mpris.MediaPlayer2.mbv.instance{}", std::process::id())
 }
 
 /// Serves both MPRIS interfaces at `/org/mpris/MediaPlayer2` on a session
