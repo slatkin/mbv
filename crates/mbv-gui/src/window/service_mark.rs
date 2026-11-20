@@ -68,43 +68,43 @@ impl ServiceMark {
     /// Everything this mark paints.
     fn paint(self) -> MarkPaint {
         match self {
-            Self::Emby => MarkPaint::solid("emby", "Emby", "#52B54B", EMBY_PATH),
-            Self::Audiobookshelf => MarkPaint::solid(
+            Self::Emby => MarkPaint::brand("emby", "Emby", "#52B54B", EMBY_PATH),
+            Self::Audiobookshelf => MarkPaint::brand(
                 "audiobookshelf",
                 "Audiobookshelf",
                 "#82612C",
                 AUDIOBOOKSHELF_PATH,
             ),
-            // The Lucide mark paints through `window/icons.rs`'s shell: the
-            // hook and the accessible name land on a wrapping span.
-            Self::Rss => MarkPaint::stroke("rss", "RSS"),
+            Self::Rss => MarkPaint::new("rss", "RSS", Fill::Lucide),
             Self::Feed(platform) => match platform {
                 FeedPlatform::YouTube => {
-                    MarkPaint::solid("youtube", "YouTube", "#FF0000", YOUTUBE_PATH)
+                    MarkPaint::brand("youtube", "YouTube", "#FF0000", YOUTUBE_PATH)
                 }
                 FeedPlatform::SoundCloud => {
-                    MarkPaint::solid("soundcloud", "SoundCloud", "#FF5500", SOUNDCLOUD_PATH)
+                    MarkPaint::brand("soundcloud", "SoundCloud", "#FF5500", SOUNDCLOUD_PATH)
                 }
                 FeedPlatform::Spreaker => {
-                    MarkPaint::solid("spreaker", "Spreaker", "#F5C300", SPREAKER_PATH)
+                    MarkPaint::brand("spreaker", "Spreaker", "#F5C300", SPREAKER_PATH)
                 }
                 FeedPlatform::Audioboom => {
-                    MarkPaint::solid("audioboom", "Audioboom", "#007CE2", AUDIOBOOM_PATH)
+                    MarkPaint::brand("audioboom", "Audioboom", "#007CE2", AUDIOBOOM_PATH)
                 }
-                FeedPlatform::Patreon => MarkPaint::heading("patreon", "Patreon", PATREON_PATH),
+                FeedPlatform::Patreon => {
+                    MarkPaint::new("patreon", "Patreon", Fill::Heading(PATREON_PATH))
+                }
                 FeedPlatform::Substack => {
-                    MarkPaint::solid("substack", "Substack", "#FF6719", SUBSTACK_PATH)
+                    MarkPaint::brand("substack", "Substack", "#FF6719", SUBSTACK_PATH)
                 }
                 FeedPlatform::Spotify => {
-                    MarkPaint::solid("spotify", "Spotify", "#1ED760", SPOTIFY_PATH)
+                    MarkPaint::brand("spotify", "Spotify", "#1ED760", SPOTIFY_PATH)
                 }
                 FeedPlatform::Odysee => {
-                    MarkPaint::solid("odysee", "Odysee", "#EF1970", ODYSEE_PATH)
+                    MarkPaint::brand("odysee", "Odysee", "#EF1970", ODYSEE_PATH)
                 }
                 FeedPlatform::PeerTube => {
-                    MarkPaint::solid("peertube", "PeerTube", "#F1680D", PEERTUBE_PATH)
+                    MarkPaint::brand("peertube", "PeerTube", "#F1680D", PEERTUBE_PATH)
                 }
-                FeedPlatform::InternetArchive => MarkPaint::solid(
+                FeedPlatform::InternetArchive => MarkPaint::brand(
                     "internetarchive",
                     "Internet Archive",
                     "#666666",
@@ -116,55 +116,55 @@ impl ServiceMark {
 }
 
 /// What one mark paints: the simple-icons slug the `data-library-list-mark`
-/// hook carries, the accessible name, the colour, and the simple-icons path
-/// (`None` for the Lucide RSS mark, which paints from `window/icons.rs`).
+/// hook carries, the accessible name, and how the glyph fills.
 struct MarkPaint {
     /// The simple-icons slug.
     slug: &'static str,
     /// The Service or platform name, as the svg's `aria-label`.
     label: &'static str,
-    /// The colour the mark paints in.
-    color: String,
-    /// The simple-icons path, or `None` for the Lucide mark.
-    path: Option<&'static str>,
+    /// How the glyph paints.
+    fill: Fill,
+}
+
+/// How a mark's glyph fills.
+enum Fill {
+    /// A simple-icons path in its brand hex.
+    Brand {
+        color: &'static str,
+        path: &'static str,
+    },
+    /// A simple-icons path in the theme's heading colour.
+    Heading(&'static str),
+    /// The Lucide RSS icon in the theme's heading colour, painted from
+    /// `window/icons.rs`.
+    Lucide,
 }
 
 impl MarkPaint {
-    /// A filled simple-icons mark in `color`.
-    fn solid(slug: &'static str, label: &'static str, color: &str, path: &'static str) -> Self {
-        Self {
-            slug,
-            label,
-            color: color.to_owned(),
-            path: Some(path),
-        }
+    fn new(slug: &'static str, label: &'static str, fill: Fill) -> Self {
+        Self { slug, label, fill }
     }
 
-    /// A filled simple-icons mark in the theme's heading colour.
-    fn heading(slug: &'static str, label: &'static str, path: &'static str) -> Self {
-        Self::solid(slug, label, &canvas_var("heading"), path)
-    }
-
-    /// The Lucide RSS mark in the theme's heading colour.
-    fn stroke(slug: &'static str, label: &'static str) -> Self {
-        Self {
-            slug,
-            label,
-            color: canvas_var("heading"),
-            path: None,
-        }
+    /// A simple-icons mark in its brand `color`.
+    fn brand(
+        slug: &'static str,
+        label: &'static str,
+        color: &'static str,
+        path: &'static str,
+    ) -> Self {
+        Self::new(slug, label, Fill::Brand { color, path })
     }
 }
 
 /// The mark of `mark`, `size` CSS pixels square.
 #[component]
 pub fn ServiceMarkIcon(mark: ServiceMark, #[props(default = 18)] size: u16) -> Element {
-    let MarkPaint {
-        slug,
-        label,
-        color,
-        path,
-    } = mark.paint();
+    let MarkPaint { slug, label, fill } = mark.paint();
+    let (color, path) = match fill {
+        Fill::Brand { color, path } => (color.to_owned(), Some(path)),
+        Fill::Heading(path) => (canvas_var("heading"), Some(path)),
+        Fill::Lucide => (canvas_var("heading"), None),
+    };
     match path {
         Some(path) => rsx! {
             svg {
