@@ -369,6 +369,22 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
     );
 }
 
+/// A folder-based artist row, grouped by name, takes the Service artist item id
+/// its level fill's tracks named for that name: the row requests that artist's
+/// image instead of painting the media kind with no source.
+#[test]
+fn a_fallback_artist_row_requests_the_artist_item_its_tracks_named() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(Vec::new(), Vec::new());
+    app.artist_name_item_ids
+        .insert("Beastie Boys".into(), "artist-7".into());
+
+    assert_eq!(
+        app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),
+        GuiRowArt::Loading
+    );
+}
+
 /// A Music artist row's art is the artist's own image when the Service names
 /// the artist (gui-delineated-rows design D5), read from the row cache alone,
 /// and the fallback identity — a name the Service never named — has no source.

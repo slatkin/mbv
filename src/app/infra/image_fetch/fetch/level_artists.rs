@@ -186,3 +186,53 @@ pub(super) fn level_artists_from_items(
     artists.sort_by(|a, b| a.0.cmp(&b.0));
     artists
 }
+
+/// The Service artist item id `track` names for the artist `name`: the first
+/// `ArtistItems` or `AlbumArtists` pair whose name equals `name` (trimmed, case
+/// folded), the match rule `EmbyItem::matched_artist_item_id` applies to an
+/// album payload.
+fn track_artist_item_id(track: &serde_json::Value, name: &str) -> Option<String> {
+    let wanted = name.trim().to_lowercase();
+    ["ArtistItems", "AlbumArtists"]
+        .into_iter()
+        .filter_map(|field| track[field].as_array())
+        .flatten()
+        .find(|pair| {
+            pair["Name"]
+                .as_str()
+                .is_some_and(|candidate| candidate.trim().to_lowercase() == wanted)
+        })
+        .and_then(|pair| pair["Id"].as_str())
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+}
+
+/// The Service artist item id of every voted artist name in a level (folder
+/// based Music carries no `ArtistItems` on its album folders, but its tracks
+/// do): each album bucket's voted name pairs with the id its sampled tracks
+/// name for it. The first album in id order claims a name. Pairs feed the row
+/// art map only and never an `ArtistKey`.
+pub(super) fn level_artist_items_from_items(
+    tracks: &[serde_json::Value],
+    albums: &[mbv_emby_model::EmbyItem],
+) -> Vec<(String, String)> {
+    let mut buckets: Vec<_> = bucket_tracks_by_album(tracks, albums).into_iter().collect();
+    buckets.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut items: Vec<(String, String)> = Vec::new();
+    for (_, bucket) in buckets {
+        let Some(name) = vote_album_artist(bucket.iter().copied()) else {
+            continue;
+        };
+        if items.iter().any(|(known, _)| known == &name) {
+            continue;
+        }
+        let id = bucket
+            .iter()
+            .take(ALBUM_ARTIST_VOTE_SAMPLE)
+            .find_map(|track| track_artist_item_id(track, &name));
+        if let Some(id) = id {
+            items.push((name, id));
+        }
+    }
+    items
+}

@@ -1,7 +1,7 @@
 use super::{App, LevelFillAction, LevelFillState, LibEvent, PAGE_SIZE};
 use crate::app::MusicEvent;
 
-use super::level_artists::level_artists_from_items;
+use super::level_artists::{level_artist_items_from_items, level_artists_from_items};
 
 const MAX_LEVEL_ARTIST_WARMUPS: usize = 6;
 
@@ -182,7 +182,7 @@ impl App {
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let url = format!(
-                "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"
+                "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ArtistItems,AlbumArtists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"
             );
             // Warm-up requests share the Emby client's agent (design D6): its
             // 5 s connect and 30 s global bounds, and a 64 MiB body cap so a
@@ -207,6 +207,10 @@ impl App {
                 .unwrap_or_default();
 
             let artists = level_artists_from_items(&items, &albums);
+            let artist_items = level_artist_items_from_items(&items, &albums);
+            let _ = tx.send(LibEvent::Music(MusicEvent::ArtistItemIdsFetched {
+                artist_items,
+            }));
             let _ = tx.send(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {
                 level_id,
                 artists,

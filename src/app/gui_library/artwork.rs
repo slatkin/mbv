@@ -17,12 +17,12 @@ use mbv_images::SourceImage;
 
 mod rows;
 
-pub use self::rows::{GuiRowArt, GuiRowMediaKind, GuiRowSource, artist_rows_in_view_id};
 pub(in crate::app::gui_library) use self::rows::{
-    artist_id_row_source, artist_row_source, catalog_book_row_source, catalog_show_row_source,
-    emby_media_kind, emby_row_source, episode_row_source, feed_media_kind, feed_row_source,
-    queue_item_media_kind, upcoming_row_source,
+    ARTIST_NAME_ROW_ID_PREFIX, artist_id_row_source, artist_row_source, catalog_book_row_source,
+    catalog_show_row_source, emby_media_kind, emby_row_source, episode_row_source, feed_media_kind,
+    feed_row_source, queue_item_media_kind, upcoming_row_source,
 };
+pub use self::rows::{GuiRowArt, GuiRowMediaKind, GuiRowSource, artist_rows_in_view_id};
 
 /// The neighbour warm window's bounds (the TUI's grouped-Music rule,
 /// `openspec/specs/music-library-hero/spec.md`): one entry behind the picked

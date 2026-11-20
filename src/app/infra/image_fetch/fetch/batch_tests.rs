@@ -1,4 +1,7 @@
-use super::level_artists::{bucket_tracks_by_album, level_artists_from_items, vote_album_artist};
+use super::level_artists::{
+    bucket_tracks_by_album, level_artist_items_from_items, level_artists_from_items,
+    vote_album_artist,
+};
 use mbv_emby_model::test_support::make_item;
 use rstest::rstest;
 fn track(
@@ -90,4 +93,20 @@ fn level_pipeline_buckets_votes_and_orders_deterministically() {
             ("alb-b".to_string(), "Beta".to_string()),
         ]
     );
+}
+
+/// A folder-based Music library's album folders carry no `ArtistItems`, but
+/// their tracks do: the level fill maps the voted artist name to the Service
+/// artist item id the tracks name for it, so the artist row can request that
+/// artist's image.
+#[test]
+fn level_fill_maps_the_voted_artist_name_to_the_tracks_artist_item_id() {
+    let mut first = track("alb-1", "/m/a/1.flac", Some("Artist A"), &["Artist A"]);
+    first["ArtistItems"] = serde_json::json!([{ "Name": "artist a", "Id": "artist-7" }]);
+    let second = track("alb-2", "/m/b/1.flac", Some("Artist B"), &["Artist B"]);
+    let albums = vec![album("alb-1", "/m/a"), album("alb-2", "/m/b")];
+
+    let items = level_artist_items_from_items(&[first, second], &albums);
+
+    assert_eq!(items, [("Artist A".to_string(), "artist-7".to_string())]);
 }

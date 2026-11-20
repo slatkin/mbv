@@ -14,8 +14,9 @@ use mbv_queue::QueueItem;
 
 use super::GuiRowArtScope;
 use super::artwork::{
-    GuiRowSource, artist_id_row_source, catalog_book_row_source, emby_row_source,
-    episode_row_source, feed_row_source, upcoming_row_source,
+    ARTIST_NAME_ROW_ID_PREFIX, GuiRowSource, artist_id_row_source, artist_row_source,
+    catalog_book_row_source, emby_row_source, episode_row_source, feed_row_source,
+    upcoming_row_source,
 };
 use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
 use super::home::GuiHomeRowId;
@@ -91,7 +92,12 @@ impl App {
                 let lib_idx = self.gui_active_library_index()?;
                 emby_row_source(&self.gui_emby_item(lib_idx, id)?)
             }
-            GuiRowArtScope::Music => artist_id_row_source(id),
+            GuiRowArtScope::Music => artist_id_row_source(id).or_else(|| {
+                let name = id.strip_prefix(ARTIST_NAME_ROW_ID_PREFIX)?;
+                self.artist_name_item_ids
+                    .get(name)
+                    .map(|artist_id| artist_row_source(artist_id))
+            }),
             GuiRowArtScope::ShowsSeries => emby_row_source(&self.gui_shows_series_item(id)?),
             GuiRowArtScope::ShowsNew => emby_row_source(&self.gui_shows_new_item(id)?),
             GuiRowArtScope::ShowsUpcoming => {

@@ -135,6 +135,10 @@ pub(in crate::app::gui_library) fn artist_row_source(artist_id: &str) -> GuiRowS
 /// D7), so the core tells the Service identity from the fallback name.
 pub(in crate::app::gui_library) const ARTIST_ROW_ID_PREFIX: &str = "artist:";
 
+/// The prefix a fallback Music artist's `RowsInView` id carries: the name the
+/// albums were grouped by, which the core maps to a Service artist item id.
+pub(in crate::app::gui_library) const ARTIST_NAME_ROW_ID_PREFIX: &str = "artist-name:";
+
 /// The id a Music artist row takes in `RowsInView` (design D7): the Service
 /// identity the row was grouped by, or the fallback name when the Service
 /// names no artist.
@@ -142,7 +146,7 @@ pub(in crate::app::gui_library) const ARTIST_ROW_ID_PREFIX: &str = "artist:";
 pub fn artist_rows_in_view_id(artist: &ArtistKey) -> String {
     match artist {
         ArtistKey::Service(id) => format!("{ARTIST_ROW_ID_PREFIX}{id}"),
-        ArtistKey::Fallback(name) => format!("artist-name:{name}"),
+        ArtistKey::Fallback(name) => format!("{ARTIST_NAME_ROW_ID_PREFIX}{name}"),
     }
 }
 

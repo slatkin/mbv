@@ -166,6 +166,11 @@ pub enum MusicEvent {
         level_id: String,
         artists: Vec<(String, String)>,
     },
+    /// The Service artist item ids a level fill's tracks named for its voted
+    /// artist names, as `(name, id)` pairs. They fill the Music row art map
+    /// only: an artist's `Primary` image is addressable by this id when the
+    /// album folders carry no `ArtistItems` (a folder-based library).
+    ArtistItemIdsFetched { artist_items: Vec<(String, String)> },
     /// Startup warm-up (design D5 of `fix-music-artist-resolution-batching`):
     /// a music library's group-level listing (its root children), fetched in
     /// the background once the Service became Ready. The handler queues one

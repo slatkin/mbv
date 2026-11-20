@@ -381,7 +381,12 @@ impl App {
     pub(in crate::app) fn music_artist_row_art(&self, key: &ArtistKey) -> GuiRowArt {
         match key {
             ArtistKey::Service(id) => self.gui_row_art(Some(&artist_row_source(id))),
-            ArtistKey::Fallback(_) => GuiRowArt::NoSource,
+            ArtistKey::Fallback(name) => self
+                .artist_name_item_ids
+                .get(name)
+                .map_or(GuiRowArt::NoSource, |id| {
+                    self.gui_row_art(Some(&artist_row_source(id)))
+                }),
         }
     }
 

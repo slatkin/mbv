@@ -297,6 +297,7 @@ impl App {
             refocus_at: None,
             window_focused: true,
             album_artist_cache: std::collections::HashMap::new(),
+            artist_name_item_ids: std::collections::HashMap::new(),
             album_artist_levels: std::collections::HashMap::new(),
             pending_level_artist_warmups: std::collections::VecDeque::new(),
             level_artist_warmups_in_flight: std::collections::HashSet::new(),
