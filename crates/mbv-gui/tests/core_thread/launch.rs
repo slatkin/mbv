@@ -164,6 +164,7 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 
@@ -195,6 +196,7 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 
@@ -226,6 +228,7 @@ fn every_start_opens_on_home_whatever_destination_was_saved() {
         destination: library_identity(SHOWS_LIBRARY.0),
         collections: Vec::new(),
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 
@@ -263,6 +266,7 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
             },
         ],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 

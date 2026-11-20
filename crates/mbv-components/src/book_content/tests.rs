@@ -7,6 +7,7 @@ fn book(id: &str, author_sort_key: &str) -> AudiobookshelfBook {
     AudiobookshelfBook {
         library_item_id: id.into(),
         updated_at_ms: 0,
+        added_at_ms: None,
         title: format!("Book {id}"),
         author_display: Some(format!("Author {id}")),
         author_sort_key: author_sort_key.into(),

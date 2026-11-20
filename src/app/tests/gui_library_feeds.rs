@@ -202,6 +202,7 @@ fn a_saved_feeds_location_applies_no_saved_selection() {
         destination: TabIdentity::Feeds,
         collections: Vec::new(),
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     };
 
     let crate::app::GuiLaunchOpen::Opened(opened) = app.open_gui_launch_destination(&saved) else {

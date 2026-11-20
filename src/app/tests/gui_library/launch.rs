@@ -210,6 +210,7 @@ fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     };
 
     assert!(app.restore_gui_launch_collections(&state, &destination));
@@ -250,6 +251,7 @@ fn a_saved_resting_music_set_installs_without_a_group_list() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     };
 
     assert!(
@@ -297,6 +299,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     };
 
     assert!(
@@ -339,6 +342,7 @@ fn a_saved_group_no_longer_held_restores_as_all() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     };
 
     assert!(app.restore_gui_launch_collections(&state, &destination));
@@ -387,6 +391,7 @@ fn the_shows_view_survives_a_restart() {
         destination: loaded.destination,
         collections: Vec::new(),
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     };
     let mut fresh = make_app_stub();
     let mut library = make_item("Shows", "CollectionFolder");

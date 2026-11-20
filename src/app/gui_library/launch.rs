@@ -37,6 +37,7 @@ impl App {
             destination: self.gui_launch_destination(),
             collections: self.gui_launch_collections(),
             shows_view: self.gui_launch_shows_view(),
+            sorts: Vec::new(),
         }
     }
 
