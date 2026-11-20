@@ -17,9 +17,9 @@ place of the artist-row parts of 2.2 and the series-row parts of 3.2.
 
 ## 3. Shows list
 
-- [ ] 3.1 In `crates/mbv-gui/src/window/library/shows.rs`, make `press_shows_row` call only `select_shows_row` (design D1) and update its doc comment. Verify: `cargo check -p mbv-gui`.
-- [ ] 3.2 In `crates/mbv-gui/src/window/components/library_shows_list.rs`, remove `paint_chevron`, its `data-library-shows-chevron` mark, and the empty 18 px spacer. For an expandable series or season row, bind `ondoubleclick` to `toggle_shows_node`, add class `tree-parent`, and add `TreeHint { open }` as the last child; a row that is not expandable gets none of these. Change `row_inset` to the design D2 insets (series 8 px, season 26 px, episode 44 px). Verify: `cargo check -p mbv-gui`.
-- [ ] 3.3 Update `crates/mbv-gui/src/window/components/library_shows_list/tests.rs` (design D5): split `a_press_on_a_series_node_opens_it_and_selects_it` into a press that selects and leaves the node closed and a `toggle_shows_node` call that opens it; make `an_expandable_node_paints_its_open_state_as_aria_expanded` open through the toggle; remove any assertion on the chevron mark. Update `crates/mbv-gui/src/window/library/shows_keys/tests.rs` only where a test opened a node by a press. Verify: `cargo nextest run -p mbv-gui shows` passes.
+- [x] 3.1 In `crates/mbv-gui/src/window/library/shows.rs`, make `press_shows_row` call only `select_shows_row` (design D1) and update its doc comment. Verify: `cargo check -p mbv-gui`.
+- [x] 3.2 In `crates/mbv-gui/src/window/components/library_shows_list.rs`, remove `paint_chevron`, its `data-library-shows-chevron` mark, and the empty 18 px spacer. For an expandable series or season row, bind `ondoubleclick` to `toggle_shows_node`, add class `tree-parent`, and add `TreeHint { open }` as the last child; a row that is not expandable gets none of these. Change `row_inset` to the design D2 insets (series 8 px, season 26 px, episode 44 px). Verify: `cargo check -p mbv-gui`.
+- [x] 3.3 Update `crates/mbv-gui/src/window/components/library_shows_list/tests.rs` (design D5): split `a_press_on_a_series_node_opens_it_and_selects_it` into a press that selects and leaves the node closed and a `toggle_shows_node` call that opens it; make `an_expandable_node_paints_its_open_state_as_aria_expanded` open through the toggle; remove any assertion on the chevron mark. Update `crates/mbv-gui/src/window/library/shows_keys/tests.rs` only where a test opened a node by a press. Verify: `cargo nextest run -p mbv-gui shows` passes.
 
 ## 4. Playlists screen
 
@@ -28,7 +28,7 @@ place of the artist-row parts of 2.2 and the series-row parts of 3.2.
 
 ## 5. Merge order with `gui-delineated-rows`
 
-- [ ] 5.1 Only if `gui-delineated-rows` is on `main` (artist and series rows paint through `LibraryItemRow`): add `tree_open: Option<bool>` and `on_toggle: Option<Callback<()>>` props to `crates/mbv-gui/src/window/components/library_item_row.rs` (design D4). With `Some(open)`, the part adds class `tree-parent` and `aria-expanded`, marks its trailing text `tree-trailing`, paints `TreeHint { open }`, and its double-click calls `on_toggle` in place of `on_play`. Pass them from the Music artist row and the Shows series row. If `gui-delineated-rows` is not on `main`, mark this task done with the note "not needed: this change merged first". Verify: `cargo nextest run -p mbv-gui library` passes.
+- [x] 5.1 Only if `gui-delineated-rows` is on `main` (artist and series rows paint through `LibraryItemRow`): add `tree_open: Option<bool>` and `on_toggle: Option<Callback<()>>` props to `crates/mbv-gui/src/window/components/library_item_row.rs` (design D4). With `Some(open)`, the part adds class `tree-parent` and `aria-expanded`, marks its trailing text `tree-trailing`, paints `TreeHint { open }`, and its double-click calls `on_toggle` in place of `on_play`. Pass them from the Music artist row and the Shows series row. If `gui-delineated-rows` is not on `main`, mark this task done with the note "not needed: this change merged first". Verify: `cargo nextest run -p mbv-gui library` passes.
 
 ## 6. Docs and gates
 
