@@ -98,9 +98,12 @@ impl App {
             }
             MusicEvent::ArtistItemIdsFetched { artist_items } => {
                 for (name, id) in artist_items {
-                    self.artist_name_item_ids.entry(name).or_insert(id);
+                    self.record_artist_item_id(&name, id);
                 }
                 self.gui_queue_in_view_row_fetches();
+            }
+            MusicEvent::ArtistNameSearched { name, candidates } => {
+                self.handle_gui_artist_name_searched(&name, candidates.as_deref());
             }
             MusicEvent::GroupWarmupListed { generation, groups } => {
                 self.handle_music_group_warmup_listed(generation, groups);

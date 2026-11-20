@@ -376,8 +376,7 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
 fn a_fallback_artist_row_requests_the_artist_item_its_tracks_named() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
-    app.artist_name_item_ids
-        .insert("Beastie Boys".into(), "artist-7".into());
+    app.record_artist_item_id("Beastie Boys", "artist-7".into());
 
     assert_eq!(
         app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),

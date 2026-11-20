@@ -48,6 +48,7 @@ impl App {
         self.library_routes.clear();
         self.album_artist_cache.clear();
         self.artist_name_item_ids.clear();
+        self.artist_name_lookups.clear();
         self.album_artist_levels.clear();
         self.pending_level_artist_warmups.clear();
         self.level_artist_warmups_in_flight.clear();

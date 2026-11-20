@@ -613,10 +613,16 @@ pub struct App {
     /// never refetches; an evicted album would keep its fallback label. Cleared
     /// on Service swap.
     pub(in crate::app) album_artist_cache: std::collections::HashMap<String, String>,
-    /// Voted artist name -> Service artist item id, from the level fills'
+    /// Normalized artist name -> Service artist item id, from the level fills'
     /// tracks (`ArtistItemIdsFetched`). Addresses a folder-based artist row's
     /// `Primary` image; never an artist key. Cleared on Service swap.
     pub(in crate::app) artist_name_item_ids: std::collections::HashMap<String, String>,
+    /// Normalized artist name -> its artist search state while the name has no
+    /// resolved id (`gui_library::artist_lookup`). Cleared on Service swap.
+    pub(in crate::app) artist_name_lookups: std::collections::HashMap<
+        String,
+        crate::app::gui_library::artist_lookup::GuiArtistNameLookup,
+    >,
     /// Per-level album-artist fill lifecycle: one background request fills
     /// every album bucket in a level, so the fill state is keyed by level id
     /// rather than album id. Concurrent candidate creations and startup

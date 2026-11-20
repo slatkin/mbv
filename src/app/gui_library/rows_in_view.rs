@@ -54,6 +54,14 @@ impl App {
         let Some(ids) = self.gui_rows_in_view.get(&scope).cloned() else {
             return;
         };
+        if scope == GuiRowArtScope::Music {
+            for name in ids
+                .iter()
+                .filter_map(|id| id.strip_prefix(ARTIST_NAME_ROW_ID_PREFIX))
+            {
+                self.request_gui_artist_name_lookup(name);
+            }
+        }
         let requests: Vec<ImageFetchReq> = ids
             .iter()
             .filter_map(|id| self.gui_row_source(scope, id))
@@ -94,9 +102,7 @@ impl App {
             }
             GuiRowArtScope::Music => artist_id_row_source(id).or_else(|| {
                 let name = id.strip_prefix(ARTIST_NAME_ROW_ID_PREFIX)?;
-                self.artist_name_item_ids
-                    .get(name)
-                    .map(|artist_id| artist_row_source(artist_id))
+                self.gui_artist_item_id(name).map(artist_row_source)
             }),
             GuiRowArtScope::ShowsSeries => emby_row_source(&self.gui_shows_series_item(id)?),
             GuiRowArtScope::ShowsNew => emby_row_source(&self.gui_shows_new_item(id)?),

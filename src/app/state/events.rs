@@ -171,6 +171,13 @@ pub enum MusicEvent {
     /// only: an artist's `Primary` image is addressable by this id when the
     /// album folders carry no `ArtistItems` (a folder-based library).
     ArtistItemIdsFetched { artist_items: Vec<(String, String)> },
+    /// One artist-name search answered (`gui_library::artist_lookup`): the
+    /// `(name, id)` artists the Service returned, or `None` when the request
+    /// failed, so the name is searched again rather than treated as missing.
+    ArtistNameSearched {
+        name: String,
+        candidates: Option<Vec<(String, String)>>,
+    },
     /// Startup warm-up (design D5 of `fix-music-artist-resolution-batching`):
     /// a music library's group-level listing (its root children), fetched in
     /// the background once the Service became Ready. The handler queues one

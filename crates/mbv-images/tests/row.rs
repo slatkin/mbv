@@ -3,7 +3,7 @@
 //! again; an item that declares no tag requests the chain untagged.
 
 use mbv_emby_model::EmbyImageTags;
-use mbv_images::row::emby_row_request_for;
+use mbv_images::row::{emby_row_primary_request, emby_row_request_for};
 use mbv_images::{ImageRendition, RowEmbyImage, RowRendition, abs_row_cache_key};
 
 #[test]
@@ -74,4 +74,13 @@ fn an_abs_row_key_changes_with_the_library_items_update_time() {
         first.ends_with(":book-1:1700000000000"),
         "the key names the library item and its update time"
     );
+}
+
+/// A Music artist row wants the artist's picture: the request asks for `Primary`
+/// alone, not the chain whose `Logo` or `Backdrop` would win over it.
+#[test]
+fn a_primary_request_asks_for_the_primary_kind_alone() {
+    let request = emby_row_primary_request("artist-1");
+
+    assert_eq!(request.types, ["Primary"]);
 }

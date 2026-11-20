@@ -67,6 +67,8 @@ pub enum GuiRowSource {
         tags: EmbyImageTags,
         square: bool,
     },
+    /// An Emby item's own `Primary` image, square (a Music artist).
+    EmbyPrimary { item_id: String },
     /// An Audiobookshelf cover: the library item's id, whether it is a book,
     /// and the item's last update time in milliseconds (design D6).
     Audiobookshelf {
@@ -123,12 +125,9 @@ pub(in crate::app::gui_library) fn upcoming_row_source(
 /// Only a Service-named artist has one; the fallback identity has no source.
 #[must_use]
 pub(in crate::app::gui_library) fn artist_row_source(artist_id: &str) -> GuiRowSource {
-    emby_source(
-        artist_id,
-        "",
-        &EmbyImageTags::default(),
-        ArtworkShape::Square,
-    )
+    GuiRowSource::EmbyPrimary {
+        item_id: artist_id.to_owned(),
+    }
 }
 
 /// The prefix a Service-named Music artist's `RowsInView` id carries (design
@@ -306,6 +305,9 @@ impl App {
             } => Some(
                 mbv_images::row::emby_row_request_for(item_id, series_id, tags, *square).cache_key,
             ),
+            GuiRowSource::EmbyPrimary { item_id } => {
+                Some(mbv_images::row::emby_row_primary_request(item_id).cache_key)
+            }
             GuiRowSource::Audiobookshelf {
                 library_item_id,
                 updated_at_ms,
@@ -331,6 +333,9 @@ impl App {
             } => Some(mbv_images::row::emby_row_request_for(
                 item_id, series_id, tags, *square,
             )),
+            GuiRowSource::EmbyPrimary { item_id } => {
+                Some(mbv_images::row::emby_row_primary_request(item_id))
+            }
             GuiRowSource::Audiobookshelf {
                 library_item_id,
                 book,

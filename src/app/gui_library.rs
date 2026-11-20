@@ -5,6 +5,7 @@
 //! every entry calls the existing `App` action for it. The TUI Client never
 //! calls any of them.
 
+pub(in crate::app) mod artist_lookup;
 mod artwork;
 mod audiobooks;
 mod audiobooks_projection;

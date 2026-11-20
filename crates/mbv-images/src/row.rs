@@ -22,6 +22,25 @@ pub fn emby_row_request(item: &EmbyItem, square: bool) -> ImageFetchReq {
     emby_row_request_for(&item.id, &item.series_id, &item.image_tags, square)
 }
 
+/// The `Row` request for an Emby item's own `Primary` image, square: an item
+/// whose only wanted image is its `Primary`, such as a Music artist, where the
+/// chain's `Logo` or `Backdrop` would show a wordmark or a landscape instead of
+/// the artist's picture. The tag is unknown, so the request is untagged.
+#[must_use]
+pub fn emby_row_primary_request(item_id: &str) -> ImageFetchReq {
+    ImageFetchReq {
+        cache_key: emby_row_cache_key(item_id, None),
+        item_id: item_id.to_owned(),
+        series_id: String::new(),
+        types: vec!["Primary".to_owned()],
+        source: ImageSource::Emby,
+        rendition: ImageRendition::Row(RowRendition {
+            square: true,
+            emby: None,
+        }),
+    }
+}
+
 /// The `Row` request from a raw address and declared tags. A caller whose row
 /// is not an Emby item frame (a Music artist named only by its Service id)
 /// passes an empty `series_id` and the default tags, which requests the chain

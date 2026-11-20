@@ -382,8 +382,7 @@ impl App {
         match key {
             ArtistKey::Service(id) => self.gui_row_art(Some(&artist_row_source(id))),
             ArtistKey::Fallback(name) => self
-                .artist_name_item_ids
-                .get(name)
+                .gui_artist_item_id(name)
                 .map_or(GuiRowArt::NoSource, |id| {
                     self.gui_row_art(Some(&artist_row_source(id)))
                 }),
