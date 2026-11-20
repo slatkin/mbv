@@ -395,6 +395,15 @@ pub struct App {
     /// per Client, so one store holds it. The TUI's feed group and Watched
     /// filter stay the TUI owner's, and the TUI never reads this store.
     pub(in crate::app) gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection,
+    /// The GUI Library panel's list sorts (gui-flat-list-sort design D3):
+    /// one sort per destination, keyed by the destination's stable identity
+    /// and held in the order the destinations were first sorted, so a set
+    /// replaces its entry in place. A destination with no entry reads its
+    /// target's default. The TUI never reads it.
+    pub(in crate::app) gui_list_sorts: Vec<(
+        mbv_config::TabIdentity,
+        crate::app::gui_library::GuiListSort,
+    )>,
     /// The GUI Library's Search store (add-gui-library-panel design D12, row
     /// 12.1): the live query, whether its result is still out, whether it
     /// failed, and the result rows. The GUI mounts no search component, so the

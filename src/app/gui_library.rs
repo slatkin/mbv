@@ -21,6 +21,7 @@ mod home;
 mod item_actions;
 mod item_menu;
 mod launch;
+mod list_sort;
 mod marks;
 mod podcasts;
 mod podcasts_projection;
@@ -66,6 +67,7 @@ pub use self::home::{
 };
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
+pub use self::list_sort::{GuiListSort, GuiListSortFrame, GuiSortTarget};
 pub use self::marks::GuiPlayheadMarks;
 use self::podcasts::GuiPodcastsCollectionSite;
 pub use self::podcasts::GuiPodcastsSelection;

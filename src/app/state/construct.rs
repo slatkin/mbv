@@ -246,6 +246,9 @@ impl App {
             gui_abs_libs: std::collections::HashMap::new(),
             gui_podcast_libs: std::collections::HashMap::new(),
             gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection::default(),
+            // Every destination starts on its target's default sort until the
+            // window sends a choice or the launch file installs one.
+            gui_list_sorts: Vec::new(),
             gui_search: crate::app::gui_library::GuiSearchStore::default(),
             title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
             dim_backdrop_active: false,

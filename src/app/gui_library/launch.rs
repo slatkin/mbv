@@ -287,7 +287,10 @@ impl App {
 
     /// The launch identity a presented destination carries: a stable Service
     /// library id, or Feeds for the one synthetic tab.
-    fn gui_destination_identity(&self, kind: GuiDestinationKind) -> Option<TabIdentity> {
+    pub(in crate::app::gui_library) fn gui_destination_identity(
+        &self,
+        kind: GuiDestinationKind,
+    ) -> Option<TabIdentity> {
         match kind {
             GuiDestinationKind::Home => Some(TabIdentity::Home),
             GuiDestinationKind::Feeds => Some(TabIdentity::Feeds),
