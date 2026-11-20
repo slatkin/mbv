@@ -100,28 +100,11 @@ impl App {
                 let lib_idx = self.gui_active_library_index()?;
                 emby_row_source(&self.gui_emby_item(lib_idx, id)?)
             }
-            GuiRowArtScope::Music => artist_id_row_source(id).or_else(|| {
-                let name = id.strip_prefix(ARTIST_NAME_ROW_ID_PREFIX)?;
-                self.gui_artist_item_id(name).map(artist_row_source)
-            }),
+            GuiRowArtScope::Music => self.gui_music_row_source(id),
             GuiRowArtScope::ShowsSeries => emby_row_source(&self.gui_shows_series_item(id)?),
             GuiRowArtScope::ShowsNew => emby_row_source(&self.gui_shows_new_item(id)?),
-            GuiRowArtScope::ShowsUpcoming => {
-                let premiere = self
-                    .tv_upcoming_snapshots
-                    .values()
-                    .flatten()
-                    .find(|premiere| premiere.stable_key() == id)?;
-                let series = self.gui_shows_series_item(premiere.series_id.as_str());
-                Some(upcoming_row_source(premiere, series.as_ref()))
-            }
-            GuiRowArtScope::Podcasts => {
-                let lib_idx = self.gui_active_podcast_library_index()?;
-                let episode = GuiPodcastEpisodeId::decode(id)?;
-                let item = self.gui_podcast_hero_item(lib_idx, &episode)?;
-                let updated_at = self.audiobookshelf_updated_at_ms(&item.library_item_id);
-                episode_row_source(&item, updated_at)
-            }
+            GuiRowArtScope::ShowsUpcoming => self.gui_upcoming_row_source(id),
+            GuiRowArtScope::Podcasts => self.gui_podcast_row_source(id),
             GuiRowArtScope::Audiobooks => {
                 let lib_idx = self.gui_audiobooks_destination()?;
                 let state = self.audiobookshelf_book_browse.get(lib_idx)?;
@@ -138,6 +121,35 @@ impl App {
                 feed_row_source(entry)
             }
         }
+    }
+
+    /// The row art source of a Music artist row (design D5): a Service artist's
+    /// own id, else the artist item its name resolves to.
+    fn gui_music_row_source(&self, id: &str) -> Option<GuiRowSource> {
+        artist_id_row_source(id).or_else(|| {
+            let name = id.strip_prefix(ARTIST_NAME_ROW_ID_PREFIX)?;
+            self.gui_artist_item_id(name).map(artist_row_source)
+        })
+    }
+
+    /// The row art source of a Shows Upcoming row: the premiere's series image.
+    fn gui_upcoming_row_source(&self, id: &str) -> Option<GuiRowSource> {
+        let premiere = self
+            .tv_upcoming_snapshots
+            .values()
+            .flatten()
+            .find(|premiere| premiere.stable_key() == id)?;
+        let series = self.gui_shows_series_item(premiere.series_id.as_str());
+        Some(upcoming_row_source(premiere, series.as_ref()))
+    }
+
+    /// The row art source of a Podcasts episode row: the show's cover.
+    fn gui_podcast_row_source(&self, id: &str) -> Option<GuiRowSource> {
+        let lib_idx = self.gui_active_podcast_library_index()?;
+        let episode = GuiPodcastEpisodeId::decode(id)?;
+        let item = self.gui_podcast_hero_item(lib_idx, &episode)?;
+        let updated_at = self.audiobookshelf_updated_at_ms(&item.library_item_id);
+        episode_row_source(&item, updated_at)
     }
 
     /// The row art source of a Home row (design D5): the row's item through its
