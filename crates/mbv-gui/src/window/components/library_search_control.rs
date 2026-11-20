@@ -110,16 +110,22 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
     // The collapsed panel's open fact: the render reads it through a
     // subscribed read (`peek` would arm no re-render).
     let panel_open = library.ui.read().search_control.panel_open;
-    if props.collapsed {
-        rsx! {
-            div {
-                class: "relative flex flex-none items-center",
-                // The panel is the control's own surface: a press inside it
-                // stops the outside-press rule, so typing into the field and
-                // pressing a row act on the control instead of closing it.
-                onpointerdown: move |event: PointerEvent| {
+    let collapsed = props.collapsed;
+    rsx! {
+        div {
+            class: "relative flex flex-none items-center",
+            // The collapsed panel is the control's own surface: a press inside
+            // it stops the outside-press rule, so typing into the field and
+            // pressing a row act on the control instead of closing it. The
+            // inline form has no panel to guard.
+            onpointerdown: move |event: PointerEvent| {
+                if collapsed {
                     event.stop_propagation();
-                },
+                }
+            },
+            "data-library-search": (!collapsed).then_some(""),
+            style: (!collapsed).then_some("flex: 0 1 220px; min-width: 0;"),
+            if collapsed {
                 button {
                     "type": "button",
                     class: "flex flex-none items-center justify-center",
@@ -142,14 +148,7 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
                         {field}
                     }
                 }
-            }
-        }
-    } else {
-        rsx! {
-            div {
-                class: "relative flex flex-none items-center",
-                "data-library-search": "",
-                style: "flex: 0 1 220px; min-width: 0;",
+            } else {
                 {field}
             }
         }
@@ -200,6 +199,20 @@ fn paint_search_box(
     }
 }
 
+/// One state line of the results dropdown: its test attribute and its text.
+/// The loading, failed, and empty lines share this look.
+fn search_notice(attr: &'static str, text: &'static str) -> Element {
+    let attrs = vec![Attribute::new(attr, "", None, false)];
+    rsx! {
+        div {
+            class: "font-mono",
+            style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
+            ..attrs,
+            "{text}"
+        }
+    }
+}
+
 /// The results dropdown the frame carries, in the list-row look (design D9):
 /// the rows under the field while the frame carries them, and the loading and
 /// failed states while the query lands. The bar sits at the window's top
@@ -216,26 +229,11 @@ fn paint_search_results(
             "data-library-search-results": "",
             role: "listbox",
             if search.loading {
-                div {
-                    class: "font-mono",
-                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                    "data-library-search-loading": "",
-                    "Searching…"
-                }
+                {search_notice("data-library-search-loading", "Searching…")}
             } else if search.failed {
-                div {
-                    class: "font-mono",
-                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                    "data-library-search-failed": "",
-                    "Search failed"
-                }
+                {search_notice("data-library-search-failed", "Search failed")}
             } else if search.results.is_empty() {
-                div {
-                    class: "font-mono",
-                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                    "data-library-search-empty": "",
-                    "No results"
-                }
+                {search_notice("data-library-search-empty", "No results")}
             } else {
                 for row in &search.results {
                     {

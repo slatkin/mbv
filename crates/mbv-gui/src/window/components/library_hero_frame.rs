@@ -209,6 +209,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
     } = props;
 
     let band = art_shape == GuiArtShapeFrame::Landscape;
+    let block_top = if band { "0" } else { "8px" };
     let root_attrs = vec![Attribute::new(root, "", None, false)];
     let kicker_attrs = vec![Attribute::new(own(attr, "kicker"), "", None, false)];
     let title_attrs = vec![Attribute::new(own(attr, "title"), "", None, false)];
@@ -267,11 +268,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                 }
                 div {
                     class: "flex min-w-0 flex-1 flex-col",
-                    style: if band {
-                        "gap: 18px; flex-basis: 320px; padding-top: 0;"
-                    } else {
-                        "gap: 18px; flex-basis: 320px; padding-top: 8px;"
-                    },
+                    style: "gap: 18px; flex-basis: 320px; padding-top: {block_top};",
                     if painted(block.eyebrow.as_ref())
                         || named(block.name.as_deref())
                         || painted(block.facts.as_ref())

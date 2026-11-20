@@ -210,7 +210,7 @@ pub fn on_pointer_cancel(event: &PointerData, link: &CoreLink) {
 /// it was carrying (if any) and every hover it armed drop — an unbuttoned
 /// leave arms no release either, but the hover would stay set without this.
 pub fn on_pointer_leave(event: &PointerData, link: &CoreLink) {
-    send_pointer(dom_cancel(event), link);
+    on_pointer_cancel(event, link);
 }
 
 /// Send one [`DomPointer`] to the core when the neutral vocabulary can

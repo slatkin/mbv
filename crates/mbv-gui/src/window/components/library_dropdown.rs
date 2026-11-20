@@ -193,13 +193,17 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
         vec![Attribute::new(name, "", None, false)]
     });
 
+    // The wrapper's justify and the popover's anchor side: one pair, from the
+    // one `align_end` fact.
+    let (justify, side) = if align_end {
+        ("justify-end", "right")
+    } else {
+        ("justify-start", "left")
+    };
+
     rsx! {
         div {
-            class: if align_end {
-                "relative flex min-w-0 flex-1 items-center justify-end"
-            } else {
-                "relative flex min-w-0 flex-1 items-center justify-start"
-            },
+            class: "relative flex min-w-0 flex-1 items-center {justify}",
             role: "group",
             "aria-label": "{aria_label}",
             style: "gap: 12px;",
@@ -240,15 +244,9 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
                         class: "absolute z-20 flex flex-col",
                         role: "menu",
                         "aria-label": "{aria_label}",
-                        style: if align_end {
-                            format!(
-                                "top: 34px; right: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
-                            )
-                        } else {
-                            format!(
-                                "top: 34px; left: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
-                            )
-                        },
+                        style: format!(
+                            "top: 34px; {side}: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
+                        ),
                         ..menu_attrs,
                         if let Some(filter) = filter {
                             label {

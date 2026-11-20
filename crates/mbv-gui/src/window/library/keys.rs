@@ -495,7 +495,7 @@ pub fn route_library_key(
         && !key.modifiers.shift_key
         && matches!(key.key.as_str(), "k" | "K")
     {
-        if state.search_collapsed() && !state.search_panel_open() {
+        if state.search_collapsed() {
             state.open_search_panel();
         }
         if state.search_field_mounted() {
