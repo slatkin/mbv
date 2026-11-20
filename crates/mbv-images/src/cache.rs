@@ -495,6 +495,7 @@ mod tests {
             series_id: String::new(),
             types: Vec::new(),
             source: super::super::ImageSource::Emby,
+            rendition: super::super::ImageRendition::Hero,
         }
     }
 
@@ -562,6 +563,7 @@ mod tests {
             series_id: String::new(),
             types: vec!["Primary".into()],
             source: ImageSource::Emby,
+            rendition: crate::ImageRendition::Hero,
         };
         let landscape = super::ImageFetchReq {
             cache_key: "item:QB".into(),
@@ -569,6 +571,7 @@ mod tests {
             series_id: String::new(),
             types: vec!["Backdrop".into(), "Primary".into()],
             source: ImageSource::Emby,
+            rendition: crate::ImageRendition::Hero,
         };
 
         assert!(matches!(

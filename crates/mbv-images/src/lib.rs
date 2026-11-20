@@ -234,6 +234,39 @@ pub struct ImageFetchReq {
     pub series_id: String,
     pub types: Vec<String>,
     pub source: ImageSource,
+    /// The size and cache namespace the request asks for (design D6).
+    pub rendition: ImageRendition,
+}
+
+/// The size and cache namespace one fetch asks for (design D6). A `Hero`
+/// request fetches the large shared image under its source's own key; a `Row`
+/// request fetches the small row image under a `row:` key.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ImageRendition {
+    #[default]
+    Hero,
+    Row(RowRendition),
+}
+
+/// The resolved data of one `Row` request (design D6): the declared artwork
+/// arm that sizes the request, and the Emby image kind the item declares a tag
+/// for, when it declares one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowRendition {
+    /// Whether the item's declared artwork arm is Square. The request asks for
+    /// a square image (the painted row box's 2x on both sides) instead of the
+    /// landscape/portrait 2x width.
+    pub square: bool,
+    /// The one Emby image kind to request with its declared tag. `None`
+    /// requests the whole `types` chain untagged.
+    pub emby: Option<RowEmbyImage>,
+}
+
+/// One Emby image kind and the tag the item declares for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowEmbyImage {
+    pub kind: String,
+    pub tag: String,
 }
 
 #[derive(Debug, Clone)]

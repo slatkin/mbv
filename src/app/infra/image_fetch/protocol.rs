@@ -623,6 +623,7 @@ fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> Fetched
         series_id,
         types,
         source,
+        rendition: _,
     } = req;
     match source {
         ImageSource::Audiobookshelf {

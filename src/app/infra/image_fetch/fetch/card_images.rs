@@ -27,6 +27,7 @@ impl App {
             series_id,
             types: types.iter().map(ToString::to_string).collect(),
             source: ImageSource::Emby,
+            rendition: mbv_images::ImageRendition::Hero,
         };
         if let mbv_images::cache::FetchReservation::Start(req) =
             self.images.reserve_card_image_fetch(req, MAX_IMAGE_FETCHES)
@@ -90,6 +91,7 @@ impl App {
                 server_url,
                 api_key,
             },
+            rendition: mbv_images::ImageRendition::Hero,
         };
         if let mbv_images::cache::FetchReservation::Start(req) =
             self.images.reserve_fetch(req, MAX_IMAGE_FETCHES)
