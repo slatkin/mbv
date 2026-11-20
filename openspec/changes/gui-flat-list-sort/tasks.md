@@ -6,8 +6,8 @@ already owns the contract.
 
 ## 1. Data at the edges
 
-- [ ] 1.1 In `crates/mbv-config/src/gui_launch_state.rs`, add `GuiLaunchSort` (snake_case: `title`, `author`, `newest`, `oldest`), `GuiLaunchListSort { destination: TabIdentity, sort: GuiLaunchSort }`, and `#[serde(default)] sorts: Vec<GuiLaunchListSort>` on `GuiLaunchState` (design D10). Give `GuiDestinationCollections.order` `skip_serializing_if = "Option::is_none"`. Set `sorts: Vec::new()` in `first_launch`. Keep the version at 1. Verify with `cargo nextest run -p mbv-config`.
-- [ ] 1.2 In `crates/mbv-audiobookshelf/src/catalog_books.rs`, parse the item DTO's `addedAt` into `AudiobookshelfBook.added_at_ms: Option<u64>`, beside `updated_at_ms`. A missing value or 0 is `None` (design D9). Fix every constructor of `AudiobookshelfBook` in the workspace. Verify with `cargo check --workspace --all-targets`.
+- [x] 1.1 In `crates/mbv-config/src/gui_launch_state.rs`, add `GuiLaunchSort` (snake_case: `title`, `author`, `newest`, `oldest`), `GuiLaunchListSort { destination: TabIdentity, sort: GuiLaunchSort }`, and `#[serde(default)] sorts: Vec<GuiLaunchListSort>` on `GuiLaunchState` (design D10). Give `GuiDestinationCollections.order` `skip_serializing_if = "Option::is_none"`. Set `sorts: Vec::new()` in `first_launch`. Keep the version at 1. Verify with `cargo nextest run -p mbv-config`.
+- [x] 1.2 In `crates/mbv-audiobookshelf/src/catalog_books.rs`, parse the item DTO's `addedAt` into `AudiobookshelfBook.added_at_ms: Option<u64>`, beside `updated_at_ms`. A missing value or 0 is `None` (design D9). Fix every constructor of `AudiobookshelfBook` in the workspace. Verify with `cargo check --workspace --all-targets`.
 
 ## 2. Core sort type, store, and command
 
