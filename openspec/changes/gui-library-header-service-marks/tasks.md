@@ -2,8 +2,8 @@
 
 ## 1. Feed platform in `mbv-feed`
 
-- [ ] 1.1 Add `crates/mbv-feed/src/platform.rs` with `FeedPlatform` and `FeedPlatform::of_url` as design D1 states: the domain-suffix host rule for the nine host platforms, then the PeerTube path-and-parameter rule. In `lib.rs`, add `mod platform;`, add `pub use self::platform::FeedPlatform;`, and make `url_authority_and_path` `pub(crate)`. Do not change `normalize_feed_url`. Verify: `cargo check -p mbv-feed`.
-- [ ] 1.2 Add `rstest.workspace = true` under `[dev-dependencies]` in `crates/mbv-feed/Cargo.toml` (the workspace pin, `rstest` 0.28). Add `crates/mbv-feed/tests/feed_platform.rs` with one named `#[case]` table that owns the contract "a URL shows its Feed platform": one case for each platform's feed form in the D1 table, a PeerTube channel feed on a self-hosted instance, a PeerTube `playlistId` podcast feed, a PeerTube instance-wide feed with no filter (`None`), `https://notyoutube.com/feed` (`None`), and a generic podcast host (`None`). Verify: `cargo nextest run -p mbv-feed`.
+- [x] 1.1 Add `crates/mbv-feed/src/platform.rs` with `FeedPlatform` and `FeedPlatform::of_url` as design D1 states: the domain-suffix host rule for the nine host platforms, then the PeerTube path-and-parameter rule. In `lib.rs`, add `mod platform;`, add `pub use self::platform::FeedPlatform;`, and make `url_authority_and_path` `pub(crate)`. Do not change `normalize_feed_url`. Verify: `cargo check -p mbv-feed`.
+- [x] 1.2 Add `rstest.workspace = true` under `[dev-dependencies]` in `crates/mbv-feed/Cargo.toml` (the workspace pin, `rstest` 0.28). Add `crates/mbv-feed/tests/feed_platform.rs` with one named `#[case]` table that owns the contract "a URL shows its Feed platform": one case for each platform's feed form in the D1 table, a PeerTube channel feed on a self-hosted instance, a PeerTube `playlistId` podcast feed, a PeerTube instance-wide feed with no filter (`None`), `https://notyoutube.com/feed` (`None`), and a generic podcast host (`None`). Verify: `cargo nextest run -p mbv-feed`.
 
 ## 2. Checked-platform rule in the core
 
