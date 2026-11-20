@@ -184,9 +184,11 @@ impl LibraryState {
         });
     }
 
-    /// Toggle a node (design D14): the press and the keys' Right/Left run
-    /// this. The children follow the toggle, and the node's select still runs,
-    /// so the Hero and the Workspace show the node the user is looking at.
+    /// Toggle a node (design D14): a double-click on the row and the keys'
+    /// Enter, Right, and Left run this (gui-tree-double-click design D1). The
+    /// children follow the toggle; the select is the press's own, so a
+    /// double-click after its two picks leaves the node the user is looking at
+    /// selected.
     pub fn toggle_shows_node(&self, node_id: &str) {
         if self.shows_node_open(node_id) {
             self.close_shows_node(node_id);
@@ -195,13 +197,12 @@ impl LibraryState {
         }
     }
 
-    /// Press a Shows row (design D14): a node toggles and selects, a flat row
-    /// selects, and an episode leaf changes nothing. A heading names no row, so
-    /// its press changes nothing.
+    /// Press a Shows row (design D14): a press picks a node, a flat row, or an
+    /// episode leaf, and nothing else. The open state belongs to the
+    /// double-click ([`Self::toggle_shows_node`]), so a press on a series or
+    /// season node leaves the node as it was (gui-tree-double-click design D1).
+    /// A heading names no row, so its press changes nothing.
     pub fn press_shows_row(&self, row: &ShowsListRow) {
-        if let Some(node_id) = row.as_node() {
-            self.toggle_shows_node(node_id);
-        }
         self.select_shows_row(row);
     }
 
