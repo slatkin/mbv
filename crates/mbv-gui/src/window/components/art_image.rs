@@ -7,7 +7,11 @@
 //! [`ArtEvent::Loaded`] divided by the window's scale factor. The fill then
 //! retries the same URL with capped backoff while mounted: the `mbv-art` miss
 //! is a failed load, so a retry asks the core again (D7). A new URL starts a
-//! fresh load.
+//! fresh load. While the natural size is still unreported, the caller's
+//! `bounds` cap the `img` provisionally, so its first painted frame is
+//! already the final size — an `img` never paints above its own pixels, so
+//! the bounds alone land on the same layout the loaded cap gives (the
+//! 2026-11-20 hero flash).
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -262,16 +266,33 @@ fn painted_url(src: Option<String>, failure: Option<Failure>) -> Option<String> 
 
 /// The `img` inline style with the natural-size cap appended, in CSS pixels
 /// (D7): the loaded size divided by the window's scale factor. With bounds the
-/// image also never outgrows its parent's width.
-fn capped_style(style: &str, cap: Option<NaturalCap>, bounded: bool) -> String {
+/// image also never outgrows its parent's width. While the natural size is
+/// still unreported the bounds cap provisionally: an `img` never paints above
+/// its own pixels, so the bounds alone land on the same layout the loaded cap
+/// gives, and the first painted frame is already the final size (the
+/// 2026-11-20 hero flash: between the bytes' arrival and the cap's, an
+/// uncapped `img` painted at its intrinsic size).
+fn capped_style(style: &str, cap: Option<NaturalCap>, bounds: Option<NaturalSizeBounds>) -> String {
     let mut style = style.to_owned();
     if let Some(cap) = cap {
-        if bounded {
+        if bounds.is_some() {
             let _ = write!(style, "max-width: min({}px, 100%); ", cap.max_width);
         } else {
             let _ = write!(style, "max-width: {}px; ", cap.max_width);
         }
         let _ = write!(style, "max-height: {}px;", cap.max_height);
+    } else if let Some(bounds) = bounds {
+        match bounds.width {
+            Some(width) => {
+                let _ = write!(style, "max-width: min({width}px, 100%); ");
+            }
+            None => {
+                let _ = write!(style, "max-width: 100%; ");
+            }
+        }
+        if let Some(height) = bounds.height {
+            let _ = write!(style, "max-height: {height}px;");
+        }
     }
     style
 }
@@ -358,7 +379,10 @@ pub fn ArtImage(props: ArtImageProps) -> Element {
         .and_then(|(width, height)| {
             capped_natural_size(width, height, scale.0.cloned(), props.bounds)
         });
-    let style = capped_style(&props.style, cap, props.bounds.is_some());
+    // The provisional bounds cap while the natural size is unreported; an
+    // uncapped image takes its caller's style alone (`cap` is already `None`
+    // for it, but its bounds must not cap it either).
+    let style = capped_style(&props.style, cap, props.bounds.filter(|_| !props.uncapped));
 
     rsx! {
         if let Some(painted) = painted {
