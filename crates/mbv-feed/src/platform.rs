@@ -1,7 +1,5 @@
 //! The known service that serves a Feed subscription, read from its URL alone.
 
-use crate::url_authority_and_path;
-
 /// A known service that serves a feed.
 ///
 /// The platform comes from the subscription URL alone, so a stored copy cannot
@@ -76,13 +74,32 @@ impl FeedPlatform {
     /// instead.
     #[must_use]
     pub fn of_url(url: &str) -> Option<Self> {
-        let (host, path_and_query) = url_authority_and_path(url)?;
+        let (host, path_and_query) = host_and_path(url)?;
         let host = host.to_ascii_lowercase();
         if let Some(platform) = host_platform(&host) {
             return Some(platform);
         }
         peer_tube_feed(path_and_query).then_some(Self::PeerTube)
     }
+}
+
+/// The host and the path with query of an `http(s)` URL, or `None` when the URL
+/// has no such scheme or no path.
+///
+/// The host is the authority's part after any userinfo and before any port, so
+/// `https://user:pass@www.youtube.com/feed` reads `www.youtube.com` and
+/// `https://youtube.com@evil.example/feed` reads `evil.example`.
+fn host_and_path(url: &str) -> Option<(&str, &str)> {
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    let slash = rest.find('/')?;
+    let authority = &rest[..slash];
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = host.split_once(':').map_or(host, |(host, _)| host);
+    Some((host, &rest[slash..]))
 }
 
 /// The platform that owns `host` by its domain, or `None`.

@@ -83,9 +83,7 @@ pub fn normalize_feed_url(input: &str) -> Result<String, FeedError> {
     extract_rss_link(&body).ok_or_else(FeedError::missing_youtube_feed)
 }
 
-/// Split a URL into its host and its path with query, or `None` when the URL
-/// has no `http(s)://` scheme or no path.
-pub(crate) fn url_authority_and_path(input: &str) -> Option<(&str, &str)> {
+fn url_authority_and_path(input: &str) -> Option<(&str, &str)> {
     let rest = input
         .strip_prefix("https://")
         .or_else(|| input.strip_prefix("http://"))?;

@@ -46,6 +46,11 @@ use rstest::rstest;
 )]
 #[case::peer_tube_instance_wide("https://video.example.com/feeds/videos.xml", None)]
 #[case::youtube_lookalike("https://notyoutube.com/feed", None)]
+#[case::userinfo_naming_youtube("https://youtube.com@evil.example/feed", None)]
+#[case::userinfo_before_youtube(
+    "https://user:pass@www.youtube.com/feeds/videos.xml?channel_id=UCabc",
+    Some(FeedPlatform::YouTube)
+)]
 #[case::generic_podcast("https://podcast.example.com/feed.xml", None)]
 fn a_url_shows_its_feed_platform(#[case] url: &str, #[case] platform: Option<FeedPlatform>) {
     assert_eq!(FeedPlatform::of_url(url), platform);
