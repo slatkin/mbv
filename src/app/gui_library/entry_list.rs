@@ -87,7 +87,6 @@ impl<H> Default for GuiEntryListProjection<H> {
                 &GuiCollectionSet::All,
                 GuiCollectionNoun::Subscriptions,
                 std::iter::empty::<(String, String)>(),
-                None,
             ),
             loading: false,
             failed: false,

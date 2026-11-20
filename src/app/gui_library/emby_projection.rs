@@ -20,6 +20,7 @@ use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
+use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source};
 use super::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiCollections, compare_gui_date_order,
@@ -328,7 +329,10 @@ impl App {
         set: &GuiCollectionSet,
     ) -> (Vec<&EmbyItem>, bool) {
         let (mut items, landing) = self.gui_emby_feed_gathered(lib_idx, set);
-        let order = self.gui_emby_feed_order(lib_idx);
+        let order = self
+            .gui_list_sort(GuiSortTarget::Library(lib_idx))
+            .date_order()
+            .unwrap_or_default();
         items.sort_by(|left, right| {
             compare_gui_date_order(
                 emby_date_added_secs(left),

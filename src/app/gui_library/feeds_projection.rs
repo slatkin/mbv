@@ -19,6 +19,7 @@ use mbv_queue::FeedEntry;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
+use super::GuiSortTarget;
 use super::artwork::{feed_media_kind, feed_row_source};
 use super::collection::{GuiCollectionTarget, GuiCollections, compare_gui_date_order};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
@@ -150,7 +151,7 @@ pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedsHero>;
 
 impl App {
     /// The Feeds projection the GUI Library panel paints (row 11.1): the
-    /// collection selector, the selection's entry rows in the stored date
+    /// collection selector, the selection's entry rows in the list's date
     /// order, the selected entry, and its Hero. A Client with no configured
     /// subscription projects the empty projection, as the frame's gate
     /// excludes that destination anyway. The selection's entries are built
@@ -161,7 +162,10 @@ impl App {
         if !self.gui_feeds_present() {
             return GuiFeedsProjection::default();
         }
-        let order = self.gui_feeds_date_order();
+        let order = self
+            .gui_list_sort(GuiSortTarget::Feeds)
+            .date_order()
+            .unwrap_or_default();
         let collections = self.gui_collections(GuiCollectionTarget::Feeds);
         let mut entries = self.gui_feeds_entries();
         entries.sort_by(|left, right| {

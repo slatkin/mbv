@@ -2,8 +2,8 @@
 //! design D12, row 8.1): the per-library selection the core owns (the picked
 //! row, a feed-view library's checked folder set, and that library's claim on
 //! its fetched results with their failed targets — gui-collection-dropdown
-//! design D2, D3), and the open, select, collection-toggle, All, and date-order
-//! actions the core's commands apply. A feed-view library's checked set reads and
+//! design D2, D3), and the open, select, collection-toggle, and All actions
+//! the core's commands apply. A feed-view library's checked set reads and
 //! fills the shared `feed_home_video` cache without writing its `selection`,
 //! so the TUI's own pill selection stays the TUI's. The root-list store
 //! follows the Music collection store's precedent (design D5): the TUI's root
@@ -19,9 +19,7 @@ use std::collections::HashSet;
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::feed::FeedHomeVideoTarget;
 
-use super::collection::{
-    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
-};
+use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
 use crate::app::state::events::{FeedHomeVideoSelectionFailed, LibEvent};
@@ -108,10 +106,6 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
         GuiCollectionNoun::Folders
     }
 
-    fn has_order(&self) -> bool {
-        true
-    }
-
     fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
         let root = app.libs.get(self.0)?.nav_stack.first()?;
         if root.loading {
@@ -136,12 +130,6 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.set)
     }
 
-    fn stored_order(&self, app: &App) -> GuiDateOrder {
-        app.gui_emby_feed_sets
-            .get(&self.0)
-            .map_or(GuiDateOrder::default(), |stored| stored.order)
-    }
-
     fn has_stored_selection(&self, app: &App) -> bool {
         // Only a user press or the launch restore stores a set: the shown
         // pass's claim is not a selection, so a painted frame never blocks
@@ -163,13 +151,7 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
     }
 
     fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
-        let order = app.gui_emby_feed_set(self.0).order;
-        app.install_gui_emby_feed_set(self.0, set, order);
-    }
-
-    fn install_order(&self, app: &mut App, order: GuiDateOrder) {
-        let set = app.gui_emby_feed_set(self.0).set;
-        app.install_gui_emby_feed_set(self.0, set, order);
+        app.install_gui_emby_feed_set(self.0, set);
     }
 }
 
@@ -282,17 +264,12 @@ impl App {
         None
     }
 
-    /// Store the feed-view library's set and order and start the fetches the
-    /// set is missing (row 8.1; gui-collection-dropdown design D5): the one
-    /// write the toggle, All, and order presses share.
-    fn install_gui_emby_feed_set(
-        &mut self,
-        lib_idx: usize,
-        set: GuiCollectionSet,
-        order: GuiDateOrder,
-    ) {
+    /// Store the feed-view library's set and start the fetches the set is
+    /// missing (row 8.1; gui-collection-dropdown design D5): the one write
+    /// the toggle and All presses share.
+    fn install_gui_emby_feed_set(&mut self, lib_idx: usize, set: GuiCollectionSet) {
         self.gui_emby_feed_sets
-            .insert(lib_idx, GuiCollectionSelection { set, order });
+            .insert(lib_idx, GuiCollectionSelection { set });
         // A user press (or the launch restore) is the one refetch trigger
         // (design D3): clearing the failed marks here lets the ensure step
         // start the selection's failed targets again, and an automatic
@@ -375,16 +352,6 @@ impl App {
             .and_then(|selection| selection.feed_claim.as_ref())
     }
 
-    /// The library's stored feed-group selection (design D2): the checked
-    /// folders or All, and the list's date order. A library the GUI has not
-    /// selected on reads All on Newest, the launch default.
-    fn gui_emby_feed_set(&self, lib_idx: usize) -> GuiCollectionSelection {
-        self.gui_emby_feed_sets
-            .get(&lib_idx)
-            .cloned()
-            .unwrap_or_default()
-    }
-
     /// The folder catalog the checked set resolves against (design D1, D3):
     /// the root listing's folders' stable ids, or `None` while the listing has
     /// not landed — the set is then kept as it is, because the listing is what
@@ -421,14 +388,6 @@ impl App {
         lib_idx: usize,
     ) -> Cow<'_, GuiCollectionSet> {
         GuiEmbyFeedCollectionSite(lib_idx).effective_set(self)
-    }
-
-    /// The date order the GUI's feed-group list sorts by (design D4): the
-    /// stored order, read without cloning the stored selection.
-    pub(in crate::app) fn gui_emby_feed_order(&self, lib_idx: usize) -> GuiDateOrder {
-        self.gui_emby_feed_sets
-            .get(&lib_idx)
-            .map_or(GuiDateOrder::default(), |stored| stored.order)
     }
 
     /// Whether the GUI's checked set still wants `target`'s list (design D3):

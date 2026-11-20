@@ -321,7 +321,6 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
-            ..GuiCollectionSelection::default()
         },
     );
 

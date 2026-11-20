@@ -1,7 +1,7 @@
 //! The GUI Library's Feeds data path (add-gui-library-panel design D12,
-//! row 11.1): the selection the core owns — the checked subscriptions, the
-//! date order, and the picked entry — and the open, set-pill, select, and
-//! ensure actions the later core surface's commands apply. The selection is
+//! row 11.1): the selection the core owns — the checked subscriptions and the
+//! picked entry — and the open, set-pill, select, and ensure actions the
+//! later core surface's commands apply. The selection is
 //! All or a set of checked subscriptions (gui-collection-dropdown design
 //! D1, D2), so the dropdown replaces the pill row in a later unit.
 //!
@@ -19,9 +19,7 @@ use std::borrow::Cow;
 
 use mbv_queue::FeedEntry;
 
-use super::collection::{
-    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
-};
+use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
 use super::tabs::GuiDestinationKind;
@@ -29,11 +27,11 @@ use crate::app::App;
 
 /// The GUI Library's Feeds selection (row 11.1).
 ///
-/// The stored collection selection — the checked subscriptions and the list's
-/// date order (gui-collection-dropdown design D1, D2, D4) — and the entry the
-/// Hero shows. All is the set default and Newest the order default, so the
-/// selection starts on All and Newest at every launch and saves nothing — the
-/// store is session memory only. The checked set's keys are the
+/// The stored collection selection — the checked subscriptions
+/// (gui-collection-dropdown design D1, D2) — and the entry the Hero shows.
+/// All is the set default, so the selection starts on All at every launch and
+/// saves nothing — the store is session memory only. The list's sort lives in
+/// the list-sort store. The checked set's keys are the
 /// subscriptions' URLs. One feed tab exists per Client, so one store holds
 /// it. The picked entry is named by its composite
 /// `(subscription url, guid)` identity, encoded as one opaque string — two
@@ -43,7 +41,7 @@ use crate::app::App;
 /// selection's stale arm does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiFeedsSelection {
-    /// The checked subscriptions and the list's date order.
+    /// The checked subscriptions.
     pub selection: GuiCollectionSelection,
     /// The entry the Hero shows, as [`GuiFeedEntryId::encode`] writes it.
     /// `None` before a select command names one.
@@ -51,8 +49,8 @@ pub struct GuiFeedsSelection {
 }
 
 impl Default for GuiFeedsSelection {
-    /// All on Newest with no pick: the selection every launch starts on (the
-    /// spec's persistence rule — session memory only, nothing saved).
+    /// All with no pick: the selection every launch starts on (the spec's
+    /// persistence rule — session memory only, nothing saved).
     fn default() -> Self {
         Self {
             selection: GuiCollectionSelection::default(),
@@ -72,10 +70,6 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
         GuiCollectionNoun::Subscriptions
     }
 
-    fn has_order(&self) -> bool {
-        true
-    }
-
     fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
         // The tab is present whenever the destination serves a command, so
         // the retention always applies (row 11.1).
@@ -93,10 +87,6 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
 
     fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
         &app.gui_feeds_selection.selection.set
-    }
-
-    fn stored_order(&self, app: &App) -> GuiDateOrder {
-        app.gui_feeds_selection.selection.order
     }
 
     fn has_stored_selection(&self, app: &App) -> bool {
@@ -123,10 +113,6 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
 
     fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
         app.gui_feeds_selection.selection.set = set;
-    }
-
-    fn install_order(&self, app: &mut App, order: GuiDateOrder) {
-        app.gui_feeds_selection.selection.order = order;
     }
 }
 
@@ -214,13 +200,6 @@ impl App {
         GuiFeedsCollectionSite.effective_set(self)
     }
 
-    /// The date order the list sorts by (row 11.1; gui-collection-dropdown
-    /// design D4): the stored order — Newest is the launch default.
-    #[must_use]
-    pub fn gui_feeds_date_order(&self) -> GuiDateOrder {
-        self.gui_feeds_selection.selection.order
-    }
-
     /// The entry the Hero shows (row 11.1): the stored pick. The projection
     /// falls back to the checked subscriptions' first row when the pick left
     /// the list, so the Hero's default is never blank.
@@ -233,7 +212,7 @@ impl App {
     ///
     /// All is the merged `all_entries`, and a checked set is the checked
     /// subscriptions' own lists, concatenated in the tab's order. Both sort
-    /// by the stored date order when the projection paints them. The list
+    /// by the list's active sort when the projection paints them. The list
     /// borrows the App's stored entries, so a frame that lists a subscription
     /// copies no entry.
     #[must_use]

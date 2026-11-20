@@ -26,6 +26,7 @@ use mbv_ui_msg::PodcastEpisodeTarget;
 use std::collections::HashSet;
 
 use super::GuiLibraryArtwork;
+use super::GuiSortTarget;
 use super::artwork::{GuiRowMediaKind, catalog_show_row_source};
 use super::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
@@ -169,7 +170,7 @@ pub type GuiPodcastsProjection = GuiEntryListProjection<GuiPodcastsHero>;
 
 impl App {
     /// The Podcasts projection the GUI Library panel paints (row 10.1): the
-    /// collection selector, the selection's episode rows in the stored date
+    /// collection selector, the selection's episode rows in the list's date
     /// order, the selected episode, and its Hero. A `lib_idx` that names no
     /// podcast library projects the empty projection, as the frame's gate
     /// excludes that destination anyway.
@@ -181,7 +182,10 @@ impl App {
         // The one effective-set read the frame takes: the rows read the set
         // it borrows, so the frame never recomputes the retention.
         let set = self.gui_podcast_effective_set(lib_idx);
-        let order = self.gui_podcast_date_order(lib_idx);
+        let order = self
+            .gui_list_sort(GuiSortTarget::Podcasts(lib_idx))
+            .date_order()
+            .unwrap_or_default();
         let collections = self.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
         let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, set.as_ref(), order);
         let selected = self.gui_podcast_selected(lib_idx, &rows);

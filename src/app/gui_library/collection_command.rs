@@ -9,9 +9,7 @@ use std::borrow::Cow;
 
 use mbv_config::GuiGroupPick;
 
-use super::collection::{
-    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
-};
+use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::{
     GuiEmbyFeedCollectionSite, GuiFeedsCollectionSite, GuiMusicCollectionSite,
     GuiPodcastsCollectionSite,
@@ -25,13 +23,8 @@ pub(in crate::app::gui_library) enum CollectionOp {
     Toggle { key: String },
     /// Select All: the All row's press and the dropdown's Clear.
     All,
-    /// Set the list's date order.
-    Order(GuiDateOrder),
     /// Install a saved launch selection, retained against the landed catalog.
-    Restore {
-        set: GuiCollectionSet,
-        order: Option<GuiDateOrder>,
-    },
+    Restore { set: GuiCollectionSet },
 }
 
 impl CollectionOp {
@@ -40,7 +33,6 @@ impl CollectionOp {
         match self {
             Self::Toggle { .. } => "collectionToggle",
             Self::All => "collectionAll",
-            Self::Order(_) => "dateOrder",
             Self::Restore { .. } => "collectionRestore",
         }
     }
@@ -64,10 +56,6 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     /// The noun the destination's selector reads (design D6).
     fn noun(&self) -> GuiCollectionNoun;
 
-    /// Whether the destination stores a date order (design D4): Music does
-    /// not, so an Order command there is a no-op.
-    fn has_order(&self) -> bool;
-
     /// The catalog the retention retains against (design D1): a key
     /// predicate over the landed catalog — `None` while the catalog has not
     /// landed, the list that would name a key stale, which keeps the stored
@@ -86,12 +74,6 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     /// [`GuiCollectionSet::ALL`], so a library without a stored entry never
     /// clones a default.
     fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet;
-
-    /// The destination's stored date order (design D4), read without
-    /// cloning the stored selection.
-    fn stored_order(&self, _app: &App) -> GuiDateOrder {
-        GuiDateOrder::default()
-    }
 
     /// Whether the session has changed this destination's collection state
     /// (design D10): a launch restore never overwrites a choice the session
@@ -125,9 +107,6 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     /// D5).
     fn install_set(&self, app: &mut App, set: GuiCollectionSet);
 
-    /// Write the order back (design D4): called only when [`Self::has_order`].
-    fn install_order(&self, app: &mut App, order: GuiDateOrder);
-
     /// The effective selection the destination paints (design D1): the stored
     /// set retained against the catalog. A set nothing drops is returned
     /// borrowed, so a per-frame reader clones nothing. The borrow is the
@@ -135,22 +114,15 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     fn effective_set<'a>(&self, app: &'a App) -> Cow<'a, GuiCollectionSet> {
         self.stored_set(app).effective(self.present(app))
     }
-
-    /// The selector's order (design D4): the stored order where the
-    /// destination stores one, `None` where it does not (Music sorts by
-    /// name).
-    fn order(&self, app: &App) -> Option<GuiDateOrder> {
-        self.has_order().then(|| self.stored_order(app))
-    }
 }
 
 impl App {
     /// Apply one collection command for `target` (gui-collection-dropdown
-    /// design D5): the one shared path — reject, stale check, toggle/All/order
-    /// over the effective set, and the destination's own install — that the
-    /// four destinations' sites plug into, so the toggle, All, and order steps
-    /// cannot drift. The match names each destination's site; everything else
-    /// is shared.
+    /// design D5): the one shared path — reject, stale check, toggle/All over
+    /// the effective set, and the destination's own install — that the four
+    /// destinations' sites plug into, so the toggle and All steps cannot
+    /// drift. The match names each destination's site; everything else is
+    /// shared.
     pub(in crate::app::gui_library) fn apply_collection(
         &mut self,
         target: &GuiCollectionTarget,
@@ -172,8 +144,7 @@ impl App {
 
     /// The one collection path over one destination's site (design D5): the
     /// op's reject rule names the log line; a toggle reads the effective set
-    /// and installs the change, All installs All, and an order writes the
-    /// stored order where the destination stores one.
+    /// and installs the change, and All and the restore install their set.
     pub(in crate::app::gui_library) fn apply_collection_at(
         &mut self,
         site: &impl GuiCollectionSite,
@@ -185,9 +156,7 @@ impl App {
                 Some(rejection) => Some(rejection),
                 None => site.reject_key(self, key),
             },
-            CollectionOp::All | CollectionOp::Order(_) | CollectionOp::Restore { .. } => {
-                site.reject_destination(self)
-            }
+            CollectionOp::All | CollectionOp::Restore { .. } => site.reject_destination(self),
         };
         if let Some(rejection) = rejection {
             match rejection {
@@ -207,25 +176,11 @@ impl App {
                 site.install_set(self, next);
             }
             CollectionOp::All => site.install_set(self, GuiCollectionSet::All),
-            CollectionOp::Order(order) => {
-                if site.has_order() {
-                    site.install_order(self, order);
-                }
-                // A destination that stores no order (Music sorts by name)
-                // takes no Order command and logs none: its dropdown paints no
-                // order toggle.
-            }
-            CollectionOp::Restore { set, order } => {
+            CollectionOp::Restore { set } => {
                 // An All entry leaves the default unset, as a destination
-                // the session never touched does; a feed-based destination
-                // still restores its saved sort through its own site.
+                // the session never touched does.
                 if !set.is_all() {
                     site.install_set(self, set);
-                }
-                if site.has_order()
-                    && let Some(order) = order
-                {
-                    site.install_order(self, order);
                 }
             }
         }
@@ -253,20 +208,13 @@ impl App {
     }
 
     /// The selector one site builds (design D6): the effective set over the
-    /// destination's catalog, its noun, its scopes in catalog order, and its
-    /// order.
+    /// destination's catalog, its noun, and its scopes in catalog order.
     fn site_collections(
         &self,
         site: &impl GuiCollectionSite,
         target: GuiCollectionTarget,
     ) -> GuiCollections {
         let set = site.effective_set(self);
-        GuiCollections::new(
-            target,
-            set.as_ref(),
-            site.noun(),
-            site.scopes(self),
-            site.order(self),
-        )
+        GuiCollections::new(target, set.as_ref(), site.noun(), site.scopes(self))
     }
 }

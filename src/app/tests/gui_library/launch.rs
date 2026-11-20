@@ -67,111 +67,68 @@ fn launch_roundtrip_app(target: &GuiCollectionTarget) -> App {
 }
 
 /// Seed one destination's session selection as the user's presses leave it.
-fn seed_launch_selection(
-    app: &mut App,
-    target: &GuiCollectionTarget,
-    keys: &[&str],
-    order: Option<GuiDateOrder>,
-) {
+fn seed_launch_selection(app: &mut App, target: &GuiCollectionTarget, keys: &[&str]) {
     let set = GuiCollectionSet::Checked(keys.iter().map(ToString::to_string).collect());
-    let stored_order = order.unwrap_or_default();
+    let selection = GuiCollectionSelection { set };
     match target {
         GuiCollectionTarget::Music(lib_idx) => {
-            app.gui_library_groups.insert(
-                *lib_idx,
-                GuiCollectionSelection {
-                    set,
-                    order: stored_order,
-                },
-            );
+            app.gui_library_groups.insert(*lib_idx, selection);
         }
         GuiCollectionTarget::Podcasts(lib_idx) => {
-            let stored = app.gui_podcast_libs.entry(*lib_idx).or_default();
-            stored.selection = GuiCollectionSelection {
-                set,
-                order: stored_order,
-            };
+            app.gui_podcast_libs.entry(*lib_idx).or_default().selection = selection;
         }
         GuiCollectionTarget::Feeds => {
-            app.gui_feeds_selection.selection = GuiCollectionSelection {
-                set,
-                order: stored_order,
-            };
+            app.gui_feeds_selection.selection = selection;
         }
         GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            app.gui_emby_feed_sets.insert(
-                *lib_idx,
-                GuiCollectionSelection {
-                    set,
-                    order: stored_order,
-                },
-            );
+            app.gui_emby_feed_sets.insert(*lib_idx, selection);
         }
     }
 }
 
-/// The stored set and date order one destination holds after the restore.
+/// The stored set one destination holds after the restore.
 fn restored_launch_selection<'a>(
     app: &'a App,
     target: &GuiCollectionTarget,
-) -> (&'a GuiCollectionSet, Option<GuiDateOrder>) {
+) -> &'a GuiCollectionSet {
     match target {
         GuiCollectionTarget::Music(lib_idx) => {
-            let stored = app
-                .gui_library_groups
+            &app.gui_library_groups
                 .get(lib_idx)
-                .expect("the set was restored");
-            (&stored.set, None)
+                .expect("the set was restored")
+                .set
         }
         GuiCollectionTarget::Podcasts(lib_idx) => {
-            let stored = app
-                .gui_podcast_libs
+            &app.gui_podcast_libs
                 .get(lib_idx)
-                .expect("the set was restored");
-            (&stored.selection.set, Some(stored.selection.order))
+                .expect("the set was restored")
+                .selection
+                .set
         }
-        GuiCollectionTarget::Feeds => (
-            &app.gui_feeds_selection.selection.set,
-            Some(app.gui_feeds_selection.selection.order),
-        ),
+        GuiCollectionTarget::Feeds => &app.gui_feeds_selection.selection.set,
         GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            let stored = app
-                .gui_emby_feed_sets
+            &app.gui_emby_feed_sets
                 .get(lib_idx)
-                .expect("the set was restored");
-            (&stored.set, Some(stored.order))
+                .expect("the set was restored")
+                .set
         }
     }
 }
 
-/// Every collection dropdown's checked set, in saved order, and its date
-/// order where the destination stores one, survive a save and a restart
-/// (bug fix: only Music used to persist).
+/// Every collection dropdown's checked set, in saved order, survives a save
+/// and a restart (bug fix: only Music used to persist).
 #[rstest]
-#[case::music(GuiCollectionTarget::Music(0), &[SOUL, HIPHOP], None)]
-#[case::podcasts(
-    GuiCollectionTarget::Podcasts(1),
-    &["show-a", "show-b"],
-    Some(GuiDateOrder::Oldest)
-)]
-#[case::feeds(
-    GuiCollectionTarget::Feeds,
-    &[FEED_B, FEED_A],
-    Some(GuiDateOrder::Oldest)
-)]
-#[case::emby_feed(
-    GuiCollectionTarget::EmbyFeed(0),
-    &["folder-b", "folder-a"],
-    Some(GuiDateOrder::Oldest)
-)]
+#[case::music(GuiCollectionTarget::Music(0), &[SOUL, HIPHOP])]
+#[case::podcasts(GuiCollectionTarget::Podcasts(1), &["show-a", "show-b"])]
+#[case::feeds(GuiCollectionTarget::Feeds, &[FEED_B, FEED_A])]
+#[case::emby_feed(GuiCollectionTarget::EmbyFeed(0), &["folder-b", "folder-a"])]
 fn a_saved_checked_set_restores_as_saved(
     #[case] target: GuiCollectionTarget,
     #[case] keys: &[&str],
-    #[case] order: Option<GuiDateOrder>,
 ) {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut source = launch_roundtrip_app(&target);
-    seed_launch_selection(&mut source, &target, keys, order);
+    seed_launch_selection(&mut source, &target, keys);
     let saved = source.gui_launch_state();
     mbv_config::save_gui_launch_state(&saved).expect("the snapshot is written");
     let loaded = mbv_config::load_gui_launch_state().expect("the snapshot is read");
@@ -179,10 +136,9 @@ fn a_saved_checked_set_restores_as_saved(
     let mut restored = launch_roundtrip_app(&target);
 
     assert!(restored.restore_gui_launch_collections(&loaded, &loaded.destination));
-    let (set, restored_order) = restored_launch_selection(&restored, &target);
+    let set = restored_launch_selection(&restored, &target);
     let expected: Vec<String> = keys.iter().map(ToString::to_string).collect();
     assert_eq!(set.checked_keys(), expected.as_slice());
-    assert_eq!(restored_order, order);
 }
 
 /// A saved entry restores through the destination it names, not through the
@@ -215,7 +171,7 @@ fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
 
     assert!(app.restore_gui_launch_collections(&state, &destination));
 
-    let (set, _) = restored_launch_selection(&app, &GuiCollectionTarget::Feeds);
+    let set = restored_launch_selection(&app, &GuiCollectionTarget::Feeds);
     let expected = vec![FEED_B.to_string()];
     assert_eq!(
         set.checked_keys(),

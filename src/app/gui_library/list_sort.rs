@@ -148,6 +148,45 @@ pub struct GuiListSortFrame {
 }
 
 impl App {
+    /// Apply one sort command (design D5): a target that names no presented
+    /// flat list, or a sort outside the target's choices, is logged and
+    /// ignored; anything else sets the destination's store.
+    pub(in crate::app::gui_library) fn apply_gui_list_sort(
+        &mut self,
+        target: GuiSortTarget,
+        sort: GuiListSort,
+    ) {
+        if !self.gui_sort_target_present(target) {
+            Self::log_ignored_library_command(
+                "listSort",
+                "the target names no presented flat list",
+            );
+            return;
+        }
+        if !target.choices().contains(&sort) {
+            Self::log_ignored_library_command(
+                "listSort",
+                "the sort is not one of the target's choices",
+            );
+            return;
+        }
+        self.set_gui_list_sort(target, sort);
+    }
+
+    /// Whether `target` names a presented flat list (design D5): the
+    /// destination's own presence rule, so a stale `lib_idx`, a `ShowsNew`
+    /// whose library is not a TV library, and a Feeds tab with no
+    /// subscription all reject the command.
+    fn gui_sort_target_present(&self, target: GuiSortTarget) -> bool {
+        match target {
+            GuiSortTarget::Library(lib_idx) => self.gui_emby_library(lib_idx),
+            GuiSortTarget::Audiobooks(lib_idx) => self.gui_abs_book_library(lib_idx),
+            GuiSortTarget::Podcasts(lib_idx) => self.gui_podcast_library(lib_idx),
+            GuiSortTarget::Feeds => self.gui_feeds_present(),
+            GuiSortTarget::ShowsNew(lib_idx) => self.gui_tv_library(lib_idx),
+        }
+    }
+
     /// The sort `target`'s list is ordered by (design D2): the stored sort
     /// when the store holds one and the target offers it, else the target's
     /// default. A stored sort the target does not offer is ignored, because

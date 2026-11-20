@@ -476,19 +476,22 @@ fn two_checked_subscriptions_merge_their_entries_in_date_order() {
     );
 }
 
-/// The Oldest order puts the earliest entry first, with the undated entries
-/// last (gui-collection-dropdown design D4, D5): the date-order command stores
-/// the order, and the projection sorts the merged list by it without a
-/// refetch.
+/// The Oldest sort puts the earliest entry first, with the undated entries
+/// last (gui-flat-list-sort design D5, D6): the sort command stores the sort,
+/// and the projection sorts the merged list by it without a refetch.
 #[test]
-fn the_date_order_command_sets_the_oldest_order() {
+fn the_oldest_sort_sets_the_oldest_order() {
     let mut app = fetched_feeds_app();
-    app.apply_gui_library_command(GuiLibraryCommand::DateOrder {
-        target: GuiCollectionTarget::Feeds,
-        order: GuiDateOrder::Oldest,
+    app.apply_gui_library_command(GuiLibraryCommand::ListSort {
+        target: GuiSortTarget::Feeds,
+        sort: GuiListSort::Oldest,
     });
 
-    assert_eq!(app.gui_feeds_date_order(), GuiDateOrder::Oldest);
+    assert_eq!(
+        app.gui_list_sort(GuiSortTarget::Feeds),
+        GuiListSort::Oldest,
+        "the command stores the destination's sort"
+    );
     let projection = app.gui_feeds_projection();
 
     assert_eq!(

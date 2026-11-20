@@ -1,7 +1,7 @@
 //! The GUI Library's Podcasts data path (add-gui-library-panel design D12,
 //! row 10.1): the per-podcast-library selection the core owns — the checked
-//! shows, the date order, and the picked episode — and the open, toggle,
-//! All, and order actions the core's collection commands apply. The
+//! shows and the picked episode — and the open, toggle, and All actions the
+//! core's collection commands apply. The
 //! selection is All or a set of checked shows (gui-collection-dropdown
 //! design D1, D2), so the dropdown replaces the pill row in a later unit.
 //!
@@ -16,9 +16,7 @@ use std::borrow::Cow;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
-use super::collection::{
-    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
-};
+use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::ensure::catalog_unloaded;
 use super::podcasts_projection::GuiPodcastEpisodeId;
@@ -27,11 +25,11 @@ use super::tabs::GuiDestinationKind;
 use crate::app::App;
 
 /// The GUI Library's Podcasts selection (row 10.1): per podcast library, the
-/// stored collection selection — the checked shows and the list's date order
-/// (gui-collection-dropdown design D1, D2, D4) — and the episode the Hero
-/// shows. All is the set default and Newest the order default, so All on
-/// Newest with no pick is the selection every launch starts on (the spec's
-/// persistence rule — session memory only, nothing saved). All fans out to
+/// stored collection selection — the checked shows (gui-collection-dropdown
+/// design D1, D2) — and the episode the Hero shows. All is the set default,
+/// so All with no pick is the selection every launch starts on (the spec's
+/// persistence rule — session memory only, nothing saved). The list's sort
+/// lives in the list-sort store. All fans out to
 /// every listed show, the same loads as today's Latest, and one checked show
 /// scopes the fan-out to it. The set's keys are the shows' stable
 /// `library_item_id`s. The episode is named by the
@@ -42,15 +40,15 @@ use crate::app::App;
 /// selection's stale arm does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiPodcastsSelection {
-    /// The checked shows and the list's date order.
+    /// The checked shows.
     pub selection: GuiCollectionSelection,
     /// The episode the Hero shows. `None` before a select command names one.
     pub picked_episode: Option<PodcastEpisodeTarget>,
 }
 
 impl Default for GuiPodcastsSelection {
-    /// All on Newest with no pick: the selection every launch starts on (the
-    /// spec's persistence rule — session memory only, nothing saved).
+    /// All with no pick: the selection every launch starts on (the spec's
+    /// persistence rule — session memory only, nothing saved).
     fn default() -> Self {
         Self {
             selection: GuiCollectionSelection::default(),
@@ -68,10 +66,6 @@ pub(super) struct GuiPodcastsCollectionSite(pub(super) usize);
 impl GuiCollectionSite for GuiPodcastsCollectionSite {
     fn noun(&self) -> GuiCollectionNoun {
         GuiCollectionNoun::Shows
-    }
-
-    fn has_order(&self) -> bool {
-        true
     }
 
     fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
@@ -93,12 +87,6 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
         app.gui_podcast_libs
             .get(&self.0)
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.selection.set)
-    }
-
-    fn stored_order(&self, app: &App) -> GuiDateOrder {
-        app.gui_podcast_libs
-            .get(&self.0)
-            .map_or(GuiDateOrder::default(), |stored| stored.selection.order)
     }
 
     fn has_stored_selection(&self, app: &App) -> bool {
@@ -125,14 +113,6 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
 
     fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
         app.install_gui_podcast_set(self.0, set);
-    }
-
-    fn install_order(&self, app: &mut App, order: GuiDateOrder) {
-        app.gui_podcast_libs
-            .entry(self.0)
-            .or_default()
-            .selection
-            .order = order;
     }
 }
 
@@ -366,16 +346,6 @@ impl App {
         lib_idx: usize,
     ) -> Cow<'_, GuiCollectionSet> {
         GuiPodcastsCollectionSite(lib_idx).effective_set(self)
-    }
-
-    /// The date order the list sorts by (row 10.1; gui-collection-dropdown
-    /// design D4): the stored order, or Newest for a library the session
-    /// never changed it — the launch default.
-    #[must_use]
-    pub fn gui_podcast_date_order(&self, lib_idx: usize) -> GuiDateOrder {
-        self.gui_podcast_libs
-            .get(&lib_idx)
-            .map_or(GuiDateOrder::default(), |stored| stored.selection.order)
     }
 
     /// The episode the Hero shows (row 10.1): the stored pick. The projection

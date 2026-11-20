@@ -135,7 +135,6 @@ fn app_with_stored_groups(
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec![HIPHOP.to_string()]),
-            ..GuiCollectionSelection::default()
         },
     );
     app.gui_music_albums
@@ -452,7 +451,6 @@ fn a_stored_group_the_library_lost_falls_back_to_all() {
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec!["grp-gone".to_string()]),
-            ..GuiCollectionSelection::default()
         },
     );
 
@@ -530,7 +528,6 @@ fn a_failed_selected_group_shows_a_failure_line() {
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec![SOUL.to_string()]),
-            ..GuiCollectionSelection::default()
         },
     );
     app.gui_music_albums

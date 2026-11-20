@@ -10,13 +10,13 @@
 
 use mbv_config::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget,
-    GuiLaunchDateOrder, GuiLaunchShowsView, GuiLaunchState, TabIdentity,
+    GuiLaunchShowsView, GuiLaunchState, TabIdentity,
 };
 use mbv_queue::ServiceKind;
 use mbv_ui_model::browse::BrowseLevel;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiDateOrder};
+use super::collection::{GuiCollectionSet, GuiCollectionTarget};
 use super::collection_command::{CollectionOp, GuiCollectionSite};
 use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
@@ -203,8 +203,7 @@ impl App {
     /// (design D9, D10), in catalog order: one entry per destination whose
     /// choice the session holds, so a destination the session never touched
     /// saves nothing and opens on All. Every dropdown reads its own site's
-    /// stored set, date order, and picks, so the four destinations share one
-    /// save path. The file keeps the list shape, and each entry holds the
+    /// stored set and picks, so the four destinations share one save path. The file keeps the list shape, and each entry holds the
     /// checked ids (an empty list is All), so the saved file is stable.
     fn gui_launch_collections(&self) -> Vec<GuiDestinationCollections> {
         self.presented_destinations()
@@ -241,7 +240,8 @@ impl App {
 
     /// One destination's saved entry, read from its own site: a destination
     /// the session never touched writes nothing, and every dropdown writes
-    /// the same checked ids and order shape.
+    /// the same checked ids. The entry's `order` stays readable for an older
+    /// file, and the list's sort saves through the launch state's own sorts.
     fn gui_launch_collection_entry(
         &self,
         site: &impl GuiCollectionSite,
@@ -255,9 +255,7 @@ impl App {
             destination,
             target,
             group_ids: site.stored_set(self).checked_keys().to_vec(),
-            order: site
-                .has_order()
-                .then(|| launch_date_order(site.stored_order(self))),
+            order: None,
             picks: site.saved_picks(self),
         })
     }
@@ -344,8 +342,7 @@ impl App {
             return;
         }
         site.install_picks(self, &picks);
-        let order = entry.order.map(collection_date_order);
-        self.apply_collection_at(site, CollectionOp::Restore { set, order });
+        self.apply_collection_at(site, CollectionOp::Restore { set });
     }
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):
@@ -558,22 +555,6 @@ fn shows_view(view: GuiLaunchShowsView) -> GuiShowsView {
         GuiLaunchShowsView::All => GuiShowsView::All,
         GuiLaunchShowsView::New => GuiShowsView::New,
         GuiLaunchShowsView::Upcoming => GuiShowsView::Upcoming,
-    }
-}
-
-/// The on-disk form of the list's date order.
-fn launch_date_order(order: GuiDateOrder) -> GuiLaunchDateOrder {
-    match order {
-        GuiDateOrder::Newest => GuiLaunchDateOrder::Newest,
-        GuiDateOrder::Oldest => GuiLaunchDateOrder::Oldest,
-    }
-}
-
-/// The core form of the saved list's date order.
-fn collection_date_order(order: GuiLaunchDateOrder) -> GuiDateOrder {
-    match order {
-        GuiLaunchDateOrder::Newest => GuiDateOrder::Newest,
-        GuiLaunchDateOrder::Oldest => GuiDateOrder::Oldest,
     }
 }
 
