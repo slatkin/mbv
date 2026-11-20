@@ -23,11 +23,10 @@ use mbv_ui_model::ui_util::row_date;
 use super::GuiListSort;
 use super::GuiSortTarget;
 use super::artwork::{feed_media_kind, feed_row_source};
-use super::collection::{GuiCollectionTarget, GuiCollections, compare_gui_date_order};
+use super::collection::{GuiCollectionTarget, GuiCollections};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use super::projection::sort_letter;
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -184,10 +183,9 @@ impl App {
                 )
             });
         } else {
-            let order = sort.date_order().unwrap_or_default();
             entries.sort_by(|left, right| {
-                compare_gui_date_order(left.pub_date_secs, right.pub_date_secs, order).then_with(
-                    || {
+                sort.compare_date(left.pub_date_secs, right.pub_date_secs)
+                    .then_with(|| {
                         (
                             left.feed_id.as_deref().unwrap_or_default(),
                             left.guid.as_str(),
@@ -196,8 +194,7 @@ impl App {
                                 right.feed_id.as_deref().unwrap_or_default(),
                                 right.guid.as_str(),
                             ))
-                    },
-                )
+                    })
             });
         }
         let rows = self.gui_feeds_rows(&entries, sort);
@@ -257,7 +254,7 @@ impl App {
                 .map(str::to_string),
             date: row_date(entry.pub_date_secs),
             state: MediaSemanticState::from_feed_entry(entry),
-            sort_letter: sort.is_name_sort().then(|| sort_letter(&entry.title)),
+            sort_letter: sort.rail_letter(&entry.title),
             art: self.gui_row_art(feed_row_source(entry).as_ref()),
             media: feed_media_kind(entry),
         }

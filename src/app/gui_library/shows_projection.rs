@@ -234,6 +234,7 @@ impl App {
             return GuiShowsProjection::default();
         }
         let view = self.gui_shows_view(lib_idx);
+        let mut sort_frame = None;
         let (series, rows, selected, hero, workspace_loading, loading) = match view {
             GuiShowsView::All => {
                 let series = self.gui_shows_series_tree(lib_idx);
@@ -259,8 +260,9 @@ impl App {
                 )
             }
             GuiShowsView::New => {
-                let rows =
-                    self.gui_shows_new_rows(self.gui_list_sort(GuiSortTarget::ShowsNew(lib_idx)));
+                let frame = self.gui_list_sort_frame(GuiSortTarget::ShowsNew(lib_idx));
+                let rows = self.gui_shows_new_rows(frame.active);
+                sort_frame = Some(frame);
                 let selected = self
                     .gui_shows_flat_selection
                     .clone()
@@ -299,8 +301,7 @@ impl App {
             view,
             loading,
             rows,
-            sort: (view == GuiShowsView::New)
-                .then(|| self.gui_list_sort_frame(GuiSortTarget::ShowsNew(lib_idx))),
+            sort: sort_frame,
             workspace_loading,
             series,
             selected,
@@ -357,7 +358,7 @@ impl App {
                 };
                 let art = self.gui_row_art(emby_row_source(&episode).as_ref());
                 GuiShowsRow {
-                    sort_letter: sort.is_name_sort().then(|| sort_letter(&title)),
+                    sort_letter: sort.rail_letter(&title),
                     id: episode.id,
                     title,
                     subtitle,

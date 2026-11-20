@@ -26,12 +26,9 @@ use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source};
-use super::collection::{
-    GuiCollectionSet, GuiCollectionTarget, GuiCollections, compare_gui_date_order,
-};
+use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use super::projection::sort_letter;
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -267,19 +264,15 @@ impl App {
         // Under the Title sort the store's own `SortName` order stands
         // (design D6); the date sorts order the same items here, so no
         // fetch backs a sort change.
-        if let Some(order) = sort.date_order() {
+        if !sort.is_name_sort() {
             items.sort_by(|left, right| {
-                compare_gui_date_order(
-                    emby_date_added_secs(left),
-                    emby_date_added_secs(right),
-                    order,
-                )
-                .then_with(|| left.id.cmp(&right.id))
+                sort.compare_date(emby_date_added_secs(left), emby_date_added_secs(right))
+                    .then_with(|| left.id.cmp(&right.id))
             });
         }
         let rows: Vec<GuiEmbyRow> = items
             .into_iter()
-            .map(|item| plain_row(self, item, emby_row_letter(item, sort)))
+            .map(|item| plain_row(self, item, sort.rail_letter(effective_sort_str(item))))
             .collect();
         let selected = self.gui_emby_selected(lib_idx, &rows);
         let hero = selected
@@ -326,7 +319,7 @@ impl App {
                     item,
                     feed_row_date(item),
                     programme_of(item, &programmes),
-                    emby_row_letter(item, sort),
+                    sort.rail_letter(effective_sort_str(item)),
                 )
             })
             .collect();
@@ -375,14 +368,9 @@ impl App {
             });
             return (items, landing);
         }
-        let order = sort.date_order().unwrap_or_default();
         items.sort_by(|left, right| {
-            compare_gui_date_order(
-                emby_date_added_secs(left),
-                emby_date_added_secs(right),
-                order,
-            )
-            .then_with(|| left.id.cmp(&right.id))
+            sort.compare_date(emby_date_added_secs(left), emby_date_added_secs(right))
+                .then_with(|| left.id.cmp(&right.id))
         });
         (items, landing)
     }
@@ -553,15 +541,6 @@ fn plain_row(app: &App, item: &EmbyItem, sort_letter: Option<char>) -> GuiEmbyRo
         art: app.gui_row_art(emby_row_source(item).as_ref()),
         media: emby_media_kind(item),
     }
-}
-
-/// The rail letter an Emby row carries (design D6): the first letter of the
-/// article-stripped sort name, which is the key both Emby sorts compare,
-/// while the list's sort is a name sort — and no letter under a date sort,
-/// so the rail follows one fact the core derives.
-fn emby_row_letter(item: &EmbyItem, sort: GuiListSort) -> Option<char> {
-    sort.is_name_sort()
-        .then(|| sort_letter(effective_sort_str(item)))
 }
 
 /// One row of the feed-group lists (row 8.1): the TUI row's primary label,

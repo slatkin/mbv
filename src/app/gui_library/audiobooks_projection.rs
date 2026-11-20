@@ -22,10 +22,8 @@ use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source};
-use super::collection::compare_gui_date_order;
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use super::projection::sort_letter;
 use crate::app::App;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
@@ -198,9 +196,8 @@ impl App {
                 )
             }),
             GuiListSort::Newest | GuiListSort::Oldest => {
-                let order = sort.date_order().unwrap_or_default();
                 books.sort_by(|left, right| {
-                    compare_gui_date_order(book_added_secs(left), book_added_secs(right), order)
+                    sort.compare_date(book_added_secs(left), book_added_secs(right))
                         .then_with(|| left.library_item_id.cmp(&right.library_item_id))
                 });
             }
@@ -352,9 +349,10 @@ fn book_row_letter(
     sort: GuiListSort,
 ) -> Option<char> {
     match sort {
-        GuiListSort::Title => Some(sort_letter(&book.title)),
-        GuiListSort::Author => Some(sort_letter(&book.author_sort_key)),
-        GuiListSort::Newest | GuiListSort::Oldest => None,
+        GuiListSort::Author => sort.rail_letter(&book.author_sort_key),
+        GuiListSort::Title | GuiListSort::Newest | GuiListSort::Oldest => {
+            sort.rail_letter(&book.title)
+        }
     }
 }
 

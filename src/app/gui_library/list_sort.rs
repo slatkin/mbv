@@ -5,9 +5,12 @@
 //! destination's stable identity, because a sort is sticky per destination
 //! and survives a restart through the launch file.
 
+use std::cmp::Ordering;
+
 use mbv_config::TabIdentity;
 
-use super::collection::GuiDateOrder;
+use super::collection::{GuiDateOrder, compare_gui_date_order};
+use super::projection::sort_letter;
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
 
@@ -52,16 +55,24 @@ impl GuiListSort {
         }
     }
 
-    /// The date comparator a date sort delegates to (design D1): Newest and
-    /// Oldest map to the existing [`GuiDateOrder`], and the name sorts map to
-    /// `None`, because that comparator cannot order them.
+    /// Compare two row dates under this sort (design D1): Newest and Oldest
+    /// delegate to [`compare_gui_date_order`], and the name sorts order no
+    /// two dates apart, so they compare `Equal`.
     #[must_use]
-    pub const fn date_order(self) -> Option<GuiDateOrder> {
+    pub fn compare_date(self, a: Option<u64>, b: Option<u64>) -> Ordering {
         match self {
-            Self::Title | Self::Author => None,
-            Self::Newest => Some(GuiDateOrder::Newest),
-            Self::Oldest => Some(GuiDateOrder::Oldest),
+            Self::Title | Self::Author => Ordering::Equal,
+            Self::Newest => compare_gui_date_order(a, b, GuiDateOrder::Newest),
+            Self::Oldest => compare_gui_date_order(a, b, GuiDateOrder::Oldest),
         }
+    }
+
+    /// The rail letter of a row whose name key is `key` (design D6): the
+    /// key's letter while the sort is a name sort, and none under a date
+    /// sort, so the rail follows the one fact the core derives.
+    #[must_use]
+    pub(in crate::app::gui_library) fn rail_letter(self, key: &str) -> Option<char> {
+        self.is_name_sort().then(|| sort_letter(key))
     }
 
     /// Whether the sort is a name sort (design D6): the list shows letter

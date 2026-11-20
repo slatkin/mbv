@@ -30,11 +30,10 @@ use super::GuiLibraryArtwork;
 use super::GuiListSort;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowMediaKind, catalog_show_row_source};
-use super::collection::{GuiCollectionSet, GuiCollectionTarget, compare_gui_date_order};
+use super::collection::{GuiCollectionSet, GuiCollectionTarget};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use super::projection::sort_letter;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
 use mbv_ui_model::meta::MetaSegment;
@@ -280,14 +279,12 @@ impl App {
                 )
             });
         } else {
-            let order = sort.date_order().unwrap_or_default();
             episodes.sort_by(|left, right| {
-                compare_gui_date_order(left.published_at, right.published_at, order).then_with(
-                    || {
+                sort.compare_date(left.published_at, right.published_at)
+                    .then_with(|| {
                         (left.library_item_id.as_str(), left.episode_id.as_str())
                             .cmp(&(right.library_item_id.as_str(), right.episode_id.as_str()))
-                    },
-                )
+                    })
             });
         }
         let fetching = match set {
@@ -426,7 +423,7 @@ fn podcast_row(
         subtitle: show.map(|show| show.title.clone()),
         date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
-        sort_letter: sort.is_name_sort().then(|| sort_letter(&episode.title)),
+        sort_letter: sort.rail_letter(&episode.title),
         art,
         media: GuiRowMediaKind::Audio,
     }
