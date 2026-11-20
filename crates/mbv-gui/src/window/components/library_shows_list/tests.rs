@@ -446,15 +446,17 @@ fn the_date_sorted_view_paints_no_rail() {
 }
 
 /// Contract (gui-delineated-rows design D7): the list reports the rows it
-/// paints under the scope its visible view names, so the core queues their row
-/// art without a coordinate.
+/// paints under the scope its visible view names, with the ids the core
+/// resolves — a series row's raw Emby id, and no row key the list itself adds —
+/// so the core queues their row art without a coordinate.
 #[rstest::rstest]
-#[case(mbv::GuiShowsView::All, mbv::GuiRowArtScope::ShowsSeries)]
-#[case(mbv::GuiShowsView::New, mbv::GuiRowArtScope::ShowsNew)]
-#[case(mbv::GuiShowsView::Upcoming, mbv::GuiRowArtScope::ShowsUpcoming)]
+#[case(mbv::GuiShowsView::All, mbv::GuiRowArtScope::ShowsSeries, &["s1", "s3"])]
+#[case(mbv::GuiShowsView::New, mbv::GuiRowArtScope::ShowsNew, &["new:e1"])]
+#[case(mbv::GuiShowsView::Upcoming, mbv::GuiRowArtScope::ShowsUpcoming, &["new:e1"])]
 fn the_list_reports_the_rows_in_view_under_the_views_scope(
     #[case] view: mbv::GuiShowsView,
     #[case] scope: mbv::GuiRowArtScope,
+    #[case] ids: &[&str],
 ) {
     let frame = GuiShowsList {
         view,
@@ -465,15 +467,12 @@ fn the_list_reports_the_rows_in_view_under_the_views_scope(
     fixture.measure(300.0);
 
     assert_eq!(
-        fixture
-            .reported_rows_in_view()
-            .last()
-            .map(|command| match command {
-                mbv::GuiLibraryCommand::RowsInView { scope, .. } => *scope,
-                _ => panic!("the report is a row set"),
-            }),
-        Some(scope),
-        "the report names the scope of the view the list paints"
+        fixture.reported_rows_in_view().last(),
+        Some(&mbv::GuiLibraryCommand::RowsInView {
+            scope,
+            ids: ids.iter().map(|id| (*id).to_owned()).collect(),
+        }),
+        "the report names the scope and the ids the core resolves"
     );
 }
 

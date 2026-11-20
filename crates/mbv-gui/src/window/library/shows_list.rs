@@ -221,6 +221,19 @@ impl GeometryRow for ShowsListRow {
         (!matches!(self, ShowsListRow::Heading(_))).then_some(ShowsListRow::id(self))
     }
 
+    /// The id this row takes in a `RowsInView` report (gui-delineated-rows
+    /// design D7): the core resolves it against its own data, never against the
+    /// row key this list adds. A series row names its stable Service id — the
+    /// raw Emby id — and a flat row the id it already carries; a heading, a
+    /// season, and an episode paint no thumb, so none of them consumes the set.
+    fn rows_in_view_id(&self) -> Option<String> {
+        match self {
+            ShowsListRow::Series(row) => Some(row.source_id.clone()),
+            ShowsListRow::Flat(row) => Some(row.id.clone()),
+            ShowsListRow::Heading(_) | ShowsListRow::Season(_) | ShowsListRow::Episode(_) => None,
+        }
+    }
+
     fn top(&self) -> f32 {
         match self {
             ShowsListRow::Heading(row) => row.top,
