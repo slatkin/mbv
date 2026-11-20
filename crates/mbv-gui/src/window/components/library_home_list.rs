@@ -191,13 +191,13 @@ pub fn LibraryHomeList() -> Element {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-home-list-column": "",
             // The Music list's header (design D15): Home keeps its text title
-            // (gui-library-header-service-marks design D5), the carried list is
-            // the whole destination, and the `/` filter field narrows it.
+            // (gui-library-header-service-marks design D5), the whole destination is the default scope, so no label
+            // names it, and the `/` filter field narrows it.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
                     heading: LibraryListHeading::Title("Home".to_owned()),
-                    label: "All".to_owned(),
+                    label: String::new(),
                     filter: filter.clone(),
                     placeholder: "Filter home".to_owned(),
                     aria_label: "Filter home".to_owned(),

@@ -566,10 +566,9 @@ fn the_list_paints_the_home_header() {
         "Home",
         "the header names the list"
     );
-    assert_eq!(
-        fixture.text_of("[data-library-selection-label]"),
-        "All",
-        "the carried list is the whole destination"
+    assert!(
+        !fixture.presents("[data-library-selection-label]"),
+        "the whole destination is the default scope, so no label names it"
     );
 }
 
