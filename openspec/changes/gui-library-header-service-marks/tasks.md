@@ -29,4 +29,4 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-feed -p mbv -p mbv-gui`. Verify: all three pass with no warnings.
+- [x] 7.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-feed -p mbv -p mbv-gui`. Verify: all three pass with no warnings.
