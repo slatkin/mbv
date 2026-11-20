@@ -12,9 +12,12 @@
 //! thumb, and the press, double-click, and context handlers; it never restates
 //! the look. Every part paints `data-library-<attr>-<part>`, and the thumb adds
 //! `data-library-<attr>-thumb` with its art state and
-//! `data-library-<attr>-thumb-progress`. A top-level tree node — a Music artist
-//! or a Shows series — also names its open state, so the part paints the one
-//! caret (`LibraryRowNode`).
+//! `data-library-<attr>-thumb-progress`. A top-level tree node names its open
+//! state (`node`, which paints the caret a row still paints) and passes
+//! `tree_open` where it is a tree parent: the part then carries `tree-parent`,
+//! its `aria-expanded`, the `tree-trailing` mark on its trailing text, and the
+//! shared `TreeHint` at its trailing end, and its double-click toggles the node
+//! through `on_toggle` instead of playing it (gui-tree-double-click design D4).
 //!
 //! [`paint_item_row`] paints one row of a flat entry list — Podcasts and Feeds
 //! — from its carried entry, so the two lists keep one row painter.
@@ -29,6 +32,7 @@ use crate::bridge::frame::library::{
 };
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_attr::library_attr;
+use crate::window::components::tree_hint::TreeHint;
 use crate::window::icons::{ChevronRight, EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
 use crate::window::library::shows_workspace::episode_progress;
@@ -157,14 +161,27 @@ pub struct LibraryItemRowProps {
     /// thumb yet.
     #[props(default)]
     pub thumb: Option<LibraryRowThumb>,
-    /// The node's open state (design D1), `None` on a row that is no tree
-    /// node. It paints the row's caret and its `aria-expanded`.
+    /// The node's caret state (design D1), `None` on a row that paints no
+    /// caret. A tree parent that paints no caret names its open state through
+    /// [`Self::tree_open`] only.
     #[props(default)]
     pub node: Option<LibraryRowNode>,
-    /// A press on the row.
+    /// The row's open state as a tree parent (gui-tree-double-click design D4),
+    /// `None` on a row that is no tree parent. `Some(open)` adds the
+    /// `tree-parent` class and the row's `aria-expanded`, marks its trailing
+    /// text `tree-trailing`, paints the shared [`TreeHint`], and turns the
+    /// row's double-click into [`Self::on_toggle`].
+    #[props(default)]
+    pub tree_open: Option<bool>,
+    /// A press on the row: it picks the row's item.
     pub on_press: Callback<()>,
-    /// A double-click on the row: the play path.
+    /// A double-click on the row.
     pub on_play: Callback<()>,
+    /// A double-click on a tree parent: it opens or closes the node, in place
+    /// of [`Self::on_play`] (gui-tree-double-click design D4). `None` while the
+    /// row is no tree parent.
+    #[props(default)]
+    pub on_toggle: Option<Callback<()>>,
     /// A right-press on the row, with the pointer's client position; `None`
     /// while the row names no item a menu could open.
     #[props(default)]
@@ -200,7 +217,14 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             false,
         ));
     }
-    if let Some(node) = props.node {
+    if let Some(open) = props.tree_open {
+        row_attrs.push(Attribute::new(
+            "aria-expanded",
+            if open { "true" } else { "false" },
+            None,
+            false,
+        ));
+    } else if let Some(node) = props.node {
         row_attrs.push(Attribute::new(
             "aria-expanded",
             node.expanded(),
@@ -244,17 +268,29 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
         .as_ref()
         .map(|thumb| paint_thumb(props.attr, thumb, props.progress));
     let caret = props.node.map(paint_caret);
+    // A tree parent's row look (gui-tree-double-click design D2, D4): the hover
+    // hint and its trailing-text swap ride the `tree-parent` class, and the
+    // double-click toggles the node in place of playing it.
+    let mut row_class = "relative flex w-full items-center overflow-hidden".to_owned();
+    let mut trail_class = "flex-none font-mono tabular-nums";
+    if props.tree_open.is_some() {
+        row_class.push_str(" tree-parent");
+        trail_class = "tree-trailing flex-none font-mono tabular-nums";
+    }
+    let on_double_click = match (props.tree_open, props.on_toggle) {
+        (Some(_), Some(on_toggle)) => on_toggle,
+        _ => props.on_play,
+    };
     let on_press = props.on_press;
-    let on_play = props.on_play;
     let on_context = props.on_context;
 
     rsx! {
         button {
             "type": "button",
-            class: "relative flex w-full items-center overflow-hidden",
+            class: "{row_class}",
             style: "{row_style}",
             onclick: move |_| on_press.call(()),
-            ondoubleclick: move |_| on_play.call(()),
+            ondoubleclick: move |_| on_double_click.call(()),
             oncontextmenu: move |event: MouseEvent| {
                 if let Some(on_context) = on_context {
                     event.prevent_default();
@@ -293,11 +329,14 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             }
             if let Some(trail) = props.trail.clone().filter(|trail| !trail.is_empty()) {
                 span {
-                    class: "flex-none font-mono tabular-nums",
+                    class: "{trail_class}",
                     style: "font-size: 12px; color: var(--canvas-muted);",
                     ..trail_attrs,
                     "{trail}"
                 }
+            }
+            if let Some(open) = props.tree_open {
+                TreeHint { open }
             }
         }
     }
