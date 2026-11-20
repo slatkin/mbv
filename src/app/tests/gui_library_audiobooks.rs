@@ -27,6 +27,7 @@ fn generation() -> mbv_core::service_runtime::SetupGeneration {
 fn book(id: &str, title: &str) -> AudiobookshelfBook {
     AudiobookshelfBook {
         library_item_id: id.into(),
+        updated_at_ms: 0,
         title: title.into(),
         author_display: None,
         author_sort_key: "Author".into(),

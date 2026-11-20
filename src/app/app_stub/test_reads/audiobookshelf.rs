@@ -81,6 +81,7 @@ impl App {
         for (id, title, author_display, author_sort_key, duration, cover) in books {
             state.books.push(mbv_audiobookshelf::AudiobookshelfBook {
                 library_item_id: (*id).into(),
+                updated_at_ms: 0,
                 title: (*title).into(),
                 author_display: author_display.map(str::to_string),
                 author_sort_key: (*author_sort_key).into(),
@@ -176,6 +177,7 @@ impl App {
         for (id, title) in shows {
             state.shows.push(mbv_audiobookshelf::AudiobookshelfShow {
                 library_item_id: (*id).into(),
+                updated_at_ms: 0,
                 title: (*title).into(),
                 author: None,
                 description: None,

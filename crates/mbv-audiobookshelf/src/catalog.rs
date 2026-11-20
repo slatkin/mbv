@@ -19,6 +19,11 @@ pub struct AudiobookshelfShow {
     pub author: Option<String>,
     pub description: Option<String>,
     pub cover_path: Option<String>,
+    /// The library item's last update time, in epoch milliseconds (the
+    /// library item DTO's `updatedAt`; 0 when the server sends none). A cover
+    /// upload updates the item, so the row cache key carries this value and
+    /// changed art never reuses old bytes.
+    pub updated_at_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,6 +93,8 @@ pub(super) struct ItemsResponse {
 pub(super) struct ShowWire {
     #[serde(rename = "id", alias = "libraryItemId")]
     pub(super) library_item_id: String,
+    #[serde(rename = "updatedAt", default)]
+    pub(super) updated_at_ms: Option<u64>,
     #[serde(default)]
     pub(super) title: Option<String>,
     #[serde(default)]
@@ -442,6 +449,7 @@ impl AudiobookshelfClient {
                     let metadata = x.media.as_ref().and_then(|media| media.metadata.as_ref());
                     AudiobookshelfShow {
                         library_item_id: x.library_item_id,
+                        updated_at_ms: x.updated_at_ms.unwrap_or(0),
                         title: x
                             .title
                             .or_else(|| metadata.and_then(|value| value.title.clone()))

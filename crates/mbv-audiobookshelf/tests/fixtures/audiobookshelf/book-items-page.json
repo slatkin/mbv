@@ -1,0 +1,1 @@
+{"page":0,"limit":20,"total":2,"results":[{"id":"book-1","updatedAt":1700000000000,"media":{"metadata":{"title":"First Book","authorName":"Author One"},"duration":3600.0,"coverPath":"/cover/book-1"}},{"id":"book-2","media":{"metadata":{"title":"Second Book"}}}]}

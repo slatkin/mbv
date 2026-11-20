@@ -16,6 +16,7 @@ pub(crate) fn audiobookshelf_app() -> App {
         1,
         vec![mbv_audiobookshelf::AudiobookshelfShow {
             library_item_id: "show-a".into(),
+            updated_at_ms: 0,
             title: "Show A".into(),
             author: None,
             description: None,
@@ -264,6 +265,7 @@ fn audiobookshelf_f5_commits_the_staged_replacement_on_completion() {
                 total: 1,
                 items: vec![mbv_audiobookshelf::AudiobookshelfShow {
                     library_item_id: "show-b".into(),
+                    updated_at_ms: 0,
                     title: "Show B".into(),
                     author: None,
                     description: None,

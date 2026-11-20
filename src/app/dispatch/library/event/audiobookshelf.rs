@@ -349,6 +349,7 @@ mod tests {
     fn book(id: &str) -> AudiobookshelfBook {
         AudiobookshelfBook {
             library_item_id: id.into(),
+            updated_at_ms: 0,
             title: id.into(),
             author_display: None,
             author_sort_key: "Author".into(),
