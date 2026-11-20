@@ -12,9 +12,9 @@ and cached under a key that never changes when the server art changes.
 
 ## What Changes
 
-- **Library top-level rows** (flat-list items and parent rows, in every
+- **Library top-level rows** (the items of a one-level list and the parent rows, in every
   destination: Home, Emby lists, Music artists, Shows series and the Shows New
-  list, Podcasts, Audiobooks, Feeds) get the mockup's delineated row: an art
+  and Upcoming lists, Podcasts, Audiobooks, Feeds) get the mockup's delineated row: an art
   thumb in a fixed 16:9 box, the title over the subtitle, and the trailing text.
   Nested rows (seasons, episodes under a series, albums, tracks) do not change.
 - The thumb shows the same image as the item's Hero, at row size. A landscape

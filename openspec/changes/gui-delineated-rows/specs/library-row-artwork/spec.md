@@ -10,7 +10,12 @@ fetches and caches row-sized images so that long lists stay fast and correct.
 
 ### Requirement: A top-level row shows its item's Hero image
 
-Every top-level Library row SHALL show an art thumb. The thumb SHALL show the same image as the Hero of that row's item, from the same artwork source. A Music artist row SHALL show the artist's own image when the Service names the artist. Nested rows SHALL NOT show a thumb.
+Every top-level Library row SHALL show an art thumb. The thumb SHALL show the same image as the Hero of that row's item, from the same artwork source. A Music artist row SHALL show the artist's own image when the Service names the artist. A Shows Upcoming row, which has no Hero, SHALL show its series' image. A Home row of an Audiobookshelf item SHALL show the same cover as that item's row in its own destination. Nested rows SHALL NOT show a thumb.
+
+#### Scenario: An Upcoming premiere shows its series image
+
+- **WHEN** the Shows Upcoming list paints a premiere row
+- **THEN** its thumb shows the image of that premiere's series
 
 #### Scenario: A series row shows the series image
 
@@ -30,37 +35,32 @@ Every top-level Library row SHALL show an art thumb. The thumb SHALL show the sa
 
 ### Requirement: The thumb fits the image by its shape
 
-The thumb SHALL keep one fixed landscape box on every top-level row. A landscape image SHALL fill the box. A portrait image SHALL fill the box, cropped about its centre. A square image SHALL show whole, centred in the box. The shape SHALL come from the image's own pixels once the image is loaded.
+The thumb SHALL keep one fixed landscape box on every top-level row. A landscape image SHALL fill the box. A portrait image SHALL fill the box, cropped. A square image SHALL show whole, with no crop. The shape SHALL come from the image's own pixels once the image is loaded.
 
 #### Scenario: A book cover
 
 - **WHEN** an Audiobooks row's portrait cover loads
-- **THEN** the cover fills the thumb, cropped about its centre
+- **THEN** the cover fills the thumb, cropped
 
 #### Scenario: A podcast cover
 
 - **WHEN** a Podcasts row's square cover loads
-- **THEN** the whole cover shows, centred in the thumb
-
-#### Scenario: Titles align across shapes
-
-- **WHEN** rows with landscape, portrait, and square images paint in one list
-- **THEN** every row's title starts at the same position
+- **THEN** the whole cover shows in the thumb, with no crop
 
 ### Requirement: The thumb shows its art state
 
-The thumb SHALL be in one of four states: image, loading, missing (the source gave no image), or no source (the row's kind has no art source). The missing and the no-source states SHALL show the generic audio icon for an audio item and the generic video icon for a video item, the icons the Queue playback panel title uses. A row in the no-source state SHALL make no image request.
+The thumb SHALL be in one of four states: image, loading, missing (the source gave no image), or no source (the row's kind has no art source). The missing and the no-source states SHALL show the item's media kind, audio or video. A row in the no-source state SHALL make no image request.
 
 #### Scenario: A feed entry
 
 - **WHEN** a Feeds row paints
-- **THEN** its thumb is in the no-source state and shows the icon for the entry's media kind
+- **THEN** its thumb is in the no-source state and shows the entry's media kind
 - **AND** the Client core makes no image request for the row
 
 #### Scenario: The Service has no image
 
 - **WHEN** the fetch for an Emby movie row's image returns no image
-- **THEN** the thumb is in the missing state and shows the video icon
+- **THEN** the thumb is in the missing state and shows the video media kind
 
 #### Scenario: The image is on its way
 

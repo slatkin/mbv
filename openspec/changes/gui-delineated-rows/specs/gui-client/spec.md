@@ -85,7 +85,7 @@ The Library's pills, flat list rows, letter headings, scrollers, Workspace table
 
 #### Scenario: A list row looks the same in every destination
 
-- **WHEN** a Home, Emby, Music artist, Shows series, Shows New, Audiobooks, Podcasts, or Feeds top-level row paints
+- **WHEN** a Home, Emby, Music artist, Shows series, Shows New, Shows Upcoming, Audiobooks, Podcasts, or Feeds top-level row paints
 - **THEN** it paints through the shared top-level row with the same thumb, title, subtitle, and trailing text
 
 #### Scenario: Continue watching shows the time left

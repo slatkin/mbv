@@ -8,7 +8,7 @@ to the GUI's theme tokens below.
 
 Current state that shapes the approach:
 
-- Flat Library rows paint through `LibraryItemRow`
+- One-level Library list rows paint through `LibraryItemRow`
   (`crates/mbv-gui/src/window/components/library_item_row.rs`). Home paints
   its own copy (`library_home_list.rs::paint_home_item_row`). Tree lists
   (Music `library_list.rs`, Shows `library_shows_list.rs`) paint their own
@@ -65,7 +65,7 @@ Destinations keep their hook prefix (`data-library-<attr>-*`); the thumb adds
 `data-library-<attr>-thumb` with the art state word (`image`, `loading`,
 `missing`, `none`) and `data-library-<attr>-thumb-progress`.
 
-Alternative: a second part beside `LibraryItemRow`. Rejected: the flat lists
+Alternative: a second part beside `LibraryItemRow`. Rejected: the one-level lists
 would then hold two row looks, which the shared-parts requirement forbids.
 
 ### D2. Library row look (mockup values, theme tokens)
@@ -83,8 +83,13 @@ would then hold two row looks, which the shared-parts requirement forbids.
 | Thumb progress fill | 3 px, the row's percent, `--canvas-partial` |
 | Title | 14 px, weight 400, `--canvas-text` (played: `--canvas-muted`, unchanged rule) |
 | Subtitle | 12 px, `--canvas-muted` |
-| Trailing text | IBM Plex Mono 12 px, `--canvas-muted` |
+| Trailing text | `font-mono` 12 px, `--canvas-muted` |
 | Home section heading | 12 px, weight 600, uppercase, letter-spacing 0.06em, `--canvas-muted` |
+
+The mockup's mono face (IBM Plex Mono) is not bundled; it maps to the bundled
+`font-mono` (JetBrains Mono, `--font-mono`) here and in D3. The kind icon, the
+image's centred crop and centring, and the shared title start of every row
+are look choices held here, not in the spec.
 
 `FLAT_ROW_TITLE_WEIGHT` becomes 400 for top-level rows. The accent run under
 the row is deleted. Nested rows keep their heights; the tree lists' fixed
@@ -97,10 +102,10 @@ row-height tables change only for their top-level kinds.
 | Row | 40 px high, `ROW_GAP_PX` 0, columns `28px | 1fr | 96px`, gap 10 px, padding `0 10px` |
 | Divider | 1 px line under each row, `--canvas-border` |
 | Corners | radius 0; the now-playing row radius 4 px |
-| Ordinal | IBM Plex Mono 11 px, right-aligned, `Grey1` (unchanged colour) |
+| Ordinal | `font-mono` 11 px, right-aligned, `Grey1` (unchanged colour) |
 | Title | 14 px; now playing `Green` weight 600; played `Grey1` struck in `Bg5` (unchanged colours) |
 | Ring | after the title, 6 px space; 14 px SVG, r 6, stroke 2.5; track `Bg2`, fill `Orange`, now playing `Green` |
-| Right column | the frame's `duration`, IBM Plex Mono 12 px, `Grey1`, right-aligned |
+| Right column | the frame's `duration`, `font-mono` 12 px, `Grey1`, right-aligned |
 | Fills | now playing `BgGreen`; marked `Bg3`; hovered `Bg0` (unchanged colours, now square) |
 
 The hover chrome stays: the grip covers the ordinal, the actions button
@@ -108,15 +113,21 @@ covers the right end of the row (so the hovered row hides its duration). The
 drag ghost paints the title and the ring. The ghost and menu offsets already
 derive from `ROW_HEIGHT_PX` and `ROW_GAP_PX`, so they follow the new values.
 
-The ring draws its fill with `stroke-dasharray` over the circle's
-circumference (37.7 at r 6), rotated −90°, as the mockup does. Its percent is
+The ring copies the collapsed rail's ring (`collapsed_rail.rs`): two
+circles, each with `stroke="currentColor"` and its token in the circle's own
+`color` style, and the fill arc drawn with `stroke-dasharray` over the
+circumference (37.7 at r 6), rotated −90°. A `var()` in a `stroke` attribute
+is never used: usvg drops it and the ring does not paint. Its percent is
 `row_progress` (unchanged): the frame's percent for a partial row and the
 playhead's predicted percent for the now-playing row.
 
 The start mark (`StartMark`, `start_mark`, the `Play` glyph before the title)
-is deleted from the row. `GuiQueue::start` and `start_slot_reported` stay only
-where another reader uses them; the implementing task removes them when the
-row was their last reader.
+is deleted from the row. The row is the only reader of `GuiQueue::start`,
+`GuiQueue::playing`, and `GuiQueue::start_slot_reported`, so those three
+fields, `QueueStartProjection`, and `gui_queue_start_projection` are deleted
+too, with the tests that cite the retired start-mark scenarios
+(`src/app/tests/named_queues.rs`, `src/app/tests/named_queues/peer_link.rs`,
+`crates/mbv-gui/tests/bridge/frame.rs`).
 
 Alternative: keep the time left beside the ring. Rejected by the user
 ("precision is not necessary"); the right column is the duration, always.
@@ -152,11 +163,20 @@ The row's source is the item's Hero source from the artwork policy, so the row
 and the Hero show the same image:
 
 - Emby items (Home, Emby lists, Shows series and New): `emby_artwork_policy`.
+- Shows Upcoming (display-only, no Hero; user decision): the series image —
+  the `Thumb`, `Backdrop`, `Primary` chain addressed to the premiere's
+  `series_id`, tagged from its `series_thumb` or `series_backdrops[0]` per D6.
+  New and Upcoming rows share `paint_shows_flat` and `GuiShowsRowFrame`, so
+  both take the thumb in one place.
 - Music artist with `ArtistKey::Service(id)`: Emby `Primary` of the artist id
   (one request; the Music Hero shows albums, so the artist's own image is the
   artist row's image). `ArtistKey::Fallback` → `NoSource`.
 - Audiobooks: `abs_book_artwork_policy`. Podcasts: `abs_episode_artwork_policy`
   (the show's cover).
+- Home Recently added Audiobookshelf rows: the same ABS policy as their own
+  destination (the show's cover for an episode), so the row is the same
+  cached image as on Podcasts. The Home Hero's art does not change in this
+  change.
 - Feeds: `NoSource` (`feed_artwork_policy` declares no source).
 
 A row whose policy gives no source is `NoSource`.
@@ -168,10 +188,13 @@ callers pass `Hero`; their URLs do not change).
 
 Emby `Row` request, one image type, one request:
 
-- Resolve the chain to its first type whose tag the item declares
-  (`EmbyImageTags`: `thumb`, `primary`, `backdrops[0]`, and the series
-  fields for the series fallbacks). Request that type with
-  `tag={tag}`. If the item declares no tag in the chain (for example a Music
+- Resolve the chain to its first type whose tag the item declares, with the
+  addressing `fetch_emby_image_type` uses: `Thumb`, `Backdrop`, and `Logo`
+  with a `series_id` address the series and take `series_thumb` or
+  `series_backdrops[0]`; without a `series_id` they address the item and
+  take `thumb` or `backdrops[0]`. `Primary` addresses the item and takes
+  `primary`. Thus a Continue watching or Shows New episode row gets the same
+  series image as its Hero. Request that one type with `tag={tag}`. If the item declares no tag in the chain (for example a Music
   artist, whose frame carries no tags), request the chain untagged as today.
 - Size: `maxWidth=128` for a declared Landscape or Portrait arm,
   `maxWidth=72&maxHeight=72` for a declared Square arm (2× the painted box).
@@ -205,10 +228,14 @@ slower and larger than a 128 px request.
 
 `library_virtual_list` reports the stable ids of the rows it paints plus an
 overscan of 4 rows above and below, through a new command
-`GuiLibraryCommand::RowsInView { list: GuiRowList, ids: Vec<String> }`, each
-time that set changes. `GuiRowList` names the list (Home, Emby, Music,
-ShowsSeries, ShowsNew, Podcasts, Audiobooks, Feeds). The ids are the frames'
-existing stable row ids, so the core resolves them with no coordinates.
+`GuiLibraryCommand::RowsInView { scope: GuiRowArtScope, ids: Vec<String> }`,
+each time that set changes. `GuiRowArtScope` names the destination list
+whose rows the ids are (Home, Emby, Music, ShowsSeries, ShowsNew,
+ShowsUpcoming, Podcasts, Audiobooks, Feeds); it lives in the app crate beside `GuiLibraryCommand`,
+because the window's `PointerList` is not visible to the core and also names
+the Tracklist and the Workspace, which carry no thumbs. The ids are the
+frames' existing stable row ids, so the core resolves them with no
+coordinates.
 
 The core keeps the latest set per list and stamps the navigation-idle clock
 (the same gate `fetch_list_card_image_when_idle` uses). Once navigation is
@@ -216,6 +243,15 @@ idle, the core resolves each in-view row's source and queues its `Row` fetch.
 
 `ImageCache` gets a second pending queue for row fetches. Each `RowsInView`
 replaces it, so a row that left the view before its fetch started is dropped.
+Dropping an unstarted row request also clears its loading mark
+(`card_image_loading`, set by `reserve_fetch` when it queues), so the row
+fetches again when it comes back into view and a later reserve does not
+return `Duplicate`.
+
+Retries stay demand-driven (invariant 27): when an interrupted row key's
+retry time passes and the key is in the stored in-view set, the core queues it
+again. The retry deadline joins the existing art retry deadline
+(`gui_art_retry_due`, `sections/deadlines.rs`).
 `take_pending_fetch` drains the Hero/card queue first. Row fetches use at most
 4 of the 6 fetch slots (`MAX_IMAGE_FETCHES`), so a Hero fetch always has a free
 slot.
@@ -241,10 +277,9 @@ format lives beside the Home row projection in `src/app/gui_library/home.rs`.
 
 ## Risks / Trade-offs
 
-- [Blitz SVG `stroke-dasharray` support for the ring] → Icons already paint
-  inline SVG through the same renderer. If the dash does not paint, the ring
-  uses a conic fill clipped to an annulus; the task verifies it in a render
-  test.
+- [The ring's stroke colour] → A DOM render test cannot see a dropped
+  stroke. The ring copies the collapsed rail's proven `currentColor` form
+  (D3), so the stroke reaches usvg.
 - [Untagged artist images do not refresh] → Same as today's behavior for
   every image; the 30-day eviction bounds it.
 - [2× sizes look soft on a 3× display] → The GUI targets 1× and 2×; a larger
