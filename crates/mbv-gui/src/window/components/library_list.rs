@@ -329,6 +329,7 @@ pub fn LibraryList() -> Element {
         "0 0 0 8px",
         Callback::new(move |height: f32| measure_library.measure_library_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_library_list(top)),
+        None,
         |row: &LibraryRow| paint_library_row(row, &paint_library, picked.as_deref()),
     );
 

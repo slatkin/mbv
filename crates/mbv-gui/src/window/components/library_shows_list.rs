@@ -449,6 +449,7 @@ pub fn LibraryShowsList() -> Element {
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),
+        None,
         move |row: &ShowsListRow| {
             paint_shows_row(row, &paint_library, paint_shows, paint_selected.as_deref())
         },

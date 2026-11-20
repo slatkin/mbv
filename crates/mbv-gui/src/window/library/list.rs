@@ -119,6 +119,11 @@ impl LibraryRow {
     }
 }
 
+/// The rows a `RowsInView` report adds above and below the painted window
+/// (gui-delineated-rows design D7): the row art of the rows just outside the
+/// viewport is fetched too, so a small scroll paints no empty thumb.
+pub const ROWS_IN_VIEW_OVERSCAN: usize = 4;
+
 /// The geometry the scroll and window geometry read (`add-gui-library-panel`
 /// design D7, D12): the stable id, the top edge from the list's first row, and
 /// the painted height. The Library tree's rows and the Home list's rows both
@@ -133,6 +138,15 @@ pub trait GeometryRow {
     /// over it names no row.
     fn pointer_row(&self) -> Option<&str> {
         Some(self.id())
+    }
+
+    /// The id this row takes in a `RowsInView` report (gui-delineated-rows
+    /// design D7), or `None` for a row whose kind has no art source. The core
+    /// resolves the id with no coordinates, and a nested row names none — its
+    /// kind paints no thumb. A row overrides this where the core's own
+    /// encoding differs from its id (`HomeListRow`, `LibraryRow::Artist`).
+    fn rows_in_view_id(&self) -> Option<String> {
+        self.pointer_row().map(str::to_owned)
     }
 
     /// The row's top edge from the list's first row.
@@ -151,6 +165,10 @@ impl<T: GeometryRow> GeometryRow for &T {
         T::pointer_row(self)
     }
 
+    fn rows_in_view_id(&self) -> Option<String> {
+        T::rows_in_view_id(self)
+    }
+
     fn top(&self) -> f32 {
         T::top(self)
     }
@@ -167,6 +185,23 @@ impl GeometryRow for LibraryRow {
 
     fn pointer_row(&self) -> Option<&str> {
         self.selectable().then_some(LibraryRow::id(self))
+    }
+
+    fn rows_in_view_id(&self) -> Option<String> {
+        match self {
+            LibraryRow::Artist {
+                item_id: Some(item_id),
+                ..
+            } => Some(format!("artist:{item_id}")),
+            LibraryRow::Artist {
+                name,
+                item_id: None,
+                ..
+            } => Some(format!("artist-name:{name}")),
+            // A nested row names no thumb (design D5), and a letter heading
+            // names no item.
+            LibraryRow::Letter(_) | LibraryRow::Album { .. } | LibraryRow::Track { .. } => None,
+        }
     }
 
     fn top(&self) -> f32 {
@@ -581,6 +616,27 @@ pub fn list_window(rows: &[impl GeometryRow], scroll_top: f32, viewport_height: 
         end += 1;
     }
     ListWindow { start, end }
+}
+
+/// The stable ids a `RowsInView` report carries (gui-delineated-rows design
+/// D7): the painted window's rows plus [`ROWS_IN_VIEW_OVERSCAN`] rows above and
+/// below it. An unmeasured viewport paints nothing, so its list reports no rows
+/// — the set arrives once the list is measured. A row whose kind paints no
+/// thumb names no id.
+#[must_use]
+pub fn rows_in_view_ids<Row: GeometryRow>(rows: &[Row], window: ListWindow) -> Vec<String> {
+    if window.end <= window.start {
+        return Vec::new();
+    }
+    let start = window.start.saturating_sub(ROWS_IN_VIEW_OVERSCAN);
+    let end = window
+        .end
+        .saturating_add(ROWS_IN_VIEW_OVERSCAN)
+        .min(rows.len());
+    rows[start..end]
+        .iter()
+        .filter_map(GeometryRow::rows_in_view_id)
+        .collect()
 }
 
 /// A scroll offset held inside the list's scrollable range.

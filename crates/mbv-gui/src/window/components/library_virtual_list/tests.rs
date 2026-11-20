@@ -21,8 +21,14 @@ use crate::window::library::scroll::ListScroll;
 use crate::window::pointer_target::PointerList;
 
 /// The context handles the root hands the test: the layout epoch, the scroll
-/// offset the root paints with, and the rows the shell painted last.
-type FixtureHandles = (LayoutEpoch, Signal<f32>, Rc<RefCell<Vec<String>>>);
+/// offset the root paints with, the rows the shell painted last, and the row
+/// art sets it reported.
+type FixtureHandles = (
+    LayoutEpoch,
+    Signal<f32>,
+    Rc<RefCell<Vec<String>>>,
+    Rc<RefCell<Vec<Vec<String>>>>,
+);
 
 /// The layout rules the fixture resolves with, in place of the app
 /// stylesheet a real window loads: the shell's utilities, the fixed
@@ -70,16 +76,18 @@ struct FixtureProps {
 }
 
 /// The root: provides the layout epoch and paints the shell over ten rows,
-/// recording every row the shell painted.
+/// recording every row the shell painted and every row art set it reported.
 fn list_app(props: FixtureProps) -> Element {
     let FixtureProps { rows, handle } = props;
     let epoch = use_hook(LayoutEpoch::new);
     provide_context(epoch);
     let scroll_top = use_signal(|| 0.0);
     let painted = use_hook(|| Rc::new(RefCell::new(Vec::new())));
+    let reported = use_hook(|| Rc::new(RefCell::new(Vec::new())));
     handle
         .borrow_mut()
-        .replace((epoch, scroll_top, Rc::clone(&painted)));
+        .replace((epoch, scroll_top, Rc::clone(&painted), Rc::clone(&reported)));
+    let reported_ids = Rc::clone(&reported);
     let list = library_virtual_list(
         rows.as_ref(),
         ListScroll {
@@ -91,6 +99,9 @@ fn list_app(props: FixtureProps) -> Element {
         "8px 8px 8px 8px",
         Callback::new(move |_| {}),
         Callback::new(move |_| {}),
+        Some(Callback::new(move |ids: Vec<String>| {
+            reported_ids.borrow_mut().push(ids);
+        })),
         move |row: &TestRow| {
             painted.borrow_mut().push(row.id.clone());
             rsx! {
@@ -108,6 +119,7 @@ struct Fixture {
     epoch: LayoutEpoch,
     scroll_top: Signal<f32>,
     painted: Rc<RefCell<Vec<String>>>,
+    reported: Rc<RefCell<Vec<Vec<String>>>>,
 }
 
 impl Fixture {
@@ -184,7 +196,7 @@ fn built() -> Fixture {
         },
     );
     doc.initial_build();
-    let (epoch, scroll_top, painted) = handle
+    let (epoch, scroll_top, painted, reported) = handle
         .borrow_mut()
         .take()
         .expect("the root handed the handles over");
@@ -193,6 +205,7 @@ fn built() -> Fixture {
         epoch,
         scroll_top,
         painted,
+        reported,
     };
     fixture.poll_until_idle();
     fixture.lay_out();
@@ -281,4 +294,47 @@ fn the_scroller_and_its_rows_carry_the_pointer_markers() {
         })
         .collect();
     assert_eq!(rows, ["row-0", "row-1", "row-2", "row-3"]);
+}
+
+/// Contract (gui-delineated-rows design D7): the shell reports the ids of the
+/// rows it paints plus four rows of overscan either side, and a scroll reports
+/// the new set.
+#[test]
+fn the_shell_reports_the_painted_rows_with_their_overscan() {
+    let mut fixture = built();
+    assert_eq!(
+        fixture.reported.borrow()[0],
+        [
+            "row-0", "row-1", "row-2", "row-3", "row-4", "row-5", "row-6", "row-7"
+        ],
+        "the first window reports its rows plus the four below"
+    );
+
+    let mut scroll_top = fixture.scroll_top;
+    fixture.in_runtime(move || scroll_top.set(60.0));
+
+    assert_eq!(
+        fixture.reported.borrow().last(),
+        Some(&(0..10).map(|index| format!("row-{index}")).collect()),
+        "the scrolled window reports the whole list's rows"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): an unchanged row set reports
+/// nothing, so a paint that moves no row art sends no command.
+#[test]
+fn an_unchanged_row_set_reports_nothing() {
+    let mut fixture = built();
+    fixture.reported.borrow_mut().clear();
+
+    let mut scroll_top = fixture.scroll_top;
+    fixture.in_runtime(move || scroll_top.set(45.0));
+    let mut scrolled_top = fixture.scroll_top;
+    fixture.in_runtime(move || scrolled_top.set(50.0));
+
+    assert_eq!(
+        fixture.reported.borrow().len(),
+        1,
+        "only the scroll that changed the row set reports it"
+    );
 }

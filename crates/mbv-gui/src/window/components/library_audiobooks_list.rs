@@ -130,6 +130,7 @@ pub fn LibraryAudiobooksList() -> Element {
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_audiobooks_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_audiobooks_list(top)),
+        None,
         move |row: &AudiobooksListRow| {
             paint_audiobooks_row(row, &paint_library, paint_selected.as_deref())
         },

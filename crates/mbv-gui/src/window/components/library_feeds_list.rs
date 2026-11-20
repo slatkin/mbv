@@ -95,6 +95,7 @@ pub fn LibraryFeedsList() -> Element {
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_feeds_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_feeds_list(top)),
+        None,
         move |row: &FeedsItemRow| paint_feeds_row(row, &paint_library, paint_selected.as_deref()),
     );
 

@@ -1,15 +1,18 @@
-//! The flat Library list's item row (`replace-tauri-with-blitz` task 7.2,
+//! The Library's top-level row part (`replace-tauri-with-blitz` task 7.2,
 //! the port of `LibraryItemRow`; add-gui-library-panel design D15,
-//! invariant 30): the title over its subtitle, the date or duration at the
-//! right, the selection fill, and the resume run under the row. Every flat
-//! destination list — Emby, Audiobooks, Podcasts, Feeds — paints its rows here,
-//! so a fix to one row look lands in every list. A row keeps no keyboard
+//! invariant 30; gui-delineated-rows design D1, D2): the art thumb, the title
+//! over its subtitle, the date or duration at the right, and the selection
+//! fill. Every destination paints its top-level rows here, so a fix to one row
+//! look lands in every list (the gui-client spec's "Library lists and
+//! Workspace tables paint through shared parts"). A row keeps no keyboard
 //! cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2, D6).
 //!
-//! A destination supplies its own hook prefix (`attr`), the row's text, and
-//! the press, double-click, and context handlers; it never restates the
-//! look. Every part paints `data-library-<attr>-<part>`.
+//! A destination supplies its own hook prefix (`attr`), the row's text, its
+//! thumb, and the press, double-click, and context handlers; it never restates
+//! the look. Every part paints `data-library-<attr>-<part>`, and the thumb adds
+//! `data-library-<attr>-thumb` with its art state and
+//! `data-library-<attr>-thumb-progress`.
 //!
 //! [`paint_item_row`] paints one row of a flat entry list — Podcasts and Feeds
 //! — from its carried entry, so the two lists keep one row painter.
@@ -18,17 +21,57 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiEntryRowFrame, GuiHomeRowStateFrame};
+use crate::art::GuiArtRef;
+use crate::bridge::frame::library::{
+    GuiEntryRowFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
+};
+use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_attr::library_attr;
+use crate::window::icons::{EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
 use crate::window::library::shows_workspace::episode_progress;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The flat Library lists' top-level row title weight: the Music artist and
-/// TV series root rows paint 600, selected or not. Only nested rows stay at
-/// 400.
-pub const FLAT_ROW_TITLE_WEIGHT: f32 = 600.0;
+/// The top-level row's height in logical pixels (gui-delineated-rows design
+/// D2): every destination's row constant reads it, so a list's geometry and
+/// its painted rows share one height.
+pub const LIBRARY_ROW_HEIGHT: f32 = 56.0;
+
+/// The top-level row's title weight (design D2): 400 at every selection state,
+/// as the canvas paints it.
+pub const FLAT_ROW_TITLE_WEIGHT: f32 = 400.0;
+
+/// The thumb box's width in logical pixels (design D2).
+pub const THUMB_WIDTH_PX: f32 = 64.0;
+
+/// The thumb box's height in logical pixels (design D2).
+pub const THUMB_HEIGHT_PX: f32 = 36.0;
+
+/// The side of a square image inside the thumb box (design D2): the box's
+/// height, centred, so the image shows whole.
+pub const THUMB_SQUARE_PX: f32 = THUMB_HEIGHT_PX;
+
+/// The thumb box's corner radius (design D2).
+pub const THUMB_RADIUS_PX: f32 = 3.0;
+
+/// The media kind icon's size inside a thumb with no image (design D2).
+pub const THUMB_ICON_PX: u16 = 16;
+
+/// The thumb's progress track and fill height, along the box's bottom edge
+/// (design D2).
+pub const THUMB_PROGRESS_PX: f32 = 3.0;
+
+/// The art one top-level row's thumb paints (gui-delineated-rows design D1):
+/// the frame's art state and the media kind its icon names while it holds no
+/// image.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryRowThumb {
+    /// The thumb's art state.
+    pub art: GuiRowArtFrame,
+    /// The media kind the icon shows in the missing and no-source states.
+    pub media: GuiRowMediaKindFrame,
+}
 
 /// The trailing text's hook part: the date gutter or the duration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,8 +119,13 @@ pub struct LibraryItemRowProps {
     pub background: Option<String>,
     /// Whether the selection marks the row.
     pub selected: bool,
-    /// The resume percent of a partly played row, or `None`.
+    /// The resume percent of a partly played row, or `None`. It paints along
+    /// the thumb's bottom edge (design D2); a row with no thumb paints none.
     pub progress: Option<f32>,
+    /// The row's art thumb (design D1), `None` while the destination paints no
+    /// thumb yet.
+    #[props(default)]
+    pub thumb: Option<LibraryRowThumb>,
     /// A press on the row.
     pub on_press: Callback<()>,
     /// A double-click on the row: the play path.
@@ -117,9 +165,13 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             false,
         ));
     }
+    // The top-level row look (design D2): the fixed height, the tight padding,
+    // the square corners, and the 1 px divider under the row. `border-box`
+    // keeps the divider inside the row height the list's geometry holds.
     let mut row_style = format!(
-        "height: {}px; padding: 0 12px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
-        props.height
+        "height: {}px; box-sizing: border-box; padding: 0 8px; gap: 12px; border: 0; border-bottom: 1px solid {}; border-radius: 0; text-align: left; font-size: 14px; cursor: pointer;",
+        props.height,
+        canvas_var("border")
     );
     if let Some(background) = props.background.as_ref() {
         let _ = write!(row_style, " background: {background};");
@@ -144,12 +196,10 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             false,
         )]
     });
-    let progress_attrs = vec![Attribute::new(
-        library_attr(props.attr, "progress"),
-        "",
-        None,
-        false,
-    )];
+    let thumb = props
+        .thumb
+        .as_ref()
+        .map(|thumb| paint_thumb(props.attr, thumb, props.progress));
     let on_press = props.on_press;
     let on_play = props.on_play;
     let on_context = props.on_context;
@@ -170,6 +220,9 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 }
             },
             ..row_attrs,
+            if let Some(thumb) = thumb {
+                {thumb}
+            }
             span {
                 class: "flex min-w-0 flex-1 flex-col",
                 style: "gap: 2px;",
@@ -179,7 +232,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                         "color: {}; font-weight: {FLAT_ROW_TITLE_WEIGHT};",
                         props.title_color
                     ),
-                    style: TextStyle::sans(14.5, FLAT_ROW_TITLE_WEIGHT),
+                    style: TextStyle::sans(14.0, FLAT_ROW_TITLE_WEIGHT),
                     attrs: title_attrs,
                 }
                 if let Some(subtitle) = props.subtitle.clone() {
@@ -199,12 +252,92 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                     "{trail}"
                 }
             }
-            if let Some(progress) = props.progress {
-                // The resume position: a thin accent run under the row's
-                // bottom edge, at the frame's bounded percent.
+        }
+    }
+}
+
+/// The art state word a row's thumb hook carries (design D1): the state the
+/// destination's `data-library-<attr>-thumb` attribute paints.
+fn thumb_state(art: &GuiRowArtFrame) -> &'static str {
+    match art {
+        GuiRowArtFrame::Image { .. } => "image",
+        GuiRowArtFrame::Loading => "loading",
+        GuiRowArtFrame::Missing => "missing",
+        GuiRowArtFrame::NoSource => "none",
+    }
+}
+
+/// The media kind icon a thumb with no image paints (design D2): the audio
+/// notes or the video screen, in the muted tone.
+fn thumb_icon(media: GuiRowMediaKindFrame) -> Element {
+    let color = canvas_var("muted");
+    match media {
+        GuiRowMediaKindFrame::Audio => rsx! {
+            EighthNotes { size: THUMB_ICON_PX, color }
+        },
+        GuiRowMediaKindFrame::Video => rsx! {
+            MonitorPlay { size: THUMB_ICON_PX, color }
+        },
+    }
+}
+
+/// The image an image-state thumb paints (design D2): a landscape or portrait
+/// image cover-fills the box, and a square image shows whole at the box's
+/// height, centred.
+fn thumb_image(art: GuiArtRef, class: &str, style: &str) -> Element {
+    rsx! {
+        ArtImage { art: Some(art), alt: "", class: class.to_owned(), style: style.to_owned() }
+    }
+}
+
+/// One row's art thumb (design D1, D2): the 64 × 36 box on the recessed fill,
+/// the image or the media kind's icon inside it, and the row's resume run along
+/// the box's bottom edge.
+fn paint_thumb(attr: &'static str, thumb: &LibraryRowThumb, progress: Option<f32>) -> Element {
+    // The box: one fixed landscape shape every top-level row shares.
+    let box_style = format!(
+        "width: {THUMB_WIDTH_PX}px; height: {THUMB_HEIGHT_PX}px; border-radius: {THUMB_RADIUS_PX}px; background: {};",
+        canvas_var("well")
+    );
+    let box_attrs = vec![Attribute::new(
+        library_attr(attr, "thumb"),
+        thumb_state(&thumb.art),
+        None,
+        false,
+    )];
+    let cover_class = "h-full w-full object-cover";
+    let square_style = format!("width: {THUMB_SQUARE_PX}px; height: {THUMB_SQUARE_PX}px;");
+    let body: Element = match &thumb.art {
+        GuiRowArtFrame::Image { art, square: true } => {
+            thumb_image(art.clone(), "object-cover", &square_style)
+        }
+        GuiRowArtFrame::Image { art, square: false } => thumb_image(art.clone(), cover_class, ""),
+        // A fetch in flight paints the well alone, as the loading fill does.
+        GuiRowArtFrame::Loading => rsx! {},
+        GuiRowArtFrame::Missing | GuiRowArtFrame::NoSource => thumb_icon(thumb.media),
+    };
+    let progress_attrs = vec![Attribute::new(
+        library_attr(attr, "thumb-progress"),
+        "",
+        None,
+        false,
+    )];
+    rsx! {
+        span {
+            class: "relative flex flex-none items-center justify-center overflow-hidden",
+            style: "{box_style}",
+            ..box_attrs,
+            {body}
+            if let Some(progress) = progress {
+                // The row's resume position: the track along the box's bottom
+                // edge and the accent fill over it, at the frame's percent.
                 span {
                     class: "absolute",
-                    style: "left: 0; bottom: 0; height: 2px; width: {progress}%; background: var(--canvas-accent);",
+                    style: "left: 0; bottom: 0; width: 100%; height: {THUMB_PROGRESS_PX}px; background: var(--canvas-thumb-track);",
+                }
+                span {
+                    class: "absolute",
+                    style: "left: 0; bottom: 0; height: {THUMB_PROGRESS_PX}px; width: {progress}%; background: var(--canvas-partial);",
                     ..progress_attrs,
                 }
             }
@@ -256,6 +389,10 @@ pub fn paint_item_row(
             background,
             selected: paint.selected,
             progress: episode_progress(&paint.entry.state).map(f32::from),
+            thumb: Some(LibraryRowThumb {
+                art: paint.entry.art.clone(),
+                media: paint.entry.media,
+            }),
             on_press,
             on_play,
             on_context,
@@ -282,3 +419,6 @@ pub fn mark(name: &'static str, on: bool) -> Vec<Attribute> {
         .into_iter()
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

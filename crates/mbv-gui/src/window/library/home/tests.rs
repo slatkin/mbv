@@ -182,7 +182,9 @@ fn home_facts(state: &LibraryState) -> String {
 fn down_scrolls_the_list_by_the_height_of_the_top_row() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
-        state.measure_home_list(HOME_ITEM_ROW_HEIGHT * 3.0);
+        // The viewport leaves the list room to scroll, so the step is the top
+        // row's height and not the range's clamp.
+        state.measure_home_list(HOME_ITEM_ROW_HEIGHT * 2.0);
 
         state.step_home_scroll(ListMove::Down);
 

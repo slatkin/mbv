@@ -466,7 +466,9 @@ fn a_played_entry_dims_its_title_and_an_active_one_paints_its_resume_percent() {
         "the played entry's title dims"
     );
     assert!(
-        fixture.presents("[data-library-feeds-row-id=\"s1::e3\"] [data-library-feeds-progress]"),
+        fixture.presents(
+            "[data-library-feeds-row-id=\"s1::e3\"] [data-library-feeds-thumb-progress]",
+        ),
         "the active entry paints its resume percent"
     );
 }

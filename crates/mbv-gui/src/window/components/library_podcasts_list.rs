@@ -107,6 +107,7 @@ pub fn LibraryPodcastsList() -> Element {
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_podcasts_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_podcasts_list(top)),
+        None,
         move |row: &PodcastsItemRow| {
             paint_podcasts_row(row, &paint_library, paint_selected.as_deref())
         },

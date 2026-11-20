@@ -110,6 +110,45 @@ fn rows() -> Vec<LibraryRow> {
     })
 }
 
+/// Contract (gui-delineated-rows design D7): an artist row reports the id the
+/// core's own Music encoder names — the Service identity, or the fallback
+/// name — and the nested rows and letter headings report none.
+#[test]
+fn an_artist_row_reports_the_cores_row_art_id() {
+    // A fallback artist's identity is its display name, as the Music grouping
+    // builds it.
+    let mut artists = vec![tribe()];
+    artists[0].artist_key = GuiArtistKey::Fallback(artists[0].name.clone());
+    let painted = build_library_rows(LibraryTree {
+        artists: &artists,
+        open: &[],
+        closed: &[],
+        filter: "",
+    });
+    let ids: Vec<Option<String>> = painted.iter().map(GeometryRow::rows_in_view_id).collect();
+
+    assert_eq!(
+        ids,
+        [None, Some("artist-name:A Tribe Called Quest".to_owned())],
+        "the fallback identity reports its name and the heading none"
+    );
+    let service = rows();
+    let artist_ids: Vec<Option<String>> = service
+        .iter()
+        .filter(|row| matches!(row, LibraryRow::Artist { .. }))
+        .map(GeometryRow::rows_in_view_id)
+        .collect();
+    assert_eq!(
+        artist_ids,
+        [
+            Some("artist:a3".to_owned()),
+            Some("artist:a1".to_owned()),
+            Some("artist:a2".to_owned()),
+        ],
+        "a Service-named artist reports the Service id"
+    );
+}
+
 // The canvas tree paints letter headings and the canvas row heights.
 #[test]
 fn the_canvas_tree_paints_letter_headings_and_the_canvas_row_heights() {

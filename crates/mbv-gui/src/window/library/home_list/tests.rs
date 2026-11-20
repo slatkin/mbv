@@ -5,7 +5,6 @@
 
 use super::*;
 use crate::bridge::frame::library::GuiHomeItemRowFrame;
-use crate::bridge::frame::library::GuiRowMediaKindFrame;
 use crate::window::library::list::{ListWindow, list_window};
 
 /// The `Continue watching` row the fixture carries: an Emby item with its
@@ -100,7 +99,7 @@ fn the_sections_paint_their_heading_rows_items_and_the_spacer_in_order() {
         ]
     );
     let tops: Vec<f32> = painted.iter().map(GeometryRow::top).collect();
-    assert_eq!(tops, [0.0, 28.0, 76.0, 124.0, 144.0, 172.0]);
+    assert_eq!(tops, [0.0, 28.0, 84.0, 140.0, 160.0, 188.0]);
     let HomeListRow::Heading { text: first, .. } = &painted[0] else {
         panic!("a heading opens the list");
     };
@@ -109,6 +108,27 @@ fn the_sections_paint_their_heading_rows_items_and_the_spacer_in_order() {
         panic!("the second section carries a heading");
     };
     assert_eq!(second, "Recently added");
+}
+
+/// Contract (gui-delineated-rows design D7): an item row reports the id the
+/// core's own Home encoder names — not the row key — and a heading and a
+/// spacer report none.
+#[test]
+fn an_item_row_reports_the_cores_row_art_id() {
+    let painted = build_home_rows(&rows(), "");
+    let ids: Vec<Option<String>> = painted.iter().map(GeometryRow::rows_in_view_id).collect();
+
+    assert_eq!(
+        ids,
+        [
+            None,
+            Some("continue:e1".to_owned()),
+            Some("continue:e2".to_owned()),
+            None,
+            None,
+            Some("recent:feed:f1".to_owned()),
+        ]
+    );
 }
 
 // The stale-frame contract (design D12): a command must resolve the row the
@@ -144,7 +164,11 @@ fn the_window_paints_only_the_rows_in_view() {
     let painted = build_home_rows(&rows(), "");
 
     assert_eq!(
-        list_window(&painted, 0.0, 80.0),
-        ListWindow { start: 0, end: 3 }
+        list_window(
+            &painted,
+            0.0,
+            HOME_HEADING_ROW_HEIGHT + HOME_ITEM_ROW_HEIGHT
+        ),
+        ListWindow { start: 0, end: 2 }
     );
 }

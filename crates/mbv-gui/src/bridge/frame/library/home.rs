@@ -194,6 +194,42 @@ impl From<&GuiHomeRowId> for GuiHomeRowIdFrame {
     }
 }
 
+impl GuiHomeRowIdFrame {
+    /// The id this row takes in a `RowsInView` report (gui-delineated-rows
+    /// design D7): the core's own encoding (`GuiHomeRowId::rows_in_view_id`),
+    /// which matches the row by an opaque string and never by a position. A
+    /// `Continue` watching row carries its Emby item id, and a `Recently added`
+    /// row its queue item's content id, provider first.
+    #[must_use]
+    pub fn rows_in_view_id(&self) -> String {
+        match self {
+            Self::Continue(item_id) => format!("continue:{item_id}"),
+            Self::Recent(content_id) => format!("recent:{}", content_id_text(content_id)),
+        }
+    }
+}
+
+/// The text a queue item's content id takes inside a `RowsInView` Home id
+/// (design D7), the core's encoding: one provider word, then the provider's own
+/// identity fields.
+fn content_id_text(id: &QueueItemContentId) -> String {
+    match id {
+        QueueItemContentId::Emby(value) => format!("emby:{value}"),
+        QueueItemContentId::Feed(value) => format!("feed:{value}"),
+        QueueItemContentId::Audiobookshelf {
+            library_item_id,
+            episode_id,
+        } => format!(
+            "audiobookshelf:{}:{library_item_id}:{episode_id}",
+            library_item_id.len()
+        ),
+        QueueItemContentId::AudiobookshelfBook { library_item_id } => {
+            format!("audiobookshelfBook:{library_item_id}")
+        }
+        QueueItemContentId::Twitch(value) => format!("twitch:{value}"),
+    }
+}
+
 /// The wire row id a carried row's identity sends (design D12): the same
 /// shape on the way out, so a command built from a carried row addresses
 /// exactly that row. The owned form is the ref form's delegate, so the

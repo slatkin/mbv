@@ -477,8 +477,9 @@ fn a_played_episode_dims_its_title_and_an_active_one_paints_its_resume_percent()
         "the played episode's title dims"
     );
     assert!(
-        fixture
-            .presents("[data-library-podcasts-row-id=\"e3:ep3\"] [data-library-podcasts-progress]"),
+        fixture.presents(
+            "[data-library-podcasts-row-id=\"e3:ep3\"] [data-library-podcasts-thumb-progress]",
+        ),
         "the active episode paints its resume percent"
     );
 }

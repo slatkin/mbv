@@ -23,7 +23,7 @@ use dioxus_native::prelude::*;
 use crate::window::components::library_attr::library_attr;
 use crate::window::input::f32_from_f64;
 use crate::window::layout::LayoutEpoch;
-use crate::window::library::list::{GeometryRow, list_window, rows_height};
+use crate::window::library::list::{GeometryRow, list_window, rows_height, rows_in_view_ids};
 use crate::window::library::scroll::ListScroll;
 use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
 
@@ -31,8 +31,9 @@ use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
 /// (design D9); `list` is the destination's own list kind, which the scroller
 /// carries as its pointer marker (`gui-pointer-target-interaction` D1);
 /// `on_measure` reports the measured viewport height back to
-/// it, `on_scroll` its native scroll offset, and `paint_row` paints one row
-/// under the shell's own list item.
+/// it, `on_scroll` its native scroll offset, `rows_in_view` the stable ids of
+/// the rows it paints for the core's row art fetches (gui-delineated-rows
+/// design D7), and `paint_row` paints one row under the shell's own list item.
 pub fn library_virtual_list<R: GeometryRow>(
     rows: &[R],
     view: ListScroll,
@@ -41,6 +42,7 @@ pub fn library_virtual_list<R: GeometryRow>(
     padding: &str,
     on_measure: Callback<f32>,
     on_scroll: Callback<f32>,
+    rows_in_view: Option<Callback<Vec<String>>>,
     paint_row: impl Fn(&R) -> Element,
 ) -> Element {
     let mut list_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
@@ -50,6 +52,17 @@ pub fn library_virtual_list<R: GeometryRow>(
     // clones only the visible rows.
     let scrolled = list_window(rows, view.scroll_top, view.viewport_height);
     let painted = &rows[scrolled.start..scrolled.end];
+
+    // The row art set the core fetches (gui-delineated-rows design D7): the
+    // painted ids plus the overscan either side, reported once when it
+    // changes. A destination that paints no thumbs reports none.
+    let art_ids = rows_in_view.map_or_else(Vec::new, |_| rows_in_view_ids(rows, scrolled));
+    let report_rows_in_view = rows_in_view;
+    use_effect(use_reactive(&(art_ids,), move |(ids,)| {
+        if let Some(report) = report_rows_in_view {
+            report.call(ids);
+        }
+    }));
 
     // The list's whole painted height, and the spacers that hold its scroll
     // range while only the rows in view paint.

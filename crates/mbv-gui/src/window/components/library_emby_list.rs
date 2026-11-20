@@ -149,6 +149,7 @@ pub fn LibraryEmbyList() -> Element {
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_emby_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_emby_list(top)),
+        None,
         move |row: &EmbyListRow| paint_emby_row(row, &paint_library, paint_selected.as_deref()),
     );
 
