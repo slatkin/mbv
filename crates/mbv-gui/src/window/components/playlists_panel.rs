@@ -435,7 +435,7 @@ fn playlist_node(
     let id = playlist.id.clone();
     let is_open = frame.open.as_ref().is_some_and(|open| open.id == id);
     let selected = picked == Some(&Pick::Playlist(id.clone()));
-    let press_link = link.clone();
+    let toggle_link = link.clone();
     let press_id = id.clone();
     let toggle_id = id.clone();
     let context_id = id.clone();
@@ -456,7 +456,7 @@ fn playlist_node(
                     press_pick.set(Some(Pick::Playlist(press_id.clone())));
                 },
                 ondoubleclick: move |_| {
-                    press_link.playlists(toggle_command(is_open, &toggle_id));
+                    toggle_link.playlists(toggle_command(is_open, &toggle_id));
                 },
                 oncontextmenu: move |event: MouseEvent| {
                     open_menu(&event, Pick::Playlist(context_id.clone()), pick, menu);

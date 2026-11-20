@@ -227,16 +227,18 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     // A tree parent's row look (gui-tree-double-click design D2, D4): the hover
     // hint and its trailing-text swap ride the `tree-parent` class, and the
     // double-click toggles the node in place of playing it.
-    let mut row_class = "relative flex w-full items-center overflow-hidden".to_owned();
-    let mut trail_class = "flex-none font-mono tabular-nums";
-    if props.tree_open.is_some() {
-        row_class.push_str(" tree-parent");
-        trail_class = "tree-trailing flex-none font-mono tabular-nums";
-    }
-    let on_double_click = match (props.tree_open, props.on_toggle) {
-        (Some(_), Some(on_toggle)) => on_toggle,
-        _ => props.on_play,
+    let (row_class, trail_class) = if props.tree_open.is_some() {
+        (
+            "tree-parent relative flex w-full items-center overflow-hidden",
+            "tree-trailing flex-none font-mono tabular-nums",
+        )
+    } else {
+        (
+            "relative flex w-full items-center overflow-hidden",
+            "flex-none font-mono tabular-nums",
+        )
     };
+    let on_double_click = props.on_toggle.unwrap_or(props.on_play);
     let on_press = props.on_press;
     let on_context = props.on_context;
 
