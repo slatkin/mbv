@@ -26,7 +26,7 @@ already owns the contract.
 
 ## 4. Launch persistence
 
-- [ ] 4.1 In `src/app/gui_library/launch.rs`, save the store into `GuiLaunchState.sorts` in store order. Stop writing a collection entry's `order`. Restore each saved sort whose identity the session has not set, then migrate each collection entry's `order: Some(_)` whose destination has no saved sort to `Newest` or `Oldest` (design D10). Port or delete the existing order assertions in `src/app/tests/gui_library/launch.rs` and `crates/mbv-gui/tests/core_thread/launch.rs`. Verify with `cargo nextest run -p mbv -p mbv-gui`.
+- [x] 4.1 In `src/app/gui_library/launch.rs`, save the store into `GuiLaunchState.sorts` in store order. Stop writing a collection entry's `order`. Restore each saved sort whose identity the session has not set, then migrate each collection entry's `order: Some(_)` whose destination has no saved sort to `Newest` or `Oldest` (design D10). Port or delete the existing order assertions in `src/app/tests/gui_library/launch.rs` and `crates/mbv-gui/tests/core_thread/launch.rs`. Verify with `cargo nextest run -p mbv -p mbv-gui`.
 
 ## 5. Wire and window
 
