@@ -183,7 +183,6 @@ fn podcasts_frame() -> GuiCollections {
             checked: false,
         }],
         noun: mbv::GuiCollectionNoun::Shows,
-        order: Some(mbv::GuiDateOrder::Newest),
     }
 }
 

@@ -5,7 +5,7 @@
 //! so a command built from a stale paint addresses the item that paint showed
 //! or nothing.
 
-use mbv::{GuiCollectionTarget, GuiDateOrder, GuiRowArtScope, GuiShowsView};
+use mbv::{GuiCollectionTarget, GuiListSort, GuiRowArtScope, GuiShowsView, GuiSortTarget};
 use mbv_queue::QueueItemContentId;
 
 /// One request from the Library panel's window content (design D2). The
@@ -28,12 +28,13 @@ pub enum GuiLibraryCommand {
     },
     /// Select All for `target` (design D5): the All row's press.
     CollectionAll { target: GuiCollectionTarget },
-    /// Set the list order of a feed-based `target` (design D4, D5): Newest or
-    /// Oldest. The Music destination sorts by name, so the core's arm changes
-    /// nothing there.
-    DateOrder {
-        target: GuiCollectionTarget,
-        order: GuiDateOrder,
+    /// Set a flat list's sort (gui-flat-list-sort design D5): the target names
+    /// the list, and the sort must be one of that target's choices. The core
+    /// ignores a target that names no presented list and a sort outside its
+    /// choices.
+    ListSort {
+        target: GuiSortTarget,
+        sort: GuiListSort,
     },
     /// Select the Shows view (design D8): All, New, or Upcoming. This is a
     /// view choice, not a collection command.
@@ -200,7 +201,7 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 Self::CollectionToggle { target, key }
             }
             GuiLibraryCommand::CollectionAll { target } => Self::CollectionAll { target },
-            GuiLibraryCommand::DateOrder { target, order } => Self::DateOrder { target, order },
+            GuiLibraryCommand::ListSort { target, sort } => Self::ListSort { target, sort },
             GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
                 Self::ShowsSetView { lib_idx, view }
             }

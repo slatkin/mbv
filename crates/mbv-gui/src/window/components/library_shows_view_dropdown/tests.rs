@@ -43,6 +43,7 @@ fn dropdown_app(props: FixtureProps) -> Element {
                 tabs: Vec::new(),
                 current_tab: None,
                 destination: GuiDestinationList::Shows(GuiShowsList {
+                    sort: None,
                     lib_idx: 3,
                     view,
                     loading: false,

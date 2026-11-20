@@ -42,6 +42,21 @@ pub fn set_scroll_top(store: Signal<ListScroll>, rows: &[impl GeometryRow], scro
     }
 }
 
+/// Return a list's scroll offset to the top, keeping its measured viewport
+/// (gui-flat-list-sort design D7): a list whose sort changed starts at its
+/// first row. An unchanged offset marks no subscriber.
+pub fn reset_scroll_top(store: Signal<ListScroll>) {
+    let held = *store.peek();
+    if held.scroll_top == 0.0 {
+        return;
+    }
+    let mut store = store;
+    store.set(ListScroll {
+        scroll_top: 0.0,
+        viewport_height: held.viewport_height,
+    });
+}
+
 /// The six lists' scroll stores (`scroll.ts`'s module-level stores): one
 /// signal per destination's list. The root builds them with the interaction
 /// state ([`super::state::LibraryState`]) and provides them as context.

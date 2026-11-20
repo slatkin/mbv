@@ -219,7 +219,6 @@ fn music() -> GuiMusicList {
             all: true,
             entries: Vec::new(),
             noun: mbv::GuiCollectionNoun::Groups,
-            order: None,
         },
         loading: false,
         failure: None,

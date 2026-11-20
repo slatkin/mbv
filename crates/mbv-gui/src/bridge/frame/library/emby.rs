@@ -6,6 +6,7 @@
 
 use mbv::{
     GuiCollections, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+    GuiListSortFrame,
 };
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -24,8 +25,8 @@ pub struct GuiEmbyList {
     pub library_name: String,
     /// The destination's collection selector (gui-collection-dropdown design
     /// D6): `Some` in the feed-group mode, with All, every root folder in
-    /// listing order, the Folders noun, and the list's date order; `None` in
-    /// plain mode, whose letter rail replaces it.
+    /// listing order, and the Folders noun; `None` in plain mode, whose letter
+    /// rail replaces it.
     pub collections: Option<GuiCollections>,
     /// The selected collection's name the Library Status bar's location
     /// reads (design D10); empty in plain mode, whose list is the whole
@@ -39,6 +40,10 @@ pub struct GuiEmbyList {
     pub failed: bool,
     /// The active list's rows in the list's order.
     pub rows: Vec<GuiEmbyRowFrame>,
+    /// The active list's sort control (gui-flat-list-sort design D7): the
+    /// target a press names, its active sort, and the choices the library
+    /// offers. The plain mode and the feed-group mode share it.
+    pub sort: Option<GuiListSortFrame>,
 }
 
 /// The plain Emby-library destination's detail part (`gui-change-driven-sections`
@@ -139,6 +144,7 @@ impl GuiEmbyList {
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEmbyRowFrame::from).collect(),
+            sort: projection.sort.clone(),
         }
     }
 }

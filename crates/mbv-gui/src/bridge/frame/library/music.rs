@@ -22,8 +22,8 @@ pub struct GuiMusicList {
     /// (design D2, D6): the library whose groups these are.
     pub lib_idx: usize,
     /// The destination's collection selector (gui-collection-dropdown design
-    /// D6): All, every group in the group level's order, the Groups noun, and
-    /// no date order. The names the header's selection label, the filter's
+    /// D6): All, every group in the group level's order, and the Groups noun.
+    /// The names the header's selection label, the filter's
     /// placeholder, and the Library Status bar location read derive from it
     /// ([`GuiCollections::selected_names`]), so they cannot disagree.
     pub collections: GuiCollections,

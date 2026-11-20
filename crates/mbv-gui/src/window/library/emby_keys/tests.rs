@@ -269,6 +269,7 @@ fn emby_content(
         ],
         current_tab: Some(3),
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            sort: None,
             lib_idx: 3,
             library_name: "Movies".to_owned(),
             collections: feed_group.then(|| GuiCollections {
@@ -280,7 +281,6 @@ fn emby_content(
                     checked: false,
                 }],
                 noun: mbv::GuiCollectionNoun::Folders,
-                order: Some(mbv::GuiDateOrder::Newest),
             }),
             collection_names: if feed_group {
                 vec!["All".to_owned()]

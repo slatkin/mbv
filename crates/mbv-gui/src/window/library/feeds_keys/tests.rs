@@ -234,6 +234,7 @@ fn entry(
     state: GuiHomeRowStateFrame,
 ) -> GuiEntryRowFrame {
     GuiEntryRowFrame {
+        sort_letter: None,
         art: GuiRowArtFrame::NoSource,
         media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
@@ -264,7 +265,6 @@ fn collections(selected: PillSelection) -> GuiCollections {
             entry("https://sub.two", "Sub Two", false),
         ],
         noun: mbv::GuiCollectionNoun::Subscriptions,
-        order: Some(mbv::GuiDateOrder::Newest),
     }
 }
 
@@ -329,6 +329,7 @@ fn feeds_content_selected(
         ],
         current_tab: Some(2),
         destination: GuiDestinationList::Feeds(GuiFeedsList {
+            sort: None,
             collections: collections(pill_selection),
             loading: false,
             failed: false,

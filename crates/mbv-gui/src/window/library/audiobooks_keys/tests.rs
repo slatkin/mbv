@@ -238,13 +238,14 @@ fn book(
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),
         duration: duration.to_owned(),
-        sort_letter,
+        sort_letter: Some(sort_letter),
     }
 }
 
 /// The carried Audiobooks list part: the catalog, its load facts.
 fn audiobooks_list() -> GuiAudiobooksList {
     GuiAudiobooksList {
+        sort: None,
         lib_idx: 4,
         loading: false,
         failed: false,

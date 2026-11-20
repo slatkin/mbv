@@ -215,6 +215,7 @@ fn episode(
     state: GuiHomeRowStateFrame,
 ) -> GuiEntryRowFrame {
     GuiEntryRowFrame {
+        sort_letter: None,
         art: GuiRowArtFrame::NoSource,
         media: GuiRowMediaKindFrame::Audio,
         id: id.to_owned(),
@@ -241,7 +242,6 @@ fn collections(selected: PillSelection) -> GuiCollections {
             entry("sh2", "Show Two", false),
         ],
         noun: mbv::GuiCollectionNoun::Shows,
-        order: Some(mbv::GuiDateOrder::Newest),
     }
 }
 
@@ -275,6 +275,7 @@ fn podcasts_content(
         ],
         current_tab: Some(2),
         destination: GuiDestinationList::Podcasts(GuiPodcastsList {
+            sort: None,
             lib_idx: 0,
             collections: collections(pill_selection),
             loading: false,

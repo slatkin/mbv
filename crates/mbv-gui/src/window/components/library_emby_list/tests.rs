@@ -343,6 +343,7 @@ fn feed() -> Vec<GuiEmbyRowFrame> {
 /// The carried Emby list part in one mode over `rows` (row 8.1).
 fn emby_frame(feed_group: bool, rows: Vec<GuiEmbyRowFrame>) -> GuiEmbyList {
     GuiEmbyList {
+        sort: None,
         lib_idx: 3,
         library_name: "Movies".to_owned(),
         collections: None,

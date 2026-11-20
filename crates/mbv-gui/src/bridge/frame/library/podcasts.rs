@@ -8,7 +8,7 @@
 //! the row frame the shared entry-list one (`entry_list.rs`); the Hero and
 //! the frame struct are the destination's own.
 
-use mbv::{GuiCollections, GuiPodcastsHero, GuiPodcastsProjection};
+use mbv::{GuiCollections, GuiListSortFrame, GuiPodcastsHero, GuiPodcastsProjection};
 
 use super::GuiArtShapeFrame;
 use super::entry_list::GuiEntryRowFrame;
@@ -24,8 +24,7 @@ pub struct GuiPodcastsList {
     /// the library whose content this is.
     pub lib_idx: usize,
     /// The destination's collection selector (gui-collection-dropdown design
-    /// D6): All, every listed show in title order, the Shows noun, and the
-    /// list's date order.
+    /// D6): All, every listed show in title order, and the Shows noun.
     pub collections: GuiCollections,
     /// Whether the active view's episodes are still landing: the show
     /// catalog's pages or that view's own episode fetches.
@@ -36,6 +35,9 @@ pub struct GuiPodcastsList {
     /// listed show's episodes, a checked set merges the checked shows', both
     /// in the stored date order with undated episodes last.
     pub rows: Vec<GuiEntryRowFrame>,
+    /// The list's sort control (gui-flat-list-sort design D7): the target a
+    /// press names, its active sort, and the choices the destination offers.
+    pub sort: Option<GuiListSortFrame>,
 }
 
 /// The Podcasts destination's detail part (`gui-change-driven-sections` design
@@ -88,6 +90,7 @@ impl GuiPodcastsList {
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),
+            sort: projection.sort.clone(),
         }
     }
 }

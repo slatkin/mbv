@@ -18,7 +18,7 @@ fn book(id: &str, title: &str, sort_letter: char) -> GuiAudiobooksRowFrame {
         title: title.to_owned(),
         subtitle: None,
         duration: String::new(),
-        sort_letter,
+        sort_letter: Some(sort_letter),
     }
 }
 

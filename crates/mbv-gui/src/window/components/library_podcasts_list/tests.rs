@@ -283,6 +283,7 @@ fn built(list: GuiPodcastsList, detail: GuiPodcastsDetail) -> Fixture {
 fn episodes() -> Vec<GuiEntryRowFrame> {
     vec![
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::Loading,
             media: GuiRowMediaKindFrame::Audio,
             id: "e1:ep1".to_owned(),
@@ -292,6 +293,7 @@ fn episodes() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Audio,
             id: "e2:ep2".to_owned(),
@@ -301,6 +303,7 @@ fn episodes() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Played,
         },
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Audio,
             id: "e3:ep3".to_owned(),
@@ -316,13 +319,13 @@ fn episodes() -> Vec<GuiEntryRowFrame> {
 /// the caller sets them (design D12).
 fn frame(rows: Vec<GuiEntryRowFrame>, loading: bool, failed: bool) -> GuiPodcastsList {
     GuiPodcastsList {
+        sort: None,
         lib_idx: 0,
         collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Podcasts(0),
             all: true,
             entries: Vec::new(),
             noun: mbv::GuiCollectionNoun::Shows,
-            order: Some(mbv::GuiDateOrder::Newest),
         },
         loading,
         failed,

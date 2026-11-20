@@ -273,7 +273,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             title: "Aftermath".to_owned(),
             subtitle: Some("Bill Wyman".to_owned()),
             duration: "4:32".to_owned(),
-            sort_letter: 'A',
+            sort_letter: Some('A'),
         },
         GuiAudiobooksRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -282,7 +282,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             title: "Audition".to_owned(),
             subtitle: Some("Ryu Murakami".to_owned()),
             duration: "2:14".to_owned(),
-            sort_letter: 'A',
+            sort_letter: Some('A'),
         },
         GuiAudiobooksRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -291,7 +291,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             title: "Blindsight".to_owned(),
             subtitle: Some("Peter Watts".to_owned()),
             duration: "10:02".to_owned(),
-            sort_letter: 'B',
+            sort_letter: Some('B'),
         },
     ]
 }
@@ -299,6 +299,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
 /// The carried Audiobooks list part over `rows` (row 9.1).
 fn list_of(rows: Vec<GuiAudiobooksRowFrame>) -> GuiAudiobooksList {
     GuiAudiobooksList {
+        sort: None,
         lib_idx: 4,
         loading: false,
         failed: false,

@@ -112,8 +112,9 @@ pub fn build_audiobooks_rows(
         .iter()
         .filter(|candidate| filter_match(&candidate.title, filter))
     {
-        let letter = row.sort_letter;
-        if heading != Some(letter) {
+        if let Some(letter) = row.sort_letter
+            && heading != Some(letter)
+        {
             heading = Some(letter);
             built.push(AudiobooksListRow::Heading {
                 id: format!("abs-letter:{letter}"),
@@ -140,7 +141,7 @@ pub fn build_audiobooks_rows(
 #[must_use]
 pub fn audiobooks_letter_rail(rows: &[AudiobooksListRow]) -> Vec<RailLetter> {
     letter_rail_by(rows, |row| match row {
-        AudiobooksListRow::Item(item) => Some(item.row.sort_letter),
+        AudiobooksListRow::Item(item) => item.row.sort_letter,
         AudiobooksListRow::Heading { .. } => None,
     })
 }

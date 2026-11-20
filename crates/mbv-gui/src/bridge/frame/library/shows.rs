@@ -6,8 +6,8 @@
 //! position.
 
 use mbv::{
-    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
-    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
+    GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
+    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
 };
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -39,6 +39,11 @@ pub struct GuiShowsList {
     /// The flat Latest and Upcoming rows, which the core leaves empty while the
     /// GUI Shows destination paints the series list alone (design D8).
     pub rows: Vec<GuiShowsRowFrame>,
+    /// The New list's sort control (gui-flat-list-sort design D7): the target a
+    /// press names, its active sort, and the choices the library offers.
+    /// `Some` only while the view is New, whose list is the one the sort
+    /// orders.
+    pub sort: Option<GuiListSortFrame>,
 }
 
 /// The Shows destination's detail part (`gui-change-driven-sections` design
@@ -197,6 +202,7 @@ impl GuiShowsList {
             view: projection.view,
             loading: projection.loading,
             rows: projection.rows.iter().map(GuiShowsRowFrame::from).collect(),
+            sort: projection.sort.clone(),
             series: projection
                 .series
                 .iter()
@@ -226,7 +232,7 @@ impl From<&GuiShowsRow> for GuiShowsRowFrame {
             title: row.title.clone(),
             subtitle: row.subtitle.clone(),
             date: row.date.clone(),
-            sort_letter: None,
+            sort_letter: row.sort_letter,
             display_only: row.display_only,
             art: GuiRowArtFrame::from(&row.art),
             media: GuiRowMediaKindFrame::from(row.media),
