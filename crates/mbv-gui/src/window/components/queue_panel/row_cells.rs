@@ -105,7 +105,7 @@ pub(super) struct RowLook {
 /// text: the pointer outranks the watched row's grey.
 pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
     let hovered = queue.hover == Some(row.slot);
-    if row.state == GuiSemanticState::NowPlaying {
+    if matches!(row.state, GuiSemanticState::NowPlaying { .. }) {
         return RowLook {
             background: Some(ef_var(EfToken::BgGreen)),
             title: ef_var(EfToken::Green),
@@ -152,7 +152,10 @@ fn playhead_percent(playhead: &Playhead) -> i64 {
 /// is the active slot.
 fn row_progress(row: &ItemRow, playhead: &Playhead) -> Option<i64> {
     match row.state {
-        GuiSemanticState::NowPlaying => {
+        GuiSemanticState::NowPlaying { tracks_progress } => {
+            if !tracks_progress {
+                return None;
+            }
             let active_slot = playhead
                 .anchor
                 .cloned()

@@ -37,6 +37,10 @@ pub fn queue_media_row(
     queue_media_row_at(slot, index, playback, pending_slot)
 }
 
+fn is_music(item: &QueueItem) -> bool {
+    matches!(item, QueueItem::Emby(item) if item.is_music())
+}
+
 fn queue_media_row_at(
     slot: &QueueSlot,
     index: usize,
@@ -55,7 +59,11 @@ fn queue_media_row_at(
         MediaSemanticState::NowPlaying { progress: None }
     } else if is_active {
         MediaSemanticState::NowPlaying {
-            progress: ActiveProgress::of_ticks(pos_ticks, duration_ticks),
+            // Music is a no-progress media type (`MediaSemanticState::from_emby`):
+            // its now-playing row carries no percentage either.
+            progress: (!is_music(&slot.item))
+                .then(|| ActiveProgress::of_ticks(pos_ticks, duration_ticks))
+                .flatten(),
         }
     } else {
         // The one canonical state derivation: a played slot paints the

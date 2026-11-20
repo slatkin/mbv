@@ -59,7 +59,12 @@ fn every_row_paints_its_duration_and_no_row_paints_a_start_mark() {
             GuiSemanticState::Active { progress: Some(42) },
         ),
         in_state(renamed(item(3), "Watched"), GuiSemanticState::Played),
-        in_state(renamed(item(4), "Playing"), GuiSemanticState::NowPlaying),
+        in_state(
+            renamed(item(4), "Playing"),
+            GuiSemanticState::NowPlaying {
+                tracks_progress: true,
+            },
+        ),
     ];
     let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
 
@@ -95,7 +100,12 @@ fn only_a_row_with_progress_paints_the_ring() {
             GuiSemanticState::Active { progress: Some(42) },
         ),
         in_state(renamed(item(3), "Watched"), GuiSemanticState::Played),
-        in_state(renamed(item(4), "Playing"), GuiSemanticState::NowPlaying),
+        in_state(
+            renamed(item(4), "Playing"),
+            GuiSemanticState::NowPlaying {
+                tracks_progress: true,
+            },
+        ),
     ];
     let fixture = built_with_anchor(queue_panel_app, queue(rows), summary(), 4);
 
@@ -126,7 +136,12 @@ fn ring_percents(fixture: &Fixture) -> Vec<Option<String>> {
 fn the_rows_paint_the_watched_and_now_playing_states() {
     let rows = vec![
         in_state(renamed(item(1), "Watched"), GuiSemanticState::Played),
-        in_state(renamed(item(2), "Playing"), GuiSemanticState::NowPlaying),
+        in_state(
+            renamed(item(2), "Playing"),
+            GuiSemanticState::NowPlaying {
+                tracks_progress: true,
+            },
+        ),
     ];
     let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
 

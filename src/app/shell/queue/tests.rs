@@ -71,6 +71,41 @@ fn queue_projection_uses_adopted_pending_transition_without_progress() {
     ));
 }
 
+/// Music is a no-progress media type: its now-playing row carries no
+/// percentage, where a video's now-playing row carries one.
+#[test]
+fn now_playing_music_row_carries_no_progress() {
+    let mut app = make_app_stub();
+    app.local_view.adopt_queue_items(
+        vec![mbv_queue::QueueItem::Emby(Box::new(make_item(
+            "song", "Audio",
+        )))],
+        0,
+    );
+    app.player.update_status(|status| {
+        status.active = true;
+        status.current_idx = 0;
+        status.position_ticks = 500;
+        status.runtime_ticks = 1_000;
+    });
+
+    let rows = mbv_components::queue::queue_media_rows(
+        app.local_view.slots(),
+        app.displayed_queue_playback_state(),
+        app.pending_playback_slot(),
+    );
+
+    assert!(matches!(
+        &rows[0],
+        mbv_render::components::media_list::MediaListRow::Item {
+            semantic_state: mbv_render::components::media_list::MediaSemanticState::NowPlaying {
+                progress: None
+            },
+            ..
+        }
+    ));
+}
+
 #[test]
 fn deleting_before_playing_row_keeps_highlight_on_playing_slot() {
     // Regression (2026-10-29 queue index errors): deleting a row before

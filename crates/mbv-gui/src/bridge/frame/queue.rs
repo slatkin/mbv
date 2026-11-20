@@ -434,15 +434,16 @@ impl From<MediaKind> for GuiMediaKind {
 
 /// The semantic state of a row, mirroring `MediaSemanticState`. The `state` tag
 /// names the state, and `progress` is the bounded percentage where the state
-/// carries one. The now-playing state carries no progress (design D5): the
+/// carries one. The now-playing state carries no percentage (design D5): the
 /// window reads the playhead's played fraction for the row whose slot is the
-/// active slot.
+/// active slot, and only where `tracks_progress` says the item has progress to
+/// show — music is a no-progress media type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiSemanticState {
     Ordinary,
     Played,
     Active { progress: Option<u8> },
-    NowPlaying,
+    NowPlaying { tracks_progress: bool },
 }
 
 impl From<&MediaSemanticState> for GuiSemanticState {
@@ -453,7 +454,9 @@ impl From<&MediaSemanticState> for GuiSemanticState {
             MediaSemanticState::Active { progress } => Self::Active {
                 progress: progress.map(ActiveProgress::percent),
             },
-            MediaSemanticState::NowPlaying { .. } => Self::NowPlaying,
+            MediaSemanticState::NowPlaying { progress } => Self::NowPlaying {
+                tracks_progress: progress.is_some(),
+            },
         }
     }
 }

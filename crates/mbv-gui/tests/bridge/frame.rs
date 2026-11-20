@@ -296,7 +296,10 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
     assert_eq!(
         states,
         [
-            &GuiSemanticState::NowPlaying,
+            // The stub's playing row has no position yet, so no percentage.
+            &GuiSemanticState::NowPlaying {
+                tracks_progress: false
+            },
             &GuiSemanticState::Active { progress: Some(30) },
             &GuiSemanticState::Played,
         ]

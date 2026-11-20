@@ -506,7 +506,7 @@ pub fn QueuePanel() -> Element {
                                     // The row's inline size: the fixed row height and
                                     // the radius the canvas draws, with the trailing
                                     // room the hovered row's actions button needs.
-                                    let radius = if item.state == GuiSemanticState::NowPlaying {
+                                    let radius = if matches!(item.state, GuiSemanticState::NowPlaying { .. }) {
                                         PLAYING_ROW_RADIUS_PX
                                     } else {
                                         ROW_RADIUS_PX
