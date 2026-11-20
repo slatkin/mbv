@@ -7,12 +7,12 @@
 
 ## 2. Checked-platform rule in the core
 
-- [ ] 2.1 Add `pub fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform>` to `src/app/gui_library/feeds_projection.rs` as design D2 states. Re-export it beside `GuiFeedsProjection` in `src/app/gui_library.rs`, `src/app.rs`, and `src/lib.rs`. Also re-export `mbv_feed::FeedPlatform` from `src/lib.rs`. Verify: `cargo check -p mbv`.
-- [ ] 2.2 In `src/app/tests/gui_library_feeds.rs`, add the D6 core tests through the existing App fixture and `toggle_subscription`. Seed one YouTube URL and one generic URL with `seed_gui_feeds_for_test` in a new helper. Add a two-case named table (only YouTube checked → `Some(FeedPlatform::YouTube)`; YouTube plus generic checked → `None`) and one test (All over YouTube-only subscriptions → `None`). Keep the file under 800 lines. Verify: `cargo nextest run -p mbv gui_library_feeds`.
+- [x] 2.1 Add `pub fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform>` to `src/app/gui_library/feeds_projection.rs` as design D2 states. Re-export it beside `GuiFeedsProjection` in `src/app/gui_library.rs`, `src/app.rs`, and `src/lib.rs`. Also re-export `mbv_feed::FeedPlatform` from `src/lib.rs`. Verify: `cargo check -p mbv`.
+- [x] 2.2 In `src/app/tests/gui_library_feeds.rs`, add the D6 core tests through the existing App fixture and `toggle_subscription`. Seed one YouTube URL and one generic URL with `seed_gui_feeds_for_test` in a new helper. Add a two-case named table (only YouTube checked → `Some(FeedPlatform::YouTube)`; YouTube plus generic checked → `None`) and one test (All over YouTube-only subscriptions → `None`). Keep the file under 800 lines. Verify: `cargo nextest run -p mbv gui_library_feeds`.
 
 ## 3. Feeds frame carries the platform
 
-- [ ] 3.1 Add `pub platform: Option<FeedPlatform>` to `GuiFeedsList` in `crates/mbv-gui/src/bridge/frame/library/feeds.rs`. Set it in `from_projection` from `mbv::gui_feeds_platform(&projection.collections)`, as design D3 states. Add `platform: None` to the six test struct literals: `window/library/status/tests.rs`, `window/library/feeds_keys/tests.rs`, `window/components/library_status_bar/tests.rs`, `window/components/library_feeds_list/tests.rs`, `window/components/library_feeds_hero/tests.rs`, and `window/components/library_panel/tests/fixtures.rs`. Verify: `cargo check -p mbv-gui --all-targets`.
+- [x] 3.1 Add `pub platform: Option<FeedPlatform>` to `GuiFeedsList` in `crates/mbv-gui/src/bridge/frame/library/feeds.rs`. Set it in `from_projection` from `mbv::gui_feeds_platform(&projection.collections)`, as design D3 states. Add `platform: None` to the six test struct literals: `window/library/status/tests.rs`, `window/library/feeds_keys/tests.rs`, `window/components/library_status_bar/tests.rs`, `window/components/library_feeds_list/tests.rs`, `window/components/library_feeds_hero/tests.rs`, and `window/components/library_panel/tests/fixtures.rs`. Verify: `cargo check -p mbv-gui --all-targets`.
 
 ## 4. Service mark painter
 
