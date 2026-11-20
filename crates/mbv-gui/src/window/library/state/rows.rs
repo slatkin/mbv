@@ -191,20 +191,33 @@ impl LibraryState {
             .library(GuiLibraryCommand::Play { item_id: track_id });
     }
 
-    /// Press a row (design D7): an artist or album row opens or closes and is
-    /// picked; a track row picks its album — the pick's album shows in the Hero,
-    /// and the press is the pick's half only. The row's painted open state is the
-    /// half to flip, so a press under a filter closes the node the filter opened.
+    /// Press a row (design D7, gui-tree-double-click design D1): a press is the
+    /// pick's half only — a track row picks its album, and the pick's album shows
+    /// in the Hero. An artist row picks nothing (the Hero is album-scoped, design
+    /// D5) and an album row picks itself. A press never opens or closes a tree
+    /// node: [`Self::toggle_library_node`] owns that half, on the row's
+    /// double-click.
     pub fn press_library_row(&self, row: &LibraryRow) {
         match row {
             LibraryRow::Letter(_) => {}
-            LibraryRow::Track { .. } => {
+            LibraryRow::Artist { .. } | LibraryRow::Album { .. } | LibraryRow::Track { .. } => {
                 self.show_detail(Self::picked_item_id(row));
             }
+        }
+    }
+
+    /// Open or close one tree node (gui-tree-double-click design D1): an artist
+    /// or album row flips the open state it painted, through the same
+    /// [`Self::set_node_open`] that holds the album track load and the filter's
+    /// override. The row paints the state the flip read, and the two presses of a
+    /// double-click no longer change it, so the double-click reads the current
+    /// state. Any other row is no tree node, so its double-click toggles nothing.
+    pub fn toggle_library_node(&self, row: &LibraryRow) {
+        match row {
             LibraryRow::Artist { open, .. } | LibraryRow::Album { open, .. } => {
                 self.set_node_open(row, !*open);
-                self.show_detail(Self::picked_item_id(row));
             }
+            LibraryRow::Letter(_) | LibraryRow::Track { .. } => {}
         }
     }
 

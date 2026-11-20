@@ -1,10 +1,12 @@
 //! Headless tests of the Library list (D16): the contracts of
 //! `LibraryList.test.ts` — the canvas tree paints over native scroll and
-//! only the rows in view, a press on an album without its tracklist opens it
-//! and asks the core for the tracks, a press closes and reopens a node while
-//! the filter narrows the rows, a double-click on a track plays it, a track
-//! press moves the cursor onto the row, a right-press requests the row's
-//! item menu, and the header names the carried selection. The IPC of
+//! only the rows in view, a press on an album picks it and leaves it closed,
+//! a double-click on an album without its tracklist opens it and asks the core
+//! for the tracks (gui-tree-double-click design D1, D5), a double-click closes
+//! and reopens a node while the filter narrows the rows, a double-click on a
+//! track plays it, a track press moves the cursor onto the row, a right-press
+//! requests the row's item menu, and the header names the carried selection.
+//! The IPC of
 //! the earlier tests is the mock core link here; the asserted commands are
 //! the same neutral shapes. A headless document cannot fire a DOM click,
 //! input, or context-menu event, so the press, filter, and menu contracts
@@ -342,28 +344,12 @@ fn no_hero() -> GuiMusicDetail {
 
 /// Open the Beastie Boys node, so its albums paint.
 fn open_beastie(fixture: &mut Fixture) {
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || {
-        let mut ui = state.ui;
-        ui.with_mut(|ui| {
-            if !ui.open_nodes.iter().any(|id| id == "artist:service:a1") {
-                ui.open_nodes.push("artist:service:a1".to_owned());
-            }
-        });
-    });
+    toggle_row(fixture, "artist:service:a1");
 }
 
 /// Open the Licensed To Ill album node, so its cached tracks paint.
 fn open_licensed_to_ill(fixture: &mut Fixture) {
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || {
-        let mut ui = state.ui;
-        ui.with_mut(|ui| {
-            if !ui.open_nodes.iter().any(|id| id == "album:al1") {
-                ui.open_nodes.push("album:al1".to_owned());
-            }
-        });
-    });
+    toggle_row(fixture, "album:al1");
 }
 
 /// Report a `viewport_height` px viewport, so the rows in view are the rows
@@ -394,10 +380,43 @@ fn press_row(fixture: &mut Fixture, id: &str) {
     fixture.in_runtime(move || state.press_library_row(&row));
 }
 
-/// Contract (`LibraryList.test.ts`): a press on an album without its
-/// tracklist opens it and asks for the tracks.
+/// Toggle the node of `id`, as a tree parent's double-click handler does.
+fn toggle_row(fixture: &mut Fixture, id: &str) {
+    let row = row_of(fixture, id);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.toggle_library_node(&row));
+}
+
+/// Contract (gui-tree-double-click design D1, D5): a double-click on an album
+/// without its tracklist opens it and asks for the tracks.
 #[test]
-fn a_press_on_an_album_without_its_tracklist_opens_it_and_asks_for_the_tracks() {
+fn a_double_click_on_an_album_without_its_tracklist_opens_it_and_asks_for_the_tracks() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
+    open_beastie(&mut fixture);
+    measure(&mut fixture, 240.0);
+
+    toggle_row(&mut fixture, "album:al2");
+
+    assert_eq!(
+        fixture.library_commands(),
+        [mbv::GuiLibraryCommand::OpenAlbum {
+            album_id: "al2".to_owned(),
+        }]
+    );
+    assert_eq!(
+        fixture.attr_of(
+            "[data-library-row-id=\"album:al2\"]",
+            local_name!("aria-expanded"),
+        ),
+        Some("true".to_owned()),
+        "the double-clicked album paints open"
+    );
+}
+
+/// Contract (gui-tree-double-click design D1, D5): a press on an album is the
+/// pick's half only — the Hero takes its detail, and the node stays closed.
+#[test]
+fn a_press_on_an_album_picks_it_and_leaves_it_closed() {
     let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     open_beastie(&mut fixture);
     measure(&mut fixture, 240.0);
@@ -406,22 +425,17 @@ fn a_press_on_an_album_without_its_tracklist_opens_it_and_asks_for_the_tracks() 
 
     assert_eq!(
         fixture.library_commands(),
-        [
-            mbv::GuiLibraryCommand::OpenAlbum {
-                album_id: "al2".to_owned(),
-            },
-            mbv::GuiLibraryCommand::ShowDetail {
-                item_id: "al2".to_owned(),
-            },
-        ]
+        [mbv::GuiLibraryCommand::ShowDetail {
+            item_id: "al2".to_owned(),
+        }]
     );
     assert_eq!(
         fixture.attr_of(
             "[data-library-row-id=\"album:al2\"]",
             local_name!("aria-expanded"),
         ),
-        Some("true".to_owned()),
-        "the pressed album paints open"
+        Some("false".to_owned()),
+        "the pressed album stays closed"
     );
 }
 
@@ -494,11 +508,11 @@ fn the_filter_narrows_the_painted_rows_to_the_names_that_contain_its_text() {
 }
 
 /// Review of row 4.5, finding P2 (`LibraryList.test.ts`): the filter opens a
-/// node that holds a match, so a press under the filter must still close it
-/// — the close half of the design's "a press on an artist or album row opens
-/// or closes it".
+/// node that holds a match, so a double-click under the filter must still close
+/// it — the close half of the design's "a double-click on an artist or album
+/// row opens or closes it".
 #[test]
-fn a_press_closes_and_reopens_a_node_while_the_filter_narrows_the_rows() {
+fn a_double_click_closes_and_reopens_a_node_while_the_filter_narrows_the_rows() {
     let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     measure(&mut fixture, 240.0);
     let state = fixture.state.clone();
@@ -510,17 +524,17 @@ fn a_press_closes_and_reopens_a_node_while_the_filter_narrows_the_rows() {
         Some("true".to_owned()),
         "the filter opens the node that holds the match"
     );
-    press_row(&mut fixture, "album:al1");
+    toggle_row(&mut fixture, "album:al1");
     assert_eq!(
         fixture.attr_of(album, local_name!("aria-expanded")),
         Some("false".to_owned()),
-        "the press closes the node the filter opened"
+        "the double-click closes the node the filter opened"
     );
-    press_row(&mut fixture, "album:al1");
+    toggle_row(&mut fixture, "album:al1");
     assert_eq!(
         fixture.attr_of(album, local_name!("aria-expanded")),
         Some("true".to_owned()),
-        "the second press reopens the node"
+        "the second double-click reopens the node"
     );
 }
 
@@ -542,6 +556,33 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
         [mbv::GuiLibraryCommand::Play {
             item_id: "t1".to_owned(),
         }]
+    );
+}
+
+/// Contract (gui-tree-double-click design D2, D4): the Music artist row is a
+/// tree parent — its open state paints as `aria-expanded`, its button carries
+/// the `tree-parent` class the hover hint rides, and the shared hint paints at
+/// its trailing end.
+#[test]
+fn the_artist_row_paints_as_a_tree_parent_with_its_hint() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
+    measure(&mut fixture, 240.0);
+
+    let row = "[data-library-row-id=\"artist:service:a1\"]";
+    assert_eq!(
+        fixture.attr_of(row, local_name!("aria-expanded")),
+        Some("false".to_owned()),
+        "the closed artist paints its open state"
+    );
+    assert!(
+        fixture
+            .attr_of(row, blitz_dom::LocalName::from("class"))
+            .is_some_and(|class| class.contains("tree-parent")),
+        "the artist row is a tree parent"
+    );
+    assert!(
+        fixture.presents("[data-library-row-id=\"artist:service:a1\"] [data-tree-hint]"),
+        "the artist row paints the shared hint"
     );
 }
 
