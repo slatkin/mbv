@@ -25,7 +25,7 @@
 
 ## 6. Docs
 
-- [ ] 6.1 Add the terms *Service mark* (the brand mark that names a destination's Service, or the Feed platform of the checked subscriptions, in the GUI Library list header) and *Feed platform* (the known service that serves a FeedSubscription, read from its URL alone) to `CONTEXT.md`, under Services and under Feeds, each with an *Avoid* line. Update `docs/architecture/gui-client.md` near line 440 (the brand marks now also live in `window/service_mark.rs`) and near line 950 (the header's title line paints a Service mark or, for Home, a title). Verify: `qmd query "Service mark"` finds the new `CONTEXT.md` entry.
+- [x] 6.1 Add the terms *Service mark* (the brand mark that names a destination's Service, or the Feed platform of the checked subscriptions, in the GUI Library list header) and *Feed platform* (the known service that serves a FeedSubscription, read from its URL alone) to `CONTEXT.md`, under Services and under Feeds, each with an *Avoid* line. Update `docs/architecture/gui-client.md` near line 440 (the brand marks now also live in `window/service_mark.rs`) and near line 950 (the header's title line paints a Service mark or, for Home, a title). Verify: `qmd query "Service mark"` finds the new `CONTEXT.md` entry.
 
 ## 7. Integration
 
