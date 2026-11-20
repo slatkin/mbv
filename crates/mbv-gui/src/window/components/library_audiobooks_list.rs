@@ -125,6 +125,10 @@ pub fn LibraryAudiobooksList() -> Element {
     // The rail's A–Z letters over the painted rows (row 9.1).
     let rail = audiobooks_letter_rail(&rows);
 
+    // The sort control the header paints last on the heading's line
+    // (gui-flat-list-sort design D7).
+    let sort = frame.and_then(|frame| frame.sort.clone());
+
     let selected = detail.and_then(|detail| detail.selected.clone());
 
     // The list's two DOM facts report to the scroll store (design D9), the rows
@@ -171,6 +175,7 @@ pub fn LibraryAudiobooksList() -> Element {
                 LibraryListHeader {
                     heading: LibraryListHeading::Mark(ServiceMark::Audiobookshelf),
                     label: String::new(),
+                    sort,
                     filter: audiobooks_ui.filter.clone(),
                     placeholder: "Filter books".to_owned(),
                     aria_label: "Filter books".to_owned(),

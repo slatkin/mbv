@@ -81,6 +81,10 @@ pub fn LibraryFeedsList() -> Element {
     // itself, so the header paints no selection label beside it.
     let collections = frame.map(|frame| frame.collections.clone());
 
+    // The sort control the header paints last on the heading's line
+    // (gui-flat-list-sort design D7).
+    let sort = frame.and_then(|frame| frame.sort.clone());
+
     // The heading marks the Feed platform every checked subscription shares,
     // and RSS while the tab's frame has not landed
     // (gui-library-header-service-marks design D5).
@@ -131,6 +135,7 @@ pub fn LibraryFeedsList() -> Element {
                     label: selection_label.clone(),
                     label_attr: Some("data-library-feeds-selection-label"),
                     collections,
+                    sort,
                     filter: feeds_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter entries".to_owned(),

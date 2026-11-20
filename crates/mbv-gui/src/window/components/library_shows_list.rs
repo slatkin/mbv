@@ -444,6 +444,11 @@ pub fn LibraryShowsList() -> Element {
     // The rail's A–Z letters over the painted rows.
     let rail = shows_letter_rail(&rows);
 
+    // The sort control the header paints last on the heading's line
+    // (gui-flat-list-sort design D7): the New view's list is the one it orders,
+    // so the frame carries it only while New paints.
+    let sort = frame.and_then(|frame| frame.sort.clone());
+
     let selected = detail.and_then(|detail| detail.selected.clone());
 
     // The filter field's placeholder, naming the Music selection as the Music
@@ -506,6 +511,7 @@ pub fn LibraryShowsList() -> Element {
                     heading: LibraryListHeading::Mark(ServiceMark::Emby),
                     label: String::new(),
                     view: frame.map(|frame| frame.view),
+                    sort,
                     filter: shows_ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter series".to_owned(),

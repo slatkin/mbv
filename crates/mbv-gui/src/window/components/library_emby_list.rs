@@ -140,6 +140,11 @@ pub fn LibraryEmbyList() -> Element {
     // label: the plain list is the whole library, and the UI is not verbose.
     let collections = frame.and_then(|frame| frame.collections.clone());
 
+    // The sort control the header paints last on the heading's line
+    // (gui-flat-list-sort design D7): the plain mode and the feed-group mode
+    // share one sort frame.
+    let sort = frame.and_then(|frame| frame.sort.clone());
+
     // The rail's A–Z letters over the painted rows (row 8.1): the plain mode
     // paints it, and the date-ordered feed-group mode paints none.
     let rail = emby_letter_rail(&rows);
@@ -193,6 +198,7 @@ pub fn LibraryEmbyList() -> Element {
                     heading: LibraryListHeading::Mark(ServiceMark::Emby),
                     label: String::new(),
                     collections,
+                    sort,
                     filter: emby_ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter items".to_owned(),

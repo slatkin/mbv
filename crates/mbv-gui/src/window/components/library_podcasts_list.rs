@@ -93,6 +93,10 @@ pub fn LibraryPodcastsList() -> Element {
     // itself, so the header paints no selection label beside it.
     let collections = frame.map(|frame| frame.collections.clone());
 
+    // The sort control the header paints last on the heading's line
+    // (gui-flat-list-sort design D7).
+    let sort = frame.and_then(|frame| frame.sort.clone());
+
     // The painted rows of the flat list (row 10.1): the same model
     // [`crate::window::library::podcasts`] builds from the carried content,
     // narrowed by the filter's text.
@@ -141,6 +145,7 @@ pub fn LibraryPodcastsList() -> Element {
                     label: selection_label.clone(),
                     label_attr: Some("data-library-podcasts-selection-label"),
                     collections,
+                    sort,
                     filter: podcasts_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter episodes".to_owned(),
