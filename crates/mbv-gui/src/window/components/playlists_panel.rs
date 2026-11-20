@@ -5,6 +5,12 @@
 //! selected row's control set. A right-click on a row opens the same actions
 //! as a menu.
 //!
+//! A playlist row is a tree parent (`gui-tree-double-click` design D1 to D3):
+//! a press picks it, a double-click opens it when closed and closes it when
+//! open, its count gives way to the hover hint, and it paints no chevron. An
+//! item row stays a leaf whose double-click plays it, and the playlist's own
+//! Play control and menu Play entry still play the playlist.
+//!
 //! The core owns the data (the `playlists` section); the selection, the
 //! right-click menu, and the rename draft are this screen's own window state.
 //! The rename draft lives in the shared [`SettingsState`] beside the other
@@ -20,7 +26,7 @@ use crate::window::channel::CoreLink;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
-use crate::window::icons::{ChevronDown, ChevronRight};
+use crate::window::components::tree_hint::TreeHint;
 use crate::window::input::f32_from_f64;
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
@@ -147,6 +153,16 @@ fn run_control(
     }
     if let Some(command) = command_for(pick, control) {
         link.playlists(command);
+    }
+}
+
+/// The command a double-click on the playlist `id` sends: it opens the
+/// playlist while it is closed and closes the one the core holds open.
+fn toggle_command(is_open: bool, id: &str) -> GuiPlaylistsCommand {
+    if is_open {
+        GuiPlaylistsCommand::Collapse
+    } else {
+        GuiPlaylistsCommand::Open { id: id.to_owned() }
     }
 }
 
@@ -420,9 +436,8 @@ fn playlist_node(
     let is_open = frame.open.as_ref().is_some_and(|open| open.id == id);
     let selected = picked == Some(&Pick::Playlist(id.clone()));
     let press_link = link.clone();
-    let play_link = link.clone();
     let press_id = id.clone();
-    let play_id = id.clone();
+    let toggle_id = id.clone();
     let context_id = id.clone();
     let rename_here = rename.as_ref().is_some_and(|draft| draft.id == id);
     let rename_name = rename.as_ref().map(|draft| draft.name.clone());
@@ -433,35 +448,19 @@ fn playlist_node(
             class: "flex flex-col",
             button {
                 "type": "button",
-                class: "flex w-full items-center text-left",
+                class: "tree-parent flex w-full items-center text-left",
                 style: row_style(selected, 0),
+                "aria-expanded": "{is_open}",
                 "data-playlists-row": "playlist",
                 onclick: move |_| {
                     press_pick.set(Some(Pick::Playlist(press_id.clone())));
-                    press_link.playlists(if is_open {
-                        GuiPlaylistsCommand::Collapse
-                    } else {
-                        GuiPlaylistsCommand::Open { id: press_id.clone() }
-                    });
                 },
                 ondoubleclick: move |_| {
-                    play_link.playlists(GuiPlaylistsCommand::Action {
-                        id: play_id.clone(),
-                        action: GuiPlaylistAction::Play,
-                    });
+                    press_link.playlists(toggle_command(is_open, &toggle_id));
                 },
                 oncontextmenu: move |event: MouseEvent| {
                     open_menu(&event, Pick::Playlist(context_id.clone()), pick, menu);
                 },
-                span {
-                    class: "flex flex-none items-center",
-                    style: "width: 20px; color: var(--canvas-muted);",
-                    if is_open {
-                        ChevronDown { size: 14 }
-                    } else {
-                        ChevronRight { size: 14 }
-                    }
-                }
                 Truncate {
                     text: playlist.name.clone(),
                     class: "min-w-0 flex-1".to_owned(),
@@ -469,10 +468,11 @@ fn playlist_node(
                     css: "color: var(--canvas-text);".to_owned(),
                 }
                 span {
-                    class: "flex-none font-mono tabular-nums",
+                    class: "tree-trailing flex-none font-mono tabular-nums",
                     style: "font-size: 12px; color: var(--canvas-muted);",
                     "{playlist.item_count}"
                 }
+                TreeHint { open: is_open }
             }
             if rename_here {
                 { rename_field(settings, rename_name) }

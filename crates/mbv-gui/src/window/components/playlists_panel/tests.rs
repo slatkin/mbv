@@ -1,5 +1,8 @@
 //! The Playlists screen's control contract: which controls a playlist and an
-//! item offer, and the command each one sends.
+//! item offer, the command each one sends, and the command a double-click on a
+//! playlist row sends.
+
+use rstest::rstest;
 
 use super::*;
 
@@ -48,4 +51,16 @@ fn rename_sends_nothing_and_delete_names_the_playlist() {
             id: "pl".to_owned()
         })
     );
+}
+
+/// A double-click opens a closed playlist and collapses the open one
+/// (gui-tree-double-click design D1, D5).
+#[rstest]
+#[case::closed(false, GuiPlaylistsCommand::Open { id: "pl".to_owned() })]
+#[case::open(true, GuiPlaylistsCommand::Collapse)]
+fn a_double_click_toggles_the_playlist_row(
+    #[case] is_open: bool,
+    #[case] expected: GuiPlaylistsCommand,
+) {
+    assert_eq!(toggle_command(is_open, "pl"), expected);
 }
