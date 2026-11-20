@@ -9,12 +9,12 @@
 
 ## 2. Row art model and Service requests
 
-- [ ] 2.1 Add `ImageRendition { Hero, Row }` to `ImageFetchReq` (all current callers pass `Hero`); verify `cargo check --workspace` passes and existing image-fetch tests pass unchanged.
-- [ ] 2.2 Build the Emby `Row` URL (design D6: first declared tagged type with `tag=`, untagged chain fallback, `maxWidth=128` or `maxWidth=72&maxHeight=72` by declared arm, `quality=80`) and its `row:` cache key; verify unit tests cover the tagged URL, the untagged fallback, and the square size.
-- [ ] 2.3 Parse the Audiobookshelf library item `updatedAt` into the catalog entry for books and podcasts in `crates/mbv-audiobookshelf/src/catalog.rs`; verify a catalog test reads it from a fixture and defaults when it is absent.
-- [ ] 2.4 Build the Audiobookshelf `Row` cover URL (`width=128` book, `width=72` podcast, `format=jpeg`) and its `row:abs:` key holding `updated_at`; verify unit tests cover both widths and the key change on a new `updated_at`.
-- [ ] 2.5 Add the row LRU (256 entries, keys starting `row:`) and the row pending queue (replaced on each set, drained after the Hero/card queue, at most 4 of `MAX_IMAGE_FETCHES` slots) to `crates/mbv-images/src/cache.rs`; verify tests: a row insert never evicts a non-row key, a replaced set drops an unstarted row request and clears its loading mark (design D7), and a waiting Hero request is taken before a waiting row request.
-- [ ] 2.6 Add `docs/invariants/` entry for the row cache key rule (a row key holds the Service's change value — Emby tag, Audiobookshelf `updatedAt` — so changed art never reuses old bytes); verify the file exists with the next free invariant number.
+- [x] 2.1 Add `ImageRendition { Hero, Row }` to `ImageFetchReq` (all current callers pass `Hero`); verify `cargo check --workspace` passes and existing image-fetch tests pass unchanged.
+- [x] 2.2 Build the Emby `Row` URL (design D6: first declared tagged type with `tag=`, untagged chain fallback, `maxWidth=128` or `maxWidth=72&maxHeight=72` by declared arm, `quality=80`) and its `row:` cache key; verify unit tests cover the tagged URL, the untagged fallback, and the square size.
+- [x] 2.3 Parse the Audiobookshelf library item `updatedAt` into the catalog entry for books and podcasts in `crates/mbv-audiobookshelf/src/catalog.rs`; verify a catalog test reads it from a fixture and defaults when it is absent.
+- [x] 2.4 Build the Audiobookshelf `Row` cover URL (`width=128` book, `width=72` podcast, `format=jpeg`) and its `row:abs:` key holding `updated_at`; verify unit tests cover both widths and the key change on a new `updated_at`.
+- [x] 2.5 Add the row LRU (256 entries, keys starting `row:`) and the row pending queue (replaced on each set, drained after the Hero/card queue, at most 4 of `MAX_IMAGE_FETCHES` slots) to `crates/mbv-images/src/cache.rs`; verify tests: a row insert never evicts a non-row key, a replaced set drops an unstarted row request and clears its loading mark (design D7), and a waiting Hero request is taken before a waiting row request.
+- [x] 2.6 Add `docs/invariants/` entry for the row cache key rule (a row key holds the Service's change value — Emby tag, Audiobookshelf `updatedAt` — so changed art never reuses old bytes); verify the file exists with the next free invariant number.
 
 ## 3. Row art in the core
 
