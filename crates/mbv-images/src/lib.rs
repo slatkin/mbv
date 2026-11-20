@@ -7,6 +7,7 @@
 pub mod cache;
 mod protocol;
 pub mod resize;
+pub mod row;
 pub mod title_overlay;
 pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
 pub const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
@@ -225,6 +226,31 @@ pub enum ImageFetchOutcome {
     /// No answer: a timeout, a transport failure, or no client yet. This says
     /// nothing about whether art exists, so the key stays open to a retry.
     Interrupted,
+}
+
+/// Prefix of every row-rendition cache key (design D6): row images have their
+/// own memory LRU and their own pending queue.
+pub const ROW_IMAGE_CACHE_KEY_PREFIX: &str = "row:";
+
+/// Whether `key` names a row-rendition image.
+#[must_use]
+pub fn is_row_cache_key(key: &str) -> bool {
+    key.starts_with(ROW_IMAGE_CACHE_KEY_PREFIX)
+}
+
+/// Cache key for an Emby row image (design D6): `row:{item_id}:{type}:{tag}`,
+/// or `row:{item_id}:untagged` when the item declares no tag in the row chain.
+#[must_use]
+pub fn emby_row_cache_key(item_id: &str, image: Option<&RowEmbyImage>) -> String {
+    image.map_or_else(
+        || format!("{ROW_IMAGE_CACHE_KEY_PREFIX}{item_id}:untagged"),
+        |image| {
+            format!(
+                "{ROW_IMAGE_CACHE_KEY_PREFIX}{item_id}:{}:{}",
+                image.kind, image.tag
+            )
+        },
+    )
 }
 
 /// A pending card-image fetch, queued when the in-flight limit is reached.

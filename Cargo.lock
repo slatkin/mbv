@@ -3820,6 +3820,7 @@ dependencies = [
  "ab_glyph",
  "foldhash 0.2.0",
  "image",
+ "mbv-emby-model",
  "num-traits",
  "ratatui",
  "ratatui-image",

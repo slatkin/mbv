@@ -1,8 +1,9 @@
 use super::super::super::{App, MusicEvent};
 use super::CardImageDrain;
 use mbv_images::{
-    ImageDecode, ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
-    QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, SourceImage, cover_fill_hero_box,
+    ImageDecode, ImageFetchOutcome, ImageFetchReq, ImageRendition, ImageSource,
+    QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, SourceImage,
+    cover_fill_hero_box,
 };
 use mbv_theme as palette;
 use ratatui_image::picker::Picker;
@@ -623,16 +624,16 @@ fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> Fetched
         series_id,
         types,
         source,
-        rendition: _,
+        rendition,
     } = req;
     match source {
         ImageSource::Audiobookshelf {
             server_url,
             api_key,
         } => fetch_audiobookshelf_image(&cache_key, &server_url, &api_key, &item_id),
-        ImageSource::Emby => {
-            fetch_emby_image(&cache_key, &item_id, &series_id, &types, emby_url, token)
-        }
+        ImageSource::Emby => fetch_emby_image(
+            &cache_key, &item_id, &series_id, &types, &rendition, emby_url, token,
+        ),
     }
 }
 
@@ -684,11 +685,22 @@ const IMAGE_FETCH_MAX_SIDE: u32 = 1280;
 /// generation any Client paints, so it stays high.
 const IMAGE_FETCH_QUALITY: u8 = 90;
 
+/// A landscape or portrait row image's requested width: 2x the 64 x 36 row
+/// box. No height joins it, because Emby then forces that exact size.
+const ROW_LANDSCAPE_MAX_WIDTH: u32 = 128;
+
+/// A Square row image's requested sides: 2x the 36 x 36 painted box.
+const ROW_SQUARE_MAX_SIDE: u32 = 72;
+
+/// A row image's JPEG quality (design D6).
+const ROW_IMAGE_QUALITY: u8 = 80;
+
 fn fetch_emby_image(
     cache_key: &str,
     item_id: &str,
     series_id: &str,
     types: &[String],
+    rendition: &ImageRendition,
     server_url: &str,
     token: &str,
 ) -> FetchedBytes {
@@ -697,9 +709,30 @@ fn fetch_emby_image(
         tracing::debug!(name: "images.disk_cache.hit", target: "images", item = %item_id, "image disk cache hit");
         return FetchedBytes::Bytes(cached);
     }
-    let fetched = first_image(types, |kind| {
-        fetch_emby_image_type(kind, item_id, series_id, server_url, token)
-    });
+    // A row that resolved a declared tag asks for that one kind and tag
+    // (design D6); every other request walks `types` untagged.
+    let declared = match rendition {
+        ImageRendition::Row(row) => row.emby.as_ref(),
+        ImageRendition::Hero => None,
+    };
+    let fetched = declared.map_or_else(
+        || {
+            first_image(types, |kind| {
+                fetch_emby_image_type(kind, item_id, series_id, rendition, None, server_url, token)
+            })
+        },
+        |image| {
+            fetch_emby_image_type(
+                &image.kind,
+                item_id,
+                series_id,
+                rendition,
+                Some(&image.tag),
+                server_url,
+                token,
+            )
+        },
+    );
     // Cache original server bytes as-is; Emby already resized these to
     // `IMAGE_FETCH_MAX_SIDE`.
     if let FetchedBytes::Bytes(ref bytes) = fetched {
@@ -723,6 +756,8 @@ fn fetch_emby_image_type(
     kind: &str,
     item_id: &str,
     series_id: &str,
+    rendition: &ImageRendition,
+    tag: Option<&str>,
     server_url: &str,
     token: &str,
 ) -> FetchedBytes {
@@ -744,26 +779,84 @@ fn fetch_emby_image_type(
         let Some(child_id) = child_id else {
             return FetchedBytes::Missing;
         };
-        let url = format!(
-            "{server_url}/Items/{child_id}/Images/Primary?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
-        );
+        let url = emby_image_url(server_url, token, &child_id, "Primary", rendition, tag);
         return fetch_url(&url);
     }
 
-    let src = match kind {
+    let url = emby_type_url(kind, item_id, series_id, rendition, tag, server_url, token);
+    fetch_url(&url)
+}
+
+/// The URL of one Emby image kind, addressed the way the kind addresses its
+/// source: `Logo`, `Backdrop`, and `Thumb` with a `series_id` address the
+/// series, every other combination addresses the item.
+fn emby_type_url(
+    kind: &str,
+    item_id: &str,
+    series_id: &str,
+    rendition: &ImageRendition,
+    tag: Option<&str>,
+    server_url: &str,
+    token: &str,
+) -> String {
+    let src = emby_image_source(kind, item_id, series_id);
+    emby_image_url(
+        server_url,
+        token,
+        src,
+        emby_image_kind(kind),
+        rendition,
+        tag,
+    )
+}
+
+fn emby_image_source<'a>(kind: &str, item_id: &'a str, series_id: &'a str) -> &'a str {
+    match kind {
         "Logo" | "Backdrop" | "Thumb" if !series_id.is_empty() => series_id,
         _ => item_id,
-    };
-    let image_kind = match kind {
+    }
+}
+
+fn emby_image_kind(kind: &str) -> &str {
+    match kind {
         "Backdrop" => "Backdrop/0",
         "Logo" => "Logo",
         "Thumb" => "Thumb",
         _ => "Primary",
+    }
+}
+
+/// The request URL for one Emby image (design D6): a Hero request keeps the
+/// shared 1280-pixel, quality-90 cap; a Row request asks for 2x the painted row
+/// box — one width for a landscape or portrait arm, both sides for a Square
+/// arm (Emby distorts an image given an exact width and height with a
+/// different aspect). Only a declared row tag rides the URL.
+fn emby_image_url(
+    server_url: &str,
+    token: &str,
+    src: &str,
+    image_kind: &str,
+    rendition: &ImageRendition,
+    tag: Option<&str>,
+) -> String {
+    let (size, quality) = match rendition {
+        ImageRendition::Hero => (
+            format!("maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}"),
+            IMAGE_FETCH_QUALITY,
+        ),
+        ImageRendition::Row(row) if row.square => (
+            format!("maxWidth={ROW_SQUARE_MAX_SIDE}&maxHeight={ROW_SQUARE_MAX_SIDE}"),
+            ROW_IMAGE_QUALITY,
+        ),
+        ImageRendition::Row(_) => (
+            format!("maxWidth={ROW_LANDSCAPE_MAX_WIDTH}"),
+            ROW_IMAGE_QUALITY,
+        ),
     };
-    let url = format!(
-        "{server_url}/Items/{src}/Images/{image_kind}?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
-    );
-    fetch_url(&url)
+    let tag = tag.map_or_else(String::new, |tag| format!("&tag={tag}"));
+    format!(
+        "{server_url}/Items/{src}/Images/{image_kind}?{size}&quality={quality}{tag}&api_key={token}"
+    )
 }
 
 fn fetch_url(url: &str) -> FetchedBytes {
