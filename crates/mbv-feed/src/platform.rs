@@ -29,10 +29,10 @@ pub enum FeedPlatform {
     InternetArchive,
 }
 
-/// The host domains of the nine platforms that serve feeds from a shared host,
+/// The host domains of the platforms that serve feeds from a shared host,
 /// paired with their platform. `PeerTube` is absent: every instance has its own
 /// host, so it needs the path rule.
-const HOST_DOMAINS: [(&str, FeedPlatform); 9] = [
+const HOST_DOMAINS: &[(&str, FeedPlatform)] = &[
     ("youtube.com", FeedPlatform::YouTube),
     ("soundcloud.com", FeedPlatform::SoundCloud),
     ("spreaker.com", FeedPlatform::Spreaker),
@@ -45,7 +45,7 @@ const HOST_DOMAINS: [(&str, FeedPlatform); 9] = [
 ];
 
 /// The paths `PeerTube` serves feeds on (`server/core/controllers/feeds/`).
-const PEER_TUBE_PATHS: [&str; 5] = [
+const PEER_TUBE_PATHS: &[&str] = &[
     "/feeds/videos.xml",
     "/feeds/videos.rss",
     "/feeds/videos.atom",
@@ -56,7 +56,7 @@ const PEER_TUBE_PATHS: [&str; 5] = [
 /// The query parameters that narrow a `PeerTube` feed to a channel or a playlist
 /// (`server/core/middlewares/validators/feeds.ts`). An instance-wide feed has
 /// none of them.
-const PEER_TUBE_FILTERS: [&str; 5] = [
+const PEER_TUBE_FILTERS: &[&str] = &[
     "accountId",
     "accountName",
     "videoChannelId",
@@ -75,8 +75,7 @@ impl FeedPlatform {
     #[must_use]
     pub fn of_url(url: &str) -> Option<Self> {
         let (host, path_and_query) = host_and_path(url)?;
-        let host = host.to_ascii_lowercase();
-        if let Some(platform) = host_platform(&host) {
+        if let Some(platform) = host_platform(host) {
             return Some(platform);
         }
         peer_tube_feed(path_and_query).then_some(Self::PeerTube)
@@ -105,16 +104,18 @@ fn host_and_path(url: &str) -> Option<(&str, &str)> {
 /// The platform that owns `host` by its domain, or `None`.
 fn host_platform(host: &str) -> Option<FeedPlatform> {
     HOST_DOMAINS
-        .into_iter()
-        .find_map(|(domain, platform)| host_matches(host, domain).then_some(platform))
+        .iter()
+        .find_map(|&(domain, platform)| host_matches(host, domain).then_some(platform))
 }
 
 /// Whether `host` is `domain` itself or a subdomain of it.
 fn host_matches(host: &str, domain: &str) -> bool {
-    host == domain
+    host.eq_ignore_ascii_case(domain)
         || host
-            .strip_suffix(domain)
-            .is_some_and(|prefix| prefix.ends_with('.'))
+            .len()
+            .checked_sub(domain.len() + 1)
+            .and_then(|dot| Some((host.get(dot..=dot)?, host.get(dot + 1..)?)))
+            .is_some_and(|(dot, suffix)| dot == "." && suffix.eq_ignore_ascii_case(domain))
 }
 
 /// Whether `path_and_query` is a `PeerTube` feed narrowed to a channel or a
@@ -122,7 +123,7 @@ fn host_matches(host: &str, domain: &str) -> bool {
 fn peer_tube_feed(path_and_query: &str) -> bool {
     let (path, query) = path_and_query
         .split_once('?')
-        .map_or((path_and_query, ""), |(path, query)| (path, query));
+        .unwrap_or((path_and_query, ""));
     PEER_TUBE_PATHS.contains(&path) && query.split('&').any(has_peer_tube_filter)
 }
 

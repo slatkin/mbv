@@ -84,7 +84,7 @@ pub fn LibraryFeedsList() -> Element {
     // The heading marks the Feed platform every checked subscription shares,
     // and RSS while the tab's frame has not landed
     // (gui-library-header-service-marks design D5).
-    let mark = frame.map_or(ServiceMark::Rss, |frame| ServiceMark::feeds(frame.platform));
+    let mark = ServiceMark::feeds(frame.and_then(|frame| frame.platform));
 
     // The painted rows of the flat list (row 11.1): the same model
     // [`crate::window::library::feeds`] builds from the carried content,
