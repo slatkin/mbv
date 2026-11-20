@@ -33,7 +33,7 @@ place of the artist-row parts of 2.2 and the series-row parts of 3.2.
 ## 6. Docs and gates
 
 - [x] 6.1 Update `docs/architecture/gui-client.md` where it describes the tree rows' press, chevron, or double-click, so it states design D1 to D3; keep the Right and Left key text as it is. Verify: `rg -n -i "chevron" docs/architecture/gui-client.md` names no tree-row chevron.
-- [ ] 6.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`. Verify: all three pass with no new warning.
+- [x] 6.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`. Verify: all three pass with no new warning.
 
 ## Workflow follow-up
 
