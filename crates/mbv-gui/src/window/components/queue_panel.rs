@@ -17,8 +17,8 @@
 //! apart without a gap. Every row leads with its padded queue ordinal, carries
 //! one title line, and paints the item's duration in its right column in every
 //! state — no second line, no date gutter, no time left, and no state glyph.
-//! The rows are square-cornered, and the now-playing row alone rounds its
-//! corners. The rows paint three fills: the now-playing row's green fill, a
+//! The rows are square-cornered, the now-playing row included (user request
+//! 2026-11-20). The rows paint three fills: the now-playing row's green fill, a
 //! marked row's raised fill, and the hovered row's own fill; every other row
 //! paints none. The cursor slot paints nothing: only a multi-selection shows as
 //! selected. A marked row's look needs no focus fact: the window holds no focus,
@@ -81,7 +81,7 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry};
-use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow, GuiSemanticState};
+use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
 use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
@@ -116,12 +116,9 @@ mod tests;
 /// — as a missing visual does.
 const EMPTY_QUEUE_TEXT: &str = "¯\\_(ツ)_/¯";
 
-/// The row's corner radius in logical pixels (design D3): the rows are square,
-/// and the now-playing row alone rounds its corners.
+/// The row's corner radius in logical pixels (design D3; user request
+/// 2026-11-20): every row is square, the now-playing row included.
 const ROW_RADIUS_PX: u16 = 0;
-
-/// The now-playing row's corner radius in logical pixels (design D3).
-const PLAYING_ROW_RADIUS_PX: u16 = 4;
 
 /// The hovered row's trailing inset: the actions button's width plus the 2 px
 /// gap it leaves at the row's edge, so the title measures into the room the
@@ -503,16 +500,11 @@ pub fn QueuePanel() -> Element {
                                 Some(item) => {
                                     let hovered = queue.hover == Some(item.slot);
                                     let slot = item.slot;
-                                    // The row's inline size: the fixed row height and
-                                    // the radius the canvas draws, with the trailing
+                                    // The row's inline size: the fixed row height, the
+                                    // square corners the canvas draws, and the trailing
                                     // room the hovered row's actions button needs.
-                                    let radius = if matches!(item.state, GuiSemanticState::NowPlaying { .. }) {
-                                        PLAYING_ROW_RADIUS_PX
-                                    } else {
-                                        ROW_RADIUS_PX
-                                    };
                                     let mut button_style = format!(
-                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: {radius}px;",
+                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: {ROW_RADIUS_PX}px;",
                                         if hovered {
                                             format!("4px {HOVERED_TRAILING_PAD_PX}px")
                                         } else {

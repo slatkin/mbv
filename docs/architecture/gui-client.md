@@ -769,8 +769,8 @@ the design's delineated row (`gui-delineated-rows` design D3): its
 right-aligned two-digit mono ordinal in a 28 px column, one title line, and
 the item's duration in a 96 px right column in every row state, at the
 fixed 40 logical pixel height with no gap between rows, 10 px padding, and
-a 1 px `--canvas-border` divider under each row. The rows are square, and
-the now-playing row alone rounds its corners (radius 4). A row with
+a 1 px `--canvas-border` divider under each row. The rows are square, the
+now-playing row included (user request 2026-11-20). A row with
 progress — a partial row, and the now-playing row, whose ring follows the
 playhead — carries the progress ring after its title: a 14 px svg in the
 collapsed rail's two-circle form, the track in `--ef-bg2` and the played arc

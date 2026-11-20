@@ -163,8 +163,8 @@ fn the_rows_paint_the_watched_and_now_playing_states() {
         "{playing_row}"
     );
     assert!(
-        playing_row.contains("border-radius: 4px"),
-        "the now-playing row alone rounds its corners: {playing_row}"
+        playing_row.contains("border-radius: 0px"),
+        "the now-playing row is as square as every row: {playing_row}"
     );
     let playing_title = fixture.style_of("[data-slot=\"2\"] .truncate");
     assert!(
