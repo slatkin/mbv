@@ -91,11 +91,12 @@ pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerEr
 /// The Owner link starts MPRIS from `App` construction (#160, moved there from
 /// `startup` in #175 so `App` owns the resulting handle and can `rebind` it
 /// later — see `App::switch_to_direct_remote` / `App::restore_local_mode`).
-/// That is safe against a same-machine bus-name collision because `mbvd` has
-/// no D-Bus/zbus dependency and never claims `org.mpris.MediaPlayer2.mbv`
-/// itself (`on_player_ready` is wired to a no-op in `crates/mbvd/src/main.rs`),
-/// so this Client is the only thing that will ever own the name for a
-/// daemon-connected session.
+/// The Client publisher claims no name up front (design D1): a Client attached
+/// to the local Owner holds no name, because the Owner holds
+/// `org.mpris.MediaPlayer2.mbv` for its lifetime, and a Client controlling a
+/// remote Player owner claims `org.mpris.MediaPlayer2.mbv.instance<pid>` only
+/// while the local Owner is not playing. `mbvd` has no D-Bus/zbus dependency;
+/// its Player-ready hook is a no-op (design D5).
 ///
 /// `image_decode` is the calling Client's image setting (design D14): the TUI
 /// keeps decoded pixels, the GUI keeps the server's bytes only.

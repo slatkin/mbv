@@ -21,9 +21,12 @@ use std::sync::{Arc, Mutex, mpsc};
 ///
 /// The publishing rule (owner-mpris-fallback design D3) reads the attached
 /// endpoint: a Client attached to the local Owner holds no name, because the
-/// Owner publishes it. A freshly constructed Client has no suspended local
-/// link yet, so its local status counts as not `Playing`; every later change
-/// of attachment rebinds the rule (`rebind_mpris_to_current_player`).
+/// Owner holds `org.mpris.MediaPlayer2.mbv` for its lifetime. A Client that
+/// controls a remote Player owner claims
+/// `org.mpris.MediaPlayer2.mbv.instance<pid>` while the local Owner is not
+/// playing. A freshly constructed Client has no suspended local link yet, so
+/// its local status counts as not `Playing`; every later change of attachment
+/// rebinds the rule (`rebind_mpris_to_current_player`).
 ///
 /// Test builds leave `mpris` unset (`build()` initializes it to None):
 /// `mpris::start` serves a D-Bus connection from a thread with no shutdown

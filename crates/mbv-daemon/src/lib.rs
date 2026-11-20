@@ -3,7 +3,11 @@
 //! The daemon event loop, ctrl server, owner queue handling, queue persistence, and
 //! Service reconciliation live here. Playback runs in `mbv-player` and desktop surfaces
 //! in `mbv-desktop`. `mbvd` itself is a headless server daemon with no tray, pinned
-//! panel, or Client functionality; the tray and MPRIS live in the Local process.
+//! panel, or Client functionality. MPRIS lives in the Local process under two publishers
+//! (design D1): the local Owner holds `org.mpris.MediaPlayer2.mbv` for its lifetime, and
+//! a Client that controls a remote Player owner holds
+//! `org.mpris.MediaPlayer2.mbv.instance<pid>` while the local Owner is not playing. The
+//! tray lives in the Local process too.
 
 pub(crate) mod ctrl;
 #[cfg(test)]
