@@ -1319,7 +1319,7 @@ variants are `openDestination` (`position`), `collectionToggle` (`target`,
 (`albumId`),
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
 `shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), `rowMenu`
-(`itemId`), and the Home commands — `homeSelect`, `homePlay`,
+(`itemId`), `rowsInView` (`scope`, `ids`), and the Home commands — `homeSelect`, `homePlay`,
 `homePlayNext`, and `homeQueue` (each carrying `row`, the
 `GuiHomeRowId` the frame painted). Item
 identities are stable Service ids, never row positions, so a command built
@@ -1333,6 +1333,12 @@ queue, so a Home command never mutates it directly, and Home's rows carry
 no library the Music play-next admission resolves against. A stale frame's
 row, one whose item the App's Home data no longer holds, logs and changes
 nothing, as every item-named variant's stale arm does.
+
+The `rowsInView` variant carries no action for an item: the window reports the
+ids of the rows it paints, and the core stores the set for that scope, stamps
+its navigation clock, and queues the in-view rows' row art once navigation is
+idle (the Library row art flow above). It is the one Library command the window
+sends with no press behind it.
 
 The collection commands serve every destination that has a dropdown, and
 their `target` is a `GuiCollectionTarget`: the Grouped Music library, a
@@ -1914,7 +1920,55 @@ block (art, selected unit, actions, overview), and the list band (the movie's
 credits table and the IMDb button).
 `LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play, Play next, and Add to queue buttons,
-`LibraryPillButton` the Shows Workspace's season pills, `LibraryItemRow` and
-`LibraryLetterHeading` the flat list rows, and `LibraryVirtualList` the
-scroller of every list. Home still
+`LibraryPillButton` the Shows Workspace's season pills, `LibraryItemRow` the
+top-level rows of every list, `LibraryLetterHeading` the letter and section
+headings, and `LibraryVirtualList` the scroller of every list. Home still
 paints `LibraryHeroSummary`.
+
+### The top-level Library row and its art
+
+`LibraryItemRow`
+(`crates/mbv-gui/src/window/components/library_item_row.rs`) is the one
+top-level row part of every destination (`gui-delineated-rows` design D1, D2):
+Home, the Emby lists, the Music artist rows, the Shows series rows, the New and
+Upcoming rows, Audiobooks, Podcasts, and Feeds. A destination supplies its hook
+prefix (`data-library-<attr>-*`), its text, its thumb, and its handlers, and
+never restates the look. The row is 56 px high with square corners, an 8 px
+inline padding, a 12 px gap, and a 1 px `--canvas-border` divider under it;
+`LibraryVirtualList` paints the matching rule over the list's first row, so the
+list frame has one top rule in every destination.
+
+The thumb is a 64 × 36 box on `--canvas-well`: a landscape or portrait image
+cover-fills it, a square image shows whole at the box's height, and a row with
+no image paints the media kind's `EighthNotes` or `MonitorPlay` icon on
+`--canvas-muted`. The row's resume percent paints in 3 px along the box's
+bottom edge, on `--canvas-thumb-track` under `--canvas-partial`, and no row
+paints a progress run under itself. A top-level tree node — a Music artist row
+or a Shows series row — also names its open state, and the part paints the one
+caret and the row's `aria-expanded`. Nested rows keep their own painters and
+heights: a Music album or track, and a Shows season or episode.
+
+Every row frame carries `GuiRowArtFrame` — the cached image and the fit its own
+pixels ask for, a fetch in flight, a source that answered with no image, or a
+kind with no art source — and `GuiRowMediaKindFrame` for the icon. The core
+fills both from the item's Hero artwork source (`gui-delineated-rows` design
+D5), so a row shows the image its Hero shows, and resolves them from the cache
+on each projection without a fetch.
+
+The list reports the rows it paints through
+`GuiLibraryCommand::RowsInView { scope, ids }`
+(`crates/mbv-gui/src/window/library/list/geometry.rs`, `rows_in_view_ids`): the
+painted
+window plus four rows of overscan either side, sent only when the set changes.
+`GuiRowArtScope` names the list the ids belong to — Home, Emby, Music,
+ShowsSeries, ShowsNew, ShowsUpcoming, Podcasts, Audiobooks, or Feeds — and a
+Shows list reports the scope of the view it paints. The ids are the rows'
+stable ids and never coordinates; a nested row names none, and the Music artist
+rows report the core's own `artist:` and `artist-name:` encoding. The core
+stores the set per scope, stamps its navigation-idle clock, and queues the
+in-view rows' `Row` fetches once navigation is idle
+(`src/app/gui_library/rows_in_view.rs`). Row cache keys carry the Service's
+change value (`row:{item_id}:{type}:{tag}`, and
+`row:abs:{server_hash}:{library_item_id}:{updated_at}`), the cache keeps its own
+256-entry row LRU, and row fetches take at most 4 of the 6 fetch slots, so a
+Hero fetch always has one.
