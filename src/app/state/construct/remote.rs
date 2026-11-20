@@ -19,20 +19,33 @@ use std::sync::{Arc, Mutex, mpsc};
 /// connection state), so MPRIS reads status and the disconnect signal
 /// through behavior, never through shared-state handles.
 ///
+/// The publishing rule (owner-mpris-fallback design D3) reads the attached
+/// endpoint: a Client attached to the local Owner holds no name, because the
+/// Owner holds `org.mpris.MediaPlayer2.mbv` for its lifetime. A Client that
+/// controls a remote Player owner claims
+/// `org.mpris.MediaPlayer2.mbv.instance<pid>` while the local Owner is not
+/// playing. A freshly constructed Client has no suspended local link yet, so
+/// its local status counts as not `Playing`; every later change of attachment
+/// rebinds the rule (`rebind_mpris_to_current_player`).
+///
 /// Test builds leave `mpris` unset (`build()` initializes it to None):
-/// `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real D-Bus
-/// session bus from a thread with no shutdown path -- leaked into every test
-/// process that constructs a remote App, where process teardown races it
-/// (issue #757). Tests leave `mpris` unset.
+/// `mpris::start` serves a D-Bus connection from a thread with no shutdown
+/// path -- leaked into every test process that constructs a remote App, where
+/// process teardown races it (issue #757). Tests leave `mpris` unset.
 #[cfg(not(test))]
-fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::MprisHandle {
+fn start_mpris(
+    remote: &mbv_remote_player::RemotePlayer,
+    endpoint: &DaemonEndpoint,
+) -> mbv_desktop::mpris::MprisHandle {
     let status_remote = remote.clone();
     let send_remote = remote.clone();
     let disconnect_remote = remote.clone();
+    let endpoint_is_local = endpoint.is_local();
     mbv_desktop::mpris::start(
         move || status_remote.status_snapshot(),
         move |transport| send_remote.send_transport(transport),
         Some(move || disconnect_remote.is_disconnected()),
+        move || mbv_desktop::mpris::client_publishes(endpoint_is_local, None),
         crate::config::image_disk_cache_path,
     )
 }
@@ -204,10 +217,10 @@ impl App {
         let system_notifications = app_config.system_notifications;
         // Both side effects below touch real system state, so test builds
         // must never run them (issue #757): the eviction thread scans and
-        // prunes the user's real image-cache dir, and `mpris::start` claims
-        // `org.mpris.MediaPlayer2.mbv` on the real D-Bus session bus from a
-        // thread that has no shutdown path -- leaked into every test process
-        // that constructs a remote App, where process teardown races it.
+        // prunes the user's real image-cache dir, and `mpris::start` serves a
+        // D-Bus connection on the real session bus from a thread that has no
+        // shutdown path -- leaked into every test process that constructs a
+        // remote App, where process teardown races it.
         #[cfg(not(test))]
         crate::config::evict_old_image_cache();
         // EmbyClient retains this snapshot only for constructing Emby API
@@ -219,7 +232,7 @@ impl App {
         let snapshot = RemoteSnapshot::take(&remote);
         let local_daemon_bootstrap = endpoint.is_local().then(|| snapshot.local_bootstrap());
         #[cfg(not(test))]
-        let mpris_handle = Some(start_mpris(&remote));
+        let mpris_handle = Some(start_mpris(&remote, endpoint));
         #[cfg(test)]
         let mpris_handle = None;
         let player = PlayerProxy::from_remote(remote, always_play_next);

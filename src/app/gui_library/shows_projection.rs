@@ -438,11 +438,15 @@ impl App {
     }
 
     /// Whether the frame path must start the Shows root load: no root level
-    /// yet, or a settled root that is not the All series list. A root already
-    /// loading is left alone so a repaint never starts a second request, and
-    /// a settled All list is left alone — landed rows or not — because the
+    /// yet, or a root whose mode is not the All series list. A root loading as
+    /// All is left alone so a repaint never starts a second request, and a
+    /// settled All list is left alone — landed rows or not — because the
     /// All series list is exactly what the destination presents. Any other
-    /// settled mode must be reloaded as All: the shared landing path's
+    /// mode must be reloaded as All, loading or settled, because the mode is
+    /// what the destination presents and not the level's progress: the tab's
+    /// activation pushes a root with no mode yet and its own browse request in
+    /// flight, so a loading root without the All mode would otherwise land a
+    /// list the destination never presents. The shared landing path's
     /// default-mode resolution (`maybe_capture_library_total_and_apply_default_pill`)
     /// replaces the first landed root with the Latest episodes list
     /// (`resolve_tv_content_mode`'s any-size Latest default), whose episodes
@@ -453,11 +457,8 @@ impl App {
         if !self.gui_tv_library(lib_idx) {
             return false;
         }
-        let Some(level) = self.libs.get(lib_idx).and_then(|lib| lib.nav_stack.last()) else {
+        if self.libs[lib_idx].nav_stack.is_empty() {
             return true;
-        };
-        if level.loading {
-            return false;
         }
         self.libs[lib_idx].tv_content_mode.as_ref() != Some(&TvContentMode::All)
     }

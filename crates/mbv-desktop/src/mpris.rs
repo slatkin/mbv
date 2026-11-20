@@ -1,6 +1,13 @@
+// Two publishers serve these interfaces (owner-mpris-fallback design D1): the
+// local Owner process holds `org.mpris.MediaPlayer2.mbv` for its lifetime
+// (`owner::start_owner`), and a Client that controls a remote Player owner
+// holds `org.mpris.MediaPlayer2.mbv.instance<pid>` only while the local Owner
+// is not playing (`start`, with the rule in `rule.rs`). The two names never
+// contend, so no process polls for a free name and no handoff can leave a gap.
+//
 // In test builds the D-Bus-serving machinery below is compiled out: nothing
-// may claim `org.mpris.MediaPlayer2.mbv` on the real session bus from a test
-// process (issue #757), so `start` is only reachable from production.
+// may claim an MPRIS bus name on the real session bus from a test process
+// (issue #757), so both publishers are only reachable from production.
 // Production builds keep full dead-code checking.
 
 #[cfg(not(test))]
@@ -22,6 +29,29 @@ use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::player::PlayerStatus;
 #[cfg(not(test))]
 use mbv_emby_model::{TICKS_PER_SECOND, saturating_i64_from_f64};
+
+#[cfg(not(test))]
+use claim::{NameClaim, instance_name};
+#[cfg(not(test))]
+use metadata::make_metadata;
+#[cfg(not(test))]
+use tick::{SignalCache, emit_changes, read_tick};
+
+#[cfg(not(test))]
+mod claim;
+#[cfg(not(test))]
+mod metadata;
+#[cfg(not(test))]
+mod owner;
+mod rule;
+#[cfg(test)]
+mod tests;
+#[cfg(not(test))]
+mod tick;
+
+#[cfg(not(test))]
+pub use owner::start_owner;
+pub use rule::client_publishes;
 
 #[cfg(not(test))]
 struct MediaPlayer2;
@@ -90,24 +120,29 @@ impl MediaPlayer2 {
     }
 }
 
-/// The live status-source/command-sender/disconnect-signal triple MPRIS
-/// publishes.
+/// The live status-source/command-sender/disconnect-signal/publish-rule set
+/// MPRIS publishes.
 ///
 /// Each member is a plain closure so callers hand over behavior, not shared
-/// state: the status source returns a fresh snapshot per call, and the
-/// optional disconnect signal answers whether the owner connection has
-/// dropped. Kept behind a handle (rather than baked directly into
-/// `MediaPlayer2Player` and the polling loop's captured variables) so
-/// `rebind` (#175) can re-point an already-registered MPRIS service at a
-/// different playback source without restarting the D-Bus connection: the
-/// App swaps between playback owners at runtime
-/// (`switch_to_direct_remote` / `restore_local_mode`), and MPRIS must track
-/// whichever one currently owns playback rather than staying wired to
-/// whatever was live when `start` was first called.
+/// state: the status source returns a fresh snapshot per call, the optional
+/// disconnect signal answers whether the owner connection has dropped, and the
+/// publish rule answers whether this Client should hold its instance name at
+/// all (design D3). Kept behind a handle (rather than baked directly into
+/// `MediaPlayer2Player` and the polling loop's captured variables) so `rebind`
+/// (#175) can re-point an already-registered MPRIS service at a different
+/// playback source without restarting the D-Bus connection: the App swaps
+/// between playback owners at runtime (`switch_to_direct_remote` /
+/// `restore_local_mode`), and MPRIS must track whichever one currently owns
+/// playback rather than staying wired to whatever was live when `start` was
+/// first called.
 pub struct MprisSource {
     status: Box<dyn Fn() -> PlayerStatus + Send + Sync>,
     send: Box<dyn Fn(TransportCommand) + Send + Sync>,
     disconnected: Option<Box<dyn Fn() -> bool + Send + Sync>>,
+    /// Whether the name should be on the bus right now. The Owner's publisher
+    /// answers true for as long as it runs; a Client answers through
+    /// [`client_publishes`].
+    publish: Box<dyn Fn() -> bool + Send + Sync>,
 }
 
 impl std::fmt::Debug for MprisSource {
@@ -181,68 +216,6 @@ fn us_to_seconds(microseconds: i64) -> f64 {
     microseconds as f64 / 1_000_000.0
 }
 
-/// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
-/// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
-/// it's cloned/called every poll tick without hesitation; kept independent of
-/// the D-Bus connection.
-#[cfg(not(test))]
-fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
-    if disconnected {
-        s.active = false;
-    }
-    s
-}
-
-#[cfg(not(test))]
-fn make_metadata(
-    s: &PlayerStatus,
-    art_path: fn(&str) -> Option<std::path::PathBuf>,
-) -> HashMap<String, zvariant::Value<'static>> {
-    make_metadata_with_art_resolver(s, art_path)
-}
-
-#[cfg(not(test))]
-fn make_metadata_with_art_resolver(
-    s: &PlayerStatus,
-    resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
-) -> HashMap<String, zvariant::Value<'static>> {
-    let mut m = HashMap::new();
-    let track_id = zvariant::ObjectPath::try_from(if s.active && !s.title.is_empty() {
-        "/org/mpris/MediaPlayer2/TrackList/Track1"
-    } else {
-        "/org/mpris/MediaPlayer2/TrackList/NoTrack"
-    })
-    .unwrap();
-    m.insert("mpris:trackid".to_string(), zvariant::Value::new(track_id));
-    if s.active && !s.title.is_empty() {
-        m.insert(
-            "xesam:title".to_string(),
-            zvariant::Value::new(s.title.clone()),
-        );
-        if s.runtime_ticks > 0 {
-            let length_us = s.runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
-            m.insert("mpris:length".to_string(), zvariant::Value::new(length_us));
-        }
-        if let Some(art_url) = resolve_art_url(&s.art_item_id, &s.art_album_id, resolve_path) {
-            m.insert("mpris:artUrl".to_string(), zvariant::Value::new(art_url));
-        }
-        if !s.artist.is_empty() {
-            m.insert(
-                "xesam:artist".to_string(),
-                zvariant::Value::new(vec![s.artist.clone()]),
-            );
-        }
-        if !s.album.is_empty() {
-            m.insert(
-                "xesam:album".to_string(),
-                zvariant::Value::new(s.album.clone()),
-            );
-        }
-    }
-    m
-}
-
-#[cfg(not(test))]
 #[cfg(not(test))]
 impl MediaPlayer2Player {
     /// Reads a fresh status snapshot through the source's closure and drops
@@ -458,123 +431,69 @@ impl MediaPlayer2Player {
     }
 }
 
+/// The polling loop both publishers run (owner-mpris-fallback design D2/D4).
+///
+/// Every 500 ms it re-reads the source, refreshes the snapshot the property
+/// getters read, keeps `name` claimed exactly while the source's publish rule
+/// holds, and signals whatever property changed. A publisher that holds no name
+/// publishes no property signals, so a released Client stays silent.
 #[cfg(not(test))]
 async fn poll_status(
     conn: zbus::Connection,
+    name: String,
     source_poll: MprisHandle,
     snapshot_poll: Arc<Mutex<PlayerStatus>>,
     art_path: fn(&str) -> Option<std::path::PathBuf>,
 ) {
-    let mut last_status = String::new();
-    let mut last_metadata_key = (String::new(), String::new(), String::new(), String::new());
-    let mut last_pos_seconds: i64 = -1;
-    let mut last_vol: i64 = -1;
+    let mut claim = NameClaim::default();
+    let mut cache = SignalCache::empty();
 
     loop {
         tokio::time::sleep(Duration::from_millis(500)).await;
         // Re-read the source every tick so a rebind takes effect immediately.
-        let is_disconnected = source_poll
-            .lock()
-            .unwrap()
-            .disconnected
-            .as_ref()
-            .is_some_and(|disconnected| disconnected());
-        let raw = (source_poll.lock().unwrap().status)();
-
-        let (cur_status, cur_metadata_key, cur_pos_us, cur_vol) = {
-            let s = effective_status(raw, is_disconnected);
-            let st = match (s.active, s.paused) {
-                (false, _) => "Stopped",
-                (true, true) => "Paused",
-                (true, false) => "Playing",
-            }
-            .to_string();
-            let pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
-            // Include the resolved cache path so artwork appearing mid-track
-            // triggers a metadata change instead of remaining absent.
-            let art_key =
-                resolve_art_url(&s.art_item_id, &s.art_album_id, art_path).unwrap_or_default();
-            let result = (
-                st,
-                (s.title.clone(), s.artist.clone(), s.album.clone(), art_key),
-                pos_us,
-                s.volume,
-            );
-            *snapshot_poll.lock().unwrap() = s;
-            result
-        };
-
-        let Ok(iface_ref) = conn
-            .object_server()
-            .interface::<_, MediaPlayer2Player>("/org/mpris/MediaPlayer2")
-            .await
-        else {
+        let (status, tick) = read_tick(&source_poll, art_path);
+        let publish = tick.publish;
+        *snapshot_poll.lock().unwrap() = status;
+        // A name that has just appeared on the bus reports its full state:
+        // drop the change caches so nothing is suppressed by a value carried
+        // over from before.
+        if claim.sync(&conn, &name, publish).await {
+            cache = SignalCache::empty();
+        }
+        // A publisher that holds no name emits nothing, and one whose rule says
+        // no stays silent even while a failed release leaves it on the bus.
+        if !publish || !claim.held {
             continue;
-        };
-        let ctxt = iface_ref.signal_emitter();
-        let iface = iface_ref.get().await;
-
-        if cur_status != last_status {
-            last_status = cur_status;
-            let _ = iface.playback_status_changed(ctxt).await;
         }
-        if cur_metadata_key != last_metadata_key {
-            last_metadata_key = cur_metadata_key;
-            let _ = iface.metadata_changed(ctxt).await;
-        }
-        let current_pos_seconds = cur_pos_us / 1_000_000;
-        if (current_pos_seconds - last_pos_seconds).abs() >= 5 {
-            last_pos_seconds = current_pos_seconds;
-            let _ = iface.position_changed(ctxt).await;
-        }
-        if cur_vol != last_vol {
-            last_vol = cur_vol;
-            let _ = iface.volume_changed(ctxt).await;
-        }
+        emit_changes(&conn, &tick, &mut cache).await;
     }
 }
 
-/// Starts the MPRIS D-Bus service against the `status` source closure,
-/// forwarding player commands via `send`.
-///
-/// `disconnected` (#160) is the daemon-connection drop signal for the
-/// remote-client case (`RemotePlayer::is_disconnected`); pass `None`
-/// for the local, non-daemon player, which has no such connection to lose.
-/// When set and answering true, published state is forced to
-/// `Stopped`/`NoTrack` regardless of what's still reported by `status` --
-/// see `effective_status`. This is a defense-in-depth net:
-/// `RemotePlayer::connect_endpoint` also clears its status directly at the
-/// point it detects an "expected" (silent) disconnect, but polling can
-/// race that update, so the signal is checked independently on every tick.
-///
-/// Returns a handle that `rebind` (#175) can later use to re-point this
-/// same live registration at a different `status`/`send`/`disconnected`
-/// triple -- needed because `App::switch_to_direct_remote` /
-/// `restore_local_mode` swap which owner holds playback
-/// at runtime, and MPRIS must follow whichever one is current rather than
-/// staying wired to whatever was live when `start` was first called.
-///
-/// # Panics
-///
-/// Panics if the `status` source closure panics (for example because the
-/// state mutex it reads behind is poisoned).
+/// Serves both MPRIS interfaces at `/org/mpris/MediaPlayer2` on a session
+/// connection that requests no name (design D4): each publisher claims its own
+/// name from the polling loop, so the interfaces are live before any claim.
 #[cfg(not(test))]
-pub fn start(
-    status: impl Fn() -> PlayerStatus + Send + Sync + 'static,
-    send: impl Fn(TransportCommand) + Send + Sync + 'static,
-    disconnected: Option<impl Fn() -> bool + Send + Sync + 'static>,
-    art_path: fn(&str) -> Option<std::path::PathBuf>,
-) -> MprisHandle {
-    let snapshot = Arc::new(Mutex::new(status()));
-    let source: MprisHandle = Arc::new(Mutex::new(MprisSource {
-        status: Box::new(status),
-        send: Box::new(send),
-        disconnected: disconnected
-            .map(|disconnected| Box::new(disconnected) as Box<dyn Fn() -> bool + Send + Sync>),
-    }));
-    let source_poll = Arc::clone(&source);
-    let snapshot_poll = Arc::clone(&snapshot);
+async fn serve_session(player_iface: MediaPlayer2Player) -> Result<zbus::Connection, zbus::Error> {
+    connection::Builder::session()?
+        .serve_at("/org/mpris/MediaPlayer2", MediaPlayer2)?
+        .serve_at("/org/mpris/MediaPlayer2", player_iface)?
+        .build()
+        .await
+}
 
+/// Starts the publisher thread both entry points share (design D2/D6).
+///
+/// The thread builds its own single-threaded runtime, serves the interfaces,
+/// and runs [`poll_status`] until the process ends. A runtime or connection
+/// failure is logged and parks the thread: a missing session bus is not an
+/// error, and playback never depends on it.
+#[cfg(not(test))]
+fn spawn_publisher(
+    name: String,
+    source: MprisHandle,
+    snapshot: Arc<Mutex<PlayerStatus>>,
+    art_path: fn(&str) -> Option<std::path::PathBuf>,
+) {
     thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -593,21 +512,11 @@ pub fn start(
         };
         rt.block_on(async move {
             let player_iface = MediaPlayer2Player {
-                source: Arc::clone(&source_poll),
-                snapshot: Arc::clone(&snapshot_poll),
+                source: Arc::clone(&source),
+                snapshot: Arc::clone(&snapshot),
                 art_path,
             };
-            let conn = match connection::Builder::session()
-                .unwrap()
-                .name("org.mpris.MediaPlayer2.mbv")
-                .unwrap()
-                .serve_at("/org/mpris/MediaPlayer2", MediaPlayer2)
-                .unwrap()
-                .serve_at("/org/mpris/MediaPlayer2", player_iface)
-                .unwrap()
-                .build()
-                .await
-            {
+            let conn = match serve_session(player_iface).await {
                 Ok(c) => c,
                 Err(e) => {
                     tracing::error!(
@@ -620,16 +529,67 @@ pub fn start(
                 }
             };
 
-            poll_status(conn, source_poll, snapshot_poll, art_path).await;
+            poll_status(conn, name, source, snapshot, art_path).await;
         });
     });
+}
 
+/// Starts the Client's MPRIS D-Bus service against the `status` source
+/// closure, forwarding player commands via `send`.
+///
+/// The connection serves both interfaces without requesting a name: `publish`
+/// is the Client publishing rule (design D3), and the polling loop claims
+/// `org.mpris.MediaPlayer2.mbv.instance<pid>` on a tick where the rule holds
+/// and releases it while the rule does not (design D4). A Client attached to
+/// the local Owner therefore holds no name at all, and a playing local Owner
+/// wins over the remote playback this Client publishes.
+///
+/// `disconnected` (#160) is the daemon-connection drop signal for the
+/// remote-client case (`RemotePlayer::is_disconnected`); pass `None`
+/// for the local, non-daemon player, which has no such connection to lose.
+/// When set and answering true, published state is forced to
+/// `Stopped`/`NoTrack` regardless of what's still reported by `status` --
+/// see `effective_status`. This is a defense-in-depth net:
+/// `RemotePlayer::connect_endpoint` also clears its status directly at the
+/// point it detects an "expected" (silent) disconnect, but polling can
+/// race that update, so the signal is checked independently on every tick.
+///
+/// Returns a handle that `rebind` (#175) can later use to re-point this
+/// same live registration at a different
+/// `status`/`send`/`disconnected`/`publish` set -- needed because
+/// `App::switch_to_direct_remote` / `restore_local_mode` swap which owner
+/// holds playback at runtime, and MPRIS must follow whichever one is current
+/// rather than staying wired to whatever was live when `start` was first
+/// called.
+///
+/// # Panics
+///
+/// Panics if the `status` source closure panics (for example because the
+/// state mutex it reads behind is poisoned).
+#[cfg(not(test))]
+pub fn start(
+    status: impl Fn() -> PlayerStatus + Send + Sync + 'static,
+    send: impl Fn(TransportCommand) + Send + Sync + 'static,
+    disconnected: Option<impl Fn() -> bool + Send + Sync + 'static>,
+    publish: impl Fn() -> bool + Send + Sync + 'static,
+    art_path: fn(&str) -> Option<std::path::PathBuf>,
+) -> MprisHandle {
+    let snapshot = Arc::new(Mutex::new(status()));
+    let source: MprisHandle = Arc::new(Mutex::new(MprisSource {
+        status: Box::new(status),
+        send: Box::new(send),
+        disconnected: disconnected
+            .map(|disconnected| Box::new(disconnected) as Box<dyn Fn() -> bool + Send + Sync>),
+        publish: Box::new(publish),
+    }));
+    spawn_publisher(instance_name(), Arc::clone(&source), snapshot, art_path);
     source
 }
 
 /// Re-points an already-registered MPRIS service (from `start`) at a
-/// different `status`/`send`/`disconnected` triple, without restarting the
-/// D-Bus connection or re-claiming the bus name.
+/// different `status`/`send`/`disconnected`/`publish` set, without
+/// restarting the D-Bus connection. The polling loop claims or releases the
+/// instance name on its next tick, as the new rule says.
 ///
 /// #175: `App::switch_to_direct_remote` and `restore_local_mode` swap which
 /// owner currently holds playback; before this existed,
@@ -645,27 +605,12 @@ pub fn rebind(
     status: impl Fn() -> PlayerStatus + Send + Sync + 'static,
     send: impl Fn(TransportCommand) + Send + Sync + 'static,
     disconnected: Option<impl Fn() -> bool + Send + Sync + 'static>,
+    publish: impl Fn() -> bool + Send + Sync + 'static,
 ) {
     let mut source = handle.lock().unwrap();
     source.status = Box::new(status);
     source.send = Box::new(send);
     source.disconnected = disconnected
         .map(|disconnected| Box::new(disconnected) as Box<dyn Fn() -> bool + Send + Sync>);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::resolve_art_url;
-    use std::path::PathBuf;
-
-    // Regression guard: a Movie's queue card writes its art under the
-    // landscape key (`{id}:QB`), so MPRIS must fall back to that key after
-    // the portrait key misses instead of omitting `mpris:artUrl`.
-    #[test]
-    fn movie_art_cached_only_under_landscape_key_resolves() {
-        let art_url = resolve_art_url("movie", "", |key| {
-            (key == "movie:QB").then(|| PathBuf::from("/cache/movie-qb"))
-        });
-        assert_eq!(art_url.as_deref(), Some("file:///cache/movie-qb"));
-    }
+    source.publish = Box::new(publish);
 }
