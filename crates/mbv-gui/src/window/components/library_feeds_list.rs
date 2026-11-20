@@ -1,8 +1,9 @@
 //! The Feeds list (`replace-tauri-with-blitz` task 7.7, the port of
 //! `LibraryFeedsList`; add-gui-library-panel design D12, row 11.1):
-//! the checked collections' flat entry rows — the entry's title over its
-//! subscription, and the entry date in the gutter — with no letter headings,
-//! because the list is sorted by date, and so no letter rail.
+//! the checked collections' entry rows — the entry's title over its
+//! subscription, and the entry date in the gutter — under their letter
+//! headings and the A–Z rail while the list sorts by title, and flat under a
+//! date sort (gui-flat-list-sort design D8).
 //!
 //! The rows paint at the fixed heights of [`crate::window::library::feeds_list`]
 //! over native scroll, and only the rows in view paint, so a long Latest
@@ -20,18 +21,33 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
+use crate::window::components::library_letter_heading::paint_letter_heading;
+use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::feeds_list::{FEEDS_ROW_HEIGHT, FeedsItemRow};
+use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
 
-/// One painted row of the flat list: the entry row.
-/// A feed entry names no right-click menu — the former row paints none.
-fn paint_feeds_row(row: &FeedsItemRow, library: &LibraryState, selected: Option<&str>) -> Element {
+/// One painted row of the flat list: the letter heading, or the entry row.
+fn paint_feeds_row(
+    row: &LetteredRow<FeedsItemRow>,
+    library: &LibraryState,
+    selected: Option<&str>,
+) -> Element {
+    match row {
+        LetteredRow::Heading(heading) => paint_letter_heading("feeds", heading),
+        LetteredRow::Item(row) => paint_feeds_item(row, library, selected),
+    }
+}
+
+/// One painted entry row. A feed entry names no right-click menu — the former
+/// row paints none.
+fn paint_feeds_item(row: &FeedsItemRow, library: &LibraryState, selected: Option<&str>) -> Element {
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = row.row.id.clone();
@@ -81,15 +97,22 @@ pub fn LibraryFeedsList() -> Element {
     // itself, so the header paints no selection label beside it.
     let collections = frame.map(|frame| frame.collections.clone());
 
+    // The sort control the header paints last on the heading's line
+    // (gui-flat-list-sort design D7).
+    let sort = frame.and_then(|frame| frame.sort.clone());
+
     // The heading marks the Feed platform every checked subscription shares,
     // and RSS while the tab's frame has not landed
     // (gui-library-header-service-marks design D5).
     let mark = ServiceMark::feeds(frame.and_then(|frame| frame.platform));
 
-    // The painted rows of the flat list (row 11.1): the same model
-    // [`crate::window::library::feeds`] builds from the carried content,
-    // narrowed by the filter's text.
+    // The painted rows of the flat list (row 11.1; gui-flat-list-sort design
+    // D8): the same model [`crate::window::library::feeds`] builds from the
+    // carried content, narrowed by the filter's text. A name sort paints letter
+    // headings and the rail, and a date sort paints neither.
     let rows = library.feeds_rows();
+    let rail = lettered_rail(&rows);
+    let paints_rail = carries_letters(&rows);
 
     // The list's two DOM facts report to the scroll store (design D9), the rows
     // in view report to the core for their row art fetches (gui-delineated-rows
@@ -110,11 +133,15 @@ pub fn LibraryFeedsList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Feeds, ids);
         })),
-        move |row: &FeedsItemRow| paint_feeds_row(row, &paint_library, paint_selected.as_deref()),
+        move |row: &LetteredRow<FeedsItemRow>| {
+            paint_feeds_row(row, &paint_library, paint_selected.as_deref())
+        },
     );
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The rail's press scrolls the list to the letter's first entry (design D7).
+    let jump_library = library.clone();
 
     rsx! {
         div {
@@ -131,6 +158,7 @@ pub fn LibraryFeedsList() -> Element {
                     label: selection_label.clone(),
                     label_attr: Some("data-library-feeds-selection-label"),
                     collections,
+                    sort,
                     filter: feeds_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter entries".to_owned(),
@@ -157,7 +185,19 @@ pub fn LibraryFeedsList() -> Element {
                     }),
                 }
             }
-            {virtual_list}
+            div {
+                class: "flex min-h-0 flex-1",
+                style: "overflow: hidden;",
+                {virtual_list}
+                if paints_rail {
+                    LibraryLetterRail {
+                        letters: rail,
+                        jump: Some(Callback::new(move |letter: char| {
+                            jump_library.jump_feeds_to_letter(letter);
+                        })),
+                    }
+                }
+            }
         }
     }
 }

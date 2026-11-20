@@ -27,6 +27,10 @@ pub struct GuiEntryRowFrame {
     /// `None` on an undated entry, and `Some("")` never rides here — the
     /// TUI's rows drop an empty gutter too.
     pub date: Option<String>,
+    /// The row's rail letter (gui-flat-list-sort design D6), or `#` for a
+    /// digit- or symbol-led title. `Some` exactly while the list's sort is a
+    /// name sort, so a date-ordered list shows no rail.
+    pub sort_letter: Option<char>,
     /// The row's played state, with the resume percent on a partly played
     /// entry.
     pub state: GuiHomeRowStateFrame,
@@ -43,6 +47,7 @@ impl From<&GuiEntryRow> for GuiEntryRowFrame {
             title: row.title.clone(),
             subtitle: row.subtitle.clone(),
             date: row.date.clone(),
+            sort_letter: row.sort_letter,
             state: GuiHomeRowStateFrame::from(&row.state),
             art: GuiRowArtFrame::from(&row.art),
             media: GuiRowMediaKindFrame::from(row.media),

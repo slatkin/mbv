@@ -7,7 +7,7 @@
 //! The row frame is the shared entry-list one (`entry_list.rs`); the Hero and
 //! the frame struct are the destination's own.
 
-use mbv::{FeedPlatform, GuiCollections, GuiFeedsHero, GuiFeedsProjection};
+use mbv::{FeedPlatform, GuiCollections, GuiFeedsHero, GuiFeedsProjection, GuiListSortFrame};
 
 use super::GuiArtShapeFrame;
 use super::entry_list::GuiEntryRowFrame;
@@ -19,8 +19,8 @@ use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFeedsList {
     /// The destination's collection selector (gui-collection-dropdown design
-    /// D6): All, every configured subscription in the tab's order, the
-    /// Subscriptions noun, and the list's date order.
+    /// D6): All, every configured subscription in the tab's order, and the
+    /// Subscriptions noun.
     pub collections: GuiCollections,
     /// Whether the tab's fetch results are still landing.
     pub loading: bool,
@@ -38,6 +38,9 @@ pub struct GuiFeedsList {
     /// subscriptions', both in the stored date order with undated entries
     /// last.
     pub rows: Vec<GuiEntryRowFrame>,
+    /// The list's sort control (gui-flat-list-sort design D7): the target a
+    /// press names, its active sort, and the choices the tab offers.
+    pub sort: Option<GuiListSortFrame>,
 }
 
 /// The Feeds destination's detail part (`gui-change-driven-sections` design
@@ -85,6 +88,7 @@ impl GuiFeedsList {
             failed: projection.failed,
             platform: mbv::gui_feeds_platform(&projection.collections),
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),
+            sort: projection.sort.clone(),
         }
     }
 }

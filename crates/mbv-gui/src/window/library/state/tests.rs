@@ -115,7 +115,6 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
                     checked: true,
                 }],
                 noun: mbv::GuiCollectionNoun::Groups,
-                order: None,
             },
             loading: false,
             failure: None,

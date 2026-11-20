@@ -97,7 +97,6 @@ fn music_list() -> GuiDestinationList {
                 checked: true,
             }],
             noun: mbv::GuiCollectionNoun::Groups,
-            order: None,
         },
         loading: false,
         failure: None,
@@ -312,6 +311,7 @@ fn an_armed_prefix_paints_and_keeps_the_location() {
 /// The carried plain Emby-library list part: one selected row.
 fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Emby(GuiEmbyList {
+        sort: None,
         lib_idx: 2,
         library_name: "Movies".to_owned(),
         collections: None,
@@ -340,6 +340,7 @@ fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
 /// The carried Audiobooks list part: one selected book.
 fn audiobooks_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Audiobooks(GuiAudiobooksList {
+        sort: None,
         lib_idx: 1,
         loading: false,
         failed: false,
@@ -350,7 +351,7 @@ fn audiobooks_content() -> (GuiDestinationList, GuiLibraryDetail) {
             title: "Dune".to_owned(),
             subtitle: Some("Frank Herbert".to_owned()),
             duration: "15:12:00".to_owned(),
-            sort_letter: 'D',
+            sort_letter: Some('D'),
         }],
     });
     let detail = GuiLibraryDetail::Audiobooks(GuiAudiobooksDetail {
@@ -366,6 +367,7 @@ fn audiobooks_content() -> (GuiDestinationList, GuiLibraryDetail) {
 /// row.
 fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Podcasts(GuiPodcastsList {
+        sort: None,
         lib_idx: 1,
         collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Podcasts(1),
@@ -376,11 +378,11 @@ fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
                 checked: true,
             }],
             noun: mbv::GuiCollectionNoun::Shows,
-            order: Some(mbv::GuiDateOrder::Newest),
         },
         loading: false,
         failed: false,
         rows: vec![GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Video,
             id: "show1:ep12".to_owned(),
@@ -452,6 +454,7 @@ fn the_bar_paints_the_audiobooks_location_for_the_carried_content() {
 /// entry (spec "The Library Status bar shows hints and the location").
 fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Feeds(GuiFeedsList {
+        sort: None,
         collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Feeds,
             all: false,
@@ -468,12 +471,12 @@ fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
                 },
             ],
             noun: mbv::GuiCollectionNoun::Subscriptions,
-            order: Some(mbv::GuiDateOrder::Newest),
         },
         loading: false,
         failed: false,
         platform: None,
         rows: vec![GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Video,
             id: "sub1:guid12".to_owned(),

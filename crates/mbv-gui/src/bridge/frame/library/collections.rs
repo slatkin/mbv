@@ -1,17 +1,17 @@
 //! The collection destinations' one selector frame (gui-collection-dropdown
 //! design D6): the Music, Podcasts, Feeds, and Emby feed-group destinations
 //! paint the same dropdown over it — All, every collection in catalog order
-//! with its checked flag, the destination's noun, and the date order a
-//! feed-based destination sorts by. A destination with no collections (Shows,
-//! a plain Emby library, Audiobooks) carries no frame, so no dropdown paints
-//! there.
+//! with its checked flag, and the destination's noun. A destination with no
+//! collections (Shows, a plain Emby library, Audiobooks) carries no frame, so
+//! no dropdown paints there. The list sort is its own frame on each flat list
+//! (gui-flat-list-sort design D7), so the selector carries no order.
 //!
 //! The frame is the core's own value type, [`GuiCollections`], which the
 //! projection builds and the frame carries as it is; the paint and press
 //! helpers ride an extension trait over it, because the core type sits below
 //! this crate and cannot carry the window's command vocabulary.
 
-use mbv::{GuiCollectionTarget, GuiDateOrder};
+use mbv::GuiCollectionTarget;
 
 use crate::bridge::library::GuiLibraryCommand;
 
@@ -23,8 +23,7 @@ pub use mbv::{GuiCollectionEntry, GuiCollections};
 pub const ALL_KEY: &str = "";
 
 /// The frame-shaped helpers over the core's collection selector (design D5,
-/// D6): the label the trigger reads, the wire command a row press sends, and
-/// the date-order toggle's press and label.
+/// D6): the label the trigger reads and the wire command a row press sends.
 pub trait GuiCollectionsFrame {
     /// The selector's label (design D6): `All`, the one checked collection's
     /// name, or the count with the destination's noun.
@@ -40,15 +39,6 @@ pub trait GuiCollectionsFrame {
     /// command from the target alone, so a repaint captures no whole frame in
     /// a closure.
     fn pressed_target(target: &GuiCollectionTarget, key: &str) -> GuiLibraryCommand;
-
-    /// The order a press on the date-order toggle asks for (design D4, D6):
-    /// Newest switches to Oldest and Oldest to Newest. `None` on Music, whose
-    /// frame carries no order and which paints no toggle.
-    fn next_order(&self) -> Option<GuiDateOrder>;
-
-    /// The date-order toggle's label (design D6): Newest or Oldest. `None` on
-    /// Music, which paints no toggle.
-    fn order_label(&self) -> Option<&'static str>;
 }
 
 impl GuiCollectionsFrame for GuiCollections {
@@ -83,19 +73,5 @@ impl GuiCollectionsFrame for GuiCollections {
 
     fn pressed(&self, key: &str) -> GuiLibraryCommand {
         Self::pressed_target(&self.target, key)
-    }
-
-    fn next_order(&self) -> Option<GuiDateOrder> {
-        self.order.map(|order| match order {
-            GuiDateOrder::Newest => GuiDateOrder::Oldest,
-            GuiDateOrder::Oldest => GuiDateOrder::Newest,
-        })
-    }
-
-    fn order_label(&self) -> Option<&'static str> {
-        self.order.map(|order| match order {
-            GuiDateOrder::Newest => "Newest",
-            GuiDateOrder::Oldest => "Oldest",
-        })
     }
 }

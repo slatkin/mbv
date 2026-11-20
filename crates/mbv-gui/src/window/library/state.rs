@@ -13,7 +13,7 @@
 use dioxus_native::prelude::*;
 
 use mbv::GuiCollections;
-use mbv::{GuiCollectionTarget, GuiShowsView};
+use mbv::{GuiCollectionTarget, GuiListSort, GuiShowsView, GuiSortTarget};
 
 use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiLibraryDetail, GuiLibraryList};
 use crate::bridge::library::{GuiLibraryCommand, GuiRowArtScopeFrame};
@@ -25,7 +25,7 @@ use crate::window::sections::Sections;
 use std::sync::Arc;
 
 use super::row_memo::RowsMemo;
-use super::scroll::{ListScroll, initial_list_scroll};
+use super::scroll::{ListScroll, initial_list_scroll, reset_scroll_top};
 
 /// The right-click item menu's facts (`state.ts`'s `rowMenu`): the item a row
 /// right-press named, with the pointer position it opened at. The menu paints
@@ -324,17 +324,27 @@ impl LibraryState {
             .library(GuiCollections::pressed_target(target, key));
     }
 
-    /// Press the date-order toggle (design D4, D6): the feed-based
-    /// destinations' order switches between Newest and Oldest. Music carries no
-    /// order, so its frame sends nothing.
-    pub fn press_date_order(&self, collections: &GuiCollections) {
-        let Some(order) = collections.next_order() else {
-            return;
-        };
-        self.link.library(GuiLibraryCommand::DateOrder {
-            target: collections.target.clone(),
-            order,
-        });
+    /// Set one flat list's sort (gui-flat-list-sort design D7): the command
+    /// names the target and the chosen sort, and the list's scroll returns to
+    /// the top, because the whole list reorders under it. The filter text
+    /// stays: it narrows the reordered rows.
+    pub fn select_list_sort(&self, target: GuiSortTarget, sort: GuiListSort) {
+        self.link
+            .library(GuiLibraryCommand::ListSort { target, sort });
+        reset_scroll_top(self.sort_target_scroll(target));
+    }
+
+    /// The scroll store of the list `target` sorts (gui-flat-list-sort design
+    /// D7): the plain Emby list's store serves its feed-group mode too, and
+    /// the Shows New list shares the Shows destination's store.
+    fn sort_target_scroll(&self, target: GuiSortTarget) -> Signal<ListScroll> {
+        match target {
+            GuiSortTarget::Library(_) => self.scrolls.emby,
+            GuiSortTarget::Audiobooks(_) => self.scrolls.audiobooks,
+            GuiSortTarget::Podcasts(_) => self.scrolls.podcasts,
+            GuiSortTarget::Feeds => self.scrolls.feeds,
+            GuiSortTarget::ShowsNew(_) => self.scrolls.shows,
+        }
     }
 
     /// Select the Shows destination's one view (gui-collection-dropdown

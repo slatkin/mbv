@@ -266,6 +266,7 @@ fn built(list: GuiShowsList, detail: GuiShowsDetail) -> Fixture {
 /// and no collection selector.
 fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
     GuiShowsList {
+        sort: None,
         view: mbv::GuiShowsView::All,
         lib_idx: 0,
         loading: false,
@@ -434,6 +435,7 @@ fn new_view_rows() -> Vec<GuiShowsRowFrame> {
 #[test]
 fn the_date_sorted_view_paints_no_rail() {
     let frame = GuiShowsList {
+        sort: None,
         view: mbv::GuiShowsView::New,
         rows: new_view_rows(),
         ..shows_frame(Vec::new())
@@ -470,6 +472,7 @@ fn the_list_reports_the_rows_in_view_under_the_views_scope(
     #[case] ids: &[&str],
 ) {
     let frame = GuiShowsList {
+        sort: None,
         view,
         rows: new_view_rows(),
         ..shows_frame(tree())

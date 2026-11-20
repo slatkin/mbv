@@ -180,6 +180,7 @@ fn the_row_art_set_names_the_top_level_rows_alone() {
         height: SHOWS_FLAT_ROW_HEIGHT,
         art: GuiRowArtFrame::NoSource,
         media: GuiRowMediaKindFrame::Video,
+        letter: None,
     });
 
     let names: Vec<(&str, Option<String>)> = tree

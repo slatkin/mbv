@@ -315,7 +315,6 @@ fn collections() -> GuiCollections {
             },
         ],
         noun: mbv::GuiCollectionNoun::Groups,
-        order: None,
     }
 }
 
@@ -424,6 +423,7 @@ fn shows_list() -> GuiLibraryList {
         tabs: Vec::new(),
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {
+            sort: None,
             lib_idx: 0,
             view: mbv::GuiShowsView::All,
             loading: false,

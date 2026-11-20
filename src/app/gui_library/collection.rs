@@ -2,8 +2,9 @@
 //! design D1, D4): one set type for every collection destination — Music
 //! groups, Podcast shows, Feeds subscriptions, and Emby feed-group folders —
 //! whose selection is All or a non-empty set of checked collections, plus the
-//! date order the feed-based lists sort by. The TUI-shared stores never hold
-//! a set, so the TUI does not change.
+//! date comparator the date sorts share. A list's sort is not a collection
+//! fact, so it lives in the list-sort store (`list_sort.rs`). The TUI-shared
+//! stores never hold a set, so the TUI does not change.
 
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -127,20 +128,19 @@ impl GuiCollectionSet {
 }
 
 /// One destination's whole stored selection (design D2, D4): the checked set
-/// and the date order the list sorts by. The one shape all four stores hold —
-/// the Music store's set, the Podcasts and Feeds selections' halves, and the
-/// Emby feed-group map's value. Music stores the default order it never
-/// reads: its list sorts by name, so its projection carries no order.
+/// the dropdown paints. The one shape all four stores hold — the Music
+/// store's set, the Podcasts and Feeds selections' halves, and the Emby
+/// feed-group map's value. The list's sort is not a collection fact, so it
+/// lives in the list-sort store beside the destination's own state
+/// (`App::gui_list_sorts`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiCollectionSelection {
     /// The checked collections, or All. All is the default.
     pub set: GuiCollectionSet,
-    /// The list's date order. Newest is the default.
-    pub order: GuiDateOrder,
 }
 
-/// The list order of a feed-based destination (design D4): Newest is the
-/// default, and undated rows stay last in both orders.
+/// The comparator's order (design D4): Newest is the default, and undated
+/// rows stay last in both orders.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GuiDateOrder {
     /// The most recent row first.
@@ -203,11 +203,11 @@ pub struct GuiCollectionEntry {
 
 /// One destination's whole collection selector (design D6): the target its
 /// commands name, the All state, every collection in catalog order with its
-/// checked flag, the destination's noun, and the date order a feed-based
-/// destination sorts by. Music has no date order, so its `order` is `None`.
+/// checked flag, and the destination's noun. The list's sort is not a
+/// collection fact, so the frame carries it beside the selector.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiCollections {
-    /// The destination the toggle, All, and date-order commands name.
+    /// The destination the toggle and All commands name.
     pub target: GuiCollectionTarget,
     /// Whether the selection is All.
     pub all: bool,
@@ -215,24 +215,19 @@ pub struct GuiCollections {
     pub entries: Vec<GuiCollectionEntry>,
     /// The noun the trigger label and the Clear control read.
     pub noun: GuiCollectionNoun,
-    /// The list's date order on a feed-based destination; `None` on Music,
-    /// which sorts by name.
-    pub order: Option<GuiDateOrder>,
 }
 
 impl GuiCollections {
     /// The selector for `target` (design D6) over `set`, with `scopes` — each
-    /// collection's stable key and name, in catalog order — as its entries,
-    /// and the destination's list `order`. The scopes' pairs convert as they
-    /// are kept, so a site can stream borrowed catalog entries without a
-    /// freshly cloned vector between them.
+    /// collection's stable key and name, in catalog order — as its entries.
+    /// The scopes' pairs convert as they are kept, so a site can stream
+    /// borrowed catalog entries without a freshly cloned vector between them.
     #[must_use]
     pub fn new<S: Into<String>, N: Into<String>>(
         target: GuiCollectionTarget,
         set: &GuiCollectionSet,
         noun: GuiCollectionNoun,
         scopes: impl IntoIterator<Item = (S, N)>,
-        order: Option<GuiDateOrder>,
     ) -> Self {
         let checked: HashSet<&str> = set.checked_keys().iter().map(String::as_str).collect();
         Self {
@@ -250,7 +245,6 @@ impl GuiCollections {
                 })
                 .collect(),
             noun,
-            order,
         }
     }
 

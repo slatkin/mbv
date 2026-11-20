@@ -29,6 +29,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
+use crate::window::library::list::GeometryRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
@@ -343,6 +344,7 @@ fn feed() -> Vec<GuiEmbyRowFrame> {
 /// The carried Emby list part in one mode over `rows` (row 8.1).
 fn emby_frame(feed_group: bool, rows: Vec<GuiEmbyRowFrame>) -> GuiEmbyList {
     GuiEmbyList {
+        sort: None,
         lib_idx: 3,
         library_name: "Movies".to_owned(),
         collections: None,
@@ -368,7 +370,10 @@ fn painted_rows(fixture: &Fixture) -> Vec<String> {
 }
 
 /// The painted item row of `id`, as the press handler takes it.
-fn row_of(fixture: &mut Fixture, id: &str) -> crate::window::library::emby_list::EmbyListRow {
+fn row_of(
+    fixture: &mut Fixture,
+    id: &str,
+) -> crate::window::library::list::LetteredRow<crate::window::library::emby_list::EmbyItemRow> {
     let id = id.to_owned();
     fixture.compute(move |state| {
         state

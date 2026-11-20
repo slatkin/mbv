@@ -325,7 +325,6 @@ fn music(collection_names: &[&str]) -> GuiMusicList {
                 })
                 .collect(),
             noun: mbv::GuiCollectionNoun::Groups,
-            order: None,
         },
         loading: false,
         failure: None,

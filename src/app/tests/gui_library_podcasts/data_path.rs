@@ -404,6 +404,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
         },
         collections: Vec::new(),
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     };
     let crate::app::GuiLaunchOpen::Opened(opened) = app.open_gui_launch_destination(&saved) else {
         panic!("the catalog is presented, so the start has opened");

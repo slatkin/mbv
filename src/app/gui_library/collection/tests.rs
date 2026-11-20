@@ -162,7 +162,6 @@ fn selected_names_names_all() {
         &GuiCollectionSet::All,
         GuiCollectionNoun::Subscriptions,
         [("feed-a".to_owned(), "Feed A".to_owned())],
-        None,
     );
     assert_eq!(collections.selected_names(), ["All"]);
 }
@@ -181,7 +180,6 @@ fn selected_names_names_the_checked_collections_in_catalog_order() {
             ("feed-b".to_owned(), "Feed B".to_owned()),
             ("feed-c".to_owned(), "Feed C".to_owned()),
         ],
-        None,
     );
     assert_eq!(collections.selected_names(), ["Feed A", "Feed B"]);
 }

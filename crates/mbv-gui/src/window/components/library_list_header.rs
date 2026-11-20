@@ -1,10 +1,12 @@
 //! The Library list's header (`replace-tauri-with-blitz` task 7.2, the port
 //! of `LibraryListHeader`; add-gui-library-panel design D7, D14): the
 //! canvas's list heading, the destination's collection dropdown on the
-//! heading's line, and the `/` filter field under both. Every destination
+//! heading's line, the flat list's sort control at that line's right end, and
+//! the `/` filter field under both. Every destination
 //! paints this one header, so the column cannot drift between tabs: a
 //! destination passes its heading, its collections frame when it has one, a
-//! selection label when it wants one, and its own filter state.
+//! selection label when it wants one, its sort frame when its list has one, and
+//! its own filter state.
 //!
 //! The heading is a Service mark or Home's text title (gui-library-header-
 //! service-marks design D5): a Service destination names itself by its mark,
@@ -18,16 +20,23 @@
 //! where it is non-empty: a plain Emby library and the Shows destination pass
 //! an empty one, because the UI is not verbose.
 //!
+//! The sort control paints last on the same line (gui-flat-list-sort design
+//! D7), so it is the rightmost item and sits directly right of the collection
+//! dropdown or the Shows view dropdown. The five flat lists pass their frame's
+//! sort and every other destination paints none, so the placement has one
+//! owner here.
+//!
 //! `label_attr` names a destination's own attribute, so a destination's tests
 //! keep a per-tab hook beside the shared ones.
 
 use dioxus_native::prelude::*;
 
-use mbv::{GuiCollections, GuiShowsView};
+use mbv::{GuiCollections, GuiListSortFrame, GuiShowsView};
 
 use crate::window::components::library_collection_dropdown::LibraryCollectionDropdown;
 use crate::window::components::library_filter_field::LibraryFilterField;
 use crate::window::components::library_shows_view_dropdown::LibraryShowsViewDropdown;
+use crate::window::components::library_sort_control::LibrarySortControl;
 use crate::window::service_mark::{ServiceMark, ServiceMarkIcon};
 
 /// What a destination paints at the left end of its heading line (design
@@ -62,6 +71,11 @@ pub struct LibraryListHeaderProps {
     /// heading line and is not a collection selector.
     #[props(default)]
     pub view: Option<GuiShowsView>,
+    /// The flat list's sort control, when its list has one (gui-flat-list-sort
+    /// design D7): the control paints last on the heading line, so it is the
+    /// line's rightmost item.
+    #[props(default)]
+    pub sort: Option<GuiListSortFrame>,
     /// The filter text the field paints.
     pub filter: String,
     /// The field's placeholder, which names the selection it narrows.
@@ -83,6 +97,7 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
         label_attr,
         collections,
         view,
+        sort,
         filter,
         placeholder,
         aria_label,
@@ -129,6 +144,11 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
                         ..label_attrs,
                         "{label}"
                     }
+                }
+                // The sort control closes the line (design D7): the last item,
+                // right of the dropdown or the view dropdown when there is one.
+                if let Some(sort) = sort {
+                    LibrarySortControl { sort }
                 }
             }
             LibraryFilterField {

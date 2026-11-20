@@ -27,6 +27,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
+use crate::window::library::list::GeometryRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
@@ -273,7 +274,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             title: "Aftermath".to_owned(),
             subtitle: Some("Bill Wyman".to_owned()),
             duration: "4:32".to_owned(),
-            sort_letter: 'A',
+            sort_letter: Some('A'),
         },
         GuiAudiobooksRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -282,7 +283,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             title: "Audition".to_owned(),
             subtitle: Some("Ryu Murakami".to_owned()),
             duration: "2:14".to_owned(),
-            sort_letter: 'A',
+            sort_letter: Some('A'),
         },
         GuiAudiobooksRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -291,7 +292,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             title: "Blindsight".to_owned(),
             subtitle: Some("Peter Watts".to_owned()),
             duration: "10:02".to_owned(),
-            sort_letter: 'B',
+            sort_letter: Some('B'),
         },
     ]
 }
@@ -299,6 +300,7 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
 /// The carried Audiobooks list part over `rows` (row 9.1).
 fn list_of(rows: Vec<GuiAudiobooksRowFrame>) -> GuiAudiobooksList {
     GuiAudiobooksList {
+        sort: None,
         lib_idx: 4,
         loading: false,
         failed: false,
@@ -325,7 +327,9 @@ fn painted_rows(fixture: &Fixture) -> Vec<String> {
 fn row_of(
     fixture: &mut Fixture,
     id: &str,
-) -> crate::window::library::audiobooks_list::AudiobooksListRow {
+) -> crate::window::library::list::LetteredRow<
+    crate::window::library::audiobooks_list::AudiobooksItemRow,
+> {
     let id = id.to_owned();
     fixture.compute(move |state| {
         let filter = state.audiobooks_ui.peek().filter.clone();

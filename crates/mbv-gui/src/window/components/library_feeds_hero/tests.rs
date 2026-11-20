@@ -55,6 +55,7 @@ fn hero(art_shape: GuiArtShapeFrame) -> GuiFeedsHeroFrame {
 /// The carried Feeds rows: one merged entry, `extra` the test's own rows.
 fn rows(extra: Vec<GuiEntryRowFrame>) -> Vec<GuiEntryRowFrame> {
     let mut rows = vec![GuiEntryRowFrame {
+        sort_letter: None,
         art: GuiRowArtFrame::NoSource,
         media: GuiRowMediaKindFrame::Video,
         id: "sub1:guid12".to_owned(),
@@ -259,12 +260,12 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
                     tabs: Vec::new(),
                     current_tab: Some(2),
                     destination: GuiDestinationList::Feeds(GuiFeedsList {
+                        sort: None,
                         collections: GuiCollections {
                             target: mbv::GuiCollectionTarget::Feeds,
                             all: true,
                             entries: Vec::new(),
                             noun: mbv::GuiCollectionNoun::Subscriptions,
-                            order: None,
                         },
                         loading: false,
                         failed: false,
@@ -486,6 +487,7 @@ fn the_hero_paints_the_frame_header_above_its_artwork() {
 fn the_list_band_holds_the_feed_entries_alone() {
     let extra = vec![
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Video,
             id: "sub1:guid11".to_owned(),
@@ -495,6 +497,7 @@ fn the_list_band_holds_the_feed_entries_alone() {
             state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Video,
             id: "sub2:guid20".to_owned(),

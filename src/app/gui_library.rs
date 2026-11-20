@@ -21,6 +21,7 @@ mod home;
 mod item_actions;
 mod item_menu;
 mod launch;
+mod list_sort;
 mod marks;
 mod podcasts;
 mod podcasts_projection;
@@ -66,6 +67,7 @@ pub use self::home::{
 };
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
+pub use self::list_sort::{GuiListSort, GuiListSortFrame, GuiSortTarget};
 pub use self::marks::GuiPlayheadMarks;
 use self::podcasts::GuiPodcastsCollectionSite;
 pub use self::podcasts::GuiPodcastsSelection;
@@ -147,12 +149,13 @@ pub enum GuiLibraryCommand {
     /// Select All for `target` (design D5): the All row's press and the
     /// dropdown's Clear.
     CollectionAll { target: GuiCollectionTarget },
-    /// Set the list order of a feed-based `target` (design D4, D5): Newest or
-    /// Oldest. The Music destination sorts by name, so a Music target
-    /// changes nothing.
-    DateOrder {
-        target: GuiCollectionTarget,
-        order: GuiDateOrder,
+    /// Select a flat list's sort (design D5): `target` names the list, and
+    /// `sort` is one of its choices. A target that names no presented flat
+    /// list, a `ShowsNew` on a library that is not a TV library, and a sort
+    /// outside the target's choices change nothing.
+    ListSort {
+        target: GuiSortTarget,
+        sort: GuiListSort,
     },
     /// Select the Shows destination's single view (design D8): All, New, or
     /// Upcoming. This is a view choice, not a collection command.
@@ -325,8 +328,8 @@ impl App {
             GuiLibraryCommand::CollectionAll { target } => {
                 self.apply_collection(&target, CollectionOp::All);
             }
-            GuiLibraryCommand::DateOrder { target, order } => {
-                self.apply_collection(&target, CollectionOp::Order(order));
+            GuiLibraryCommand::ListSort { target, sort } => {
+                self.apply_gui_list_sort(target, sort);
             }
             GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
                 self.set_gui_shows_view(lib_idx, view);

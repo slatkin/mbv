@@ -19,7 +19,8 @@ use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::audiobooks_list::AudiobooksListRow;
+use crate::window::library::audiobooks_list::AudiobooksItemRow;
+use crate::window::library::list::LetteredRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
@@ -118,7 +119,7 @@ fn book(
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),
         duration: duration.to_owned(),
-        sort_letter,
+        sort_letter: Some(sort_letter),
     }
 }
 
@@ -131,6 +132,7 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
         }],
         current_tab: Some(4),
         destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {
+            sort: None,
             lib_idx: 4,
             loading: false,
             failed: false,
@@ -191,7 +193,7 @@ fn scroll_facts(state: &LibraryState) -> String {
 }
 
 /// The painted rows of the carried catalog.
-fn painted_rows(state: &LibraryState) -> Arc<[AudiobooksListRow]> {
+fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<AudiobooksItemRow>]> {
     let filter = state.audiobooks_ui.peek().filter.clone();
     state.audiobooks_rows(&filter)
 }
@@ -203,7 +205,7 @@ fn a_press_selects_the_book() {
         carry(state, Some("b1"));
         let row = painted_rows(state)
             .iter()
-            .find(|row| matches!(row, AudiobooksListRow::Item(item) if item.row.id == "b3"))
+            .find(|row| matches!(row, LetteredRow::Item(item) if item.row.id == "b3"))
             .expect("the fixture paints b3")
             .clone();
 

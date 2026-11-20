@@ -66,7 +66,6 @@ fn music_list() -> GuiLibraryList {
                     },
                 ],
                 noun: mbv::GuiCollectionNoun::Groups,
-                order: None,
             },
             loading: false,
             failure: None,
@@ -104,6 +103,7 @@ fn emby_plain() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            sort: None,
             lib_idx: 2,
             library_name: "Movies".to_owned(),
             collections: None,
@@ -130,6 +130,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            sort: None,
             lib_idx: 2,
             library_name: "Movies".to_owned(),
             collections: Some(GuiCollections {
@@ -148,7 +149,6 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
                     },
                 ],
                 noun: mbv::GuiCollectionNoun::Folders,
-                order: Some(mbv::GuiDateOrder::Newest),
             }),
             collection_names: vec!["Home videos".to_owned(), "Holiday clips".to_owned()],
             feed_group: true,
@@ -179,6 +179,7 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {
+            sort: None,
             lib_idx: 1,
             loading: false,
             failed: false,
@@ -190,7 +191,7 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
                     title: "Dune".to_owned(),
                     subtitle: Some("Frank Herbert".to_owned()),
                     duration: "15:12:00".to_owned(),
-                    sort_letter: 'D',
+                    sort_letter: Some('D'),
                 },
                 GuiAudiobooksRowFrame {
                     art: GuiRowArtFrame::NoSource,
@@ -199,7 +200,7 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
                     title: "Hyperion".to_owned(),
                     subtitle: Some("Dan Simmons".to_owned()),
                     duration: "9:18:00".to_owned(),
-                    sort_letter: 'H',
+                    sort_letter: Some('H'),
                 },
             ],
         }),
@@ -219,6 +220,7 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Feeds(GuiFeedsList {
+            sort: None,
             collections: GuiCollections {
                 target: mbv::GuiCollectionTarget::Feeds,
                 all: false,
@@ -228,12 +230,12 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
                     checked: true,
                 }],
                 noun: mbv::GuiCollectionNoun::Subscriptions,
-                order: Some(mbv::GuiDateOrder::Newest),
             },
             loading: false,
             failed: false,
             platform: None,
             rows: vec![GuiEntryRowFrame {
+                sort_letter: None,
                 art: GuiRowArtFrame::NoSource,
                 media: GuiRowMediaKindFrame::Video,
                 id: "sub1:guid12".to_owned(),
@@ -282,6 +284,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Shows(GuiShowsList {
+            sort: None,
             view: mbv::GuiShowsView::All,
             lib_idx: 0,
             loading: false,

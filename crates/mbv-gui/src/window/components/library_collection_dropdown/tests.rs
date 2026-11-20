@@ -172,7 +172,7 @@ fn entry(key: &str, name: &str, checked: bool) -> GuiCollectionEntry {
     }
 }
 
-/// The Music frame: All selected, three groups, no date order.
+/// The Music frame: All selected, three groups.
 fn music_all() -> GuiCollections {
     GuiCollections {
         target: mbv::GuiCollectionTarget::Music(2),
@@ -183,11 +183,10 @@ fn music_all() -> GuiCollections {
             entry("g3", "Soul", false),
         ],
         noun: mbv::GuiCollectionNoun::Groups,
-        order: None,
     }
 }
 
-/// The Feeds frame: two subscriptions checked, newest first.
+/// The Feeds frame: two subscriptions checked.
 fn feeds_two_checked() -> GuiCollections {
     GuiCollections {
         target: mbv::GuiCollectionTarget::Feeds,
@@ -198,7 +197,6 @@ fn feeds_two_checked() -> GuiCollections {
             entry("https://example.test/other", "Other Show", false),
         ],
         noun: mbv::GuiCollectionNoun::Subscriptions,
-        order: Some(mbv::GuiDateOrder::Newest),
     }
 }
 

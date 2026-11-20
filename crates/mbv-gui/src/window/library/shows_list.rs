@@ -20,8 +20,9 @@ use crate::bridge::frame::library::{
     GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::window::library::list::{
-    GeometryRow, LETTER_ROW_HEIGHT, LIBRARY_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter,
-    TRACK_ROW_HEIGHT, letter_rail_by,
+    GeometryRow, LETTER_ROW_HEIGHT, LIBRARY_ROW_HEIGHT, LetterHeading, LetteredRow,
+    NODE_ROW_HEIGHT, RailLetter, TRACK_ROW_HEIGHT, build_lettered_rows, filter_match,
+    letter_rail_by,
 };
 
 /// The letter heading row's height in logical pixels: the Music list's letter
@@ -53,19 +54,6 @@ pub struct ShowsTreeState<'a> {
     pub open: &'a [String],
     /// The node row ids the user closed under a filter.
     pub closed: &'a [String],
-}
-
-/// A painted heading row (structural: no key acts on it).
-#[derive(Debug, Clone, PartialEq)]
-pub struct ShowsHeadingRow {
-    /// The row's stable key.
-    pub id: String,
-    /// The row's top edge from the list's first row.
-    pub top: f32,
-    /// The row's painted height.
-    pub height: f32,
-    /// The heading's rail letter.
-    pub letter: char,
 }
 
 /// A painted series node (design D14): the Music artist row's counterpart.
@@ -169,6 +157,10 @@ pub struct ShowsFlatRow {
     /// The media kind the row's thumb shows while it holds no image (design
     /// D4).
     pub media: GuiRowMediaKindFrame,
+    /// The rail letter a title-sorted New row paints under
+    /// (gui-flat-list-sort design D6): `None` under a date sort and on every
+    /// Upcoming row.
+    pub letter: Option<char>,
 }
 
 /// One painted row of the Shows list (design D14). The `id` is the row's
@@ -177,7 +169,7 @@ pub struct ShowsFlatRow {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowsListRow {
     /// A letter heading above the first series of the letter.
-    Heading(ShowsHeadingRow),
+    Heading(LetterHeading),
     /// A series node, open or closed.
     Series(ShowsSeriesRow),
     /// A season node under an open series, open or closed.
@@ -198,6 +190,21 @@ impl ShowsListRow {
             ShowsListRow::Season(row) => &row.id,
             ShowsListRow::Episode(row) => &row.id,
             ShowsListRow::Flat(row) => &row.id,
+        }
+    }
+
+    /// The row's rail letter, or `None` on a row no rail anchors
+    /// (gui-flat-list-sort design D8): every tree row carries the letter of
+    /// its series, and a flat row carries one exactly while the New view sorts
+    /// by name.
+    #[must_use]
+    pub fn letter(&self) -> Option<char> {
+        match self {
+            ShowsListRow::Heading(heading) => Some(heading.letter),
+            ShowsListRow::Series(row) => Some(row.letter),
+            ShowsListRow::Season(row) => Some(row.letter),
+            ShowsListRow::Episode(row) => Some(row.letter),
+            ShowsListRow::Flat(row) => row.letter,
         }
     }
 
@@ -298,33 +305,29 @@ pub fn build_shows_rows(
     match view {
         GuiShowsView::All => series_shows_rows(series, filter, tree),
         GuiShowsView::New | GuiShowsView::Upcoming => {
-            let needle = filter.trim().to_lowercase();
-            let mut top = 0.0_f32;
-            rows.iter()
-                .filter(|row| {
-                    needle.is_empty()
-                        || row.title.to_lowercase().contains(&needle)
-                        || row
-                            .subtitle
-                            .as_deref()
-                            .is_some_and(|text| text.to_lowercase().contains(&needle))
-                })
-                .map(|row| {
-                    let built = ShowsListRow::Flat(ShowsFlatRow {
-                        id: row.id.clone(),
-                        title: row.title.clone(),
-                        subtitle: row.subtitle.clone(),
-                        date: row.date.clone(),
-                        display_only: row.display_only,
-                        top,
-                        height: SHOWS_FLAT_ROW_HEIGHT,
-                        art: row.art.clone(),
-                        media: row.media,
-                    });
-                    top += SHOWS_FLAT_ROW_HEIGHT;
-                    built
-                })
-                .collect()
+            // The filter's empty text keeps every row (`filter_match`'s own
+            // rule), so no separate emptiness test rides here.
+            let keeps = |row: &GuiShowsRowFrame| {
+                filter_match(&row.title, filter)
+                    || row
+                        .subtitle
+                        .as_deref()
+                        .is_some_and(|text| filter_match(text, filter))
+            };
+            build_lettered_rows(
+                rows,
+                SHOWS_FLAT_ROW_HEIGHT,
+                "shows-letter",
+                keeps,
+                |row| row.sort_letter,
+                shows_flat_row,
+            )
+            .into_iter()
+            .map(|row| match row {
+                LetteredRow::Heading(heading) => ShowsListRow::Heading(heading),
+                LetteredRow::Item(flat) => ShowsListRow::Flat(flat),
+            })
+            .collect()
         }
     }
 }
@@ -389,7 +392,7 @@ fn series_shows_rows(
         }
         if heading != Some(letter) {
             heading = Some(letter);
-            built.push(ShowsListRow::Heading(ShowsHeadingRow {
+            built.push(ShowsListRow::Heading(LetterHeading {
                 id: format!("shows-letter:{letter}"),
                 letter,
                 top,
@@ -452,15 +455,35 @@ fn series_shows_rows(
     built
 }
 
-/// The A–Z rail over the painted rows (design D7, D14): each letter with the
-/// first series row under it, so a press scrolls there. A letter no painted row
-/// carries is disabled, as the Music rail's is.
+/// The A–Z rail over the painted rows (design D7, D14; gui-flat-list-sort
+/// design D8): each letter with the first series or flat row under it, so a
+/// press scrolls there. A letter no painted row carries is disabled, as the
+/// Music rail's is.
 #[must_use]
 pub fn shows_letter_rail(rows: &[ShowsListRow]) -> Vec<RailLetter> {
     letter_rail_by(rows, |row| match row {
         ShowsListRow::Series(series) => Some(series.letter),
+        ShowsListRow::Flat(flat) => flat.letter,
         _ => None,
     })
+}
+
+/// One New or Upcoming row of the carried frame (gui-collection-dropdown design
+/// D9; gui-flat-list-sort design D8): its two title lines, its gutter date, and
+/// its rail letter.
+fn shows_flat_row(row: &GuiShowsRowFrame, top: f32, height: f32) -> ShowsFlatRow {
+    ShowsFlatRow {
+        id: row.id.clone(),
+        title: row.title.clone(),
+        subtitle: row.subtitle.clone(),
+        date: row.date.clone(),
+        display_only: row.display_only,
+        top,
+        height,
+        art: row.art.clone(),
+        media: row.media,
+        letter: row.sort_letter,
+    }
 }
 
 /// The rows the memo handed back last, with the cheap key and the interaction

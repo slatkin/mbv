@@ -282,6 +282,7 @@ fn built(list: GuiFeedsList, detail: GuiFeedsDetail) -> Fixture {
 fn entries() -> Vec<GuiEntryRowFrame> {
     vec![
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::Loading,
             media: GuiRowMediaKindFrame::Video,
             id: "s1::e1".to_owned(),
@@ -291,6 +292,7 @@ fn entries() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Video,
             id: "s2::e2".to_owned(),
@@ -300,6 +302,7 @@ fn entries() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Played,
         },
         GuiEntryRowFrame {
+            sort_letter: None,
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Video,
             id: "s1::e3".to_owned(),
@@ -315,12 +318,12 @@ fn entries() -> Vec<GuiEntryRowFrame> {
 /// sets it (design D12).
 fn frame(rows: Vec<GuiEntryRowFrame>, loading: bool) -> GuiFeedsList {
     GuiFeedsList {
+        sort: None,
         collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Feeds,
             all: true,
             entries: Vec::new(),
             noun: mbv::GuiCollectionNoun::Subscriptions,
-            order: Some(mbv::GuiDateOrder::Newest),
         },
         loading,
         failed: false,
@@ -349,8 +352,12 @@ fn row_of(fixture: &mut Fixture, id: &str) -> crate::window::library::feeds_list
         state
             .feeds_rows()
             .iter()
-            .find(|row| row.id == id)
-            .cloned()
+            .find_map(|row| match row {
+                crate::window::library::list::LetteredRow::Item(item) if item.id == id => {
+                    Some(item.clone())
+                }
+                _ => None,
+            })
             .expect("the row paints")
     })
 }

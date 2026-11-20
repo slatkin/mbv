@@ -11,6 +11,7 @@
 
 use mbv_ui_model::media_list::MediaSemanticState;
 
+use super::GuiListSortFrame;
 use super::artwork::{GuiRowArt, GuiRowMediaKind};
 use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 
@@ -37,6 +38,10 @@ pub struct GuiEntryRow {
     /// resume, `Active` with the resume percent exactly when Play would
     /// resume a saved position, otherwise `Ordinary`.
     pub state: MediaSemanticState,
+    /// The row's rail letter (design D6): the first letter of the entry's
+    /// title, or `#` for a digit- or symbol-led title. `Some` exactly while
+    /// the list's sort is a name sort, so a date-ordered list shows no rail.
+    pub sort_letter: Option<char>,
     /// The row's art (gui-delineated-rows design D4).
     pub art: GuiRowArt,
     /// The media kind the row shows when it has no image (design D4).
@@ -45,13 +50,12 @@ pub struct GuiEntryRow {
 
 /// The collection-scoped entry-list projection a destination paints (rows 10.1,
 /// 11.1): the destination's collection selector, the selection's entry rows,
-/// the core's selected entry, and its Hero. No letter rail rides here — the
-/// lists are sorted by date — and no Workspace.
+/// the core's selected entry, and its Hero. No Workspace rides here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEntryListProjection<H> {
     /// The destination's collection selector (gui-collection-dropdown design
     /// D6): All, every scope in the destination's order with its checked
-    /// flag, the destination's noun, and its date order.
+    /// flag, and the destination's noun.
     pub collections: GuiCollections,
     /// Whether the active view's content is still landing: the feed tab's
     /// fetch for Feeds, the show catalog's pages and the active view's own
@@ -63,9 +67,12 @@ pub struct GuiEntryListProjection<H> {
     /// for Podcasts, whose published episodes keep serving when they can.
     pub failed: bool,
     /// The selection's entry rows: All merges every scope's entries, and a
-    /// checked set holds the checked scopes' — in the destination's date
-    /// order.
+    /// checked set holds the checked scopes' — in the destination's list
+    /// sort order.
     pub rows: Vec<GuiEntryRow>,
+    /// The list's sort control (design D7): the target a press names, its
+    /// active sort, and the choices the destination offers.
+    pub sort: Option<GuiListSortFrame>,
     /// The core's selected entry (rows 10.1, 11.1), as the frame painted it:
     /// the pick the select command last named while the active list still
     /// carries it, else that list's first row — the Hero default, so the Hero
@@ -87,11 +94,11 @@ impl<H> Default for GuiEntryListProjection<H> {
                 &GuiCollectionSet::All,
                 GuiCollectionNoun::Subscriptions,
                 std::iter::empty::<(String, String)>(),
-                None,
             ),
             loading: false,
             failed: false,
             rows: Vec::new(),
+            sort: None,
             selected: None,
             hero: None,
         }

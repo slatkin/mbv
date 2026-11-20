@@ -47,6 +47,11 @@ pub struct GuiLaunchState {
     /// field loads as All: the destination's default series list.
     #[serde(default)]
     pub shows_view: GuiLaunchShowsView,
+    /// One entry per destination whose list sort the session changed, in the
+    /// store's order. An older file without the field loads as no saved sort,
+    /// and each destination opens on its own default sort.
+    #[serde(default)]
+    pub sorts: Vec<GuiLaunchListSort>,
 }
 
 /// The three views a GUI Shows destination can show (gui-collection-dropdown
@@ -64,6 +69,31 @@ pub enum GuiLaunchShowsView {
     Upcoming,
 }
 
+/// The one sort a flat GUI Library list held at exit
+/// (gui-flat-list-sort design D10). The saved value names the order only; the
+/// choices and the default of each list are the Client's, so a value the list
+/// no longer offers falls back to that list's default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuiLaunchSort {
+    /// The row's title.
+    Title,
+    /// The row's author.
+    Author,
+    /// The most recently added row first.
+    Newest,
+    /// The earliest added row first.
+    Oldest,
+}
+
+/// The saved sort of one destination: its stable identity, never a tab or a
+/// library position, and the sort that identity held.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GuiLaunchListSort {
+    pub destination: TabIdentity,
+    pub sort: GuiLaunchSort,
+}
+
 /// The selected collections of one destination: the destination's stable
 /// identity, the collection dropdown kind the ids and picks belong to, the
 /// checked ids in press order, the list's date order, and the album each
@@ -76,9 +106,10 @@ pub struct GuiDestinationCollections {
     #[serde(default)]
     pub target: GuiLaunchCollectionTarget,
     pub group_ids: Vec<String>,
-    /// The list's date order where the destination stores one. Absent for a
-    /// Grouped Music library, which sorts by name.
-    #[serde(default)]
+    /// The list's date order where an older file stored one. The field stays
+    /// readable so that a saved order migrates to that destination's sort, and
+    /// a save no longer writes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub order: Option<GuiLaunchDateOrder>,
     /// The last picked album of each collection group, so each pill reopens
     /// on its own album. Absent in a file written before this field.
@@ -149,6 +180,7 @@ pub fn first_launch() -> GuiLaunchState {
         destination: TabIdentity::Home,
         collections: Vec::new(),
         shows_view: GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     }
 }
 

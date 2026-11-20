@@ -276,6 +276,7 @@ fn shows_content(
         ],
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {
+            sort: None,
             view: mbv::GuiShowsView::All,
             lib_idx: 0,
             loading: false,

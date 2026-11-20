@@ -36,7 +36,7 @@ impl GuiShowsView {
     pub const fn label(self) -> &'static str {
         match self {
             Self::All => "All",
-            Self::New => "New",
+            Self::New => "Recent",
             Self::Upcoming => "Upcoming",
         }
     }

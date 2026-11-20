@@ -10,14 +10,16 @@
 
 use mbv_config::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget,
-    GuiLaunchDateOrder, GuiLaunchShowsView, GuiLaunchState, TabIdentity,
+    GuiLaunchDateOrder, GuiLaunchListSort, GuiLaunchShowsView, GuiLaunchSort, GuiLaunchState,
+    TabIdentity,
 };
 use mbv_queue::ServiceKind;
 use mbv_ui_model::browse::BrowseLevel;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiDateOrder};
+use super::collection::{GuiCollectionSet, GuiCollectionTarget};
 use super::collection_command::{CollectionOp, GuiCollectionSite};
+use super::list_sort::GuiListSort;
 use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
 use super::{
@@ -27,9 +29,10 @@ use super::{
 use crate::app::App;
 
 impl App {
-    /// The GUI's launch location (design D9): the active destination and the
-    /// selected collections of each destination. Read at orderly exit only;
-    /// nothing writes it while the window is open.
+    /// The GUI's launch location (design D9, D10): the active destination, the
+    /// selected collections of each destination, and each destination's list
+    /// sort. Read at orderly exit only; nothing writes it while the window is
+    /// open.
     #[must_use]
     pub fn gui_launch_state(&self) -> GuiLaunchState {
         GuiLaunchState {
@@ -37,6 +40,7 @@ impl App {
             destination: self.gui_launch_destination(),
             collections: self.gui_launch_collections(),
             shows_view: self.gui_launch_shows_view(),
+            sorts: self.gui_launch_sorts(),
         }
     }
 
@@ -50,6 +54,9 @@ impl App {
     /// means no catalog has landed, so the caller retries on the drain that
     /// delivers one.
     pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> GuiLaunchOpen {
+        // The saved sorts key by destination identity, so they install before
+        // any catalog lands, and a retry cannot clobber them either.
+        self.restore_gui_launch_sorts(state);
         if self.presented_destinations().is_empty() {
             return GuiLaunchOpen::Retry;
         }
@@ -60,6 +67,52 @@ impl App {
         self.spawn_gui_shows_sections();
         self.restore_gui_shows_view(state.shows_view);
         GuiLaunchOpen::Opened(self.gui_launch_destination())
+    }
+
+    /// The saved sorts of the lists the session sorted (design D10), in the
+    /// store's order: one entry per destination whose sort the session
+    /// changed, so a destination the session never touched opens on its own
+    /// default.
+    fn gui_launch_sorts(&self) -> Vec<GuiLaunchListSort> {
+        self.gui_list_sorts
+            .iter()
+            .map(|(destination, sort)| GuiLaunchListSort {
+                destination: destination.clone(),
+                sort: launch_list_sort(*sort),
+            })
+            .collect()
+    }
+
+    /// Apply the saved list sorts (design D10): every saved sort installs by
+    /// its stable identity unless the session already set that destination's
+    /// sort, so a restore never clobbers a choice the session made, and a
+    /// saved sort for a library absent this session stays in the store for
+    /// the next save. Then each collection entry's saved date order installs
+    /// as Newest or Oldest where the file holds no sort for that destination,
+    /// so a launch file written before the list sort still opens on its own
+    /// order.
+    pub fn restore_gui_launch_sorts(&mut self, state: &GuiLaunchState) {
+        for saved in &state.sorts {
+            self.install_saved_sort(&saved.destination, list_sort(saved.sort));
+        }
+        for entry in &state.collections {
+            let Some(order) = entry.order else {
+                continue;
+            };
+            // A saved sort wins over the entry's older date order: the loop
+            // above installed it, so `install_saved_sort` holds the slot and
+            // this install changes nothing.
+            self.install_saved_sort(&entry.destination, date_sort(order));
+        }
+    }
+
+    /// Install one saved sort unless the session already set that
+    /// destination's sort (design D10).
+    fn install_saved_sort(&mut self, destination: &TabIdentity, sort: GuiListSort) {
+        if self.gui_list_sort_stored(destination).is_some() {
+            return;
+        }
+        self.install_gui_list_sort(destination.clone(), sort);
     }
 
     /// Apply the saved Shows view to every presented Shows destination
@@ -202,8 +255,7 @@ impl App {
     /// (design D9, D10), in catalog order: one entry per destination whose
     /// choice the session holds, so a destination the session never touched
     /// saves nothing and opens on All. Every dropdown reads its own site's
-    /// stored set, date order, and picks, so the four destinations share one
-    /// save path. The file keeps the list shape, and each entry holds the
+    /// stored set and picks, so the four destinations share one save path. The file keeps the list shape, and each entry holds the
     /// checked ids (an empty list is All), so the saved file is stable.
     fn gui_launch_collections(&self) -> Vec<GuiDestinationCollections> {
         self.presented_destinations()
@@ -240,7 +292,8 @@ impl App {
 
     /// One destination's saved entry, read from its own site: a destination
     /// the session never touched writes nothing, and every dropdown writes
-    /// the same checked ids and order shape.
+    /// the same checked ids. The entry's `order` stays readable for an older
+    /// file, and the list's sort saves through the launch state's own sorts.
     fn gui_launch_collection_entry(
         &self,
         site: &impl GuiCollectionSite,
@@ -254,9 +307,7 @@ impl App {
             destination,
             target,
             group_ids: site.stored_set(self).checked_keys().to_vec(),
-            order: site
-                .has_order()
-                .then(|| launch_date_order(site.stored_order(self))),
+            order: None,
             picks: site.saved_picks(self),
         })
     }
@@ -286,7 +337,10 @@ impl App {
 
     /// The launch identity a presented destination carries: a stable Service
     /// library id, or Feeds for the one synthetic tab.
-    fn gui_destination_identity(&self, kind: GuiDestinationKind) -> Option<TabIdentity> {
+    pub(in crate::app::gui_library) fn gui_destination_identity(
+        &self,
+        kind: GuiDestinationKind,
+    ) -> Option<TabIdentity> {
         match kind {
             GuiDestinationKind::Home => Some(TabIdentity::Home),
             GuiDestinationKind::Feeds => Some(TabIdentity::Feeds),
@@ -340,8 +394,7 @@ impl App {
             return;
         }
         site.install_picks(self, &picks);
-        let order = entry.order.map(collection_date_order);
-        self.apply_collection_at(site, CollectionOp::Restore { set, order });
+        self.apply_collection_at(site, CollectionOp::Restore { set });
     }
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):
@@ -539,6 +592,34 @@ fn launch_collection_target(target: &GuiCollectionTarget) -> GuiLaunchCollection
     }
 }
 
+/// The on-disk form of one list sort (design D10).
+fn launch_list_sort(sort: GuiListSort) -> GuiLaunchSort {
+    match sort {
+        GuiListSort::Title => GuiLaunchSort::Title,
+        GuiListSort::Author => GuiLaunchSort::Author,
+        GuiListSort::Newest => GuiLaunchSort::Newest,
+        GuiListSort::Oldest => GuiLaunchSort::Oldest,
+    }
+}
+
+/// The core form of one saved list sort.
+fn list_sort(saved: GuiLaunchSort) -> GuiListSort {
+    match saved {
+        GuiLaunchSort::Title => GuiListSort::Title,
+        GuiLaunchSort::Author => GuiListSort::Author,
+        GuiLaunchSort::Newest => GuiListSort::Newest,
+        GuiLaunchSort::Oldest => GuiListSort::Oldest,
+    }
+}
+
+/// The sort a collection entry's saved date order migrates to (design D10).
+fn date_sort(order: GuiLaunchDateOrder) -> GuiListSort {
+    match order {
+        GuiLaunchDateOrder::Newest => GuiListSort::Newest,
+        GuiLaunchDateOrder::Oldest => GuiListSort::Oldest,
+    }
+}
+
 /// The on-disk form of the Shows view (design D14).
 fn launch_shows_view(view: GuiShowsView) -> GuiLaunchShowsView {
     match view {
@@ -554,22 +635,6 @@ fn shows_view(view: GuiLaunchShowsView) -> GuiShowsView {
         GuiLaunchShowsView::All => GuiShowsView::All,
         GuiLaunchShowsView::New => GuiShowsView::New,
         GuiLaunchShowsView::Upcoming => GuiShowsView::Upcoming,
-    }
-}
-
-/// The on-disk form of the list's date order.
-fn launch_date_order(order: GuiDateOrder) -> GuiLaunchDateOrder {
-    match order {
-        GuiDateOrder::Newest => GuiLaunchDateOrder::Newest,
-        GuiDateOrder::Oldest => GuiLaunchDateOrder::Oldest,
-    }
-}
-
-/// The core form of the saved list's date order.
-fn collection_date_order(order: GuiLaunchDateOrder) -> GuiDateOrder {
-    match order {
-        GuiLaunchDateOrder::Newest => GuiDateOrder::Newest,
-        GuiLaunchDateOrder::Oldest => GuiDateOrder::Oldest,
     }
 }
 

@@ -27,6 +27,11 @@ pub struct AudiobookshelfBook {
     /// upload updates the item, so the row cache key carries this value and
     /// changed art never reuses old bytes.
     pub updated_at_ms: u64,
+    /// The library item's creation time, in epoch milliseconds (the library
+    /// item DTO's `addedAt`; `None` when the server sends none or sends 0).
+    /// The Newest and Oldest list sorts order by this value, and a book with
+    /// none sorts last in both.
+    pub added_at_ms: Option<u64>,
     pub title: String,
     /// Raw author credit (full, possibly multi-author) for display.
     pub author_display: Option<String>,
@@ -119,6 +124,8 @@ pub struct BookWire {
     pub library_item_id: String,
     #[serde(rename = "updatedAt", default)]
     pub updated_at_ms: Option<u64>,
+    #[serde(rename = "addedAt", default)]
+    pub added_at_ms: Option<u64>,
     #[serde(default)]
     pub title: Option<String>,
     #[serde(rename = "coverPath", default)]
@@ -256,6 +263,7 @@ impl AudiobookshelfClient {
                     );
                     AudiobookshelfBook {
                         updated_at_ms: x.updated_at_ms.unwrap_or(0),
+                        added_at_ms: x.added_at_ms.filter(|ms| *ms > 0),
                         author_sort_key: author_display
                             .as_deref()
                             .map(first_listed_author_sort_key)

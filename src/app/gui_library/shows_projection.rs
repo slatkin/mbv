@@ -17,8 +17,12 @@ use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
+use super::GuiListSort;
+use super::GuiListSortFrame;
+use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_row_source, upcoming_row_source};
 use super::home::GuiArtShape;
+use super::list_sort::gui_title_sort_key;
 use super::projection::sort_letter;
 use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
@@ -41,6 +45,11 @@ pub struct GuiShowsRow {
     pub subtitle: Option<String>,
     /// The gutter date, the provider date as `day month` text.
     pub date: Option<String>,
+    /// The row's rail letter (design D6): the first letter of the series name
+    /// a New row shows, or `#` for a digit- or symbol-led name. `Some` exactly
+    /// on a New row while the list's sort is a name sort; an Upcoming row
+    /// carries none.
+    pub sort_letter: Option<char>,
     /// Whether the row takes no select, play, or enqueue.
     pub display_only: bool,
     /// The row's art (gui-delineated-rows design D4).
@@ -183,6 +192,10 @@ pub struct GuiShowsProjection {
     /// The New or Upcoming list's flat rows in paint order (design D9); empty
     /// in All, where the `series` tree paints.
     pub rows: Vec<GuiShowsRow>,
+    /// The New list's sort control (design D7): the target a press names, its
+    /// active sort, and the choices the Shows library offers. `Some` only
+    /// while the view is New, whose list is the one the sort orders.
+    pub sort: Option<GuiListSortFrame>,
     /// Whether the selected series' detail or the selected season's episodes
     /// fetch has not landed yet. The window paints the Workspace's loading
     /// state with it.
@@ -221,6 +234,7 @@ impl App {
             return GuiShowsProjection::default();
         }
         let view = self.gui_shows_view(lib_idx);
+        let mut sort_frame = None;
         let (series, rows, selected, hero, workspace_loading, loading) = match view {
             GuiShowsView::All => {
                 let series = self.gui_shows_series_tree(lib_idx);
@@ -246,7 +260,9 @@ impl App {
                 )
             }
             GuiShowsView::New => {
-                let rows = self.gui_shows_new_rows();
+                let frame = self.gui_list_sort_frame(GuiSortTarget::ShowsNew(lib_idx));
+                let rows = self.gui_shows_new_rows(frame.active);
+                sort_frame = Some(frame);
                 let selected = self
                     .gui_shows_flat_selection
                     .clone()
@@ -285,6 +301,7 @@ impl App {
             view,
             loading,
             rows,
+            sort: sort_frame,
             workspace_loading,
             series,
             selected,
@@ -296,23 +313,39 @@ impl App {
         projection
     }
 
-    /// The New list's merged flat rows (design D9): every TV library's latest
-    /// episodes as one list, newest `date_added` first, de-duplicated by item
-    /// id. The split show/episode title and the provider-date gutter are the
-    /// old `Latest episodes` section's.
-    fn gui_shows_new_rows(&self) -> Vec<GuiShowsRow> {
+    /// The New list's merged flat rows (design D9, D6): every TV library's
+    /// latest episodes as one list, de-duplicated by item id, in the list's
+    /// sort — the series name, then the season and episode numbers under
+    /// Title, else newest `date_added` first. Every order's last tie-break is
+    /// the item id, and the sort runs before the de-duplication, so a
+    /// duplicated item keeps the row its order puts first. The split
+    /// show/episode title and the provider-date gutter are the old `Latest
+    /// episodes` section's.
+    fn gui_shows_new_rows(&self, sort: GuiListSort) -> Vec<GuiShowsRow> {
         let mut items: Vec<EmbyItem> = self
             .gui_shows_new
             .values()
             .flat_map(GuiSectionRequest::items)
             .cloned()
             .collect();
-        items.sort_by_cached_key(|item| {
-            (
-                std::cmp::Reverse(mbv_ui_model::home_latest::emby_date_added_secs(item)),
-                item.id.clone(),
-            )
-        });
+        if sort.is_name_sort() {
+            items.sort_by_cached_key(|item| {
+                (
+                    gui_title_sort_key(shows_new_series_name(item)),
+                    item.parent_index_number,
+                    item.index_number,
+                    item.id.clone(),
+                )
+            });
+        } else {
+            items.sort_by(|a, b| {
+                sort.compare_date(
+                    mbv_ui_model::home_latest::emby_date_added_secs(a),
+                    mbv_ui_model::home_latest::emby_date_added_secs(b),
+                )
+                .then_with(|| a.id.cmp(&b.id))
+            });
+        }
         let mut seen = std::collections::HashSet::new();
         items
             .into_iter()
@@ -326,6 +359,7 @@ impl App {
                 };
                 let art = self.gui_row_art(emby_row_source(&episode).as_ref());
                 GuiShowsRow {
+                    sort_letter: sort.rail_letter(&title),
                     id: episode.id,
                     title,
                     subtitle,
@@ -367,6 +401,7 @@ impl App {
                         premiere.title
                     )),
                     date: row_date(secs),
+                    sort_letter: None,
                     display_only: true,
                     art,
                     media: GuiRowMediaKind::Video,
@@ -519,6 +554,17 @@ impl App {
                 .find(|episode| episode.id == item_id)
                 .cloned()
         })
+    }
+}
+
+/// The series name a New row leads with, and the key its Title sort compares
+/// (design D6): the Service's series name, else the episode's own name for an
+/// item that belongs to no series.
+fn shows_new_series_name(item: &EmbyItem) -> &str {
+    if item.series_name.is_empty() {
+        &item.name
+    } else {
+        &item.series_name
     }
 }
 

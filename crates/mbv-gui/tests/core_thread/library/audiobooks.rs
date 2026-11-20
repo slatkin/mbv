@@ -182,10 +182,10 @@ fn the_frame_carries_the_book_list_after_the_open() {
         ["book-a", "book-b"],
         "the rows are the catalog in its order"
     );
-    let letters: Vec<char> = list.rows.iter().map(|row| row.sort_letter).collect();
+    let letters: Vec<Option<char>> = list.rows.iter().map(|row| row.sort_letter).collect();
     assert_eq!(
         letters,
-        ['A', 'F'],
+        [Some('A'), Some('F')],
         "the rail letters read the author sort keys"
     );
     assert_eq!(

@@ -31,7 +31,7 @@ use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart, mark,
 };
-use crate::window::components::library_letter_heading::LibraryLetterHeading;
+use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -402,13 +402,7 @@ fn paint_shows_row(
     selected: Option<&str>,
 ) -> Element {
     match row {
-        ShowsListRow::Heading(heading) => rsx! {
-            LibraryLetterHeading {
-                attr: "shows",
-                letter: heading.letter.to_string(),
-                height: heading.height,
-            }
-        },
+        ShowsListRow::Heading(heading) => paint_letter_heading("shows", heading),
         ShowsListRow::Series(_) => paint_shows_series(row, library, shows, selected),
         ShowsListRow::Season(_) => paint_shows_season(row, library, shows, selected),
         ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected),
@@ -443,6 +437,11 @@ pub fn LibraryShowsList() -> Element {
 
     // The rail's A–Z letters over the painted rows.
     let rail = shows_letter_rail(&rows);
+
+    // The sort control the header paints last on the heading's line
+    // (gui-flat-list-sort design D7): the New view's list is the one it orders,
+    // so the frame carries it only while New paints.
+    let sort = frame.and_then(|frame| frame.sort.clone());
 
     let selected = detail.and_then(|detail| detail.selected.clone());
 
@@ -482,10 +481,11 @@ pub fn LibraryShowsList() -> Element {
         },
     );
 
-    // The All view paints the rail (design D12): its series tree sorts by name,
-    // so it has letters to jump to. The date-sorted New and Upcoming views show
-    // no rail (spec "The letter rail jumps a name-sorted list").
-    let paints_rail = frame.is_some_and(|frame| frame.view == mbv::GuiShowsView::All);
+    // The rail paints exactly while the rows carry letters (gui-flat-list-sort
+    // design D8): the All view's series tree, and the New view while its sort
+    // compares a name. The date-sorted views show no heading and no rail (spec
+    // "The letter rail jumps a name-sorted list").
+    let paints_rail = rows.iter().any(|row| row.letter().is_some());
 
     // The rail's press scrolls to the letter's first row (design D7).
     let jump_library = library.clone();
@@ -506,6 +506,7 @@ pub fn LibraryShowsList() -> Element {
                     heading: LibraryListHeading::Mark(ServiceMark::Emby),
                     label: String::new(),
                     view: frame.map(|frame| frame.view),
+                    sort,
                     filter: shows_ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter series".to_owned(),

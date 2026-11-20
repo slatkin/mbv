@@ -289,14 +289,14 @@ fn a_collection_command_on_another_podcast_library_starts_no_load() {
     );
 }
 
-/// The Oldest order puts the earliest episode first, with the undated
-/// episodes last (gui-collection-dropdown design D4): the stored order sorts
+/// The Oldest sort puts the earliest episode first, with the undated
+/// episodes last (gui-flat-list-sort design D5, D6): the stored sort sorts
 /// the merged list without a refetch.
 #[test]
-fn the_oldest_order_puts_the_earliest_episode_first_with_undated_last() {
+fn the_oldest_sort_puts_the_earliest_episode_first_with_undated_last() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
-    app.gui_podcast_libs.entry(1).or_default().selection.order = GuiDateOrder::Oldest;
+    app.set_gui_list_sort(GuiSortTarget::Podcasts(1), GuiListSort::Oldest);
 
     let projection = app.gui_podcasts_projection(1);
 

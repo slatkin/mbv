@@ -8,9 +8,7 @@
 use mbv_config::GuiGroupPick;
 use mbv_emby_model::EmbyItem;
 
-use super::collection::{
-    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
-};
+use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
 use crate::app::state::events::LibEvent;
@@ -65,13 +63,8 @@ impl App {
         if !next_single && let Some(album_id) = self.gui_hero_album_under(lib_idx, &previous) {
             self.gui_music_union_picks.insert(lib_idx, album_id);
         }
-        self.gui_library_groups.insert(
-            lib_idx,
-            GuiCollectionSelection {
-                set,
-                order: GuiDateOrder::default(),
-            },
-        );
+        self.gui_library_groups
+            .insert(lib_idx, GuiCollectionSelection { set });
         self.clear_failed_music_groups(lib_idx);
         self.ensure_gui_destination(GuiDestinationKind::Music { lib_idx });
     }
@@ -232,12 +225,6 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
         GuiCollectionNoun::Groups
     }
 
-    fn has_order(&self) -> bool {
-        // The Music destination sorts by name, never by date, and its
-        // dropdown paints no order toggle: an Order command is a no-op.
-        false
-    }
-
     fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
         let level = app.gui_music_group_level(self.0)?;
         if level.loading {
@@ -310,10 +297,6 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
 
     fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
         app.install_gui_library_collection(self.0, set);
-    }
-
-    fn install_order(&self, _app: &mut App, _order: GuiDateOrder) {
-        // Unreachable: the Music destination stores no order.
     }
 }
 

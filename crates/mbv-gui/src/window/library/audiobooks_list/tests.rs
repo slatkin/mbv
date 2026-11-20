@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::bridge::frame::library::{GuiRowArtFrame, GuiRowMediaKindFrame};
+use crate::window::library::list::{LETTER_ROW_HEIGHT, lettered_rail};
 
 /// One book row of the catalog: its rail letter is the heading it paints
 /// under.
@@ -18,7 +19,7 @@ fn book(id: &str, title: &str, sort_letter: char) -> GuiAudiobooksRowFrame {
         title: title.to_owned(),
         subtitle: None,
         duration: String::new(),
-        sort_letter,
+        sort_letter: Some(sort_letter),
     }
 }
 
@@ -34,18 +35,18 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
 }
 
 /// The painted row's kind, as the TypeScript test's `kind` names it.
-fn kind_of(row: &AudiobooksListRow) -> &'static str {
+fn kind_of(row: &LetteredRow<AudiobooksItemRow>) -> &'static str {
     match row {
-        AudiobooksListRow::Heading { .. } => "heading",
-        AudiobooksListRow::Item(_) => "item",
+        LetteredRow::Heading(_) => "heading",
+        LetteredRow::Item(_) => "item",
     }
 }
 
 /// The row's heading letter, `None` on every other kind.
-fn heading_letter(row: &AudiobooksListRow) -> Option<char> {
+fn heading_letter(row: &LetteredRow<AudiobooksItemRow>) -> Option<char> {
     match row {
-        AudiobooksListRow::Heading { letter, .. } => Some(*letter),
-        AudiobooksListRow::Item(_) => None,
+        LetteredRow::Heading(heading) => Some(heading.letter),
+        LetteredRow::Item(_) => None,
     }
 }
 
@@ -65,17 +66,17 @@ fn a_letter_heading_paints_over_each_run_of_author_sort_keys() {
     assert_eq!(
         heights,
         [
-            AUIB_HEADING_ROW_HEIGHT,
+            LETTER_ROW_HEIGHT,
             AUIB_ROW_HEIGHT,
             AUIB_ROW_HEIGHT,
-            AUIB_HEADING_ROW_HEIGHT,
+            LETTER_ROW_HEIGHT,
             AUIB_ROW_HEIGHT,
-            AUIB_HEADING_ROW_HEIGHT,
+            LETTER_ROW_HEIGHT,
             AUIB_ROW_HEIGHT,
         ]
     );
     assert_eq!(painted[0].top(), 0.0);
-    assert_eq!(painted[1].top(), AUIB_HEADING_ROW_HEIGHT);
+    assert_eq!(painted[1].top(), LETTER_ROW_HEIGHT);
     let letters: Vec<Option<char>> = painted.iter().map(heading_letter).collect();
     assert_eq!(
         letters,
@@ -92,7 +93,7 @@ fn an_empty_catalog_paints_no_row() {
 // The rail holds the first book under each letter and disables the rest.
 #[test]
 fn the_rail_holds_the_first_book_under_each_letter_and_disables_the_rest() {
-    let rail = audiobooks_letter_rail(&build_audiobooks_rows(&catalog(), ""));
+    let rail = lettered_rail(&build_audiobooks_rows(&catalog(), ""));
     let letter = |letter: char| {
         rail.iter()
             .find(|entry| entry.letter == letter)

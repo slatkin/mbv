@@ -1,17 +1,18 @@
 //! The GUI Library's Feeds projection (add-gui-library-panel design D12,
 //! row 11.1): the interim collection pill row of All and one pill per
-//! subscription, the selection's entry list in the stored date order — the
-//! shared `compare_gui_date_order` rule, newest first with undated entries
-//! last while Newest — the core's selected entry, and its Hero. All merges
-//! every subscription's entries; a checked set merges the checked
-//! subscriptions'. The list shows no letter rail,
-//! because the sorted-by-date list has one, and the TUI's Watched filter is
-//! dropped. The Hero is the shared `hero_content_feed` producer's facts — the
-//! entry title with the duration — behind the subscription name, with the
-//! placeholder artwork only: a feed entry has no artwork source, so the frame
-//! carries the shape and no image. The per-subscription lists are the App's
-//! own (`FeedTabState::rebuild_all_entries`), so the two Clients cannot drift;
-//! the projection reads `App` data only.
+//! subscription, the selection's entry list in the list's sort — Title orders
+//! the entry titles, and the date sorts use the shared
+//! `compare_gui_date_order` rule, newest first with undated entries last while
+//! Newest — the core's selected entry, and its Hero. All merges every
+//! subscription's entries; a checked set merges the checked subscriptions'.
+//! The list shows the letter rail exactly while its sort is a name sort, and
+//! the TUI's Watched filter is dropped. The Hero is the shared
+//! `hero_content_feed` producer's facts — the entry title with the duration —
+//! behind the subscription name, with the placeholder artwork only: a feed
+//! entry has no artwork source, so the frame carries the shape and no image.
+//! The per-subscription lists are the App's own
+//! (`FeedTabState::rebuild_all_entries`), so the two Clients cannot drift; the
+//! projection reads `App` data only.
 
 use mbv_components::library_panel::hero::hero_content_feed;
 use mbv_feed::FeedPlatform;
@@ -19,10 +20,13 @@ use mbv_queue::FeedEntry;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
+use super::GuiListSort;
+use super::GuiSortTarget;
 use super::artwork::{feed_media_kind, feed_row_source};
-use super::collection::{GuiCollectionTarget, GuiCollections, compare_gui_date_order};
+use super::collection::{GuiCollectionTarget, GuiCollections};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
+use super::list_sort::gui_title_sort_key;
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -144,13 +148,13 @@ pub fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform> 
 /// The Feeds projection the GUI Library panel paints (row 11.1) — the
 /// shared collection-scoped entry-list projection over the collection selector
 /// and Hero: All and the subscriptions with their checked state, the
-/// selection's entry rows, the core's selected entry, and its Hero. No letter
-/// rail rides here and no state filter.
+/// selection's entry rows, the core's selected entry, and its Hero. No
+/// Workspace and no state filter ride here.
 pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedsHero>;
 
 impl App {
     /// The Feeds projection the GUI Library panel paints (row 11.1): the
-    /// collection selector, the selection's entry rows in the stored date
+    /// collection selector, the selection's entry rows in the list's sort
     /// order, the selected entry, and its Hero. A Client with no configured
     /// subscription projects the empty projection, as the frame's gate
     /// excludes that destination anyway. The selection's entries are built
@@ -161,13 +165,39 @@ impl App {
         if !self.gui_feeds_present() {
             return GuiFeedsProjection::default();
         }
-        let order = self.gui_feeds_date_order();
+        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Feeds);
+        let sort = sort_frame.active;
         let collections = self.gui_collections(GuiCollectionTarget::Feeds);
         let mut entries = self.gui_feeds_entries();
-        entries.sort_by(|left, right| {
-            compare_gui_date_order(left.pub_date_secs, right.pub_date_secs, order)
-        });
-        let rows = self.gui_feeds_rows(&entries);
+        if sort.is_name_sort() {
+            // The entry title leads under Title, and the date newest follows
+            // it, so two entries of one title keep the newest first (design
+            // D6).
+            entries.sort_by_cached_key(|entry| {
+                (
+                    gui_title_sort_key(&entry.title),
+                    entry.pub_date_secs.is_none(),
+                    std::cmp::Reverse(entry.pub_date_secs.unwrap_or_default()),
+                    entry.feed_id.clone().unwrap_or_default(),
+                    entry.guid.clone(),
+                )
+            });
+        } else {
+            entries.sort_by(|left, right| {
+                sort.compare_date(left.pub_date_secs, right.pub_date_secs)
+                    .then_with(|| {
+                        (
+                            left.feed_id.as_deref().unwrap_or_default(),
+                            left.guid.as_str(),
+                        )
+                            .cmp(&(
+                                right.feed_id.as_deref().unwrap_or_default(),
+                                right.guid.as_str(),
+                            ))
+                    })
+            });
+        }
+        let rows = self.gui_feeds_rows(&entries, sort);
         let selected = self.gui_feeds_selected(&rows);
         let hero = selected
             .as_deref()
@@ -178,6 +208,7 @@ impl App {
             loading: self.feed_tab.loading,
             failed: false,
             rows,
+            sort: Some(sort_frame),
             selected,
             hero,
         }
@@ -194,22 +225,23 @@ impl App {
     }
 
     /// The selection's entry rows (row 11.1; gui-collection-dropdown design
-    /// D2, D4): the projection has already applied the stored date order to
-    /// the entries — newest first with undated rows last while Newest — and
-    /// these rows carry that order as it is.
-    fn gui_feeds_rows(&self, entries: &[&FeedEntry]) -> Vec<GuiFeedsRow> {
+    /// D2, D4): the projection has already ordered the entries by the list's
+    /// sort, and these rows carry that order as it is, with the rail letter a
+    /// name sort gives each row (design D6).
+    fn gui_feeds_rows(&self, entries: &[&FeedEntry], sort: GuiListSort) -> Vec<GuiFeedsRow> {
         entries
             .iter()
-            .map(|entry| self.gui_feeds_row(entry))
+            .map(|entry| self.gui_feeds_row(entry, sort))
             .collect()
     }
 
     /// One row of the active list (row 11.1): the TUI feed row's facts — the
     /// entry title, its subscription's name, and the publish date in the
-    /// right-aligned gutter — with the row's played state, the art its
-    /// artwork policy declares (gui-delineated-rows design D5: none, so the
-    /// row is the no-source state), and the media kind that state shows.
-    fn gui_feeds_row(&self, entry: &FeedEntry) -> GuiFeedsRow {
+    /// right-aligned gutter — with the row's played state, the rail letter a
+    /// name sort gives it (design D6), the art its artwork policy declares
+    /// (gui-delineated-rows design D5: none, so the row is the no-source
+    /// state), and the media kind that state shows.
+    fn gui_feeds_row(&self, entry: &FeedEntry, sort: GuiListSort) -> GuiFeedsRow {
         GuiFeedsRow {
             id: GuiFeedEntryId::new(
                 entry.feed_id.clone().unwrap_or_default(),
@@ -222,6 +254,7 @@ impl App {
                 .map(str::to_string),
             date: row_date(entry.pub_date_secs),
             state: MediaSemanticState::from_feed_entry(entry),
+            sort_letter: sort.rail_letter(&entry.title),
             art: self.gui_row_art(feed_row_source(entry).as_ref()),
             media: feed_media_kind(entry),
         }

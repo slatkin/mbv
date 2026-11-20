@@ -18,9 +18,12 @@ use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_item;
 use mbv_ui_model::ui_util::fmt_duration_gutter;
 
 use super::GuiLibraryArtwork;
+use super::GuiListSort;
+use super::GuiListSortFrame;
+use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source};
 use super::home::{GuiArtShape, artwork_shape};
-use super::projection::sort_letter;
+use super::list_sort::gui_title_sort_key;
 use crate::app::App;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
@@ -36,10 +39,11 @@ pub struct GuiAudiobooksRow {
     pub subtitle: Option<String>,
     /// The book's total duration, the TUI row's duration gutter.
     pub duration: String,
-    /// The row's rail letter (design D12): the first letter of the author
-    /// sort key — the surname the list sorts by — or `#` for a digit- or
-    /// symbol-led surname.
-    pub sort_letter: char,
+    /// The row's rail letter (design D6): the first letter of the key the
+    /// list's sort compares — the title under Title, the author sort key
+    /// under Author — or `#` for a digit- or symbol-led key. `None` under a
+    /// date sort, which shows no rail.
+    pub sort_letter: Option<char>,
     /// The row's art (gui-delineated-rows design D4).
     pub art: GuiRowArt,
     /// The media kind the row shows when it has no image (design D4).
@@ -123,8 +127,13 @@ pub struct GuiAudiobooksProjection {
     /// Whether the catalog fetch failed, the browse state's error. The
     /// published catalog keeps serving when it can.
     pub failed: bool,
-    /// The catalog's books in the TUI's order: author sort key, then title.
+    /// The catalog's books in the list's sort order: the catalog's own order
+    /// (author sort key, then title) under Author, the title's under Title,
+    /// and the date added's under Newest and Oldest.
     pub rows: Vec<GuiAudiobooksRow>,
+    /// The list's sort control (design D7): the target a press names, its
+    /// active sort, and the choices the book library offers.
+    pub sort: Option<GuiListSortFrame>,
     /// The core's selected book (row 9.1): the pick the select command last
     /// named while the catalog still carries it, else the catalog's first
     /// book — the Hero default. `None` while the catalog holds no book.
@@ -171,10 +180,31 @@ impl App {
         };
         let loading = !state.loading_pages.is_empty();
         let failed = state.error.is_some();
-        let rows: Vec<GuiAudiobooksRow> = state
-            .books
-            .iter()
-            .map(|book| book_row(self, book))
+        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Audiobooks(lib_idx));
+        let sort = sort_frame.active;
+        let mut books: Vec<&mbv_audiobookshelf::AudiobookshelfBook> = state.books.iter().collect();
+        // Under Author the catalog's own order stands: it is already the
+        // author sort key, then the title (design D6). Under Title the title
+        // leads and the author sort key follows it.
+        match sort {
+            GuiListSort::Author => {}
+            GuiListSort::Title => books.sort_by_cached_key(|book| {
+                (
+                    gui_title_sort_key(&book.title),
+                    gui_title_sort_key(&book.author_sort_key),
+                    book.library_item_id.clone(),
+                )
+            }),
+            GuiListSort::Newest | GuiListSort::Oldest => {
+                books.sort_by(|left, right| {
+                    sort.compare_date(book_added_secs(left), book_added_secs(right))
+                        .then_with(|| left.library_item_id.cmp(&right.library_item_id))
+                });
+            }
+        }
+        let rows: Vec<GuiAudiobooksRow> = books
+            .into_iter()
+            .map(|book| book_row(self, book, sort))
             .collect();
         let selected = self
             .gui_abs_effective_pick(lib_idx)
@@ -189,6 +219,7 @@ impl App {
             loading,
             failed,
             rows,
+            sort: Some(sort_frame),
             selected,
             hero,
             workspace_loading,
@@ -287,10 +318,14 @@ impl App {
 
 /// One row of the book list (row 9.1): the TUI book row's labels — the
 /// title primary, the author credit secondary, the duration gutter — with
-/// the rail letter over the author sort key the list sorts by, and the row
-/// art the book artwork policy's cover names (gui-delineated-rows design D5),
-/// read from the cache alone.
-fn book_row(app: &App, book: &mbv_audiobookshelf::AudiobookshelfBook) -> GuiAudiobooksRow {
+/// the rail letter over the key the list's sort compares (design D6), and
+/// the row art the book artwork policy's cover names (gui-delineated-rows
+/// design D5), read from the cache alone.
+fn book_row(
+    app: &App,
+    book: &mbv_audiobookshelf::AudiobookshelfBook,
+    sort: GuiListSort,
+) -> GuiAudiobooksRow {
     GuiAudiobooksRow {
         id: book.library_item_id.clone(),
         title: book.title.clone(),
@@ -299,10 +334,33 @@ fn book_row(app: &App, book: &mbv_audiobookshelf::AudiobookshelfBook) -> GuiAudi
             .clone()
             .filter(|author| !author.is_empty()),
         duration: gutter(book.duration_seconds),
-        sort_letter: sort_letter(&book.author_sort_key),
+        sort_letter: book_row_letter(book, sort),
         art: app.gui_row_art(catalog_book_row_source(book).as_ref()),
         media: GuiRowMediaKind::Audio,
     }
+}
+
+/// The rail letter a book row carries (design D6): the first letter of the
+/// key the list's sort compares — the title under Title, the author sort key
+/// under Author, whose surname the TUI's buckets group by — and no letter
+/// under a date sort.
+fn book_row_letter(
+    book: &mbv_audiobookshelf::AudiobookshelfBook,
+    sort: GuiListSort,
+) -> Option<char> {
+    match sort {
+        GuiListSort::Author => sort.rail_letter(&book.author_sort_key),
+        GuiListSort::Title | GuiListSort::Newest | GuiListSort::Oldest => {
+            sort.rail_letter(&book.title)
+        }
+    }
+}
+
+/// The book's added instant in seconds, the date sorts' key (design D6, D9):
+/// the catalog's `addedAt` milliseconds, so a book with no added instant
+/// sorts last in both date sorts.
+fn book_added_secs(book: &mbv_audiobookshelf::AudiobookshelfBook) -> Option<u64> {
+    book.added_at_ms.map(|ms| ms / 1_000)
 }
 
 /// One chapter row (row 9.1): the TUI chapter-row projection's labels — the

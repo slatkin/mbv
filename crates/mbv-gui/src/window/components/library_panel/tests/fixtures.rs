@@ -23,7 +23,6 @@ pub(super) fn music_list() -> GuiMusicList {
             all: true,
             entries: Vec::new(),
             noun: mbv::GuiCollectionNoun::Groups,
-            order: None,
         },
         loading: false,
         failure: None,
@@ -126,6 +125,7 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
 /// (gui-collection-dropdown design D6, D8).
 pub(super) fn shows_list() -> GuiShowsList {
     GuiShowsList {
+        sort: None,
         view: mbv::GuiShowsView::All,
         lib_idx: 0,
         loading: false,
@@ -189,6 +189,7 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
             }],
             current_tab: Some(3),
             destination: GuiDestinationList::Emby(GuiEmbyList {
+                sort: None,
                 lib_idx: 3,
                 library_name: "Movies".to_owned(),
                 collections: feed_group.then(|| GuiCollections {
@@ -196,7 +197,6 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
                     all: true,
                     entries: Vec::new(),
                     noun: mbv::GuiCollectionNoun::Folders,
-                    order: Some(mbv::GuiDateOrder::Newest),
                 }),
                 collection_names: if feed_group {
                     vec!["All".to_owned()]
@@ -249,6 +249,7 @@ pub(super) fn audiobooks_sections(
             }],
             current_tab: Some(4),
             destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {
+                sort: None,
                 lib_idx: 4,
                 loading: false,
                 failed: false,
@@ -259,7 +260,7 @@ pub(super) fn audiobooks_sections(
                     title: "Aftermath".to_owned(),
                     subtitle: Some("Bill Wyman".to_owned()),
                     duration: "4:32".to_owned(),
-                    sort_letter: 'A',
+                    sort_letter: Some('A'),
                 }],
             }),
         },
@@ -305,6 +306,7 @@ pub(super) fn feeds_sections(
             }],
             current_tab: Some(5),
             destination: GuiDestinationList::Feeds(GuiFeedsList {
+                sort: None,
                 collections: GuiCollections {
                     target: mbv::GuiCollectionTarget::Feeds,
                     all: true,
@@ -314,12 +316,12 @@ pub(super) fn feeds_sections(
                         checked: false,
                     }],
                     noun: mbv::GuiCollectionNoun::Subscriptions,
-                    order: Some(mbv::GuiDateOrder::Newest),
                 },
                 loading: false,
                 failed: false,
                 platform: None,
                 rows: vec![GuiEntryRowFrame {
+                    sort_letter: None,
                     art: GuiRowArtFrame::NoSource,
                     media: GuiRowMediaKindFrame::Video,
                     id: "s1::e1".to_owned(),

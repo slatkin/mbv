@@ -137,7 +137,6 @@ fn hero_app(props: FixtureProps) -> Element {
                         checked: true,
                     }],
                     noun: mbv::GuiCollectionNoun::Groups,
-                    order: None,
                 },
                 loading: false,
                 failure: None,

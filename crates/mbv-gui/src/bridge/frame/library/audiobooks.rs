@@ -6,7 +6,7 @@
 
 use mbv::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
-    GuiAudiobooksWorkspace,
+    GuiAudiobooksWorkspace, GuiListSortFrame,
 };
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -27,6 +27,9 @@ pub struct GuiAudiobooksList {
     pub failed: bool,
     /// The catalog's books in the TUI's sort order.
     pub rows: Vec<GuiAudiobooksRowFrame>,
+    /// The list's sort control (gui-flat-list-sort design D7): the target a
+    /// press names, its active sort, and the choices the book library offers.
+    pub sort: Option<GuiListSortFrame>,
 }
 
 /// The Audiobooks destination's detail part (`gui-change-driven-sections`
@@ -62,9 +65,9 @@ pub struct GuiAudiobooksRowFrame {
     /// The book's total duration, the TUI row's duration gutter; empty when
     /// unknown.
     pub duration: String,
-    /// The row's rail letter, or `#` for a digit- or symbol-led author sort
-    /// key.
-    pub sort_letter: char,
+    /// The row's rail letter, or `#` for a digit- or symbol-led key; `None`
+    /// under a date sort, whose list shows no rail.
+    pub sort_letter: Option<char>,
     /// The row's art (gui-delineated-rows design D4).
     pub art: GuiRowArtFrame,
     /// The media kind the row shows when it has no image (design D4).
@@ -140,6 +143,7 @@ impl GuiAudiobooksList {
                 .iter()
                 .map(GuiAudiobooksRowFrame::from)
                 .collect(),
+            sort: projection.sort.clone(),
         }
     }
 }

@@ -32,6 +32,7 @@ fn two_group_location() -> GuiLaunchState {
             picks: Vec::new(),
         }],
         shows_view: GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     }
 }
 

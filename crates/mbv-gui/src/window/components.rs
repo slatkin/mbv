@@ -40,6 +40,7 @@ pub mod library_search_control;
 pub mod library_shows_hero;
 pub mod library_shows_list;
 pub mod library_shows_view_dropdown;
+pub mod library_sort_control;
 pub mod library_status_bar;
 pub mod library_top_bar;
 pub mod library_tracklist;

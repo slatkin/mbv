@@ -164,6 +164,7 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 
@@ -195,6 +196,7 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
             picks: Vec::new(),
         }],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 
@@ -226,6 +228,7 @@ fn every_start_opens_on_home_whatever_destination_was_saved() {
         destination: library_identity(SHOWS_LIBRARY.0),
         collections: Vec::new(),
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 
@@ -263,6 +266,7 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
             },
         ],
         shows_view: mbv_config::GuiLaunchShowsView::All,
+        sorts: Vec::new(),
     })
     .unwrap();
 
@@ -276,9 +280,11 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
         "the opened destination restores its own saved entry"
     );
     assert_eq!(
-        test.core.app_mut().gui_podcast_date_order(1),
-        mbv::GuiDateOrder::Oldest,
-        "the resting destination installs its saved order with no show list"
+        test.core
+            .app_mut()
+            .gui_list_sort(mbv::GuiSortTarget::Podcasts(1)),
+        mbv::GuiListSort::Oldest,
+        "the resting destination installs its saved order as its sort with no show list"
     );
 
     // The user opens Podcasts, whose show list has landed by then.
@@ -306,11 +312,6 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
     assert!(
         !collections.all,
         "the saved show stays checked against the landed list"
-    );
-    assert_eq!(
-        collections.order,
-        Some(mbv::GuiDateOrder::Oldest),
-        "the saved order stays the list's order"
     );
     assert!(
         collections.entries[0].checked,

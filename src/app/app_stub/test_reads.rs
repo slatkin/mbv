@@ -273,7 +273,6 @@ impl App {
             lib_idx,
             crate::app::gui_library::GuiCollectionSelection {
                 set: crate::app::gui_library::GuiCollectionSet::Checked(vec![group_id.to_string()]),
-                ..crate::app::gui_library::GuiCollectionSelection::default()
             },
         );
     }

@@ -23,7 +23,9 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::list::{ListMove, scroll_step};
+use crate::window::library::list::{
+    LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
+};
 use crate::window::library::parts::library_podcasts_list;
 use crate::window::library::podcasts_list::PodcastsItemRow;
 
@@ -55,7 +57,7 @@ impl LibraryState {
     /// The rows borrow the section's carried frame through the memo's revision
     /// key — a keydown copies none of it.
     #[must_use]
-    pub fn podcasts_rows(&self) -> Arc<[PodcastsItemRow]> {
+    pub fn podcasts_rows(&self) -> Arc<[LetteredRow<PodcastsItemRow>]> {
         let list = self.sections.library_list.peek();
         let Some(podcasts) = library_podcasts_list(list.as_deref()) else {
             return Arc::from([]);
@@ -71,10 +73,10 @@ impl LibraryState {
     /// id names no episode. `None` while no painted row carries the id.
     #[must_use]
     pub fn podcasts_row_at(&self, row_id: &str) -> Option<PodcastsItemRow> {
-        self.podcasts_rows()
-            .iter()
-            .find(|row| row.id == row_id)
-            .cloned()
+        self.podcasts_rows().iter().find_map(|row| match row {
+            LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
+            _ => None,
+        })
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
@@ -156,6 +158,19 @@ impl LibraryState {
         let rows = self.podcasts_rows();
         let held = *self.scrolls.podcasts.peek();
         set_scroll_top(self.scrolls.podcasts, &rows, scroll_step(&rows, held, mv));
+    }
+
+    /// Jump to a letter of the rail (design D7; gui-flat-list-sort design D8):
+    /// the list scrolls so the first episode under the letter paints fully. A
+    /// letter without rows changes nothing.
+    pub fn jump_podcasts_to_letter(&self, letter: char) {
+        let rows = self.podcasts_rows();
+        let view = *self.scrolls.podcasts.peek();
+        let Some((_, scroll_top)) = jump_to_letter(&lettered_rail(&rows), &rows, letter, view)
+        else {
+            return;
+        };
+        set_scroll_top(self.scrolls.podcasts, &rows, scroll_top);
     }
 
     /// Report the list's measured viewport height (design D12): the rows in

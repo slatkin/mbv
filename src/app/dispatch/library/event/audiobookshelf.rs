@@ -350,6 +350,7 @@ mod tests {
         AudiobookshelfBook {
             library_item_id: id.into(),
             updated_at_ms: 0,
+            added_at_ms: None,
             title: id.into(),
             author_display: None,
             author_sort_key: "Author".into(),
