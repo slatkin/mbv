@@ -10,7 +10,9 @@
 //! in its own store. The art is part of its section's value, so a landed image
 //! bumps that section's revision.
 
-use mbv::{GuiArtShape, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryTab};
+use mbv::{
+    GuiArtShape, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryTab, GuiRowArt, GuiRowMediaKind,
+};
 
 use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 
@@ -131,6 +133,56 @@ impl From<&GuiLibraryArtwork> for GuiArtRef {
                 src: art_url(PLACEHOLDER_PATH),
             },
             GuiLibraryArtwork::Loading => Self::Loading,
+        }
+    }
+}
+
+/// The art one top-level Library row shows (gui-delineated-rows design D4),
+/// mirroring `mbv::GuiRowArt`: the row's cached image and the fit its own
+/// pixels ask for, a fetch in flight, a source that gave no image, or a row
+/// kind with no art source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GuiRowArtFrame {
+    /// The row's cached image, painted as `src`; `square` says the image shows
+    /// whole instead of cover-filling the thumb.
+    Image { art: GuiArtRef, square: bool },
+    /// The row's image fetch is in flight or awaits its retry.
+    Loading,
+    /// The row's source answered with no image.
+    Missing,
+    /// The row's kind declares no art source.
+    NoSource,
+}
+
+impl From<&GuiRowArt> for GuiRowArtFrame {
+    fn from(art: &GuiRowArt) -> Self {
+        match art {
+            GuiRowArt::Image { key, square } => Self::Image {
+                art: GuiArtRef::Image {
+                    src: art_url(&card_path(key)),
+                },
+                square: *square,
+            },
+            GuiRowArt::Loading => Self::Loading,
+            GuiRowArt::Missing => Self::Missing,
+            GuiRowArt::NoSource => Self::NoSource,
+        }
+    }
+}
+
+/// The media kind a row without an image shows (design D4), mirroring
+/// `mbv::GuiRowMediaKind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuiRowMediaKindFrame {
+    Audio,
+    Video,
+}
+
+impl From<GuiRowMediaKind> for GuiRowMediaKindFrame {
+    fn from(kind: GuiRowMediaKind) -> Self {
+        match kind {
+            GuiRowMediaKind::Audio => Self::Audio,
+            GuiRowMediaKind::Video => Self::Video,
         }
     }
 }

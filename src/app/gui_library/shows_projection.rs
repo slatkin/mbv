@@ -17,6 +17,7 @@ use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_row_source, upcoming_row_source};
 use super::home::GuiArtShape;
 use super::projection::sort_letter;
 use super::request::GuiSectionRequest;
@@ -42,6 +43,10 @@ pub struct GuiShowsRow {
     pub date: Option<String>,
     /// Whether the row takes no select, play, or enqueue.
     pub display_only: bool,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// One series node of the All series tree (design D14): the series row, its
@@ -64,6 +69,10 @@ pub struct GuiShowsSeries {
     /// The series' seasons in the detail's order; empty while the detail has
     /// not landed.
     pub seasons: Vec<GuiShowsSeasonNode>,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// One season node under a series (design D14): the season row and its
@@ -315,12 +324,15 @@ impl App {
                     Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
                     None => (parts.title.text.clone(), None),
                 };
+                let art = self.gui_row_art(emby_row_source(&episode).as_ref());
                 GuiShowsRow {
                     id: episode.id,
                     title,
                     subtitle,
                     date: row_date(mbv_ui_model::home_latest::provider_timestamp_secs(&item)),
                     display_only: false,
+                    art,
+                    media: GuiRowMediaKind::Video,
                 }
             })
             .collect()
@@ -344,6 +356,8 @@ impl App {
             .into_iter()
             .map(|premiere| {
                 let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
+                let series = self.gui_shows_series_item(premiere.series_id.as_str());
+                let art = self.gui_row_art(Some(&upcoming_row_source(premiere, series.as_ref())));
                 GuiShowsRow {
                     id: premiere.stable_key(),
                     title: premiere.series_name.clone(),
@@ -354,6 +368,8 @@ impl App {
                     )),
                     date: row_date(secs),
                     display_only: true,
+                    art,
+                    media: GuiRowMediaKind::Video,
                 }
             })
             .collect()
@@ -399,6 +415,8 @@ impl App {
                     sort_letter: sort_letter(effective_sort_str(item)),
                     expandable: detail.is_none_or(|detail| !detail.seasons.is_empty()),
                     seasons,
+                    art: self.gui_row_art(emby_row_source(item).as_ref()),
+                    media: GuiRowMediaKind::Video,
                 }
             })
             .collect()

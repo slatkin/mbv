@@ -27,6 +27,7 @@ fn unfetched_podcast_app(shows: usize) -> App {
     let shows: Vec<mbv_audiobookshelf::AudiobookshelfShow> = (0..shows)
         .map(|i| mbv_audiobookshelf::AudiobookshelfShow {
             library_item_id: format!("show-{i}"),
+            updated_at_ms: 0,
             title: format!("Show {i}"),
             author: None,
             description: None,

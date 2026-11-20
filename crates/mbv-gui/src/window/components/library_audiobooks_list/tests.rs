@@ -21,7 +21,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryAudiobooksList;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
-    GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -213,11 +213,25 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
+    /// The `RowsInView` reports the core link received, in send order.
+    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+                    Some(command)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The Library commands the core link received, in send order.
     fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
+                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -267,6 +281,8 @@ fn built(list: GuiAudiobooksList, detail: GuiAudiobooksDetail) -> Fixture {
 fn catalog() -> Vec<GuiAudiobooksRowFrame> {
     vec![
         GuiAudiobooksRowFrame {
+            art: GuiRowArtFrame::Loading,
+            media: GuiRowMediaKindFrame::Audio,
             id: "b1".to_owned(),
             title: "Aftermath".to_owned(),
             subtitle: Some("Bill Wyman".to_owned()),
@@ -274,6 +290,8 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             sort_letter: 'A',
         },
         GuiAudiobooksRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "b2".to_owned(),
             title: "Audition".to_owned(),
             subtitle: Some("Ryu Murakami".to_owned()),
@@ -281,6 +299,8 @@ fn catalog() -> Vec<GuiAudiobooksRowFrame> {
             sort_letter: 'A',
         },
         GuiAudiobooksRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "b3".to_owned(),
             title: "Blindsight".to_owned(),
             subtitle: Some("Peter Watts".to_owned()),
@@ -373,6 +393,40 @@ fn the_list_paints_letter_headings_its_rows_and_the_rail_beside_them() {
         fixture.attr_of("[data-library-rail-letter=\"B\"]", "disabled"),
         None,
         "the rail's B is enabled by the book under it"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-abs-row-id=\"b1\"] [data-library-abs-thumb]",
+            "data-library-abs-thumb"
+        ),
+        ["loading".to_owned()],
+        "the book row paints the shared part's thumb with its art state"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-abs-row-id=\"b2\"] [data-library-abs-thumb]",
+            "data-library-abs-thumb"
+        ),
+        ["none".to_owned()],
+        "a row with no art source paints the no-source thumb"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): the list reports the rows it
+/// paints under its own scope, so the core queues their row art without a
+/// coordinate.
+#[test]
+fn the_list_reports_the_rows_in_view_under_the_audiobooks_scope() {
+    let mut fixture = built(list_of(catalog()), detail_of(Some("b1")));
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.reported_rows_in_view().last(),
+        Some(&mbv::GuiLibraryCommand::RowsInView {
+            scope: mbv::GuiRowArtScope::Audiobooks,
+            ids: vec!["b1".to_owned(), "b2".to_owned(), "b3".to_owned()],
+        }),
+        "the report names the painted rows under the Audiobooks scope"
     );
 }
 

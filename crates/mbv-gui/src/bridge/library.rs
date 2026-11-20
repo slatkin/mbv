@@ -5,7 +5,7 @@
 //! so a command built from a stale paint addresses the item that paint showed
 //! or nothing.
 
-use mbv::{GuiCollectionTarget, GuiDateOrder, GuiShowsView};
+use mbv::{GuiCollectionTarget, GuiDateOrder, GuiRowArtScope, GuiShowsView};
 use mbv_queue::QueueItemContentId;
 
 /// One request from the Library panel's window content (design D2). The
@@ -135,11 +135,49 @@ pub enum GuiLibraryCommand {
     SearchActivate { id: String, item_type: String },
     /// Close the Search results (row 12.1): the Esc in the field.
     SearchClose,
+    /// Report the stable ids of the rows `scope`'s list paints, plus its
+    /// overscan (gui-delineated-rows design D7). The core stores the set and
+    /// queues the row art fetches once navigation is idle.
+    RowsInView {
+        scope: GuiRowArtScopeFrame,
+        ids: Vec<String>,
+    },
     /// Open the URL in the user's browser (the Hero's `IMDb` link, TUI
     /// parity): the scheme gate runs in the core, because the url comes
     /// from the window — only an http or https URL reaches the opener, and
     /// any other scheme changes nothing.
     OpenUrl { url: String },
+}
+
+/// The Library list a `RowsInView` set names (gui-delineated-rows design D7),
+/// mirroring `mbv::GuiRowArtScope`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuiRowArtScopeFrame {
+    Home,
+    Emby,
+    Music,
+    ShowsSeries,
+    ShowsNew,
+    ShowsUpcoming,
+    Podcasts,
+    Audiobooks,
+    Feeds,
+}
+
+impl From<GuiRowArtScopeFrame> for GuiRowArtScope {
+    fn from(scope: GuiRowArtScopeFrame) -> Self {
+        match scope {
+            GuiRowArtScopeFrame::Home => Self::Home,
+            GuiRowArtScopeFrame::Emby => Self::Emby,
+            GuiRowArtScopeFrame::Music => Self::Music,
+            GuiRowArtScopeFrame::ShowsSeries => Self::ShowsSeries,
+            GuiRowArtScopeFrame::ShowsNew => Self::ShowsNew,
+            GuiRowArtScopeFrame::ShowsUpcoming => Self::ShowsUpcoming,
+            GuiRowArtScopeFrame::Podcasts => Self::Podcasts,
+            GuiRowArtScopeFrame::Audiobooks => Self::Audiobooks,
+            GuiRowArtScopeFrame::Feeds => Self::Feeds,
+        }
+    }
 }
 
 /// One Home row's stable identity (design D12): the identity the Home
@@ -228,6 +266,10 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 Self::SearchActivate { id, item_type }
             }
             GuiLibraryCommand::SearchClose => Self::SearchClose,
+            GuiLibraryCommand::RowsInView { scope, ids } => Self::RowsInView {
+                scope: scope.into(),
+                ids,
+            },
             GuiLibraryCommand::OpenUrl { url } => Self::OpenUrl { url },
         }
     }

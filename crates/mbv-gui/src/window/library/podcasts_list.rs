@@ -12,7 +12,7 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEntryRowFrame;
-use crate::window::library::list::{FlatItem, GeometryRow, build_flat_rows};
+use crate::window::library::list::{FlatItem, GeometryRow, LIBRARY_ROW_HEIGHT, build_flat_rows};
 
 /// The fields of a carried entry row the flat list reads (design D12): the
 /// stable id and the title the filter narrows on. The Feeds list paints the
@@ -27,10 +27,10 @@ impl FlatItem for GuiEntryRowFrame {
     }
 }
 
-/// The episode row's height in logical pixels (design D12): the room a
-/// two-line episode title and the date gutter paint into, as a Shows flat
-/// row.
-pub const PODCASTS_ROW_HEIGHT: f32 = 48.0;
+/// The episode row's height in logical pixels (gui-delineated-rows design D2):
+/// the shared top-level row part's height, which paints the episode's
+/// two-line title and its date gutter.
+pub const PODCASTS_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 
 /// One painted row of the Podcasts list (design D12). The list is one flat
 /// episode list in core order — newest first with undated episodes last — so

@@ -3,15 +3,26 @@
 //! neighbour warm that fills the cache around the pick. The fetches
 //! are issued here, as the TUI's hero projection issues its own, so the window
 //! content never requests an image itself.
+//!
+//! `rows` holds the top-level row art model (gui-delineated-rows design D4): the
+//! art state each row paints, its Hero artwork source, and the row cache read.
 
 use mbv_components::library_panel::content::{
     ArtworkShape, ArtworkSource, painted_shape_for_pixels,
 };
-use mbv_emby_model::EmbyItem;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
 use crate::app::App;
 use mbv_images::SourceImage;
+
+mod rows;
+
+pub(in crate::app::gui_library) use self::rows::{
+    ARTIST_NAME_ROW_ID_PREFIX, artist_id_row_source, artist_row_source, catalog_book_row_source,
+    catalog_show_row_source, emby_media_kind, emby_row_source, episode_row_source, feed_media_kind,
+    feed_row_source, queue_item_media_kind, upcoming_row_source,
+};
+pub use self::rows::{GuiRowArt, GuiRowMediaKind, GuiRowSource, artist_rows_in_view_id};
 
 /// The neighbour warm window's bounds (the TUI's grouped-Music rule,
 /// `openspec/specs/music-library-hero/spec.md`): one entry behind the picked
@@ -133,28 +144,6 @@ impl App {
         };
         let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
         self.fetch_card_image(cache_key.clone(), item_id, series_id, &types);
-        self.resolve_gui_art(&cache_key)
-    }
-
-    /// One Home row's card art (add-gui-library-panel design D12, the
-    /// USER-APPROVED GUI Home design): the queue card's chain and cache
-    /// key for `item` — the now-playing card's conventions, so a Home row
-    /// whose item plays shares its cache entry — fetched here and read from
-    /// the image cache. A fetch in flight paints the
-    /// loading fill, and a fetch that resolved empty paints the
-    /// placeholder — the queue card's resolution.
-    pub(in crate::app::gui_library) fn gui_home_row_artwork(
-        &mut self,
-        item: &EmbyItem,
-    ) -> GuiLibraryArtwork {
-        let cache_key = crate::app::state::projection::card::card_cache_key(item);
-        let types = crate::app::state::projection::card::card_image_types(item);
-        self.fetch_card_image(
-            cache_key.clone(),
-            item.id.clone(),
-            item.series_id.clone(),
-            types,
-        );
         self.resolve_gui_art(&cache_key)
     }
 

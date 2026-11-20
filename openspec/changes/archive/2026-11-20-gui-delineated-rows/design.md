@@ -170,7 +170,13 @@ and the Hero show the same image:
   both take the thumb in one place.
 - Music artist with `ArtistKey::Service(id)`: Emby `Primary` of the artist id
   (one request; the Music Hero shows albums, so the artist's own image is the
-  artist row's image). `ArtistKey::Fallback` → `NoSource`.
+  artist row's image). `ArtistKey::Fallback` (a folder-based library: album
+  folders carry no `ArtistItems`) → the Service artist item id its level fill's
+  tracks named for that name (`artist_name_item_ids`), else the closest Emby
+  artist by name (`/Artists?SearchTerm=`, scored both ways by the shared fuzzy
+  matcher, for untagged files), else `NoSource`. Either id feeds the row's image
+  source only and never becomes an `ArtistKey`. An artist row asks for `Primary`
+  alone: the chain's `Logo` and `Backdrop` would win over the picture.
 - Audiobooks: `abs_book_artwork_policy`. Podcasts: `abs_episode_artwork_policy`
   (the show's cover).
 - Home Recently added Audiobookshelf rows: the same ABS policy as their own

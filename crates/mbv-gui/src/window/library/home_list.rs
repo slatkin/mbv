@@ -12,18 +12,18 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 use mbv_queue::QueueItemContentId;
 
-use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
-    GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame,
+    GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
 };
-use crate::window::library::list::{GeometryRow, filter_match};
+use crate::window::library::list::{GeometryRow, LIBRARY_ROW_HEIGHT, filter_match};
 
 /// The section heading row's height in logical pixels: the letter heading
 /// height's look, scaled to the section name.
 pub const HOME_HEADING_ROW_HEIGHT: f32 = 28.0;
-/// The item row's height in logical pixels: the room a 40 px art thumb and
-/// the two-line name paint into.
-pub const HOME_ITEM_ROW_HEIGHT: f32 = 48.0;
+/// The item row's height in logical pixels: the room the shared top-level row
+/// part paints into (gui-delineated-rows design D2).
+pub const HOME_ITEM_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 /// The spacer row's height between two non-empty sections (design D12).
 pub const HOME_SPACER_ROW_HEIGHT: f32 = 20.0;
 
@@ -37,16 +37,21 @@ pub struct HomeItemRow {
     pub title: String,
     /// The row's secondary label.
     pub subtitle: Option<String>,
-    /// The gutter date.
-    pub date: Option<String>,
+    /// The row's trailing text (gui-delineated-rows design D2): the Continue
+    /// watching time left, or the Recently added row's `day month` date.
+    pub trailing: Option<String>,
     /// The row's kind (`collection` when the row targets a container the
     /// play path refuses, `media` on a playable leaf).
     pub item_kind: GuiHomeRowKindFrame,
     /// The row's state, with the Continue Watching resume progress.
     pub state: GuiHomeRowStateFrame,
-    /// The row's artwork, present exactly while the row's item obtains art
-    /// from the image cache.
-    pub art: Option<GuiArtRef>,
+    /// The row's art (gui-delineated-rows design D4): the cached row image and
+    /// the fit its pixels ask for, a fetch in flight, a source with no image,
+    /// or a row kind with no art source.
+    pub art: GuiRowArtFrame,
+    /// The media kind the row's thumb shows while it holds no image (design
+    /// D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// One painted row of the flat Home list (design D12). The `id` is the row's
@@ -106,6 +111,16 @@ impl GeometryRow for HomeListRow {
 
     fn pointer_row(&self) -> Option<&str> {
         matches!(self, HomeListRow::Item { .. }).then_some(self.id())
+    }
+
+    fn rows_in_view_id(&self) -> Option<String> {
+        match self {
+            // The core's own Home encoding (`GuiHomeRowId::rows_in_view_id`),
+            // which is not the row key (gui-delineated-rows design D7): a
+            // heading and a spacer name no row art.
+            HomeListRow::Item { row, .. } => Some(row.row_id.rows_in_view_id()),
+            HomeListRow::Heading { .. } | HomeListRow::Spacer { .. } => None,
+        }
     }
 
     fn top(&self) -> f32 {
@@ -215,10 +230,11 @@ pub fn build_home_rows(rows: &[GuiHomeRowFrame], filter: &str) -> Vec<HomeListRo
                         row_id: item.id.clone(),
                         title: item.title.clone(),
                         subtitle: item.subtitle.clone(),
-                        date: item.date.clone(),
+                        trailing: item.trailing.clone(),
                         item_kind: item.kind,
                         state: item.state.clone(),
                         art: item.art.clone(),
+                        media: item.media,
                     },
                 });
                 top += height;

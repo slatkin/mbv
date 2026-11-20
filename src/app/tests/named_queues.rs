@@ -411,11 +411,10 @@ fn resting_state(items: &[EmbyItem], start_index: Option<usize>) -> UnifiedQueue
 }
 
 /// A resting queue is shown while the current queue plays its first slot. The
-/// shown queue carries no playhead of its own, so its rows take the start mark
-/// from its own snapshot and never the playing queue's index (design D7, D9;
-/// spec `gui-client` "A stopped queue marks its start slot").
+/// shown queue carries no playhead of its own, so its cursor takes its own
+/// snapshot's start slot and never the playing queue's index (design D7, D9).
 #[test]
-fn a_resting_queue_never_marks_the_playing_queue_s_index() {
+fn a_resting_queue_never_focuses_the_playing_queue_s_index() {
     let (mut app, _cmd_rx) = gui_app_with_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_state(&make_items(3), Some(2)));
@@ -426,20 +425,6 @@ fn a_resting_queue_never_marks_the_playing_queue_s_index() {
         "the shown resting queue carries no playhead"
     );
     assert_eq!(playback.active_idx, None);
-    let start = app.gui_queue_start_projection();
-    assert!(!start.playing, "a resting queue does not play");
-    assert!(
-        start.start_slot_reported,
-        "the resting queue's snapshot reports its start slot"
-    );
-    assert_eq!(
-        start.start,
-        app.displayed_queue()
-            .slots()
-            .get(2)
-            .map(|slot| slot.slot_id.raw()),
-        "the start mark is the resting queue's own start slot"
-    );
     app.focus_queue_initial_item();
     assert_eq!(
         app.displayed_queue().cursor(),

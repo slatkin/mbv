@@ -13,7 +13,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
-    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
@@ -112,6 +112,8 @@ fn book(
     sort_letter: char,
 ) -> GuiAudiobooksRowFrame {
     GuiAudiobooksRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),
@@ -293,8 +295,9 @@ fn a_rail_jump_scrolls_to_the_letter_first_book() {
         state.jump_audiobooks_to_letter('B');
         facts.lock().expect("facts").push(scroll_facts(state));
     });
-    // `B`'s heading and the `A` heading with its two books cover 128 px
-    // before `B`'s first book.
-    assert_eq!(facts[0], "top=128 viewport=40");
+    // `B`'s heading and the `A` heading with its two books cover 160 px
+    // before `B`'s first book, and the 56 px book's bottom edge sits at the
+    // viewport's bottom.
+    assert_eq!(facts[0], "top=176 viewport=40");
     assert_eq!(commands(&rx), []);
 }

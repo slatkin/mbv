@@ -14,6 +14,7 @@ fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
             series_id: String::new(),
             types: vec!["Primary".into()],
             source: mbv_images::ImageSource::Emby,
+            rendition: mbv_images::ImageRendition::Hero,
         };
         let _ = app.images.reserve_fetch(req, 0);
     }

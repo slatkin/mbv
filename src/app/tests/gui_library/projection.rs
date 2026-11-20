@@ -8,6 +8,7 @@
 //! that file stays within its line ceiling.
 
 use super::*;
+use mbv_ui_model::music_grouping::ArtistKey;
 /// The album the Hero shows, by Service id (add-gui-library-panel design D13).
 fn hero_album_id(app: &mut App) -> Option<String> {
     app.gui_music_projection(0)
@@ -365,5 +366,73 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
         hero_album_id(&mut app),
         Some("alb-aar".to_string()),
         "the union's first album in artist order is the Hero"
+    );
+}
+
+/// A folder-based artist row, grouped by name, takes the Service artist item id
+/// its level fill's tracks named for that name: the row requests that artist's
+/// image instead of painting the media kind with no source.
+#[test]
+fn a_fallback_artist_row_requests_the_artist_item_its_tracks_named() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(Vec::new(), Vec::new());
+    app.record_artist_item_id("Beastie Boys", "artist-7".into());
+
+    assert_eq!(
+        app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),
+        GuiRowArt::Loading
+    );
+}
+
+/// A Music artist row's art is the artist's own image when the Service names
+/// the artist (gui-delineated-rows design D5), read from the row cache alone,
+/// and the fallback identity — a name the Service never named — has no source.
+/// The Music Hero shows albums, so the artist's own `Primary` is the row's
+/// image; the projection's own rows carry that art beside their media kind.
+#[test]
+fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        Vec::new(),
+    );
+    let key = mbv_images::row::emby_row_request_for(
+        "artist-1",
+        "",
+        &mbv_emby_model::EmbyImageTags::default(),
+        true,
+    )
+    .cache_key;
+    let cover = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        72,
+        72,
+        image::Rgba([20, 40, 60, 255]),
+    ));
+    app.seed_card_image_for_test(key.clone(), cover);
+
+    let projection = app.gui_music_projection(0);
+
+    assert_eq!(
+        projection.artists[0].art,
+        GuiRowArt::NoSource,
+        "a union row the Service names no artist id for has no source"
+    );
+    assert_eq!(projection.artists[0].media, GuiRowMediaKind::Audio);
+    assert_eq!(
+        app.music_artist_row_art(&ArtistKey::Service("artist-1".into())),
+        GuiRowArt::Image {
+            key: key.clone(),
+            square: true
+        },
+        "a Service-named artist shows its own cached image"
+    );
+    assert_eq!(
+        app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),
+        GuiRowArt::NoSource
     );
 }

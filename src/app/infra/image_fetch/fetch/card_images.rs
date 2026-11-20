@@ -27,6 +27,7 @@ impl App {
             series_id,
             types: types.iter().map(ToString::to_string).collect(),
             source: ImageSource::Emby,
+            rendition: mbv_images::ImageRendition::Hero,
         };
         if let mbv_images::cache::FetchReservation::Start(req) =
             self.images.reserve_card_image_fetch(req, MAX_IMAGE_FETCHES)
@@ -90,6 +91,7 @@ impl App {
                 server_url,
                 api_key,
             },
+            rendition: mbv_images::ImageRendition::Hero,
         };
         if let mbv_images::cache::FetchReservation::Start(req) =
             self.images.reserve_fetch(req, MAX_IMAGE_FETCHES)
@@ -119,6 +121,24 @@ impl App {
             return;
         }
         self.fetch_card_image(cache_key, item_id, series_id, types);
+    }
+
+    /// Queue the in-view row fetches (design D7): the waiting row queue is
+    /// replaced, so a row that left the view before its fetch started is
+    /// dropped, and the requests with a free row slot start now. The Hero's
+    /// queue drains first (design D7), so a Hero fetch never waits on a row.
+    pub(in crate::app) fn fetch_row_images(&mut self, requests: Vec<ImageFetchReq>) {
+        for req in self.images.replace_pending_row_fetches(requests) {
+            self.spawn_image_fetch(req);
+        }
+    }
+
+    /// Drop the waiting in-view row fetches (design D7): each `RowsInView` set
+    /// replaces the queue, so a row that left the view before its fetch started
+    /// is never fetched, and its loading mark clears so a later reserve of the
+    /// same key is not refused as a duplicate.
+    pub(in crate::app) fn drop_pending_row_fetches(&mut self) {
+        self.images.replace_pending_row_fetches(Vec::new());
     }
 
     /// Pre-warm the neighbour album artwork the Grouped Music tree resolved

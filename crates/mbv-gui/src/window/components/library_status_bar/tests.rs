@@ -24,7 +24,8 @@ use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
     GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail,
-    GuiMusicHeroFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList,
+    GuiMusicHeroFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
 };
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::SectionRef;
@@ -319,6 +320,8 @@ fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
         loading: false,
         failed: false,
         rows: vec![GuiEmbyRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "m1".to_owned(),
             title: "Heat".to_owned(),
             subtitle: Some("1995".to_owned()),
@@ -341,6 +344,8 @@ fn audiobooks_content() -> (GuiDestinationList, GuiLibraryDetail) {
         loading: false,
         failed: false,
         rows: vec![GuiAudiobooksRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
             id: "b1".to_owned(),
             title: "Dune".to_owned(),
             subtitle: Some("Frank Herbert".to_owned()),
@@ -376,6 +381,8 @@ fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
         loading: false,
         failed: false,
         rows: vec![GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "show1:ep12".to_owned(),
             title: "Episode 12: The Long Road".to_owned(),
             subtitle: Some("Bits and Bites".to_owned()),
@@ -466,6 +473,8 @@ fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
         loading: false,
         failed: false,
         rows: vec![GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "sub1:guid12".to_owned(),
             title: "The Long Road Home".to_owned(),
             subtitle: Some("Tifo Football".to_owned()),

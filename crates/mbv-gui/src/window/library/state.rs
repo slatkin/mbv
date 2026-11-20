@@ -16,7 +16,7 @@ use mbv::GuiCollections;
 use mbv::{GuiCollectionTarget, GuiShowsView};
 
 use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiLibraryDetail, GuiLibraryList};
-use crate::bridge::library::GuiLibraryCommand;
+use crate::bridge::library::{GuiLibraryCommand, GuiRowArtScopeFrame};
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::Clock;
@@ -300,6 +300,16 @@ impl LibraryState {
     /// collection destination shares this one press path.
     pub fn press_collection(&self, collections: &GuiCollections, key: &str) {
         self.press_collection_target(&collections.target, key);
+    }
+
+    /// Report the stable ids of the rows a destination paints, plus the
+    /// shell's overscan (gui-delineated-rows design D7): the core resolves each
+    /// id's row art source and queues its fetch once navigation is idle. The
+    /// scope names the list whose rows these are, so a set of a list that is
+    /// not the active destination queues nothing.
+    pub fn report_rows_in_view(&self, scope: GuiRowArtScopeFrame, ids: Vec<String>) {
+        self.link
+            .library(GuiLibraryCommand::RowsInView { scope, ids });
     }
 
     /// Ask for a collection row of one destination `target` to be pressed

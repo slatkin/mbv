@@ -51,16 +51,14 @@ swap play in `control/named_queue.rs`; and the projection
 
 ## Why it matters
 
-The GUI Client paints the Queue's start mark from this slot: a filled mark while
-the queue plays, an outlined one while it rests or is stopped. A Play of a
-resting or stopped queue has nowhere else to resume from — the playhead is not a
-fact the Owner keeps while nothing plays, and the queue's cursor is a
-presentation coordinate that every edit shifts. If a stop or a completion failed
-to record where playback really was, the mark would paint a row the user never
-reached and a later Play would resume there. If a start slot were derived from
-the queue's active marker instead of the run's observation, a cold-started
-queue, a removed active slot, or a remote output's load would move the mark to
-a slot nothing played. Nothing in the type system forbids a second writer: the
+A Play of a resting or stopped queue has nowhere else to resume from — the
+playhead is not a fact the Owner keeps while nothing plays, and the queue's
+cursor is a presentation coordinate that every edit shifts. If a stop or a
+completion failed to record where playback really was, a later Play would
+resume at a row the user never reached. If a start slot were derived from the
+queue's active marker instead of the run's observation, a cold-started queue, a
+removed active slot, or a remote output's load would leave a Play starting at a
+slot nothing played. Nothing in the type system forbids a second writer: the
 cell is an `Arc<Mutex<Option<QueueSlotId>>>`, and an assignment next to any
 handler compiles and passes every functional test.
 

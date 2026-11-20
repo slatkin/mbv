@@ -10,8 +10,8 @@ use mbv::{
 use mbv_queue::QueueItemContentId;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
-use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
 /// The Home destination's list part (design D8): whether the first fetch has
@@ -88,17 +88,19 @@ pub struct GuiHomeItemRowFrame {
     /// The row's secondary label: the item's own title on a split row;
     /// `None` on an unsplit row.
     pub subtitle: Option<String>,
-    /// The gutter date, the shared projection's `day month` text; `None` on
-    /// a `Continue watching` row and on an item with no parseable date.
-    pub date: Option<String>,
+    /// The row's trailing text (gui-delineated-rows design D2): the time left
+    /// on a `Continue watching` row, and the projection's `day month` gutter
+    /// date on a `Recently added` one. `None` when the row has neither.
+    pub trailing: Option<String>,
     /// The row's kind (`collection` when the row targets a container the
     /// play path refuses, `media` on a playable leaf).
     pub kind: GuiHomeRowKindFrame,
     /// The row's state, with the Continue Watching resume progress.
     pub state: GuiHomeRowStateFrame,
-    /// The row's artwork, present exactly while the row's item obtains art
-    /// from the image cache.
-    pub art: Option<GuiArtRef>,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// One Home row's stable identity, mirroring `mbv::GuiHomeRowId` (design
@@ -174,10 +176,11 @@ impl From<&GuiHomeItemRow> for GuiHomeItemRowFrame {
             id: GuiHomeRowIdFrame::from(&item.id),
             title: item.title.clone(),
             subtitle: item.subtitle.clone(),
-            date: item.date.clone(),
+            trailing: item.trailing.clone(),
             kind: GuiHomeRowKindFrame::from(item.kind),
             state: GuiHomeRowStateFrame::from(&item.state),
-            art: item.art.as_ref().map(GuiArtRef::from),
+            art: GuiRowArtFrame::from(&item.art),
+            media: GuiRowMediaKindFrame::from(item.media),
         }
     }
 }
@@ -188,6 +191,18 @@ impl From<&GuiHomeRowId> for GuiHomeRowIdFrame {
             GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
             GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
         }
+    }
+}
+
+impl GuiHomeRowIdFrame {
+    /// The id this row takes in a `RowsInView` report (gui-delineated-rows
+    /// design D7): the core's own encoding (`GuiHomeRowId::rows_in_view_id`),
+    /// which matches the row by an opaque string and never by a position. A
+    /// `Continue` watching row carries its Emby item id, and a `Recently added`
+    /// row its queue item's content id, provider first.
+    #[must_use]
+    pub fn rows_in_view_id(&self) -> String {
+        mbv::GuiHomeRowId::from(&crate::bridge::library::GuiHomeRowId::from(self)).rows_in_view_id()
     }
 }
 

@@ -6,11 +6,14 @@
 //! is asserted without a layout.
 
 use super::*;
+use crate::bridge::frame::library::{GuiRowArtFrame, GuiRowMediaKindFrame};
 
 /// One book row of the catalog: its rail letter is the heading it paints
 /// under.
 fn book(id: &str, title: &str, sort_letter: char) -> GuiAudiobooksRowFrame {
     GuiAudiobooksRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: None,

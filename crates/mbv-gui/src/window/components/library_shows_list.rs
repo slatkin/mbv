@@ -16,14 +16,20 @@
 //! press on a leaf selects it, a double-click on an episode plays
 //! it, and a right-click opens the item menu, as the Music list's rows do. The
 //! list keeps no cursor: the keys act on the row the pointer marks
-//! (`gui-pointer-target-interaction` D2).
+//! (`gui-pointer-target-interaction` D2). The series rows are top-level rows and
+//! paint through the shared row part with their art thumb; their season and
+//! episode rows keep their own painters (gui-delineated-rows design D1). The
+//! rows the list paints are also the row art set the core fetches (design D7).
 
 use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiShowsList;
-use crate::window::components::library_item_row::mark;
+use crate::bridge::library::GuiRowArtScopeFrame;
+use crate::window::components::library_item_row::{
+    LibraryItemRow, LibraryRowNode, LibraryRowThumb, LibraryTrailPart, mark,
+};
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
@@ -55,8 +61,9 @@ fn is_selected_row(row: &ShowsListRow, selected: Option<&str>) -> bool {
     row_source_id(row).is_some_and(|source_id| Some(source_id) == selected)
 }
 
-/// The row's indentation: the Music tree's depths — the series at the list's
-/// own inset, the season under it, the episode under the season.
+/// The row's indentation: the Music tree's depths — the season under its series
+/// and the episode under its season. A series row is a top-level row and paints
+/// through the shared row part, so its own inset is never read.
 fn row_inset(row: &ShowsListRow) -> &'static str {
     match row {
         ShowsListRow::Series(_) => "4px",
@@ -129,22 +136,65 @@ fn paint_chevron(open: bool) -> Element {
     }
 }
 
-/// A series or season node row: the chevron, the
-/// name, and the press that opens or closes the node and selects it.
-fn paint_shows_node(
+/// A top-level series row (gui-delineated-rows design D1): the shared row part
+/// over the series' name, its node caret, and its art thumb. A press opens or
+/// closes the node and selects it; the series has no double-click path.
+fn paint_shows_series(
+    row: &ShowsListRow,
+    library: &LibraryState,
+    shows: Option<&GuiShowsList>,
+    selected: Option<&str>,
+) -> Element {
+    let ShowsListRow::Series(series) = row else {
+        return rsx! {};
+    };
+    let selected_row = is_selected_row(row, selected);
+    let press_row = row.clone();
+    let press_library = library.clone();
+    let menu_id = row_source_id(row).map(str::to_owned);
+    let menu_library = library.clone();
+    rsx! {
+        LibraryItemRow {
+            attr: "shows",
+            kind: "series".to_owned(),
+            id: row.id().to_owned(),
+            height: series.height,
+            title: series.title.clone(),
+            subtitle: None,
+            trail: None,
+            trail_part: LibraryTrailPart::Date,
+            title_color: row_name_color(shows, row),
+            background: row_background(row, selected),
+            selected: selected_row,
+            progress: None,
+            thumb: Some(LibraryRowThumb {
+                art: series.art.clone(),
+                media: series.media,
+            }),
+            node: series.expandable.then_some(if series.open {
+                LibraryRowNode::Open
+            } else {
+                LibraryRowNode::Closed
+            }),
+            on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
+            on_play: Callback::new(|()| {}),
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
+                menu_library.open_row_menu_at(menu_id.clone(), x, y);
+            })),
+        }
+    }
+}
+
+/// A nested season node row under an open series (design D1): the chevron, the
+/// name, and the press that opens or closes the node and selects it. It keeps
+/// its own painter and height.
+fn paint_shows_season(
     row: &ShowsListRow,
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
     selected: Option<&str>,
 ) -> Element {
     let (kind, title, open, expandable, height) = match row {
-        ShowsListRow::Series(series) => (
-            "series",
-            &series.title,
-            series.open,
-            series.expandable,
-            series.height,
-        ),
         ShowsListRow::Season(season) => (
             "season",
             &season.title,
@@ -162,11 +212,7 @@ fn paint_shows_node(
     if let Some(background) = row_background(row, selected) {
         let _ = write!(style, " background: {background};");
     }
-    let weight = if matches!(row, ShowsListRow::Series(_)) || selected_row {
-        600.0
-    } else {
-        400.0
-    };
+    let weight = if selected_row { 600.0 } else { 400.0 };
     let name_color = row_name_color(shows, row);
     let press_row = row.clone();
     let press_library = library.clone();
@@ -232,67 +278,46 @@ fn paint_shows_node(
     }
 }
 
-/// A flat New or Upcoming row (gui-collection-dropdown design D9): the two
-/// title lines and the date gutter the old Home sections carried. An Upcoming
-/// row paints no play affordance and takes no select.
+/// A flat New or Upcoming row (gui-collection-dropdown design D9;
+/// gui-delineated-rows design D1, D2): the shared top-level row part over the
+/// two title lines and the date gutter the old Home sections carried, with the
+/// row's art thumb. An Upcoming row paints no play affordance and takes no
+/// select.
 fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option<&str>) -> Element {
     let id = row.id.clone();
-    let title = row.title.clone();
-    let subtitle = row.subtitle.clone();
-    let date = row.date.clone();
-    let height = row.height;
+    let selected_row = Some(id.as_str()) == selected;
     let display_only = row.display_only;
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = id.clone();
     let play_library = library.clone();
-    let selected_row = Some(id.as_str()) == selected;
     rsx! {
-        button {
-            "type": "button",
-            class: "flex w-full items-center overflow-hidden",
-            // The painted sizes carry the row's format: the title at 14 px
-            // and the subtitle at 12 px, matching the measure styles. Without
-            // the button's font-size the two lines inherit the DOM's 16 px
-            // default and paint larger than every other list row.
-            style: format!(
-                "height: {height}px; padding: 0 8px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14px;"
-            ),
-            "data-library-shows-row": "flat",
-            "data-library-shows-row-id": "{id}",
-            onclick: move |_| press_library.select_shows_row(&ShowsListRow::Flat(press_row.clone())),
-            ondoubleclick: move |_| {
+        LibraryItemRow {
+            attr: "shows",
+            kind: "flat".to_owned(),
+            id,
+            height: row.height,
+            title: row.title.clone(),
+            subtitle: row.subtitle.clone(),
+            trail: row.date.clone(),
+            trail_part: LibraryTrailPart::Date,
+            title_color: canvas_var("text"),
+            background: selected_row.then(|| canvas_var("library-raise")),
+            selected: selected_row,
+            progress: None,
+            thumb: Some(LibraryRowThumb {
+                art: row.art.clone(),
+                media: row.media,
+            }),
+            on_press: Callback::new(move |()| {
+                press_library.select_shows_row(&ShowsListRow::Flat(press_row.clone()));
+            }),
+            on_play: Callback::new(move |()| {
                 if !display_only {
                     play_library.play_shows_row(&play_id);
                 }
-            },
-            ..mark("data-library-shows-selected", selected_row),
-            if let Some(date) = date {
-                span {
-                    class: "flex-none font-mono tabular-nums",
-                    style: "font-size: 12px; color: var(--canvas-type-date);",
-                    "data-library-shows-flat-date": "",
-                    "{date}"
-                }
-            }
-            div {
-                class: "flex min-w-0 flex-1 flex-col",
-                Truncate {
-                    text: title,
-                    class: "min-w-0 w-full".to_owned(),
-                    css: "color: var(--canvas-heading); font-weight: 600;".to_owned(),
-                    style: TextStyle::sans(14.0, 600.0),
-                    attrs: vec![Attribute::new("data-library-shows-flat-title", "", None, false)],
-                }
-                if let Some(subtitle) = subtitle {
-                    Truncate {
-                        text: subtitle,
-                        class: "min-w-0 w-full".to_owned(),
-                        css: "font-size: 12px; color: var(--canvas-muted); font-weight: 400;".to_owned(),
-                        style: TextStyle::sans(12.0, 400.0),
-                    }
-                }
-            }
+            }),
+            on_context: None,
         }
     }
 }
@@ -384,9 +409,8 @@ fn paint_shows_row(
                 height: heading.height,
             }
         },
-        ShowsListRow::Series(_) | ShowsListRow::Season(_) => {
-            paint_shows_node(row, library, shows, selected)
-        }
+        ShowsListRow::Series(_) => paint_shows_series(row, library, shows, selected),
+        ShowsListRow::Season(_) => paint_shows_season(row, library, shows, selected),
         ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected),
         ShowsListRow::Flat(flat) => paint_shows_flat(flat, library, selected),
     }
@@ -438,6 +462,14 @@ pub fn LibraryShowsList() -> Element {
     // the rows paint over the interaction state this render read.
     let measure_library = library.clone();
     let scroll_library = library.clone();
+    let art_library = library.clone();
+    // The destination list the painted rows' art belongs to (gui-delineated-rows
+    // design D7): the visible view names its own scope.
+    let art_scope = match frame.map(|frame| frame.view) {
+        Some(mbv::GuiShowsView::New) => GuiRowArtScopeFrame::ShowsNew,
+        Some(mbv::GuiShowsView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
+        Some(mbv::GuiShowsView::All) | None => GuiRowArtScopeFrame::ShowsSeries,
+    };
     let paint_library = library.clone();
     let paint_selected = selected.clone();
     let paint_shows = frame;
@@ -449,6 +481,9 @@ pub fn LibraryShowsList() -> Element {
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),
+        Some(Callback::new(move |ids: Vec<String>| {
+            art_library.report_rows_in_view(art_scope, ids);
+        })),
         move |row: &ShowsListRow| {
             paint_shows_row(row, &paint_library, paint_shows, paint_selected.as_deref())
         },

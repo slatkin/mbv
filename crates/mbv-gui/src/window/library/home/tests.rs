@@ -17,7 +17,7 @@ use mbv_queue::QueueItemContentId;
 
 use crate::bridge::frame::library::{
     GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame,
-    GuiHomeRowStateFrame,
+    GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 
 use crate::bridge::sections::GuiSectionBatch;
@@ -106,10 +106,11 @@ fn continued() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Continue("e1".to_owned()),
         title: "Better Call Saul".to_owned(),
         subtitle: None,
-        date: None,
+        trailing: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -119,10 +120,11 @@ fn added() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Recent(QueueItemContentId::Feed("f1".to_owned())),
         title: "A Feed Entry".to_owned(),
         subtitle: None,
-        date: Some("12 May".to_owned()),
+        trailing: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -180,7 +182,9 @@ fn home_facts(state: &LibraryState) -> String {
 fn down_scrolls_the_list_by_the_height_of_the_top_row() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
-        state.measure_home_list(HOME_ITEM_ROW_HEIGHT * 3.0);
+        // The viewport leaves the list room to scroll, so the step is the top
+        // row's height and not the range's clamp.
+        state.measure_home_list(HOME_ITEM_ROW_HEIGHT * 2.0);
 
         state.step_home_scroll(ListMove::Down);
 

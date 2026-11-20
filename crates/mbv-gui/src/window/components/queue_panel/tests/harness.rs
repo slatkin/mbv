@@ -60,12 +60,6 @@ pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
         marks: Vec::new(),
         active: None,
         hover: None,
-        start: None,
-        playing: false,
-        // A queue with no start mark reports its start slot as a queue with
-        // one does: the window paints no outlined mark from an unreported
-        // slot, so the fixture's rows carry no mark either way.
-        start_slot_reported: true,
         drag: None,
         scroll: None,
     }
@@ -293,6 +287,15 @@ pub(super) fn anchor() -> GuiPlayhead {
         position_ticks: 60 * SECOND,
         runtime_ticks: 200 * SECOND,
         paused: false,
+    }
+}
+
+/// [`anchor`] with `slot` carrying the playhead: the playing row's ring then
+/// paints the playhead's predicted 30 percent.
+pub(super) fn anchor_on(slot: u64) -> GuiPlayhead {
+    GuiPlayhead {
+        active_slot: Some(slot),
+        ..anchor()
     }
 }
 
@@ -581,14 +584,26 @@ impl Fixture {
         summary: GuiQueueSummary,
         overlay: Option<GuiOverlayFrame>,
     ) {
+        self.show_with_anchor(rows, summary, overlay, anchor());
+    }
+
+    /// Paint the frame's queue and summary (and `overlay` when one is up) with
+    /// `head` as the playhead anchor the rows read their prediction from, and
+    /// let the re-render land.
+    pub(super) fn show_with_anchor(
+        &mut self,
+        rows: GuiQueue,
+        summary: GuiQueueSummary,
+        overlay: Option<GuiOverlayFrame>,
+        head: GuiPlayhead,
+    ) {
         let mut sections = self.sections.clone();
-        let anchor = anchor();
         let mut playhead = self.playhead.clone();
         self.doc.vdom.in_runtime(move || {
             sections.queue.set(SectionRef::new(rows));
             sections.summary.set(summary);
             sections.overlay.set(overlay);
-            playhead.stamp(anchor);
+            playhead.stamp(head);
         });
         self.poll_until_idle();
         self.lay_out();
@@ -709,5 +724,18 @@ pub(super) fn built_with_frame(
 ) -> Fixture {
     let mut fixture = built_sized(app);
     fixture.show(rows, summary, overlay);
+    fixture
+}
+
+/// A fixture whose painted frame is `rows` under `summary`, with the playhead
+/// anchored on `slot`.
+pub(super) fn built_with_anchor(
+    app: fn(FixtureProps) -> Element,
+    rows: GuiQueue,
+    summary: GuiQueueSummary,
+    slot: u64,
+) -> Fixture {
+    let mut fixture = built_sized(app);
+    fixture.show_with_anchor(rows, summary, None, anchor_on(slot));
     fixture
 }

@@ -19,7 +19,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiPodcastsDetail, GuiPodcastsHeroFrame,
-    GuiPodcastsList,
+    GuiPodcastsList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -215,6 +215,8 @@ fn episode(
     state: GuiHomeRowStateFrame,
 ) -> GuiEntryRowFrame {
     GuiEntryRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),
@@ -409,9 +411,9 @@ fn down_over_the_podcasts_list_scrolls_it_by_one_row() {
         facts.lock().expect("facts").push(scroll_facts(state));
     });
     assert_eq!(facts[0], "down=Handled");
-    // The first row is 48 px, and the 96 px of rows clamp the step at the
-    // list's end.
-    assert_eq!(facts[1], "top=48 viewport=40");
+    // The first row is 56 px, so one row step moves the 40 px viewport down
+    // a row.
+    assert_eq!(facts[1], "top=56 viewport=40");
     assert_eq!(commands(&rx), []);
 }
 

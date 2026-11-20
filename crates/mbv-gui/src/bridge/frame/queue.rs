@@ -1,9 +1,9 @@
 //! The Queue section: the rows inside the viewport, and the cursor,
-//! marks, active slot, and start slot (design D4). A slot id travels as its
-//! raw number, as `layout.rs` does. The summary section carries the queue
-//! header's chooser facts, tail offset, filter text, and totals.
+//! marks, and active slot (design D4). A slot id travels as its raw number, as
+//! `layout.rs` does. The summary section carries the queue header's chooser
+//! facts, tail offset, filter text, and totals.
 
-use mbv::{QueueEndOffsets, QueueHeaderProjection, QueueStartProjection, QueueSummaryProjection};
+use mbv::{QueueEndOffsets, QueueHeaderProjection, QueueSummaryProjection};
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::{QueueRowDrag, QueueRowInsertion, QueueSurface};
 use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
@@ -28,21 +28,6 @@ pub struct GuiQueue {
     /// add-tauri-gui-client row 6.5): the window paints that row's grip and
     /// actions button. `None` while the pointer rests on no row.
     pub hover: Option<u64>,
-    /// The start slot of the shown queue (`QueueSlotId::raw`): the slot a play
-    /// of that queue starts at (gui-named-queues design D9). An owner that
-    /// reports no start slot — a peer without `named-queues` — carries its
-    /// observed active slot here instead, so it keeps the playing mark it
-    /// paints today.
-    pub start: Option<u64>,
-    /// Whether the shown queue is the queue that plays (gui-named-queues design
-    /// D9): the rows paint the start slot filled while it does and outlined
-    /// while the queue is stopped or resting.
-    pub playing: bool,
-    /// Whether the shown queue's owner reports [`Self::start`] as its start
-    /// slot (gui-named-queues design D9): only a reported start slot can carry
-    /// the outlined mark, so an owner without one paints the playing mark on
-    /// its observed active slot and no outlined mark.
-    pub start_slot_reported: bool,
     /// The row drag in progress, if any: the drag ghost and insertion line.
     pub drag: Option<GuiQueueDrag>,
     /// The scroll position the window paints as a scroll bar, `None` while
@@ -152,15 +137,12 @@ impl GuiQueue {
     /// tall, with the cursor, marks, and active slot. The
     /// summary's filter text narrows the projected rows locally — the library's
     /// one word-local acceptance rule (`mbv-text`) decides what matches, and the
-    /// Surface state and the canonical queue stay whole. `start` names the
-    /// shown queue's start slot, whether that queue plays, and whether its
-    /// owner reported the slot (design D9 of `gui-named-queues`).
+    /// Surface state and the canonical queue stay whole.
     #[must_use]
     pub fn from_surface(
         queue: &QueueSurface,
         viewport_rows: usize,
         summary: &QueueSummaryProjection,
-        start: &QueueStartProjection,
     ) -> Self {
         let rows = queue.rows();
         let filter = summary.filter.as_str();
@@ -205,9 +187,6 @@ impl GuiQueue {
             // not: it is the playback fact, not the filter's.
             active: rows.iter().find_map(active_slot),
             hover: queue.hover().map(QueueSlotId::raw),
-            start: start.start,
-            playing: start.playing,
-            start_slot_reported: start.start_slot_reported,
             drag: queue
                 .row_drag()
                 .and_then(|drag| GuiQueueDrag::from_surface(queue, drag)),
@@ -455,15 +434,16 @@ impl From<MediaKind> for GuiMediaKind {
 
 /// The semantic state of a row, mirroring `MediaSemanticState`. The `state` tag
 /// names the state, and `progress` is the bounded percentage where the state
-/// carries one. The now-playing state carries no progress (design D5): the
+/// carries one. The now-playing state carries no percentage (design D5): the
 /// window reads the playhead's played fraction for the row whose slot is the
-/// active slot.
+/// active slot, and only where `tracks_progress` says the item has progress to
+/// show — music is a no-progress media type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiSemanticState {
     Ordinary,
     Played,
     Active { progress: Option<u8> },
-    NowPlaying,
+    NowPlaying { tracks_progress: bool },
 }
 
 impl From<&MediaSemanticState> for GuiSemanticState {
@@ -474,7 +454,9 @@ impl From<&MediaSemanticState> for GuiSemanticState {
             MediaSemanticState::Active { progress } => Self::Active {
                 progress: progress.map(ActiveProgress::percent),
             },
-            MediaSemanticState::NowPlaying { .. } => Self::NowPlaying,
+            MediaSemanticState::NowPlaying { progress } => Self::NowPlaying {
+                tracks_progress: progress.is_some(),
+            },
         }
     }
 }

@@ -22,6 +22,7 @@ use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame,
     GuiAudiobooksList, GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame, GuiDestinationList,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -231,6 +232,8 @@ fn book(
     sort_letter: char,
 ) -> GuiAudiobooksRowFrame {
     GuiAudiobooksRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some(subtitle.to_owned()),

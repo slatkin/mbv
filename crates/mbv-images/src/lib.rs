@@ -7,6 +7,7 @@
 pub mod cache;
 mod protocol;
 pub mod resize;
+pub mod row;
 pub mod title_overlay;
 pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
 pub const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
@@ -227,6 +228,60 @@ pub enum ImageFetchOutcome {
     Interrupted,
 }
 
+/// Prefix of every row-rendition cache key (design D6): row images have their
+/// own memory LRU and their own pending queue.
+pub const ROW_IMAGE_CACHE_KEY_PREFIX: &str = "row:";
+
+/// Whether `key` names a row-rendition image.
+#[must_use]
+pub fn is_row_cache_key(key: &str) -> bool {
+    key.starts_with(ROW_IMAGE_CACHE_KEY_PREFIX)
+}
+
+/// Cache key for an Emby row image (design D6): `row:{item_id}:{type}:{tag}`,
+/// or `row:{item_id}:untagged` when the item declares no tag in the row chain.
+#[must_use]
+pub fn emby_row_cache_key(item_id: &str, image: Option<&RowEmbyImage>) -> String {
+    image.map_or_else(
+        || format!("{ROW_IMAGE_CACHE_KEY_PREFIX}{item_id}:untagged"),
+        |image| {
+            format!(
+                "{ROW_IMAGE_CACHE_KEY_PREFIX}{item_id}:{}:{}",
+                image.kind, image.tag
+            )
+        },
+    )
+}
+
+/// Prefix of every Audiobookshelf row cache key (design D6), so a Service
+/// setup change can drop them with the other Audiobookshelf entries.
+pub const ABS_ROW_CACHE_KEY_PREFIX: &str = "row:abs:";
+
+/// Cache key for an Audiobookshelf row cover (design D6):
+/// `row:abs:{server_hash}:{library_item_id}:{updated_at}`, where
+/// `{updated_at}` is the library item's update time in milliseconds (`0` when
+/// the catalog has none). A cover upload updates the item, so a new update
+/// time makes a new key and changed art never reuses old bytes.
+#[must_use]
+pub fn abs_row_cache_key(server_url: &str, library_item_id: &str, updated_at_ms: u64) -> String {
+    format!(
+        "{ABS_ROW_CACHE_KEY_PREFIX}{:016x}:{library_item_id}:{updated_at_ms}",
+        server_hash(server_url)
+    )
+}
+
+/// A stable, compact server identity for a row cache key (design D6's
+/// `server_hash`): FNV-1a over the server URL, so the key stays short and holds
+/// none of the URL's own separators.
+fn server_hash(server_url: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in server_url.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 /// A pending card-image fetch, queued when the in-flight limit is reached.
 pub struct ImageFetchReq {
     pub cache_key: String,
@@ -234,6 +289,39 @@ pub struct ImageFetchReq {
     pub series_id: String,
     pub types: Vec<String>,
     pub source: ImageSource,
+    /// The size and cache namespace the request asks for (design D6).
+    pub rendition: ImageRendition,
+}
+
+/// The size and cache namespace one fetch asks for (design D6). A `Hero`
+/// request fetches the large shared image under its source's own key; a `Row`
+/// request fetches the small row image under a `row:` key.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ImageRendition {
+    #[default]
+    Hero,
+    Row(RowRendition),
+}
+
+/// The resolved data of one `Row` request (design D6): the declared artwork
+/// arm that sizes the request, and the Emby image kind the item declares a tag
+/// for, when it declares one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowRendition {
+    /// Whether the item's declared artwork arm is Square. The request asks for
+    /// a square image (the painted row box's 2x on both sides) instead of the
+    /// landscape/portrait 2x width.
+    pub square: bool,
+    /// The one Emby image kind to request with its declared tag. `None`
+    /// requests the whole `types` chain untagged.
+    pub emby: Option<RowEmbyImage>,
+}
+
+/// One Emby image kind and the tag the item declares for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowEmbyImage {
+    pub kind: String,
+    pub tag: String,
 }
 
 #[derive(Debug, Clone)]

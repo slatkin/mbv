@@ -96,6 +96,15 @@ impl App {
             MusicEvent::AlbumArtistLevelFetched { level_id, artists } => {
                 self.handle_album_artist_level_fetched(level_id, artists);
             }
+            MusicEvent::ArtistItemIdsFetched { artist_items } => {
+                for (name, id) in artist_items {
+                    self.record_artist_item_id(&name, id);
+                }
+                self.gui_queue_in_view_row_fetches();
+            }
+            MusicEvent::ArtistNameSearched { name, candidates } => {
+                self.handle_gui_artist_name_searched(&name, candidates.as_deref());
+            }
             MusicEvent::GroupWarmupListed { generation, groups } => {
                 self.handle_music_group_warmup_listed(generation, groups);
             }

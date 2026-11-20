@@ -22,10 +22,10 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use mbv_queue::QueueItemContentId;
 
 use super::LibraryHomeList;
-use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiHomeDetail, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
     GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -217,11 +217,15 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
-    /// The Library commands the core link received, in send order.
+    /// The Library commands the core link received, in send order. The row
+    /// art report the list sends (gui-delineated-rows design D7) rides its own
+    /// test, so a caller that asserts the command its press sends reads it
+    /// alone.
     fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
+                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -273,10 +277,11 @@ fn continued_with_art() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Continue("e1".to_owned()),
         title: "Better Call Saul".to_owned(),
         subtitle: Some("S3E4 · Sabrosito".to_owned()),
-        date: None,
+        trailing: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Active { progress: Some(42) },
-        art: Some(GuiArtRef::Loading),
+        art: GuiRowArtFrame::Loading,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -286,10 +291,11 @@ fn played() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Continue("e2".to_owned()),
         title: "The Wire".to_owned(),
         subtitle: None,
-        date: None,
+        trailing: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Played,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -299,10 +305,11 @@ fn added() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Recent(QueueItemContentId::Feed("f1".to_owned())),
         title: "A Feed Entry".to_owned(),
         subtitle: Some("The Feed".to_owned()),
-        date: Some("12 May".to_owned()),
+        trailing: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -469,21 +476,28 @@ fn a_double_click_sends_the_play_command_with_the_rows_opaque_id() {
     );
 }
 
-/// Contract (`LibraryHomeList.test.ts`): the rows without art paint no art
-/// box.
+/// Contract (`LibraryHomeList.test.ts`): each row paints its thumb, and the
+/// thumb names the art state it holds (gui-delineated-rows design D1).
 #[test]
-fn the_rows_without_art_paint_no_art_box() {
+fn the_rows_paint_their_thumb_with_its_art_state() {
     let mut fixture = built(home_frame(), home_detail());
     fixture.measure(300.0);
 
-    assert!(
-        fixture.presents("[data-library-home-row-id=\"home-continue:e1\"] [data-library-home-art]"),
-        "the row with art paints its art box"
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-home-row-id=\"home-continue:e1\"] [data-library-home-thumb]",
+            "data-library-home-thumb"
+        ),
+        ["loading".to_owned()],
+        "the row paints its thumb and names the state it holds"
     );
-    assert!(
-        !fixture
-            .presents("[data-library-home-row-id=\"home-recent:Feed:f1\"] [data-library-home-art]"),
-        "the row without art paints no art box"
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-home-row-id=\"home-recent:Feed:f1\"] [data-library-home-thumb]",
+            "data-library-home-thumb"
+        ),
+        ["none".to_owned()],
+        "a kind with no art source paints the no-source state"
     );
 }
 
@@ -496,15 +510,47 @@ fn the_active_row_paints_its_resume_percent_and_the_played_row_none() {
 
     assert!(
         fixture.presents(
-            "[data-library-home-row-id=\"home-continue:e1\"] [data-library-home-progress]"
+            "[data-library-home-row-id=\"home-continue:e1\"] [data-library-home-thumb-progress]"
         ),
         "the active row paints its resume percent"
     );
     assert!(
         !fixture.presents(
-            "[data-library-home-row-id=\"home-continue:e2\"] [data-library-home-progress]"
+            "[data-library-home-row-id=\"home-continue:e2\"] [data-library-home-thumb-progress]"
         ),
         "the played row paints no resume percent"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): the list reports the rows it
+/// paints with the core's Home ids, so the core queues their row art without a
+/// coordinate.
+#[test]
+fn the_list_reports_the_rows_in_view_with_the_cores_ids() {
+    let mut fixture = built(home_frame(), home_detail());
+    fixture.measure(300.0);
+
+    let reported: Vec<mbv::GuiLibraryCommand> = fixture
+        .receiver
+        .try_iter()
+        .filter_map(|input| match input {
+            CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+                Some(command)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        reported.last(),
+        Some(&mbv::GuiLibraryCommand::RowsInView {
+            scope: mbv::GuiRowArtScope::Home,
+            ids: vec![
+                "continue:e1".to_owned(),
+                "continue:e2".to_owned(),
+                "recent:feed:f1".to_owned(),
+            ],
+        }),
+        "the report names the core's own row ids"
     );
 }
 

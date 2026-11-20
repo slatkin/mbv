@@ -18,6 +18,7 @@ use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_item;
 use mbv_ui_model::ui_util::fmt_duration_gutter;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source};
 use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
 use crate::app::App;
@@ -39,6 +40,10 @@ pub struct GuiAudiobooksRow {
     /// sort key — the surname the list sorts by — or `#` for a digit- or
     /// symbol-led surname.
     pub sort_letter: char,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// The book Hero's facts (row 9.1): the shared `hero_content_abs_book`
@@ -166,7 +171,11 @@ impl App {
         };
         let loading = !state.loading_pages.is_empty();
         let failed = state.error.is_some();
-        let rows: Vec<GuiAudiobooksRow> = state.books.iter().map(book_row).collect();
+        let rows: Vec<GuiAudiobooksRow> = state
+            .books
+            .iter()
+            .map(|book| book_row(self, book))
+            .collect();
         let selected = self
             .gui_abs_effective_pick(lib_idx)
             .filter(|pick| rows.iter().any(|row| &row.id == pick));
@@ -278,8 +287,10 @@ impl App {
 
 /// One row of the book list (row 9.1): the TUI book row's labels — the
 /// title primary, the author credit secondary, the duration gutter — with
-/// the rail letter over the author sort key the list sorts by.
-fn book_row(book: &mbv_audiobookshelf::AudiobookshelfBook) -> GuiAudiobooksRow {
+/// the rail letter over the author sort key the list sorts by, and the row
+/// art the book artwork policy's cover names (gui-delineated-rows design D5),
+/// read from the cache alone.
+fn book_row(app: &App, book: &mbv_audiobookshelf::AudiobookshelfBook) -> GuiAudiobooksRow {
     GuiAudiobooksRow {
         id: book.library_item_id.clone(),
         title: book.title.clone(),
@@ -289,6 +300,8 @@ fn book_row(book: &mbv_audiobookshelf::AudiobookshelfBook) -> GuiAudiobooksRow {
             .filter(|author| !author.is_empty()),
         duration: gutter(book.duration_seconds),
         sort_letter: sort_letter(&book.author_sort_key),
+        art: app.gui_row_art(catalog_book_row_source(book).as_ref()),
+        media: GuiRowMediaKind::Audio,
     }
 }
 

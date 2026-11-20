@@ -4,7 +4,7 @@
 
 ### Requirement: The queue shows a row menu and drag reorder
 
-The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Every row SHALL have the same fixed height and SHALL carry its queue ordinal, its title, and a right column. The right column SHALL show the item's duration in every row state. A row with progress (partly played, or now playing) SHALL show a progress ring after its title; the ring SHALL be the row's only progress mark and SHALL NOT add height to the row. The now-playing row's ring SHALL follow the playhead. A row SHALL show no time-left text, no start mark, and no state glyph in the right column. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
+The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Every row SHALL have the same fixed height and SHALL carry its queue ordinal, its title, and a right column. The right column SHALL show the item's duration in every row state. A row with progress (partly played, or now playing) SHALL show a progress ring after its title; the ring SHALL be the row's only progress mark and SHALL NOT add height to the row. The now-playing row's ring SHALL follow the playhead. Music is a no-progress media type: a music row SHALL show no ring, whether it is playing or not. A row SHALL show no time-left text, no start mark, and no state glyph in the right column. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
 
 #### Scenario: Rows show their state
 
@@ -24,6 +24,11 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 
 - **WHEN** the now-playing item plays on
 - **THEN** its row's ring advances with the playhead, and its right column keeps the item's duration
+
+#### Scenario: A music row shows no progress ring
+
+- **WHEN** the queue holds a music item, playing or not
+- **THEN** its row shows no progress ring, and its right column keeps the item's duration
 
 #### Scenario: The queue header counts the queue
 

@@ -53,8 +53,9 @@ a screen-specific copy.
   `LibraryItemRow`, `LibraryLetterHeading`, and `LibraryVirtualList` are the
   one painter of their part: the Hero buttons, the Workspace list band (Music's
   tracklist, Shows' episodes, Audiobooks' chapters, Feeds' entries), the pills
-  (top row and season pills), the flat list row, the letter heading, and the
-  scroller (Music's list too).
+  (top row and season pills), the top-level row of every list with its art
+  thumb (gui-delineated-rows design D1), the letter heading, and the scroller
+  (Music's list too).
 - One test per frame consumer asserts that the header kicker and title paint.
 
 ## Where it currently fails / how it could regress
@@ -67,6 +68,8 @@ Nothing mechanical enforces rules 2 to 4.
   asserted. A consumer can match the attributes and still differ in look.
 - **Destinations not yet on the shared piece.** Home still paints through
   `LibraryHeroSummary`, a second layout; it is redone after the GUI
-  migration. Home's list and its tree rows (Shows, Music) keep their own markup.
+  migration. A list's nested rows — Music albums and tracks, Shows seasons and
+  episodes — keep their own painters by design (gui-delineated-rows design D1),
+  and each one is a place the shared row look can drift.
 - **Music has no loading line.** Its tracklist has no loading signal from the
   core, so the Workspace table paints none for it.

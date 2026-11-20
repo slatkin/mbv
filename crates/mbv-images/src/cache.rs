@@ -9,9 +9,21 @@ use std::time::{Duration, Instant};
 /// Retries are demand-driven: only a key a surface still asks for runs again.
 const INTERRUPTED_FETCH_RETRY_DELAY: Duration = Duration::from_secs(10);
 
+/// How many row images the memory cache keeps (design D8): a fixed budget,
+/// separate from `image_cache_size`, so a long scroll never evicts a Hero or
+/// queue-card image.
+const ROW_IMAGE_CACHE_CAPACITY: usize = 256;
+
+/// How many of the image fetch slots row fetches may hold (design D7). The
+/// other slots stay free for a Hero or queue-card fetch, which starts first.
+const ROW_IMAGE_FETCH_LIMIT: usize = 4;
+
 pub struct ImageCache {
     card_image_states: foldhash::HashMap<String, CachedImage>,
     image_lru: std::collections::VecDeque<String>,
+    /// Recency of the row images alone (design D8); row inserts evict only
+    /// from this queue.
+    row_image_lru: std::collections::VecDeque<String>,
     cache_size: usize,
     card_image_loading: foldhash::HashSet<String>,
     /// Keys whose last fetch got no answer, with the earliest retry time.
@@ -21,6 +33,9 @@ pub struct ImageCache {
     last_card_height: u16,
     last_card_width: u16,
     pending_image_fetches: std::collections::VecDeque<ImageFetchReq>,
+    /// Waiting row fetches (design D7), drained only after the Hero queue and
+    /// only while `ROW_IMAGE_FETCH_LIMIT` slots or fewer are in flight.
+    pending_row_fetches: std::collections::VecDeque<ImageFetchReq>,
     image_fetches_active: usize,
     card_image_tx: mpsc::Sender<(String, ImageFetchOutcome)>,
     card_image_rx: mpsc::Receiver<(String, ImageFetchOutcome)>,
@@ -65,6 +80,7 @@ impl ImageCache {
         Self {
             card_image_states: foldhash::HashMap::default(),
             image_lru: std::collections::VecDeque::new(),
+            row_image_lru: std::collections::VecDeque::new(),
             cache_size,
             card_image_loading: foldhash::HashSet::default(),
             interrupted_fetches: foldhash::HashMap::default(),
@@ -72,6 +88,7 @@ impl ImageCache {
             last_card_height: 0,
             last_card_width: 0,
             pending_image_fetches: std::collections::VecDeque::new(),
+            pending_row_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             card_image_tx,
             card_image_rx,
@@ -150,7 +167,7 @@ impl ImageCache {
         (
             self.card_image_loading.clone(),
             self.image_fetches_active,
-            self.pending_image_fetches.len(),
+            self.pending_image_fetches.len() + self.pending_row_fetches.len(),
         )
     }
 
@@ -205,6 +222,7 @@ impl ImageCache {
 
     pub fn remove_image(&mut self, key: &str) -> Option<CachedImage> {
         self.image_lru.retain(|cached| cached != key);
+        self.row_image_lru.retain(|cached| cached != key);
         self.remove_derived_variants_for(key);
         self.card_image_states.remove(key)
     }
@@ -233,25 +251,32 @@ impl ImageCache {
         self.card_image_states.clear();
         self.card_image_loading.clear();
         self.interrupted_fetches.clear();
+        self.pending_row_fetches.clear();
     }
 
     pub fn clear_audiobookshelf_images(&mut self) {
-        let prefix = crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX;
-        self.card_image_states
-            .retain(|key, _| !key.starts_with(prefix));
-        self.card_image_loading
-            .retain(|key| !key.starts_with(prefix));
+        fn audiobookshelf(key: &str) -> bool {
+            key.starts_with(crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
+                || key.starts_with(crate::ABS_ROW_CACHE_KEY_PREFIX)
+        }
+        self.card_image_states.retain(|key, _| !audiobookshelf(key));
+        self.card_image_loading.retain(|key| !audiobookshelf(key));
         self.interrupted_fetches
-            .retain(|key, _| !key.starts_with(prefix));
-        self.image_lru.retain(|key| !key.starts_with(prefix));
+            .retain(|key, _| !audiobookshelf(key));
+        self.image_lru.retain(|key| !audiobookshelf(key));
+        self.row_image_lru.retain(|key| !audiobookshelf(key));
         self.pending_image_fetches
+            .retain(|req| !matches!(req.source, super::ImageSource::Audiobookshelf { .. }));
+        self.pending_row_fetches
             .retain(|req| !matches!(req.source, super::ImageSource::Audiobookshelf { .. }));
     }
 
     pub fn clear_session_image_work(&mut self) {
         self.clear_images_and_loading();
         self.image_lru.clear();
+        self.row_image_lru.clear();
         self.pending_image_fetches.clear();
+        self.pending_row_fetches.clear();
         self.image_fetches_active = 0;
     }
 
@@ -276,12 +301,54 @@ impl ImageCache {
         self.image_fetches_active += 1;
     }
 
+    /// Replace the waiting row fetches with `requests` (design D7): each
+    /// `RowsInView` set replaces the queue, so a row that left the view before
+    /// its fetch started is dropped. Dropping a request clears its loading
+    /// mark (set here when it was queued), so a later reserve of the same key
+    /// does not report `Duplicate`. A request already cached, loading, or
+    /// waiting out a retry is skipped. Returns the requests to start now, at
+    /// most `ROW_IMAGE_FETCH_LIMIT` in flight.
+    pub fn replace_pending_row_fetches(
+        &mut self,
+        requests: Vec<ImageFetchReq>,
+    ) -> Vec<ImageFetchReq> {
+        let dropped: Vec<ImageFetchReq> = self.pending_row_fetches.drain(..).collect();
+        for req in dropped {
+            self.card_image_loading.remove(&req.cache_key);
+        }
+        let mut start = Vec::new();
+        for req in requests {
+            let key = &req.cache_key;
+            if self.card_image_loading.contains(key)
+                || self.card_image_states.contains_key(key)
+                || self.is_fetch_retry_waiting(key)
+            {
+                continue;
+            }
+            self.card_image_loading.insert(key.clone());
+            if self.image_fetches_active + start.len() < ROW_IMAGE_FETCH_LIMIT {
+                start.push(req);
+            } else {
+                self.pending_row_fetches.push_back(req);
+            }
+        }
+        start
+    }
+
+    /// The next fetch to start: the Hero/card queue drains first, so a waiting
+    /// Hero always has a slot; row fetches then run only while fewer than
+    /// `ROW_IMAGE_FETCH_LIMIT` fetches are in flight (design D7).
     pub fn take_pending_fetch(&mut self, limit: usize) -> Option<ImageFetchReq> {
         if self.image_fetches_active >= limit {
             return None;
         }
-        let req = self.pending_image_fetches.pop_front()?;
-        Some(req)
+        if let Some(req) = self.pending_image_fetches.pop_front() {
+            return Some(req);
+        }
+        if self.image_fetches_active >= ROW_IMAGE_FETCH_LIMIT {
+            return None;
+        }
+        self.pending_row_fetches.pop_front()
     }
 
     /// The fetch could not start (no client yet). The receiver balances the
@@ -301,22 +368,48 @@ impl ImageCache {
             .insert(key, Instant::now() + self.interrupted_fetch_retry_delay);
     }
 
+    /// Clear every interrupted key's waiting time, as a test's passed retry
+    /// would: no cache entry is written, so the next reserve may start the key
+    /// again (invariant 27). A test that must observe the retry without waiting
+    /// the delay calls this instead of sleeping.
+    #[cfg(any(test, feature = "test"))]
+    pub fn pass_interrupted_fetch_retries_for_test(&mut self) {
+        self.interrupted_fetches.clear();
+    }
+
     pub fn complete_fetch(&mut self, key: String, entry: CachedImage) {
         self.card_image_loading.remove(&key);
         self.interrupted_fetches.remove(&key);
         self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
         self.remove_derived_variants_for(&key);
         if entry.has_art() {
-            self.image_lru.retain(|cached| cached != &key);
-            self.image_lru.push_back(key.clone());
-            while self.image_lru.len() > self.cache_size_total {
-                let Some(evict) = self.image_lru.pop_front() else {
-                    break;
-                };
-                self.remove_image(&evict);
-            }
+            self.touch_cache_budget(&key);
         }
         self.card_image_states.insert(key, entry);
+    }
+
+    /// Record `key` as the newest entry of its budget's recency queue and drop
+    /// the entries that overflow it. Row images have their own budget (design
+    /// D8): a row insert evicts row entries only, and a Hero/card insert only
+    /// its own.
+    fn touch_cache_budget(&mut self, key: &str) {
+        let row = crate::is_row_cache_key(key);
+        let capacity = if row {
+            ROW_IMAGE_CACHE_CAPACITY
+        } else {
+            self.cache_size_total
+        };
+        let lru = if row {
+            &mut self.row_image_lru
+        } else {
+            &mut self.image_lru
+        };
+        lru.retain(|cached| cached != key);
+        lru.push_back(key.to_owned());
+        let evicted = trim_budget(lru, capacity);
+        for evict in evicted {
+            self.remove_image(&evict);
+        }
     }
 
     pub fn try_recv_card_image(&self) -> Result<(String, ImageFetchOutcome), mpsc::TryRecvError> {
@@ -403,6 +496,18 @@ impl ImageCache {
     }
 }
 
+/// Drop `lru`'s oldest entries past `capacity`, returning their keys.
+fn trim_budget(lru: &mut std::collections::VecDeque<String>, capacity: usize) -> Vec<String> {
+    let mut evicted = Vec::new();
+    while lru.len() > capacity {
+        let Some(key) = lru.pop_front() else {
+            break;
+        };
+        evicted.push(key);
+    }
+    evicted
+}
+
 impl std::fmt::Debug for ImageCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ImageCache").finish_non_exhaustive()
@@ -411,7 +516,10 @@ impl std::fmt::Debug for ImageCache {
 
 #[cfg(test)]
 mod tests {
-    use super::{CachedImage, INTERRUPTED_FETCH_RETRY_DELAY, ImageCache};
+    use super::{
+        CachedImage, INTERRUPTED_FETCH_RETRY_DELAY, ImageCache, ROW_IMAGE_CACHE_CAPACITY,
+        ROW_IMAGE_FETCH_LIMIT,
+    };
     use std::sync::mpsc;
 
     fn cache(capacity: usize) -> ImageCache {
@@ -495,6 +603,7 @@ mod tests {
             series_id: String::new(),
             types: Vec::new(),
             source: super::super::ImageSource::Emby,
+            rendition: super::super::ImageRendition::Hero,
         }
     }
 
@@ -549,6 +658,103 @@ mod tests {
         assert!(cache.is_cached("other:P"));
     }
 
+    fn row_req(index: usize) -> super::ImageFetchReq {
+        fetch_req(&format!("row:item:{index}"))
+    }
+
+    fn row_reqs(count: usize) -> Vec<super::ImageFetchReq> {
+        (0..count).map(row_req).collect()
+    }
+
+    fn insert_rows(cache: &mut ImageCache, count: usize) {
+        for index in 0..count {
+            cache.complete_fetch(row_req(index).cache_key, image());
+        }
+    }
+
+    fn start_fetches(cache: &mut ImageCache, count: usize) {
+        for _ in 0..count {
+            cache.start_fetch();
+        }
+    }
+
+    /// Design D8: row images have their own 256-entry budget. Filling it
+    /// evicts row entries only, so a Hero or queue-card image survives a long
+    /// scroll.
+    #[test]
+    fn row_inserts_never_evict_a_non_row_image() {
+        let mut cache = cache(1);
+        cache.complete_fetch("item:P".into(), image());
+
+        insert_rows(&mut cache, ROW_IMAGE_CACHE_CAPACITY + 1);
+
+        assert!(cache.is_cached("item:P"), "the non-row image survives");
+        assert!(
+            cache.is_cached(&row_req(ROW_IMAGE_CACHE_CAPACITY).cache_key),
+            "the newest row image is kept"
+        );
+        assert!(
+            !cache.is_cached(&row_req(0).cache_key),
+            "the oldest row image at the row budget was evicted"
+        );
+    }
+
+    /// Design D7: a replaced in-view set drops a row request that never
+    /// started and clears its loading mark, so its row fetches again when it
+    /// comes back into view.
+    #[test]
+    fn a_replaced_row_set_drops_an_unstarted_request_and_clears_its_loading_mark() {
+        let mut cache = cache(2);
+        let waiting = row_req(ROW_IMAGE_FETCH_LIMIT).cache_key;
+
+        let started = cache.replace_pending_row_fetches(row_reqs(ROW_IMAGE_FETCH_LIMIT + 1));
+
+        assert_eq!(started.len(), ROW_IMAGE_FETCH_LIMIT);
+        assert!(cache.is_loading(&waiting));
+
+        assert!(cache.replace_pending_row_fetches(Vec::new()).is_empty());
+
+        assert!(
+            !cache.is_loading(&waiting),
+            "dropping the waiting request clears its loading mark"
+        );
+        let restarted = cache.replace_pending_row_fetches(row_reqs(ROW_IMAGE_FETCH_LIMIT + 1));
+        assert_eq!(restarted.len(), 1, "the dropped row fetches again");
+    }
+
+    /// Design D7: the Hero/card queue drains before the row queue, and row
+    /// fetches stay below their own slot limit so a Hero always fits.
+    #[test]
+    fn a_waiting_hero_request_is_taken_before_a_waiting_row_request() {
+        let mut cache = cache(2);
+        start_fetches(&mut cache, ROW_IMAGE_FETCH_LIMIT);
+        assert!(matches!(
+            cache.reserve_fetch(fetch_req("item:P"), ROW_IMAGE_FETCH_LIMIT),
+            super::FetchReservation::Queued
+        ));
+        assert!(
+            cache
+                .replace_pending_row_fetches(row_reqs(ROW_IMAGE_FETCH_LIMIT))
+                .is_empty(),
+            "rows wait while four fetches are in flight"
+        );
+
+        let first = cache
+            .take_pending_fetch(6)
+            .expect("the waiting Hero starts first");
+        assert_eq!(first.cache_key, "item:P");
+        assert!(
+            cache.take_pending_fetch(6).is_none(),
+            "no row starts while its slots are taken"
+        );
+
+        cache.fetch_interrupted("item:P".into());
+        let row = cache
+            .take_pending_fetch(6)
+            .expect("a freed slot starts the first waiting row");
+        assert!(row.cache_key.starts_with("row:"));
+    }
+
     #[test]
     fn reported_movie_primary_reservation_does_not_block_queue_backdrop_fetch() {
         // Regression: a Primary-only reservation under {id}:P must not pin the queue card's landscape bytes.
@@ -562,6 +768,7 @@ mod tests {
             series_id: String::new(),
             types: vec!["Primary".into()],
             source: ImageSource::Emby,
+            rendition: crate::ImageRendition::Hero,
         };
         let landscape = super::ImageFetchReq {
             cache_key: "item:QB".into(),
@@ -569,6 +776,7 @@ mod tests {
             series_id: String::new(),
             types: vec!["Backdrop".into(), "Primary".into()],
             source: ImageSource::Emby,
+            rendition: crate::ImageRendition::Hero,
         };
 
         assert!(matches!(

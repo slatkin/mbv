@@ -1,21 +1,24 @@
 //! The Queue panel (`replace-tauri-with-blitz` task 5.5, the port of
-//! `QueuePanel`): the canvas header (`QueueHeader`), the redesign's fixed
-//! 34 px rows, 2 px apart, with no native DOM scroll — the core owns scroll
-//! and sends the viewport rows to paint — and the canvas footer line is
-//! `QueueFooter`'s. The component measures the list and reports the whole
-//! rows it fits plus the painted regions through the shared layout reporter.
+//! `QueuePanel`): the canvas header (`QueueHeader`), the delineated fixed
+//! 40 px rows, flush against one another, with no native DOM scroll — the core
+//! owns scroll and sends the viewport rows to paint — and the canvas footer
+//! line is `QueueFooter`'s. The component measures the list and reports the
+//! whole rows it fits plus the painted regions through the shared layout
+//! reporter.
 //!
 //! The rows paint the canvas's states from the frame's per-row
-//! `GuiSemanticState` (design D9 of `gui-queue-panel-redesign`): a watched
-//! (`played`) row strikes its grey title through, the now-playing row fills
-//! green and paints its title in green at weight 600, a partial-progress row
-//! (and the playing row) fills the thin progress track inside the row's
-//! bottom edge, and no row adds height for it. Every row leads with its padded
-//! queue ordinal and carries one title line — no right-column value, no
-//! second line, and no date gutter, as the canvas's row draws. The shown
-//! queue's start slot carries the start mark: a filled triangle while that
-//! queue plays and an outlined one while it is stopped or resting (task 8.4,
-//! design D9). The rows paint three fills: the now-playing row's green fill, a
+//! `GuiSemanticState` (design D9 of `gui-queue-panel-redesign`, restyled by
+//! design D3 of `gui-delineated-rows`): a watched (`played`) row strikes its
+//! grey title through, the now-playing row fills green and paints its title in
+//! green at weight 600, and a row with progress — a partial row, and the
+//! playing row, which follows the playhead — carries the progress ring after
+//! its title. The ring is the row's only progress mark and adds no height. A
+//! 1 px `--canvas-border` divider runs under every row, so the flush rows read
+//! apart without a gap. Every row leads with its padded queue ordinal, carries
+//! one title line, and paints the item's duration in its right column in every
+//! state — no second line, no date gutter, no time left, and no state glyph.
+//! The rows are square-cornered, and the now-playing row alone rounds its
+//! corners. The rows paint three fills: the now-playing row's green fill, a
 //! marked row's raised fill, and the hovered row's own fill; every other row
 //! paints none. The cursor slot paints nothing: only a multi-selection shows as
 //! selected. A marked row's look needs no focus fact: the window holds no focus,
@@ -28,8 +31,9 @@
 //! of the row's one button, over slots the row reserves, so no control nests
 //! in it — and `queue.drag` carries the drag ghost's content and the insertion
 //! line's stable-slot anchor. The ghost floats at the line the drop would
-//! insert at, with no ordinal and the dragged row's percent when it has one;
-//! the dragged row no longer dims in place (the canvas keeps it lit). Every
+//! insert at, with no ordinal, no right column, and the dragged row's ring and
+//! percent when it has progress; the dragged row no longer dims in place (the
+//! canvas keeps it lit). Every
 //! pointer press, move, and release forwards through the shared input
 //! installer — the core owns the gesture, the drop index, and the move
 //! request.
@@ -77,7 +81,7 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry};
-use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow};
+use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow, GuiSemanticState};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
 use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
@@ -99,7 +103,7 @@ use geometry::{
     ROW_CELL_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ROW_INSET_PX, ghost_top, insertion, menu_top,
     whole_rows,
 };
-use row_cells::{ItemRow, RowCells, RowChrome, row_look, start_mark};
+use row_cells::{ItemRow, RowCells, RowChrome, row_look};
 
 #[cfg(test)]
 mod tests;
@@ -111,6 +115,13 @@ mod tests;
 /// canvas's type — a display-sized medium weight in the `emptyQueueFg` role
 /// — as a missing visual does.
 const EMPTY_QUEUE_TEXT: &str = "¯\\_(ツ)_/¯";
+
+/// The row's corner radius in logical pixels (design D3): the rows are square,
+/// and the now-playing row alone rounds its corners.
+const ROW_RADIUS_PX: u16 = 0;
+
+/// The now-playing row's corner radius in logical pixels (design D3).
+const PLAYING_ROW_RADIUS_PX: u16 = 4;
 
 /// The hovered row's trailing inset: the actions button's width plus the 2 px
 /// gap it leaves at the row's edge, so the title measures into the room the
@@ -495,8 +506,13 @@ pub fn QueuePanel() -> Element {
                                     // The row's inline size: the fixed row height and
                                     // the radius the canvas draws, with the trailing
                                     // room the hovered row's actions button needs.
+                                    let radius = if matches!(item.state, GuiSemanticState::NowPlaying { .. }) {
+                                        PLAYING_ROW_RADIUS_PX
+                                    } else {
+                                        ROW_RADIUS_PX
+                                    };
                                     let mut button_style = format!(
-                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: 6px;",
+                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: {radius}px;",
                                         if hovered {
                                             format!("4px {HOVERED_TRAILING_PAD_PX}px")
                                         } else {
@@ -525,7 +541,6 @@ pub fn QueuePanel() -> Element {
                                             )
                                         });
                                     let cells_row = item.clone();
-                                    let mark = start_mark(&queue, slot);
                                     let mut slot_slot = slot_handles;
                                     let mut grip_slot = grip_mounted;
                                     let mut actions_slot = actions_mounted;
@@ -557,8 +572,16 @@ pub fn QueuePanel() -> Element {
                                                     row: cells_row,
                                                     look,
                                                     chrome: if hovered { RowChrome::Hover } else { RowChrome::Row },
-                                                    mark,
                                                 }
+                                            }
+                                            // The 1 px divider under the row (design D3):
+                                            // the rows sit flush (`ROW_GAP_PX` 0), so the
+                                            // line is the row's own bottom edge and adds no
+                                            // height to it.
+                                            span {
+                                                class: "pointer-events-none absolute right-0 left-0",
+                                                style: "bottom: 0; height: 1px; background: {canvas_var(\"border\")};",
+                                                "data-divider": "",
                                             }
                                             if let Some((line_position, line_at)) = line {
                                                 // The drag's insertion line, anchored on this
@@ -673,7 +696,6 @@ pub fn QueuePanel() -> Element {
                                 row: ghost_row.clone(),
                                 look: row_look(ghost_row, &queue),
                                 chrome: RowChrome::Ghost,
-                                mark: None,
                             }
                         }
                     }

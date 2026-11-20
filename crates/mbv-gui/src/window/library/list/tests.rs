@@ -23,6 +23,8 @@ fn all_for_one() -> GuiMusicTrackFrame {
 /// album whose tracks the content does not hold.
 fn tribe() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a3".to_owned()),
         name: "A Tribe Called Quest".to_owned(),
         sort_letter: 'A',
@@ -40,6 +42,8 @@ fn tribe() -> GuiMusicArtistFrame {
 /// cached tracklist.
 fn beastie() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
@@ -79,6 +83,8 @@ fn beastie() -> GuiMusicArtistFrame {
 /// content holds.
 fn brand() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a2".to_owned()),
         name: "Brand Nubian".to_owned(),
         sort_letter: 'B',
@@ -103,6 +109,45 @@ fn rows() -> Vec<LibraryRow> {
     })
 }
 
+/// Contract (gui-delineated-rows design D7): an artist row reports the id the
+/// core's own Music encoder names — the Service identity, or the fallback
+/// name — and the nested rows and letter headings report none.
+#[test]
+fn an_artist_row_reports_the_cores_row_art_id() {
+    // A fallback artist's identity is its display name, as the Music grouping
+    // builds it.
+    let mut artists = vec![tribe()];
+    artists[0].artist_key = GuiArtistKey::Fallback(artists[0].name.clone());
+    let painted = build_library_rows(LibraryTree {
+        artists: &artists,
+        open: &[],
+        closed: &[],
+        filter: "",
+    });
+    let ids: Vec<Option<String>> = painted.iter().map(GeometryRow::rows_in_view_id).collect();
+
+    assert_eq!(
+        ids,
+        [None, Some("artist-name:A Tribe Called Quest".to_owned())],
+        "the fallback identity reports its name and the heading none"
+    );
+    let service = rows();
+    let artist_ids: Vec<Option<String>> = service
+        .iter()
+        .filter(|row| matches!(row, LibraryRow::Artist { .. }))
+        .map(GeometryRow::rows_in_view_id)
+        .collect();
+    assert_eq!(
+        artist_ids,
+        [
+            Some("artist:a3".to_owned()),
+            Some("artist:a1".to_owned()),
+            Some("artist:a2".to_owned()),
+        ],
+        "a Service-named artist reports the Service id"
+    );
+}
+
 // The canvas tree paints letter headings and the canvas row heights.
 #[test]
 fn the_canvas_tree_paints_letter_headings_and_the_canvas_row_heights() {
@@ -125,12 +170,12 @@ fn the_canvas_tree_paints_letter_headings_and_the_canvas_row_heights() {
     let heights: Vec<f32> = painted.iter().map(|row| row.base().height).collect();
     assert_eq!(
         heights,
-        [24.0, 30.0, 24.0, 30.0, 30.0, 28.0, 28.0, 30.0, 30.0]
+        [24.0, 56.0, 24.0, 56.0, 30.0, 28.0, 28.0, 30.0, 56.0]
     );
     let tops: Vec<f32> = painted.iter().map(|row| row.base().top).collect();
     assert_eq!(
         tops,
-        [0.0, 24.0, 54.0, 78.0, 108.0, 138.0, 166.0, 194.0, 224.0]
+        [0.0, 24.0, 80.0, 104.0, 160.0, 190.0, 218.0, 246.0, 276.0]
     );
 }
 
@@ -170,7 +215,7 @@ fn the_rail_disables_the_letters_no_painted_row_carries() {
 fn the_window_paints_only_the_rows_in_view() {
     assert_eq!(
         list_window(&rows(), 54.0, 60.0),
-        ListWindow { start: 2, end: 5 }
+        ListWindow { start: 1, end: 4 }
     );
 }
 
@@ -180,7 +225,7 @@ fn the_window_paints_only_the_rows_in_view() {
 fn the_scroll_offset_that_shows_a_cursor_below_the_viewport_puts_its_bottom_edge_there() {
     assert_eq!(
         scroll_top_to_show_cursor(&rows(), Some("artist:service:a2"), 0.0, 60.0),
-        194.0
+        272.0
     );
 }
 
@@ -210,12 +255,12 @@ fn the_page_step_moves_by_the_viewport_height() {
 #[test]
 fn home_and_end_go_to_the_lists_ends() {
     assert_eq!(scroll_step(&rows(), view(100.0), ListMove::Home), 0.0);
-    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::End), 194.0);
+    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::End), 272.0);
 }
 
 // The step stays inside the list's scrollable range.
 #[test]
 fn the_step_stays_inside_the_lists_scrollable_range() {
     assert_eq!(scroll_step(&rows(), view(0.0), ListMove::Up), 0.0);
-    assert_eq!(scroll_step(&rows(), view(194.0), ListMove::Down), 194.0);
+    assert_eq!(scroll_step(&rows(), view(272.0), ListMove::Down), 272.0);
 }

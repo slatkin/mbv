@@ -1,12 +1,16 @@
 use super::super::super::{App, MusicEvent};
 use super::CardImageDrain;
 use mbv_images::{
-    ImageDecode, ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
-    QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, SourceImage, cover_fill_hero_box,
+    ImageDecode, ImageFetchOutcome, ImageFetchReq, ImageRendition, ImageSource,
+    QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, SourceImage,
+    cover_fill_hero_box,
 };
 use mbv_theme as palette;
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
+
+mod emby;
+use emby::fetch_emby_image;
 
 fn color_rgb(color: ratatui::style::Color) -> [u8; 3] {
     match color {
@@ -623,15 +627,16 @@ fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> Fetched
         series_id,
         types,
         source,
+        rendition,
     } = req;
     match source {
         ImageSource::Audiobookshelf {
             server_url,
             api_key,
-        } => fetch_audiobookshelf_image(&cache_key, &server_url, &api_key, &item_id),
-        ImageSource::Emby => {
-            fetch_emby_image(&cache_key, &item_id, &series_id, &types, emby_url, token)
-        }
+        } => fetch_audiobookshelf_image(&cache_key, &server_url, &api_key, &item_id, &rendition),
+        ImageSource::Emby => fetch_emby_image(
+            &cache_key, &item_id, &series_id, &types, &rendition, emby_url, token,
+        ),
     }
 }
 
@@ -640,6 +645,7 @@ fn fetch_audiobookshelf_image(
     server_url: &str,
     api_key: &str,
     item_id: &str,
+    rendition: &ImageRendition,
 ) -> FetchedBytes {
     if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
         return FetchedBytes::Bytes(cached);
@@ -647,11 +653,24 @@ fn fetch_audiobookshelf_image(
     let Ok(client) = mbv_audiobookshelf::AudiobookshelfClient::new(server_url) else {
         return FetchedBytes::Missing;
     };
-    let result = client.cover_bounded(
-        api_key,
-        item_id,
-        mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
-    );
+    let bound = mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND;
+    let result = match rendition {
+        // The Square arm is a podcast cover, and the landscape/portrait arm a
+        // book cover (design D6): each asks for its row width.
+        ImageRendition::Row(row) if row.square => client.row_cover_bounded(
+            api_key,
+            item_id,
+            mbv_audiobookshelf::ROW_PODCAST_COVER_WIDTH,
+            bound,
+        ),
+        ImageRendition::Row(_) => client.row_cover_bounded(
+            api_key,
+            item_id,
+            mbv_audiobookshelf::ROW_BOOK_COVER_WIDTH,
+            bound,
+        ),
+        ImageRendition::Hero => client.cover_bounded(api_key, item_id, bound),
+    };
     match result {
         Ok(bytes) => {
             crate::config::write_image_disk_cache(cache_key, &bytes);
@@ -668,101 +687,6 @@ fn fetch_audiobookshelf_image(
         }
         Err(_) => FetchedBytes::Missing,
     }
-}
-
-/// The Emby image fetch's long-side cap. Every Client shows the cached bytes
-/// as they are — the TUI decodes them for its terminal protocol, and the GUI
-/// hands them to the window unchanged — so this one cap is the pixel budget
-/// of every surface: the GUI Hero at a 2x scale factor, and the card and row
-/// art that share its cache entry. A smaller cap leaves the Hero's browser
-/// upscaling the server's pixels, and a larger one costs fetch time and frame
-/// payload for pixels no surface paints.
-const IMAGE_FETCH_MAX_SIDE: u32 = 1280;
-
-/// The Emby image fetch's JPEG quality. The server's encode is the only lossy
-/// generation any Client paints, so it stays high.
-const IMAGE_FETCH_QUALITY: u8 = 90;
-
-fn fetch_emby_image(
-    cache_key: &str,
-    item_id: &str,
-    series_id: &str,
-    types: &[String],
-    server_url: &str,
-    token: &str,
-) -> FetchedBytes {
-    if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
-        // Local-only cache hits power dim-then-undim cycles for warm-cache modals.
-        tracing::debug!(name: "images.disk_cache.hit", target: "images", item = %item_id, "image disk cache hit");
-        return FetchedBytes::Bytes(cached);
-    }
-    let fetched = first_image(types, |kind| {
-        fetch_emby_image_type(kind, item_id, series_id, server_url, token)
-    });
-    // Cache original server bytes as-is; Emby already resized these to
-    // `IMAGE_FETCH_MAX_SIDE`.
-    if let FetchedBytes::Bytes(ref bytes) = fetched {
-        crate::config::write_image_disk_cache(cache_key, bytes);
-    }
-    fetched
-}
-
-/// Walks the image kinds in order: only `Missing` moves on to the next kind.
-fn first_image(kinds: &[String], mut fetch: impl FnMut(&str) -> FetchedBytes) -> FetchedBytes {
-    for kind in kinds {
-        match fetch(kind) {
-            FetchedBytes::Missing => {}
-            result => return result,
-        }
-    }
-    FetchedBytes::Missing
-}
-
-fn fetch_emby_image_type(
-    kind: &str,
-    item_id: &str,
-    series_id: &str,
-    server_url: &str,
-    token: &str,
-) -> FetchedBytes {
-    if kind == "AudioChild" {
-        let child_url = format!(
-            "{server_url}/Items?ParentId={item_id}&IncludeItemTypes=Audio&Limit=1&api_key={token}"
-        );
-        let bytes = match fetch_url(&child_url) {
-            FetchedBytes::Bytes(bytes) => bytes,
-            result => return result,
-        };
-        let child_id = serde_json::from_slice::<serde_json::Value>(&bytes)
-            .ok()
-            .and_then(|value| {
-                value["Items"]
-                    .get(0)
-                    .and_then(|item| item["Id"].as_str().map(str::to_owned))
-            });
-        let Some(child_id) = child_id else {
-            return FetchedBytes::Missing;
-        };
-        let url = format!(
-            "{server_url}/Items/{child_id}/Images/Primary?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
-        );
-        return fetch_url(&url);
-    }
-
-    let src = match kind {
-        "Logo" | "Backdrop" | "Thumb" if !series_id.is_empty() => series_id,
-        _ => item_id,
-    };
-    let image_kind = match kind {
-        "Backdrop" => "Backdrop/0",
-        "Logo" => "Logo",
-        "Thumb" => "Thumb",
-        _ => "Primary",
-    };
-    let url = format!(
-        "{server_url}/Items/{src}/Images/{image_kind}?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
-    );
-    fetch_url(&url)
 }
 
 fn fetch_url(url: &str) -> FetchedBytes {

@@ -41,6 +41,7 @@ fn mixed_services_app() -> App {
         1,
         vec![mbv_audiobookshelf::AudiobookshelfShow {
             library_item_id: "show-a".into(),
+            updated_at_ms: 0,
             title: "Show A".into(),
             author: None,
             description: None,

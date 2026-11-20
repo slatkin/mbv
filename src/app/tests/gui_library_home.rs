@@ -12,6 +12,7 @@ use mbv_config::FeedSubscription;
 use mbv_emby_model::UpcomingPremiere;
 use mbv_queue::{QueueItem, QueueItemContentId};
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
+use rstest::rstest;
 
 /// One Continue Watching row's Emby item, `position_ticks` of resume.
 fn continue_item(id: &str, name: &str, position_ticks: i64, runtime_ticks: i64) -> EmbyItem {
@@ -273,5 +274,172 @@ fn a_stale_selection_falls_back_to_the_first_item_row() {
         projection.selected,
         Some(GuiHomeRowId::Continue("cw-first".to_string())),
         "the Hero default returns when the selection's row has left the list"
+    );
+}
+
+/// One `Recently added` row's Audiobookshelf podcast episode whose show
+/// declares a cover: the row art's Service-scoped source.
+fn covered_episode(episode_id: &str, pub_date_secs: u64) -> QueueItem {
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
+            library_item_id: "pod-lib".into(),
+            episode_id: episode_id.into(),
+            title: "Episode".into(),
+            show_title: Some("The Show".into()),
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: Some(pub_date_secs),
+            is_finished: false,
+            cover_path: Some("cover.jpg".into()),
+        },
+    ))
+}
+
+/// A landscape image for a row's cache entry: the Emby row's size.
+fn landscape_row_image() -> image::DynamicImage {
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        128,
+        72,
+        image::Rgba([10, 20, 30, 255]),
+    ))
+}
+
+/// A square image for a row's cache entry: a podcast cover.
+fn square_row_image() -> image::DynamicImage {
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        72,
+        72,
+        image::Rgba([30, 20, 10, 255]),
+    ))
+}
+
+/// Home rows paint the art their own destination paints, from the cache read
+/// alone (gui-delineated-rows design D4, D5, D7): an Emby row shows its item's
+/// row image, an Audiobookshelf row shows its destination's cover under the
+/// same row key, a feed entry has no source, and no row fetch starts before
+/// `RowsInView` names the row.
+#[test]
+fn home_rows_paint_their_row_art_and_fetch_nothing_before_rows_in_view() {
+    let _guard = TestStateDirGuard::new();
+    let server = "http://127.0.0.1:1";
+    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let mut movie = continue_item(
+        "cw-first",
+        "Movie One",
+        0,
+        1200 * mbv_emby_model::TICKS_PER_SECOND,
+    );
+    movie.image_tags.thumb = "t1".into();
+    let movie_key = mbv_images::row::emby_row_request(&movie, false).cache_key;
+    let mut app = home_app(vec![movie]);
+    app.config.lock().unwrap().audiobookshelf_setup =
+        Some(mbv_config::AudiobookshelfSetup::new(server));
+    app.home_recently_added.insert(
+        DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
+        vec![covered_episode("recent-episode", now - 3600)],
+    );
+    app.feed_tab.subscriptions.push(FeedSubscription {
+        name: "Tone Feed".into(),
+        url: "https://feed.example/rss".into(),
+        kind: mbv_queue::FeedKind::Audio,
+    });
+    app.feed_tab.all_entries = vec![recent_feed_entry("feed-entry", now - 2 * 3600)];
+    app.seed_card_image_for_test(movie_key.clone(), landscape_row_image());
+    let episode_key = mbv_images::abs_row_cache_key(server, "pod-lib", 0);
+    app.seed_card_image_for_test(episode_key.clone(), square_row_image());
+
+    let projection = app.gui_home_projection();
+
+    let items: Vec<&GuiHomeItemRow> = projection
+        .rows
+        .iter()
+        .filter_map(|row| match row {
+            GuiHomeRow::Item(item) => Some(item),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        items[0].art,
+        GuiRowArt::Image {
+            key: movie_key.clone(),
+            square: false
+        },
+        "a Continue row shows its item's row image"
+    );
+    assert_eq!(items[0].media, GuiRowMediaKind::Video);
+    assert_eq!(
+        items[1].art,
+        GuiRowArt::Image {
+            key: episode_key.clone(),
+            square: true
+        },
+        "an Audiobookshelf Home row shows its own destination's cover"
+    );
+    assert_eq!(items[1].media, GuiRowMediaKind::Audio);
+    assert_eq!(
+        items[2].art,
+        GuiRowArt::NoSource,
+        "a feed entry declares no art source"
+    );
+    assert_eq!(items[2].media, GuiRowMediaKind::Video);
+    assert!(
+        !app.images.is_loading(&movie_key) && !app.images.is_loading(&episode_key),
+        "the projection queues no row fetch before RowsInView names the row"
+    );
+}
+
+/// One `Continue watching` row's trailing text is the time left in its item
+/// (gui-delineated-rows design D9): the runtime less the saved position, as
+/// whole minutes rounded up, `"{m}m left"` under one hour and `"{h}h {m}m
+/// left"` from one hour.
+#[rstest]
+#[case(3600, 2700, "15m left", "under one hour")]
+#[case(7200, 3600, "1h 0m left", "exactly one hour")]
+#[case(3600, 3481, "2m left", "a rounded-up minute")]
+fn a_continue_row_shows_the_time_left(
+    #[case] runtime_secs: i64,
+    #[case] position_secs: i64,
+    #[case] expected: &str,
+    #[case] why: &str,
+) {
+    let _guard = TestStateDirGuard::new();
+    let mut app = home_app(vec![continue_item(
+        "cw-first",
+        "Movie One",
+        position_secs * mbv_emby_model::TICKS_PER_SECOND,
+        runtime_secs * mbv_emby_model::TICKS_PER_SECOND,
+    )]);
+
+    let projection = app.gui_home_projection();
+
+    assert_eq!(
+        item_of(&projection.rows[1]).trailing.as_deref(),
+        Some(expected),
+        "{why}"
+    );
+}
+
+/// A `Recently added` row keeps its gutter date as its trailing text (design
+/// D9): only a Continue watching row shows the time left.
+#[test]
+fn a_recently_added_row_keeps_its_date() {
+    let _guard = TestStateDirGuard::new();
+    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let mut app = home_app(Vec::new());
+    app.home_recently_added.insert(
+        DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
+        vec![recent_episode("recent-episode", now - 3600)],
+    );
+
+    let projection = app.gui_home_projection();
+
+    let date = mbv_ui_model::ui_util::row_date(Some(now - 3600)).expect("the instant formats");
+    assert_eq!(
+        item_of(&projection.rows[1]).trailing.as_deref(),
+        Some(date.as_str()),
+        "the row keeps the projection's gutter date"
     );
 }

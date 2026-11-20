@@ -12,11 +12,15 @@
 //! (`gui-pointer-target-interaction` D2); the scroll offset and the viewport are
 //! the Podcasts list's scroll store (design D9). A press selects the episode the
 //! Hero shows, and a double-click plays it (design D12): the keys' Enter plays
-//! the hovered row, and the press is the selection's half.
+//! the hovered row, and the press is the selection's half. The episode rows are
+//! top-level rows and paint through the shared row part with their art thumb
+//! (gui-delineated-rows design D1); the rows the list paints are also the row
+//! art set the core fetches (design D7).
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiCollectionsFrame as _;
+use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -93,10 +97,12 @@ pub fn LibraryPodcastsList() -> Element {
     // narrowed by the filter's text.
     let rows = library.podcasts_rows();
 
-    // The list's two DOM facts report to the scroll store (design D9), and
-    // the rows paint over the section this render read.
+    // The list's two DOM facts report to the scroll store (design D9), the rows
+    // in view report to the core for their row art fetches (gui-delineated-rows
+    // design D7), and the rows paint over the section this render read.
     let measure_library = library.clone();
     let scroll_library = library.clone();
+    let art_library = library.clone();
     let paint_library = library.clone();
     let paint_selected = detail.and_then(|detail| detail.selected.clone());
     let virtual_list = library_virtual_list(
@@ -107,6 +113,9 @@ pub fn LibraryPodcastsList() -> Element {
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_podcasts_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_podcasts_list(top)),
+        Some(Callback::new(move |ids: Vec<String>| {
+            art_library.report_rows_in_view(GuiRowArtScopeFrame::Podcasts, ids);
+        })),
         move |row: &PodcastsItemRow| {
             paint_podcasts_row(row, &paint_library, paint_selected.as_deref())
         },

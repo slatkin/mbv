@@ -11,6 +11,7 @@
 
 use mbv_ui_model::media_list::MediaSemanticState;
 
+use super::artwork::{GuiRowArt, GuiRowMediaKind};
 use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 
 /// One row of a collection-scoped destination's entry list (rows 10.1,
@@ -36,6 +37,10 @@ pub struct GuiEntryRow {
     /// resume, `Active` with the resume percent exactly when Play would
     /// resume a saved position, otherwise `Ordinary`.
     pub state: MediaSemanticState,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// The collection-scoped entry-list projection a destination paints (rows 10.1,

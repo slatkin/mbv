@@ -20,6 +20,7 @@ fn library() -> AudiobookshelfLibrary {
 fn show(id: &str, title: &str) -> AudiobookshelfShow {
     AudiobookshelfShow {
         library_item_id: id.into(),
+        updated_at_ms: 0,
         title: title.into(),
         author: None,
         description: None,
@@ -405,6 +406,7 @@ fn visible_rows_fall_back_to_audio_files_when_chapters_empty() {
 fn book(id: &str, title: &str, author: &str) -> AudiobookshelfBook {
     AudiobookshelfBook {
         library_item_id: id.into(),
+        updated_at_ms: 0,
         title: title.into(),
         author_display: Some(author.into()),
         author_sort_key: audiobook_author_sort_key(author),

@@ -19,6 +19,7 @@ fn library() -> AudiobookshelfLibrary {
 fn show(id: &str, title: &str) -> AudiobookshelfShow {
     AudiobookshelfShow {
         library_item_id: id.into(),
+        updated_at_ms: 0,
         title: title.into(),
         author: None,
         description: None,

@@ -27,6 +27,8 @@ fn series(
     seasons: Vec<crate::bridge::frame::library::GuiShowsSeasonFrame>,
 ) -> GuiShowsSeriesFrame {
     GuiShowsSeriesFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         sort_letter,
@@ -151,6 +153,55 @@ fn the_series_list_paints_the_tree_at_the_music_heights() {
     );
 }
 
+// The row art set names the series' raw Service id and the flat row's own id —
+// the ids the core resolves — and no heading, season, or episode key
+// (gui-delineated-rows design D7).
+#[test]
+fn the_row_art_set_names_the_top_level_rows_alone() {
+    let open = vec![series_row_id("s1"), season_row_id("s1", "se1")];
+    let closed: Vec<String> = Vec::new();
+    let tree = build_shows_rows(
+        GuiShowsView::All,
+        &tree(),
+        &[],
+        "",
+        ShowsTreeState {
+            open: &open,
+            closed: &closed,
+        },
+    );
+    let flat = ShowsListRow::Flat(ShowsFlatRow {
+        id: "e1".to_owned(),
+        title: "Pilot".to_owned(),
+        subtitle: None,
+        date: None,
+        display_only: false,
+        top: 0.0,
+        height: SHOWS_FLAT_ROW_HEIGHT,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+    });
+
+    let names: Vec<(&str, Option<String>)> = tree
+        .iter()
+        .chain(std::iter::once(&flat))
+        .map(|row| (kind_of(row), row.rows_in_view_id()))
+        .filter(|(kind, id)| *kind == "series" || id.is_some())
+        .collect();
+
+    assert_eq!(
+        names,
+        [
+            ("series", Some("s1".to_owned())),
+            ("series", Some("s2".to_owned())),
+            ("series", Some("s3".to_owned())),
+            ("series", Some("s4".to_owned())),
+            ("flat", Some("e1".to_owned())),
+        ],
+        "only a top-level row joins the set, under the id the core resolves"
+    );
+}
+
 // A closed series paints no season and a closed season no episode.
 #[test]
 fn a_closed_series_paints_no_season_and_a_closed_season_no_episode() {
@@ -217,6 +268,8 @@ fn the_rail_holds_the_first_series_row_under_each_letter_and_disables_the_rest()
 /// One flat New or Upcoming row, as the frame carries it.
 fn flat_row(id: &str, title: &str) -> GuiShowsRowFrame {
     GuiShowsRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
         id: id.to_owned(),
         title: title.to_owned(),
         subtitle: Some("The Beginning".to_owned()),
@@ -226,10 +279,10 @@ fn flat_row(id: &str, title: &str) -> GuiShowsRowFrame {
     }
 }
 
-// The flat New and Upcoming rows paint at the two-line height their format
-// was built for (gui-collection-dropdown D9): the old Home item rows' 48 px,
-// whose two title lines fit — not the one-line track row's 28 px, which
-// clipped them illegibly (the live defect of 2026-11-18).
+// The flat New and Upcoming rows paint at the shared top-level row part's
+// height (gui-delineated-rows D2), whose two title lines fit — not the
+// one-line track row's 28 px, which clipped them illegibly (the live defect
+// of 2026-11-18).
 #[test]
 fn the_flat_rows_paint_at_the_two_line_height() {
     let rows = vec![flat_row("n1", "Alfred"), flat_row("n2", "Bridgerton")];

@@ -1,9 +1,10 @@
 //! Headless tests of the Queue panel (D16): the contracts of
 //! `QueuePanel.test.ts` the window's port keeps — the frame's viewport rows
-//! with their watched, active, and partial-progress states, the empty-queue
-//! state, the start mark, the hovered row's grip and actions button, the open
-//! row menu's chrome and hints, the drag's ghost and insertion line, and the
-//! capacity and region targets the panel reports — plus the two region-order
+//! with their watched, active, and partial-progress states, the progress ring,
+//! the right column's duration, the empty-queue state, the hovered row's grip
+//! and actions button, the open row menu's chrome and hints, the drag's ghost
+//! and insertion line, and the capacity and region targets the panel reports —
+//! plus the two region-order
 //! contracts
 //! `QueuePlaybackPanel.test.ts` deferred until this panel existed (an open
 //! chooser's rows reporting after the queue's, and the full player panel's
@@ -14,8 +15,9 @@
 //! channel is a mock pair; the clocks are the injected recorders (D10); no
 //! test opens a window, sleeps, or reaches the core. The capacity contract's
 //! module sat undeclared since the Blitz port, so it never compiled; the
-//! redesign's 34 px row gave it a rule to state again
-//! (gui-queue-panel-redesign task 6.1).
+//! redesign's fixed row gave it a rule to state again
+//! (gui-queue-panel-redesign task 6.1), and the delineated 40 px row restates
+//! it (`gui-delineated-rows` design D3).
 
 mod capacity;
 mod chooser;

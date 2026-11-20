@@ -127,6 +127,7 @@
 	--canvas-heading: #e9e1cc; /* the header's heading, active segment, hovered row text, and drag ghost text */
 	--canvas-accent: #a7c080; /* the active row's fill and the Ends-at values */
 	--canvas-partial: #e69875; /* the partial-progress fill */
+	--canvas-thumb-track: rgba(0, 0, 0, 0.55); /* the row thumb's progress track: the shaded edge of the row's art */
 	--canvas-menu: #343f44; /* the row menu's fill */
 	--canvas-menu-border: #475258; /* the row menu's border and its divider */
 	--canvas-menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the row menu's lift */

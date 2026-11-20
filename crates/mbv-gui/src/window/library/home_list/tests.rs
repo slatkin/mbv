@@ -14,10 +14,11 @@ fn continued() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Continue("e1".to_owned()),
         title: "Better Call Saul".to_owned(),
         subtitle: Some("S3E4 · Sabrosito".to_owned()),
-        date: None,
+        trailing: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Active { progress: Some(42) },
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -27,10 +28,11 @@ fn watched() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Continue("e2".to_owned()),
         title: "The Wire".to_owned(),
         subtitle: None,
-        date: None,
+        trailing: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Played,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -40,10 +42,11 @@ fn added() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Recent(QueueItemContentId::Feed("f1".to_owned())),
         title: "A Feed Entry".to_owned(),
         subtitle: Some("The Feed".to_owned()),
-        date: Some("12 May".to_owned()),
+        trailing: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -96,7 +99,7 @@ fn the_sections_paint_their_heading_rows_items_and_the_spacer_in_order() {
         ]
     );
     let tops: Vec<f32> = painted.iter().map(GeometryRow::top).collect();
-    assert_eq!(tops, [0.0, 28.0, 76.0, 124.0, 144.0, 172.0]);
+    assert_eq!(tops, [0.0, 28.0, 84.0, 140.0, 160.0, 188.0]);
     let HomeListRow::Heading { text: first, .. } = &painted[0] else {
         panic!("a heading opens the list");
     };
@@ -105,6 +108,27 @@ fn the_sections_paint_their_heading_rows_items_and_the_spacer_in_order() {
         panic!("the second section carries a heading");
     };
     assert_eq!(second, "Recently added");
+}
+
+/// Contract (gui-delineated-rows design D7): an item row reports the id the
+/// core's own Home encoder names — not the row key — and a heading and a
+/// spacer report none.
+#[test]
+fn an_item_row_reports_the_cores_row_art_id() {
+    let painted = build_home_rows(&rows(), "");
+    let ids: Vec<Option<String>> = painted.iter().map(GeometryRow::rows_in_view_id).collect();
+
+    assert_eq!(
+        ids,
+        [
+            None,
+            Some("continue:e1".to_owned()),
+            Some("continue:e2".to_owned()),
+            None,
+            None,
+            Some("recent:feed:f1".to_owned()),
+        ]
+    );
 }
 
 // The stale-frame contract (design D12): a command must resolve the row the
@@ -140,7 +164,11 @@ fn the_window_paints_only_the_rows_in_view() {
     let painted = build_home_rows(&rows(), "");
 
     assert_eq!(
-        list_window(&painted, 0.0, 80.0),
-        ListWindow { start: 0, end: 3 }
+        list_window(
+            &painted,
+            0.0,
+            HOME_HEADING_ROW_HEIGHT + HOME_ITEM_ROW_HEIGHT
+        ),
+        ListWindow { start: 0, end: 2 }
     );
 }

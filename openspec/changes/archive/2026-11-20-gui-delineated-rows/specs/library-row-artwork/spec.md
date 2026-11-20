@@ -10,7 +10,7 @@ fetches and caches row-sized images so that long lists stay fast and correct.
 
 ### Requirement: A top-level row shows its item's Hero image
 
-Every top-level Library row SHALL show an art thumb. The thumb SHALL show the same image as the Hero of that row's item, from the same artwork source. A Music artist row SHALL show the artist's own image when the Service names the artist. A Shows Upcoming row, which has no Hero, SHALL show its series' image. A Home row of an Audiobookshelf item SHALL show the same cover as that item's row in its own destination. Nested rows SHALL NOT show a thumb.
+Every top-level Library row SHALL show an art thumb. The thumb SHALL show the same image as the Hero of that row's item, from the same artwork source. A Music artist row SHALL show the artist's own image when its artist resolves to a Service artist: through the artist identity the Service names, else through the artist the level's tracks name for that artist name, else through the closest Service artist found by name. The row SHALL NOT show the artist's logo or backdrop in place of that image. A Shows Upcoming row, which has no Hero, SHALL show its series' image. A Home row of an Audiobookshelf item SHALL show the same cover as that item's row in its own destination. Nested rows SHALL NOT show a thumb.
 
 #### Scenario: An Upcoming premiere shows its series image
 
@@ -27,9 +27,9 @@ Every top-level Library row SHALL show an art thumb. The thumb SHALL show the sa
 - **WHEN** a series row is open and its episode rows paint
 - **THEN** the episode rows show no thumb
 
-#### Scenario: An artist with no Service identity
+#### Scenario: An artist the Service never names
 
-- **GIVEN** a Music artist row whose artist the Service does not name
+- **GIVEN** a Music artist row whose artist no Service identity, level track, or name search resolves
 - **WHEN** the row paints
 - **THEN** its thumb is in the no-source state
 

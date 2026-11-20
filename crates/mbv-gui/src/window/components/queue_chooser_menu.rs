@@ -10,9 +10,9 @@
 //! forwards like every other pointer event — the core resolves it against the
 //! hit map. The card is a child of the switcher's own anchor box, so its leading
 //! edge is the switcher's and it drops four pixels under it (design D8), and it
-//! paints the design's own card and item chrome: a 34 px row in the raised fill
-//! on the cursor and under the pointer, so the two queue overlays read as one
-//! family. The card answers the pointer with those fills alone, so it sets
+//! paints the design's own card and item chrome: a queue-row-height entry in the
+//! raised fill on the cursor and under the pointer, so the two queue overlays
+//! read as one family. The card answers the pointer with those fills alone, so it sets
 //! `--hover-veil: transparent` and the shared veil does not wash them.
 //!
 //! Each row paints, in the design's order: the shown entry's check, the name —
@@ -47,7 +47,9 @@ use crate::window::theme::{EfToken, ef_var};
 const CURRENT_MARK_PX: u16 = 8;
 
 /// One entry's height and the gap between two items are the queue rows' own
-/// (designs D8 and D9); the card's padding is its own inset.
+/// (designs D8 and D9 of `gui-queue-panel-redesign`, now the delineated row's
+/// 40 px and its 0 px gap, design D3 of `gui-delineated-rows`); the card's
+/// padding is its own inset.
 const ITEM_HEIGHT_PX: u16 = ROW_HEIGHT_PX;
 const ITEM_GAP_PX: u16 = ROW_GAP_PX;
 const CARD_PADDING_PX: u16 = 4;
@@ -130,12 +132,12 @@ fn entry_key(entry: &GuiQueueChooserEntry) -> String {
         .map_or_else(|| "peer".to_owned(), |raw| raw.to_string())
 }
 
-/// The Queue chooser's dropdown: one 34 px row per entry, the cursor row
-/// filled, the shown entry checked, the current queue dotted, the playing queue
-/// marked in aqua, the peer entry brand-marked, each with its slot count, and
-/// the rename draft's caret after the text it edits. It fills its positioning
-/// ancestor — the switcher's anchor — dropping four pixels under it with its
-/// leading edge on the switcher's (design D8).
+/// The Queue chooser's dropdown: one entry per queue at the queue rows' height
+/// and gap, the cursor row filled, the shown entry checked, the current queue
+/// dotted, the playing queue marked in aqua, the peer entry brand-marked, each
+/// with its slot count, and the rename draft's caret after the text it edits.
+/// It fills its positioning ancestor — the switcher's anchor — dropping four
+/// pixels under it with its leading edge on the switcher's (design D8).
 #[component]
 pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
     rsx! {

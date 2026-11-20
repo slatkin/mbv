@@ -453,3 +453,46 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
     assert!(!projection.loading, "the landed fetch is not loading");
     assert!(projection.rows.is_empty(), "the list paints no rows");
 }
+
+/// An Upcoming row shows its series' image (gui-delineated-rows design D5,
+/// D6): the premiere has no Hero, so its row takes the row chain addressed to
+/// the premiere's series, under the series' own declared tag — the image a
+/// series row shows.
+#[test]
+fn an_upcoming_row_shows_its_series_image() {
+    let _guard = TestStateDirGuard::new();
+    let mut series = series_item("series-a", "Show A", "Show A");
+    series.image_tags.thumb = "t1".into();
+    let key = mbv_images::row::emby_row_request(&series, false).cache_key;
+    let mut app = shows_app(vec![series]);
+    app.tv_upcoming_snapshots.insert(
+        "lib-a".into(),
+        vec![premiere(
+            "series-a",
+            "Show A",
+            "2026-12-01T00:00:00.0000000Z",
+        )],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::Upcoming,
+    });
+    let still = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        128,
+        72,
+        image::Rgba([20, 40, 60, 255]),
+    ));
+    app.seed_card_image_for_test(key.clone(), still);
+
+    let projection = app.gui_shows_projection(0);
+
+    assert_eq!(
+        projection.rows[0].art,
+        GuiRowArt::Image {
+            key: key.clone(),
+            square: false
+        },
+        "the premiere row shows the series image under the series' tag"
+    );
+    assert_eq!(projection.rows[0].media, GuiRowMediaKind::Video);
+}

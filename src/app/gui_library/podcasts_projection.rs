@@ -26,6 +26,7 @@ use mbv_ui_msg::PodcastEpisodeTarget;
 use std::collections::HashSet;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowMediaKind, catalog_show_row_source};
 use super::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
 };
@@ -273,7 +274,7 @@ impl App {
         };
         let rows = episodes
             .iter()
-            .map(|episode| podcast_row(state, episode))
+            .map(|episode| podcast_row(self, state, episode))
             .collect();
         (
             rows,
@@ -339,7 +340,7 @@ impl App {
     /// catalog the TUI's podcast owner builds for its own hero
     /// (`PodcastContent::selected_episode_item`), the description included.
     /// `None` when the per-show cache no longer carries the episode.
-    fn gui_podcast_hero_item(
+    pub(in crate::app::gui_library) fn gui_podcast_hero_item(
         &self,
         lib_idx: usize,
         episode: &GuiPodcastEpisodeId,
@@ -378,8 +379,11 @@ impl App {
 
 /// One row of the active list (row 10.1): the TUI podcast row's facts —
 /// the episode title, the parent show's title, and the publish date in the
-/// right-aligned gutter — with the row's played state.
+/// right-aligned gutter — with the row's played state and the show cover the
+/// episode artwork policy names (gui-delineated-rows design D5), read from
+/// the cache alone.
 fn podcast_row(
+    app: &App,
     state: &AudiobookshelfBrowseState,
     episode: &AudiobookshelfDownloadedEpisode,
 ) -> GuiPodcastsRow {
@@ -387,6 +391,7 @@ fn podcast_row(
     let progress = state
         .progress
         .get(&(episode.library_item_id.clone(), episode.episode_id.clone()));
+    let art = app.gui_row_art(show.and_then(catalog_show_row_source).as_ref());
     GuiPodcastsRow {
         id: GuiPodcastEpisodeId::new(episode.library_item_id.clone(), episode.episode_id.clone())
             .encode(),
@@ -394,6 +399,8 @@ fn podcast_row(
         subtitle: show.map(|show| show.title.clone()),
         date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
+        art,
+        media: GuiRowMediaKind::Audio,
     }
 }
 

@@ -127,16 +127,18 @@ fn queue() -> GuiQueue {
     GuiQueue {
         rows: vec![
             row(1, GuiSemanticState::Ordinary),
-            row(2, GuiSemanticState::NowPlaying),
+            row(
+                2,
+                GuiSemanticState::NowPlaying {
+                    tracks_progress: true,
+                },
+            ),
             row(3, GuiSemanticState::Played),
         ],
         cursor: Some(1),
         marks: Vec::new(),
         active: Some(2),
         hover: Some(2),
-        start: Some(2),
-        playing: true,
-        start_slot_reported: true,
         drag: None,
         scroll: None,
     }

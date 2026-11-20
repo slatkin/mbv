@@ -92,11 +92,9 @@ fn app_with_cmd_rx() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
 }
 
 /// The projected queue view the queue stubs share: `n` Emby movie slots in
-/// canonical order, numbered from 1. `start_index` places the shown queue's
-/// start slot on that slot (gui-named-queues design D9); `None` is an owner
-/// that reports no start slot.
+/// canonical order, numbered from 1.
 #[cfg(feature = "test")]
-fn queue_view_with_start(n: usize, start_index: Option<usize>) -> QueueView {
+fn queue_view(n: usize) -> QueueView {
     let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = (0..n)
         .map(|i| mbv_ctrl::UnifiedQueueSlot {
             slot_id: u64::try_from(i).unwrap_or(u64::MAX) + 1,
@@ -118,21 +116,7 @@ fn queue_view_with_start(n: usize, start_index: Option<usize>) -> QueueView {
         in_flight_transition: None,
         queued_latest_transition: None,
     };
-    let start_slot = start_index
-        .and_then(|index| state.slots.get(index))
-        .map(|slot| slot.slot_id);
-    let state = mbv_ctrl::UnifiedQueueStateData {
-        start_slot,
-        ..state
-    };
     QueueView::from_snapshot(&state)
-}
-
-/// The projected queue view the queue stubs share: `n` Emby movie slots in
-/// canonical order, numbered from 1.
-#[cfg(feature = "test")]
-fn queue_view(n: usize) -> QueueView {
-    queue_view_with_start(n, None)
 }
 
 /// The `App` a Client's test drives with `n` projected queue slots and the
@@ -147,19 +131,6 @@ pub fn stub_app_with_playing_queue(n: usize) -> App {
         status.current_idx = 0;
         status.queue_len = n;
     });
-    app
-}
-
-/// The `App` a Client's test drives with `n` projected queue slots, the first
-/// one playing, and the shown queue's start slot on the slot at `start_index`
-/// (gui-named-queues design D9): the rows' start mark reads that slot out of
-/// the projection this state feeds, so a frame test can tell it from the
-/// observed active slot.
-#[cfg(feature = "test")]
-#[must_use]
-pub fn stub_app_with_playing_start_slot(n: usize, start_index: usize) -> App {
-    let mut app = stub_app_with_playing_queue(n);
-    app.local_view = queue_view_with_start(n, Some(start_index));
     app
 }
 

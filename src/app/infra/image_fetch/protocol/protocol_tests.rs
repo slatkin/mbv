@@ -1,7 +1,10 @@
 use super::super::App;
-use super::{FetchedBytes, decode_fetched, first_image, request_failure};
+use super::emby::{emby_type_url, first_image};
+use super::{FetchedBytes, decode_fetched, request_failure};
 use crate::app::tests::make_app_stub;
-use mbv_images::{CachedImage, ImageDecode, ImageFetchOutcome};
+use mbv_images::{
+    CachedImage, ImageDecode, ImageFetchOutcome, ImageRendition, RowEmbyImage, RowRendition,
+};
 use ratatui_image::picker::{Picker, ProtocolType};
 
 const BASE_KEY: &str = "hero-base";
@@ -312,4 +315,78 @@ fn a_source_only_completion_caches_the_source_and_no_pixels() {
     assert!(entry.source.is_some());
     assert!(entry.has_art());
     assert_eq!(entry.dimensions(), Some((4, 3)));
+}
+
+fn row_rendition(square: bool, image: Option<RowEmbyImage>) -> ImageRendition {
+    ImageRendition::Row(RowRendition {
+        square,
+        emby: image,
+    })
+}
+
+/// Design D6: a row's declared kind is requested with its tag and the 2x row
+/// width, at quality 80, with no height and no format parameter.
+#[test]
+fn a_tagged_row_request_url_carries_the_tag_and_row_width() {
+    let rendition = row_rendition(
+        false,
+        Some(RowEmbyImage {
+            kind: "Thumb".into(),
+            tag: "thumb-1".into(),
+        }),
+    );
+
+    let url = emby_type_url(
+        "Thumb",
+        "item-1",
+        "",
+        &rendition,
+        Some("thumb-1"),
+        "https://emby.example",
+        "secret",
+    );
+
+    assert_eq!(
+        url,
+        "https://emby.example/Items/item-1/Images/Thumb?maxWidth=128&quality=80&tag=thumb-1&api_key=secret"
+    );
+}
+
+/// Design D6: a chain walk over an item that declares no tag sends no tag.
+#[test]
+fn an_untagged_row_request_url_omits_the_tag_parameter() {
+    let url = emby_type_url(
+        "Backdrop",
+        "item-1",
+        "",
+        &row_rendition(false, None),
+        None,
+        "https://emby.example",
+        "secret",
+    );
+
+    assert_eq!(
+        url,
+        "https://emby.example/Items/item-1/Images/Backdrop/0?maxWidth=128&quality=80&api_key=secret"
+    );
+}
+
+/// Design D6: a Square arm asks for both sides (Emby forces an exact width and
+/// height), while the landscape arm asks for the width alone.
+#[test]
+fn a_square_row_request_url_asks_for_both_sides() {
+    let url = emby_type_url(
+        "Primary",
+        "item-1",
+        "",
+        &row_rendition(true, None),
+        None,
+        "https://emby.example",
+        "secret",
+    );
+
+    assert_eq!(
+        url,
+        "https://emby.example/Items/item-1/Images/Primary?maxWidth=72&maxHeight=72&quality=80&api_key=secret"
+    );
 }

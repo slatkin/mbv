@@ -10,8 +10,8 @@ use crate::bridge::frame::library::{
     GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame,
     GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame, GuiMusicDetail,
-    GuiMusicHeroFrame, GuiMusicList, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList,
-    GuiShowsRowFrame,
+    GuiMusicHeroFrame, GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail,
+    GuiShowsHeroFrame, GuiShowsList, GuiShowsRowFrame,
 };
 
 /// The carried Music list part with no album picked.
@@ -98,10 +98,11 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
                         id: row_id.clone(),
                         title: "Better Call Saul".to_owned(),
                         subtitle: None,
-                        date: None,
+                        trailing: None,
                         kind: GuiHomeRowKindFrame::Media,
                         state: GuiHomeRowStateFrame::Ordinary,
-                        art: None,
+                        art: GuiRowArtFrame::NoSource,
+                        media: GuiRowMediaKindFrame::Video,
                     }),
                 ],
             }),
@@ -131,6 +132,8 @@ pub(super) fn shows_list() -> GuiShowsList {
         series: Vec::new(),
         upcoming_failed: false,
         rows: vec![GuiShowsRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             display_only: false,
             id: "s1".to_owned(),
             title: "Atlanta".to_owned(),
@@ -204,6 +207,8 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
                 loading: false,
                 failed: false,
                 rows: vec![GuiEmbyRowFrame {
+                    art: GuiRowArtFrame::NoSource,
+                    media: GuiRowMediaKindFrame::Video,
                     id: "m1".to_owned(),
                     title: "Alien".to_owned(),
                     subtitle: Some("1979".to_owned()),
@@ -248,6 +253,8 @@ pub(super) fn audiobooks_sections(
                 loading: false,
                 failed: false,
                 rows: vec![GuiAudiobooksRowFrame {
+                    art: GuiRowArtFrame::NoSource,
+                    media: GuiRowMediaKindFrame::Audio,
                     id: "b1".to_owned(),
                     title: "Aftermath".to_owned(),
                     subtitle: Some("Bill Wyman".to_owned()),
@@ -312,6 +319,8 @@ pub(super) fn feeds_sections(
                 loading: false,
                 failed: false,
                 rows: vec![GuiEntryRowFrame {
+                    art: GuiRowArtFrame::NoSource,
+                    media: GuiRowMediaKindFrame::Video,
                     id: "s1::e1".to_owned(),
                     title: "Entry A".to_owned(),
                     subtitle: Some("Sub One".to_owned()),

@@ -16,28 +16,32 @@ use dioxus_native::prelude::*;
 use mbv::GuiShowsView;
 
 use crate::bridge::frame::library::{
-    GuiShowsEpisodeRowFrame, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
+    GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsEpisodeRowFrame, GuiShowsRowFrame,
+    GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::window::library::list::{
-    GeometryRow, LETTER_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter, TRACK_ROW_HEIGHT, letter_rail_by,
+    GeometryRow, LETTER_ROW_HEIGHT, LIBRARY_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter,
+    TRACK_ROW_HEIGHT, letter_rail_by,
 };
 
 /// The letter heading row's height in logical pixels: the Music list's letter
 /// heading, which the All series list reuses.
 pub const SHOWS_HEADING_ROW_HEIGHT: f32 = LETTER_ROW_HEIGHT;
-/// The series and season row height in logical pixels: the Music list's node
-/// row.
-pub const SHOWS_SERIES_ROW_HEIGHT: f32 = NODE_ROW_HEIGHT;
-/// The season row's height: the Music node row's, as the series row's is.
+/// The series row's height in logical pixels (gui-delineated-rows design D2):
+/// the series is a top-level row, so it paints through the shared row part at
+/// that part's height.
+pub const SHOWS_SERIES_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
+/// The season row's height: the Music node row's, because a season is a nested
+/// row and keeps its own painter (design D1).
 pub const SHOWS_SEASON_ROW_HEIGHT: f32 = NODE_ROW_HEIGHT;
 /// The episode leaf's height in logical pixels: the Music track row.
 pub const SHOWS_EPISODE_ROW_HEIGHT: f32 = TRACK_ROW_HEIGHT;
-/// The flat New or Upcoming row's height in logical pixels: the old Home
-/// item row's two-line height, whose format the relocated rows kept. A track
-/// row's 28 px clips the two title lines to illegibility, so the flat rows
-/// take the height their format was built for (gui-collection-dropdown D9,
-/// the live defect of 2026-11-18: the New and Upcoming rows painted cut off).
-pub const SHOWS_FLAT_ROW_HEIGHT: f32 = 48.0;
+/// The flat New or Upcoming row's height in logical pixels (gui-delineated-rows
+/// design D2): the shared top-level row part's height, whose two title lines
+/// and date gutter replace the old Home item row's format (gui-collection-dropdown
+/// D9, the live defect of 2026-11-18: the New and Upcoming rows painted cut
+/// off).
+pub const SHOWS_FLAT_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 
 /// The tree's open and closed node keys (design D14): the Music tree's rule.
 /// `open` holds the nodes the user opened, and `closed` holds the nodes the
@@ -83,6 +87,13 @@ pub struct ShowsSeriesRow {
     pub open: bool,
     /// Whether the node opens.
     pub expandable: bool,
+    /// The series' art (gui-delineated-rows design D4): the cached row image
+    /// and the fit its pixels ask for, a fetch in flight, a source with no
+    /// image, or a kind with no art source.
+    pub art: GuiRowArtFrame,
+    /// The media kind the row's thumb shows while it holds no image (design
+    /// D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// A painted season node (design D14): the Music album row's counterpart.
@@ -153,6 +164,11 @@ pub struct ShowsFlatRow {
     pub top: f32,
     /// The row's painted height.
     pub height: f32,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row's thumb shows while it holds no image (design
+    /// D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// One painted row of the Shows list (design D14). The `id` is the row's
@@ -204,6 +220,19 @@ impl GeometryRow for ShowsListRow {
 
     fn pointer_row(&self) -> Option<&str> {
         (!matches!(self, ShowsListRow::Heading(_))).then_some(ShowsListRow::id(self))
+    }
+
+    /// The id this row takes in a `RowsInView` report (gui-delineated-rows
+    /// design D7): the core resolves it against its own data, never against the
+    /// row key this list adds. A series row names its stable Service id — the
+    /// raw Emby id — and a flat row the id it already carries; a heading, a
+    /// season, and an episode paint no thumb, so none of them consumes the set.
+    fn rows_in_view_id(&self) -> Option<String> {
+        match self {
+            ShowsListRow::Series(row) => Some(row.source_id.clone()),
+            ShowsListRow::Flat(row) => Some(row.id.clone()),
+            ShowsListRow::Heading(_) | ShowsListRow::Season(_) | ShowsListRow::Episode(_) => None,
+        }
     }
 
     fn top(&self) -> f32 {
@@ -289,6 +318,8 @@ pub fn build_shows_rows(
                         display_only: row.display_only,
                         top,
                         height: SHOWS_FLAT_ROW_HEIGHT,
+                        art: row.art.clone(),
+                        media: row.media,
                     });
                     top += SHOWS_FLAT_ROW_HEIGHT;
                     built
@@ -296,6 +327,29 @@ pub fn build_shows_rows(
                 .collect()
         }
     }
+}
+
+/// A series node's painted row: the top-level row's height and art, its rail
+/// letter, and how it opens.
+fn series_row(
+    node: &GuiShowsSeriesFrame,
+    id: String,
+    letter: char,
+    open: bool,
+    top: f32,
+) -> ShowsListRow {
+    ShowsListRow::Series(ShowsSeriesRow {
+        id,
+        source_id: node.id.clone(),
+        title: node.title.clone(),
+        letter,
+        open,
+        expandable: node.expandable,
+        top,
+        height: SHOWS_SERIES_ROW_HEIGHT,
+        art: node.art.clone(),
+        media: node.media,
+    })
 }
 
 /// The All series mode's tree rows.
@@ -348,16 +402,7 @@ fn series_shows_rows(
         } else {
             tree.open.contains(&node_id)
         };
-        built.push(ShowsListRow::Series(ShowsSeriesRow {
-            id: node_id.clone(),
-            source_id: node.id.clone(),
-            title: node.title.clone(),
-            letter,
-            open: series_open,
-            expandable: node.expandable,
-            top,
-            height: SHOWS_SERIES_ROW_HEIGHT,
-        }));
+        built.push(series_row(node, node_id.clone(), letter, series_open, top));
         top += SHOWS_SERIES_ROW_HEIGHT;
         if !series_open {
             continue;

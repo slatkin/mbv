@@ -113,6 +113,29 @@ fn show_page_fixture_maps_through_the_client() {
     assert_eq!(page.items[0].title, "Second Show");
     assert_eq!(page.items[1].title, "Third Show");
     assert_eq!(page.items[1].author, None);
+    assert_eq!(
+        page.items[0].updated_at_ms, 1_700_000_000_000,
+        "the library item's updatedAt is carried in milliseconds"
+    );
+    assert_eq!(
+        page.items[1].updated_at_ms, 0,
+        "a library item without updatedAt defaults to 0"
+    );
+}
+
+#[test]
+fn book_page_fixture_carries_the_library_items_update_time() {
+    let client = mock_client(&wire_fixture("book-items-page.json"));
+
+    let page = client
+        .books_bounded("secret", "lib-books", 0, 20, Duration::from_secs(1))
+        .unwrap();
+
+    assert_eq!(page.items[0].updated_at_ms, 1_700_000_000_000);
+    assert_eq!(
+        page.items[1].updated_at_ms, 0,
+        "a book without updatedAt defaults to 0"
+    );
 }
 
 #[test]

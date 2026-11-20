@@ -3,9 +3,9 @@
 //! in whole rows, the row's insets and ordinal column, the drag's insertion
 //! line and its ghost offset, and the row menu's top edge. They moved out of
 //! `queue_panel.rs` so that file stays under the 800-line limit, and the whole
-//! queue column reads its pixel sizes from here. The rows are the redesign's
-//! 34 px rows, 2 px apart (design D9), so a stacked row starts one 36 px
-//! stride below its neighbour.
+//! queue column reads its pixel sizes from here. The rows are the delineated
+//! 40 px rows with no gap between them (design D3 of `gui-delineated-rows`), so
+//! a stacked row starts one 40 px stride below its neighbour.
 
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow};
 
@@ -20,11 +20,12 @@ pub(in crate::window::components) const HEADER_HEIGHT_PX: u16 = 48;
 /// buttons are square at this size and the switcher is this tall.
 pub(in crate::window::components) const CONTROL_PX: u16 = 32;
 
-/// The canvas's fixed queue row height in logical pixels (design D9).
-pub(in crate::window::components) const ROW_HEIGHT_PX: u16 = 34;
+/// The canvas's fixed queue row height in logical pixels (design D3).
+pub(in crate::window::components) const ROW_HEIGHT_PX: u16 = 40;
 
-/// The gap between two stacked rows in logical pixels (design D9).
-pub(in crate::window::components) const ROW_GAP_PX: u16 = 2;
+/// The gap between two stacked rows in logical pixels (design D3): the rows
+/// sit flush and their own 1 px dividers separate them.
+pub(in crate::window::components) const ROW_GAP_PX: u16 = 0;
 
 /// The space between the queue header and the first row. It is the list box's
 /// top margin, not its padding: the list's measured height (the capacity) and
@@ -36,22 +37,21 @@ pub(super) const LIST_TOP_GAP_PX: u16 = 8;
 const ROW_STRIDE_PX: u16 = ROW_HEIGHT_PX + ROW_GAP_PX;
 
 /// The row's inset from its leading and trailing edges at rest, in logical
-/// pixels (design D9). The hovered row narrows its leading inset to the grip's
+/// pixels (design D3). The hovered row narrows its leading inset to the grip's
 /// slot.
-pub(super) const ROW_INSET_PX: u16 = 8;
+pub(super) const ROW_INSET_PX: u16 = 10;
 
-/// The gap between a row's cells, in logical pixels (design D9): the ordinal,
-/// the start mark, and the title.
+/// The gap between a row's cells, in logical pixels (design D3): the ordinal,
+/// the title, and the right column.
 pub(super) const ROW_CELL_GAP_PX: u16 = 10;
 
-/// The queue ordinal's column width in logical pixels (design D9): the
+/// The queue ordinal's column width in logical pixels (design D3): the
 /// two-digit number every row leads with.
-pub(in crate::window::components) const ORDINAL_COL_PX: u16 = 18;
+pub(in crate::window::components) const ORDINAL_COL_PX: u16 = 28;
 
-/// The start mark's slot in the title column, in logical pixels (design D9):
-/// the 12 px glyph and the 6 px gap beside it, which the progress bar starts
-/// past.
-pub(super) const START_MARK_SLOT_PX: u16 = 18;
+/// The row's right column width in logical pixels (design D3): the item's
+/// duration, right-aligned, which every row state paints.
+pub(super) const RIGHT_COL_PX: u16 = 96;
 
 /// The row's title's inset from its leading edge: the row's inset, the ordinal
 /// column, and the cell gap.
@@ -151,8 +151,8 @@ pub(super) fn menu_top(queue: &GuiQueue, anchor_slot: u64) -> String {
 /// The whole rows a list box of `height` CSS pixels fits (the former client
 /// report's `wholeRows`): the capacity the core's queue viewport reads. N rows
 /// need `N` row heights and the `N - 1` gaps between them, so a box fits
-/// `floor((height + gap) / stride)` of them — 70 px holds two 34 px rows and
-/// their 2 px gap, and only a box shorter than a row fits none.
+/// `floor((height + gap) / stride)` of them — with a 0 px gap, 80 px holds two
+/// 40 px rows, and only a box shorter than a row fits none.
 pub(super) fn whole_rows(height: f32) -> usize {
     let stride = f32::from(ROW_STRIDE_PX);
     let gap = f32::from(ROW_GAP_PX);

@@ -10,7 +10,7 @@ use mbv::{
 };
 use mbv_ui_model::music_grouping::ArtistKey;
 
-use super::GuiMusicMenuEntryFrame;
+use super::{GuiMusicMenuEntryFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
 /// The Music destination's list part (design D8): the group selector, the
@@ -107,6 +107,10 @@ pub struct GuiMusicArtistFrame {
     pub sort_letter: char,
     /// The artist's albums in the union's order.
     pub albums: Vec<GuiMusicAlbumFrame>,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// An artist's stable identity, mirroring `mbv_ui_model::ArtistKey`: the
@@ -183,6 +187,8 @@ impl From<&GuiMusicArtist> for GuiMusicArtistFrame {
             name: artist.name.clone(),
             sort_letter: artist.sort_letter,
             albums: artist.albums.iter().map(GuiMusicAlbumFrame::from).collect(),
+            art: GuiRowArtFrame::from(&artist.art),
+            media: GuiRowMediaKindFrame::from(artist.media),
         }
     }
 }

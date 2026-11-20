@@ -9,8 +9,8 @@ use mbv::{
     GuiAudiobooksWorkspace,
 };
 
-use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
 /// The Audiobooks destination's list part (add-gui-library-panel design D12,
@@ -65,6 +65,10 @@ pub struct GuiAudiobooksRowFrame {
     /// The row's rail letter, or `#` for a digit- or symbol-led author sort
     /// key.
     pub sort_letter: char,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArtFrame,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKindFrame,
 }
 
 /// The book Hero's facts (row 9.1), with the chapters Workspace.
@@ -161,6 +165,8 @@ impl From<&GuiAudiobooksRow> for GuiAudiobooksRowFrame {
             subtitle: row.subtitle.clone(),
             duration: row.duration.clone(),
             sort_letter: row.sort_letter,
+            art: GuiRowArtFrame::from(&row.art),
+            media: GuiRowMediaKindFrame::from(row.media),
         }
     }
 }

@@ -4,12 +4,15 @@
 //! `Recently added` — and the selected row's Hero facts. The section rules,
 //! the split title parts, and the gutter date are the TUI's flat projection's
 //! (`crates/mbv-components/src/home_content/flat.rs`), rebuilt over the GUI's
-//! row vocabulary so each row also carries its stable id, row state, and
-//! artwork. The projection reads `App` data only, so the TUI's own
+//! row vocabulary so each row also carries its stable id, row state, trailing
+//! text, and art. A `Continue watching` row's trailing text is the time left
+//! (gui-delineated-rows design D9). The projection reads `App` data only — and
+//! its row art is one cache read per row, never a fetch — so the TUI's own
 //! projections and paint do not change.
 
 use mbv_components::library_panel::content::ArtworkShape;
 use mbv_components::library_panel::hero::hero_content_queue;
+use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::{QueueItem, QueueItemContentId};
 use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
 use mbv_ui_model::media_list::MediaSemanticState;
@@ -18,6 +21,7 @@ use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_model::ui_util::row_date;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind, queue_item_media_kind};
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -51,6 +55,39 @@ impl GuiHomeRowId {
     pub fn is_continue(&self) -> bool {
         matches!(self, Self::Continue(_))
     }
+
+    /// The id this row takes in `RowsInView` (gui-delineated-rows design D7):
+    /// one opaque string the window sends and the core matches its own Home
+    /// rows by, so the row art set never names a position. A `Continue`
+    /// watching row carries its Emby item id; a `Recently added` row carries
+    /// the queue item's content id, provider first.
+    #[must_use]
+    pub fn rows_in_view_id(&self) -> String {
+        match self {
+            Self::Continue(item_id) => format!("continue:{item_id}"),
+            Self::Recent(content_id) => format!("recent:{}", content_id_text(content_id)),
+        }
+    }
+}
+
+/// The text a queue item's content id takes inside a `RowsInView` Home id
+/// (design D7): one provider word, then the provider's own identity fields.
+fn content_id_text(id: &QueueItemContentId) -> String {
+    match id {
+        QueueItemContentId::Emby(value) => format!("emby:{value}"),
+        QueueItemContentId::Feed(value) => format!("feed:{value}"),
+        QueueItemContentId::Audiobookshelf {
+            library_item_id,
+            episode_id,
+        } => format!(
+            "audiobookshelf:{}:{library_item_id}:{episode_id}",
+            library_item_id.len()
+        ),
+        QueueItemContentId::AudiobookshelfBook { library_item_id } => {
+            format!("audiobookshelfBook:{library_item_id}")
+        }
+        QueueItemContentId::Twitch(value) => format!("twitch:{value}"),
+    }
 }
 
 /// One item row's kind: `Collection` when the row targets a container — a
@@ -78,25 +115,23 @@ pub struct GuiHomeItemRow {
     /// The row's secondary label: the item's own title when a context part
     /// holds `title`. `None` on an unsplit row.
     pub subtitle: Option<String>,
-    /// The gutter date, as the TUI's flat projection formats it:
-    /// `fmt_publish_date_short` over the provider timestamp, a `day month`
-    /// text the window content paints as-is. `None` on `Continue watching`
-    /// rows and on an item with no parseable provider date. The GUI carries
-    /// the formatted text — not the raw seconds — so the window keeps no
-    /// date-formatting rule.
-    pub date: Option<String>,
+    /// The row's trailing text (gui-delineated-rows design D2, D9): the time
+    /// left on a `Continue watching` row, and the gutter date on a `Recently
+    /// added` row. The GUI carries the formatted text — not the raw seconds —
+    /// so the window keeps no time or date rule.
+    pub trailing: Option<String>,
     /// The row's kind.
     pub kind: GuiHomeRowKind,
     /// The row's state: the shared media-list semantic state the queue-item
     /// constructor derives, which carries the Continue Watching resume
     /// progress.
     pub state: MediaSemanticState,
-    /// The row's artwork, display-encoded for Emby items only: the
-    /// Audiobookshelf and Feed rows paint without art in Phase 2 (the
-    /// USER-APPROVED Home design). A `Some` carries the cached art, the
-    /// placeholder, or the loading state, exactly as the queue card
-    /// resolves it.
-    pub art: Option<GuiLibraryArtwork>,
+    /// The row's art (gui-delineated-rows design D4): the cached row image,
+    /// a fetch in flight, a source with no image, or a row kind with no art
+    /// source.
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// The selected row's Hero facts (design D12): one title, ordered meta rows
@@ -227,7 +262,7 @@ impl App {
         let mut continue_rows = Vec::new();
         for item in &continue_items {
             let id = GuiHomeRowId::Continue(item.id().to_owned());
-            continue_rows.push(self.home_item(item, id, None, None));
+            continue_rows.push(self.home_item(item, id, None, time_left(item)));
         }
         // The `Recently added` rows: the merged store-and-Feeds rows inside
         // the 14-day cutoff (`App::home_recent_rows`'s merge order, newest
@@ -293,14 +328,15 @@ impl App {
     }
 
     /// One item row beside the queue item that projects it (design D12):
-    /// the row's title parts, kind, state, date, and artwork read the item
-    /// alone.
+    /// the row's title parts, kind, state, trailing text, and art read the
+    /// item alone. `trailing` is the caller's text for a row whose trailing
+    /// fact is not the time left (a `Recently added` row's date).
     fn home_item(
-        &mut self,
+        &self,
         item: &QueueItem,
         id: GuiHomeRowId,
         feed_name: Option<&str>,
-        date: Option<String>,
+        trailing: Option<String>,
     ) -> GuiHomeItem {
         let parts = item.playback_title_parts(feed_name);
         let (title, subtitle) = match &parts.context {
@@ -309,22 +345,19 @@ impl App {
         };
         let kind = home_item_kind(item);
         let state = MediaSemanticState::from_queue_item(item);
-        let art = match item {
-            // Emby rows fetch their card art through the image cache; the
-            // other providers paint without art in Phase 2.
-            QueueItem::Emby(emby) => Some(self.gui_home_row_artwork(emby)),
-            _ => None,
-        };
+        let media = queue_item_media_kind(item);
+        let art = self.gui_row_art(self.queue_item_row_source(item).as_ref());
         GuiHomeItem {
             item: item.clone(),
             row: GuiHomeItemRow {
                 id,
                 title,
                 subtitle,
-                date,
+                trailing,
                 kind,
                 state,
                 art,
+                media,
             },
         }
     }
@@ -370,6 +403,31 @@ fn home_item_kind(item: &QueueItem) -> GuiHomeRowKind {
     } else {
         GuiHomeRowKind::Media
     }
+}
+
+/// The time left in a `Continue watching` row's item (design D9): the item's
+/// runtime less its saved position, as whole minutes rounded up — `"{m}m
+/// left"` under one hour and `"{h}h {m}m left"` from one hour. `None` on an
+/// item whose runtime the Service does not declare, which leaves the trailing
+/// place empty.
+fn time_left(item: &QueueItem) -> Option<String> {
+    let QueueItem::Emby(emby) = item else {
+        return None;
+    };
+    if emby.runtime_ticks <= 0 {
+        return None;
+    }
+    let remaining = emby
+        .runtime_ticks
+        .saturating_sub(emby.playback_position_ticks)
+        .max(0);
+    let timer = 60 * TICKS_PER_SECOND;
+    let minutes = remaining.saturating_add(timer - 1) / timer;
+    Some(if minutes < 60 {
+        format!("{minutes}m left")
+    } else {
+        format!("{}h {}m left", minutes / 60, minutes % 60)
+    })
 }
 
 /// The Hero's art box shape, mirrored from the artwork policy's declared

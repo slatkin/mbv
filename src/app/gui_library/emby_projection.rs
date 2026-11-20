@@ -20,6 +20,7 @@ use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
+use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source};
 use super::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiCollections, compare_gui_date_order,
 };
@@ -58,6 +59,10 @@ pub struct GuiEmbyRow {
     pub sort_letter: Option<char>,
     /// The row's kind.
     pub kind: GuiEmbyRowKind,
+    /// The row's art (gui-delineated-rows design D4).
+    pub art: GuiRowArt,
+    /// The media kind the row shows when it has no image (design D4).
+    pub media: GuiRowMediaKind,
 }
 
 /// One credit of the movie's credits table (design D17, Q7): the shared
@@ -244,7 +249,7 @@ impl App {
             Some(super::GuiEmbyRootItems::Loading) | None => (&[][..], true, false),
             Some(super::GuiEmbyRootItems::Failed) => (&[][..], false, true),
         };
-        let rows: Vec<GuiEmbyRow> = items.iter().map(plain_row).collect();
+        let rows: Vec<GuiEmbyRow> = items.iter().map(|item| plain_row(self, item)).collect();
         let selected = self.gui_emby_selected(lib_idx, &rows);
         let hero = selected
             .as_ref()
@@ -281,7 +286,14 @@ impl App {
         let (items, loading) = self.gui_emby_feed_items(lib_idx, set.as_ref());
         let rows: Vec<GuiEmbyRow> = items
             .iter()
-            .map(|item| feed_row(item, feed_row_date(item), programme_of(item, &programmes)))
+            .map(|item| {
+                feed_row(
+                    self,
+                    item,
+                    feed_row_date(item),
+                    programme_of(item, &programmes),
+                )
+            })
             .collect();
         let selected = self.gui_emby_selected(lib_idx, &rows);
         let hero = selected
@@ -481,8 +493,9 @@ impl App {
 /// One row of the plain list (row 8.1): the TUI browse row's primary label
 /// and gutter facts, with the year on `subtitle` — the plain list's rail
 /// replaces the TUI's letter-range pill row, and the row carries no gutter
-/// date.
-fn plain_row(item: &EmbyItem) -> GuiEmbyRow {
+/// date — and the row art its item's Hero artwork policy declares
+/// (gui-delineated-rows design D5), read from the cache alone.
+fn plain_row(app: &App, item: &EmbyItem) -> GuiEmbyRow {
     GuiEmbyRow {
         id: item.id.clone(),
         title: row_title(item),
@@ -490,6 +503,8 @@ fn plain_row(item: &EmbyItem) -> GuiEmbyRow {
         date: None,
         sort_letter: Some(sort_letter(effective_sort_str(item))),
         kind: row_kind(item),
+        art: app.gui_row_art(emby_row_source(item).as_ref()),
+        media: emby_media_kind(item),
     }
 }
 
@@ -497,8 +512,14 @@ fn plain_row(item: &EmbyItem) -> GuiEmbyRow {
 /// the programme (root folder) the item sits in underneath it — the user
 /// rule of 2026-12-30, so a flat All row names the programme it belongs to
 /// — the gutter date (the New list's date added, the All and folder lists'
-/// production year), and no rail letter.
-fn feed_row(item: &EmbyItem, date: Option<String>, programme: Option<String>) -> GuiEmbyRow {
+/// production year), no rail letter, and the row art its item's Hero artwork
+/// policy declares (gui-delineated-rows design D5), read from the cache alone.
+fn feed_row(
+    app: &App,
+    item: &EmbyItem,
+    date: Option<String>,
+    programme: Option<String>,
+) -> GuiEmbyRow {
     GuiEmbyRow {
         id: item.id.clone(),
         title: row_title(item),
@@ -506,6 +527,8 @@ fn feed_row(item: &EmbyItem, date: Option<String>, programme: Option<String>) ->
         date,
         sort_letter: None,
         kind: row_kind(item),
+        art: app.gui_row_art(emby_row_source(item).as_ref()),
+        media: emby_media_kind(item),
     }
 }
 

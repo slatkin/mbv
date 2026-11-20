@@ -22,7 +22,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryFeedsList;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -213,11 +213,25 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
+    /// The `RowsInView` reports the core link received, in send order.
+    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+                    Some(command)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The Library commands the core link received, in send order.
     fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
+                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -268,6 +282,8 @@ fn built(list: GuiFeedsList, detail: GuiFeedsDetail) -> Fixture {
 fn entries() -> Vec<GuiEntryRowFrame> {
     vec![
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::Loading,
+            media: GuiRowMediaKindFrame::Video,
             id: "s1::e1".to_owned(),
             title: "Entry A".to_owned(),
             subtitle: Some("Sub One".to_owned()),
@@ -275,6 +291,8 @@ fn entries() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s2::e2".to_owned(),
             title: "Entry B".to_owned(),
             subtitle: Some("Sub Two".to_owned()),
@@ -282,6 +300,8 @@ fn entries() -> Vec<GuiEntryRowFrame> {
             state: GuiHomeRowStateFrame::Played,
         },
         GuiEntryRowFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
             id: "s1::e3".to_owned(),
             title: "Entry C".to_owned(),
             subtitle: Some("Sub One".to_owned()),
@@ -375,6 +395,44 @@ fn the_flat_list_paints_its_date_gutter_with_no_heading_and_no_rail() {
         "Sub One",
         "the entry title paints over its subscription"
     );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-feeds-row-id=\"s1::e1\"] [data-library-feeds-thumb]",
+            "data-library-feeds-thumb"
+        ),
+        ["loading".to_owned()],
+        "the entry row paints the shared part's thumb with its art state"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-feeds-row-id=\"s2::e2\"] [data-library-feeds-thumb]",
+            "data-library-feeds-thumb"
+        ),
+        ["none".to_owned()],
+        "a row with no art source paints the no-source thumb"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): the list reports the rows it
+/// paints under its own scope, so the core queues their row art without a
+/// coordinate.
+#[test]
+fn the_list_reports_the_rows_in_view_under_the_feeds_scope() {
+    let mut fixture = built(frame(entries(), false), detail(None));
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.reported_rows_in_view().last(),
+        Some(&mbv::GuiLibraryCommand::RowsInView {
+            scope: mbv::GuiRowArtScope::Feeds,
+            ids: vec![
+                "s1::e1".to_owned(),
+                "s2::e2".to_owned(),
+                "s1::e3".to_owned()
+            ],
+        }),
+        "the report names the painted rows under the Feeds scope"
+    );
 }
 
 /// Contract (`LibraryFeedsList.test.ts`): a press sends the select command
@@ -460,7 +518,9 @@ fn a_played_entry_dims_its_title_and_an_active_one_paints_its_resume_percent() {
         "the played entry's title dims"
     );
     assert!(
-        fixture.presents("[data-library-feeds-row-id=\"s1::e3\"] [data-library-feeds-progress]"),
+        fixture.presents(
+            "[data-library-feeds-row-id=\"s1::e3\"] [data-library-feeds-thumb-progress]",
+        ),
         "the active entry paints its resume percent"
     );
 }

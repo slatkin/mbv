@@ -19,10 +19,11 @@ fn continued_row() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Continue("e1".to_owned()),
         title: "Better Call Saul".to_owned(),
         subtitle: None,
-        date: None,
+        trailing: None,
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 
@@ -32,10 +33,11 @@ fn added_row() -> GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Recent(QueueItemContentId::Feed("f1".to_owned())),
         title: "A Feed Entry".to_owned(),
         subtitle: None,
-        date: Some("12 May".to_owned()),
+        trailing: Some("12 May".to_owned()),
         kind: GuiHomeRowKindFrame::Media,
         state: GuiHomeRowStateFrame::Ordinary,
-        art: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
     }
 }
 

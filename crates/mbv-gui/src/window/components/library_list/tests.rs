@@ -26,7 +26,7 @@ use super::LibraryList;
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail,
     GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail,
-    GuiMusicList, GuiMusicTrackFrame,
+    GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
@@ -192,11 +192,25 @@ impl Fixture {
             .map(str::to_owned)
     }
 
+    /// The `RowsInView` reports the core link received, in send order.
+    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+                    Some(command)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The Library commands the core link received, in send order.
     fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
+                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -245,6 +259,8 @@ fn built(list: &GuiMusicList, detail: &GuiMusicDetail) -> Fixture {
 /// The Beastie Boys artist: one album with a cached tracklist, one without.
 fn beastie() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::Loading,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
@@ -275,6 +291,8 @@ fn beastie() -> GuiMusicArtistFrame {
 /// The Brand Nubian artist: one album, closed under the artist.
 fn brand() -> GuiMusicArtistFrame {
     GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
         artist_key: GuiArtistKey::Service("a2".to_owned()),
         name: "Brand Nubian".to_owned(),
         sort_letter: 'B',
@@ -524,6 +542,52 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
         [mbv::GuiLibraryCommand::Play {
             item_id: "t1".to_owned(),
         }]
+    );
+}
+
+/// Contract (gui-delineated-rows design D1): an artist row is a top-level row
+/// and paints the shared part's thumb with its art state, while the album and
+/// track rows under it keep their own painters and paint none.
+#[test]
+fn the_artist_row_paints_a_thumb_and_its_nested_rows_paint_none() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
+    open_beastie(&mut fixture);
+    open_licensed_to_ill(&mut fixture);
+    measure(&mut fixture, 240.0);
+
+    assert_eq!(
+        fixture.attr_of(
+            "[data-library-row-id=\"artist:service:a1\"] [data-library-thumb]",
+            blitz_dom::LocalName::from("data-library-thumb"),
+        ),
+        Some("loading".to_owned()),
+        "the artist row paints the shared part's thumb with its art state"
+    );
+    assert!(
+        !fixture.presents("[data-library-row-id=\"album:al1\"] [data-library-thumb]"),
+        "the nested album row paints no thumb"
+    );
+    assert!(
+        !fixture.presents("[data-library-row-id=\"track:t1\"] [data-library-thumb]"),
+        "the nested track row paints no thumb"
+    );
+}
+
+/// Contract (gui-delineated-rows design D7): the list reports the artist rows it
+/// paints with the core's own artist ids, under the Music scope, so the core
+/// queues their row art without a coordinate.
+#[test]
+fn the_list_reports_the_artist_rows_in_view_under_the_music_scope() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
+    measure(&mut fixture, 240.0);
+
+    assert_eq!(
+        fixture.reported_rows_in_view().last(),
+        Some(&mbv::GuiLibraryCommand::RowsInView {
+            scope: mbv::GuiRowArtScope::Music,
+            ids: vec!["artist:a1".to_owned(), "artist:a2".to_owned()],
+        }),
+        "the report names the painted artist rows under the Music scope"
     );
 }
 

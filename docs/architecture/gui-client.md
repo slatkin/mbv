@@ -97,9 +97,7 @@ A section whose content can be absent has an `Option` value, so a `null`
 clears it. The sections are: the pre-attach state (`attach`, `null` once the
 attach succeeds), the theme (`theme`, `GuiTheme`), the
 Queue viewport rows with their stable `QueueSlotId` raw numbers, the active
-row, marks, active slot, row hover, row drag, and the shown queue's
-start-mark facts — its start slot, whether it plays,
-and whether its owner reported a start slot (`queue`, `GuiQueue`), the Queue
+row, marks, active slot, row hover, and row drag (`queue`, `GuiQueue`), the Queue
 chooser facts the header's controls read, the filter text with its caret
 fact, and the totals the footer shows, beside the folded strip's remaining
 count, next item title, and finish tail (`summary`, `GuiQueueSummary`), the collapse and queue-fold
@@ -702,8 +700,9 @@ paints from the switcher's own anchor box: it hangs 4 px under the
 switcher, left-aligned on the switcher's leading edge, and paints over the
 queue rows below. The card is the design's own chrome
 (`gui-queue-panel-redesign` design D8): min-width 260 px on `--ef-bg2` with
-a 1 px `--ef-bg4` border, radius 8, 4 px padding, and 34 px items that take
-the raised fill on the chooser's cursor and under the pointer. Its entries
+a 1 px `--ef-bg4` border, radius 8, 4 px padding, and items at the queue
+rows' height and gap (40 px, 0 px apart) that take the raised fill on the
+chooser's cursor and under the pointer. Its entries
 are the local Owner's Named queues in queue order, then one entry for the
 connected peer Player owner, named by the peer's own name (its device name,
 or the route or endpoint it connects by). Each entry paints, in order: the
@@ -763,18 +762,21 @@ playback; and after a close the panel shows the current local queue.
 The item rows carry no zebra stripe and no leading accent edge
 (`gui-queue-panel-redesign` design D9): the row's look comes from its
 state, and the hover veil stays the shared `button` look. Each row paints
-the design's row: its padded two-digit mono ordinal in place of the date
-gutter, one title line, with no right-column value and no second text
-line, at the fixed 34 logical pixel height with 2 px between rows. The
-progress bar is absolute inside the row along its bottom edge — 2 px tall,
-4 px above the bottom, inset 54 px left and 12 px right, on the raised
-tier's track with the orange fill for a partial row and the green fill for
-the now-playing row — so the bar adds no height. The shown queue's start
-slot carries the start mark: the filled play glyph while its queue plays,
-the outlined one while it is stopped or resting. A shown queue whose owner
-reports no start slot — a peer without `named-queues` — carries the playing
-mark on its observed active slot and no start mark. The rows paint three
-fills, and the three are distinct: the now-playing row fills
+the design's delineated row (`gui-delineated-rows` design D3): its
+right-aligned two-digit mono ordinal in a 28 px column, one title line, and
+the item's duration in a 96 px right column in every row state, at the
+fixed 40 logical pixel height with no gap between rows, 10 px padding, and
+a 1 px `--canvas-border` divider under each row. The rows are square, and
+the now-playing row alone rounds its corners (radius 4). A row with
+progress — a partial row, and the now-playing row, whose ring follows the
+playhead — carries the progress ring after its title: a 14 px svg in the
+collapsed rail's two-circle form, the track in `--ef-bg2` and the played arc
+in `--ef-orange`, or `--ef-green` on the now-playing row, each circle
+naming `currentColor` with its token in its own computed `color`, because
+usvg drops a `var()` in a `stroke` attribute. The ring is the row's only
+progress mark and adds no height, no row paints a start mark, and no row
+paints a time left. The rows paint three fills, and the three are distinct:
+the now-playing row fills
 `--ef-bg-green` with its green 600-weight title, a look no hover
 displaces; every marked row fills `--ef-bg3`, kept under the
 pointer too; a hovered row that is neither fills `--ef-bg0`; and an
@@ -814,8 +816,9 @@ whose answer carries the removal. The menu anchors on the first marked
 slot. `GuiQueue.drag` carries the
 dragged row's content as the ghost, the final index the drop leaves it at,
 and the insertion line's stable-slot anchor; the ghost floats at that line
-— with no ordinal, and the dragged row's painted percent — and the dragged
-row keeps its in-place paint (the canvas keeps it lit). The core owns the
+— with no ordinal and no right column, painted with the dragged row's ring
+and percent — and the dragged row keeps its in-place paint (the canvas keeps
+it lit). The core owns the
 gesture and the drop index, and it sends
 one move request to the Owner on release. `Alt+J` and `Alt+K` ask the core
 for the same move on the active row. A `cancel` pointer kind
@@ -1316,7 +1319,7 @@ variants are `openDestination` (`position`), `collectionToggle` (`target`,
 (`albumId`),
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
 `shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), `rowMenu`
-(`itemId`), and the Home commands — `homeSelect`, `homePlay`,
+(`itemId`), `rowsInView` (`scope`, `ids`), and the Home commands — `homeSelect`, `homePlay`,
 `homePlayNext`, and `homeQueue` (each carrying `row`, the
 `GuiHomeRowId` the frame painted). Item
 identities are stable Service ids, never row positions, so a command built
@@ -1330,6 +1333,12 @@ queue, so a Home command never mutates it directly, and Home's rows carry
 no library the Music play-next admission resolves against. A stale frame's
 row, one whose item the App's Home data no longer holds, logs and changes
 nothing, as every item-named variant's stale arm does.
+
+The `rowsInView` variant carries no action for an item: the window reports the
+ids of the rows it paints, and the core stores the set for that scope, stamps
+its navigation clock, and queues the in-view rows' row art once navigation is
+idle (the Library row art flow above). It is the one Library command the window
+sends with no press behind it.
 
 The collection commands serve every destination that has a dropdown, and
 their `target` is a `GuiCollectionTarget`: the Grouped Music library, a
@@ -1911,7 +1920,55 @@ block (art, selected unit, actions, overview), and the list band (the movie's
 credits table and the IMDb button).
 `LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play, Play next, and Add to queue buttons,
-`LibraryPillButton` the Shows Workspace's season pills, `LibraryItemRow` and
-`LibraryLetterHeading` the flat list rows, and `LibraryVirtualList` the
-scroller of every list. Home still
+`LibraryPillButton` the Shows Workspace's season pills, `LibraryItemRow` the
+top-level rows of every list, `LibraryLetterHeading` the letter and section
+headings, and `LibraryVirtualList` the scroller of every list. Home still
 paints `LibraryHeroSummary`.
+
+### The top-level Library row and its art
+
+`LibraryItemRow`
+(`crates/mbv-gui/src/window/components/library_item_row.rs`) is the one
+top-level row part of every destination (`gui-delineated-rows` design D1, D2):
+Home, the Emby lists, the Music artist rows, the Shows series rows, the New and
+Upcoming rows, Audiobooks, Podcasts, and Feeds. A destination supplies its hook
+prefix (`data-library-<attr>-*`), its text, its thumb, and its handlers, and
+never restates the look. The row is 56 px high with square corners, an 8 px
+inline padding, a 12 px gap, and a 1 px `--canvas-border` divider under it;
+`LibraryVirtualList` paints the matching rule over the list's first row, so the
+list frame has one top rule in every destination.
+
+The thumb is a 64 × 36 box on `--canvas-well`: a landscape or portrait image
+cover-fills it, a square image shows whole at the box's height, and a row with
+no image paints the media kind's `EighthNotes` or `MonitorPlay` icon on
+`--canvas-muted`. The row's resume percent paints in 3 px along the box's
+bottom edge, on `--canvas-thumb-track` under `--canvas-partial`, and no row
+paints a progress run under itself. A top-level tree node — a Music artist row
+or a Shows series row — also names its open state, and the part paints the one
+caret and the row's `aria-expanded`. Nested rows keep their own painters and
+heights: a Music album or track, and a Shows season or episode.
+
+Every row frame carries `GuiRowArtFrame` — the cached image and the fit its own
+pixels ask for, a fetch in flight, a source that answered with no image, or a
+kind with no art source — and `GuiRowMediaKindFrame` for the icon. The core
+fills both from the item's Hero artwork source (`gui-delineated-rows` design
+D5), so a row shows the image its Hero shows, and resolves them from the cache
+on each projection without a fetch.
+
+The list reports the rows it paints through
+`GuiLibraryCommand::RowsInView { scope, ids }`
+(`crates/mbv-gui/src/window/library/list/geometry.rs`, `rows_in_view_ids`): the
+painted
+window plus four rows of overscan either side, sent only when the set changes.
+`GuiRowArtScope` names the list the ids belong to — Home, Emby, Music,
+ShowsSeries, ShowsNew, ShowsUpcoming, Podcasts, Audiobooks, or Feeds — and a
+Shows list reports the scope of the view it paints. The ids are the rows'
+stable ids and never coordinates; a nested row names none, and the Music artist
+rows report the core's own `artist:` and `artist-name:` encoding. The core
+stores the set per scope, stamps its navigation-idle clock, and queues the
+in-view rows' `Row` fetches once navigation is idle
+(`src/app/gui_library/rows_in_view.rs`). Row cache keys carry the Service's
+change value (`row:{item_id}:{type}:{tag}`, and
+`row:abs:{server_hash}:{library_item_id}:{updated_at}`), the cache keeps its own
+256-entry row LRU, and row fetches take at most 4 of the 6 fetch slots, so a
+Hero fetch always has one.
