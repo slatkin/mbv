@@ -211,9 +211,10 @@ fn paint_shows_season(
         "height: {height}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         row_inset(row)
     );
-    if let Some(background) = row_background(row, selected) {
-        let _ = write!(style, " background: {background};");
-    }
+    // The expanded area's fill under an open series, unless the row is the
+    // selected one.
+    let fill = row_background(row, selected).unwrap_or_else(|| canvas_var("tree-subtree"));
+    let _ = write!(style, " background: {fill};");
     style.push_str(&tail_divider_style(tail));
     let weight = if selected_row { 600.0 } else { 400.0 };
     let name_color = row_name_color(shows, row);
@@ -368,9 +369,10 @@ fn paint_shows_episode(
         episode.height,
         row_inset(row)
     );
-    if let Some(background) = row_background(row, selected) {
-        let _ = write!(style, " background: {background};");
-    }
+    // The expanded area's fill under an open series, unless the row is the
+    // selected one.
+    let fill = row_background(row, selected).unwrap_or_else(|| canvas_var("tree-subtree"));
+    let _ = write!(style, " background: {fill};");
     style.push_str(&tail_divider_style(tail));
     let name_color = row_name_color(shows, row);
     let press_row = row.clone();

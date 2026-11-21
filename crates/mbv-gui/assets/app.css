@@ -163,6 +163,11 @@
 	   the mockup's #83c092 default accent. */
 	--canvas-tree-guide: #4f5b58; /* a top-level parent's guide: the neutral tone */
 	--canvas-tree-guide-nested: var(--canvas-insertion); /* a nested parent's guide: the accent tone */
+	/* An open parent's expanded area (user mockup 2026-11-21): its season,
+	   episode, album, and track rows paint one step lighter than the list
+	   column's raised fill (#2d353b, +4 per channel, the mockup's step), so
+	   the subtree reads as one block. */
+	--canvas-tree-subtree: #313940; /* the expanded area's fill */
 	/* The Queue panel column's backdrop beside the Library panel: the dim
 	   tier, so the raised library panel contrasts against it. One fill at
 	   every focus state (user decision 2026-11-15). */

@@ -23,6 +23,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::fmt::Write as _;
 use std::rc::Rc;
 
 use dioxus_native::prelude::*;
@@ -104,6 +105,14 @@ fn paint_track_row(
         "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
+    // The expanded area's fill under an open artist; the picked album keeps the
+    // raised fill its rounded corners were cut for.
+    let fill = if picked_row {
+        canvas_var("library-raise")
+    } else {
+        canvas_var("tree-subtree")
+    };
+    let _ = write!(style, " background: {fill};");
     style.push_str(&tail_divider_style(tail));
     let press_row = row.clone();
     let press_library = library.clone();
@@ -269,6 +278,14 @@ fn paint_album_row(
         "height: {NODE_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
+    // The expanded area's fill under an open artist; the picked album keeps the
+    // raised fill its rounded corners were cut for.
+    let fill = if picked_row {
+        canvas_var("library-raise")
+    } else {
+        canvas_var("tree-subtree")
+    };
+    let _ = write!(style, " background: {fill};");
     style.push_str(&tail_divider_style(tail));
     let press_row = row.clone();
     let press_library = library.clone();
