@@ -53,8 +53,8 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 ## 8. Settings screen
 
-- [ ] 8.1 Add one Settings pane scaffold to `crates/mbv-gui/src/window/components/settings_screen.rs` (design D13): one read that consumes the two contexts, guards the `settings_section_view`, builds the `onpress` over `press_settings_entry`, and yields the cursor id, beside one two-column grid constant. Point the six panes `settings_{rows,keys,sessions,services,feeds,library}.rs` at them. Verify: `cargo nextest run -p mbv-gui settings` passes with no edit to expected text, attributes, or commands.
-- [ ] 8.2 Replace `emby_form` and `audiobookshelf_form` in `crates/mbv-gui/src/window/components/settings_services.rs` with one setup-form builder over a field list — the label, the secret flag, and the update closure (design D13); `form_actions` stays the actions' one home. Verify: `cargo nextest run -p mbv-gui settings_services` passes with no edit.
+- [x] 8.1 Add one Settings pane scaffold to `crates/mbv-gui/src/window/components/settings_screen.rs` (design D13): one read that consumes the two contexts, guards the `settings_section_view`, builds the `onpress` over `press_settings_entry`, and yields the cursor id, beside one two-column grid constant. Point the six panes `settings_{rows,keys,sessions,services,feeds,library}.rs` at them. Verify: `cargo nextest run -p mbv-gui settings` passes with no edit to expected text, attributes, or commands.
+- [x] 8.2 Replace `emby_form` and `audiobookshelf_form` in `crates/mbv-gui/src/window/components/settings_services.rs` with one setup-form builder over a field list — the label, the secret flag, and the update closure (design D13); `form_actions` stays the actions' one home. Verify: `cargo nextest run -p mbv-gui settings_services` passes with no edit.
 
 ## 9. Small rules from the audit
 
