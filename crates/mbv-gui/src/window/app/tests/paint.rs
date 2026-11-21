@@ -175,6 +175,7 @@ fn summary() -> GuiQueueSummary {
             shown_name: "Default".to_owned(),
             shown_len: 26,
             close_disabled: true,
+            rename_disabled: true,
         },
     }
 }

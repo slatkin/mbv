@@ -175,6 +175,8 @@ pub fn QueuePanel() -> Element {
     let new_queue_mark = region_set.mark(RegionTarget::Queue(QueueTargetId::NewQueue));
     let close_mark = (!summary.header.close_disabled)
         .then(|| region_set.mark(RegionTarget::Queue(QueueTargetId::CloseQueue)));
+    let rename_mark = (!summary.header.rename_disabled)
+        .then(|| region_set.mark(RegionTarget::Queue(QueueTargetId::RenameQueue)));
     let filter_mark = region_set.mark(RegionTarget::Queue(QueueTargetId::Filter));
     // The painted rows' slot marks, in paint order, and then the hovered row's
     // grip and actions: chrome that paints over a row marks after every slot,
@@ -247,6 +249,7 @@ pub fn QueuePanel() -> Element {
                     filter: filter_mark,
                     new_queue: new_queue_mark,
                     close: close_mark,
+                    rename: rename_mark,
                     if let Some(menu) = chooser_menu {
                         QueueChooserMenu {
                             cursor: menu.cursor,

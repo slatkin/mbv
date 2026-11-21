@@ -74,6 +74,9 @@ pub enum PlaybackRequest {
     /// the `Ctrl+W` chord's request, pressed on the header control.
     /// GUI-painted only.
     CloseQueue,
+    /// The canvas queue header's rename control: opens the shown local queue's
+    /// name for edit in the Queue chooser's rename draft. GUI-painted only.
+    RenameQueue,
     /// One entry of the open Queue chooser (task 8.3 of `gui-named-queues`): the
     /// entry's painted identity — a local Named queue, or `None` for the
     /// connected peer Player owner — so the press shows what the window painted

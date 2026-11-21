@@ -203,6 +203,10 @@ pub enum QueueTargetId {
     /// closes the shown entry, as `Ctrl+W` does. The control reports no region
     /// while it is disabled — the only local queue has no close.
     CloseQueue,
+    /// The queue header's rename control: a press opens the shown local
+    /// queue's name for edit, as a new queue's name opens. The control reports
+    /// no region while the shown entry is not a local queue.
+    RenameQueue,
     /// One entry of the open Queue chooser that is a local Named queue
     /// (gui-named-queues task 8.3): the number is `NamedQueueId::raw`. A press
     /// shows that queue, as the chooser's Enter does, and starts, stops, and

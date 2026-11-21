@@ -337,6 +337,9 @@ pub struct GuiQueueHeaderFacts {
     /// close (spec `gui-queue-chooser` "The close control closes the shown
     /// entry").
     pub close_disabled: bool,
+    /// Whether the rename control is disabled: only a shown local queue has a
+    /// name to edit.
+    pub rename_disabled: bool,
 }
 
 impl GuiQueueSummary {
@@ -365,6 +368,7 @@ impl GuiQueueSummary {
                 shown_name: header.shown_name.clone(),
                 shown_len: header.shown_len,
                 close_disabled: header.close_disabled,
+                rename_disabled: header.rename_disabled,
             },
         }
     }

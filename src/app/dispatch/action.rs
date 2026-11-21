@@ -167,6 +167,9 @@ pub enum PanelIntent {
     /// header's close press, which run one core path: close the shown entry,
     /// with the confirmation only the playing current queue asks for.
     RequestCloseQueue,
+    /// The rename control: the header's rename press, which opens the shown
+    /// local queue's name for edit in the Queue chooser's rename draft.
+    RequestRenameQueue,
     /// The playback-target chooser (add-tauri-gui-client row 6.4): the GUI-
     /// only `r` chord's open/close of the Client-core overlay the header's
     /// target press also toggles. GUI-only: the TUI's counterpart is the
@@ -412,6 +415,7 @@ impl App {
             // move here.
             PanelIntent::RequestNewQueue => self.request_new_gui_queue(),
             PanelIntent::RequestCloseQueue => self.request_close_shown_queue(),
+            PanelIntent::RequestRenameQueue => self.request_rename_shown_queue(),
             PanelIntent::MoveQueueRow(_) => {}
         }
     }

@@ -119,6 +119,7 @@ fn several_entries_paints_the_switcher_with_the_shown_name_and_the_close_control
             RegionTarget::Queue(QueueTargetId::QueueChooser),
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::CloseQueue),
+            RegionTarget::Queue(QueueTargetId::RenameQueue),
             RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
         ]

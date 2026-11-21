@@ -44,7 +44,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::window::components::queue_panel::geometry::{CONTROL_PX, HEADER_HEIGHT_PX};
 use crate::window::components::queue_target_control::QueueTargetControl;
-use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
+use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, SquarePen, X};
 use crate::window::layout::region_set::MarkHandler;
 use crate::window::theme::{EfToken, ef_var};
 
@@ -89,6 +89,10 @@ pub struct QueueHeaderProps {
     /// `closeQueue` region reads. The panel passes none while the control is
     /// disabled, so the control attaches no `onmounted` and reports nothing.
     pub close: Option<MarkHandler>,
+    /// The rename control's mark — the closure that records the handle the
+    /// `renameQueue` region reads. The panel passes none while the shown entry
+    /// is no local queue, so the control reports nothing then.
+    pub rename: Option<MarkHandler>,
     /// The open Queue chooser's dropdown, built by `QueuePanel` and placed in
     /// the switcher's anchor (design D8). The header carries no chooser facts.
     pub children: Element,
@@ -104,6 +108,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     let filter = props.filter;
     let new_queue = props.new_queue;
     let close = props.close;
+    let rename = props.rename;
     let chooser_open = props.chooser_open;
     let title = if summary.header.shown_name.is_empty() {
         DEFAULT_TITLE.to_owned()
@@ -254,6 +259,42 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     "data-close-queue": "",
                     disabled: true,
                     X {
+                        size: 16,
+                        stroke_width: 1.6,
+                    }
+                }
+            }
+            // The rename control: a press opens the shown local queue's name
+            // for edit, in the draft a new queue's name opens in. It is
+            // disabled while the shown entry is the peer, which has no name to
+            // edit, and — like the close control — attaches its mark only while
+            // it acts.
+            if let Some(rename_mark) = rename {
+                button {
+                    "type": "button",
+                    class: "{ICON_BUTTON_CLASS}",
+                    style: "{icon_button_style} opacity: 1;",
+                    title: "Rename queue",
+                    "aria-label": "Rename queue",
+                    "aria-disabled": "false",
+                    "data-rename-queue": "",
+                    onmounted: rename_mark,
+                    SquarePen {
+                        size: 16,
+                        stroke_width: 1.6,
+                    }
+                }
+            } else {
+                button {
+                    "type": "button",
+                    class: "{ICON_BUTTON_CLASS}",
+                    style: "{icon_button_style} opacity: 0.4;",
+                    title: "Rename queue",
+                    "aria-label": "Rename queue",
+                    "aria-disabled": "true",
+                    "data-rename-queue": "",
+                    disabled: true,
+                    SquarePen {
                         size: 16,
                         stroke_width: 1.6,
                     }

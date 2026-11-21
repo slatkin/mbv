@@ -325,6 +325,7 @@ fn fresh_summary() -> GuiQueueSummary {
             shown_name: String::new(),
             shown_len: 0,
             close_disabled: true,
+            rename_disabled: true,
         },
     }
 }

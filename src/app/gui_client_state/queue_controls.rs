@@ -117,6 +117,18 @@ impl App {
         }));
     }
 
+    /// The rename control: open the shown local queue's name for edit, in the
+    /// draft a new queue's name opens in. The peer entry has no name to edit,
+    /// so it does nothing there, as the disabled control does.
+    pub(in crate::app) fn request_rename_shown_queue(&mut self) {
+        if !self.gui_client {
+            return;
+        }
+        if let Some(ShownEntry::Local(queue)) = self.gui_shown_entry {
+            self.open_new_queue_rename(queue);
+        }
+    }
+
     /// The close control (design D8, spec `gui-queue-chooser` "The close
     /// control closes the shown entry"): it acts on the shown entry. A peer
     /// entry disconnects without touching the peer's playback, and a local

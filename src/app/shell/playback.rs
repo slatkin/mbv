@@ -121,6 +121,7 @@ impl crate::app::App {
                 self.dispatch_panel(PanelIntent::ToggleQueueChooser);
             }
             PlaybackRequest::NewQueue => self.dispatch_panel(PanelIntent::RequestNewQueue),
+            PlaybackRequest::RenameQueue => self.dispatch_panel(PanelIntent::RequestRenameQueue),
             PlaybackRequest::CloseQueue => self.dispatch_panel(PanelIntent::RequestCloseQueue),
             // One Queue chooser entry's press (task 8.3 of `gui-named-queues`):
             // the entry the window painted, shown through the same path the

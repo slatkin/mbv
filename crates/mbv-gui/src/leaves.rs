@@ -199,6 +199,9 @@ impl<'a> QueueLeaf<'a> {
             // The queue header's close control (design D9): the same request
             // `Ctrl+W` dispatches. A disabled control reports no region, so a
             // press never reaches this arm.
+            RegionTarget::Queue(QueueTargetId::RenameQueue) => {
+                Some(Msg::Playback(PlaybackRequest::RenameQueue))
+            }
             RegionTarget::Queue(QueueTargetId::CloseQueue) => {
                 Some(Msg::Playback(PlaybackRequest::CloseQueue))
             }

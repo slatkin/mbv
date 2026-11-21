@@ -32,6 +32,9 @@ pub struct QueueHeaderProjection {
     /// close, and no entry has arrived to close yet. A shown peer entry is
     /// always closable, because closing it disconnects.
     pub close_disabled: bool,
+    /// Whether the rename control is disabled: only a shown local queue has a
+    /// name to edit.
+    pub rename_disabled: bool,
 }
 
 /// The canvas panel's collapse and queue-fold facts (design D10): the front
@@ -215,6 +218,7 @@ impl App {
                 .unwrap_or_default(),
             shown_len: self.displayed_queue().total_queue_len(),
             close_disabled: self.gui_close_disabled(),
+            rename_disabled: !matches!(self.gui_shown_entry, Some(ShownEntry::Local(_))),
         }
     }
 

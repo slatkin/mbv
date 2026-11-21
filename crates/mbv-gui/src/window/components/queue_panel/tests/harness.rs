@@ -84,6 +84,7 @@ pub(super) fn summary() -> GuiQueueSummary {
             shown_name: "Default".to_owned(),
             shown_len: 26,
             close_disabled: true,
+            rename_disabled: true,
         },
     }
 }
@@ -97,6 +98,7 @@ pub(super) fn several_entries() -> GuiQueueSummary {
             shown_name: "Kids".to_owned(),
             shown_len: 4,
             close_disabled: false,
+            rename_disabled: false,
         },
         ..summary()
     }
@@ -111,6 +113,7 @@ pub(super) fn chooser_summary() -> GuiQueueSummary {
             shown_name: "Kids".to_owned(),
             shown_len: 4,
             close_disabled: false,
+            rename_disabled: false,
         },
         ..summary()
     }
