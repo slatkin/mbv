@@ -13,37 +13,35 @@ use crate::bridge::frame::settings::GuiSettingsContent;
 use crate::bridge::frame::settings::keys::{GuiSettingsKeyRefusal, GuiSettingsKeyRow};
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
 use crate::window::components::settings_card::SettingsCard;
-use crate::window::components::settings_screen::settings_section_view;
-use crate::window::sections::Sections;
+use crate::window::components::settings_screen::{
+    SETTINGS_PANES_GRID_STYLE, SettingsPaneScaffold, settings_pane,
+};
 use crate::window::settings::entries::entry_id;
-use crate::window::settings::state::{Capture, SettingsState};
+use crate::window::settings::state::Capture;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The one Keys pane.
 #[component]
 pub fn SettingsKeys() -> Element {
-    let sections = consume_context::<Sections>();
-    let settings = consume_context::<SettingsState>();
-    let Some(view) = settings_section_view(&sections, &settings) else {
+    let Some(SettingsPaneScaffold {
+        settings,
+        frame,
+        onpress,
+        cursor_id,
+        ..
+    }) = settings_pane()
+    else {
         return rsx! {};
     };
     let GuiSettingsContent::Keys {
         prefix,
         rows,
         refusal,
-    } = &view.frame.content
+    } = &frame.content
     else {
         return rsx! {};
     };
 
-    // A press on a chord, a reset, or a clear: the entry's activation, the
-    // same one the keyboard's Enter runs.
-    let press_settings = settings.clone();
-    let press_entries = view.entries;
-    let onpress = Callback::new(move |id: String| {
-        press_settings.press_settings_entry(&press_entries, &id);
-    });
-    let cursor_id = view.cursor_id.clone();
     let capture = settings.ui.cloned().capture;
 
     // The rows grouped into one card per section, in the frame's order (the
@@ -59,7 +57,7 @@ pub fn SettingsKeys() -> Element {
     rsx! {
         div {
             class: "grid",
-            style: "grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start;",
+            style: SETTINGS_PANES_GRID_STYLE,
             "data-settings-keys": "",
             SettingsCard {
                 title: Some("Prefix chord".to_owned()),

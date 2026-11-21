@@ -35,7 +35,9 @@ use crate::bridge::settings::GuiSettingsCommand;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
 use crate::window::components::settings_card::SettingsCard;
 use crate::window::components::settings_field::SettingsField;
-use crate::window::components::settings_screen::settings_section_view;
+use crate::window::components::settings_screen::{
+    SETTINGS_PANES_GRID_STYLE, SettingsPaneScaffold, settings_pane,
+};
 use crate::window::components::settings_state_pill::SettingsStatePill;
 use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
@@ -45,28 +47,26 @@ use crate::window::settings::state::{SettingsForm, SettingsState, submit_setting
 /// The one Services pane.
 #[component]
 pub fn SettingsServices() -> Element {
-    let sections = consume_context::<Sections>();
-    let settings = consume_context::<SettingsState>();
-    let Some(view) = settings_section_view(&sections, &settings) else {
+    let Some(SettingsPaneScaffold {
+        sections,
+        settings,
+        frame,
+        onpress,
+        cursor_id,
+        ..
+    }) = settings_pane()
+    else {
         return rsx! {};
     };
-    let GuiSettingsContent::Services { services, setup } = &view.frame.content else {
+    let GuiSettingsContent::Services { services, setup } = &frame.content else {
         return rsx! {};
     };
     let ui = settings.ui.cloned();
 
-    // A press on an action button: the entry's activation, the same one the
-    // keyboard's Enter runs.
-    let press_settings = settings.clone();
-    let press_entries = view.entries;
-    let onpress = Callback::new(move |id: String| {
-        press_settings.press_settings_entry(&press_entries, &id);
-    });
-
     rsx! {
         div {
             class: "grid",
-            style: "grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start;",
+            style: SETTINGS_PANES_GRID_STYLE,
             "data-settings-services": "",
             for service in services {
                 {
@@ -101,7 +101,7 @@ pub fn SettingsServices() -> Element {
                                                 key: "{id}",
                                                 variant: action_variant(action.intent),
                                                 entry: Some(id.clone()),
-                                                cursor: view.cursor_id.as_deref() == Some(id.as_str()),
+                                                cursor: cursor_id.as_deref() == Some(id.as_str()),
                                                 onpress: Some(Callback::new(move |()| action_press.call(id.clone()))),
                                                 "{action.label}"
                                             }

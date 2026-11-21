@@ -24,22 +24,27 @@ use crate::window::components::settings_card::SettingsCard;
 use crate::window::components::settings_checkbox_grid::{CheckboxOption, SettingsCheckboxGrid};
 use crate::window::components::settings_pick_button::SettingsPickButton;
 use crate::window::components::settings_row::SettingsRow;
-use crate::window::components::settings_screen::{section_label, settings_section_view};
+use crate::window::components::settings_screen::{
+    SETTINGS_PANES_GRID_STYLE, SettingsPaneScaffold, section_label, settings_pane,
+};
 use crate::window::components::settings_switch::SettingsSwitch;
-use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
-use crate::window::settings::state::SettingsState;
 
 /// The one rows pane.
 #[component]
 pub fn SettingsRows() -> Element {
-    let sections = consume_context::<Sections>();
-    let settings = consume_context::<SettingsState>();
-    let Some(view) = settings_section_view(&sections, &settings) else {
+    let Some(SettingsPaneScaffold {
+        settings,
+        frame,
+        onpress,
+        cursor_id,
+        ..
+    }) = settings_pane()
+    else {
         return rsx! {};
     };
-    let rows = content_rows(&view.frame.content);
-    let label = section_label(view.frame.section);
+    let rows = content_rows(&frame.content);
+    let label = section_label(frame.section);
 
     // The rows one card holds as setting rows: a toggle, a cycle, a pick, or
     // an info row; the action rows, which the canvas paints as buttons; and
@@ -65,19 +70,10 @@ pub fn SettingsRows() -> Element {
         .filter(|row| row.kind == GuiSettingRowKind::ChoiceList)
         .collect();
 
-    // A press on any control of this pane: the entry's activation through
-    // the section's full entry list, the same one the keyboard's Enter runs.
-    let press_settings = settings.clone();
-    let press_entries = view.entries;
-    let onpress = Callback::new(move |id: String| {
-        press_settings.press_settings_entry(&press_entries, &id);
-    });
-    let cursor_id = view.cursor_id;
-
     rsx! {
         div {
             class: "grid",
-            style: "grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start;",
+            style: SETTINGS_PANES_GRID_STYLE,
             "data-settings-rows": "",
             if !setting_rows.is_empty() {
                 SettingsCard {
