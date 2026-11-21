@@ -5,7 +5,7 @@
 See proposal.md (Why) for the motivation. The facts that shape the approach:
 
 - **Region reports.** Eleven components in `crates/mbv-gui/src/window/components/` each hold one or more `LayoutKey`s (`layout.rs:226`). Each holds one `Signal<Option<Event<MountedData>>>` per control, or a `Vec` of row handles. Each runs one effect that reads its sections and the `LayoutEpoch`, spawns one task that calls `element_region` (`layout.rs:430`) for each handle, and then calls `report_layout`. Each retracts in `use_drop`. `queue_panel.rs` holds three keys. `queue_target_control.rs`, `queue_playback_panel.rs`, and `track_chips.rs` hold two. The extra keys exist only so a popover's rows merge after the content under them. The reporter merges in first-push order, and the last push wins in the hit map. A popover's key retracts while the popover is closed, so each open pushes it at the end again. One task reports the base key and then the popover key, in that order. `track_chips.rs`, `confirm_overlay.rs`, and `daemon_lost_overlay.rs` trigger the report through `use_reactive` on props. The others read signals in `use_effect`.
-- **Popovers.** The four popovers (`QueueRowMenu`, `QueueChooserMenu`, `TargetChooserPopover`, `TrackPopoverList`) are presentation-only. Each takes a `row_slot: Signal<Vec<Option<Event<MountedData>>>>` that it fills with `record_row_handle` (`row_handle.rs:12`). The parent truncates that list and reports it under its second key. Their card styles, anchors, and row heights all differ (40, 34, 36, and 16 px rows; three different card token sets). `record_row_handle` has no callers other than these four.
+- **Popovers.** The four popovers (`QueueRowMenu`, `QueueChooserMenu`, `TargetChooserPopover`, `TrackPopoverList`) are presentation-only. Each takes a `row_slot: Signal<Vec<Option<Event<MountedData>>>>` that it fills with `record_row_handle` (`row_handle.rs:12`). The parent truncates that list and reports it under its second key. Their card styles, anchors, and row heights all differ (40, 34, 36, and 16 px rows; three different card token sets). `record_row_handle` has no callers other than these four. `QueueRowMenu` also serves five menus the window owns — the Library item menu (`library_panel.rs`), the Hero menu (`library_hero.rs`), the Playlists menu (`playlists_panel.rs`), the Settings pick (`settings_pick_button.rs`), and the Feed kind menu (`settings_feeds.rs`) — whose rows never reported: they pass `row_slot` only because the prop is required, nothing reads those signals, and their entries' presses run `on_select`, never the hit map.
 - **Dialogs.** `confirm_overlay.rs` and `daemon_lost_overlay.rs` repeat the same scrim, card, button row, button fill, `HashMap` of button handles, and region report. Only the padding, gap, maximum width, and button text size differ (19/14/398/14 against 16/12/420/12).
 - **Lettered lists.** Emby, Audiobooks, Podcasts, and Feeds repeat each layer:
   - The list component: `components/library_{emby,audiobooks,podcasts,feeds}_list.rs`, 210 to 247 lines.
@@ -45,13 +45,15 @@ New child module `crates/mbv-gui/src/window/layout/region_set.rs`. Its interface
 - `RegionSet::mark(target) -> impl FnMut(Event<MountedData>)` serves the base contribution.
 - `RegionSet::mark_over(i, target)` serves overlay contribution `i` (`i < overlays`).
 - `RegionSet::mark_list(list: ListId, whole_rows: fn(f32) -> usize)` serves the one measured list (the queue). It reports `ListRows { list, whole_rows: whole_rows(height) }`.
-- `RegionSet` is `Clone` and `PartialEq` (it compares the base key), so a popover can take it as a prop.
+- `RegionSet` is `Clone`. The `mark*` calls return `EventHandler`s, so a mark's closure can pass to a child component as a prop.
 
 How the set works:
 
-- **At render.** The hook call at the top of the component body marks a new render and clears the "painted this render" list. Each `mark*` call during render appends its target to that list, and the closure it returns stores the element's handle under that target. Both live in one `CopyValue`, which is not reactive, so a mark never triggers a render and no `Rc` is necessary.
+- **At render.** The hook call at the top of the component body marks a new render and clears the "painted this render" list. Each `mark*` call during render appends its target to that list, and the closure it returns stores the element's handle under that target. Both live in one `CopyValue`, which is not reactive, so a mark never triggers a render and no `Rc` is necessary. Marks run in the surface-owner's own render — inline in its `rsx` or in `let`s before it — in today's report order. A child component never calls `mark`: Dioxus memoizes a child whose props compare equal, and a child's render runs after its parent's, so a mark inside a child could be skipped while its element still paints — the open popover's key would retract — or land after the parent's own marks. For an element a child owns, the owner calls `mark` and passes the closure to the child as a prop — the queue header's four controls, the playback stage's and scrubber's controls, and the popovers' rows all work this way. A mark keeps today's paint-vs-report gates: a control that claims no pointer today is marked only while it acts — the queue header's close control is marked only while `close_disabled` is false.
 - **The report task.** One effect spawns one task. The task resolves the painted targets of the base, in mark order, and reports them under the base key. Then it does the same for each overlay key in index order. A base with no marks still reports its empty contribution, as `folded_queue` does today. An overlay with no marks retracts its key, as each popover's key does today when it closes, so a popover that opens again pushes at the end, as now. The task also drops stored handles whose targets were not painted in the latest render.
 - **Retract.** `use_drop` retracts every key of the set.
+
+`mark`, `mark_over`, and `mark_list` are new vocabulary beside the multi-selection *Mark* (`CONTEXT.md`): the region-set sense records there with the change (task 2.9).
 
 Why this preserves behaviour: the trigger signals, the task count (one), the key creation order (hook order), the first-push timing, and the mark order are each equal to today's. Before a migration, each surface's current region order is compared with its `rsx` order. Where overlapping regions (the queue row and its grip and actions, the art stage and the transport controls) are pushed in an order other than paint order today, the surface marks in today's order.
 
@@ -61,9 +63,11 @@ Alternatives considered:
 - A key reserved at hook time. It was rejected because the popover would then merge under surfaces that are created after its parent.
 - Measuring every render. It was rejected because playhead re-renders would add `element_region` calls.
 
-### D2. Popovers take the parent's region set
+### D2. Popovers take the owner's mark closures
 
-Each of the four popovers replaces its `row_slot` prop with `regions: RegionSet` plus its overlay index, and marks its rows with `mark_over`. Each parent drops its second and third keys, its row-handle `Vec`s, its truncation code, and its popover report block. `row_handle.rs` is deleted. The look, the anchor, and the row paint of each popover stay in its own module.
+Each of the four popovers replaces its `row_slot` prop with `row_marks: Vec<EventHandler<MountedData>>` — the mark closures the owner produced by calling `mark_over` at the popover's position in its `rsx`, one per painted row in row order. The owner computes each row's target exactly as it maps index to target today. Each parent drops its second and third keys, its row-handle `Vec`s, its truncation code, and its popover report block. The look, the anchor, and the row paint of each popover stay in its own module.
+
+`QueueRowMenu` also serves the five menus whose rows never reported (the Context's popover note), so its `row_slot` stays beside `row_marks` as an `Option` (`#[props(into)]`, so the unmigrated call sites compile): a row uses its `row_marks` entry when the vector reaches it and records into `row_slot` otherwise. `row_slot` and `row_handle.rs` go when the last caller flips.
 
 Alternative considered: one popover module with the look as parameters. It was rejected because, once D1 is in place, only chrome strings and row painters would stay, and they all differ, so the module would be shallow.
 
@@ -121,14 +125,51 @@ The proposed `FlatSource` pipeline in `src/app/gui_library` is dropped. The comm
 
 No test is new in kind, and the test line count goes down.
 
+### D11. One rows memo
+
+`window/library/row_memo.rs` holds one generic `RowsMemo<Row, Facts: PartialEq>`: one entry (the `libraryList` section revision, the facts, and the `Arc<[Row]>`), one `rows()` that keeps the `peek`-never-`read` hit test, and one `Debug` impl. The seven memo types become typed uses of it, and `LibraryState`'s memo fields keep their names. The lettered four migrate beside the generic row model D4 builds.
+
+Alternative considered: a trait the per-list memos implement. It was rejected because the entry is one struct and the trait would only restate the hit test.
+
+### D12. Hero actions through the destination's commands
+
+After D4's command methods, each Hero's Play, Play next, and Add to queue buttons call the destination's command methods through `LibraryState`, passing the frame's selected row as the item id. The five private `Action` enums and `act` functions go, and the Emby Hero's inline selection guard becomes the shared `selected_with_hero`. The `IMDb` link and the chapter and episode Workspace plays stay in their Heroes: they name no destination command method.
+
+Alternative considered: keeping the per-Hero `act`s. It was rejected because each would hold the same command mapping the destination's command methods already hold.
+
+### D13. One Settings pane scaffold
+
+`settings_screen.rs` owns the panes' shared prologue: one read that consumes the two contexts, guards the `settings_section_view`, builds the `onpress` over `press_settings_entry`, and yields the cursor id, beside one two-column grid constant. The six panes keep their content matches and their bodies. One setup-form builder over a field list — the label, the secret flag, and the update closure — replaces `emby_form` and `audiobookshelf_form`; `form_actions` stays the actions' one home.
+
+### D14. The shared list wiring serves every list
+
+The wiring the lettered component absorbs for the four lettered lists — the measure, scroll, and rows-in-view callbacks, the `library_virtual_list` call, the header block, and the notices block — becomes one scaffold beside `library_virtual_list.rs`, and Music, Home, and Shows call it with their own row painters and header facts. Their row models, headers, and notices stay per destination, exactly as D4 keeps their modules: this shares the wiring, not the list.
+
+Alternative considered: leaving the three hand-wired. It was rejected because the wiring is the same shape in every list, and the next destination would copy it a seventh time.
+
+### D15. Small rules
+
+- `GuiArtRef::src()` in `art.rs` replaces the two `art_src` copies.
+- One `PrefixBadge` part (`window/components/prefix_badge.rs`) replaces the three badge paints; each surface keeps its own data attribute.
+- The Shows view dropdown owns its open fact: `LibraryUiState` gains `shows_view_open` with its own toggle and close, and every path that closes the popover through the shared fact today closes it through its own: the root's every-press (`window/app.rs`), the Library panel's inside-press (`press_in_panel` in `window/components/library_panel.rs`), the Shows Hero's inside-press (`window/components/library_shows_hero.rs`), and Esc — `route_open_field_key` (`window/library/keys.rs`) gains a `shows_view_open` arm that closes on Esc and takes no typed key, as its seasons arm does. The two shows-view keys tests (`window/library/keys/tests/collections.rs`) follow the new fact, so they keep guarding the real popover. The collections' open fact names the collection dropdowns alone again, so every window-owned dropdown owns its open fact, as the seasons dropdown already does.
+- `apply_batch` writes `connected` only on the false-to-true flip, so a batch the root does not read re-renders only its own readers. No paint, reported region, or command changes; only the root's re-render count goes down.
+- The `KeyRoute` doc's repeated sentences go, and `LibraryScrolls::Debug` names every store.
+
+### D16. The icons macro
+
+One declarative macro in `icons.rs` generates each `#[component]` from its name, its aliases, and its path children. `icon_shell` and the painted output stay identical, so the class-list tests stay green with no edit. This workstream rides last: it is the least valuable of the set, and it only rewrites a frozen vendored port.
+
 ## Risks / Trade-offs
 
 - [Region order changes for overlapping regions] → Each migration compares the effect's push order with the `rsx` mark order before the edit and keeps today's order. The existing region tests (`queue_panel/tests/regions.rs`, `track_chips/tests.rs`, `queue_footer/tests.rs`, and the dialog and attach suites) must pass without edits to their expected targets.
-- [A popover renders without its parent] → The painted list clears only at the parent's hook call, and a mark whose target is already in the list is a no-op. So a render of only the child can only re-add targets, never drop them. That is the same as today's grow-only `record_row_handle` between two parent renders.
+- [A popover child skips or lags its parent's render] → No mark runs inside a child (D1): Dioxus memoizes a child whose props compare equal, and a child's render runs after its parent's, so a mark inside a child could be skipped while its element still paints — the open popover's key would retract — or land after the parent's own marks. The owner calls `mark_over` at the popover's rsx position instead, so a painted popover's rows always record and a closed popover's always retract, as today.
 - [The generic list moves a paint difference] → Each adapter's row painter is the destination's current paint code, moved unchanged. Tests that assert painted text and attributes stay green with no change to their expectations.
 - [This overlaps the open change `gui-playlists-in-queue-column`] → Implementation of this change starts after that change merges (it edits `queue_playback_panel.rs`, `panel.rs`, `app.rs`, and `library/keys.rs`).
-- [800-line limit] → No file in this change grows. `queue_panel.rs` and `core_thread.rs` shrink.
+- [The generic memo moves a hit test] → The hit test and the `peek` rule move unchanged into the one entry; every list suite that asserts rows stays green with no edit.
+- [A Hero button changes its command] → Each button sends the command its Hero sends today for the same frame; the Hero suites stay green with no edit to their expected commands.
+- [The `connected` flip changes rendering] → No paint, reported region, or command changes; only the root's re-render count on batches the root does not read goes down. The window suites stay green.
+- [800-line limit] → No file in this change grows. `queue_panel.rs`, `core_thread.rs`, `settings_services.rs`, and `icons.rs` shrink.
 
 ## Migration Plan
 
-This is a refactor in the window and the core thread only. Each task group is a commit series that can be reverted on its own. Nothing persists, nothing goes on the wire, and no config changes, so no migration or rollback step is necessary beyond a revert.
+This is a refactor in `crates/mbv-gui` only. Each task group is a commit series that can be reverted on its own. Nothing persists, nothing goes on the wire, and no config changes, so no migration or rollback step is necessary beyond a revert.
