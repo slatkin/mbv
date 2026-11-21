@@ -70,7 +70,7 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 ## 11. Integration checks
 
-- [ ] 11.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `cargo nextest run --release --test-threads=4` in the foreground. Verify that all three pass.
+- [x] 11.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `cargo nextest run --release --test-threads=4` in the foreground. Verify that all three pass.
 
 ## Workflow follow-up
 
