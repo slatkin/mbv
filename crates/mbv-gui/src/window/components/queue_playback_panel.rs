@@ -80,15 +80,6 @@ fn kind_icon(kind: NowPlayingMediaKind) -> Element {
     }
 }
 
-/// The URL the artwork reference names, `None` while it names none (a
-/// `loading` reference paints no `img`, so no art answer can land for it).
-fn art_src(art: Option<&GuiArtRef>) -> Option<String> {
-    match art {
-        Some(GuiArtRef::Image { src } | GuiArtRef::Placeholder { src }) => Some(src.clone()),
-        Some(GuiArtRef::Loading) | None => None,
-    }
-}
-
 /// The artwork the stage paints: `Some` for the two states that carry a media
 /// box, `None` for the states that paint the no-image column (design D6).
 fn stage_art(art: Option<&GuiArtRef>) -> Option<GuiArtRef> {
@@ -174,7 +165,8 @@ pub fn QueuePlaybackPanel() -> Element {
         // loaded size moves the rows beside it. The load answers ride the art
         // store (D7), so subscribing to the painted URL's answer covers the
         // load and the swap.
-        let _art = art_events.status(&art_src(playback.artwork.as_ref()).unwrap_or_default());
+        let src = playback.artwork.as_ref().and_then(GuiArtRef::src);
+        let _art = art_events.status(src.unwrap_or_default());
     });
 
     let playback = sections.playback.cloned();
