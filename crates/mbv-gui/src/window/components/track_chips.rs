@@ -24,12 +24,16 @@
 //!
 //! The audio chip reports `audioChip` and the subtitle chip `subtitleChip`;
 //! the video chip is label-only (the D4a ruling) and reports no region. The
-//! open popover's rows report their `trackPopoverChoice` indices under a
-//! second report key, first inserted when the popover opens: a child
-//! component's mount effect runs before the panel's, so the chips' key
-//! lands before the transport's regions in the merged report, and only a
-//! key inserted after them puts the rows last — the hit map's last push
-//! wins where a row paints over the transport band beneath it. A press on a
+//! row owns one region set: the two chips are its base contribution, and the
+//! open popover's rows report their `trackPopoverChoice` indices under its one
+//! overlay key, first inserted when the popover opens, so the rows land after
+//! the row's own regions and after every key created before them in the merged
+//! report — the hit map's last push wins where a row paints over the transport
+//! band beneath it. The row marks in its own render and passes the row closures
+//! to the presentation-only popover as props: the report re-runs on the row's
+//! props and on the layout epoch, as the former `use_reactive` effect did. A
+//! closed popover marks no row, so the overlay retracts and a stale row never
+//! keeps swallowing presses on the surfaces beneath it. A press on a
 //! chip or a row forwards `pointer` like every other pointer event; the
 //! core resolves it against the hit map.
 
@@ -38,12 +42,9 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiTrackChipKind, GuiTrackPopoverChoice};
 use crate::bridge::frame::playback::{GuiTrackChip, GuiTrackChips};
 use crate::bridge::frame::theme::GuiRole;
-use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
-use crate::window::components::row_handle::record_row_handle;
+use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::icons::{AudioLines, Captions, Check, MonitorPlay};
-use crate::window::layout::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
-};
+use crate::window::layout::region_set::{MarkHandler, RegionSet, use_region_set_for};
 use crate::window::theme::{canvas_var, role_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -78,6 +79,20 @@ fn open_popover(overlay: Option<&GuiOverlayFrame>) -> OpenPopover {
         }) => Some((*chip, *cursor, choices.clone())),
         _ => None,
     }
+}
+
+/// The open popover's row marks (design D1, D2): the set's one overlay, one
+/// mark per painted row in row order — each row's `trackPopoverChoice` index is
+/// its region target. A closed popover marks none, so its overlay retracts.
+fn mark_popover_rows(region_set: &RegionSet, count: usize) -> Vec<MarkHandler> {
+    (0..count)
+        .map(|index| {
+            region_set.mark_over(
+                0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TrackPopoverChoice(index)),
+            )
+        })
+        .collect()
 }
 
 /// The label a chip paints: the chosen choice's label; `Off` while the
@@ -115,102 +130,28 @@ fn audio_chip_text(chips: &GuiTrackChips) -> String {
 /// epoch re-reports on every layout change (D9).
 #[component]
 pub fn TrackChips(props: TrackChipsProps) -> Element {
-    let reporter = consume_context::<LayoutReporter>();
-    let epoch = consume_context::<LayoutEpoch>();
-    let key = use_hook(LayoutKey::next);
-    let popover_key = use_hook(LayoutKey::next);
-
-    let mut audio_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut subtitle_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The open popover's painted rows, by their choice index (the former client
-    // `querySelectorAll('[data-popover-row]')`).
-    let popover_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
-
-    // No region outlives the row: the contributions retract on unmount, as
-    // the former client `onMount` teardown did.
-    let mut drop_reporter = reporter.clone();
+    // Each paint that moved a region reports (design D1): the region set's one
+    // effect re-runs on the same dependency tuple the row gave `use_reactive`
+    // — the chips and the overlay frame — and on the layout epoch through the
+    // set's own read. The two chips are the base contribution; the open
+    // popover's rows are overlay 0, so they land last in the merged report.
+    let region_set = use_region_set_for(1, (&props.chips.clone(), &props.overlay.clone()));
 
     let popover = open_popover(props.overlay.as_ref());
-
-    // Each paint that moved a region reports (design D4): the frame's chips
-    // and overlay re-run the report — the popover's key retracts while none
-    // is open, and a closed popover or a shrinking choice list drops the
-    // stale row handles. The row handles are read as peeks (the confirm
-    // modal's idiom): the effect's subscriptions are the reactive props and
-    // the layout epoch, so the clear's write cannot re-run it. The reporter
-    // dedupes an unchanged contribution.
-    use_effect(use_reactive(
-        (&props.chips.clone(), &props.overlay.clone()),
-        move |(_chips, overlay)| {
-            let _epoch = epoch.0.cloned();
-            let audio = audio_mounted.peek().cloned();
-            let subtitle = subtitle_mounted.peek().cloned();
-            let open = open_popover(overlay.as_ref());
-            let row_count = open.as_ref().map_or(0, |(_, _, choices)| choices.len());
-            let mut effect_reporter = reporter.clone();
-            let mut rows_signal = popover_rows;
-            spawn(async move {
-                if rows_signal.peek().len() > row_count {
-                    rows_signal.write().truncate(row_count);
-                }
-                let mut regions: Vec<LayoutRegion> = Vec::new();
-                for (mounted, id) in [
-                    (audio, QueuePlaybackTargetId::AudioChip),
-                    (subtitle, QueuePlaybackTargetId::SubtitleChip),
-                ] {
-                    if let Some(mounted) = mounted {
-                        regions.extend(
-                            element_region(&mounted, RegionTarget::QueuePlayback(id)).await,
-                        );
-                    }
-                }
-                effect_reporter.report_layout(
-                    key,
-                    LayoutContribution {
-                        lists: Vec::new(),
-                        regions,
-                    },
-                );
-                if open.is_some() {
-                    let rows = rows_signal.peek().clone();
-                    let mut popover_regions: Vec<LayoutRegion> = Vec::new();
-                    for (index, mounted) in rows.iter().enumerate() {
-                        if let Some(mounted) = mounted {
-                            popover_regions.extend(
-                                element_region(
-                                    mounted,
-                                    RegionTarget::QueuePlayback(
-                                        QueuePlaybackTargetId::TrackPopoverChoice(index),
-                                    ),
-                                )
-                                .await,
-                            );
-                        }
-                    }
-                    effect_reporter.report_layout(
-                        popover_key,
-                        LayoutContribution {
-                            lists: Vec::new(),
-                            regions: popover_regions,
-                        },
-                    );
-                } else {
-                    effect_reporter.retract_layout(popover_key);
-                }
-            });
-        },
-    ));
-
-    use_drop(move || {
-        drop_reporter.retract_layout(key);
-        drop_reporter.retract_layout(popover_key);
-    });
 
     // The chips carry no data while the local player is inactive: the row
     // paints nothing then, as the status-indicator cluster does.
     let Some(chips) = props.chips.as_ref() else {
         return rsx! {};
     };
+    // The marks, in the report's order (design D1): the two chips first, as
+    // the former effect pushed them.
+    let audio_mark = region_set.mark(RegionTarget::QueuePlayback(
+        QueuePlaybackTargetId::AudioChip,
+    ));
+    let subtitle_mark = region_set.mark(RegionTarget::QueuePlayback(
+        QueuePlaybackTargetId::SubtitleChip,
+    ));
     let audio_open = popover
         .as_ref()
         .is_some_and(|(chip, _, _)| *chip == GuiTrackChipKind::Audio);
@@ -255,13 +196,18 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
                     style: "gap: calc(var(--mbv-cell-col) / 2); border-color: {chip_border(audio_open)}; background: {chip_fill(audio_open)}; color: {role_var(GuiRole::TextPrimary)};",
                     "aria-expanded": "{audio_open}",
                     "data-chip": "audio",
-                    onmounted: move |event| audio_mounted.set(Some(event)),
+                    onmounted: move |event| audio_mark.call(event),
                     AudioLines { size: 12, color: role_var(GuiRole::IndicatorAudioFg) }
                     span { "{audio_chip_text(chips)}" }
                 }
                 if audio_open {
                     if let Some((kind, cursor, choices)) = popover.clone() {
-                        TrackPopoverList { kind, cursor, choices, row_slot: popover_rows }
+                        {
+                            let row_marks = mark_popover_rows(&region_set, choices.len());
+                            rsx! {
+                                TrackPopoverList { kind, cursor, choices, row_marks }
+                            }
+                        }
                     }
                 }
             }
@@ -273,13 +219,18 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
                     style: "gap: calc(var(--mbv-cell-col) / 2); border-color: {chip_border(subtitles_open)}; background: {chip_fill(subtitles_open)}; color: {role_var(GuiRole::TextPrimary)};",
                     "aria-expanded": "{subtitles_open}",
                     "data-chip": "subtitles",
-                    onmounted: move |event| subtitle_mounted.set(Some(event)),
+                    onmounted: move |event| subtitle_mark.call(event),
                     Captions { size: 12, color: role_var(GuiRole::TextMuted) }
                     span { "{chip_label(&chips.subtitles, GuiTrackChipKind::Subtitles)}" }
                 }
                 if subtitles_open {
                     if let Some((kind, cursor, choices)) = popover.clone() {
-                        TrackPopoverList { kind, cursor, choices, row_slot: popover_rows }
+                        {
+                            let row_marks = mark_popover_rows(&region_set, choices.len());
+                            rsx! {
+                                TrackPopoverList { kind, cursor, choices, row_marks }
+                            }
+                        }
                     }
                 }
             }
@@ -288,7 +239,8 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
 }
 
 /// The track popover list's props: the chip kind the dialog names, the
-/// core's cursor row, and the live choice list.
+/// core's cursor row, the live choice list, and the marks of the rows the row
+/// reports.
 #[derive(Props, Clone, PartialEq)]
 struct TrackPopoverProps {
     /// Which chip's popover this is: the dialog's aria label names it.
@@ -298,9 +250,11 @@ struct TrackPopoverProps {
     /// The chip's choices, in the frame's order (the subtitle popover lists
     /// Off first).
     choices: Vec<GuiTrackPopoverChoice>,
-    /// The painted rows' mounted events, by their choice index — the handle
-    /// the parent's popover regions read.
-    row_slot: Signal<Vec<Option<Event<MountedData>>>>,
+    /// The painted rows' marks, in row order — the closures the row that owns
+    /// the popover produced with its region set's `mark_over`. A row takes its
+    /// own entry when the vector reaches it.
+    #[props(default)]
+    row_marks: Vec<MarkHandler>,
 }
 
 impl std::fmt::Debug for TrackPopoverProps {
@@ -316,7 +270,8 @@ impl std::fmt::Debug for TrackPopoverProps {
 /// The track popover (the Menus artboard): the core's live choice list in
 /// the canvas dialog below the chip, right-aligned, the chosen choice
 /// filled and checked at the row's trailing edge, and the cursor row's text
-/// highlighted. Each row reports its `trackPopoverChoice` index on mount.
+/// highlighted. Each row reports its `trackPopoverChoice` index on mount,
+/// through the mark the row that owns the popover handed down.
 #[component]
 fn TrackPopoverList(props: TrackPopoverProps) -> Element {
     let dialog_label = match props.kind {
@@ -357,8 +312,15 @@ fn TrackPopoverList(props: TrackPopoverProps) -> Element {
                             style: "height: 36px; padding: 0 10px; border-radius: 4px; font-size: 13px; background: {row_fill}; color: {row_color};",
                             "data-popover-row": "{index}",
                             onmounted: {
-                                let row_slot = props.row_slot;
-                                move |event| record_row_handle(row_slot, index, event)
+                                let row_mark = props.row_marks.get(index).copied();
+                                move |event| {
+                                    // The row that owns the popover marks this
+                                    // row: the closure records the handle its
+                                    // overlay region reads.
+                                    if let Some(mark) = row_mark {
+                                        mark.call(event);
+                                    }
+                                }
                             },
                             span {
                                 class: "flex min-w-0 flex-1 items-center",
