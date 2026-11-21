@@ -29,8 +29,8 @@
 //! effect runs before the parent's, so a child-held key would land first and
 //! the entries would lose to the regions beneath them. The window's own menus
 //! (the Library's item menu, the Hero's, the Playlists', the Settings pick and
-//! Feed kind) whose rows never reported record into the optional `row_slot`
-//! instead: their entries' presses run `on_select`, never the hit map.
+//! Feed kind) pass no marks and report nothing: their entries' presses run
+//! `on_select`, never the hit map.
 
 use std::fmt::Write as _;
 
@@ -39,7 +39,6 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
-use crate::window::components::row_handle::record_row_handle;
 use crate::window::layout::region_set::MarkHandler;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -85,11 +84,6 @@ pub struct QueueRowMenuProps {
     /// its own entry when the vector reaches it.
     #[props(default)]
     pub row_marks: Vec<MarkHandler>,
-    /// The painted rows' mounted events, by their row index — the slot a menu
-    /// whose rows never report records into. A row takes its `row_marks` entry
-    /// when the vector reaches it and records here otherwise.
-    #[props(default, into)]
-    pub row_slot: Option<Signal<Vec<Option<Event<MountedData>>>>>,
 }
 
 /// The painted hint: the canvas draws `⏎` where the core's hint chord is
@@ -152,7 +146,6 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                     let hint = entry.key_hint.as_deref().map(paint_hint);
                     let entry_index = entry.index.unwrap_or(index);
                     let row_mark = props.row_marks.get(index).copied();
-                    let row_slot = props.row_slot;
                     rsx! {
                         if entry.destructive {
                             // The canvas's divider above the destructive entry.
@@ -188,18 +181,13 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                                     on_select.call(entry_index);
                                 }
                             },
-                            onmounted: move |event| match row_mark {
+                            onmounted: move |event| {
                                 // The surface that owns the menu marks this row:
                                 // the closure records the handle its overlay
-                                // region reads.
-                                Some(mark) => mark.call(event),
-                                // A menu whose rows never report records the
-                                // handle for a parent that reads it, or for
-                                // none.
-                                None => {
-                                    if let Some(row_slot) = row_slot {
-                                        record_row_handle(row_slot, index, event);
-                                    }
+                                // region reads. A menu whose rows never report
+                                // passes no mark and records nothing.
+                                if let Some(mark) = row_mark {
+                                    mark.call(event);
                                 }
                             },
                             // The check entry's small box paints the state
