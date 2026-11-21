@@ -45,7 +45,7 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 ## 6. Hero actions
 
-- [ ] 6.1 Point each destination Hero's Play, Play next, and Add to queue buttons at the destination command methods task 4.3 gave the trait (design D12), passing the frame's selected row as the item id — Home's buttons call `LibraryState::{play_home_row, play_home_row_next, queue_home_row}` with the selected row's id frame (`library/home.rs`) — and delete the five private `Action` enums and `act` functions in `library_{emby,audiobooks,podcasts,feeds,home}_hero.rs`. Make the Emby Hero's inline selection guard call the shared `selected_with_hero`. The `IMDb` link and the chapter and episode Workspace plays stay in their Heroes. Verify: `cargo nextest run -p mbv-gui hero` passes with no edit to expected commands, and `rg -n "enum (Emby|Abs|Podcasts|Feeds|Home)Action" crates/mbv-gui/src` finds nothing.
+- [x] 6.1 Point each destination Hero's Play, Play next, and Add to queue buttons at the destination command methods task 4.3 gave the trait (design D12), passing the frame's selected row as the item id — Home's buttons call `LibraryState::{play_home_row, play_home_row_next, queue_home_row}` with the selected row's id frame (`library/home.rs`) — and delete the five private `Action` enums and `act` functions in `library_{emby,audiobooks,podcasts,feeds,home}_hero.rs`. Make the Emby Hero's inline selection guard call the shared `selected_with_hero`. The `IMDb` link and the chapter and episode Workspace plays stay in their Heroes. Verify: `cargo nextest run -p mbv-gui hero` passes with no edit to expected commands, and `rg -n "enum (Emby|Abs|Podcasts|Feeds|Home)Action" crates/mbv-gui/src` finds nothing.
 
 ## 7. Shared list wiring
 
