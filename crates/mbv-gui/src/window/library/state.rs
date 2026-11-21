@@ -15,7 +15,10 @@ use dioxus_native::prelude::*;
 use mbv::GuiCollections;
 use mbv::{GuiCollectionTarget, GuiListSort, GuiShowsView, GuiSortTarget};
 
-use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiLibraryDetail, GuiLibraryList};
+use crate::bridge::frame::library::{
+    GuiAudiobooksRowFrame, GuiCollectionsFrame as _, GuiEmbyRowFrame, GuiEntryRowFrame,
+    GuiLibraryDetail, GuiLibraryList,
+};
 use crate::bridge::library::{GuiLibraryCommand, GuiRowArtScopeFrame};
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
@@ -24,8 +27,12 @@ use crate::window::sections::Sections;
 
 use std::sync::Arc;
 
+use super::home_list::HomeListRow;
+use super::lettered::LetteredItemRow;
+use super::list::{LetteredRow, LibraryRow, MusicRowsFacts};
 use super::row_memo::RowsMemo;
 use super::scroll::{ListScroll, initial_list_scroll, reset_scroll_top};
+use super::shows_list::{ShowsListRow, ShowsRowsFacts};
 
 /// The right-click item menu's facts (`state.ts`'s `rowMenu`): the row a row
 /// right-press named, with the pointer position it opened at. The menu paints
@@ -155,20 +162,23 @@ pub struct LibraryState {
     pub search: Signal<super::search::LibrarySearchState>,
     /// The pending query send's timer (D10), or `None` while none is armed.
     pub search_send: Signal<Option<crate::window::clock::TimerId>>,
-    /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`).
-    pub home_rows_memo: super::home_list::HomeRowsMemo,
-    /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`).
-    pub emby_rows_memo: super::lettered::EmbyRowsMemo,
+    /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`), keyed on the
+    /// filter text.
+    pub home_rows_memo: RowsMemo<HomeListRow, String>,
+    /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`), keyed on the
+    /// filter text.
+    pub emby_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>, String>,
     /// The Shows list's row memo (`shows-list.ts`'s `showsRowsOf`).
-    pub shows_rows_memo: super::shows_list::ShowsRowsMemo,
+    pub shows_rows_memo: RowsMemo<ShowsListRow, ShowsRowsFacts>,
     /// The Audiobooks list's row memo (`audiobooks-list.ts`'s
-    /// `audiobooksRowsOf`).
-    pub audiobooks_rows_memo: super::lettered::AudiobooksRowsMemo,
+    /// `audiobooksRowsOf`), keyed on the filter text.
+    pub audiobooks_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>, String>,
     /// The Podcasts list's row memo (`podcasts-list.ts`'s
-    /// `podcastsRowsOf`).
-    pub podcasts_rows_memo: super::lettered::PodcastsRowsMemo,
-    /// The Feeds list's row memo (`feeds-list.ts`'s `feedsRowsOf`).
-    pub feeds_rows_memo: super::lettered::FeedsRowsMemo,
+    /// `podcastsRowsOf`), keyed on the filter text.
+    pub podcasts_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiEntryRowFrame>>, String>,
+    /// The Feeds list's row memo (`feeds-list.ts`'s `feedsRowsOf`), keyed on
+    /// the filter text.
+    pub feeds_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiEntryRowFrame>>, String>,
     /// The playhead's predicted position, in ticks (design D5): the
     /// Audiobooks chapter Workspace reads it to mark the playing chapter row.
     /// The playhead's own memo, shared — never a second prediction.
@@ -187,7 +197,7 @@ pub struct LibraryState {
     pub pending_reveal_row: Signal<Option<String>>,
     /// The canvas tree's row memo (`state.ts`'s `musicRowsOf`, built over
     /// `row-memo.ts`).
-    pub rows_memo: RowsMemo,
+    pub rows_memo: RowsMemo<LibraryRow, MusicRowsFacts>,
     /// The active tab the carried Library list section last named (design D2
     /// of `gui-pointer-target-interaction`), `None` before the first carried
     /// section. The destination reset rides a change of this value, so the
@@ -228,12 +238,12 @@ impl LibraryState {
             feeds_ui: Signal::new(super::feeds::initial_feeds_ui()),
             search: Signal::new(super::search::initial_library_search()),
             search_send: Signal::new(None),
-            home_rows_memo: super::home_list::HomeRowsMemo::default(),
-            emby_rows_memo: super::lettered::EmbyRowsMemo::default(),
-            shows_rows_memo: super::shows_list::ShowsRowsMemo::default(),
-            audiobooks_rows_memo: super::lettered::AudiobooksRowsMemo::default(),
-            podcasts_rows_memo: super::lettered::PodcastsRowsMemo::default(),
-            feeds_rows_memo: super::lettered::FeedsRowsMemo::default(),
+            home_rows_memo: RowsMemo::default(),
+            emby_rows_memo: RowsMemo::default(),
+            shows_rows_memo: RowsMemo::default(),
+            audiobooks_rows_memo: RowsMemo::default(),
+            podcasts_rows_memo: RowsMemo::default(),
+            feeds_rows_memo: RowsMemo::default(),
             playhead_position,
             sections,
             link,

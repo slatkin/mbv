@@ -18,7 +18,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiAudiobooksRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{AudiobooksList, LetteredItemRow, build_rows};
 use crate::window::library::list::LetteredRow;
 use crate::window::library::parts::library_audiobooks_list;
 
@@ -55,7 +55,9 @@ impl LibraryState {
         };
         let revision = self.sections.library_list_revision();
         self.audiobooks_rows_memo
-            .rows(revision, &audiobooks.rows, filter)
+            .rows(revision, filter.to_owned(), |filter| {
+                build_rows::<AudiobooksList>(&audiobooks.rows, filter)
+            })
     }
 
     /// The painted rows under the filter's current text.

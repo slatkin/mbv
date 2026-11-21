@@ -15,7 +15,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiHomeRowIdFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::home_list::HomeListRow;
+use crate::window::library::home_list::{HomeListRow, build_home_rows};
 use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_home_list;
 use crate::window::library::scroll::set_scroll_top;
@@ -48,7 +48,10 @@ impl LibraryState {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
-        self.home_rows_memo.rows(revision, &home.rows, filter)
+        self.home_rows_memo
+            .rows(revision, filter.to_owned(), |filter| {
+                build_home_rows(&home.rows, filter)
+            })
     }
 
     /// The item row the pointer's marker names (design D1, D2): the marker

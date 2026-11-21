@@ -24,7 +24,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEmbyRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{EmbyList, LetteredItemRow, build_rows};
 use crate::window::library::list::LetteredRow;
 use crate::window::library::parts::library_emby_list;
 
@@ -62,7 +62,9 @@ impl LibraryState {
         };
         let revision = self.sections.library_list_revision();
         let filter = self.emby_ui.peek().filter.clone();
-        self.emby_rows_memo.rows(revision, &frame.rows, &filter)
+        self.emby_rows_memo.rows(revision, filter, |filter| {
+            build_rows::<EmbyList>(&frame.rows, filter)
+        })
     }
 
     /// The row the pointer's marker names (design D1, D2): the marker carries

@@ -24,7 +24,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{FeedsList, LetteredItemRow, build_rows};
 use crate::window::library::list::LetteredRow;
 use crate::window::library::parts::library_feeds_list;
 
@@ -55,7 +55,9 @@ impl LibraryState {
         };
         let revision = self.sections.library_list_revision();
         let filter = self.feeds_ui.peek().filter.clone();
-        self.feeds_rows_memo.rows(revision, &feeds.rows, &filter)
+        self.feeds_rows_memo.rows(revision, filter, |filter| {
+            build_rows::<FeedsList>(&feeds.rows, filter)
+        })
     }
 
     /// The row the pointer's marker names (design D1, D2): the marker carries

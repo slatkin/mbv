@@ -21,7 +21,9 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
 use crate::window::library::parts::library_shows_list;
 use crate::window::library::scroll::set_scroll_top;
-use crate::window::library::shows_list::{ShowsListRow, shows_letter_rail};
+use crate::window::library::shows_list::{
+    ShowsListRow, ShowsRowsFacts, ShowsTreeState, build_shows_rows, shows_letter_rail,
+};
 
 use super::state::LibraryState;
 
@@ -72,12 +74,24 @@ impl LibraryState {
         let ui = self.shows_ui.peek();
         self.shows_rows_memo.rows(
             revision,
-            shows.view,
-            &shows.series,
-            &shows.rows,
-            &ui.filter,
-            &ui.open,
-            &ui.closed,
+            ShowsRowsFacts {
+                view: shows.view,
+                filter: ui.filter.clone(),
+                open: ui.open.clone(),
+                closed: ui.closed.clone(),
+            },
+            |facts| {
+                build_shows_rows(
+                    facts.view,
+                    &shows.series,
+                    &shows.rows,
+                    &facts.filter,
+                    ShowsTreeState {
+                        open: &facts.open,
+                        closed: &facts.closed,
+                    },
+                )
+            },
         )
     }
 

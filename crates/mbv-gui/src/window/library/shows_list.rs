@@ -9,10 +9,6 @@
 //! (`gui-pointer-target-interaction` D2), which is never a heading. The model is
 //! plain data over fixed heights, so the geometry is asserted without a layout.
 
-use std::sync::Arc;
-
-use dioxus_native::prelude::*;
-
 use mbv::GuiShowsView;
 
 use crate::bridge::frame::library::{
@@ -54,6 +50,22 @@ pub struct ShowsTreeState<'a> {
     pub open: &'a [String],
     /// The node row ids the user closed under a filter.
     pub closed: &'a [String],
+}
+
+/// The interaction facts the Shows rows are memoized on (design D11): the view
+/// mode, the filter text, and the tree's open and closed nodes. The carried
+/// content these narrow comes from the memo's `libraryList` revision, so the
+/// hit test compares only these.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowsRowsFacts {
+    /// The view mode the rows were built for.
+    pub view: GuiShowsView,
+    /// The filter text the rows were narrowed by.
+    pub filter: String,
+    /// The node row ids the user opened.
+    pub open: Vec<String>,
+    /// The node row ids the user closed under a filter.
+    pub closed: Vec<String>,
 }
 
 /// A painted series node (design D14): the Music artist row's counterpart.
@@ -509,82 +521,6 @@ fn shows_flat_row(row: &GuiShowsRowFrame, top: f32, height: f32) -> ShowsFlatRow
         art: row.art.clone(),
         media: row.media,
         letter: row.sort_letter,
-    }
-}
-
-/// The rows the memo handed back last, with the cheap key and the interaction
-/// facts they were built from. The rows sit behind an `Arc` because the former client
-/// semantics the memo preserves are shared state: one scroll step reads the
-/// same rows the last one built, and the list repaints only its visible
-/// window.
-#[derive(Debug, Clone)]
-struct ShowsMemoEntry {
-    /// The `libraryList` section revision the rows came from (design D6): a
-    /// section's value at one revision is immutable, so equal revisions carry
-    /// equal rows and the hit test never compares the union.
-    revision: Option<u64>,
-    view: GuiShowsView,
-    filter: String,
-    open: Vec<String>,
-    closed: Vec<String>,
-    rows: Arc<[ShowsListRow]>,
-}
-
-/// The Shows rows, memoized on the carried content, the filter, and the tree's
-/// open and closed nodes (design D9). One slot, because a list paints one
-/// content at a time.
-#[derive(Clone, Default)]
-pub struct ShowsRowsMemo {
-    last: Signal<Option<ShowsMemoEntry>>,
-}
-
-impl std::fmt::Debug for ShowsRowsMemo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ShowsRowsMemo").finish_non_exhaustive()
-    }
-}
-
-impl ShowsRowsMemo {
-    /// The rows `build_shows_rows` leaves over the carried content and the
-    /// interaction facts: the ones it built last while the arguments are the
-    /// same, and a fresh build otherwise. The rows come keyed on the
-    /// `libraryList` section revision they borrowed from (design D6); the
-    /// caller must pass the slices the section's current value carries.
-    #[must_use]
-    pub fn rows(
-        &self,
-        revision: Option<u64>,
-        view: GuiShowsView,
-        series: &[GuiShowsSeriesFrame],
-        rows: &[GuiShowsRowFrame],
-        filter: &str,
-        open: &[String],
-        closed: &[String],
-    ) -> Arc<[ShowsListRow]> {
-        // `peek`, never `read`: a caller inside an effect that writes the
-        // memo (a filter's scroll clamp) would re-queue itself on the write
-        // below otherwise.
-        if let Some(entry) = self.last.peek().as_ref()
-            && entry.revision == revision
-            && entry.view == view
-            && entry.filter == filter
-            && entry.open == open
-            && entry.closed == closed
-        {
-            return Arc::clone(&entry.rows);
-        }
-        let tree = ShowsTreeState { open, closed };
-        let built: Arc<[ShowsListRow]> = build_shows_rows(view, series, rows, filter, tree).into();
-        let mut last = self.last;
-        last.set(Some(ShowsMemoEntry {
-            revision,
-            view,
-            filter: filter.to_owned(),
-            open: open.to_vec(),
-            closed: closed.to_vec(),
-            rows: Arc::clone(&built),
-        }));
-        built
     }
 }
 
