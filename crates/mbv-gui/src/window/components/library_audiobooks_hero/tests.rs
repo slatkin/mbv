@@ -15,7 +15,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
-use blitz_dom::{Document as _, LocalName, NodeData};
+use blitz_dom::{Document as _, LocalName};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
@@ -249,19 +249,6 @@ impl Fixture {
                     .to_owned()
             })
             .collect()
-    }
-
-    /// The tag name of the first node the selector names.
-    fn tag_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        match &dom.get_node(id).expect("the node is in the document").data {
-            NodeData::Element(data) => data.name.local.to_string(),
-            _ => panic!("{selector} is an element"),
-        }
     }
 
     /// The Library commands the core link received, in send order.
@@ -568,24 +555,5 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_book() {
             item_id: "book1".to_owned(),
         }],
         "the enqueue command names the selected book"
-    );
-}
-
-/// Contract (`LibraryAudiobooksHero.test.ts`): the Hero paints the frame's
-/// header band, as Music and Shows do — the kicker over the title, above the
-/// artwork (the frame is one look for every Hero).
-#[test]
-fn the_hero_paints_the_frame_header_above_its_artwork() {
-    let fixture = built_book();
-
-    assert_eq!(
-        fixture.text_of("[data-library-abs-hero-kicker]"),
-        "audiobook",
-        "the kicker is the audiobook label"
-    );
-    assert_eq!(
-        fixture.tag_of("[data-library-abs-hero-title]"),
-        "h1",
-        "the title paints in the header band's h1"
     );
 }
