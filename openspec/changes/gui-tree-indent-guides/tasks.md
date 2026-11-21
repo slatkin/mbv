@@ -33,4 +33,4 @@ Rules for every task: add no new tests (user rule). When an existing test breaks
 
 ## 7. Gates
 
-- [ ] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-gui`, and `make check-code-file-lines`. Fix every failure at its cause (no lint suppression); a file over 800 lines splits along a responsibility seam. Verify: all four commands exit 0.
+- [x] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-gui`, and `make check-code-file-lines`. Fix every failure at its cause (no lint suppression); a file over 800 lines splits along a responsibility seam. Verify: all four commands exit 0.
