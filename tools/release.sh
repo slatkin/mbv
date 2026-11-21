@@ -2,10 +2,9 @@
 # Usage: tools/release.sh <version> "<summary>"
 # Example: tools/release.sh 0.8.9 "add keyboard shortcuts for playback speed"
 #
-# Runs the CI gate set, bumps Cargo.toml + PKGBUILD, updates Cargo.lock, and
-# commits. On main (branch protection blocks direct pushes): opens a release
-# PR; merge it when the required checks pass, then tag with
-# tools/release-tag.sh. On a branch: commits only; merge via PR, then tag.
+# Runs the CI gate set, bumps Cargo.toml + PKGBUILD, updates Cargo.lock,
+# commits, and pushes. On main: pushes, tags, and pushes the tag. On a branch:
+# commits only; merge via PR, then tag with tools/release-tag.sh.
 # PKGBUILD sha256sums is set to 'SKIP' here; build.yml fills in the real hash
 # after building the release tarball.
 #
@@ -125,28 +124,17 @@ git commit --no-verify --allow-empty -m "Release ${TAG}: ${SUMMARY}"
 echo
 echo "==> Release prep committed on ${BRANCH}."
 if [[ "${BRANCH}" == "main" ]]; then
-  # Branch protection blocks direct pushes to main; the release prep lands
-  # through a PR the required checks gate. Branch from the prep commit, then
-  # move main back to origin/main so it holds nothing the PR does not.
   echo
-  echo "==> Creating release branch release/${TAG}..."
-  git checkout -b "release/${TAG}"
-  git checkout main
-  git fetch origin main --quiet
-  git reset --hard origin/main
-  git push -u origin "release/${TAG}"
+  echo "==> git push origin main..."
+  git push origin main
 
   echo
-  echo "==> Opening the release PR..."
-  gh pr create \
-    --base main \
-    --head "release/${TAG}" \
-    --title "Release ${TAG}: ${SUMMARY}" \
-    --body "Release prep for ${TAG}: the version bump and Cargo.lock. Merge when the required checks pass, then tag with \`tools/release-tag.sh ${TAG}\`."
+  echo "==> git tag ${TAG}..."
+  git tag "${TAG}"
 
   echo
-  echo "==> Release PR opened. Watch its checks, merge when green, then run:"
-  echo "    tools/release-tag.sh ${TAG}"
+  echo "==> git push origin ${TAG}..."
+  git push origin "${TAG}"
 else
   echo
   echo "==> Release committed on ${BRANCH} (not main)."

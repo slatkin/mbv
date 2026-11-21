@@ -2,8 +2,9 @@
 # Usage: tools/release-tag.sh <version>
 # Example: tools/release-tag.sh 0.28.1
 #
-# Tags the merged release. Run after the release PR that tools/release.sh
-# opened has merged: fetches origin/main, tags it, pushes the tag. The tag
+# Tags the merged release. On main, tools/release.sh already tags and pushes;
+# run this only for a release committed on a feature branch, once that branch
+# has merged: fetches origin/main, tags it, pushes the tag. The tag
 # push is what triggers the PKGBUILD publish run (the tarball, the debs, the
 # GitHub release, the AUR hand-off).
 set -euo pipefail

@@ -10,8 +10,13 @@ release preparation. The script runs the project checks (`cargo nextest run`,
 `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`), updates
 `Cargo.toml`, `Cargo.lock`, and `PKGBUILD` (`pkgver`, `sha256sums='SKIP'` —
 build.yml fills the real hash when it builds the release tarball), commits the
-release, and applies different behavior on `main` versus a feature branch. Do not reproduce those steps manually unless
-the script is unavailable or the user explicitly asks to change it.
+release, and pushes. On `main` it also tags and pushes the tag itself. Do not
+reproduce those steps manually unless the script is unavailable or the user
+explicitly asks to change it.
+
+Releases never go through a pull request. The release commit pushes directly
+to `main` and the tag pushes directly to `origin`. Never open a release PR,
+and never merge release prep through one.
 
 ## Preflight
 
@@ -63,33 +68,24 @@ feature matrix. A failure there means the release push would fail CI the
 same way; fix the cause and rerun the script. Do not skip or shorten the
 gate set, and never bypass it with a manual tag.
 
-On `main`, branch protection blocks direct pushes, so the script opens a
-release PR (`release/vX.Y.Z`) carrying only the version bump, and moves the
-local `main` back to `origin/main`. The release then needs three more steps:
+On `main`, the script pushes the release commit to `main`, tags it `vX.Y.Z`,
+and pushes the tag — no PR, no release branch. The tag push triggers the
+PKGBUILD publish run (tarball, debs, GitHub release, AUR hand-off). Then
+verify:
 
-1. Watch the PR's checks in the foreground (`gh pr checks --watch`) and merge
-   when every required check is green (`gh pr merge --squash`). Never merge a
-   red PR, and never close-and-reopen to dodge a check.
-2. Tag only after the PR has merged into `main`: `tools/release-tag.sh
-   <version>`. Never tag the PR head, a local release branch, or a feature
-   branch. The script fetches, tags `origin/main`, and pushes the tag. The tag
-   push triggers the PKGBUILD publish run (tarball, debs, GitHub release, AUR
-   hand-off).
-3. Verify:
+```bash
+git status --short
+git ls-remote origin "refs/tags/v<version>"
+gh run list --repo slatkin/mbv --limit 3
+```
 
-   ```bash
-   git status --short
-   git ls-remote origin "refs/tags/v<version>"
-   gh run list --repo slatkin/mbv --limit 3
-   ```
-
-   The remote tag must point at the merge commit, and the publish run must be
-   running. Use `gh` to inspect checks or release status when the repository
-   exposes them; do not assume a workflow name or that a pushed tag means the
-   release completed.
+The remote tag must point at the release commit on `main`, and the publish run
+must be running. Use `gh` to inspect checks or release status when the
+repository exposes them; do not assume a workflow name or that a pushed tag
+means the release completed.
 
 On a feature branch, the script only prepares and commits the version bump.
-Do not tag it there either. Report that the branch must be merged into `main`
+Do not tag it there. Report that the branch must be merged into `main`
 before the tag is created (then `tools/release-tag.sh <version>`), and keep
 release publishing separate from unrelated PR work.
 
