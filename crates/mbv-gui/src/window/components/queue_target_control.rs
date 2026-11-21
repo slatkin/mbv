@@ -31,11 +31,15 @@ use crate::bridge::frame::playback::{GuiTargetChoice, GuiTargetKey};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
+use crate::window::components::queue_panel::geometry::{MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX};
 use crate::window::icons::{Check, ChevronDown, Monitor};
 use crate::window::layout::region_set::{MarkHandler, use_region_set};
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var, role_var};
 use crate::window::truncate::{TextStyle, Truncate};
+
+/// The popover card's padding: the Queue chooser's own inset.
+const CARD_PADDING_PX: u16 = 4;
 
 /// The glyph a target choice paints, in the chooser's rows and on the control's
 /// button alike: one function, so the two cannot drift apart.
@@ -143,6 +147,7 @@ pub fn QueueTargetControl() -> Element {
                     // kept on the control's moves).
                     span {
                         class: "min-w-0 overflow-hidden whitespace-nowrap",
+                        style: "font-weight: 600;",
                         "{playback.host}"
                     }
                 }
@@ -208,24 +213,33 @@ impl std::fmt::Debug for TargetChooserPopoverProps {
 fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
     rsx! {
         div {
-            class: "absolute z-20 flex min-w-56 flex-col rounded-md border py-1 shadow-md",
-            // The header's type is not the popover's: it keeps the 16 px body
-            // face its rows painted in, which is the face the rows' `Truncate`
-            // measure names.
-            style: "top: 36px; left: 0; font-family: var(--font-sans); font-size: 16px; background: var(--mbv-popover); border-color: var(--mbv-border);",
+            class: "absolute z-20 flex flex-col",
+            role: "menu",
+            // The card is the Queue chooser's own (it is authoritative): the
+            // same fill, border, radius, padding, drop, and 13 px type.
+            style: format!(
+                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ROW_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
+                ef_var(EfToken::Bg2),
+                ef_var(EfToken::Bg4)
+            ),
             "data-target-chooser": "",
             for (index, choice) in props.choices.iter().enumerate() {
                 {
-                    let row_color = if index == props.cursor {
-                        role_var(GuiRole::TextFocusAccent)
+                    let row_background = if index == props.cursor {
+                        format!(" background: {};", ef_var(EfToken::Bg3))
                     } else {
-                        role_var(GuiRole::TextPrimary)
+                        String::new()
                     };
+                    let row_style = format!(
+                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
+                        ef_var(EfToken::Fg)
+                    );
                     rsx! {
                         button {
                             "type": "button",
                             class: "flex w-full items-center text-left",
-                            style: "padding: calc(var(--mbv-cell-row) / 4) calc(var(--mbv-cell-col) * 1); gap: var(--mbv-cell-col); color: {row_color};",
+                            role: "menuitem",
+                            style: "{row_style}",
                             "data-choice": "{index}",
                             onmounted: {
                                 let row_mark = props.row_marks.get(index).copied();
@@ -241,16 +255,14 @@ fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
                             span {
                                 class: "flex w-4 shrink-0 justify-center",
                                 if choice.is_active {
-                                    Check { size: 14, color: role_var(GuiRole::Accent) }
+                                    Check { size: 14, color: ef_var(EfToken::Green).to_owned() }
                                 }
                             }
                             {target_icon(choice, 14)}
                             Truncate {
                                 text: choice.label.clone(),
                                 class: "min-w-0 flex-1".to_owned(),
-                                // The chooser button names no font size: the
-                                // label inherits the document's 16 px body face.
-                                style: TextStyle::sans(16.0, 400.0),
+                                style: TextStyle::sans(13.0, 500.0),
                             }
                         }
                     }
