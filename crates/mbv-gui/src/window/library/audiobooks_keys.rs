@@ -16,13 +16,14 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiAudiobooksRowFrame;
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
-use super::audiobooks_list::AudiobooksItemRow;
 use super::audiobooks_workspace::{abs_chapter_at, play_abs_chapter, queue_abs_book};
 use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
+use super::lettered::LetteredItemRow;
 use super::list::ListMove;
 use super::parts::{library_audiobooks_detail, library_audiobooks_list};
 use super::state::LibraryState;
@@ -54,7 +55,7 @@ struct AudiobooksKeys<'a> {
 
 impl PanelKeys for AudiobooksKeys<'_> {
     type Frame = AudiobooksFrame;
-    type Item = AudiobooksItemRow;
+    type Item = LetteredItemRow<GuiAudiobooksRowFrame>;
 
     fn frame(&self) -> Option<AudiobooksFrame> {
         AudiobooksFrame::carry(self.state)
@@ -70,14 +71,14 @@ impl PanelKeys for AudiobooksKeys<'_> {
         library_audiobooks_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn row(&self, pointer: &PointerTarget) -> Option<AudiobooksItemRow> {
+    fn row(&self, pointer: &PointerTarget) -> Option<LetteredItemRow<GuiAudiobooksRowFrame>> {
         if pointer.list != Some(PointerList::Audiobooks) {
             return None;
         }
         self.state.audiobooks_row_at(pointer.row.as_deref()?)
     }
 
-    fn item_id(&self, item: &AudiobooksItemRow) -> Option<String> {
+    fn item_id(&self, item: &LetteredItemRow<GuiAudiobooksRowFrame>) -> Option<String> {
         Some(item.row.id.clone())
     }
 

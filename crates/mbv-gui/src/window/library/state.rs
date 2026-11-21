@@ -158,17 +158,17 @@ pub struct LibraryState {
     /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`).
     pub home_rows_memo: super::home_list::HomeRowsMemo,
     /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`).
-    pub emby_rows_memo: super::emby_list::EmbyRowsMemo,
+    pub emby_rows_memo: super::lettered::EmbyRowsMemo,
     /// The Shows list's row memo (`shows-list.ts`'s `showsRowsOf`).
     pub shows_rows_memo: super::shows_list::ShowsRowsMemo,
     /// The Audiobooks list's row memo (`audiobooks-list.ts`'s
     /// `audiobooksRowsOf`).
-    pub audiobooks_rows_memo: super::audiobooks_list::AudiobooksRowsMemo,
+    pub audiobooks_rows_memo: super::lettered::AudiobooksRowsMemo,
     /// The Podcasts list's row memo (`podcasts-list.ts`'s
     /// `podcastsRowsOf`).
-    pub podcasts_rows_memo: super::podcasts_list::PodcastsRowsMemo,
+    pub podcasts_rows_memo: super::lettered::PodcastsRowsMemo,
     /// The Feeds list's row memo (`feeds-list.ts`'s `feedsRowsOf`).
-    pub feeds_rows_memo: super::feeds_list::FeedsRowsMemo,
+    pub feeds_rows_memo: super::lettered::FeedsRowsMemo,
     /// The playhead's predicted position, in ticks (design D5): the
     /// Audiobooks chapter Workspace reads it to mark the playing chapter row.
     /// The playhead's own memo, shared — never a second prediction.
@@ -229,11 +229,11 @@ impl LibraryState {
             search: Signal::new(super::search::initial_library_search()),
             search_send: Signal::new(None),
             home_rows_memo: super::home_list::HomeRowsMemo::default(),
-            emby_rows_memo: super::emby_list::EmbyRowsMemo::default(),
+            emby_rows_memo: super::lettered::EmbyRowsMemo::default(),
             shows_rows_memo: super::shows_list::ShowsRowsMemo::default(),
-            audiobooks_rows_memo: super::audiobooks_list::AudiobooksRowsMemo::default(),
-            podcasts_rows_memo: super::podcasts_list::PodcastsRowsMemo::default(),
-            feeds_rows_memo: super::feeds_list::FeedsRowsMemo::default(),
+            audiobooks_rows_memo: super::lettered::AudiobooksRowsMemo::default(),
+            podcasts_rows_memo: super::lettered::PodcastsRowsMemo::default(),
+            feeds_rows_memo: super::lettered::FeedsRowsMemo::default(),
             playhead_position,
             sections,
             link,

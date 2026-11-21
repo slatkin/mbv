@@ -5,7 +5,7 @@
 //! ([`super::scroll`], design D9). The core owns the collection selection and the
 //! selected entry (the frame's `collections` and `selected`), so nothing here
 //! mirrors them: a press sends the select command, and the frame carries the
-//! choice back. The row model is [`super::feeds_list`]'s; the Hero overlay stays
+//! choice back. The row model is [`super::lettered`]'s; the Hero overlay stays
 //! in [`super::state`]'s shared store. There is no play-next: `n` is consumed
 //! and does nothing. A Client holds one feed tab, so no library index rides the
 //! commands.
@@ -24,7 +24,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::feeds_list::FeedsItemRow;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::{
     LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
 };
@@ -51,7 +51,7 @@ impl LibraryState {
     /// rows borrow the section's carried frame through the memo's revision
     /// key — a keydown copies none of it.
     #[must_use]
-    pub fn feeds_rows(&self) -> Arc<[LetteredRow<FeedsItemRow>]> {
+    pub fn feeds_rows(&self) -> Arc<[LetteredRow<LetteredItemRow<GuiEntryRowFrame>>]> {
         let list = self.sections.library_list.peek();
         let Some(feeds) = library_feeds_list(list.as_deref()) else {
             return Arc::from([]);
@@ -65,7 +65,7 @@ impl LibraryState {
     /// the row's own id, so the painted rows resolve it and a stale or foreign
     /// id names no entry. `None` while no painted row carries the id.
     #[must_use]
-    pub fn feeds_row_at(&self, row_id: &str) -> Option<FeedsItemRow> {
+    pub fn feeds_row_at(&self, row_id: &str) -> Option<LetteredItemRow<GuiEntryRowFrame>> {
         self.feeds_rows().iter().find_map(|row| match row {
             LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
             _ => None,
@@ -115,13 +115,13 @@ impl LibraryState {
     /// frame paints the Hero. A select never opens the Narrow arrangement's
     /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
     /// the previous entry, as a Music pick's do.
-    pub fn select_feeds_row(&self, row: &FeedsItemRow) {
+    pub fn select_feeds_row(&self, row: &LetteredItemRow<GuiEntryRowFrame>) {
         self.select_feeds_row_id(&row.row.id);
     }
 
     /// Select the row the id names (design D12): the same select by the row
     /// id alone, which the Hero Workspace table's press carries — its rows
-    /// name the stable identity, never a `FeedsItemRow`.
+    /// name the stable identity, never a `LetteredItemRow<GuiEntryRowFrame>`.
     pub fn select_feeds_row_id(&self, row_id: &str) {
         self.link.library(GuiLibraryCommand::FeedsSelect {
             row: row_id.to_owned(),
@@ -135,7 +135,7 @@ impl LibraryState {
 
     /// Press an entry row (design D12): the press selects the entry the Hero
     /// shows.
-    pub fn press_feeds_row(&self, row: &FeedsItemRow) {
+    pub fn press_feeds_row(&self, row: &LetteredItemRow<GuiEntryRowFrame>) {
         self.select_feeds_row(row);
     }
 

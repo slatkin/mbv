@@ -15,14 +15,15 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::keys::DomKey;
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, route_panel_list_key};
+use super::lettered::LetteredItemRow;
 use super::list::ListMove;
 use super::parts::{library_podcasts_detail, library_podcasts_list};
-use super::podcasts_list::PodcastsItemRow;
 use super::state::LibraryState;
 
 /// The Podcasts facts a routed key reads (row 7C.2): the destination is
@@ -56,7 +57,7 @@ impl<'a> PodcastsKeys<'a> {
 
 impl PanelKeys for PodcastsKeys<'_> {
     type Frame = PodcastsFrame;
-    type Item = PodcastsItemRow;
+    type Item = LetteredItemRow<GuiEntryRowFrame>;
 
     fn frame(&self) -> Option<PodcastsFrame> {
         PodcastsFrame::carry(self.state)
@@ -72,14 +73,14 @@ impl PanelKeys for PodcastsKeys<'_> {
         library_podcasts_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn row(&self, pointer: &PointerTarget) -> Option<PodcastsItemRow> {
+    fn row(&self, pointer: &PointerTarget) -> Option<LetteredItemRow<GuiEntryRowFrame>> {
         if pointer.list != Some(PointerList::Podcasts) {
             return None;
         }
         self.state.podcasts_row_at(pointer.row.as_deref()?)
     }
 
-    fn item_id(&self, item: &PodcastsItemRow) -> Option<String> {
+    fn item_id(&self, item: &LetteredItemRow<GuiEntryRowFrame>) -> Option<String> {
         Some(item.row.id.clone())
     }
 

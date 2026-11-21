@@ -29,6 +29,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::GeometryRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
@@ -373,7 +374,7 @@ fn painted_rows(fixture: &Fixture) -> Vec<String> {
 fn row_of(
     fixture: &mut Fixture,
     id: &str,
-) -> crate::window::library::list::LetteredRow<crate::window::library::emby_list::EmbyItemRow> {
+) -> crate::window::library::list::LetteredRow<LetteredItemRow<GuiEmbyRowFrame>> {
     let id = id.to_owned();
     fixture.compute(move |state| {
         state

@@ -5,7 +5,7 @@
 //! store ([`super::scroll`], design D9). The core owns the collection selection
 //! and the selected episode (the frame's `collections` and `selected`), so
 //! nothing here mirrors them: a press sends the select command, and the frame
-//! carries the choice back. The row model is [`super::podcasts_list`]'s; the
+//! carries the choice back. The row model is [`super::lettered`]'s; the
 //! Hero overlay stays in [`super::state`]'s shared store. There is no
 //! play-next: `n` is consumed and does nothing.
 //!
@@ -22,12 +22,13 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::{
     LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
 };
 use crate::window::library::parts::library_podcasts_list;
-use crate::window::library::podcasts_list::PodcastsItemRow;
 
 use super::list_state::ListUiState;
 use super::scroll::set_scroll_top;
@@ -57,7 +58,7 @@ impl LibraryState {
     /// The rows borrow the section's carried frame through the memo's revision
     /// key — a keydown copies none of it.
     #[must_use]
-    pub fn podcasts_rows(&self) -> Arc<[LetteredRow<PodcastsItemRow>]> {
+    pub fn podcasts_rows(&self) -> Arc<[LetteredRow<LetteredItemRow<GuiEntryRowFrame>>]> {
         let list = self.sections.library_list.peek();
         let Some(podcasts) = library_podcasts_list(list.as_deref()) else {
             return Arc::from([]);
@@ -72,7 +73,7 @@ impl LibraryState {
     /// the row's own id, so the painted rows resolve it and a stale or foreign
     /// id names no episode. `None` while no painted row carries the id.
     #[must_use]
-    pub fn podcasts_row_at(&self, row_id: &str) -> Option<PodcastsItemRow> {
+    pub fn podcasts_row_at(&self, row_id: &str) -> Option<LetteredItemRow<GuiEntryRowFrame>> {
         self.podcasts_rows().iter().find_map(|row| match row {
             LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
             _ => None,
@@ -102,7 +103,7 @@ impl LibraryState {
     /// frame paints the Hero. A select never opens the Narrow arrangement's
     /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
     /// the previous episode, as a Music pick's do.
-    pub fn select_podcasts_row(&self, row: &PodcastsItemRow) {
+    pub fn select_podcasts_row(&self, row: &LetteredItemRow<GuiEntryRowFrame>) {
         let Some(lib_idx) = self.podcasts_lib_idx() else {
             return;
         };
@@ -119,7 +120,7 @@ impl LibraryState {
 
     /// Press an episode row (design D12): the press selects the episode the
     /// Hero shows.
-    pub fn press_podcasts_row(&self, row: &PodcastsItemRow) {
+    pub fn press_podcasts_row(&self, row: &LetteredItemRow<GuiEntryRowFrame>) {
         self.select_podcasts_row(row);
     }
 

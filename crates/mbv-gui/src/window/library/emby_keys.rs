@@ -14,12 +14,13 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEmbyRowFrame;
 use crate::bridge::keys::DomKey;
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
-use super::emby_list::EmbyItemRow;
 use super::keys_shared::{PanelKeys, route_panel_list_key};
+use super::lettered::LetteredItemRow;
 use super::list::ListMove;
 use super::parts::{library_emby_detail, library_emby_list};
 use super::state::LibraryState;
@@ -55,7 +56,7 @@ impl<'a> EmbyKeys<'a> {
 
 impl PanelKeys for EmbyKeys<'_> {
     type Frame = EmbyFrame;
-    type Item = EmbyItemRow;
+    type Item = LetteredItemRow<GuiEmbyRowFrame>;
 
     fn frame(&self) -> Option<EmbyFrame> {
         EmbyFrame::carry(self.state)
@@ -71,14 +72,14 @@ impl PanelKeys for EmbyKeys<'_> {
         library_emby_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn row(&self, pointer: &PointerTarget) -> Option<EmbyItemRow> {
+    fn row(&self, pointer: &PointerTarget) -> Option<LetteredItemRow<GuiEmbyRowFrame>> {
         if pointer.list != Some(PointerList::Emby) {
             return None;
         }
         self.state.emby_row_at(pointer.row.as_deref()?)
     }
 
-    fn item_id(&self, item: &EmbyItemRow) -> Option<String> {
+    fn item_id(&self, item: &LetteredItemRow<GuiEmbyRowFrame>) -> Option<String> {
         Some(item.row.id.clone())
     }
 

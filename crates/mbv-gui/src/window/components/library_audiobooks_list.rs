@@ -9,7 +9,7 @@
 //! fetches (design D7).
 //!
 //! The rows paint at the fixed heights of
-//! [`crate::window::library::audiobooks_list`] over native scroll, and only
+//! [`crate::window::library::lettered`] over native scroll, and only
 //! the rows in view paint, so a long catalog stays fast. The list keeps no
 //! cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2); the scroll offset and the viewport are
@@ -23,6 +23,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiAudiobooksRowFrame;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart,
@@ -32,7 +33,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::audiobooks_list::AudiobooksItemRow;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
@@ -43,7 +44,7 @@ use crate::window::theme::canvas_var;
 /// One painted row of the list: the letter heading
 /// or the book row.
 fn paint_audiobooks_row(
-    row: &LetteredRow<AudiobooksItemRow>,
+    row: &LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>,
     library: &LibraryState,
     selected: Option<&str>,
 ) -> Element {
@@ -149,7 +150,7 @@ pub fn LibraryAudiobooksList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Audiobooks, ids);
         })),
-        move |row: &LetteredRow<AudiobooksItemRow>| {
+        move |row: &LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>| {
             paint_audiobooks_row(row, &paint_library, paint_selected.as_deref())
         },
     );

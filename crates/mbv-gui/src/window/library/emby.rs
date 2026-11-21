@@ -6,7 +6,7 @@
 //! owns the selected row and the feed-group selection (the frame's `selected`
 //! and `collections`), so nothing here mirrors them: a press and an Enter send
 //! the command, and the frame carries the choice back. The row model is
-//! [`super::emby_list`]'s; the Hero overlay stays in [`super::state`]'s shared
+//! [`super::lettered`]'s; the Hero overlay stays in [`super::state`]'s shared
 //! store, and the Hero carries no Workspace and no cursor of its own.
 //!
 //! The list keeps no cursor: the keys act on the row the pointer marks
@@ -22,8 +22,9 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEmbyRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::emby_list::EmbyItemRow;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::{
     LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
 };
@@ -57,7 +58,7 @@ impl LibraryState {
     /// a name, flat under a date sort, narrowed by the state's filter text. No
     /// carried Emby content paints no rows.
     #[must_use]
-    pub fn emby_rows(&self) -> Arc<[LetteredRow<EmbyItemRow>]> {
+    pub fn emby_rows(&self) -> Arc<[LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>]> {
         let list = self.sections.library_list.peek();
         let Some(frame) = library_emby_list(list.as_deref()) else {
             return Arc::from([]);
@@ -72,7 +73,7 @@ impl LibraryState {
     /// id names no item. `None` while no painted item row carries the id — a
     /// letter heading carries none at all.
     #[must_use]
-    pub fn emby_row_at(&self, row_id: &str) -> Option<EmbyItemRow> {
+    pub fn emby_row_at(&self, row_id: &str) -> Option<LetteredItemRow<GuiEmbyRowFrame>> {
         let rows = self.emby_rows();
         rows.iter().find_map(|row| match row {
             LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
@@ -104,7 +105,7 @@ impl LibraryState {
     /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
     /// the previous row, as a Music pick's do. A heading names no row, so its
     /// select changes nothing.
-    pub fn select_emby_row(&self, row: &LetteredRow<EmbyItemRow>) {
+    pub fn select_emby_row(&self, row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>) {
         let LetteredRow::Item(item) = row else {
             return;
         };
@@ -124,7 +125,7 @@ impl LibraryState {
 
     /// Press a row (row 8.1): the press selects the row the Hero shows, as a
     /// Home press does. A heading names no row, so its press changes nothing.
-    pub fn press_emby_row(&self, row: &LetteredRow<EmbyItemRow>) {
+    pub fn press_emby_row(&self, row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>) {
         self.select_emby_row(row);
     }
 

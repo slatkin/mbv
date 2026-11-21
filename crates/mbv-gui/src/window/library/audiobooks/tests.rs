@@ -19,7 +19,7 @@ use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::audiobooks_list::AudiobooksItemRow;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::LetteredRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
@@ -193,7 +193,9 @@ fn scroll_facts(state: &LibraryState) -> String {
 }
 
 /// The painted rows of the carried catalog.
-fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<AudiobooksItemRow>]> {
+fn painted_rows(
+    state: &LibraryState,
+) -> Arc<[LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>]> {
     let filter = state.audiobooks_ui.peek().filter.clone();
     state.audiobooks_rows(&filter)
 }

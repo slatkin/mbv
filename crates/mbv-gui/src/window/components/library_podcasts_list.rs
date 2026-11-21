@@ -6,7 +6,7 @@
 //! (gui-flat-list-sort design D8).
 //!
 //! The rows paint at the fixed heights of
-//! [`crate::window::library::podcasts_list`] over native scroll, and only
+//! [`crate::window::library::lettered`] over native scroll, and only
 //! the rows in view paint, so a long Latest merge stays fast. The list keeps
 //! no cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2); the scroll offset and the viewport are
@@ -19,7 +19,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiCollectionsFrame as _;
+use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiEntryRowFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_letter_heading::paint_letter_heading;
@@ -27,16 +27,16 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::library::lettered::{LetteredItemRow, PODCASTS_ROW_HEIGHT};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_podcasts_detail, library_podcasts_list};
-use crate::window::library::podcasts_list::{PODCASTS_ROW_HEIGHT, PodcastsItemRow};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
 
 /// One painted row of the flat list: the letter heading, or the episode row.
 fn paint_podcasts_row(
-    row: &LetteredRow<PodcastsItemRow>,
+    row: &LetteredRow<LetteredItemRow<GuiEntryRowFrame>>,
     library: &LibraryState,
     selected: Option<&str>,
 ) -> Element {
@@ -49,7 +49,7 @@ fn paint_podcasts_row(
 /// One painted episode row: the row's press selects the episode the Hero
 /// shows, a double-click plays it, and a right-press opens the row menu.
 fn paint_podcasts_item(
-    row: &PodcastsItemRow,
+    row: &LetteredItemRow<GuiEntryRowFrame>,
     library: &LibraryState,
     selected: Option<&str>,
 ) -> Element {
@@ -138,7 +138,7 @@ pub fn LibraryPodcastsList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Podcasts, ids);
         })),
-        move |row: &LetteredRow<PodcastsItemRow>| {
+        move |row: &LetteredRow<LetteredItemRow<GuiEntryRowFrame>>| {
             paint_podcasts_row(row, &paint_library, paint_selected.as_deref())
         },
     );

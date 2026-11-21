@@ -5,7 +5,7 @@
 //! store ([`super::scroll`], design D9). The core owns the selected book (the
 //! frame's `selected` and its Hero), so nothing here mirrors it: a press sends
 //! the select command, and the frame carries the choice back. The row model is
-//! [`super::audiobooks_list`]'s, and the Hero's chapter Workspace is
+//! [`super::lettered`]'s, and the Hero's chapter Workspace is
 //! [`super::audiobooks_workspace`]'s. There is no pill row on the destination.
 //!
 //! The list keeps no cursor: the keys act on the row the pointer marks
@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiAudiobooksRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::audiobooks_list::AudiobooksItemRow;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::{
     LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
 };
@@ -57,7 +58,10 @@ impl LibraryState {
     /// borrow the section's carried frame through the memo's revision key —
     /// a keydown copies none of it.
     #[must_use]
-    pub fn audiobooks_rows(&self, filter: &str) -> Arc<[LetteredRow<AudiobooksItemRow>]> {
+    pub fn audiobooks_rows(
+        &self,
+        filter: &str,
+    ) -> Arc<[LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>]> {
         let list = self.sections.library_list.peek();
         let Some(audiobooks) = library_audiobooks_list(list.as_deref()) else {
             return Arc::from([]);
@@ -68,7 +72,9 @@ impl LibraryState {
     }
 
     /// The painted rows under the filter's current text.
-    fn audiobooks_painted_rows(&self) -> Arc<[LetteredRow<AudiobooksItemRow>]> {
+    fn audiobooks_painted_rows(
+        &self,
+    ) -> Arc<[LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>]> {
         let filter = self.audiobooks_ui.peek().filter.clone();
         self.audiobooks_rows(&filter)
     }
@@ -78,7 +84,10 @@ impl LibraryState {
     /// foreign id names no book. `None` while no painted item row carries the
     /// id — a letter heading carries none at all.
     #[must_use]
-    pub fn audiobooks_row_at(&self, row_id: &str) -> Option<AudiobooksItemRow> {
+    pub fn audiobooks_row_at(
+        &self,
+        row_id: &str,
+    ) -> Option<LetteredItemRow<GuiAudiobooksRowFrame>> {
         let rows = self.audiobooks_painted_rows();
         rows.iter().find_map(|row| match row {
             LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
@@ -110,7 +119,7 @@ impl LibraryState {
     /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
     /// the previous book, as a Music pick's do. A heading names no book, so
     /// its select changes nothing.
-    pub fn select_audiobooks_row(&self, row: &LetteredRow<AudiobooksItemRow>) {
+    pub fn select_audiobooks_row(&self, row: &LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>) {
         let LetteredRow::Item(item) = row else {
             return;
         };
@@ -130,7 +139,7 @@ impl LibraryState {
 
     /// Press a book row (row 9.1): the press selects the book the Hero shows.
     /// A heading names no book, so its press changes nothing.
-    pub fn press_audiobooks_row(&self, row: &LetteredRow<AudiobooksItemRow>) {
+    pub fn press_audiobooks_row(&self, row: &LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>) {
         self.select_audiobooks_row(row);
     }
 

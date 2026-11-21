@@ -5,7 +5,7 @@
 //! headings and the A–Z rail while the list sorts by title, and flat under a
 //! date sort (gui-flat-list-sort design D8).
 //!
-//! The rows paint at the fixed heights of [`crate::window::library::feeds_list`]
+//! The rows paint at the fixed heights of [`crate::window::library::lettered`]
 //! over native scroll, and only the rows in view paint, so a long Latest
 //! merge stays fast. The list keeps no cursor: the keys act on the row the
 //! pointer marks (`gui-pointer-target-interaction` D2); the scroll offset and
@@ -18,7 +18,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiCollectionsFrame as _;
+use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiEntryRowFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_letter_heading::paint_letter_heading;
@@ -26,7 +26,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::feeds_list::{FEEDS_ROW_HEIGHT, FeedsItemRow};
+use crate::window::library::lettered::{FEEDS_ROW_HEIGHT, LetteredItemRow};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
@@ -35,7 +35,7 @@ use crate::window::service_mark::ServiceMark;
 
 /// One painted row of the flat list: the letter heading, or the entry row.
 fn paint_feeds_row(
-    row: &LetteredRow<FeedsItemRow>,
+    row: &LetteredRow<LetteredItemRow<GuiEntryRowFrame>>,
     library: &LibraryState,
     selected: Option<&str>,
 ) -> Element {
@@ -47,7 +47,11 @@ fn paint_feeds_row(
 
 /// One painted entry row: a press selects the entry the Hero shows, a
 /// double-click plays it, and a right-press opens the row menu.
-fn paint_feeds_item(row: &FeedsItemRow, library: &LibraryState, selected: Option<&str>) -> Element {
+fn paint_feeds_item(
+    row: &LetteredItemRow<GuiEntryRowFrame>,
+    library: &LibraryState,
+    selected: Option<&str>,
+) -> Element {
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = row.row.id.clone();
@@ -137,7 +141,7 @@ pub fn LibraryFeedsList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Feeds, ids);
         })),
-        move |row: &LetteredRow<FeedsItemRow>| {
+        move |row: &LetteredRow<LetteredItemRow<GuiEntryRowFrame>>| {
             paint_feeds_row(row, &paint_library, paint_selected.as_deref())
         },
     );

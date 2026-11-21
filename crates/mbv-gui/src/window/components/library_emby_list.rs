@@ -8,7 +8,7 @@
 //! D1); the rows the list paints are also the row art set the core fetches
 //! (design D7).
 //!
-//! The rows paint at the fixed heights of [`crate::window::library::emby_list`]
+//! The rows paint at the fixed heights of [`crate::window::library::lettered`]
 //! over native scroll, and only the rows in view paint, so a long library
 //! stays fast. The list keeps no cursor: the keys act on the row the pointer
 //! marks (`gui-pointer-target-interaction` D2); the scroll offset and the
@@ -19,6 +19,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEmbyRowFrame;
 use crate::bridge::frame::library::GuiEmbyRowKindFrame;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
@@ -29,7 +30,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::emby_list::EmbyItemRow;
+use crate::window::library::lettered::LetteredItemRow;
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_emby_detail, library_emby_list};
 use crate::window::library::state::LibraryState;
@@ -48,7 +49,7 @@ fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
 /// One painted row of the list: the letter heading
 /// or the item row.
 fn paint_emby_row(
-    row: &LetteredRow<EmbyItemRow>,
+    row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>,
     library: &LibraryState,
     selected: Option<&str>,
 ) -> Element {
@@ -174,7 +175,7 @@ pub fn LibraryEmbyList() -> Element {
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Emby, ids);
         })),
-        move |row: &LetteredRow<EmbyItemRow>| {
+        move |row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>| {
             paint_emby_row(row, &paint_library, paint_selected.as_deref())
         },
     );
