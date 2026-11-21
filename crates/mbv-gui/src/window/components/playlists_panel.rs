@@ -27,6 +27,9 @@ use crate::bridge::frame::playlists::{GuiOpenPlaylist, GuiPlaylistRow, GuiPlayli
 use crate::bridge::playlists::{GuiPlaylistAction, GuiPlaylistsCommand};
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
+use crate::window::components::library_hero_actions::{
+    ACCENT_STYLE, DESTRUCTIVE_STYLE, RAISED_STYLE,
+};
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
@@ -632,16 +635,18 @@ fn hero_pane(
                         let run_frame = frame.clone();
                         let target = picked.clone();
                         rsx! {
-                            SettingsButton {
+                            button {
                                 key: "{control.label()}",
-                                variant: match control {
-                                    Control::Play => SettingsButtonVariant::Primary,
-                                    Control::Delete => SettingsButtonVariant::Destructive,
-                                    _ => SettingsButtonVariant::Secondary,
+                                "type": "button",
+                                class: "flex items-center flex-none whitespace-nowrap",
+                                style: match control {
+                                    Control::Play => ACCENT_STYLE,
+                                    Control::Delete => DESTRUCTIVE_STYLE,
+                                    _ => RAISED_STYLE,
                                 },
-                                onpress: Some(Callback::new(move |()| {
+                                onclick: move |_| {
                                     run_control(&run_link, &run_settings, &run_frame, &target, control);
-                                })),
+                                },
                                 "{control.label()}"
                             }
                         }

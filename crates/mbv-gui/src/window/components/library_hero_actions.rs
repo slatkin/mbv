@@ -39,9 +39,16 @@ fn paint_hint(hint: &str) -> Element {
     }
 }
 
+/// The accent Play pill's style, shared with the Playlists hero.
+pub(crate) const ACCENT_STYLE: &str = "height: 44px; padding: 0 18px 0 14px; gap: 8px; background: var(--canvas-accent); border: 0; border-radius: 22px; color: var(--canvas-ink); font-size: 15px; font-weight: 600; cursor: pointer;";
+
+/// The destructive action pill's style: the raised pill with the destructive
+/// outline and text, for the Playlists hero's Delete.
+pub(crate) const DESTRUCTIVE_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background: none; border: 1px solid var(--canvas-destructive-border); border-radius: 22px; color: var(--canvas-destructive); font-size: 14px; cursor: pointer;";
+
 /// The raised action pill's style: the Play-next and Add-to-queue buttons'
 /// shared look.
-const RAISED_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background: var(--canvas-library-raise); border: 1px solid var(--canvas-library-control); border-radius: 22px; color: var(--canvas-text); font-size: 14px; cursor: pointer;";
+pub(crate) const RAISED_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background: var(--canvas-library-raise); border: 1px solid var(--canvas-library-control); border-radius: 22px; color: var(--canvas-text); font-size: 14px; cursor: pointer;";
 
 /// The Hero's action buttons:
 /// the accent Play pill, and the raised Play-next and Add-to-queue pills with
@@ -65,7 +72,7 @@ pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex items-center",
-                style: "height: 44px; padding: 0 18px 0 14px; gap: 8px; background: var(--canvas-accent); border: 0; border-radius: 22px; color: var(--canvas-ink); font-size: 15px; font-weight: 600; cursor: pointer;",
+                style: ACCENT_STYLE,
                 onclick: move |_| on_play.call(()),
                 ..play_attrs,
                 Play { size: 16, fill: "var(--canvas-ink)".to_owned(), stroke_width: 0.0 }
