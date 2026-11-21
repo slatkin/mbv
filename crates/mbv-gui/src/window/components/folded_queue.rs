@@ -15,9 +15,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::icons::ChevronDown;
-use crate::window::layout::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
-};
+use crate::window::layout::region_set::use_region_set;
 use crate::window::playhead::{Playhead, queue_finish_text};
 use crate::window::sections::Sections;
 use crate::window::theme::role_var;
@@ -28,54 +26,14 @@ use crate::window::theme::role_var;
 pub fn FoldedQueue() -> Element {
     let sections = consume_context::<Sections>();
     let playhead = consume_context::<Playhead>();
-    let epoch = consume_context::<LayoutEpoch>();
-    let reporter = consume_context::<LayoutReporter>();
-    let key = use_hook(LayoutKey::next);
 
-    let mut expand_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-
-    // No region outlives the line: the contribution retracts on unmount, as
-    // the former client `onMount` teardown did.
-    let mut drop_reporter = reporter.clone();
-
-    // Each paint that moved a region reports (design D4): this effect runs
-    // after the DOM update, and the layout epoch reports layout-driven moves.
-    // The reporter dedupes an unchanged contribution.
+    // Each paint that moved a region reports (design D1): the region set's one
+    // effect watches the summary and the layout epoch, and its reporter
+    // dedupes an unchanged contribution.
     let watch_summary = sections.summary;
-    let watch_epoch = epoch.0;
-    use_effect(move || {
+    let region_set = use_region_set(0, move || {
         let _summary = watch_summary.cloned();
-        let _epoch = watch_epoch.cloned();
-        let expand = expand_mounted.cloned();
-        let mut effect_reporter = reporter.clone();
-        spawn(async move {
-            // The painted regions (design D4): the expand control, the
-            // line's one interactive target. The line itself is
-            // informational, so it reports none.
-            let regions = match expand.as_ref() {
-                Some(expand) => element_region(
-                    expand,
-                    RegionTarget::QueuePlayback(QueuePlaybackTargetId::QueueFold),
-                )
-                .await
-                .into_iter()
-                .collect(),
-                None => Vec::new(),
-            };
-            effect_reporter.report_layout(
-                key,
-                LayoutContribution {
-                    lists: Vec::new(),
-                    regions,
-                },
-            );
-        });
     });
-
-    use_drop(move || {
-        drop_reporter.retract_layout(key);
-    });
-
     let summary = sections.summary.cloned();
     // The queue's finish clock, `None` while no finish facts hold or the
     // summary carries no tail (design D5).
@@ -114,7 +72,11 @@ pub fn FoldedQueue() -> Element {
                 "data-target": "queueFold",
                 "aria-label": "Expand queue",
                 title: "Expand queue (q)",
-                onmounted: move |event| expand_mounted.set(Some(event)),
+                // The line's one interactive target: the expand control. The
+                // line itself is informational, so it reports none.
+                onmounted: region_set.mark(RegionTarget::QueuePlayback(
+                    QueuePlaybackTargetId::QueueFold,
+                )),
                 ChevronDown {
                     size: 16,
                     color: role_var(GuiRole::TextMuted),
