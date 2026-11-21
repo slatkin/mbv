@@ -475,7 +475,7 @@ fn playlist_node(
                 Truncate {
                     text: playlist.name.clone(),
                     class: "min-w-0 flex-1".to_owned(),
-                    style: TextStyle::sans(14.5, 400.0),
+                    style: TextStyle::sans(14.0, 400.0),
                     css: "color: var(--canvas-text);".to_owned(),
                 }
                 span {
