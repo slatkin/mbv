@@ -15,6 +15,8 @@ use super::ConfirmOverlay;
 use crate::bridge::frame::overlay::{GuiConfirmButton, GuiConfirmButtonTone};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::layout::LayoutEpoch;
+use crate::window::layout::region_set::last_reported_targets;
 use crate::window::layout::use_layout_reporter;
 
 #[derive(Clone)]
@@ -27,6 +29,7 @@ struct FixtureProps {
 /// The root: provides the reporter's contexts and paints the modal.
 fn confirm_app(props: FixtureProps) -> Element {
     provide_context(CoreLink::new(props.sender));
+    provide_context(use_hook(LayoutEpoch::new));
     let reporter = use_layout_reporter();
     provide_context(reporter);
     rsx! {
@@ -139,23 +142,10 @@ fn the_affirmative_choice_paints_the_accent_text_token_on_the_recessed_fill() {
 /// core's order (the merged report the core's hit map reads).
 #[test]
 fn the_buttons_report_their_confirm_regions() {
-    use crate::bridge::layout::{ConfirmTargetId, LayoutReport, RegionTarget};
+    use crate::bridge::layout::{ConfirmTargetId, RegionTarget};
     let mut fixture = built();
     fixture.poll_until_idle();
-    let targets: Vec<_> = fixture
-        .receiver
-        .try_iter()
-        .filter_map(|input| match input {
-            CoreInput::Layout(LayoutReport { regions, .. }) => Some(
-                regions
-                    .into_iter()
-                    .map(|region| region.target)
-                    .collect::<Vec<_>>(),
-            ),
-            _ => None,
-        })
-        .last()
-        .unwrap_or_default();
+    let targets = last_reported_targets(&fixture.receiver);
     assert_eq!(
         targets,
         vec![

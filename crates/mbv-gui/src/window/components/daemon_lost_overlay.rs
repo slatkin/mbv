@@ -21,7 +21,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiConfirmButton;
 use crate::bridge::layout::{DaemonLostTargetId, RegionTarget};
-use crate::window::components::confirm_overlay::{BUTTON_FILL, button_color};
+use crate::window::components::dialog_frame::{BUTTON_FILL, button_color};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,

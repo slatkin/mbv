@@ -9,6 +9,7 @@ pub mod compact_strip;
 pub mod confirm_overlay;
 pub mod cursor_reveal;
 pub mod daemon_lost_overlay;
+pub mod dialog_frame;
 pub mod folded_queue;
 pub mod library_attr;
 pub mod library_audiobooks_hero;
