@@ -18,9 +18,8 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::HomeAction;
 use super::LibraryHomeHero;
-use super::act;
+use super::press;
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiHomeDetail, GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiLibraryDetail,
     GuiMetaKindFrame, GuiMetaSegmentFrame,
@@ -318,7 +317,7 @@ fn play_sends_the_play_command_for_the_selected_row() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, HomeAction::Play, &detail));
+    fixture.in_runtime(move || press(&state, &detail, LibraryState::play_home_row));
 
     assert_eq!(
         fixture.library_commands(),
@@ -338,7 +337,7 @@ fn play_next_sends_the_play_next_command_for_the_selected_row() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, HomeAction::PlayNext, &detail));
+    fixture.in_runtime(move || press(&state, &detail, LibraryState::play_home_row_next));
 
     assert_eq!(
         fixture.library_commands(),
@@ -358,7 +357,7 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_row() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, HomeAction::Queue, &detail));
+    fixture.in_runtime(move || press(&state, &detail, LibraryState::queue_home_row));
 
     assert_eq!(
         fixture.library_commands(),

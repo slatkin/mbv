@@ -22,7 +22,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
-use super::{FeedsAction, LibraryFeedsHero, act};
+use super::LibraryFeedsHero;
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail,
     GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
@@ -32,6 +32,8 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::library::hero::hero_command;
+use crate::window::library::lettered::{FeedsList, LetteredDestination};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::{SectionRef, Sections};
 
@@ -398,7 +400,9 @@ fn play_sends_the_play_command_for_the_selected_entry() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, FeedsAction::Play, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<FeedsList>(&state, &detail, FeedsList::play);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -418,7 +422,9 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_entry() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, FeedsAction::Queue, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<FeedsList>(&state, &detail, FeedsList::queue);
+    });
 
     assert_eq!(
         fixture.library_commands(),

@@ -257,6 +257,11 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// as the frame painted it.
     fn selected(detail: &Self::Detail) -> Option<&str>;
 
+    /// Whether the detail part carries a Hero (design D12): the Hero's
+    /// actions send only while the frame holds both the selection and a
+    /// Hero.
+    fn hero_present(detail: &Self::Detail) -> bool;
+
     /// The load facts the destination's list part carries (design D4): the
     /// load line, the failure line, and the empty line each paint while their
     /// fact holds.

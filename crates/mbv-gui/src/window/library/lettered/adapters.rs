@@ -78,6 +78,10 @@ impl LetteredDestination for EmbyList {
         detail.selected.as_deref()
     }
 
+    fn hero_present(detail: &Self::Detail) -> bool {
+        detail.hero.is_some()
+    }
+
     fn load_facts(list: &Self::List) -> LetteredLoadFacts {
         LetteredLoadFacts::of(list.loading, list.failed, list.rows.is_empty())
     }
@@ -236,6 +240,10 @@ impl LetteredDestination for AudiobooksList {
         detail.selected.as_deref()
     }
 
+    fn hero_present(detail: &Self::Detail) -> bool {
+        detail.hero.is_some()
+    }
+
     fn load_facts(list: &Self::List) -> LetteredLoadFacts {
         LetteredLoadFacts::of(list.loading, list.failed, list.rows.is_empty())
     }
@@ -375,6 +383,10 @@ impl LetteredDestination for PodcastsList {
         detail.selected.as_deref()
     }
 
+    fn hero_present(detail: &Self::Detail) -> bool {
+        detail.hero.is_some()
+    }
+
     fn load_facts(list: &Self::List) -> LetteredLoadFacts {
         LetteredLoadFacts::of(list.loading, list.failed, list.rows.is_empty())
     }
@@ -504,6 +516,10 @@ impl LetteredDestination for FeedsList {
 
     fn selected(detail: &Self::Detail) -> Option<&str> {
         detail.selected.as_deref()
+    }
+
+    fn hero_present(detail: &Self::Detail) -> bool {
+        detail.hero.is_some()
     }
 
     fn load_facts(list: &Self::List) -> LetteredLoadFacts {

@@ -18,9 +18,10 @@
 //! boxset plays through the TUI's folder-play rule, so the pane is the frame
 //! and no nested list opens.
 //!
-//! Play, Play next (`n`), and Add to queue (`a`) send the Emby commands with
-//! the frame's selected row — the core owns the selection, so the actions
-//! name the row the frame painted and never a position.
+//! Play, Play next (`n`), and Add to queue (`a`) send the Emby destination's
+//! commands with the frame's selected row (design D12) — the core owns the
+//! selection, so the actions name the row the frame painted and never a
+//! position, and the destination's list part names the library index.
 
 use dioxus_native::prelude::*;
 
@@ -30,35 +31,21 @@ use crate::bridge::frame::library::{
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame, own};
-use crate::window::library::hero::{HeroLayoutFacts, MetaRow, hero_layout};
+use crate::window::library::hero::{HeroLayoutFacts, MetaRow, hero_command, hero_layout};
+use crate::window::library::lettered::{EmbyList, LetteredDestination};
 use crate::window::library::parts::library_emby_detail;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
 
 /// The props of the Emby Hero (the `LibraryEmbyHero` props, narrowed
-/// to what the Hero reads): the library index the Emby commands name, and the
-/// carried plain Emby-library detail — the selected row and its Hero facts
-/// (design D12, row 8.1).
+/// to what the Hero reads): the carried plain Emby-library detail — the
+/// selected row and its Hero facts (design D12, row 8.1).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryEmbyHeroProps {
-    /// The plain Emby-library index the Emby commands name (design D2, row
-    /// 8.1).
-    pub lib_idx: usize,
     /// The selected row's Hero facts and the selection the actions name, as
     /// the one handle every reader clones (`share-gui-sections-by-rc` design
     /// D3).
     pub detail: SectionRef<GuiLibraryDetail>,
-}
-
-/// The Emby action a button sends.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EmbyAction {
-    /// Play the selected row.
-    Play,
-    /// Play the selected row next in the queue.
-    PlayNext,
-    /// Add the selected row to the queue.
-    Queue,
 }
 
 /// The text of one meta row, as the `IMDb` row's filter reads it.
@@ -86,32 +73,6 @@ fn layout_facts(facts: &GuiEmbyHeroFrame) -> (Vec<MetaRow>, Option<usize>, Optio
         meta_rows.push(row.clone());
     }
     (meta_rows, duration_row, progress_row)
-}
-
-/// Send an Emby-library command for the frame's selected row (design D12,
-/// row 8.1): the row the frame painted, never a position. The command sends
-/// only while the frame holds both the selection and a Hero. The handle is
-/// narrowed here, so the press reads the carried detail without the Hero
-/// cloning it per render (`share-gui-sections-by-rc` design D3).
-fn act(
-    library: &LibraryState,
-    action: EmbyAction,
-    lib_idx: usize,
-    detail: &SectionRef<GuiLibraryDetail>,
-) {
-    let Some(detail) = library_emby_detail(Some(detail)) else {
-        return;
-    };
-    let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
-        return;
-    };
-    let item_id = item_id.clone();
-    let command = match action {
-        EmbyAction::Play => GuiLibraryCommand::EmbyPlay { lib_idx, item_id },
-        EmbyAction::PlayNext => GuiLibraryCommand::EmbyPlayNext { lib_idx, item_id },
-        EmbyAction::Queue => GuiLibraryCommand::EmbyQueue { lib_idx, item_id },
-    };
-    library.link.library(command);
 }
 
 /// Open the Hero's `IMDb` link in the user's browser (design D17, Q7): the
@@ -201,23 +162,22 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
         }
     });
 
-    // The actions' sends (design D12, row 8.1): the picked row's own stable
-    // id.
-    let lib_idx = props.lib_idx;
+    // The actions' sends (design D12, row 8.1): the Emby destination's
+    // commands over the picked row's own stable id.
     let play_library = library.clone();
     let play_detail = props.detail.clone();
     let on_play = Callback::new(move |()| {
-        act(&play_library, EmbyAction::Play, lib_idx, &play_detail);
+        hero_command::<EmbyList>(&play_library, &play_detail, EmbyList::play);
     });
     let next_library = library.clone();
     let next_detail = props.detail.clone();
     let on_play_next = Callback::new(move |()| {
-        act(&next_library, EmbyAction::PlayNext, lib_idx, &next_detail);
+        hero_command::<EmbyList>(&next_library, &next_detail, EmbyList::play_next);
     });
     let queue_library = library.clone();
     let queue_detail = props.detail.clone();
     let on_queue = Callback::new(move |()| {
-        act(&queue_library, EmbyAction::Queue, lib_idx, &queue_detail);
+        hero_command::<EmbyList>(&queue_library, &queue_detail, EmbyList::queue);
     });
     let actions = rsx! {
         LibraryHeroActions {

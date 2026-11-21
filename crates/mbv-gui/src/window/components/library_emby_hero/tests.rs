@@ -22,15 +22,17 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
-use super::{EmbyAction, LibraryEmbyHero, act, open_imdb};
+use super::{LibraryEmbyHero, open_imdb};
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiLibraryDetail,
-    GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiArtShapeFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame,
+    GuiEmbyList, GuiLibraryDetail, GuiLibraryList, GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::library::hero::hero_command;
+use crate::window::library::lettered::{EmbyList, LetteredDestination};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::{SectionRef, Sections};
 
@@ -71,6 +73,26 @@ fn detail(facts: Option<GuiEmbyHeroFrame>) -> GuiEmbyDetail {
     }
 }
 
+/// The Emby list part the destination's commands read the library index
+/// from (design D12).
+fn emby_library_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: None,
+        destination: GuiDestinationList::Emby(GuiEmbyList {
+            lib_idx: LIB_IDX,
+            library_name: "Movies".to_owned(),
+            collections: None,
+            collection_names: Vec::new(),
+            feed_group: false,
+            loading: false,
+            failed: false,
+            rows: Vec::new(),
+            sort: None,
+        }),
+    }
+}
+
 /// The harness's props: the carried Emby content, the mock core sender, and
 /// the handle the test reads the store through.
 #[derive(Clone)]
@@ -106,8 +128,12 @@ fn emby_hero_app(props: FixtureProps) -> Element {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.
         let playhead_position = Memo::new(|| 0.0);
+        let mut sections = Sections::new();
+        sections
+            .library_list
+            .set(Some(SectionRef::new(emby_library_list())));
         LibraryState::new(
-            Sections::new(),
+            sections,
             CoreLink::new(sender),
             playhead_position,
             Arc::clone(&clock),
@@ -116,7 +142,7 @@ fn emby_hero_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace((state, detail.clone()));
     rsx! {
-        LibraryEmbyHero { lib_idx: LIB_IDX, detail }
+        LibraryEmbyHero { detail }
     }
 }
 
@@ -415,7 +441,9 @@ fn play_sends_the_play_command_for_the_selected_row() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, EmbyAction::Play, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<EmbyList>(&state, &detail, EmbyList::play);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -436,7 +464,9 @@ fn play_next_sends_the_play_next_command_for_the_selected_row() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, EmbyAction::PlayNext, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<EmbyList>(&state, &detail, EmbyList::play_next);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -457,7 +487,9 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_row() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, EmbyAction::Queue, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<EmbyList>(&state, &detail, EmbyList::queue);
+    });
 
     assert_eq!(
         fixture.library_commands(),

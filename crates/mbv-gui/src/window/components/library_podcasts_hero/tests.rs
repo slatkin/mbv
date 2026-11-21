@@ -20,15 +20,18 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
-use super::{LibraryPodcastsHero, PodcastsAction, act};
+use super::LibraryPodcastsHero;
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiPodcastsDetail,
-    GuiPodcastsHeroFrame,
+    GuiArtShapeFrame, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
+    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiPodcastsDetail, GuiPodcastsHeroFrame,
+    GuiPodcastsList,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::library::hero::hero_command;
+use crate::window::library::lettered::{LetteredDestination, PodcastsList};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::{SectionRef, Sections};
 
@@ -68,6 +71,28 @@ fn detail(facts: Option<GuiPodcastsHeroFrame>) -> GuiPodcastsDetail {
     }
 }
 
+/// The Podcasts list part the destination's commands read the library index
+/// from (design D12).
+fn podcasts_library_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: None,
+        destination: GuiDestinationList::Podcasts(GuiPodcastsList {
+            lib_idx: LIB_IDX,
+            collections: GuiCollections {
+                target: mbv::GuiCollectionTarget::Podcasts(LIB_IDX),
+                all: true,
+                entries: Vec::new(),
+                noun: mbv::GuiCollectionNoun::Shows,
+            },
+            loading: false,
+            failed: false,
+            rows: Vec::new(),
+            sort: None,
+        }),
+    }
+}
+
 /// The harness's props: the carried Podcasts content, the mock core sender,
 /// and the handle the test reads the store through.
 #[derive(Clone)]
@@ -103,8 +128,12 @@ fn podcasts_hero_app(props: FixtureProps) -> Element {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.
         let playhead_position = Memo::new(|| 0.0);
+        let mut sections = Sections::new();
+        sections
+            .library_list
+            .set(Some(SectionRef::new(podcasts_library_list())));
         LibraryState::new(
-            Sections::new(),
+            sections,
             CoreLink::new(sender),
             playhead_position,
             Arc::clone(&clock),
@@ -113,7 +142,7 @@ fn podcasts_hero_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace((state, detail.clone()));
     rsx! {
-        LibraryPodcastsHero { lib_idx: LIB_IDX, detail }
+        LibraryPodcastsHero { detail }
     }
 }
 
@@ -365,7 +394,9 @@ fn play_sends_the_play_command_for_the_selected_episode() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, PodcastsAction::Play, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<PodcastsList>(&state, &detail, PodcastsList::play);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -386,7 +417,9 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_episode() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, PodcastsAction::Queue, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<PodcastsList>(&state, &detail, PodcastsList::queue);
+    });
 
     assert_eq!(
         fixture.library_commands(),

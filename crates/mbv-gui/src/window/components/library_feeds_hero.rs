@@ -9,24 +9,24 @@
 //! is no Workspace and no tracklist. Play next is not a Feeds command
 //! (row 11.1), so only Play and Add to queue paint.
 //!
-//! Play and Add to queue send the Feeds commands with the frame's selected
-//! entry — the core owns the selection, so the actions name the row the frame
-//! painted and never a position. A Client holds one feed tab, so no library
-//! index rides the commands.
+//! Play and Add to queue send the Feeds destination's commands with the
+//! frame's selected entry (design D12) — the core owns the selection, so the
+//! actions name the row the frame painted and never a position. A Client holds
+//! one feed tab, so no library index rides the commands.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{
     GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
 };
-use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow, WorkspaceRowState,
 };
 use crate::window::library::episode::{episode_progress, is_played_episode};
-use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
+use crate::window::library::hero::{HeroLayoutFacts, hero_command, hero_layout};
+use crate::window::library::lettered::{FeedsList, LetteredDestination};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
@@ -47,35 +47,6 @@ pub struct LibraryFeedsHeroProps {
     pub list: SectionRef<GuiLibraryList>,
     /// The selected entry's Hero facts and the selection the actions name.
     pub detail: SectionRef<GuiLibraryDetail>,
-}
-
-/// The Feeds action a button sends.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FeedsAction {
-    /// Play the selected entry.
-    Play,
-    /// Add the selected entry to the queue.
-    Queue,
-}
-
-/// Send a Feeds command for the frame's selected entry (design D12, row
-/// 11.1): the row the frame painted, never a position. The command sends
-/// only while the frame holds both the selection and a Hero. The handle is
-/// narrowed here, so the press reads the carried detail without the Hero
-/// cloning it per render (`share-gui-sections-by-rc` design D3).
-fn act(library: &LibraryState, action: FeedsAction, detail: &SectionRef<GuiLibraryDetail>) {
-    let Some(detail) = library_feeds_detail(Some(detail)) else {
-        return;
-    };
-    let Some(item_id) = selected_with_hero(detail.selected.as_ref(), detail.hero.is_some()) else {
-        return;
-    };
-    let item_id = item_id.clone();
-    let command = match action {
-        FeedsAction::Play => GuiLibraryCommand::FeedsPlay { item_id },
-        FeedsAction::Queue => GuiLibraryCommand::FeedsQueue { item_id },
-    };
-    library.link.library(command);
 }
 
 /// The row's played state: played, active with a
@@ -143,14 +114,19 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
             .collect(),
     };
 
-    // The actions' sends (design D12, row 11.1): the picked entry's own
-    // stable id. There is no play-next command for Feeds.
+    // The actions' sends (design D12, row 11.1): the Feeds destination's
+    // commands over the picked entry's own stable id. There is no play-next
+    // command for Feeds.
     let play_library = library.clone();
     let play_detail = props.detail.clone();
-    let on_play = Callback::new(move |()| act(&play_library, FeedsAction::Play, &play_detail));
+    let on_play = Callback::new(move |()| {
+        hero_command::<FeedsList>(&play_library, &play_detail, FeedsList::play);
+    });
     let queue_library = library.clone();
     let queue_detail = props.detail.clone();
-    let on_queue = Callback::new(move |()| act(&queue_library, FeedsAction::Queue, &queue_detail));
+    let on_queue = Callback::new(move |()| {
+        hero_command::<FeedsList>(&queue_library, &queue_detail, FeedsList::queue);
+    });
     let actions = rsx! {
         LibraryHeroActions {
             attr: "feeds",

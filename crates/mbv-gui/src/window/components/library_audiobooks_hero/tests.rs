@@ -20,15 +20,18 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::{AbsAction, LibraryAudiobooksHero, act_book, play_chapter_row};
+use super::{LibraryAudiobooksHero, play_chapter_row};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame,
-    GuiAudiobooksWorkspaceFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiAudiobooksList, GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiLibraryDetail,
+    GuiLibraryList, GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::library::hero::hero_command;
+use crate::window::library::lettered::{AudiobooksList, LetteredDestination};
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::ticks_f64;
 use crate::window::sections::{SectionRef, Sections};
@@ -105,6 +108,22 @@ fn detail(
     }
 }
 
+/// The Audiobooks list part the destination's commands read the library index
+/// from (design D12).
+fn audiobooks_library_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: None,
+        destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {
+            lib_idx: LIB_IDX,
+            loading: false,
+            failed: false,
+            rows: Vec::new(),
+            sort: None,
+        }),
+    }
+}
+
 /// The harness's props: the carried Audiobooks content, the playhead position
 /// the mark reads, the mock core sender, and the handle the test reads the
 /// store through.
@@ -143,8 +162,12 @@ fn abs_hero_app(props: FixtureProps) -> Element {
         // The playhead position the interaction state reads: the test's fixed
         // position, stamped before the build (design D5).
         let playhead_position = Memo::new(move || position_ticks);
+        let mut sections = Sections::new();
+        sections
+            .library_list
+            .set(Some(SectionRef::new(audiobooks_library_list())));
         LibraryState::new(
-            Sections::new(),
+            sections,
             CoreLink::new(sender),
             playhead_position,
             Arc::clone(&clock),
@@ -525,7 +548,9 @@ fn play_sends_the_play_command_for_the_selected_book() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act_book(&state, AbsAction::Play, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<AudiobooksList>(&state, &detail, AudiobooksList::play);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -546,7 +571,9 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_book() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act_book(&state, AbsAction::Queue, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<AudiobooksList>(&state, &detail, AudiobooksList::queue);
+    });
 
     assert_eq!(
         fixture.library_commands(),

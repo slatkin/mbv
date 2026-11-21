@@ -141,11 +141,10 @@ fn list_painter(pair: LibraryPair) -> Element {
 /// The active destination's Hero painter: the same painter the Wide pane and
 /// the Narrow overlay mount, so the two cannot drift (design D4). The Music,
 /// Home, Shows, plain Emby, Audiobooks, Podcasts, and Feeds Heroes are rows
-/// 7.5 and 7.6's ports; the props carry what each Hero reads — the Emby,
-/// Shows, Audiobooks, and Podcasts commands name the library index, and each
-/// Hero takes the carried handle and narrows its own part in its body, so a
-/// panel repaint clones no section's content (`share-gui-sections-by-rc`
-/// design D3).
+/// 7.5 and 7.6's ports; the props carry what each Hero reads — the Shows and
+/// Audiobooks chapters' commands name the library index, and each Hero takes
+/// the carried handle and narrows its own part in its body, so a panel repaint
+/// clones no section's content (`share-gui-sections-by-rc` design D3).
 fn hero_painter(
     list: Option<&SectionRef<GuiLibraryList>>,
     detail: Option<&SectionRef<GuiLibraryDetail>>,
@@ -166,9 +165,8 @@ fn hero_painter(
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Emby(list_part, _) => rsx! {
+        LibraryPair::Emby(..) => rsx! {
             LibraryEmbyHero {
-                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
@@ -178,9 +176,8 @@ fn hero_painter(
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Podcasts(list_part, _) => rsx! {
+        LibraryPair::Podcasts(..) => rsx! {
             LibraryPodcastsHero {
-                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
