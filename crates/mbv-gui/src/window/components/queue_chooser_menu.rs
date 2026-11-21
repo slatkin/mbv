@@ -47,11 +47,9 @@ use crate::window::theme::{EfToken, ef_var};
 const CURRENT_MARK_PX: u16 = 8;
 
 /// One entry's height and the gap between two items are the queue rows' own
-/// (designs D8 and D9 of `gui-queue-panel-redesign`, now the delineated row's
-/// 40 px and its 0 px gap, design D3 of `gui-delineated-rows`); the card's
-/// padding is its own inset.
-const ITEM_HEIGHT_PX: u16 = ROW_HEIGHT_PX;
-const ITEM_GAP_PX: u16 = ROW_GAP_PX;
+/// (`ROW_HEIGHT_PX` and `ROW_GAP_PX`: the delineated row's 40 px and its 0 px
+/// gap, design D3 of `gui-delineated-rows`); the card's padding is its own
+/// inset.
 const CARD_PADDING_PX: u16 = 4;
 
 /// The open Queue chooser's dropdown facts, as the frame's overlay carries
@@ -146,7 +144,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
             role: "menu",
             "aria-label": "Queue chooser",
             style: format!(
-                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
+                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ROW_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
                 ef_var(EfToken::Bg2),
                 ef_var(EfToken::Bg4)
             ),
@@ -161,7 +159,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                         String::new()
                     };
                     let row_style = format!(
-                        "height: {ITEM_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
+                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
                         ef_var(EfToken::Fg)
                     );
                     let label_align = if paint.draft {
