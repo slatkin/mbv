@@ -29,11 +29,9 @@ git tag --sort=-version:refname | head -10
   running the release command; do not invent product claims.
 - Read `tools/release.sh` before invoking it, especially if the script has
   changed since the last release.
-- Check CI before releasing: `gh run list --repo slatkin/mbv --limit 10`. If
-  the latest run on `main` (the commit being released or an ancestor of it) is
-  red or still running, stop and report; fix or wait for green first. A
-  release pushed from a red `main` ships artifacts CI has already failed.
-  Never announce a release while a run on the release commit is failing.
+- Old CI runs on `main` are not a release gate: the release commit is not on
+  `main` yet, and the release script runs the full gate set itself. Do not
+  poll `gh run list` before running the script.
 - Check both local and remote tag state. Stop if the release tag already exists
   locally or on `origin`; the script only protects against an existing local
   tag. Preserve unrelated work rather than committing it as part of the
@@ -72,9 +70,11 @@ local `main` back to `origin/main`. The release then needs three more steps:
 1. Watch the PR's checks in the foreground (`gh pr checks --watch`) and merge
    when every required check is green (`gh pr merge --squash`). Never merge a
    red PR, and never close-and-reopen to dodge a check.
-2. Tag the merge commit: `tools/release-tag.sh <version>`. The script fetches,
-   tags `origin/main`, and pushes the tag. The tag push triggers the PKGBUILD
-   publish run (tarball, debs, GitHub release, AUR hand-off).
+2. Tag only after the PR has merged into `main`: `tools/release-tag.sh
+   <version>`. Never tag the PR head, a local release branch, or a feature
+   branch. The script fetches, tags `origin/main`, and pushes the tag. The tag
+   push triggers the PKGBUILD publish run (tarball, debs, GitHub release, AUR
+   hand-off).
 3. Verify:
 
    ```bash
@@ -89,9 +89,9 @@ local `main` back to `origin/main`. The release then needs three more steps:
    release completed.
 
 On a feature branch, the script only prepares and commits the version bump.
-Do not tag it there. Report that the branch must be merged into `main` before
-the tag is created (then `tools/release-tag.sh <version>`), and keep release
-publishing separate from unrelated PR work.
+Do not tag it there either. Report that the branch must be merged into `main`
+before the tag is created (then `tools/release-tag.sh <version>`), and keep
+release publishing separate from unrelated PR work.
 
 Never wait for the release github action to complete as part of this process.
 
