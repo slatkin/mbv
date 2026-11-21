@@ -1,7 +1,9 @@
 # Invariant 29 — A play activation resolves the autoload policy one way
 
-**Scope:** `select_item`, `play_tv_episode`, and `play_autoloaded_children`
-(`src/app/dispatch/navigation.rs`); the `TvEpisodeActivate` arm
+**Scope:** `select_item`, `play_tv_episode`, `play_autoloaded_siblings`,
+`play_autoloaded_containing_folder`, and `play_autoloaded_children`
+(`src/app/dispatch/navigation.rs`); `home_play_target` and `play_home_cw_item`
+(`src/app/dispatch/home.rs`); the `TvEpisodeActivate` arm
 (`src/app/shell/tv_workspace.rs`); the `EmbyLibraryActivate` arm
 (`src/app/shell/emby_library.rs`).
 
@@ -13,9 +15,14 @@
 2. When the policy is off, the same activation queues that item alone.
 3. One resolver applies that rule to every browse-like activation. A view
    supplies the parent folder; it never decides the queue itself.
-4. A single-item play is the fallback, not the rule: it is correct only when
-   the policy is off, the parent fetch fails, or the activated item is not in
-   its resolved parent (a flat Latest/Upcoming row, a playlist entry).
+4. A flat row — a Home `Continue watching` or `Recently added` row, a Shows
+   `New` or `Upcoming` row, any Latest list's row — names no browse level, so
+   its own containing item resolves the parent: an episode's season, a home
+   video's folder. A row that names no containing item, and a playlist entry,
+   still take the single-item play.
+5. A single-item play is the fallback, not the rule: it is correct only when
+   the policy is off, the parent fetch fails, or the activated item has no
+   resolved parent holding it.
 
 ## Why it matters
 
@@ -34,10 +41,20 @@ generic browser kept autoloading.
   It returns `false` — leaving playback to the caller — in the four fallback
   cases above.
 - `select_item` supplies the browse level's parent (or the feed home video
-  group's parent) and keeps the existing queue source.
+  group's parent) and keeps the existing queue source. When that parent does
+  not hold the item — a flat row in a Latest list — it falls back to the
+  item's own containing item.
+- `play_autoloaded_containing_folder(fresh, queue_source)` is the flat-row
+  resolution: it hands `fresh.parent_id` to `play_autoloaded_children`, and
+  returns `false` when the item names no containing item.
+- `home_play_target` and `play_home_cw_item` (the latter after refreshing the
+  item) take that resolution before `play_item`, so a Home row autoloads its
+  container in both Clients. A resuming item still starts at its position,
+  because the queue's start item carries it.
 - `play_tv_episode` supplies the episode's season, resolved from the shell's
   cached series detail — the same cache the TV Workspace renders from — and
-  passes `QueueSource::Series`.
+  from the episode's own containing item when no cache entry holds the
+  series, which is every Latest row. It passes `QueueSource::Series`.
 - Guard tests in `src/app/dispatch/actions/route_tests/library_routing.rs`:
   `tv_episode_play_queues_the_cached_season_when_autoload_is_on` and
   `tv_episode_play_queues_only_that_episode_when_autoload_is_off`, plus the
@@ -45,9 +62,13 @@ generic browser kept autoloading.
 
 ## Where it currently fails / how it could regress
 
-- The TV Workspace's flat Latest/Upcoming rows carry no cached season, so they
-  take the single-item path even with the policy on. That is a known gap, not
-  a decision recorded anywhere else.
+- An item whose payload declares no containing item (`ParentId` empty) takes
+  the single-item path even with the policy on. Queue items the Owner restored
+  from an older snapshot carry the field as empty until their next refresh.
+- A movie's containing item is its library, so autoloading a movie from a Home
+  or New row queues the whole library. That is the same queue the policy
+  produces when the movie plays from the library's own root listing, not a
+  separate rule.
 - Other playback entry points (context menu play, playlists, series
   continuation, feeds) do not autoload by design. A new browse-like Enter path
   that calls `play_item` directly would join them silently; only the TV path

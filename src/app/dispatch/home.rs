@@ -28,7 +28,15 @@ impl App {
             }
         } else {
             match item {
-                QueueItem::Emby(item) => self.play_item(*item),
+                QueueItem::Emby(item) => {
+                    // The autoload policy fills the queue with the folder the
+                    // row names as its containing item (invariant 29 rule 3).
+                    let source = Self::flat_activation_queue_source(&item);
+                    if self.play_autoloaded_containing_folder(&item, source) {
+                        return;
+                    }
+                    self.play_item(*item);
+                }
                 // Non-Emby `latest` items (Audiobookshelf today, Feeds in
                 // Part 3) submit through the shared helper, which neither
                 // reads nor mutates the owning tab's cursor/filter.
@@ -90,6 +98,13 @@ impl App {
                 })
                 .unwrap_or(item)
         };
+        // A Continue Watching row is a flat row too: with the autoload policy
+        // on, the container it sits in joins the queue around it, and the item's
+        // own position still resumes it.
+        let source = Self::flat_activation_queue_source(&fresh);
+        if self.play_autoloaded_containing_folder(&fresh, source) {
+            return;
+        }
         self.play_item(fresh);
     }
 }

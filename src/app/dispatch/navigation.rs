@@ -114,8 +114,10 @@ impl App {
     /// episode's season fills the queue from that episode — the same
     /// folder-sibling rule `select_item` applies to a played browse row; with
     /// it off, only the episode plays. The season comes from the shell's
-    /// cached series detail (the source the TV Workspace renders from); an
-    /// episode outside a cached season takes the single-item path.
+    /// cached series detail (the source the TV Workspace renders from), and
+    /// from the episode's own containing item otherwise: a flat Latest or
+    /// Upcoming row is outside every cached season, its payload still names
+    /// the season it belongs to.
     pub(in crate::app) fn play_tv_episode(&mut self, episode: EmbyItem) {
         let season_id = self.season_id_for_episode(&episode);
         if let Some(season_id) = season_id
@@ -128,18 +130,25 @@ impl App {
 
     /// The season that holds `episode`, resolved from the cached series
     /// detail. Season IDs are unique across one series, so the first season
-    /// whose cached episodes hold the item is the only candidate.
+    /// whose cached episodes hold the item is the only candidate. A row from a
+    /// flat Latest or Upcoming list has no cached series detail behind it, so
+    /// the episode's own containing item (the season) is the fallback.
     fn season_id_for_episode(&self, episode: &EmbyItem) -> Option<String> {
-        let detail = self.series_detail_cache.get(&episode.series_id)?;
-        detail
-            .episodes
-            .iter()
-            .find(|(_, episodes)| episodes.iter().any(|cached| cached.id == episode.id))
-            .map(|(season_id, _)| season_id.clone())
+        let cached = self
+            .series_detail_cache
+            .get(&episode.series_id)
+            .and_then(|detail| {
+                detail
+                    .episodes
+                    .iter()
+                    .find(|(_, episodes)| episodes.iter().any(|cached| cached.id == episode.id))
+                    .map(|(season_id, _)| season_id.clone())
+            });
+        cached.or_else(|| (!episode.parent_id.is_empty()).then(|| episode.parent_id.clone()))
     }
 
     fn play_autoloaded_siblings(&mut self, lib_idx: usize, fresh: &EmbyItem) -> bool {
-        let parent_id = if self.is_feed_home_video_group_view(lib_idx) {
+        let browse_parent = if self.is_feed_home_video_group_view(lib_idx) {
             self.feed_home_video_selected_parent_id(lib_idx)
         } else {
             self.libs[lib_idx]
@@ -147,11 +156,47 @@ impl App {
                 .last()
                 .map(|l| l.parent_id.clone())
         };
-        let Some(parent_id) = parent_id else {
-            return false;
-        };
         let queue_source = self.playback_queue().source().clone();
-        self.play_autoloaded_children(&parent_id, fresh, queue_source)
+        if let Some(parent_id) = browse_parent.as_deref()
+            && self.play_autoloaded_children(parent_id, fresh, queue_source.clone())
+        {
+            return true;
+        }
+        // The browse level (a library root, a Latest list) does not hold a
+        // flat row; the folder the row names as its containing item does.
+        if browse_parent.as_deref() == Some(fresh.parent_id.as_str()) {
+            return false;
+        }
+        self.play_autoloaded_containing_folder(fresh, queue_source)
+    }
+
+    /// Queue the direct playable children of the folder `fresh` names as its
+    /// containing item (`fresh.parent_id`), starting at `fresh`, under the
+    /// autoload policy. This is the flat-row resolution: a Home latest row, a
+    /// Shows New row, or another Latest list's row names the season or folder
+    /// it sits in, so the policy fills the queue with that container instead
+    /// of dropping the setting. Returns false — leaving playback to the
+    /// caller — when the item names no containing item, the policy is off, the
+    /// fetch fails, or `fresh` is not in the resolved list.
+    pub(in crate::app) fn play_autoloaded_containing_folder(
+        &mut self,
+        fresh: &EmbyItem,
+        queue_source: mbv_queue::QueueSource,
+    ) -> bool {
+        if fresh.parent_id.is_empty() {
+            return false;
+        }
+        self.play_autoloaded_children(&fresh.parent_id, fresh, queue_source)
+    }
+
+    /// The queue source a flat video activation claims: an episode's queue is
+    /// its series; any other video is a one-container queue.
+    pub(in crate::app) fn flat_activation_queue_source(fresh: &EmbyItem) -> mbv_queue::QueueSource {
+        if fresh.series_id.is_empty() {
+            mbv_queue::QueueSource::Unknown
+        } else {
+            mbv_queue::QueueSource::Series
+        }
     }
 
     /// Queue the playable direct children of `parent_id`, starting at `fresh`,
