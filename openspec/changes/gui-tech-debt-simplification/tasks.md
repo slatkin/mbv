@@ -49,7 +49,7 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 ## 7. Shared list wiring
 
-- [ ] 7.1 Move the list-column wiring the lettered component absorbs — the measure, scroll, and rows-in-view callbacks, the `library_virtual_list` call, the header block, and the notices block — into one scaffold beside `crates/mbv-gui/src/window/components/library_virtual_list.rs`, and point `library_list.rs` (Music), `library_home_list.rs` (Home), and `library_shows_list.rs` (Shows) at it (design D14). Their row models, headers, and notices stay their own. Update the "The Library panel" section of `docs/architecture/gui-client.md` to name the one scaffold every list's wiring goes through. Verify: `cargo nextest run -p mbv-gui library` passes with no edit to expected text, attributes, or commands.
+- [x] 7.1 Move the list-column wiring the lettered component absorbs — the measure, scroll, and rows-in-view callbacks, the `library_virtual_list` call, the header block, and the notices block — into one scaffold beside `crates/mbv-gui/src/window/components/library_virtual_list.rs`, and point `library_list.rs` (Music), `library_home_list.rs` (Home), and `library_shows_list.rs` (Shows) at it (design D14). Their row models, headers, and notices stay their own. Update the "The Library panel" section of `docs/architecture/gui-client.md` to name the one scaffold every list's wiring goes through. Verify: `cargo nextest run -p mbv-gui library` passes with no edit to expected text, attributes, or commands.
 
 ## 8. Settings screen
 
