@@ -36,6 +36,10 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::components::tree_guide::{
+    GUIDE_START_INSET_PX, GuideTone, LEAF_INSET_X, NESTED_GUIDE_X, NESTED_INSET_X, TOP_GUIDE_X,
+    TreeGuide,
+};
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::input::f32_from_f64;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
@@ -65,17 +69,18 @@ fn is_selected_row(row: &ShowsListRow, selected: Option<&str>) -> bool {
 }
 
 /// The row's indentation (gui-tree-double-click design D2): the Music tree's
-/// depths — the season under its series and the episode under its season. A
-/// series row is a top-level row and paints through the shared row part, so its
-/// own inset is never read.
-fn row_inset(row: &ShowsListRow) -> &'static str {
+/// depths — the season under its series and the episode under its season, each
+/// inset far enough to clear the guides that pass through the row
+/// (gui-tree-indent-guides design D2). A series row is a top-level row and
+/// paints through the shared row part, so its own inset is never read.
+fn row_inset(row: &ShowsListRow) -> f32 {
     match row {
-        ShowsListRow::Season(_) => "26px",
-        ShowsListRow::Episode(_) => "44px",
+        ShowsListRow::Season(_) => NESTED_INSET_X,
+        ShowsListRow::Episode(_) => LEAF_INSET_X,
         // The top-level rows: a series paints through the shared row part, so
         // its own inset is never read, and a heading and a flat row sit at the
         // list's own inset.
-        ShowsListRow::Series(_) | ShowsListRow::Heading(_) | ShowsListRow::Flat(_) => "8px",
+        ShowsListRow::Series(_) | ShowsListRow::Heading(_) | ShowsListRow::Flat(_) => 8.0,
     }
 }
 
@@ -159,6 +164,7 @@ fn paint_shows_series(
                 media: series.media,
             }),
             tree_open: series.expandable.then_some(series.open),
+            tree_guide: series.shows_children,
             on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
             on_play: Callback::new(|()| {}),
             on_toggle,
@@ -173,26 +179,29 @@ fn paint_shows_series(
 /// press that selects it. An expandable season is a tree parent
 /// (gui-tree-double-click design D1, D2), so it paints no caret: its
 /// double-click toggles the node and its hover shows the hint. It keeps its own
-/// painter and height.
+/// painter and height. It passes the series' guide through and, while it shows
+/// episode rows, starts its own under its label (gui-tree-indent-guides design
+/// D2, D3).
 fn paint_shows_season(
     row: &ShowsListRow,
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
     selected: Option<&str>,
 ) -> Element {
-    let (kind, title, open, expandable, height) = match row {
+    let (kind, title, open, expandable, shows_children, height) = match row {
         ShowsListRow::Season(season) => (
             "season",
             &season.title,
             season.open,
             season.expandable,
+            season.shows_children(),
             season.height,
         ),
         _ => return rsx! {},
     };
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
-        "height: {height}px; padding: 0 8px; padding-left: {}; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
+        "height: {height}px; padding: 0 8px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
         row_inset(row)
     );
     if let Some(background) = row_background(row, selected) {
@@ -207,7 +216,10 @@ fn paint_shows_season(
     let row_class = if expandable {
         "tree-parent relative flex w-full items-center"
     } else {
-        "flex w-full items-center overflow-hidden"
+        // A season that does not expand still paints the series' guide
+        // through, so it carries the span's containing block
+        // (gui-tree-indent-guides design D1).
+        "relative flex w-full items-center overflow-hidden"
     };
     let menu_id = row_source_id(row).map(str::to_owned);
     let menu_row = row.clone();
@@ -267,6 +279,15 @@ fn paint_shows_season(
                 css: format!("color: {name_color}; font-weight: {weight};"),
                 style: TextStyle::sans(14.5, weight),
             }
+            TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
+            if shows_children {
+                TreeGuide {
+                    x: NESTED_GUIDE_X,
+                    tone: GuideTone::Nested,
+                    top: height - GUIDE_START_INSET_PX,
+                    bottom: 0.0,
+                }
+            }
             if expandable {
                 TreeHint { open }
             }
@@ -319,7 +340,9 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
 }
 
 /// An episode leaf row: the number, the name,
-/// and the runtime, with the double-click's play.
+/// and the runtime, with the double-click's play. It is a leaf of the tree, so
+/// it paints both guides that pass through it — the series' and its season's
+/// (gui-tree-indent-guides design D3).
 fn paint_shows_episode(
     row: &ShowsListRow,
     library: &LibraryState,
@@ -331,7 +354,7 @@ fn paint_shows_episode(
     };
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
-        "height: {}px; padding: 0 8px; padding-left: {}; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {}px; padding: 0 8px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;",
         episode.height,
         row_inset(row)
     );
@@ -349,7 +372,7 @@ fn paint_shows_episode(
     rsx! {
         button {
             "type": "button",
-            class: "flex w-full items-center overflow-hidden",
+            class: "relative flex w-full items-center overflow-hidden",
             style: "{style}",
             "data-library-shows-row": "episode",
             "data-library-shows-row-id": "{episode.id}",
@@ -389,6 +412,8 @@ fn paint_shows_episode(
                     "{episode.duration}"
                 }
             }
+            TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
+            TreeGuide { x: NESTED_GUIDE_X, tone: GuideTone::Nested, top: 0.0, bottom: 0.0 }
         }
     }
 }
