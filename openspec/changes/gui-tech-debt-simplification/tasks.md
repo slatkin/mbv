@@ -72,6 +72,15 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 - [x] 11.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `cargo nextest run --release --test-threads=4` in the foreground. Verify that all three pass.
 
+## 12. Gate clearances (added 2026-11-21 with user approval)
+
+Pre-existing failures that block the push; behaviour, paint, and commands stay exactly as they are.
+
+- [ ] 12.1 Split `src/app/dispatch/context_menu/menu.rs` (807 lines, limit 800; standing `check-code-file-lines` failure from 8c6c53d38) along a responsibility seam into a child module. Verify: `make check-code-file-lines` passes and the context-menu dispatch tests pass.
+- [ ] 12.2 Split the `QueuePanel` function in `crates/mbv-gui/src/window/components/queue_panel.rs` (cyclomatic 33, over the 25 rule) along the row-paint seam so no function exceeds cyclomatic 25. Verify: `cargo nextest run -p mbv-gui queue_panel panel` passes and rust-code-analysis reports no function over 25 cyclomatic in the file.
+- [ ] 12.3 Split `route_library_key` in `crates/mbv-gui/src/window/library/keys.rs` (cyclomatic 28) so no function exceeds cyclomatic 25; key routing behaviour unchanged. Verify: `cargo nextest run -p mbv-gui keys` passes and rust-code-analysis reports no function over 25 cyclomatic in the file.
+- [ ] 12.4 Split the `App` function in `crates/mbv-gui/src/window/app.rs` (cyclomatic 26) along a render seam so no function exceeds cyclomatic 25. Verify: `cargo nextest run -p mbv-gui` passes and rust-code-analysis reports no function over 25 cyclomatic in the file.
+
 ## Workflow follow-up
 
 - More workstreams from later code reviews join this change as new task groups before the Integration checks section.
