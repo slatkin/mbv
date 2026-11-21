@@ -34,9 +34,13 @@ Current state that shapes the approach:
 Add `crates/mbv-gui/src/window/components/tree_guide.rs` with:
 
 - `pub enum GuideTone { Top, Nested }`: `Top` is a guide under a top-level parent (artist, series, playlist); `Nested` is a guide under a nested parent (album, season).
-- `#[component] pub fn TreeGuide(props: TreeGuideProps) -> Element` with props `x: f32` (the guide's left edge in the row box, px), `tone: GuideTone`, `top: f32` (px from the row's top; `0.0` for a row the guide passes through), and `bottom: f32` (px from the row's bottom; `0.0`, or `-1.0` for a top-level row, see D3).
+- `#[component] pub fn TreeGuide(props: TreeGuideProps) -> Element` with props `x: f32` (the guide's left edge in the row box, px), `tone: GuideTone`, `top: f32` (px from the row's top; `0.0` for a row the guide passes through), and `bottom: f32` (px from the row's bottom; `0.0`, or negative for a top-level row, whose divider it crosses, see D3).
 - It paints one `span` with class `pointer-events-none absolute`, mark `data-tree-guide` (`top` or `nested`), and inline style `left: {x}px; top: {top}px; bottom: {bottom}px; width: 1px; background: {tone var};`.
-- It owns the geometry constants (D2) and the parent start offset (D3).
+- It owns the geometry constants (D2), the parent start offset (D3), and the
+  three paint helpers the row kinds share, so D3's row-kind table has one home:
+  `leaf_guides()` (a track and an episode row), `nested_parent_guides(row_height,
+  shows_children)` (an album and a season row), and `parent_guide_start(x,
+  row_height, bottom)` (a top-level parent row and a playlist row).
 
 Each row paints the segments that pass through it: a row inside an open subtree paints its ancestors' guides from top to bottom, and an open parent that shows children paints its own guide's start. The segments of adjacent rows meet, so the guide reads as one line.
 
@@ -65,7 +69,7 @@ All x values are px from the row box's left edge, which is the same in Music and
 ### D3. Where a guide starts and stops
 
 - **Start.** An open parent that shows at least one child row paints its own guide from `top = row height − GUIDE_START_INSET_PX` to the row's bottom, with `GUIDE_START_INSET_PX: f32 = 6.0` (mockup: 50 of 56 px on the series row, 24 of 30 px on the season row). On a 36 px playlist row that is 30 px.
-- **Top-level row's divider.** `LibraryItemRow` is `border-box` with a 1 px bottom divider, and an absolute child's `bottom: 0` is the padding edge, above the divider. The top-level start segment uses `bottom: -1.0` so the guide crosses the divider with no 1 px gap. Nested and playlist rows have no bottom border and use `0.0`.
+- **Top-level row's divider.** `LibraryItemRow` is `border-box` with a 1 px bottom divider, and an absolute child's `bottom: 0` is the padding edge, above the divider. The top-level start segment passes `bottom: -ROW_DIVIDER_PX` (`ROW_DIVIDER_PX: f32 = 1.0`, the constant the row's own style paints the divider with) so the guide crosses the divider with no 1 px gap. Nested and playlist rows have no bottom border and use `0.0`.
 - **Through.** Every row inside an open subtree paints each ancestor's guide with `top = 0`, `bottom = 0`. The guide ends where the parent's last subtree row ends; the next row outside the subtree paints no segment for it.
 - **Which rows carry which guides** follows from the row kind alone, because a nested row only exists under an open ancestor:
 

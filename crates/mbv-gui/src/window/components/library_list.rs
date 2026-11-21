@@ -29,15 +29,14 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart,
+    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX,
 };
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::components::tree_guide::{
-    GUIDE_START_INSET_PX, GuideTone, LEAF_INSET_X, NESTED_GUIDE_X, NESTED_INSET_X, TOP_GUIDE_X,
-    TreeGuide,
+    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
 };
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::components::typed_text::TypedText;
@@ -66,7 +65,7 @@ fn paint_letter_row(letter: char) -> Element {
     rsx! {
         div {
             class: "flex items-end font-mono",
-            style: "height: {LETTER_ROW_HEIGHT}px; padding: 0 8px 2px; font-size: 12px; color: var(--canvas-type-label);",
+            style: "height: {LETTER_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px 2px; font-size: 12px; color: var(--canvas-type-label);",
             "data-library-letter": "{letter}",
             "{letter}"
         }
@@ -92,7 +91,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     // The leaf inset clears both guides that pass through the row
     // (gui-tree-indent-guides design D2, D3).
     let style = format!(
-        "height: {TRACK_ROW_HEIGHT}px; padding: 0 8px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     let press_row = row.clone();
@@ -139,8 +138,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                 style: "font-size: 12px; color: var(--canvas-muted);",
                 "{duration}"
             }
-            TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
-            TreeGuide { x: NESTED_GUIDE_X, tone: GuideTone::Nested, top: 0.0, bottom: 0.0 }
+            {leaf_guides()}
         }
     }
 }
@@ -242,7 +240,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     // The nested inset clears the artist's guide that passes through the row
     // (gui-tree-indent-guides design D2).
     let style = format!(
-        "height: {NODE_ROW_HEIGHT}px; padding: 0 8px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
+        "height: {NODE_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     let press_row = row.clone();
@@ -302,15 +300,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                     }
                 }
             }
-            TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
-            if *shows_children {
-                TreeGuide {
-                    x: NESTED_GUIDE_X,
-                    tone: GuideTone::Nested,
-                    top: NODE_ROW_HEIGHT - GUIDE_START_INSET_PX,
-                    bottom: 0.0,
-                }
-            }
+            {nested_parent_guides(NODE_ROW_HEIGHT, *shows_children)}
             TreeHint { open: *open }
         }
     }

@@ -29,7 +29,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiShowsList;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, mark,
+    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, mark,
 };
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
@@ -37,8 +37,7 @@ use crate::window::components::library_list_header::{LibraryListHeader, LibraryL
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::components::tree_guide::{
-    GUIDE_START_INSET_PX, GuideTone, LEAF_INSET_X, NESTED_GUIDE_X, NESTED_INSET_X, TOP_GUIDE_X,
-    TreeGuide,
+    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
 };
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::input::f32_from_f64;
@@ -201,7 +200,7 @@ fn paint_shows_season(
     };
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
-        "height: {height}px; padding: 0 8px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
+        "height: {height}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
         row_inset(row)
     );
     if let Some(background) = row_background(row, selected) {
@@ -279,15 +278,7 @@ fn paint_shows_season(
                 css: format!("color: {name_color}; font-weight: {weight};"),
                 style: TextStyle::sans(14.5, weight),
             }
-            TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
-            if shows_children {
-                TreeGuide {
-                    x: NESTED_GUIDE_X,
-                    tone: GuideTone::Nested,
-                    top: height - GUIDE_START_INSET_PX,
-                    bottom: 0.0,
-                }
-            }
+            {nested_parent_guides(height, shows_children)}
             if expandable {
                 TreeHint { open }
             }
@@ -354,7 +345,7 @@ fn paint_shows_episode(
     };
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
-        "height: {}px; padding: 0 8px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;",
         episode.height,
         row_inset(row)
     );
@@ -412,8 +403,7 @@ fn paint_shows_episode(
                     "{episode.duration}"
                 }
             }
-            TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
-            TreeGuide { x: NESTED_GUIDE_X, tone: GuideTone::Nested, top: 0.0, bottom: 0.0 }
+            {leaf_guides()}
         }
     }
 }

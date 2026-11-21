@@ -31,7 +31,7 @@ use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDi
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
 use crate::window::components::tree_guide::{
-    GUIDE_START_INSET_PX, GuideTone, PLAYLIST_GUIDE_X, TreeGuide,
+    GuideTone, PLAYLIST_GUIDE_X, PLAYLIST_LABEL_X, TreeGuide, parent_guide_start,
 };
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::input::f32_from_f64;
@@ -440,14 +440,11 @@ fn playlist_node(
 ) -> Element {
     let rename = settings.ui.cloned().rename;
     let id = playlist.id.clone();
-    let is_open = frame.open.as_ref().is_some_and(|open| open.id == id);
+    let open = frame.open.as_ref().filter(|open| open.id == id);
+    let is_open = open.is_some();
     // The open playlist holds at least one item row, so it starts its guide
     // (`gui-tree-indent-guides` design D3, D4).
-    let shows_items = is_open
-        && frame
-            .open
-            .as_ref()
-            .is_some_and(|open| !open.items.is_empty());
+    let shows_items = open.is_some_and(|open| !open.items.is_empty());
     let selected = picked == Some(&Pick::Playlist(id.clone()));
     let toggle_link = link.clone();
     let press_id = id.clone();
@@ -463,7 +460,7 @@ fn playlist_node(
             button {
                 "type": "button",
                 class: "tree-parent relative flex w-full items-center text-left",
-                style: row_style(selected, 0),
+                style: row_style(selected, 0.0),
                 "aria-expanded": "{is_open}",
                 "data-playlists-row": "playlist",
                 onclick: move |_| {
@@ -487,12 +484,7 @@ fn playlist_node(
                     "{playlist.item_count}"
                 }
                 if shows_items {
-                    TreeGuide {
-                        x: PLAYLIST_GUIDE_X,
-                        tone: GuideTone::Top,
-                        top: PLAYLIST_ROW_HEIGHT_PX - GUIDE_START_INSET_PX,
-                        bottom: 0.0,
-                    }
+                    {parent_guide_start(PLAYLIST_GUIDE_X, PLAYLIST_ROW_HEIGHT_PX, 0.0)}
                 }
                 TreeHint { open: is_open }
             }
@@ -541,7 +533,7 @@ fn items_block(
                             key: "{item.id}",
                             "type": "button",
                             class: "relative flex w-full items-center text-left",
-                            style: row_style(selected, 24),
+                            style: row_style(selected, 24.0),
                             "data-playlists-row": "item",
                             onclick: move |_| press_pick.set(Some(press.clone())),
                             ondoubleclick: move |_| {
@@ -581,10 +573,10 @@ const PLAYLIST_ROW_HEIGHT_PX: f32 = 36.0;
 
 /// One tree row's box: a [`PLAYLIST_ROW_HEIGHT_PX`] row, indented for an item,
 /// filled while picked.
-fn row_style(selected: bool, indent: u32) -> String {
+fn row_style(selected: bool, indent: f32) -> String {
     format!(
-        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 8px 0 {}px; border: 0; border-radius: 6px; background: {}; cursor: pointer;",
-        8 + indent,
+        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 {PLAYLIST_LABEL_X}px 0 {}px; border: 0; border-radius: 6px; background: {}; cursor: pointer;",
+        PLAYLIST_LABEL_X + indent,
         if selected {
             "var(--canvas-selected)"
         } else {

@@ -18,8 +18,6 @@
 //! under a top-level parent (artist, series, playlist) and
 //! [`GuideTone::Nested`] under a nested parent (album, season).
 
-use std::fmt::Write as _;
-
 use dioxus_native::prelude::*;
 
 use crate::window::components::library_item_row::{ROW_PADDING_PX, THUMB_WIDTH_PX};
@@ -44,8 +42,8 @@ pub const NESTED_GUIDE_X: f32 = NESTED_INSET_X + 4.0;
 pub const LEAF_INSET_X: f32 = NESTED_GUIDE_X + 8.0;
 
 /// A playlist row's left padding, in pixels from the row box's left edge
-/// (design D2): the Playlists tree's label inset, which the tree's items
-/// already clear.
+/// (design D2): [`crate::window::components::playlists_panel`]'s row style
+/// paints it, and the tree's items indent from it.
 pub const PLAYLIST_LABEL_X: f32 = 8.0;
 
 /// A playlist's guide's left edge in the row box, in pixels (design D2): a
@@ -100,9 +98,9 @@ pub struct TreeGuideProps {
     /// The guide's top edge, in pixels from the row's top: `0.0` on a row the
     /// guide passes through.
     pub top: f32,
-    /// The guide's bottom edge, in pixels from the row's bottom: `0.0`, or
-    /// `-1.0` on a top-level row, whose bottom divider the guide crosses
-    /// (design D3).
+    /// The guide's bottom edge, in pixels from the row's bottom: `0.0` to the
+    /// row's edge, or negative on a top-level row, whose bottom divider the
+    /// guide crosses (design D3).
     pub bottom: f32,
 }
 
@@ -111,9 +109,7 @@ pub struct TreeGuideProps {
 /// look and under its hint.
 #[component]
 pub fn TreeGuide(props: TreeGuideProps) -> Element {
-    let mut style = String::new();
-    let _ = write!(
-        style,
+    let style = format!(
         "left: {}px; top: {}px; bottom: {}px; width: 1px; background: {};",
         props.x,
         props.top,
@@ -125,6 +121,51 @@ pub fn TreeGuide(props: TreeGuideProps) -> Element {
             class: "pointer-events-none absolute",
             style: "{style}",
             "data-tree-guide": props.tone.mark(),
+        }
+    }
+}
+
+/// The guides a tree leaf row paints (design D3): every ancestor's guide that
+/// passes through the row, from its top to its bottom, so the segments of
+/// adjacent rows meet. The two library trees carry both an artist or series
+/// guide and an album or season guide, so a track and an episode row share
+/// this paint.
+pub fn leaf_guides() -> Element {
+    rsx! {
+        TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
+        TreeGuide { x: NESTED_GUIDE_X, tone: GuideTone::Nested, top: 0.0, bottom: 0.0 }
+    }
+}
+
+/// The guides a nested parent row paints (design D2, D3, D4): the top-level
+/// ancestor's guide passes through the row, and while the row shows child rows
+/// it starts its own under its label, so an album and a season row share this
+/// paint.
+pub fn nested_parent_guides(row_height: f32, shows_children: bool) -> Element {
+    rsx! {
+        TreeGuide { x: TOP_GUIDE_X, tone: GuideTone::Top, top: 0.0, bottom: 0.0 }
+        if shows_children {
+            TreeGuide {
+                x: NESTED_GUIDE_X,
+                tone: GuideTone::Nested,
+                top: row_height - GUIDE_START_INSET_PX,
+                bottom: 0.0,
+            }
+        }
+    }
+}
+
+/// The guide an open parent row starts under its leading element (design D3):
+/// `x` is the parent's guide position, `row_height` its painted height, and
+/// `bottom` how far the segment reaches past the row's bottom edge — `0.0` to
+/// the edge, negative where the row paints a divider the guide crosses.
+pub fn parent_guide_start(x: f32, row_height: f32, bottom: f32) -> Element {
+    rsx! {
+        TreeGuide {
+            x,
+            tone: GuideTone::Top,
+            top: row_height - GUIDE_START_INSET_PX,
+            bottom,
         }
     }
 }

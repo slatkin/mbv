@@ -36,9 +36,7 @@ use crate::bridge::frame::library::{
 };
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_attr::library_attr;
-use crate::window::components::tree_guide::{
-    GUIDE_START_INSET_PX, GuideTone, TOP_GUIDE_X, TreeGuide,
-};
+use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::icons::{EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
@@ -57,6 +55,11 @@ pub const FLAT_ROW_TITLE_WEIGHT: f32 = 400.0;
 /// row's style reads it, so a top-level tree parent's guide follows the thumb
 /// when the padding changes.
 pub const ROW_PADDING_PX: f32 = 8.0;
+
+/// The divider width under a top-level row, in logical pixels (gui-delineated-rows
+/// design D2): the row's style paints it and a guide that starts on the row
+/// crosses it (`gui-tree-indent-guides` design D3).
+pub const ROW_DIVIDER_PX: f32 = 1.0;
 
 /// The thumb box's width in logical pixels (design D2).
 pub const THUMB_WIDTH_PX: f32 = 64.0;
@@ -211,7 +214,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     // the square corners, and the 1 px divider under the row. `border-box`
     // keeps the divider inside the row height the list's geometry holds.
     let mut row_style = format!(
-        "height: {}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; gap: 12px; border: 0; border-bottom: 1px solid {}; border-radius: 0; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; gap: 12px; border: 0; border-bottom: {ROW_DIVIDER_PX}px solid {}; border-radius: 0; text-align: left; font-size: 14px; cursor: pointer;",
         props.height,
         canvas_var("border")
     );
@@ -312,12 +315,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 }
             }
             if props.tree_guide {
-                TreeGuide {
-                    x: TOP_GUIDE_X,
-                    tone: GuideTone::Top,
-                    top: props.height - GUIDE_START_INSET_PX,
-                    bottom: -1.0,
-                }
+                {parent_guide_start(TOP_GUIDE_X, props.height, -ROW_DIVIDER_PX)}
             }
             if let Some(open) = props.tree_open {
                 TreeHint { open }
