@@ -11,6 +11,10 @@
 //! item row stays a leaf whose double-click plays it, and the playlist's own
 //! Play control and menu Play entry still play the playlist.
 //!
+//! The tree paints the shared indent guide (`gui-tree-indent-guides`): an open
+//! playlist that shows item rows hangs one under its label, and its item rows
+//! and its rename field carry it on to the subtree's last row.
+//!
 //! The core owns the data (the `playlists` section); the selection, the
 //! right-click menu, and the rename draft are this screen's own window state.
 //! The rename draft lives in the shared [`SettingsState`] beside the other
@@ -26,6 +30,9 @@ use crate::window::channel::CoreLink;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
+use crate::window::components::tree_guide::{
+    GUIDE_START_INSET_PX, GuideTone, PLAYLIST_GUIDE_X, TreeGuide,
+};
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::input::f32_from_f64;
 use crate::window::library::state::LibraryState;
@@ -434,6 +441,13 @@ fn playlist_node(
     let rename = settings.ui.cloned().rename;
     let id = playlist.id.clone();
     let is_open = frame.open.as_ref().is_some_and(|open| open.id == id);
+    // The open playlist holds at least one item row, so it starts its guide
+    // (`gui-tree-indent-guides` design D3, D4).
+    let shows_items = is_open
+        && frame
+            .open
+            .as_ref()
+            .is_some_and(|open| !open.items.is_empty());
     let selected = picked == Some(&Pick::Playlist(id.clone()));
     let toggle_link = link.clone();
     let press_id = id.clone();
@@ -472,10 +486,18 @@ fn playlist_node(
                     style: "font-size: 12px; color: var(--canvas-muted);",
                     "{playlist.item_count}"
                 }
+                if shows_items {
+                    TreeGuide {
+                        x: PLAYLIST_GUIDE_X,
+                        tone: GuideTone::Top,
+                        top: PLAYLIST_ROW_HEIGHT_PX - GUIDE_START_INSET_PX,
+                        bottom: 0.0,
+                    }
+                }
                 TreeHint { open: is_open }
             }
             if rename_here {
-                { rename_field(settings, rename_name) }
+                { rename_field(settings, rename_name, shows_items) }
             }
             if is_open {
                 { items_block(frame.open.as_ref(), link, picked, pick, menu) }
@@ -484,7 +506,9 @@ fn playlist_node(
     }
 }
 
-/// The open playlist's item rows, indented under it.
+/// The open playlist's item rows, indented under it. Each item row is a leaf of
+/// the tree, so it carries its playlist's guide from its top to its bottom
+/// (`gui-tree-indent-guides` design D3).
 fn items_block(
     open: Option<&GuiOpenPlaylist>,
     link: &CoreLink,
@@ -516,7 +540,7 @@ fn items_block(
                         button {
                             key: "{item.id}",
                             "type": "button",
-                            class: "flex w-full items-center text-left",
+                            class: "relative flex w-full items-center text-left",
                             style: row_style(selected, 24),
                             "data-playlists-row": "item",
                             onclick: move |_| press_pick.set(Some(press.clone())),
@@ -536,6 +560,12 @@ fn items_block(
                                 style: TextStyle::sans(14.0, 400.0),
                                 css: "color: var(--canvas-text);".to_owned(),
                             }
+                            TreeGuide {
+                                x: PLAYLIST_GUIDE_X,
+                                tone: GuideTone::Top,
+                                top: 0.0,
+                                bottom: 0.0,
+                            }
                         }
                     }
                 }
@@ -544,10 +574,16 @@ fn items_block(
     }
 }
 
-/// One tree row's box: a 36 px row, indented for an item, filled while picked.
+/// A Playlists tree row's height, in pixels (`gui-tree-indent-guides` design
+/// D3): [`row_style`] paints it and the open playlist's guide start is measured
+/// from its bottom.
+const PLAYLIST_ROW_HEIGHT_PX: f32 = 36.0;
+
+/// One tree row's box: a [`PLAYLIST_ROW_HEIGHT_PX`] row, indented for an item,
+/// filled while picked.
 fn row_style(selected: bool, indent: u32) -> String {
     format!(
-        "height: 36px; padding: 0 8px 0 {}px; border: 0; border-radius: 6px; background: {}; cursor: pointer;",
+        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 8px 0 {}px; border: 0; border-radius: 6px; background: {}; cursor: pointer;",
         8 + indent,
         if selected {
             "var(--canvas-selected)"
@@ -626,15 +662,18 @@ fn hero_pane(
 }
 
 /// The rename field: the draft's input under its focus host, mounted with
-/// `focus_on_mount`, which arms the rename hold and focuses the input.
-fn rename_field(settings: &SettingsState, name: Option<String>) -> Element {
+/// `focus_on_mount`, which arms the rename hold and focuses the input. It
+/// carries its playlist's guide while `guide` holds — the playlist is open and
+/// shows item rows — so the guide has no gap during a rename, and paints none
+/// under a closed playlist (`gui-tree-indent-guides` design D3).
+fn rename_field(settings: &SettingsState, name: Option<String>, guide: bool) -> Element {
     let focus_settings = settings.clone();
     let blur_settings = settings.clone();
     let input_settings = settings.clone();
     let arm_settings = settings.clone();
     rsx! {
         div {
-            class: "flex",
+            class: "relative flex",
             style: "padding: 4px 8px 4px 28px;",
             "data-playlists-rename": "",
             onfocusin: move |_| focus_settings.focus_settings_field(SettingsForm::Rename),
@@ -651,6 +690,14 @@ fn rename_field(settings: &SettingsState, name: Option<String>) -> Element {
                 oninput: move |event: Event<FormData>| {
                     input_settings.set_rename_draft(&event.value());
                 },
+            }
+            if guide {
+                TreeGuide {
+                    x: PLAYLIST_GUIDE_X,
+                    tone: GuideTone::Top,
+                    top: 0.0,
+                    bottom: 0.0,
+                }
             }
         }
     }
