@@ -80,8 +80,7 @@ fn types_into_filter(key: &DomKey) -> bool {
 }
 
 /// Whether the open popover mounts a filter field: the collection dropdown
-/// does, and the Shows view dropdown reuses the open fact without one (design
-/// D8), so a destination that carries no collection selector mounts none.
+/// does, and a destination that carries no collection selector mounts none.
 fn collections_filter_mounted(state: &LibraryState) -> bool {
     let list = state.sections.library_list.peek();
     list.as_ref()
@@ -92,9 +91,7 @@ fn collections_filter_mounted(state: &LibraryState) -> bool {
 /// design D7): Esc closes it and clears its filter text, and the filter takes
 /// the typed keys and Backspace wherever the pointer is. Every other key
 /// passes to the rest of the routing, so the dropdown binds nothing else. A
-/// popover with no filter field takes no typed key: the Shows view dropdown
-/// reuses the open fact (design D8), so its keys stay the panel's and the
-/// core's.
+/// destination that mounts no filter field takes no typed key.
 fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     if key.key == "Escape" && bare(key) {
         state.close_collections_dropdown();
@@ -104,6 +101,18 @@ fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyO
         return None;
     }
     types_into_filter(key).then_some(KeyOutcome::Text)
+}
+
+/// Route a key while the Shows view dropdown is open (gui-collection-dropdown
+/// design D8, gtds design D15): Esc closes it. The popover mounts no filter
+/// field, so every other key passes to the rest of the routing and stays the
+/// panel's and the core's.
+fn route_shows_view_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+    if key.key == "Escape" && bare(key) {
+        state.close_shows_view_dropdown();
+        return Some(KeyOutcome::Handled);
+    }
+    None
 }
 
 /// Route a key while the Shows Hero's season dropdown is open: Esc closes it
@@ -118,18 +127,20 @@ fn route_seasons_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutco
 }
 
 /// Route a key while an open text field of the panel holds the keyboard (design
-/// D3, step 2; gui-collection-dropdown design D7): the list's `/` filter takes
-/// every key, and the collection dropdown's own filter takes the typed keys,
-/// Backspace, and Esc — everywhere the pointer is. `None` while no field of the
-/// panel is open, so the rest of the routing answers the key.
+/// D3, step 2; gui-collection-dropdown design D7, D8): the list's `/` filter
+/// takes every key, the collection dropdown's own filter takes the typed keys,
+/// Backspace, and Esc, and the Shows view popover takes Esc — everywhere the
+/// pointer is. `None` while no field or popover of the panel is open, so the
+/// rest of the routing answers the key.
 fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     // The facts are copied out of the store: a route may write it, and a held
     // read would meet that write.
-    let (filter_open, collections_open, seasons_open) = {
+    let (filter_open, collections_open, shows_view_open, seasons_open) = {
         let ui = state.ui.peek();
         (
             ui.filter_open,
             ui.collections.is_some(),
+            ui.shows_view_open.is_open(),
             ui.shows_seasons.is_some(),
         )
     };
@@ -138,6 +149,9 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
     }
     if collections_open {
         return route_collections_open_key(state, key);
+    }
+    if shows_view_open {
+        return route_shows_view_open_key(state, key);
     }
     if seasons_open {
         return route_seasons_open_key(state, key);

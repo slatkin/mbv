@@ -600,13 +600,16 @@ pub fn App() -> Element {
             },
             onpointerdown: move |event: PointerEvent| {
                 // A press outside the collection dropdown closes it and clears
-                // its filter text, and a press outside the collapsed Search
-                // control's panel closes it, wherever in the window the press
-                // lands (gui-collection-dropdown design D7; user request
-                // 2026-11-19). The control's own surface stops this handler,
-                // so a press inside acts on the control. The close changes no
-                // pointer fact, so the press still reaches the core.
+                // its filter text, a press outside the Shows view popover or
+                // the season dropdown closes it, and a press outside the
+                // collapsed Search control's panel closes it, wherever in the
+                // window the press lands (gui-collection-dropdown design D7,
+                // D8; gtds design D15; user request 2026-11-19). The control's
+                // own surface stops this handler, so a press inside acts on
+                // the control. The close changes no pointer fact, so the press
+                // still reaches the core.
                 press_library.close_collections_dropdown();
+                press_library.close_shows_view_dropdown();
                 press_library.close_shows_seasons_dropdown();
                 press_library.close_search_panel();
                 input::on_pointer(DomPointerKind::Press, &event.data, &press_link);

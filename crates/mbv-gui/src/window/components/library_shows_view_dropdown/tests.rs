@@ -157,7 +157,7 @@ fn the_trigger_names_the_active_view() {
 fn the_popover_paints_three_radio_views_and_no_filter() {
     let mut fixture = built(GuiShowsView::All);
     let library = fixture.state.clone();
-    fixture.in_runtime(move || library.toggle_collections_dropdown());
+    fixture.in_runtime(move || library.toggle_shows_view_dropdown());
 
     assert_eq!(
         fixture
@@ -179,9 +179,9 @@ fn a_view_press_replaces_the_choice_and_closes_the_popover() {
     let mut fixture = built(GuiShowsView::All);
     let library = fixture.state.clone();
     fixture.in_runtime(move || {
-        library.toggle_collections_dropdown();
+        library.toggle_shows_view_dropdown();
         library.select_shows_view(3, GuiShowsView::New);
-        library.close_collections_dropdown();
+        library.close_shows_view_dropdown();
     });
 
     assert_eq!(
@@ -191,5 +191,5 @@ fn a_view_press_replaces_the_choice_and_closes_the_popover() {
             view: GuiShowsView::New,
         }]
     );
-    assert!(fixture.state.ui.peek().collections.is_none());
+    assert!(!fixture.state.shows_view_open());
 }
