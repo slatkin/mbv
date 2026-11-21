@@ -73,64 +73,32 @@
 //! as it painted in the reference build (`window/theme.rs::write_chrome` holds
 //! the rule and the reason); the queue column's own backdrop shows through.
 
-use std::fmt::Write as _;
-
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiOverlayFrame;
-use crate::bridge::frame::queue::GuiQueueRow;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{ListId, QueueTargetId, RegionTarget};
 use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
 use crate::window::components::queue_header::QueueHeader;
 use crate::window::components::queue_row_menu::QueueRowMenu;
-use crate::window::icons::{Ellipsis, GripVertical};
 use crate::window::layout::region_set::{MarkHandler, use_region_set};
 use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
-use crate::window::theme::{canvas_var, role_var};
+use crate::window::theme::role_var;
 
 pub(super) mod geometry;
+mod row;
 mod row_cells;
 
 use geometry::{
-    GHOST_LEFT_PX, GHOST_RIGHT_OVERHANG_PX, GRIP_SIZE_PX, GRIP_TOP_PX, LIST_TOP_GAP_PX,
-    ROW_CELL_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ROW_INSET_PX, ghost_top, insertion, menu_top,
-    whole_rows,
+    GHOST_LEFT_PX, GHOST_RIGHT_OVERHANG_PX, LIST_TOP_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ghost_top,
+    insertion, menu_top, whole_rows,
 };
+use row::queue_rows;
 use row_cells::{ItemRow, RowCells, RowChrome, row_look};
 
 #[cfg(test)]
 mod tests;
-
-/// The empty-queue text, as the TUI's local queue shows it. The frame
-/// carries no queue link, so the remote-queue text cannot be selected; the
-/// first slice attaches only to a local Owner (design D9). The canvas draws
-/// no empty-queue state (design D15), so the placeholder paints in the
-/// canvas's type — a display-sized medium weight in the `emptyQueueFg` role
-/// — as a missing visual does.
-const EMPTY_QUEUE_TEXT: &str = "¯\\_(ツ)_/¯";
-
-/// The row's corner radius in logical pixels (design D3; user request
-/// 2026-11-20): every row is square, the now-playing row included.
-const ROW_RADIUS_PX: u16 = 0;
-
-/// The hovered row's trailing inset: the actions button's width plus the 2 px
-/// gap it leaves at the row's edge, so the title measures into the room the
-/// button does not cover.
-const HOVERED_TRAILING_PAD_PX: u16 = ROW_HEIGHT_PX + 2;
-
-/// The mark of the row the panel painted for `slot`: every painted item row
-/// marked its slot this render, and the rows look their mark up by slot. The
-/// tripwire stays loud, because a row that mounted without its mark would
-/// report no region.
-fn slot_mark_for(marks: &[(u64, MarkHandler)], slot: u64) -> MarkHandler {
-    marks
-        .iter()
-        .find(|(held, _)| *held == slot)
-        .map(|(_, mark)| *mark)
-        .expect("a painted item row marked its slot")
-}
 
 /// The Queue panel (task 5.5). The panel reads the `queue`, `summary`,
 /// and `overlay` sections and the playhead's prediction; its one region set
@@ -293,157 +261,7 @@ pub fn QueuePanel() -> Element {
                     style: "margin-top: {LIST_TOP_GAP_PX}px; padding-inline: 8px; display: flex; flex-direction: column; gap: {ROW_GAP_PX}px;",
                     "data-queue-list": "",
                     onmounted: region_set.mark_list(ListId::Queue, whole_rows),
-                    if queue.rows.is_empty() {
-                        // The empty-queue placeholder (design D15's
-                        // missing-visual rule): the TUI's shrug set as the
-                        // canvas's display type — display-sized, medium
-                        // weight, wide tracking — in the `emptyQueueFg` role,
-                        // centred in the list box.
-                        div {
-                            class: "flex h-full items-center justify-center",
-                            span {
-                                class: "text-2xl font-medium tracking-widest",
-                                style: "color: {role_var(GuiRole::EmptyQueueFg)};",
-                                "{EMPTY_QUEUE_TEXT}"
-                            }
-                        }
-                    } else {
-                        for (index, row) in queue.rows.iter().enumerate() {
-                            { match ItemRow::of(row) {
-                                Some(item) => {
-                                    let hovered = queue.hover == Some(item.slot);
-                                    let slot = item.slot;
-                                    // The row's inline size: the fixed row height, the
-                                    // square corners the canvas draws, and the trailing
-                                    // room the hovered row's actions button needs.
-                                    let mut button_style = format!(
-                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: {ROW_RADIUS_PX}px;",
-                                        if hovered {
-                                            format!("4px {HOVERED_TRAILING_PAD_PX}px")
-                                        } else {
-                                            format!("{ROW_INSET_PX}px")
-                                        }
-                                    );
-                                    let look = row_look(&item, &queue);
-                                    if let Some(background) = look.background {
-                                        let _ = write!(button_style, " background: {background};");
-                                    }
-                                    let line = insertion
-                                        .as_ref()
-                                        .filter(|line| line.slot == slot)
-                                        .map(|line| {
-                                            // The line sits against the row's top edge
-                                            // (`before`) or in the gap under its bottom
-                                            // edge (`after`), where the ghost's top lands.
-                                            let position = if line.before {
-                                                "top: 0;".to_owned()
-                                            } else {
-                                                format!("top: {ROW_HEIGHT_PX}px;")
-                                            };
-                                            (
-                                                position,
-                                                if line.before { "before" } else { "after" },
-                                            )
-                                        });
-                                    let cells_row = item.clone();
-                                    let slot_mark = slot_mark_for(&slot_marks, slot);
-                                    rsx! {
-                                        // The row is one button; its hover chrome and the
-                                        // drag's insertion line are siblings inside the
-                                        // positioning box, so no control nests in the row's
-                                        // own button.
-                                        div {
-                                            key: "{slot}",
-                                            class: "relative",
-                                            "data-row": "{slot}",
-                                            button {
-                                                "type": "button",
-                                                class: "relative flex w-full items-center overflow-hidden text-left whitespace-nowrap",
-                                                style: "{button_style}",
-                                                "data-slot": "{slot}",
-                                                onmounted: slot_mark,
-                                                RowCells {
-                                                    row: cells_row,
-                                                    look,
-                                                    chrome: if hovered { RowChrome::Hover } else { RowChrome::Row },
-                                                }
-                                            }
-                                            // The 1 px divider under the row (design D3):
-                                            // the rows sit flush (`ROW_GAP_PX` 0), so the
-                                            // line is the row's own bottom edge and adds no
-                                            // height to it.
-                                            span {
-                                                class: "pointer-events-none absolute right-0 left-0",
-                                                style: "bottom: 0; height: 1px; background: {canvas_var(\"border\")};",
-                                                "data-divider": "",
-                                            }
-                                            if let Some((line_position, line_at)) = line {
-                                                // The drag's insertion line, anchored on this
-                                                // row's top edge (`before`) or under its bottom
-                                                // edge (`after`), inset from the row's edges as
-                                                // the canvas draws it.
-                                                span {
-                                                    class: "pointer-events-none absolute right-0 left-0 z-10",
-                                                    style: "height: 2px; {line_position} margin: 0 8px; border-radius: 1px; background: {canvas_var(\"insertion\")};",
-                                                    "data-insertion": "{line_at}",
-                                                }
-                                            }
-                                            if hovered
-                                                && let Some((grip_mark, actions_mark)) = hover_marks
-                                            {
-                                                // The hover chrome (the Menus artboard): the
-                                                // six-dot grip over the leading slot the row
-                                                // reserves in place of its ordinal, and the
-                                                // row-height actions button over the empty space
-                                                // at the row's trailing end — the space the row
-                                                // reserves in its trailing padding. Each is its
-                                                // own region, pushed after the row's `slot`
-                                                // region so the press resolves to the chrome.
-                                                // They stay siblings of the row's button, so no
-                                                // control nests in it.
-                                                span {
-                                                    class: "absolute flex items-center",
-                                                    style: "left: 4px; width: {GRIP_SIZE_PX}px; top: {GRIP_TOP_PX}px;",
-                                                    "data-grip": "{slot}",
-                                                    onmounted: grip_mark,
-                                                    GripVertical { size: GRIP_SIZE_PX, color: canvas_var("muted") }
-                                                }
-                                                button {
-                                                    "type": "button",
-                                                    class: "absolute flex items-center justify-center",
-                                                    style: "top: 0; right: 2px; width: {ROW_HEIGHT_PX}px; height: {ROW_HEIGHT_PX}px; border-radius: 6px; background: var(--canvas-action);",
-                                                    "data-actions": "{slot}",
-                                                    "aria-label": "Row actions",
-                                                    onmounted: actions_mark,
-                                                    Ellipsis {
-                                                        size: 14,
-                                                        fill: canvas_var("heading"),
-                                                        color: canvas_var("heading"),
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                None => match row {
-                                    GuiQueueRow::Heading { text } => {
-                                        let heading = text.clone();
-                                        rsx! {
-                                            div {
-                                                key: "heading-{index}",
-                                                class: "flex items-center overflow-hidden uppercase",
-                                                style: "height: {ROW_HEIGHT_PX}px; padding-inline: calc(var(--mbv-cell-col) * 2); color: {role_var(GuiRole::GroupHeadingFg)};",
-                                                "{heading}"
-                                            }
-                                        }
-                                    }
-                                    _ => rsx! {
-                                        div { key: "spacer-{index}", style: "height: {ROW_HEIGHT_PX}px;" }
-                                    },
-                                },
-                            } }
-                        }
-                    }
+                    {queue_rows(&queue, insertion.as_ref(), &slot_marks, hover_marks)}
                 }
                 if let Some(scroll) = queue.scroll {
                     // The scroll bar: a readout of the core's scroll, set
