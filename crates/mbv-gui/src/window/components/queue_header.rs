@@ -29,13 +29,15 @@
 //! keeps its own clipping, so a long name still cannot push the controls.
 //!
 //! Each control carries a pointer target: it reports its own region through
-//! `QueuePanel`'s report keys — the switcher `queueChooser`, the filter
+//! `QueuePanel`'s region set — the switcher `queueChooser`, the filter
 //! `filter`, the new-queue control `newQueue`, and the close control
 //! `closeQueue` — so a press resolves in the core to the request the matching
 //! GUI-only chord dispatches, and the control and the chord run one path. The
-//! close control reports no region while it is disabled (the only local queue
-//! has no close): an absent or disabled control claims no pointer, so the panel
-//! reads neither handle then.
+//! panel marks each control in its own render and hands the closures down as
+//! this component's props, so the marks record in the panel's report order.
+//! The close control reports no region while it is disabled (the only local
+//! queue has no close): an absent or disabled control claims no pointer, so
+//! the panel passes no close mark then and this control attaches none.
 
 use dioxus_native::prelude::*;
 
@@ -43,6 +45,7 @@ use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::window::components::queue_panel::geometry::{CONTROL_PX, HEADER_HEIGHT_PX};
 use crate::window::components::queue_target_control::QueueTargetControl;
 use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
+use crate::window::layout::region_set::MarkHandler;
 use crate::window::theme::{EfToken, ef_var};
 
 /// The title the header paints while the shown entry has no name (the label
@@ -64,8 +67,8 @@ const ICON_BUTTON_CLASS: &str = "flex shrink-0 items-center justify-center";
 /// where a hover cannot override them.
 const SWITCHER_CLASS: &str = "flex min-w-0 items-center";
 
-/// The props of the Queue header (the `QueueHeader` props, plus the region
-/// handles the panel's report reads).
+/// The props of the Queue header (the `QueueHeader` props, plus the mark
+/// closures the panel's region set reports its controls' regions from).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct QueueHeaderProps {
     /// The queue summary the header's controls read.
@@ -73,18 +76,19 @@ pub struct QueueHeaderProps {
     /// Whether the Queue chooser's dropdown is open: the switcher's chevron
     /// points up while it is (design D7).
     pub chooser_open: bool,
-    /// The Queue chooser button's mounted event — the handle the
-    /// `queueChooser` region reads.
-    pub chooser: Signal<Option<Event<MountedData>>>,
-    /// The filter control's mounted event — the handle the `filter` region
-    /// reads.
-    pub filter: Signal<Option<Event<MountedData>>>,
-    /// The new-queue control's mounted event — the handle the `newQueue`
-    /// region reads.
-    pub new_queue: Signal<Option<Event<MountedData>>>,
-    /// The close control's mounted event — the handle the `closeQueue` region
-    /// reads.
-    pub close: Signal<Option<Event<MountedData>>>,
+    /// The Queue chooser button's mark — the closure that records the handle
+    /// the `queueChooser` region reads.
+    pub chooser: MarkHandler,
+    /// The filter control's mark — the closure that records the handle the
+    /// `filter` region reads.
+    pub filter: MarkHandler,
+    /// The new-queue control's mark — the closure that records the handle the
+    /// `newQueue` region reads.
+    pub new_queue: MarkHandler,
+    /// The close control's mark — the closure that records the handle the
+    /// `closeQueue` region reads. The panel passes none while the control is
+    /// disabled, so the control attaches no `onmounted` and reports nothing.
+    pub close: Option<MarkHandler>,
     /// The open Queue chooser's dropdown, built by `QueuePanel` and placed in
     /// the switcher's anchor (design D8). The header carries no chooser facts.
     pub children: Element,
@@ -134,7 +138,6 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 class: "flex items-center",
                 "data-queue-switcher-anchor": "",
                 {
-                    let mut chooser_slot = chooser;
                     let switcher_style = if chooser_open {
                         format!(
                             "height: {CONTROL_PX}px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: {}; background: {};",
@@ -155,7 +158,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             "aria-label": "Queue chooser",
                             "aria-expanded": "{chooser_open}",
                             "data-queue-chooser": "",
-                            onmounted: move |event| chooser_slot.set(Some(event)),
+                            onmounted: chooser,
                             ListOrdered {
                                 size: 14,
                                 stroke_width: 1.6,
@@ -203,47 +206,56 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
             }
             // The new-queue control: a press asks the local Owner for a new
             // Named queue, the same request `Ctrl+T` dispatches.
-            {
-                let mut new_queue_slot = new_queue;
-                rsx! {
-                    button {
-                        "type": "button",
-                        class: "{ICON_BUTTON_CLASS}",
-                        style: "{icon_button_style}",
-                        title: "New queue (Ctrl+T)",
-                        "aria-label": "New queue",
-                        "data-new-queue": "",
-                        onmounted: move |event| new_queue_slot.set(Some(event)),
-                        Plus {
-                            size: 16,
-                            stroke_width: 1.6,
-                        }
-                    }
+            button {
+                "type": "button",
+                class: "{ICON_BUTTON_CLASS}",
+                style: "{icon_button_style}",
+                title: "New queue (Ctrl+T)",
+                "aria-label": "New queue",
+                "data-new-queue": "",
+                onmounted: new_queue,
+                Plus {
+                    size: 16,
+                    stroke_width: 1.6,
                 }
             }
             // The close control: a press closes the shown entry, the same
             // request `Ctrl+W` dispatches. It is disabled on the only local
             // queue — there is nothing to close — and a disabled control
-            // reports no region and answers no pointer.
-            {
-                let close_disabled = summary.header.close_disabled;
-                let close_opacity = if close_disabled { "0.4" } else { "1" };
-                let mut close_slot = close;
-                rsx! {
-                    button {
-                        "type": "button",
-                        class: "{ICON_BUTTON_CLASS}",
-                        style: "{icon_button_style} opacity: {close_opacity};",
-                        title: "Close queue (Ctrl+W)",
-                        "aria-label": "Close queue",
-                        "aria-disabled": "{close_disabled}",
-                        "data-close-queue": "",
-                        disabled: close_disabled,
-                        onmounted: move |event| close_slot.set(Some(event)),
-                        X {
-                            size: 16,
-                            stroke_width: 1.6,
-                        }
+            // reports no region and answers no pointer. The panel passes its
+            // mark only while the control acts, and this control paints one of
+            // two buttons: the acting one attaches the mark, the disabled one
+            // attaches no `onmounted` at all. This renderer adds a listener only
+            // when one appears, so a control that kept its listener would never
+            // re-report after it was enabled.
+            if let Some(close_mark) = close {
+                button {
+                    "type": "button",
+                    class: "{ICON_BUTTON_CLASS}",
+                    style: "{icon_button_style} opacity: 1;",
+                    title: "Close queue (Ctrl+W)",
+                    "aria-label": "Close queue",
+                    "aria-disabled": "false",
+                    "data-close-queue": "",
+                    onmounted: close_mark,
+                    X {
+                        size: 16,
+                        stroke_width: 1.6,
+                    }
+                }
+            } else {
+                button {
+                    "type": "button",
+                    class: "{ICON_BUTTON_CLASS}",
+                    style: "{icon_button_style} opacity: 0.4;",
+                    title: "Close queue (Ctrl+W)",
+                    "aria-label": "Close queue",
+                    "aria-disabled": "true",
+                    "data-close-queue": "",
+                    disabled: true,
+                    X {
+                        size: 16,
+                        stroke_width: 1.6,
                     }
                 }
             }
@@ -267,7 +279,6 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     } else {
                         ef_var(EfToken::Fg)
                     };
-                    let mut filter_slot = filter;
                     let filter_active = summary.filter_active;
                     rsx! {
                         span {
@@ -277,7 +288,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             ),
                             title: "Filter (/)",
                             "data-filter": "",
-                            onmounted: move |event| filter_slot.set(Some(event)),
+                            onmounted: filter,
                             Search {
                                 size: 16,
                                 stroke_width: 1.6,
@@ -302,7 +313,6 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 }
             } else {
                 {
-                    let mut filter_slot = filter;
                     rsx! {
                         button {
                             "type": "button",
@@ -311,7 +321,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             title: "Filter (/)",
                             "aria-label": "Filter queue",
                             "data-filter": "",
-                            onmounted: move |event| filter_slot.set(Some(event)),
+                            onmounted: filter,
                             Search {
                                 size: 16,
                                 stroke_width: 1.6,
