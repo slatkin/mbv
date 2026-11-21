@@ -41,7 +41,7 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 ## 5. Rows memo
 
-- [ ] 5.1 Make `crates/mbv-gui/src/window/library/row_memo.rs` hold one generic `RowsMemo<Row, Facts>` (design D11): one entry that holds the `libraryList` section revision, the `PartialEq` facts, and the `Arc<[Row]>`; one `rows()` that keeps the `peek`-never-`read` hit test; one `Debug` impl. Replace the canvas's `RowsMemo`, the Home and Shows memos, and the four lettered memos task 4.1 moved, keeping `LibraryState`'s memo field names. Verify: `rg -n "struct (Emby|Audiobooks|Podcasts|Feeds|Shows|Home)RowsMemo" crates/mbv-gui/src` finds nothing, and `cargo nextest run -p mbv-gui` passes.
+- [x] 5.1 Make `crates/mbv-gui/src/window/library/row_memo.rs` hold one generic `RowsMemo<Row, Facts>` (design D11): one entry that holds the `libraryList` section revision, the `PartialEq` facts, and the `Arc<[Row]>`; one `rows()` that keeps the `peek`-never-`read` hit test; one `Debug` impl. Replace the canvas's `RowsMemo`, the Home and Shows memos, and the four lettered memos task 4.1 moved, keeping `LibraryState`'s memo field names. Verify: `rg -n "struct (Emby|Audiobooks|Podcasts|Feeds|Shows|Home)RowsMemo" crates/mbv-gui/src` finds nothing, and `cargo nextest run -p mbv-gui` passes.
 
 ## 6. Hero actions
 
