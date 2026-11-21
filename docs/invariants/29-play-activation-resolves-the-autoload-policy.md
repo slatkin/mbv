@@ -65,6 +65,12 @@ generic browser kept autoloading.
 - An item whose payload declares no containing item (`ParentId` empty) takes
   the single-item path even with the policy on. Queue items the Owner restored
   from an older snapshot carry the field as empty until their next refresh.
+  Emby omits `ParentId` from every response whose request supplies a `Fields`
+  list that does not name it — the flat-row fetches (`get_continue_watching`,
+  `get_latest`, `get_latest_episodes`) and the `get_items_by_ids` refresh all
+  name it for this reason; a new Emby fetch that feeds a play activation must
+  name it too, or the flat-row resolution silently degrades to the
+  single-item play.
 - A movie's containing item is its library, so autoloading a movie from a Home
   or New row queues the whole library. That is the same queue the policy
   produces when the movie plays from the library's own root listing, not a

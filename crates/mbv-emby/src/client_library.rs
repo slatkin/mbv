@@ -22,11 +22,11 @@ fn premiere(item: EmbyItem) -> Option<UpcomingPremiere> {
 /// `Fields` for `get_latest`. Must include every field its parser
 /// (`parse_item`) reads — in particular `DateCreated`, which destination
 /// Latest markers and date gutters depend on (mbv/#756).
-const LATEST_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId,Overview,PremiereDate,DateCreated";
+const LATEST_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId,Overview,PremiereDate,DateCreated,ParentId";
 
 /// `Fields` for `get_latest_episodes`. Same `DateCreated` dependency as
 /// [`LATEST_FIELDS`].
-const LATEST_EPISODES_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,Overview,PremiereDate,DateCreated";
+const LATEST_EPISODES_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,Overview,PremiereDate,DateCreated,ParentId";
 
 #[derive(Debug)]
 pub struct SortedItemsParams<'a> {
@@ -247,7 +247,7 @@ impl EmbyClient {
             ("UserId",     &self.user_id),
             ("Limit",      &limit),
             ("EnableUserData", "true"),
-            ("Fields",     "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,Overview,PremiereDate"),
+            ("Fields",     "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,Overview,PremiereDate,ParentId"),
             ("MediaTypes", "Video"),
         ])
     }

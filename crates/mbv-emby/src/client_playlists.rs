@@ -303,7 +303,7 @@ impl EmbyClient {
         let joined = ids.join(",");
         let mut items = self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("Ids",    &joined),
-            ("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
+            ("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ParentId"),
         ])?;
         // Emby returns items in server sort order, not input order. Restore input order.
         let order: std::collections::HashMap<&str, usize> = ids
