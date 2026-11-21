@@ -25,8 +25,8 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 ## 3. Dialog frame
 
-- [ ] 3.1 Create `crates/mbv-gui/src/window/components/dialog_frame.rs` as design D3 describes (scrim, `MENU_CARD_STYLE` card, button row, button region set through `use_region_set_for`), and move `BUTTON_FILL` and `button_color` into it. Migrate `confirm_overlay.rs` to it with its sizes (19, 14, 398, 14). Replace the inline last-report closure in `confirm_overlay/tests.rs` with the shared helper. Verify that `cargo nextest run -p mbv-gui confirm_overlay` passes with no edit to expected targets.
-- [ ] 3.2 Migrate `daemon_lost_overlay.rs` to the dialog frame with its sizes (16, 12, 420, 12), and replace its `last_reported_targets` with the shared helper. Verify: `cargo nextest run -p mbv-gui daemon_lost` passes with no edit to expected targets, and `rg -n "use_drop|HashMap" crates/mbv-gui/src/window/components/{confirm_overlay,daemon_lost_overlay}.rs` finds nothing.
+- [x] 3.1 Create `crates/mbv-gui/src/window/components/dialog_frame.rs` as design D3 describes (scrim, `MENU_CARD_STYLE` card, button row, button region set through `use_region_set_for`), and move `BUTTON_FILL` and `button_color` into it. Migrate `confirm_overlay.rs` to it with its sizes (19, 14, 398, 14). Replace the inline last-report closure in `confirm_overlay/tests.rs` with the shared helper. Verify that `cargo nextest run -p mbv-gui confirm_overlay` passes with no edit to expected targets.
+- [x] 3.2 Migrate `daemon_lost_overlay.rs` to the dialog frame with its sizes (16, 12, 420, 12), and replace its `last_reported_targets` with the shared helper. Verify: `cargo nextest run -p mbv-gui daemon_lost` passes with no edit to expected targets, and `rg -n "use_drop|HashMap" crates/mbv-gui/src/window/components/{confirm_overlay,daemon_lost_overlay}.rs` finds nothing.
 
 ## 4. Lettered-list module
 
