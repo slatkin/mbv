@@ -66,7 +66,7 @@ Every task keeps behaviour, paint, reported regions, and commands exactly as the
 
 ## 10. Icons macro
 
-- [ ] 10.1 Generate the forty-one icon components of `crates/mbv-gui/src/window/icons.rs` from one declarative macro over the name, the aliases, and the path children (design D16); `icon_shell` and the painted output stay identical. Verify: `cargo nextest run -p mbv-gui icons` passes with no edit, and `wc -l crates/mbv-gui/src/window/icons.rs` reports fewer lines than before.
+- [x] 10.1 Generate the forty-one icon components of `crates/mbv-gui/src/window/icons.rs` from one declarative macro over the name, the aliases, and the path children (design D16); `icon_shell` and the painted output stay identical. Verify: `cargo nextest run -p mbv-gui icons` passes with no edit, and `wc -l crates/mbv-gui/src/window/icons.rs` reports fewer lines than before.
 
 ## 11. Integration checks
 
