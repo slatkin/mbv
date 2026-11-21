@@ -22,6 +22,7 @@
 //! act on the row the pointer marks (`gui-pointer-target-interaction` D2).
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use dioxus_native::prelude::*;
@@ -38,7 +39,8 @@ use crate::window::components::library_list_column::{
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::tree_guide::{
-    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
+    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides, subtree_tails,
+    tail_divider_style,
 };
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
@@ -79,7 +81,12 @@ fn paint_letter_row(letter: char) -> Element {
 /// the muted name, and the runtime. It is a leaf of the tree, so it paints both
 /// guides that pass through it — the artist's and its album's
 /// (gui-tree-indent-guides design D3).
-fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
+fn paint_track_row(
+    row: &LibraryRow,
+    library: &LibraryState,
+    picked_row: bool,
+    tail: bool,
+) -> Element {
     let LibraryRow::Track {
         base,
         track_id,
@@ -93,10 +100,11 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     };
     // The leaf inset clears both guides that pass through the row
     // (gui-tree-indent-guides design D2, D3).
-    let style = format!(
+    let mut style = format!(
         "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
+    style.push_str(&tail_divider_style(tail));
     let press_row = row.clone();
     let press_library = library.clone();
     let menu_row = row.clone();
@@ -149,13 +157,19 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
 /// One painted row of the canvas tree: the letter heading, the track row, the
 /// shared part's artist row (gui-delineated-rows design D1), or the nested
 /// album node.
-fn paint_library_row(row: &LibraryRow, library: &LibraryState, picked: Option<&str>) -> Element {
+fn paint_library_row(
+    row: &LibraryRow,
+    library: &LibraryState,
+    picked: Option<&str>,
+    tails: &HashSet<String>,
+) -> Element {
     let picked_row = is_picked(row, picked);
+    let tail = tails.contains(row.id());
     match row {
         LibraryRow::Letter(base) => paint_letter_row(base.letter),
-        LibraryRow::Track { .. } => paint_track_row(row, library, picked_row),
+        LibraryRow::Track { .. } => paint_track_row(row, library, picked_row, tail),
         LibraryRow::Artist { .. } => paint_artist_row(row, library, picked_row),
-        LibraryRow::Album { .. } => paint_album_row(row, library, picked_row),
+        LibraryRow::Album { .. } => paint_album_row(row, library, picked_row, tail),
     }
 }
 
@@ -230,7 +244,12 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
 /// and its indent is the row inset alone — no caret column. It passes the
 /// artist's guide through and, while it shows track rows, starts its own under
 /// its label (gui-tree-indent-guides design D2, D3).
-fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
+fn paint_album_row(
+    row: &LibraryRow,
+    library: &LibraryState,
+    picked_row: bool,
+    tail: bool,
+) -> Element {
     let LibraryRow::Album {
         base,
         name,
@@ -246,10 +265,11 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     let year = (!year.is_empty()).then(|| year.clone());
     // The nested inset clears the artist's guide that passes through the row
     // (gui-tree-indent-guides design D2).
-    let style = format!(
+    let mut style = format!(
         "height: {NODE_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
+    style.push_str(&tail_divider_style(tail));
     let press_row = row.clone();
     let press_library = library.clone();
     let toggle_row = row.clone();
@@ -404,6 +424,10 @@ pub fn LibraryList() -> Element {
     let scroll_library = library.clone();
     let art_library = library.clone();
     let paint_library = library.clone();
+    // The rows that close an open artist's subtree paint its divider.
+    let tails = subtree_tails(&rows, |row| {
+        matches!(row, LibraryRow::Album { .. } | LibraryRow::Track { .. })
+    });
     let wiring = ListColumnWiring {
         rows: rows.as_ref(),
         view: scroll,
@@ -454,7 +478,7 @@ pub fn LibraryList() -> Element {
 
     library_list_column(
         &wiring,
-        |row: &LibraryRow| paint_library_row(row, &paint_library, picked.as_deref()),
+        |row: &LibraryRow| paint_library_row(row, &paint_library, picked.as_deref(), &tails),
         header,
         notices,
         ListColumnBody::Rail(Some(rsx! {

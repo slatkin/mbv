@@ -18,9 +18,12 @@
 //! under a top-level parent (artist, series, playlist) and
 //! [`GuideTone::Nested`] under a nested parent (album, season).
 
+use std::collections::HashSet;
+
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_item_row::{ROW_PADDING_PX, THUMB_WIDTH_PX};
+use crate::window::components::library_item_row::{ROW_DIVIDER_PX, ROW_PADDING_PX, THUMB_WIDTH_PX};
+use crate::window::library::list::GeometryRow;
 use crate::window::theme::canvas_var;
 
 /// A top-level parent's guide's left edge in the row box, in pixels (design
@@ -167,5 +170,38 @@ pub fn parent_guide_start(x: f32, row_height: f32, bottom: f32) -> Element {
             top: row_height - GUIDE_START_INSET_PX,
             bottom,
         }
+    }
+}
+
+/// The ids of the rows that close an open subtree: a descendant row whose next
+/// row is no descendant, or that is the list's last. An open top-level parent
+/// that shows children paints no divider under itself, so the guides do not
+/// cross it; the subtree's last row paints the divider instead, and the
+/// divider falls under the children.
+pub fn subtree_tails<R: GeometryRow>(
+    rows: &[R],
+    is_descendant: impl Fn(&R) -> bool,
+) -> HashSet<String> {
+    rows.iter()
+        .enumerate()
+        .filter(|(index, row)| {
+            is_descendant(row) && rows.get(index + 1).is_none_or(|next| !is_descendant(next))
+        })
+        .map(|(_, row)| row.id().to_owned())
+        .collect()
+}
+
+/// The style a subtree's last row appends to take the divider the open parent
+/// gave up: the shared row divider under the row, inside its height. Empty on
+/// any other row.
+#[must_use]
+pub fn tail_divider_style(tail: bool) -> String {
+    if tail {
+        format!(
+            " box-sizing: border-box; border-bottom: {ROW_DIVIDER_PX}px solid {};",
+            canvas_var("border")
+        )
+    } else {
+        String::new()
     }
 }

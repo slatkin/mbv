@@ -22,6 +22,7 @@
 //! episode rows keep their own painters (gui-delineated-rows design D1). The
 //! rows the list paints are also the row art set the core fetches (design D7).
 
+use std::collections::HashSet;
 use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
@@ -39,7 +40,8 @@ use crate::window::components::library_list_column::{
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::tree_guide::{
-    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
+    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides, subtree_tails,
+    tail_divider_style,
 };
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
@@ -191,6 +193,7 @@ fn paint_shows_season(
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
     selected: Option<&str>,
+    tail: bool,
 ) -> Element {
     let (kind, title, open, expandable, shows_children, height) = match row {
         ShowsListRow::Season(season) => (
@@ -211,6 +214,7 @@ fn paint_shows_season(
     if let Some(background) = row_background(row, selected) {
         let _ = write!(style, " background: {background};");
     }
+    style.push_str(&tail_divider_style(tail));
     let weight = if selected_row { 600.0 } else { 400.0 };
     let name_color = row_name_color(shows, row);
     let press_row = row.clone();
@@ -353,6 +357,7 @@ fn paint_shows_episode(
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
     selected: Option<&str>,
+    tail: bool,
 ) -> Element {
     let ShowsListRow::Episode(episode) = row else {
         return rsx! {};
@@ -366,6 +371,7 @@ fn paint_shows_episode(
     if let Some(background) = row_background(row, selected) {
         let _ = write!(style, " background: {background};");
     }
+    style.push_str(&tail_divider_style(tail));
     let name_color = row_name_color(shows, row);
     let press_row = row.clone();
     let press_library = library.clone();
@@ -429,12 +435,14 @@ fn paint_shows_row(
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
     selected: Option<&str>,
+    tails: &HashSet<String>,
 ) -> Element {
+    let tail = tails.contains(row.id());
     match row {
         ShowsListRow::Heading(heading) => paint_letter_heading("shows", heading),
         ShowsListRow::Series(_) => paint_shows_series(row, library, shows, selected),
-        ShowsListRow::Season(_) => paint_shows_season(row, library, shows, selected),
-        ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected),
+        ShowsListRow::Season(_) => paint_shows_season(row, library, shows, selected, tail),
+        ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected, tail),
         ShowsListRow::Flat(flat) => paint_shows_flat(flat, library, selected),
     }
 }
@@ -492,6 +500,10 @@ pub fn LibraryShowsList() -> Element {
         Some(mbv::GuiShowsView::All) | None => GuiRowArtScopeFrame::ShowsSeries,
     };
     let paint_library = library.clone();
+    // The rows that close an open series' subtree paint its divider.
+    let tails = subtree_tails(&rows, |row| {
+        matches!(row, ShowsListRow::Season(_) | ShowsListRow::Episode(_))
+    });
     let paint_selected = selected.clone();
     let paint_shows = frame;
     // The column's wiring is the one scaffold every list paints through
@@ -566,7 +578,13 @@ pub fn LibraryShowsList() -> Element {
     library_list_column(
         &wiring,
         move |row: &ShowsListRow| {
-            paint_shows_row(row, &paint_library, paint_shows, paint_selected.as_deref())
+            paint_shows_row(
+                row,
+                &paint_library,
+                paint_shows,
+                paint_selected.as_deref(),
+                &tails,
+            )
         },
         header,
         notices,

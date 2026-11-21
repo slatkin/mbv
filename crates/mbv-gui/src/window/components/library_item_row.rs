@@ -213,9 +213,16 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     }
     // The top-level row look (design D2): the fixed height, the tight padding,
     // the square corners, and the 1 px divider under the row. `border-box`
-    // keeps the divider inside the row height the list's geometry holds.
+    // keeps the divider inside the row height the list's geometry holds. An
+    // open parent that shows children paints none: its subtree's last row
+    // paints it, so the guides never cross it.
+    let divider_width = if props.tree_guide {
+        0.0
+    } else {
+        ROW_DIVIDER_PX
+    };
     let mut row_style = format!(
-        "height: {}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; gap: 12px; border: 0; border-bottom: {ROW_DIVIDER_PX}px solid {}; border-radius: 0; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
+        "height: {}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; gap: 12px; border: 0; border-bottom: {divider_width}px solid {}; border-radius: 0; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         props.height,
         canvas_var("border")
     );
@@ -316,7 +323,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 }
             }
             if props.tree_guide {
-                {parent_guide_start(TOP_GUIDE_X, props.height, -ROW_DIVIDER_PX)}
+                {parent_guide_start(TOP_GUIDE_X, props.height, 0.0)}
             }
             if let Some(open) = props.tree_open {
                 TreeHint { open }
