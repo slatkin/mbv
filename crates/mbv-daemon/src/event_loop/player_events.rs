@@ -249,11 +249,15 @@ impl DaemonLoop {
             run_identity,
             position_ticks,
             played,
+            error,
             ..
         } = pe
         else {
             return Some(false);
         };
+        if error.is_some() {
+            self.refresh_emby_secret_if_rotated();
+        }
 
         apply_stopped_observation(
             &mut self.owner,
@@ -264,6 +268,31 @@ impl DaemonLoop {
             *position_ticks,
             *played,
         )
+    }
+
+    /// A failed run may mean the Service secret rotated under the still-alive
+    /// Owner: the Client re-authenticated and saved a new secret while the
+    /// Owner kept the token it read at startup, so every request the Owner
+    /// issues (and every stream URL the player builds from it) is rejected.
+    /// Re-read the secret once; only when it changed are the shared client
+    /// and the player's submit credentials healed, so a non-auth failure
+    /// costs one file read and nothing else.
+    fn refresh_emby_secret_if_rotated(&self) {
+        let Some(token) = mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby) else {
+            return;
+        };
+        if token.is_empty() {
+            return;
+        }
+        let mut client = self.client.lock().unwrap();
+        if client.token == token {
+            return;
+        }
+        client.token.clone_from(&token);
+        let server_url = client.config.server_url.clone();
+        drop(client);
+        self.player.update_emby_credentials(server_url, token);
+        tracing::info!(name: "daemon.emby_secret.reloaded", target: "daemon", "reloaded a rotated Emby secret after a failed playback run");
     }
 
     fn settle_player_event_intent(&mut self, pe: &PlayerEvent) {
