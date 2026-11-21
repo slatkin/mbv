@@ -20,7 +20,6 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::LibraryPodcastsList;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail,
     GuiLibraryList, GuiPodcastsDetail, GuiPodcastsList, GuiRowArtFrame, GuiRowMediaKindFrame,
@@ -28,6 +27,7 @@ use crate::bridge::frame::library::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::components::library_lettered_list::LibraryLetteredList;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::lettered::{LetteredItemRow, PodcastsList};
 use crate::window::library::state::LibraryState;
@@ -87,7 +87,7 @@ fn podcasts_list_app(props: FixtureProps) -> Element {
     provide_context(epoch);
     handle.borrow_mut().replace((state, epoch));
     rsx! {
-        LibraryPodcastsList {}
+        LibraryLetteredList::<PodcastsList> {}
     }
 }
 

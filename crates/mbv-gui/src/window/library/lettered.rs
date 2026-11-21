@@ -37,16 +37,6 @@ mod adapters;
 
 pub use adapters::{AudiobooksList, EmbyList, FeedsList, PodcastsList};
 
-/// The entry row's height in logical pixels (gui-delineated-rows design D2):
-/// the shared top-level row part's height, which paints the entry's two-line
-/// title and its date gutter.
-pub const FEEDS_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
-
-/// The episode row's height in logical pixels (gui-delineated-rows design D2):
-/// the shared top-level row part's height, which paints the episode's
-/// two-line title and its date gutter.
-pub const PODCASTS_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
-
 /// The facts the shared lettered builder reads from a destination's carried
 /// row (design D4): the row's stable identity, the title its filter matches,
 /// and the rail letter of its sort key. Each destination's carried row frame

@@ -19,7 +19,6 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::LibraryFeedsList;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList,
     GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
@@ -27,6 +26,7 @@ use crate::bridge::frame::library::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::components::library_lettered_list::LibraryLetteredList;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::lettered::{FeedsList, LetteredItemRow};
 use crate::window::library::state::LibraryState;
@@ -86,7 +86,7 @@ fn feeds_list_app(props: FixtureProps) -> Element {
     provide_context(epoch);
     handle.borrow_mut().replace((state, epoch));
     rsx! {
-        LibraryFeedsList {}
+        LibraryLetteredList::<FeedsList> {}
     }
 }
 
