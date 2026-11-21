@@ -25,14 +25,11 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::lettered::LetteredItemRow;
-use crate::window::library::list::{
-    LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
-};
+use crate::window::library::list::LetteredRow;
 use crate::window::library::parts::library_feeds_list;
 
 use super::list_state::ListUiState;
 use super::parts::library_feeds_detail;
-use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Feeds list's interaction state: the shared filtered-list state over the
@@ -92,29 +89,11 @@ impl LibraryState {
             .cloned()
     }
 
-    /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule). The filter narrows the rows and selects
-    /// nothing, and the scroll stays inside the narrower list.
-    pub fn set_feeds_filter(&self, filter: String) {
-        let mut feeds_ui = self.feeds_ui;
-        feeds_ui.with_mut(|ui| ui.filter = filter);
-        self.clamp_feeds_scroll();
-    }
-
-    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
-    /// a closed filter narrows nothing. The scroll follows the widened rows.
-    pub fn close_feeds_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut feeds_ui = self.feeds_ui;
-        feeds_ui.with_mut(|ui| ui.filter.clear());
-        self.clamp_feeds_scroll();
-    }
-
     /// Select the row (design D12): the select command the core stores, whose
     /// frame paints the Hero. A select never opens the Narrow arrangement's
-    /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
-    /// the previous entry, as a Music pick's do.
+    /// Hero overlay (only View Detail does) and closes an open menu, because
+    /// the facts they paint belong to the previous entry, as a Music pick's
+    /// do.
     pub fn select_feeds_row(&self, row: &LetteredItemRow<GuiEntryRowFrame>) {
         self.select_feeds_row_id(&row.row.id);
     }
@@ -156,49 +135,5 @@ impl LibraryState {
         self.link.library(GuiLibraryCommand::FeedsQueue {
             item_id: item_id.to_owned(),
         });
-    }
-
-    /// Scroll the list by one movement key (design D6): Up and Down move by the
-    /// height of the row at the top edge, Page Up and Page Down by the viewport
-    /// height, and Home and End go to the list's ends, inside the list's range.
-    pub fn step_feeds_scroll(&self, mv: ListMove) {
-        let rows = self.feeds_rows();
-        let held = *self.scrolls.feeds.peek();
-        set_scroll_top(self.scrolls.feeds, &rows, scroll_step(&rows, held, mv));
-    }
-
-    /// Jump to a letter of the rail (design D7; gui-flat-list-sort design D8):
-    /// the list scrolls so the first entry under the letter paints fully. A
-    /// letter without rows changes nothing.
-    pub fn jump_feeds_to_letter(&self, letter: char) {
-        let rows = self.feeds_rows();
-        let view = *self.scrolls.feeds.peek();
-        let Some((_, scroll_top)) = jump_to_letter(&lettered_rail(&rows), &rows, letter, view)
-        else {
-            return;
-        };
-        set_scroll_top(self.scrolls.feeds, &rows, scroll_top);
-    }
-
-    /// Report the list's measured viewport height (design D12): the rows in
-    /// view follow it, and the scroll offset stays inside the narrower range.
-    pub fn measure_feeds_list(&self, viewport_height: f32) {
-        let mut feeds = self.scrolls.feeds;
-        feeds.with_mut(|scroll| scroll.viewport_height = viewport_height);
-        self.clamp_feeds_scroll();
-    }
-
-    /// Report the list's native scroll offset (design D12): a user scroll
-    /// moves the rows in view, and the offset stays inside the list's range.
-    pub fn scroll_feeds_list(&self, scroll_top: f32) {
-        let rows = self.feeds_rows();
-        set_scroll_top(self.scrolls.feeds, &rows, scroll_top);
-    }
-
-    /// Hold the Feeds list's scroll offset inside the rows the filter leaves.
-    fn clamp_feeds_scroll(&self) {
-        let rows = self.feeds_rows();
-        let held = *self.scrolls.feeds.peek();
-        set_scroll_top(self.scrolls.feeds, &rows, held.scroll_top);
     }
 }

@@ -16,6 +16,7 @@ use crate::window::sections::Sections;
 use dioxus_native::prelude::*;
 
 use super::keys_shared::{bare, core_target, cursor_move};
+use super::lettered::{AudiobooksList, EmbyList, FeedsList, PodcastsList};
 use super::state::LibraryState;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::settings::keys::route_settings_key;
@@ -40,11 +41,11 @@ fn close_active_filter(state: &LibraryState) {
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => state.close_home_filter(),
-        Some(GuiDestinationList::Emby(_)) => state.close_emby_filter(),
+        Some(GuiDestinationList::Emby(_)) => state.close_lettered_filter::<EmbyList>(),
         Some(GuiDestinationList::Shows(_)) => state.close_shows_filter(),
-        Some(GuiDestinationList::Audiobooks(_)) => state.close_audiobooks_filter(),
-        Some(GuiDestinationList::Podcasts(_)) => state.close_podcasts_filter(),
-        Some(GuiDestinationList::Feeds(_)) => state.close_feeds_filter(),
+        Some(GuiDestinationList::Audiobooks(_)) => state.close_lettered_filter::<AudiobooksList>(),
+        Some(GuiDestinationList::Podcasts(_)) => state.close_lettered_filter::<PodcastsList>(),
+        Some(GuiDestinationList::Feeds(_)) => state.close_lettered_filter::<FeedsList>(),
         _ => state.close_library_filter(),
     }
 }

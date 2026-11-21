@@ -27,6 +27,7 @@ use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::library::lettered::PodcastsList;
 use crate::window::library::podcasts::initial_podcasts_ui;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
@@ -406,7 +407,7 @@ fn down_over_the_podcasts_list_scrolls_it_by_one_row() {
     let content = podcasts_content(PillSelection::Latest, &episodes(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_podcasts(state, content.clone());
-        state.measure_podcasts_list(40.0);
+        state.measure_lettered_list::<PodcastsList>(40.0);
 
         route_row(state, facts, "down", "ArrowDown", "e1:ep1");
         facts.lock().expect("facts").push(scroll_facts(state));
@@ -425,7 +426,7 @@ fn down_off_the_podcasts_list_is_the_cores_key() {
     let content = podcasts_content(PillSelection::Latest, &episodes(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_podcasts(state, content.clone());
-        state.measure_podcasts_list(40.0);
+        state.measure_lettered_list::<PodcastsList>(40.0);
 
         route(state, facts, "down", "ArrowDown", false);
         facts.lock().expect("facts").push(scroll_facts(state));

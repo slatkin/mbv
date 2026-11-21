@@ -25,13 +25,10 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::lettered::LetteredItemRow;
-use crate::window::library::list::{
-    LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
-};
+use crate::window::library::list::LetteredRow;
 use crate::window::library::parts::library_podcasts_list;
 
 use super::list_state::ListUiState;
-use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Podcasts list's interaction state: the shared filtered-list state over
@@ -80,29 +77,11 @@ impl LibraryState {
         })
     }
 
-    /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule). The filter narrows the rows and selects
-    /// nothing, and the scroll stays inside the narrower list.
-    pub fn set_podcasts_filter(&self, filter: String) {
-        let mut podcasts_ui = self.podcasts_ui;
-        podcasts_ui.with_mut(|ui| ui.filter = filter);
-        self.clamp_podcasts_scroll();
-    }
-
-    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
-    /// a closed filter narrows nothing. The scroll follows the widened rows.
-    pub fn close_podcasts_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut podcasts_ui = self.podcasts_ui;
-        podcasts_ui.with_mut(|ui| ui.filter.clear());
-        self.clamp_podcasts_scroll();
-    }
-
     /// Select the row (design D12): the select command the core stores, whose
     /// frame paints the Hero. A select never opens the Narrow arrangement's
-    /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
-    /// the previous episode, as a Music pick's do.
+    /// Hero overlay (only View Detail does) and closes an open menu, because
+    /// the facts they paint belong to the previous episode, as a Music pick's
+    /// do.
     pub fn select_podcasts_row(&self, row: &LetteredItemRow<GuiEntryRowFrame>) {
         let Some(lib_idx) = self.podcasts_lib_idx() else {
             return;
@@ -149,51 +128,5 @@ impl LibraryState {
             lib_idx,
             item_id: item_id.to_owned(),
         });
-    }
-
-    /// Move the list by one movement key's scroll (design D6): Up and Down move
-    /// by the height of the row at the top edge, Page Up and Page Down by the
-    /// viewport height, and Home and End go to the list's ends, inside the
-    /// list's range.
-    pub fn step_podcasts_scroll(&self, mv: ListMove) {
-        let rows = self.podcasts_rows();
-        let held = *self.scrolls.podcasts.peek();
-        set_scroll_top(self.scrolls.podcasts, &rows, scroll_step(&rows, held, mv));
-    }
-
-    /// Jump to a letter of the rail (design D7; gui-flat-list-sort design D8):
-    /// the list scrolls so the first episode under the letter paints fully. A
-    /// letter without rows changes nothing.
-    pub fn jump_podcasts_to_letter(&self, letter: char) {
-        let rows = self.podcasts_rows();
-        let view = *self.scrolls.podcasts.peek();
-        let Some((_, scroll_top)) = jump_to_letter(&lettered_rail(&rows), &rows, letter, view)
-        else {
-            return;
-        };
-        set_scroll_top(self.scrolls.podcasts, &rows, scroll_top);
-    }
-
-    /// Report the list's measured viewport height (design D12): the rows in
-    /// view follow it, and the scroll offset stays inside the narrower range.
-    pub fn measure_podcasts_list(&self, viewport_height: f32) {
-        let mut podcasts = self.scrolls.podcasts;
-        podcasts.with_mut(|scroll| scroll.viewport_height = viewport_height);
-        self.clamp_podcasts_scroll();
-    }
-
-    /// Report the list's native scroll offset (design D12): a user scroll
-    /// moves the rows in view, and the offset stays inside the list's range.
-    pub fn scroll_podcasts_list(&self, scroll_top: f32) {
-        let rows = self.podcasts_rows();
-        set_scroll_top(self.scrolls.podcasts, &rows, scroll_top);
-    }
-
-    /// Hold the Podcasts list's scroll offset inside the rows the filter
-    /// leaves.
-    fn clamp_podcasts_scroll(&self) {
-        let rows = self.podcasts_rows();
-        let held = *self.scrolls.podcasts.peek();
-        set_scroll_top(self.scrolls.podcasts, &rows, held.scroll_top);
     }
 }

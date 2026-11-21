@@ -27,7 +27,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::lettered::{LetteredItemRow, PODCASTS_ROW_HEIGHT};
+use crate::window::library::lettered::{LetteredItemRow, PODCASTS_ROW_HEIGHT, PodcastsList};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_podcasts_detail, library_podcasts_list};
 use crate::window::library::state::LibraryState;
@@ -133,8 +133,10 @@ pub fn LibraryPodcastsList() -> Element {
         "podcasts",
         PointerList::Podcasts,
         "8px 8px 8px 8px",
-        Callback::new(move |height: f32| measure_library.measure_podcasts_list(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_podcasts_list(top)),
+        Callback::new(move |height: f32| {
+            measure_library.measure_lettered_list::<PodcastsList>(height);
+        }),
+        Callback::new(move |top: f32| scroll_library.scroll_lettered_list::<PodcastsList>(top)),
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Podcasts, ids);
         })),
@@ -169,7 +171,9 @@ pub fn LibraryPodcastsList() -> Element {
                     filter: podcasts_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter episodes".to_owned(),
-                    on_input: move |value: String| filter_library.set_podcasts_filter(value),
+                    on_input: move |value: String| {
+                        filter_library.set_lettered_filter::<PodcastsList>(value);
+                    },
                     on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
@@ -201,7 +205,7 @@ pub fn LibraryPodcastsList() -> Element {
                     LibraryLetterRail {
                         letters: rail,
                         jump: Some(Callback::new(move |letter: char| {
-                            jump_library.jump_podcasts_to_letter(letter);
+                            jump_library.jump_lettered_to_letter::<PodcastsList>(letter);
                         })),
                     }
                 }

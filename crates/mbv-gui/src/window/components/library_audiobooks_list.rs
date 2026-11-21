@@ -33,7 +33,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{AudiobooksList, LetteredItemRow};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
@@ -145,8 +145,10 @@ pub fn LibraryAudiobooksList() -> Element {
         "abs",
         PointerList::Audiobooks,
         "8px 0 8px 8px",
-        Callback::new(move |height: f32| measure_library.measure_audiobooks_list(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_audiobooks_list(top)),
+        Callback::new(move |height: f32| {
+            measure_library.measure_lettered_list::<AudiobooksList>(height);
+        }),
+        Callback::new(move |top: f32| scroll_library.scroll_lettered_list::<AudiobooksList>(top)),
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Audiobooks, ids);
         })),
@@ -179,7 +181,9 @@ pub fn LibraryAudiobooksList() -> Element {
                     filter: audiobooks_ui.filter.clone(),
                     placeholder: "Filter books".to_owned(),
                     aria_label: "Filter books".to_owned(),
-                    on_input: move |value: String| filter_library.set_audiobooks_filter(value),
+                    on_input: move |value: String| {
+                        filter_library.set_lettered_filter::<AudiobooksList>(value);
+                    },
                     on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
@@ -210,7 +214,7 @@ pub fn LibraryAudiobooksList() -> Element {
                     LibraryLetterRail {
                         letters: rail,
                         jump: Some(Callback::new(move |letter: char| {
-                            jump_library.jump_audiobooks_to_letter(letter);
+                            jump_library.jump_lettered_to_letter::<AudiobooksList>(letter);
                         })),
                     }
                 }

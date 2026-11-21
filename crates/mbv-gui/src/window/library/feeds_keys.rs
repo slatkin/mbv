@@ -26,7 +26,7 @@ use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
-use super::lettered::LetteredItemRow;
+use super::lettered::{FeedsList, LetteredItemRow};
 use super::list::ListMove;
 use super::parts::{library_feeds_detail, library_feeds_list};
 use super::state::LibraryState;
@@ -91,7 +91,7 @@ impl PanelKeys for FeedsKeys<'_> {
         if pointer.list != Some(PointerList::Feeds) {
             return false;
         }
-        self.state.step_feeds_scroll(mv);
+        self.state.step_lettered_scroll::<FeedsList>(mv);
         true
     }
 

@@ -30,7 +30,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{EmbyList, LetteredItemRow};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_emby_detail, library_emby_list};
 use crate::window::library::state::LibraryState;
@@ -170,8 +170,8 @@ pub fn LibraryEmbyList() -> Element {
         "emby",
         PointerList::Emby,
         "8px 0 8px 8px",
-        Callback::new(move |height: f32| measure_library.measure_emby_list(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_emby_list(top)),
+        Callback::new(move |height: f32| measure_library.measure_lettered_list::<EmbyList>(height)),
+        Callback::new(move |top: f32| scroll_library.scroll_lettered_list::<EmbyList>(top)),
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Emby, ids);
         })),
@@ -204,7 +204,9 @@ pub fn LibraryEmbyList() -> Element {
                     filter: emby_ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter items".to_owned(),
-                    on_input: move |value: String| filter_library.set_emby_filter(value),
+                    on_input: move |value: String| {
+                        filter_library.set_lettered_filter::<EmbyList>(value);
+                    },
                     on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
@@ -235,7 +237,7 @@ pub fn LibraryEmbyList() -> Element {
                     LibraryLetterRail {
                         letters: rail,
                         jump: Some(Callback::new(move |letter: char| {
-                            jump_library.jump_emby_to_letter(letter);
+                            jump_library.jump_lettered_to_letter::<EmbyList>(letter);
                         })),
                     }
                 }

@@ -27,6 +27,7 @@ use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::library::lettered::EmbyList;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
@@ -420,7 +421,7 @@ fn down_over_the_emby_list_scrolls_it_by_one_row() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
-        state.measure_emby_list(40.0);
+        state.measure_lettered_list::<EmbyList>(40.0);
 
         route_on_row(state, facts, "down", "ArrowDown", "m1");
         facts.lock().expect("facts").push(scroll_facts(state));
@@ -438,7 +439,7 @@ fn down_off_the_emby_list_is_the_cores_key() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
-        state.measure_emby_list(40.0);
+        state.measure_lettered_list::<EmbyList>(40.0);
 
         route(state, facts, "down", "ArrowDown", false);
         facts.lock().expect("facts").push(scroll_facts(state));

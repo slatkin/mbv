@@ -28,7 +28,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{FeedsList, LetteredItemRow};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
@@ -149,7 +149,7 @@ impl Fixture {
     /// paints nothing, as the Music list does.
     fn measure(&mut self, viewport_height: f32) {
         let state = self.state.clone();
-        self.in_runtime(move || state.measure_feeds_list(viewport_height));
+        self.in_runtime(move || state.measure_lettered_list::<FeedsList>(viewport_height));
     }
 
     /// Whether the selector names a node in the painted tree.

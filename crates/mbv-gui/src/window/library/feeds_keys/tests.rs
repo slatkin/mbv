@@ -29,6 +29,7 @@ use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::feeds::initial_feeds_ui;
+use crate::window::library::lettered::FeedsList;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
@@ -458,7 +459,7 @@ fn down_over_the_feeds_list_scrolls_it_by_one_row() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
-        state.measure_feeds_list(40.0);
+        state.measure_lettered_list::<FeedsList>(40.0);
 
         route_row(state, facts, "down", "ArrowDown", "s1::e1");
         facts.lock().expect("facts").push(scroll_facts(state));
@@ -477,7 +478,7 @@ fn down_off_the_feeds_list_is_the_cores_key() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
-        state.measure_feeds_list(40.0);
+        state.measure_lettered_list::<FeedsList>(40.0);
 
         route(state, facts, "down", "ArrowDown", false);
         facts.lock().expect("facts").push(scroll_facts(state));

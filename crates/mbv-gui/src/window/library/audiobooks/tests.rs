@@ -19,7 +19,7 @@ use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{AudiobooksList, LetteredItemRow};
 use crate::window::library::list::LetteredRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
@@ -295,9 +295,9 @@ fn queueing_a_book_sends_abs_queue_with_its_id() {
 fn a_rail_jump_scrolls_to_the_letter_first_book() {
     let (facts, rx) = run(|state, facts| {
         carry(state, Some("b1"));
-        state.measure_audiobooks_list(40.0);
+        state.measure_lettered_list::<AudiobooksList>(40.0);
 
-        state.jump_audiobooks_to_letter('B');
+        state.jump_lettered_to_letter::<AudiobooksList>('B');
         facts.lock().expect("facts").push(scroll_facts(state));
     });
     // `B`'s heading and the `A` heading with its two books cover 160 px

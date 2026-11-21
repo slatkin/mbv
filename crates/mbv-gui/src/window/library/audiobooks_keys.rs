@@ -23,7 +23,7 @@ use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::audiobooks_workspace::{abs_chapter_at, play_abs_chapter, queue_abs_book};
 use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
-use super::lettered::LetteredItemRow;
+use super::lettered::{AudiobooksList, LetteredItemRow};
 use super::list::ListMove;
 use super::parts::{library_audiobooks_detail, library_audiobooks_list};
 use super::state::LibraryState;
@@ -86,7 +86,7 @@ impl PanelKeys for AudiobooksKeys<'_> {
         if pointer.list != Some(PointerList::Audiobooks) {
             return false;
         }
-        self.state.step_audiobooks_scroll(mv);
+        self.state.step_lettered_scroll::<AudiobooksList>(mv);
         true
     }
 

@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::bridge::frame::library::{GuiEmbyRowKindFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
-use crate::window::library::list::{LETTER_ROW_HEIGHT, carries_letters, lettered_rail};
+use crate::window::library::list::{LETTER_ROW_HEIGHT, carries_letters};
 
 /// One plain-mode row: the name-sorted library's row under its rail letter.
 fn plain(id: &str, title: &str, sort_letter: char) -> GuiEmbyRowFrame {

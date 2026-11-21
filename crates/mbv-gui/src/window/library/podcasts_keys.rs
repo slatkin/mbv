@@ -21,7 +21,7 @@ use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, route_panel_list_key};
-use super::lettered::LetteredItemRow;
+use super::lettered::{LetteredItemRow, PodcastsList};
 use super::list::ListMove;
 use super::parts::{library_podcasts_detail, library_podcasts_list};
 use super::state::LibraryState;
@@ -88,7 +88,7 @@ impl PanelKeys for PodcastsKeys<'_> {
         if pointer.list != Some(PointerList::Podcasts) {
             return false;
         }
-        self.state.step_podcasts_scroll(mv);
+        self.state.step_lettered_scroll::<PodcastsList>(mv);
         true
     }
 

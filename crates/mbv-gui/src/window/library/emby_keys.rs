@@ -20,7 +20,7 @@ use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, route_panel_list_key};
-use super::lettered::LetteredItemRow;
+use super::lettered::{EmbyList, LetteredItemRow};
 use super::list::ListMove;
 use super::parts::{library_emby_detail, library_emby_list};
 use super::state::LibraryState;
@@ -87,7 +87,7 @@ impl PanelKeys for EmbyKeys<'_> {
         if pointer.list != Some(PointerList::Emby) {
             return false;
         }
-        self.state.step_emby_scroll(mv);
+        self.state.step_lettered_scroll::<EmbyList>(mv);
         true
     }
 

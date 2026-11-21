@@ -27,7 +27,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
-use crate::window::library::lettered::LetteredItemRow;
+use crate::window::library::lettered::{AudiobooksList, LetteredItemRow};
 use crate::window::library::list::GeometryRow;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
@@ -150,7 +150,7 @@ impl Fixture {
     /// paints nothing, as the Music list does.
     fn measure(&mut self, viewport_height: f32) {
         let state = self.state.clone();
-        self.in_runtime(move || state.measure_audiobooks_list(viewport_height));
+        self.in_runtime(move || state.measure_lettered_list::<AudiobooksList>(viewport_height));
     }
 
     /// Whether the selector names a node in the painted tree.
@@ -433,7 +433,7 @@ fn a_rail_letter_no_row_carries_is_disabled() {
     );
 
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.jump_audiobooks_to_letter('C'));
+    fixture.in_runtime(move || state.jump_lettered_to_letter::<AudiobooksList>('C'));
 
     assert_eq!(
         fixture.state.scrolls.audiobooks.peek().scroll_top,

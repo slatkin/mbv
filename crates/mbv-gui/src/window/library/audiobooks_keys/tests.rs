@@ -30,6 +30,7 @@ use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::library::lettered::AudiobooksList;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
@@ -443,7 +444,7 @@ fn enter_n_and_a_with_no_hovered_row_send_nothing() {
 fn down_over_the_book_list_scrolls_it_by_one_row() {
     let (facts, rx) = run(|state, facts| {
         carry(state);
-        state.measure_audiobooks_list(40.0);
+        state.measure_lettered_list::<AudiobooksList>(40.0);
 
         route_row(state, facts, "down", "ArrowDown", "b1");
         facts.lock().expect("facts").push(scroll_facts(state));
@@ -460,7 +461,7 @@ fn down_over_the_book_list_scrolls_it_by_one_row() {
 fn down_off_the_book_list_is_the_cores_key() {
     let (facts, rx) = run(|state, facts| {
         carry(state);
-        state.measure_audiobooks_list(40.0);
+        state.measure_lettered_list::<AudiobooksList>(40.0);
 
         route(state, facts, "down", "ArrowDown", false);
         facts.lock().expect("facts").push(scroll_facts(state));

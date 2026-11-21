@@ -26,7 +26,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::lettered::{FEEDS_ROW_HEIGHT, LetteredItemRow};
+use crate::window::library::lettered::{FEEDS_ROW_HEIGHT, FeedsList, LetteredItemRow};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
@@ -136,8 +136,10 @@ pub fn LibraryFeedsList() -> Element {
         "feeds",
         PointerList::Feeds,
         "8px 8px 8px 8px",
-        Callback::new(move |height: f32| measure_library.measure_feeds_list(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_feeds_list(top)),
+        Callback::new(move |height: f32| {
+            measure_library.measure_lettered_list::<FeedsList>(height);
+        }),
+        Callback::new(move |top: f32| scroll_library.scroll_lettered_list::<FeedsList>(top)),
         Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Feeds, ids);
         })),
@@ -170,7 +172,9 @@ pub fn LibraryFeedsList() -> Element {
                     filter: feeds_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter entries".to_owned(),
-                    on_input: move |value: String| filter_library.set_feeds_filter(value),
+                    on_input: move |value: String| {
+                        filter_library.set_lettered_filter::<FeedsList>(value);
+                    },
                     on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
@@ -201,7 +205,7 @@ pub fn LibraryFeedsList() -> Element {
                     LibraryLetterRail {
                         letters: rail,
                         jump: Some(Callback::new(move |letter: char| {
-                            jump_library.jump_feeds_to_letter(letter);
+                            jump_library.jump_lettered_to_letter::<FeedsList>(letter);
                         })),
                     }
                 }

@@ -23,15 +23,15 @@ use crate::bridge::frame::library::{
     GuiLibraryList, GuiPodcastsDetail, GuiPodcastsList,
 };
 use crate::window::library::list::{
-    GeometryRow, LIBRARY_ROW_HEIGHT, LetteredRow, SortLetter, build_lettered_rows, filter_match,
+    GeometryRow, LIBRARY_ROW_HEIGHT, LetteredRow, ListMove, SortLetter, build_lettered_rows,
+    filter_match, jump_to_letter, lettered_rail, scroll_step,
 };
 use crate::window::library::parts::{
     library_audiobooks_detail, library_audiobooks_list, library_emby_detail, library_emby_list,
     library_feeds_detail, library_feeds_list, library_podcasts_detail, library_podcasts_list,
 };
-use crate::window::library::scroll::ListScroll;
+use crate::window::library::scroll::{ListScroll, set_scroll_top};
 
-use super::audiobooks::AudiobooksUiState;
 use super::list_state::ListUiState;
 use super::state::LibraryState;
 
@@ -156,9 +156,6 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// The destination's detail part.
     type Detail;
 
-    /// The destination's interaction state (`lib/library/*.ts`'s `*Ui`).
-    type Ui;
-
     /// The heading id prefix (gui-flat-list-sort design D8): each
     /// destination's letter headings keep their own hook.
     const HEADING_KEY: &'static str;
@@ -175,12 +172,19 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// destination holds the window.
     fn detail(detail: Option<&GuiLibraryDetail>) -> Option<&Self::Detail>;
 
-    /// The destination's interaction state.
-    fn ui(state: &LibraryState) -> Signal<Self::Ui>;
+    /// The destination's filter state: every lettered destination's `/`
+    /// filter is the one [`ListUiState`] text, so the generic filter, scroll,
+    /// letter-jump, measure, and scroll methods read and write it here.
+    fn ui(state: &LibraryState) -> Signal<ListUiState>;
 
     /// The destination's scroll store (design D9 of
     /// `gui-change-driven-sections`).
     fn scroll(state: &LibraryState) -> Signal<ListScroll>;
+
+    /// The destination's painted rows under its filter's current text: the
+    /// carried rows narrowed by [`ListUiState::filter`], under the letter
+    /// headings a name sort paints (design D4).
+    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]>;
 }
 
 /// The plain Emby-library destination's adapter (design D4): its carried rows
@@ -193,7 +197,6 @@ impl LetteredDestination for EmbyList {
     type Row = GuiEmbyRowFrame;
     type List = GuiEmbyList;
     type Detail = GuiEmbyDetail;
-    type Ui = ListUiState;
 
     const HEADING_KEY: &'static str = "emby-letter";
 
@@ -205,12 +208,16 @@ impl LetteredDestination for EmbyList {
         library_emby_detail(detail)
     }
 
-    fn ui(state: &LibraryState) -> Signal<Self::Ui> {
+    fn ui(state: &LibraryState) -> Signal<ListUiState> {
         state.emby_ui
     }
 
     fn scroll(state: &LibraryState) -> Signal<ListScroll> {
         state.scrolls.emby
+    }
+
+    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
+        state.emby_rows()
     }
 }
 
@@ -224,7 +231,6 @@ impl LetteredDestination for AudiobooksList {
     type Row = GuiAudiobooksRowFrame;
     type List = GuiAudiobooksList;
     type Detail = GuiAudiobooksDetail;
-    type Ui = AudiobooksUiState;
 
     const HEADING_KEY: &'static str = "abs-letter";
 
@@ -236,12 +242,17 @@ impl LetteredDestination for AudiobooksList {
         library_audiobooks_detail(detail)
     }
 
-    fn ui(state: &LibraryState) -> Signal<Self::Ui> {
+    fn ui(state: &LibraryState) -> Signal<ListUiState> {
         state.audiobooks_ui
     }
 
     fn scroll(state: &LibraryState) -> Signal<ListScroll> {
         state.scrolls.audiobooks
+    }
+
+    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
+        let filter = state.audiobooks_ui.peek().filter.clone();
+        state.audiobooks_rows(&filter)
     }
 }
 
@@ -255,7 +266,6 @@ impl LetteredDestination for PodcastsList {
     type Row = GuiEntryRowFrame;
     type List = GuiPodcastsList;
     type Detail = GuiPodcastsDetail;
-    type Ui = ListUiState;
 
     const HEADING_KEY: &'static str = "podcasts-letter";
 
@@ -267,12 +277,16 @@ impl LetteredDestination for PodcastsList {
         library_podcasts_detail(detail)
     }
 
-    fn ui(state: &LibraryState) -> Signal<Self::Ui> {
+    fn ui(state: &LibraryState) -> Signal<ListUiState> {
         state.podcasts_ui
     }
 
     fn scroll(state: &LibraryState) -> Signal<ListScroll> {
         state.scrolls.podcasts
+    }
+
+    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
+        state.podcasts_rows()
     }
 }
 
@@ -285,7 +299,6 @@ impl LetteredDestination for FeedsList {
     type Row = GuiEntryRowFrame;
     type List = GuiFeedsList;
     type Detail = GuiFeedsDetail;
-    type Ui = ListUiState;
 
     const HEADING_KEY: &'static str = "feeds-letter";
 
@@ -297,12 +310,86 @@ impl LetteredDestination for FeedsList {
         library_feeds_detail(detail)
     }
 
-    fn ui(state: &LibraryState) -> Signal<Self::Ui> {
+    fn ui(state: &LibraryState) -> Signal<ListUiState> {
         state.feeds_ui
     }
 
     fn scroll(state: &LibraryState) -> Signal<ListScroll> {
         state.scrolls.feeds
+    }
+
+    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
+        state.feeds_rows()
+    }
+}
+
+/// The one set of `LibraryState` methods the lettered destinations share
+/// (design D4): a destination's `/` filter, its scroll step, its rail jump, its
+/// measured viewport, and its native scroll offset all land on the state the
+/// adapter names, so each of the four keeps only its data. The rows each method
+/// reads are the destination's own [`LetteredDestination::painted_rows`].
+impl LibraryState {
+    /// Narrow destination `D`'s list to the titles that contain `filter`,
+    /// without case (design D7's filter rule). The filter narrows the rows and
+    /// selects nothing, and the scroll stays inside the narrower list.
+    pub fn set_lettered_filter<D: LetteredDestination>(&self, filter: String) {
+        D::ui(self).with_mut(|ui| ui.filter = filter);
+        self.clamp_lettered_scroll::<D>();
+    }
+
+    /// Close destination `D`'s filter with Esc (design D3, step 2): the text
+    /// goes with it, so a closed filter narrows nothing. The scroll follows the
+    /// widened rows.
+    pub fn close_lettered_filter<D: LetteredDestination>(&self) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.filter_open = false);
+        D::ui(self).with_mut(|ui| ui.filter.clear());
+        self.clamp_lettered_scroll::<D>();
+    }
+
+    /// Scroll destination `D`'s list by one movement key (design D6): Up and
+    /// Down move by the height of the row at the top edge, Page Up and Page
+    /// Down by the viewport height, and Home and End go to the list's ends,
+    /// inside the list's range.
+    pub fn step_lettered_scroll<D: LetteredDestination>(&self, mv: ListMove) {
+        let rows = D::painted_rows(self);
+        let held = *D::scroll(self).peek();
+        set_scroll_top(D::scroll(self), &rows, scroll_step(&rows, held, mv));
+    }
+
+    /// Jump to a letter of destination `D`'s rail (design D7; gui-flat-list-sort
+    /// design D8): the list scrolls so the first row under the letter paints
+    /// fully. A letter without rows changes nothing.
+    pub fn jump_lettered_to_letter<D: LetteredDestination>(&self, letter: char) {
+        let rows = D::painted_rows(self);
+        let view = *D::scroll(self).peek();
+        let Some((_, scroll_top)) = jump_to_letter(&lettered_rail(&rows), &rows, letter, view)
+        else {
+            return;
+        };
+        set_scroll_top(D::scroll(self), &rows, scroll_top);
+    }
+
+    /// Report destination `D`'s measured viewport height: the rows in view
+    /// follow it, and the scroll offset stays inside the narrower range.
+    pub fn measure_lettered_list<D: LetteredDestination>(&self, viewport_height: f32) {
+        let mut scroll = D::scroll(self);
+        scroll.with_mut(|scroll| scroll.viewport_height = viewport_height);
+        self.clamp_lettered_scroll::<D>();
+    }
+
+    /// Report destination `D`'s native scroll offset: a user scroll moves the
+    /// rows in view, and the offset stays inside the list's range.
+    pub fn scroll_lettered_list<D: LetteredDestination>(&self, scroll_top: f32) {
+        let rows = D::painted_rows(self);
+        set_scroll_top(D::scroll(self), &rows, scroll_top);
+    }
+
+    /// Hold destination `D`'s scroll offset inside the rows the filter leaves.
+    fn clamp_lettered_scroll<D: LetteredDestination>(&self) {
+        let rows = D::painted_rows(self);
+        let held = *D::scroll(self).peek();
+        set_scroll_top(D::scroll(self), &rows, held.scroll_top);
     }
 }
 
