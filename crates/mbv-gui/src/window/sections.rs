@@ -194,6 +194,10 @@ impl Sections {
     /// anchor is the one field this write stores nothing for: the window's
     /// caller stamps it, and the binding stays named here so a new batch field
     /// still fails the build.
+    ///
+    /// `connected` is written only on its false-to-true flip (D15): an equal
+    /// write marks the root as a subscriber, so a batch the root does not read
+    /// would re-render it.
     pub fn apply_batch(&mut self, batch: &GuiSectionBatch) {
         let GuiSectionBatch {
             attach,
@@ -215,7 +219,9 @@ impl Sections {
             playlists,
             playhead: _playhead,
         } = batch;
-        self.connected.set(true);
+        if !*self.connected.peek() {
+            self.connected.set(true);
+        }
         let mut held = self.held.write();
         write(attach.as_ref(), &mut held.attach, self.attach);
         write(theme.as_ref(), &mut held.theme, self.theme);
