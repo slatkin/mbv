@@ -41,6 +41,7 @@ use crate::window::components::tree_guide::{
     LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
 };
 use crate::window::components::tree_hint::TreeHint;
+use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
 use crate::window::components::typed_text::TypedText;
 use crate::window::input::f32_from_f64;
 use crate::window::library::list::{
@@ -51,7 +52,7 @@ use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
 use crate::window::theme::canvas_var;
-use crate::window::truncate::{TextStyle, Truncate};
+use crate::window::truncate::Truncate;
 
 /// Whether the row is the album the Hero shows.
 fn is_picked(row: &LibraryRow, picked: Option<&str>) -> bool {
@@ -93,7 +94,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     // The leaf inset clears both guides that pass through the row
     // (gui-tree-indent-guides design D2, D3).
     let style = format!(
-        "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     let press_row = row.clone();
@@ -133,7 +134,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                 text: name.clone(),
                 class: "min-w-0 flex-1".to_owned(),
                 css: "color: var(--canvas-muted);".to_owned(),
-                style: TextStyle::sans(14.0, 400.0),
+                style: tree_row_text(),
             }
             span {
                 class: "flex-none font-mono tabular-nums",
@@ -246,7 +247,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     // The nested inset clears the artist's guide that passes through the row
     // (gui-tree-indent-guides design D2).
     let style = format!(
-        "height: {NODE_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
+        "height: {NODE_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     let press_row = row.clone();
@@ -282,7 +283,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                 text: name.clone(),
                 class: "min-w-0 flex-1".to_owned(),
                 css: format!("color: {color}; font-weight: 400.0;"),
-                style: TextStyle::sans(14.5, 400.0),
+                style: tree_row_text(),
             }
             if let Some(year) = year {
                 // A year repeats down the tree, so it paints the date

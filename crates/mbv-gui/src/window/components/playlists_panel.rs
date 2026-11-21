@@ -34,13 +34,14 @@ use crate::window::components::tree_guide::{
     GuideTone, PLAYLIST_GUIDE_X, PLAYLIST_LABEL_X, TreeGuide, parent_guide_start,
 };
 use crate::window::components::tree_hint::TreeHint;
+use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
 use crate::window::input::f32_from_f64;
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 use crate::window::settings::focus::focus_on_mount;
 use crate::window::settings::state::{SettingsForm, SettingsState};
-use crate::window::truncate::{TextStyle, Truncate};
+use crate::window::truncate::Truncate;
 
 /// The row the hero shows and a menu addresses: a playlist, or one item of the
 /// open playlist. Stable ids, never positions.
@@ -473,7 +474,7 @@ fn playlist_node(
                 Truncate {
                     text: playlist.name.clone(),
                     class: "min-w-0 flex-1".to_owned(),
-                    style: TextStyle::sans(14.0, 400.0),
+                    style: tree_row_text(),
                     css: "color: var(--canvas-text);".to_owned(),
                 }
                 span {
@@ -547,7 +548,7 @@ fn items_block(
                             Truncate {
                                 text: item.name.clone(),
                                 class: "min-w-0 flex-1".to_owned(),
-                                style: TextStyle::sans(14.0, 400.0),
+                                style: tree_row_text(),
                                 css: "color: var(--canvas-text);".to_owned(),
                             }
                             TreeGuide {
@@ -573,7 +574,7 @@ const PLAYLIST_ROW_HEIGHT_PX: f32 = 36.0;
 /// filled while picked.
 fn row_style(selected: bool, indent: f32) -> String {
     format!(
-        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 {PLAYLIST_LABEL_X}px 0 {}px; border: 0; border-radius: 6px; background: {}; cursor: pointer;",
+        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 {PLAYLIST_LABEL_X}px 0 {}px; border: 0; border-radius: 6px; font-size: {TREE_ROW_FONT_PX}px; background: {}; cursor: pointer;",
         PLAYLIST_LABEL_X + indent,
         if selected {
             "var(--canvas-selected)"

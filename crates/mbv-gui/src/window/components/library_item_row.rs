@@ -38,6 +38,7 @@ use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_attr::library_attr;
 use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
 use crate::window::components::tree_hint::TreeHint;
+use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
 use crate::window::icons::{EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
 use crate::window::library::episode::episode_progress;
@@ -214,7 +215,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     // the square corners, and the 1 px divider under the row. `border-box`
     // keeps the divider inside the row height the list's geometry holds.
     let mut row_style = format!(
-        "height: {}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; gap: 12px; border: 0; border-bottom: {ROW_DIVIDER_PX}px solid {}; border-radius: 0; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; gap: 12px; border: 0; border-bottom: {ROW_DIVIDER_PX}px solid {}; border-radius: 0; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         props.height,
         canvas_var("border")
     );
@@ -294,7 +295,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                         "color: {}; font-weight: {FLAT_ROW_TITLE_WEIGHT};",
                         props.title_color
                     ),
-                    style: TextStyle::sans(14.0, FLAT_ROW_TITLE_WEIGHT),
+                    style: tree_row_text(),
                     attrs: title_attrs,
                 }
                 if let Some(subtitle) = props.subtitle.clone() {

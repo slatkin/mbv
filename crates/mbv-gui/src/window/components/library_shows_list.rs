@@ -42,6 +42,7 @@ use crate::window::components::tree_guide::{
     LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
 };
 use crate::window::components::tree_hint::TreeHint;
+use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
 use crate::window::input::f32_from_f64;
 use crate::window::library::episode::is_played_episode;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
@@ -204,7 +205,7 @@ fn paint_shows_season(
     };
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
-        "height: {height}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
+        "height: {height}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         row_inset(row)
     );
     if let Some(background) = row_background(row, selected) {
@@ -282,7 +283,7 @@ fn paint_shows_season(
                 text: title.clone(),
                 class: "min-w-0 flex-1".to_owned(),
                 css: format!("color: {name_color}; font-weight: {weight};"),
-                style: TextStyle::sans(14.5, weight),
+                style: TextStyle::sans(TREE_ROW_FONT_PX, weight),
             }
             {nested_parent_guides(height, shows_children)}
             if expandable {
@@ -358,7 +359,7 @@ fn paint_shows_episode(
     };
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
-        "height: {}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
         episode.height,
         row_inset(row)
     );
@@ -405,7 +406,7 @@ fn paint_shows_episode(
                 text: episode.title.clone(),
                 class: "min-w-0 flex-1".to_owned(),
                 css: format!("color: {name_color};"),
-                style: TextStyle::sans(14.0, 400.0),
+                style: tree_row_text(),
                 attrs: vec![Attribute::new("data-library-shows-title", "", None, false)],
             }
             if !episode.duration.is_empty() {
