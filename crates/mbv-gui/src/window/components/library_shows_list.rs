@@ -33,9 +33,11 @@ use crate::window::components::library_item_row::{
 };
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
-use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
-use crate::window::components::library_virtual_list::library_virtual_list;
-use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::components::library_list_column::{
+    ListColumnBody, ListColumnWiring, library_list_column,
+};
+use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::tree_guide::{
     LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
 };
@@ -491,21 +493,22 @@ pub fn LibraryShowsList() -> Element {
     let paint_library = library.clone();
     let paint_selected = selected.clone();
     let paint_shows = frame;
-    let virtual_list = library_virtual_list(
-        rows.as_ref(),
-        scroll,
-        "shows",
-        PointerList::Shows,
-        "8px 0 8px 8px",
-        Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),
-        Some(Callback::new(move |ids: Vec<String>| {
+    // The column's wiring is the one scaffold every list paints through
+    // (design D14): its two DOM facts report to the scroll store (design D9),
+    // the rows in view report the scope they paint under to the core for their
+    // row art fetches (gui-delineated-rows design D7).
+    let wiring = ListColumnWiring {
+        rows: rows.as_ref(),
+        view: scroll,
+        attr: "shows",
+        list: PointerList::Shows,
+        padding: "8px 0 8px 8px",
+        on_measure: Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
+        on_scroll: Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),
+        rows_in_view: Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(art_scope, ids);
         })),
-        move |row: &ShowsListRow| {
-            paint_shows_row(row, &paint_library, paint_shows, paint_selected.as_deref())
-        },
-    );
+    };
 
     // The rail paints exactly while the rows carry letters (gui-flat-list-sort
     // design D8): the All view's series tree, and the New view while its sort
@@ -515,62 +518,59 @@ pub fn LibraryShowsList() -> Element {
 
     // The rail's press scrolls to the letter's first row (design D7).
     let jump_library = library.clone();
-    let filter_library = library.clone();
-    let accept_library = library.clone();
-
-    rsx! {
-        div {
-            class: "flex min-h-0 min-w-0 flex-1 flex-col",
-            "data-library-shows-list-column": "",
-            // The Music list's header (design D14, user override): the Shows
-            // destination is an Emby destination, so its Emby mark names it
-            // under every view (gui-library-header-service-marks design D5),
-            // and the view dropdown names the view; no title repeats it.
-            div {
-                class: "flex flex-none flex-col",
-                LibraryListHeader {
-                    heading: LibraryListHeading::Mark(ServiceMark::Emby),
-                    label: String::new(),
-                    view: frame.map(|frame| frame.view),
-                    sort,
-                    filter: shows_ui.filter.clone(),
-                    placeholder: filter_placeholder,
-                    aria_label: "Filter series".to_owned(),
-                    on_input: move |value: String| filter_library.set_shows_filter(value),
-                    on_accept: move |()| accept_library.accept_destination_filter(),
-                }
-            }
-            if let Some(frame) = frame {
-                // The series list has not landed yet, or the Upcoming mode's
-                // eager fetch failed (design D14): one line per state, and the
-                // failure line only over a landed list.
-                ListFrameNotices {
-                    loading: frame.loading.then(|| {
-                        ListFrameNoticeLine::loading("data-library-shows-loading")
-                    }),
-                    failed: (!frame.loading && frame.upcoming_failed).then(|| {
-                        ListFrameNoticeLine::new(
-                            "data-library-shows-failed",
-                            "Upcoming fetch failed",
-                        )
-                    }),
-                }
-            }
-            div {
-                class: "flex min-h-0 flex-1",
-                style: "overflow: hidden;",
-                {virtual_list}
-                if paints_rail {
-                    LibraryLetterRail {
-                        letters: rail,
-                        jump: Some(Callback::new(move |letter: char| {
-                            jump_library.jump_shows_to_letter(letter);
-                        })),
-                    }
-                }
+    let rail = paints_rail.then(|| {
+        rsx! {
+            LibraryLetterRail {
+                letters: rail,
+                jump: Some(Callback::new(move |letter: char| {
+                    jump_library.jump_shows_to_letter(letter);
+                })),
             }
         }
-    }
+    });
+
+    let filter_library = library.clone();
+    let accept_library = library.clone();
+    // The header's facts (design D14, user override): the Shows destination is
+    // an Emby destination, so its Emby mark names it under every view
+    // (gui-library-header-service-marks design D5), and the view dropdown names
+    // the view; no title repeats it.
+    let header = LibraryListHeaderProps {
+        heading: LibraryListHeading::Mark(ServiceMark::Emby),
+        label: String::new(),
+        label_attr: None,
+        collections: None,
+        view: frame.map(|frame| frame.view),
+        sort,
+        filter: shows_ui.filter.clone(),
+        placeholder: filter_placeholder,
+        aria_label: "Filter series".to_owned(),
+        on_input: Callback::new(move |value: String| filter_library.set_shows_filter(value)),
+        on_accept: Callback::new(move |()| accept_library.accept_destination_filter()),
+    };
+
+    // The series list has not landed yet, or the Upcoming mode's eager fetch
+    // failed (design D14): one line per state, and the failure line only over a
+    // landed list.
+    let notices = frame.map(|frame| ListFrameNoticesProps {
+        loading: frame
+            .loading
+            .then(|| ListFrameNoticeLine::loading("data-library-shows-loading")),
+        failed: (!frame.loading && frame.upcoming_failed).then(|| {
+            ListFrameNoticeLine::new("data-library-shows-failed", "Upcoming fetch failed")
+        }),
+        empty: None,
+    });
+
+    library_list_column(
+        &wiring,
+        move |row: &ShowsListRow| {
+            paint_shows_row(row, &paint_library, paint_shows, paint_selected.as_deref())
+        },
+        header,
+        notices,
+        ListColumnBody::Rail(rail),
+    )
 }
 
 #[cfg(test)]

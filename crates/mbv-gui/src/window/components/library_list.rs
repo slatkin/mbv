@@ -32,9 +32,11 @@ use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX,
 };
 use crate::window::components::library_letter_rail::LibraryLetterRail;
-use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
-use crate::window::components::library_virtual_list::library_virtual_list;
-use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::components::library_list_column::{
+    ListColumnBody, ListColumnWiring, library_list_column,
+};
+use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::tree_guide::{
     LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
 };
@@ -395,74 +397,69 @@ pub fn LibraryList() -> Element {
     // The list's two DOM facts report to the scroll store (design D9), the
     // artist rows in view report to the core for their row art fetches
     // (gui-delineated-rows design D7), and the rows paint over the interaction
-    // state this render read.
+    // state this render read. The column's wiring is the one scaffold every
+    // list paints through (design D14).
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let art_library = library.clone();
     let paint_library = library.clone();
-    let virtual_list = library_virtual_list(
-        rows.as_ref(),
-        scroll,
-        "",
-        PointerList::Music,
-        "0 0 0 8px",
-        Callback::new(move |height: f32| measure_library.measure_library_list(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_library_list(top)),
-        Some(Callback::new(move |ids: Vec<String>| {
+    let wiring = ListColumnWiring {
+        rows: rows.as_ref(),
+        view: scroll,
+        attr: "",
+        list: PointerList::Music,
+        padding: "0 0 0 8px",
+        on_measure: Callback::new(move |height: f32| measure_library.measure_library_list(height)),
+        on_scroll: Callback::new(move |top: f32| scroll_library.scroll_library_list(top)),
+        rows_in_view: Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Music, ids);
         })),
-        |row: &LibraryRow| paint_library_row(row, &paint_library, picked.as_deref()),
-    );
+    };
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The header's facts (design D14): Music is an Emby destination, so its Emby
+    // mark names it (gui-library-header-service-marks design D5), and the
+    // carried selector names the selection itself, so it paints no selection
+    // label (design D6a).
+    let header = LibraryListHeaderProps {
+        heading: LibraryListHeading::Mark(ServiceMark::Emby),
+        label: String::new(),
+        label_attr: None,
+        collections,
+        view: None,
+        sort: None,
+        filter: ui.filter.clone(),
+        placeholder: filter_placeholder,
+        aria_label: "Filter artists".to_owned(),
+        on_input: Callback::new(move |value: String| filter_library.set_library_filter(value)),
+        on_accept: Callback::new(move |()| accept_library.accept_library_filter()),
+    };
 
-    rsx! {
-        div {
-            class: "flex min-h-0 min-w-0 flex-1 flex-col",
-            "data-library-list-column": "",
-            div {
-                class: "flex flex-none flex-col",
-                LibraryListHeader {
-                    // Music is an Emby destination: its Emby mark names it
-                    // (gui-library-header-service-marks design D5).
-                    heading: LibraryListHeading::Mark(ServiceMark::Emby),
-                    // The carried selector names the selection itself, so the
-                    // header paints no selection label (design D6a).
-                    label: String::new(),
-                    collections,
-                    filter: ui.filter.clone(),
-                    placeholder: filter_placeholder,
-                    aria_label: "Filter artists".to_owned(),
-                    on_input: move |value: String| filter_library.set_library_filter(value),
-                    on_accept: move |()| accept_library.accept_library_filter(),
-                }
-            }
-            if let Some(frame) = frame {
-                // A selected group's album list has not landed yet (design D5),
-                // the selected groups' album lists failed, or the collections
-                // hold no artist: one line per state, the failure line naming
-                // the groups the frame names.
-                ListFrameNotices {
-                    loading: frame.loading.then(|| {
-                        ListFrameNoticeLine::loading("data-library-loading")
-                    }),
-                    failed: frame.failure.clone().map(|failure| {
-                        ListFrameNoticeLine::new("data-library-failure", failure)
-                    }),
-                    empty: (!frame.loading && frame.artists.is_empty()).then(|| {
-                        ListFrameNoticeLine::new("data-library-empty", "No artists")
-                    }),
-                }
-            }
-            div {
-                class: "flex min-h-0 flex-1",
-                style: "overflow: hidden;",
-                {virtual_list}
-                LibraryLetterRail { letters: rail }
-            }
-        }
-    }
+    // A selected group's album list has not landed yet (design D5), the
+    // selected groups' album lists failed, or the collections hold no artist:
+    // one line per state, the failure line naming the groups the frame names.
+    let notices = frame.map(|frame| ListFrameNoticesProps {
+        loading: frame
+            .loading
+            .then(|| ListFrameNoticeLine::loading("data-library-loading")),
+        failed: frame
+            .failure
+            .clone()
+            .map(|failure| ListFrameNoticeLine::new("data-library-failure", failure)),
+        empty: (!frame.loading && frame.artists.is_empty())
+            .then(|| ListFrameNoticeLine::new("data-library-empty", "No artists")),
+    });
+
+    library_list_column(
+        &wiring,
+        |row: &LibraryRow| paint_library_row(row, &paint_library, picked.as_deref()),
+        header,
+        notices,
+        ListColumnBody::Rail(Some(rsx! {
+            LibraryLetterRail { letters: rail }
+        })),
+    )
 }
 
 #[cfg(test)]

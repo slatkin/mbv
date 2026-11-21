@@ -30,6 +30,7 @@ pub mod library_letter_heading;
 pub mod library_letter_rail;
 pub mod library_lettered_list;
 pub mod library_list;
+pub mod library_list_column;
 pub mod library_list_header;
 pub mod library_list_notice;
 pub mod library_panel;

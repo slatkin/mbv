@@ -18,11 +18,12 @@
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_attr::library_attr;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
-use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
-use crate::window::components::library_virtual_list::library_virtual_list;
-use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::components::library_list_column::{
+    ListColumnBody, ListColumnWiring, library_list_column,
+};
+use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::library::lettered::{LetteredDestination, LetteredItemRow};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
 use crate::window::library::state::LibraryState;
@@ -74,97 +75,87 @@ pub fn LibraryLetteredList<D: LetteredDestination>() -> Element {
 
     // The list's two DOM facts report to the scroll store (design D9), the rows
     // in view report to the core for their row art fetches (gui-delineated-rows
-    // design D7), and the rows paint through the destination's own painter.
+    // design D7), and the rows paint through the destination's own painter. The
+    // column's wiring is the one scaffold every list paints through (design
+    // D14).
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let art_library = library.clone();
     let paint_library = library.clone();
     let paint_selected = selected.map(str::to_owned);
-    let virtual_list = library_virtual_list(
-        rows.as_ref(),
-        scroll,
-        D::ATTR,
-        D::POINTER_LIST,
-        D::PADDING,
-        Callback::new(move |height: f32| measure_library.measure_lettered_list::<D>(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_lettered_list::<D>(top)),
-        Some(Callback::new(move |ids: Vec<String>| {
+    let wiring = ListColumnWiring {
+        rows: rows.as_ref(),
+        view: scroll,
+        attr: D::ATTR,
+        list: D::POINTER_LIST,
+        padding: D::PADDING,
+        on_measure: Callback::new(move |height: f32| {
+            measure_library.measure_lettered_list::<D>(height);
+        }),
+        on_scroll: Callback::new(move |top: f32| scroll_library.scroll_lettered_list::<D>(top)),
+        rows_in_view: Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(D::ART_SCOPE, ids);
         })),
+    };
+
+    // The rail's press scrolls the list to the letter's first row (design D7);
+    // a date-sorted list's rows carry no letter, so it paints the shell alone.
+    let jump_library = library.clone();
+    let rail = paints_rail.then(|| {
+        rsx! {
+            LibraryLetterRail {
+                letters: rail,
+                jump: Some(Callback::new(move |letter: char| {
+                    jump_library.jump_lettered_to_letter::<D>(letter);
+                })),
+            }
+        }
+    });
+
+    let filter_library = library.clone();
+    let accept_library = library.clone();
+    // The header's facts (design D4, D15): the destination's mark names it
+    // (gui-library-header-service-marks design D5), and its selection label,
+    // collection selector, and sort control are its own where it carries them.
+    let header = LibraryListHeaderProps {
+        heading: LibraryListHeading::Mark(header.mark),
+        label: header.label.clone(),
+        label_attr: header.label_attr,
+        collections: header.collections.clone(),
+        view: None,
+        sort: header.sort.clone(),
+        filter: ui.filter.clone(),
+        placeholder: header.placeholder.clone(),
+        aria_label: header.aria_label.to_owned(),
+        on_input: Callback::new(move |value: String| {
+            filter_library.set_lettered_filter::<D>(value);
+        }),
+        on_accept: Callback::new(move |()| accept_library.accept_destination_filter()),
+    };
+
+    // The active list has not landed yet, its fetch failed, or it holds no
+    // item: one line per state, and the empty line only over a landed row set.
+    let notices = load_facts.map(|facts| ListFrameNoticesProps {
+        loading: facts
+            .loading
+            .then(|| ListFrameNoticeLine::loading(D::NOTICES.loading_attr)),
+        failed: facts
+            .failed
+            .then(|| ListFrameNoticeLine::new(D::NOTICES.failed_attr, D::NOTICES.failed_text)),
+        empty: facts
+            .empty
+            .then(|| ListFrameNoticeLine::new(D::NOTICES.empty_attr, D::NOTICES.empty_text)),
+    });
+
+    library_list_column(
+        &wiring,
         move |row: &LetteredRow<LetteredItemRow<D::Row>>| {
             D::paint_row(row, &paint_library, paint_selected.as_deref())
         },
-    );
-
-    // The rail's press scrolls the list to the letter's first row (design D7).
-    let jump_library = library.clone();
-    let filter_library = library.clone();
-    let accept_library = library.clone();
-
-    // The list column's own hook, which the destination's tests read.
-    let column_attrs = vec![Attribute::new(
-        library_attr(D::ATTR, "list-column"),
-        "",
-        None,
-        false,
-    )];
-
-    rsx! {
-        div {
-            class: "flex min-h-0 min-w-0 flex-1 flex-col",
-            ..column_attrs,
-            // The Music list's header (design D15): the destination's mark
-            // names it (gui-library-header-service-marks design D5), its
-            // selection label and collection selector are its own, and the `/`
-            // filter field narrows it.
-            div {
-                class: "flex flex-none flex-col",
-                LibraryListHeader {
-                    heading: LibraryListHeading::Mark(header.mark),
-                    label: header.label.clone(),
-                    label_attr: header.label_attr,
-                    collections: header.collections.clone(),
-                    sort: header.sort.clone(),
-                    filter: ui.filter.clone(),
-                    placeholder: header.placeholder.clone(),
-                    aria_label: header.aria_label.to_owned(),
-                    on_input: move |value: String| {
-                        filter_library.set_lettered_filter::<D>(value);
-                    },
-                    on_accept: move |()| accept_library.accept_destination_filter(),
-                }
-            }
-            if let Some(facts) = load_facts {
-                // The active list has not landed yet, its fetch failed, or it
-                // holds no item: one line per state, and the empty line only
-                // over a landed row set.
-                ListFrameNotices {
-                    loading: facts
-                        .loading
-                        .then(|| ListFrameNoticeLine::loading(D::NOTICES.loading_attr)),
-                    failed: facts.failed.then(|| {
-                        ListFrameNoticeLine::new(D::NOTICES.failed_attr, D::NOTICES.failed_text)
-                    }),
-                    empty: facts.empty.then(|| {
-                        ListFrameNoticeLine::new(D::NOTICES.empty_attr, D::NOTICES.empty_text)
-                    }),
-                }
-            }
-            div {
-                class: "flex min-h-0 flex-1",
-                style: "overflow: hidden;",
-                {virtual_list}
-                if paints_rail {
-                    LibraryLetterRail {
-                        letters: rail,
-                        jump: Some(Callback::new(move |letter: char| {
-                            jump_library.jump_lettered_to_letter::<D>(letter);
-                        })),
-                    }
-                }
-            }
-        }
-    }
+        header,
+        notices,
+        ListColumnBody::Rail(rail),
+    )
 }
 
 #[cfg(test)]
