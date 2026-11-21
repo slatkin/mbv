@@ -166,3 +166,6 @@ pub fn LibraryLetteredList<D: LetteredDestination>() -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

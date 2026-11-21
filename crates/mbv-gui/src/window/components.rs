@@ -80,28 +80,3 @@ pub mod tree_guide;
 pub mod tree_hint;
 pub mod typed_text;
 pub mod use_focus_while;
-
-// The four lettered lists the generic component serves keep their own suites
-// in their own directories, and each keeps the module path (and so the nextest
-// filter) it had while it was a component of its own
-// (`gui-tech-debt-simplification` design D10; task 4.6 merges the four suites
-// into `library_lettered_list/tests.rs`).
-#[cfg(test)]
-mod library_emby_list {
-    mod tests;
-}
-
-#[cfg(test)]
-mod library_audiobooks_list {
-    mod tests;
-}
-
-#[cfg(test)]
-mod library_podcasts_list {
-    mod tests;
-}
-
-#[cfg(test)]
-mod library_feeds_list {
-    mod tests;
-}
