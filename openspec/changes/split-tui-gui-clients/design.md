@@ -7,7 +7,10 @@ See proposal.md (Why). The current state that shapes the approach:
 - The root package `mbv` is a library and the `mbv` binary. Its `src/app/` holds the shared `App` (182 fields), dispatch (~23.5k lines), state (~11k lines), the keyboard router (`src/app/input/`, ~5k lines), the TUI shell (`src/app/shell/`, ~14.7k lines), and the GUI-only modules `gui_library`, `gui_settings`, `gui_playlists`, `gui_client_state` (~14k lines).
 - `crates/mbv-gui` depends on the root `mbv` package. It uses `App`, `ClientTickHost`, the `Gui*Command` types, and the `test`-feature seams (`stub_app_with_queue_and_cmd_rx`).
 - The GUI-only modules are `impl App` blocks. They read 38 non-GUI `App` fields directly, own 26 `gui_*` fields on `App`, and add GUI variants to the shared event enum (`GuiGroupAlbums`, `GuiEmbyRootItems`, `GuiShowsNew`).
-- No GUI module names the TUI shell. Outside `shell/` and `input/`, only these non-test files use ratatui or crossterm: `state/projection/{card,chrome_status,tv_wide,visualizer}.rs`, `infra/terminal.rs`, `infra/image_fetch.rs`, `infra/image_fetch/protocol.rs`. One shared file uses the shell: `dispatch/run_loop/teardown.rs` (`shell::Model`).
+- No GUI module names the TUI shell. Outside `shell/` and `input/`, these non-test files use ratatui or crossterm: `state/projection/{card,chrome_status,tv_wide,visualizer}.rs`, `infra/terminal.rs`, `infra/image_fetch.rs`, `infra/image_fetch/protocol.rs`, and `test_seams.rs` (`crossterm_key_to_neutral`, also tuirealm and `mbv-components`). Inside `input/`, `input.rs` builds a ratatui `Rect` from `terminal_width` and `terminal_height` for the tab-strip width. One shared file uses the shell: `dispatch/run_loop/teardown.rs` (`shell::Model`).
+- Shared code and GUI-only code also import items from the TUI crates `mbv-render` and `mbv-components`: 27 non-test shared files and 13 GUI module files. Some items are toolkit-free shared logic that lives in a TUI crate (hero content builders, album plans, sort keys, book rows). Others are TUI terminal geometry that shared state reads (`MINI_VIEW_THRESHOLD`, `chrome_geometry`, `wide_library_panes`). So the GUI uses TUI code today through these crates. D13 places each item.
+- `App::gui_client` is the one Client-kind fact. It gates more than the Mini rule: the terminal-width Mini view and the hidden empty queue column (`client_arranges_panels`), the visualizer and visual-slot hide setters (`visual_slot_controls`), the shown-queue rules in `state/named_queues.rs` and `state/queue_link.rs` (including the closed-queue fallback in `adopt_named_queue_list`), and the router gates `GuiClient` and `GuiQueueTarget` in `input/key_policy.rs`. D6 replaces it.
+- The prefs file is one JSON object that `App::save_prefs` reads, changes, and writes back. It holds keys that only one Client reads (`gui_player_auto_hide`, `visual_slot_hidden`, `queue_column_width`, `list_pane_width`).
 - Shared signatures carry terminal cells, for example the context-menu anchor `Option<(u16, u16)>` in `build_queue_selection_menu_at`.
 - `mbv-theme` has an optional `ratatui` feature. `mbv-images` depends on `ratatui` and `ratatui-image` (crossterm feature).
 - The Owner process is `mbv --__local-daemon` (`src/startup.rs`, `src/local_daemon.rs`). The GUI resolves the sibling `mbv` program to start it. The Owner's Pin swap, Unpin, and Open launch `/proc/<owner pid>/exe`, which is the TUI because the Owner and the TUI are one file today.
@@ -83,7 +86,10 @@ Where a GUI-only and a TUI-only entry point wrap one shared function, the shared
 | `src/app/infra/terminal.rs`, `src/app/infra/image_fetch/protocol.rs`, ratatui parts of `infra/image_fetch.rs` | `mbv-tui` |
 | `src/app/dispatch/run_loop/teardown.rs` (names `shell::Model`) | `mbv-tui` (the shared part of the teardown stays in the core as a call over `App`) |
 | `src/app/gui_library`, `gui_settings`, `gui_playlists`, `gui_client_state` | `mbv-gui` |
-| `src/app/{client_core,client_drains,waking_relay,app_stub,test_seams}.rs` | `mbv-client-core` |
+| `src/app/{client_core,client_drains,waking_relay,app_stub}.rs` | `mbv-client-core` |
+| `src/app/test_seams.rs`: `crossterm_key_to_neutral` and every other seam that names crossterm, tuirealm, or `mbv-components` | `mbv-tui`, with the shell-driving tests that use it |
+| `src/app/test_seams.rs`: the toolkit-free seams | `mbv-client-core` (`test` feature) |
+| `src/app/input.rs`: the tab-strip width from `terminal_width`, `terminal_height`, a ratatui `Rect`, and `chrome_geometry` | `mbv-tui`; the TUI pushes the resulting width to the core as a value |
 | queue, status bar, and footer projections without ratatui | `mbv-client-core` |
 | `src/owner_link.rs` + `owner_link/`, `src/client_kind.rs`, `src/config.rs` | `mbv-client-core` |
 | `src/owner_restart.rs`: pure `follow_up` decision | `mbv-client-core`; the terminal prompt goes to `mbv-tui` |
@@ -100,7 +106,8 @@ Where a GUI-only and a TUI-only entry point wrap one shared function, the shared
 `App` lives in `mbv-client-core`. Each Client owns it:
 
 - TUI: the shell `Model` already owns `App`. It also takes the TUI-only state that leaves `App`: `terminal_width`, `terminal_height`, the narrow-terminal Mini view state, and every other field that only the shell reads.
-- GUI: a new `GuiCore { app: App, gui: GuiClientState }` in `mbv-gui` owns `App` and all GUI state. The 26 `gui_*` fields leave `App` for `GuiClientState`. The `impl App` blocks of the GUI modules become `impl GuiCore` blocks.
+- GUI: a new `GuiCore { app: App, gui: GuiClientState }` in `mbv-gui` owns `App` and all GUI state. Of the 26 `gui_*` fields, 24 leave `App` for `GuiClientState`. The other two do not move: `gui_client` is replaced by `ClientCapabilities`, and `gui_shown_entry` stays in the core as `shown_entry` (D6). The `impl App` blocks of the GUI modules become `impl GuiCore` blocks.
+- Prefs: the file format and every key name stay the same. The core keeps `load_prefs` and writes only the keys that the core owns. It gets one `pub fn save_client_pref(key: &str, value: serde_json::Value)` with the same read, change, and write. Each Client reads its own keys from `load_prefs` at start and writes them through `save_client_pref` when they change: the GUI owns `gui_player_auto_hide`, and the TUI owns every key whose field rule D2 moves to the shell `Model`. A key whose field stays in the core stays a core key.
 
 `App` fields stay `pub(crate)` inside the core. A Client reads and changes `App` only through `pub` methods. The 38 non-GUI fields that the GUI modules read directly get a `pub` read method each, or the GUI code calls an existing core method that already does the work. No field becomes `pub`.
 
@@ -117,8 +124,49 @@ The shared event enum loses `GuiGroupAlbums`, `GuiEmbyRootItems`, and `GuiShowsN
 ### D6. Neutral shared signatures
 
 - Context menus: the core builds the menu entries and the target. Each Client places the menu. The `anchor: Option<(u16, u16)>` parameter leaves the core. `build_queue_selection_menu_at` folds into `build_queue_selection_menu`, and the TUI keeps its pointer cell beside the returned menu.
-- Breakpoints: the core reads only the shared breakpoint class (`mbv-surfaces`). The TUI derives the class and the Mini view from its terminal size. The `gui_client` flag on `App`, which exists only to skip the terminal-width Mini rule, is deleted.
 - Any other terminal-cell or toolkit type that the compiler finds in a core signature after the move gets the same treatment: a neutral value in the core, the conversion in the Client.
+
+### D6a. Client capabilities replace the Client-kind flag
+
+The core names no Client. Where the Clients differ, the core reads a neutral fact. `App::gui_client`, `App::enable_gui_client`, `client_arranges_panels`, and `visual_slot_controls` are deleted. The core gets:
+
+```rust
+/// What this Client presents. Each Client builds its own value and passes it
+/// to the core before the first step. The core never names a Client.
+pub struct ClientCapabilities {
+    /// The Client may present one panel only, and hides an empty queue
+    /// column in its two-panel layout (TUI: true, GUI: false).
+    pub terminal_panel_rules: bool,
+    /// The Client paints the visualizer and the visual-slot hide control
+    /// (TUI: true, GUI: false).
+    pub visual_slot_controls: bool,
+    /// The Client shows one queue entry at a time that the user picks: a
+    /// Named queue or the peer's queue (TUI: false, GUI: true).
+    pub shown_queue_entries: bool,
+    /// The Client paints the transport chips, the seek-10/30 controls, the
+    /// playback-target chooser, and moves queue rows by key (TUI: false,
+    /// GUI: true).
+    pub transport_chip_keys: bool,
+}
+```
+
+Each existing `gui_client` reader maps to one fact. No behaviour changes:
+
+| Behaviour today | After the split |
+|---|---|
+| Terminal-width Mini view (`is_mini_view`) | The TUI computes "one panel only" from its terminal width and `MINI_VIEW_THRESHOLD` on each resize and pushes it with `App::set_single_panel(bool)`. `is_mini_view` reads that fact and `terminal_panel_rules`. The GUI never pushes it, so it stays false. |
+| Hidden empty queue column (`queue_column_hidden_empty`), `effective_panel_focus`, `effective_panel_mode` | Stay in the core and read `terminal_panel_rules` and the pushed single-panel fact. GUI code that reads them today calls the same `pub` methods. |
+| Visualizer and visual-slot hide setters, `visual_slot_hide_in_effect` | Stay in the core and read `visual_slot_controls`. |
+| The shown queue (`gui_shown_entry`): `show_peer_entry`, `show_local_current_entry`, `show_entry`, `show_named_queue`, `shown_queue_edit`, `adopt_named_queue_snapshot`, the closed-queue fallback in `adopt_named_queue_list`, and `queue_link_resolution` | Stay in the core. The field is renamed `shown_entry` and the gates read `shown_queue_entries`. The Owner-projection path keeps the fallback, so the `gui-queue-chooser` rule and ADR 0041 hold. The GUI queue chooser reads the entry through a `pub` read method. |
+| Router gates `KeyPolicyGate::GuiClient` and `GuiQueueTarget` | Renamed `TransportChipKeys` and `TransportChipQueueTarget`. The router snapshot carries `ClientCapabilities` in place of `gui_client`, and the gates read `transport_chip_keys`. The actions stay in the shared registry, so a rebind works the same in both Clients. |
+| `LaunchRestore::Done` set by `enable_gui_client` | The GUI calls a `pub fn skip_launch_restore(&mut self)` before its first step. |
+| Hello claim `named-queues` (`ClientKind::Gui` on a local link) | Reads `shown_queue_entries`. `ClientKind` is deleted if nothing else reads it; otherwise its readers move to the capability they mean. |
+
+Alternative considered: keep a `ClientKind { Tui, Gui }` enum in the core. Rejected: every `if kind == Gui` branch is GUI code in the shared core, which the `client-interaction-core` delta forbids.
+
+### D6b. Breakpoints
+
+The core reads only the shared breakpoint class (`mbv-surfaces`) and the pushed single-panel fact. The TUI derives both from its terminal size. The tab-strip width rule in `input.rs` (a ratatui `Rect` and `chrome_geometry` over `terminal_width`) moves to the TUI. The `tab_scroll` field follows rule D2.
 
 ### D7. Shared leaf crates lose their TUI parts
 
@@ -168,9 +216,37 @@ No new external dependency, and no version change. Each existing workspace depen
 
 - Root `AGENTS.md`: the workspace map and the shared core only. It points to each Client's guide.
 - New `crates/mbv-tui/AGENTS.md` (TUI rules, the TuiRealm and component rules, the TUI tests matrix) and `crates/mbv-gui/AGENTS.md` (GUI rules). Text that applies to one Client moves out of the root guide into that Client's guide.
-- New ADR `docs/adr/0042-clients-are-separate-crates-over-one-client-core.md`. It amends ADR 0035 and ADR 0039 (the GUI links the core, not the TUI) and records D4, D8, and D9.
+- New ADR `docs/adr/0042-clients-are-separate-crates-over-one-client-core.md`. It amends ADR 0035 and ADR 0039 (the GUI links the core, not the TUI) and records D4, D6a, D8, D9, and D13.
 - `CONTEXT.md`: add *Owner program*; update *Client core*, *Owner process*, *Local process* to name their crate and program.
 - Update `docs/architecture/tui-frontend.md`, `docs/architecture/gui-client.md`, `docs/architecture/owner-client-operation-split.md`, `docs/architecture/interactive-tui-component-map.md`, and `docs/recipes.md` site lists to the new paths.
+
+### D13. Items in `mbv-render` and `mbv-components` that shared or GUI code uses
+
+`mbv-render` and `mbv-components` stay TUI-only. Each item they hold that the core or the GUI uses goes by one of two rules.
+
+**Rule A: toolkit-free shared logic and data move down to `mbv-ui-model`.** Both Clients import them from there, and `mbv-render` and `mbv-components` import them too.
+
+| Item | From |
+|---|---|
+| `current_time_secs` | `mbv-render` `screens/feeds_model.rs` |
+| `group_album_plan`, `sorted_group_album_order`, `initial_group_artist_sort_key`, `effective_sort_str` | `mbv-render` (`screens/album_plan.rs` and the files `lib.rs` re-exports them from) |
+| `book_rows` | `mbv-render` `components/audiobookshelf_book.rs` |
+| `HeroImageState` | `mbv-render` `components/tv_wide.rs` |
+| `MUSIC_ALBUM_IMAGE_TYPES` | `mbv-render` `components/widgets.rs` |
+| `IndicatorStyle`, `StatusIndicator` (data only) | `mbv-render` `components/indicators.rs` |
+| `TransportAvailability` | `mbv-render` `components/chrome_player.rs` |
+| `hero_content_queue`, `hero_content_feed`, `hero_content_emby`, `hero_content_abs_episode`, `hero_content_abs_book` | `mbv-components` `library_panel/hero.rs` |
+| `HeroArtwork`, `ArtworkSource`, `ArtworkShape`, `HeroFacts`, `PanelHeroImagePaint` (data only) | `mbv-components` `library_panel/content.rs` |
+| `premiere_number_label` | `mbv-components` `tv_content/episode_rows.rs` |
+| `sanitize_url` | `mbv-components` `library_panel/overview_box.rs` |
+
+Where an item's type holds a ratatui value, the item splits: the neutral data moves to `mbv-ui-model`, and the ratatui part stays in its TUI crate as a conversion. Painting code never moves down.
+
+**Rule B: TUI terminal geometry stays in the TUI crates, and its readers move to `mbv-tui`.** If a core rule needs the result, the TUI pushes it to the core as a neutral value (as with the single-panel fact in D6a).
+
+`MINI_VIEW_THRESHOLD`, `TABBAR_LEFT_RESERVE`, `LEFT_WIDTH_DEFAULT`, `rect_to_presentation`, `LIBRARY_PILL_THRESHOLD`, `chrome_geometry`, `ChromeGeometryInput`, `tab_strip_text_width`, `wide_library_panes`, `normalize_queue_column_width`, `wide_hero_fits`, `visible_tab_range`, `service_state_color`, `components::card`, `hero_artwork_box`, `MusicWideRenderCtx`, `LibraryListRenderCtx`.
+
+An item that the compiler finds later goes by the same two rules. After the split, `cargo tree -p mbv-client-core` and `cargo tree -p mbv-gui` list neither `mbv-render` nor `mbv-components`.
 
 ## Risks / Trade-offs
 

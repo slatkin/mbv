@@ -23,7 +23,7 @@ Shared Client state and the calls that both Clients make SHALL use neutral value
 
 ### Requirement: No Client contains another Client's code
 
-The TUI Client SHALL NOT depend on GUI Client code, and the GUI Client SHALL NOT depend on TUI Client code. Code that both Clients use SHALL live once, in the Client core or in a shared crate below it, and both Clients SHALL import it from there. Code and state that only one Client uses SHALL live in that Client. The shared Client state SHALL hold no field and no event that only one Client reads.
+The TUI Client SHALL NOT depend on GUI Client code, and the GUI Client SHALL NOT depend on TUI Client code. Code that both Clients use SHALL live once, in the Client core or in a shared crate below it, and both Clients SHALL import it from there. Code and state that only one Client uses SHALL live in that Client. The Client core SHALL NOT name a Client: where the Clients differ, it SHALL read a neutral capability that each Client declares, and each Client's behaviour SHALL stay as it is.
 
 #### Scenario: The GUI program carries no terminal UI
 
@@ -39,6 +39,12 @@ The TUI Client SHALL NOT depend on GUI Client code, and the GUI Client SHALL NOT
 
 - **WHEN** a rule that both Clients follow changes, such as how a selection is enqueued
 - **THEN** the change is made once, in the Client core, and both Clients show the new behaviour
+
+#### Scenario: A rule applies to one Client only
+
+- **WHEN** a shared rule applies only to a Client that shows one picked queue entry at a time
+- **THEN** the Client core gates it on that capability, not on which Client runs
+- **AND** a Client that declares the capability gets the rule, and a Client that does not keeps its own behaviour
 
 #### Scenario: A GUI-only feature changes
 
