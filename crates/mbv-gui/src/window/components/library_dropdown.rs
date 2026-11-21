@@ -12,6 +12,21 @@ use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
 use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::icons::{ChevronDown, ChevronUp};
+use crate::window::input::f32_from_f64;
+
+/// The popover's width in logical pixels (`20rem` at the 16 px root).
+const MENU_WIDTH_PX: f32 = 320.0;
+
+/// The gap the popover keeps from the window's leading edge when it shifts
+/// right to fit.
+const MENU_EDGE_PX: f32 = 16.0;
+
+/// How far right a trailing-anchored popover shifts so its leading edge stays
+/// on screen: the trigger's right edge minus the popover's width is the
+/// leading edge, and a leading edge left of the margin moves right to it.
+fn trailing_shift(trigger_right: f32) -> f32 {
+    (MENU_EDGE_PX - (trigger_right - MENU_WIDTH_PX)).max(0.0)
+}
 
 /// One row of an open Library dropdown: the key its press sends, its label,
 /// and whether it is the active choice.
@@ -186,6 +201,38 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
 
     let has_filter = filter.is_some();
     let mut filter_mounted = use_focus_while(move || open && has_filter);
+    // A trailing-anchored popover hangs left of the trigger's right edge; in a
+    // narrow Library column that edge is left of the window's, so the popover
+    // measures the trigger as it opens and shifts right, over the other
+    // columns.
+    let mut anchor: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    let mut shift = use_signal(|| 0.0_f32);
+    use_effect(use_reactive(
+        &(open, align_end),
+        move |(open, align_end)| {
+            let mounted = anchor.cloned();
+            spawn(async move {
+                if !open || !align_end {
+                    shift.set(0.0);
+                    return;
+                }
+                let Some(event) = mounted else {
+                    return;
+                };
+                let Ok(rect) = event.get_client_rect().await else {
+                    return;
+                };
+                // A trigger with no laid-out width is unmeasured: leave the
+                // popover on its anchor.
+                if rect.width() <= 0.0 {
+                    return;
+                }
+                shift.set(trailing_shift(f32_from_f64(rect.max_x())));
+            });
+        },
+    ));
+    // `0.0 - shift`, not `-shift`: a rest shift of zero paints `0`, not `-0`.
+    let right = 0.0 - shift.cloned();
 
     let toggle_attrs = vec![Attribute::new(trigger_attr, "", None, false)];
     let menu_attrs = vec![Attribute::new(menu_attr, "", None, false)];
@@ -210,6 +257,7 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
             div {
                 class: "relative flex min-w-0 items-center",
                 style: "gap: 6px;",
+                onmounted: move |event: Event<MountedData>| anchor.set(Some(event)),
                 button {
                     "type": "button",
                     class: "flex flex-none items-center",
@@ -242,7 +290,7 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
                         "aria-label": "{aria_label}",
                         style: if align_end {
                             format!(
-                                "top: 34px; right: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
+                                "top: 34px; right: {right}px; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
                             )
                         } else {
                             format!(
