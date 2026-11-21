@@ -87,7 +87,7 @@ fn shuffle_artist(
 /// press.
 fn run_menu_entry(library: &LibraryState, album_id: &str, index: usize) {
     library.link.library(GuiLibraryCommand::MenuEntry {
-        item_id: album_id.to_owned(),
+        row: mbv::GuiLibraryMenuRow::Item(album_id.to_owned()),
         index,
     });
     library.close_library_item_menu();

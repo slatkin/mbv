@@ -4,19 +4,38 @@
 //! builder's, so a window that paints only some of the entries still
 //! executes the one it painted. The TUI's own menu paths do not change.
 
+use mbv_queue::QueueItem;
+use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::context_menu::ContextMenuEntry;
 use mbv_ui_model::settings::PanelFocus;
 
+use super::GuiDestinationKind;
+use super::GuiHomeRowId;
+use super::item_actions::GuiLibraryMenuTarget;
 use crate::app::App;
 
-/// The Library item menu the frame's `rowMenu` section carries: the item
-/// the entries are about, and the TUI menu builder's entries in the
-/// builder's order.
+/// The row one Library menu names: the window sends it with `rowMenu` and
+/// echoes it back with `menuEntry`, so the App rebuilds the same entries the
+/// frame painted. A destination row keeps its stable Service id; a Home row
+/// keeps its own stable identity, because its menu resolves through the Home
+/// sources rather than the destination's stores.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GuiLibraryMenuRow {
+    /// A Library destination row (Music, Shows, a plain Emby library,
+    /// Audiobooks, Podcasts, or Feeds), by the row's Service id.
+    Item(String),
+    /// A Home row, by its stable identity.
+    Home(GuiHomeRowId),
+}
+
+/// The Library item menu the frame's `rowMenu` section carries: the row the
+/// entries are about, and the TUI menu builder's entries in the builder's
+/// order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiLibraryRowMenu {
-    pub item_id: String,
+    pub row: GuiLibraryMenuRow,
     pub entries: Vec<GuiLibraryMenuItem>,
 }
 
@@ -66,49 +85,173 @@ impl App {
     }
 
     /// The right-click item menu for the frame's `rowMenu` section: the
-    /// TUI menu builder's full entries for the item the row-menu command
-    /// named, deferring to nothing the Hero carries. `None` while no
-    /// right-click has named an item or the named item is gone.
+    /// TUI menu builder's full entries for the row the row-menu command
+    /// named, whichever destination painted it, deferring to nothing the Hero
+    /// carries. `None` while no right-click has named a row, the named row is
+    /// gone, or another panel holds focus.
     pub fn gui_library_row_menu(&mut self) -> Option<GuiLibraryRowMenu> {
-        let item_id = self.gui_library_row_menu_target.clone()?;
-        let entries = self
-            .gui_library_item_menu(&item_id)
-            .map(|menu| Self::gui_library_menu_items(menu.entries))?;
+        let row = self.gui_library_row_menu_target.clone()?;
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
+            return None;
+        }
+        let target = self.gui_library_menu_target(&row)?;
+        let entries = self.gui_library_menu_entries(&target)?;
+        if entries.iter().all(|entry| entry.action.is_none()) {
+            return None;
+        }
         Some(GuiLibraryRowMenu {
-            item_id: item_id.clone(),
-            entries,
+            row,
+            entries: Self::gui_library_menu_items(entries),
         })
     }
 
-    /// Run the item menu's entry at `index` (design D8): the entry the frame
-    /// painted, rebuilt from the item it names so the action targets that
-    /// item, resolved by stable id and never by the TUI's library cursor —
-    /// the cursor may rest on any other row. The two actions whose shared
-    /// executor resolves through the cursor (bare Play and bare Enqueue)
-    /// route to the item's own play and add: the GUI Library's explicit-play
-    /// replace and its add path apply the autoload rule. The GUI never arms
-    /// the TUI's `pending_overlay`.
-    pub(super) fn run_gui_library_menu_entry(&mut self, item_id: &str, index: usize) {
-        let action = self
-            .gui_library_item_menu(item_id)
-            .and_then(|menu| menu.entries.into_iter().nth(index))
-            .and_then(|entry| entry.action);
-        if let Some((lib_idx, item)) = self.gui_library_item(item_id) {
-            match action {
-                Some(ContextAction::Play) => self.play_gui_library_item(lib_idx, item),
-                Some(ContextAction::Enqueue) => self.add_gui_library_item_to_queue(&item.id),
-                Some(action) => self.execute_context_action(Some(action), None),
-                None => Self::log_ignored_library_command(
-                    "menuEntry",
-                    format_args!("the item's menu holds no entry at {index}"),
-                ),
-            }
-        } else {
+    /// Run the row menu's entry at `index` (design D8): the entry the frame
+    /// painted, rebuilt from the row it names so the action targets that
+    /// row, resolved by stable id and never by the TUI's library cursor. The
+    /// two actions whose shared executor resolves through the cursor (bare
+    /// Play and bare Enqueue) run through the row's own destination path: an
+    /// Emby Library row takes the GUI Library's explicit play and add (with
+    /// the autoload rule), and a Home row takes the Home play and enqueue
+    /// paths. The GUI never arms the TUI's `pending_overlay`.
+    pub(super) fn run_gui_library_menu_entry(&mut self, row: &GuiLibraryMenuRow, index: usize) {
+        let Some(target) = self.gui_library_menu_target(row) else {
             Self::log_ignored_library_command(
                 "menuEntry",
-                format_args!("the item's menu holds no entry at {index}"),
+                format_args!("the row names nothing the Service data holds"),
             );
+            return;
+        };
+        let action = self
+            .gui_library_menu_entries(&target)
+            .and_then(|entries| entries.into_iter().nth(index))
+            .and_then(|entry| entry.action);
+        match (action, &target) {
+            (Some(ContextAction::Play), GuiLibraryMenuTarget::Library { lib_idx, item }) => {
+                self.play_gui_library_item(*lib_idx, item.clone());
+            }
+            (Some(ContextAction::Enqueue), GuiLibraryMenuTarget::Library { item, .. }) => {
+                self.add_gui_library_item_to_queue(&item.id);
+            }
+            (
+                Some(ContextAction::Play),
+                GuiLibraryMenuTarget::Home {
+                    item,
+                    continue_watching,
+                },
+            ) => {
+                self.home_play_target(QueueItem::Emby(Box::new(item.clone())), *continue_watching);
+            }
+            (
+                Some(ContextAction::Enqueue),
+                GuiLibraryMenuTarget::Home {
+                    item,
+                    continue_watching,
+                },
+            ) => {
+                self.home_enqueue_target(
+                    QueueItem::Emby(Box::new(item.clone())),
+                    *continue_watching,
+                );
+            }
+            // The Continue Watching removal needs the row's item, as the TUI's
+            // own Home menu passes it; every other Home action carries its own
+            // targets.
+            (action, GuiLibraryMenuTarget::Home { item, .. }) => {
+                self.execute_context_action(action, Some(item.clone()));
+            }
+            (action, _) => self.execute_context_action(action, None),
         }
+    }
+
+    /// The entries the row's destination builder produces for `target`
+    /// (standard-media-context-menus design D3): one builder per Service, so
+    /// the GUI carries the same standard action set the TUI's row menus do.
+    fn gui_library_menu_entries(
+        &mut self,
+        target: &GuiLibraryMenuTarget,
+    ) -> Option<Vec<ContextMenuEntry>> {
+        match target {
+            GuiLibraryMenuTarget::Library { item, .. } => self
+                .build_context_menu_for(Some(item.clone()), false, None)
+                .map(|menu| menu.entries),
+            GuiLibraryMenuTarget::Home {
+                item,
+                continue_watching,
+            } => {
+                let menu = if *continue_watching {
+                    self.build_continue_watching_context_menu(item)
+                } else {
+                    self.build_explicit_item_context_menu(item)
+                };
+                menu.map(|menu| menu.entries)
+            }
+            GuiLibraryMenuTarget::Audiobookshelf(target) => {
+                Some(self.build_audiobookshelf_menu_entries(std::slice::from_ref(target)))
+            }
+            GuiLibraryMenuTarget::Feed(entry) => {
+                Some(Self::build_feeds_menu_entries(std::slice::from_ref(entry)))
+            }
+        }
+    }
+
+    /// The row a command named, resolved to its destination's menu target
+    /// (design D2): the Home row's stable identity, or the Service id probed
+    /// against the active destination first — the row the press named is the
+    /// row the active list painted — then every store, so a press whose
+    /// destination changed under a stale frame still addresses the row it
+    /// painted.
+    fn gui_library_menu_target(&self, row: &GuiLibraryMenuRow) -> Option<GuiLibraryMenuTarget> {
+        match row {
+            GuiLibraryMenuRow::Home(home) => {
+                let target = home.clone().into_home_item_target();
+                match self.home_stable_target(&target)? {
+                    QueueItem::Emby(item) => Some(GuiLibraryMenuTarget::Home {
+                        item: *item,
+                        continue_watching: target.is_continue(),
+                    }),
+                    QueueItem::Audiobookshelf(item) => Some(GuiLibraryMenuTarget::Audiobookshelf(
+                        AudiobookshelfMenuTarget::for_item(&item),
+                    )),
+                    QueueItem::Feed(entry) => Some(GuiLibraryMenuTarget::Feed(entry)),
+                    QueueItem::Twitch(_) => None,
+                }
+            }
+            GuiLibraryMenuRow::Item(item_id) => self.gui_library_item_target(item_id),
+        }
+    }
+
+    /// The destination menu target for a Library row's Service id, active
+    /// destination first.
+    fn gui_library_item_target(&self, item_id: &str) -> Option<GuiLibraryMenuTarget> {
+        match self.gui_active_destination() {
+            Some(GuiDestinationKind::Audiobooks { .. } | GuiDestinationKind::Podcasts { .. }) => {
+                if let Some(target) = self.gui_audiobookshelf_target(item_id) {
+                    return Some(GuiLibraryMenuTarget::Audiobookshelf(target));
+                }
+            }
+            Some(GuiDestinationKind::Feeds) => {
+                if let Some(entry) = self.gui_feed_entry(item_id) {
+                    return Some(GuiLibraryMenuTarget::Feed(entry));
+                }
+            }
+            _ => {
+                if let Some(target) = self.gui_library_destination_target(item_id) {
+                    return Some(target);
+                }
+            }
+        }
+        self.gui_library_destination_target(item_id)
+            .or_else(|| {
+                self.gui_audiobookshelf_target(item_id)
+                    .map(GuiLibraryMenuTarget::Audiobookshelf)
+            })
+            .or_else(|| self.gui_feed_entry(item_id).map(GuiLibraryMenuTarget::Feed))
+    }
+
+    /// An Emby Library row's menu target: the item's own library store.
+    fn gui_library_destination_target(&self, item_id: &str) -> Option<GuiLibraryMenuTarget> {
+        let (lib_idx, item) = self.gui_library_item(item_id)?;
+        Some(GuiLibraryMenuTarget::Library { lib_idx, item })
     }
 
     /// The item's menu from the shared builder (design D8): the Library panel's

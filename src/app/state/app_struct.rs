@@ -299,10 +299,10 @@ pub struct App {
     /// index: the session-only union pick, which the launch file never saves.
     /// The TUI never reads it.
     pub(in crate::app) gui_music_union_picks: std::collections::HashMap<usize, String>,
-    /// The item whose full menu the frame's `rowMenu` section carries (the
-    /// GUI Library's right-click item menu): the item the row-menu command
-    /// last named. The TUI never reads it.
-    pub(in crate::app) gui_library_row_menu_target: Option<String>,
+    /// The row whose full menu the frame's `rowMenu` section carries (the
+    /// GUI Library's right-click item menu): the row the row-menu command
+    /// last named, by its destination identity. The TUI never reads it.
+    pub(in crate::app) gui_library_row_menu_target: Option<crate::app::GuiLibraryMenuRow>,
     /// The latest `RowsInView` set per Library list (gui-delineated-rows design
     /// D7): the stable row ids the window last painted with its overscan. The
     /// core queues a `Row` fetch for each in-view row of the active

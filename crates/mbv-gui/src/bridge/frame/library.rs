@@ -77,14 +77,14 @@ impl From<GuiLibraryTab> for GuiLibraryTabFrame {
     }
 }
 
-/// The Library's right-click item menu (the row-menu command): the item the
+/// The Library's right-click item menu (the row-menu command): the row the
 /// entries are about, and the TUI menu builder's entries in the builder's
 /// order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiLibraryRowMenuFrame {
-    /// The item's stable Service id the command named.
-    pub item_id: String,
-    /// The TUI menu builder's entries for the item.
+    /// The row's destination identity the command named.
+    pub row: mbv::GuiLibraryMenuRow,
+    /// The TUI menu builder's entries for the row.
     pub entries: Vec<GuiMusicMenuEntryFrame>,
 }
 
@@ -103,7 +103,7 @@ pub struct GuiMusicMenuEntryFrame {
 impl From<&mbv::GuiLibraryRowMenu> for GuiLibraryRowMenuFrame {
     fn from(menu: &mbv::GuiLibraryRowMenu) -> Self {
         Self {
-            item_id: menu.item_id.clone(),
+            row: menu.row.clone(),
             entries: menu
                 .entries
                 .iter()

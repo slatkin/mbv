@@ -101,7 +101,7 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
     let mut app = app;
     app.set_panel_focus(PanelFocus::Library);
     app.apply_gui_library_command(GuiLibraryCommand::RowMenu {
-        item_id: "alb-ill".into(),
+        row: GuiLibraryMenuRow::Item("alb-ill".into()),
     });
 
     let menu = app.gui_library_row_menu().expect("the album has a menu");

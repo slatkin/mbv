@@ -194,7 +194,7 @@ impl Fixture {
         let mut sections = self.state.sections.clone();
         self.in_runtime(move || {
             sections.row_menu.set(Some(GuiLibraryRowMenuFrame {
-                item_id,
+                row: mbv::GuiLibraryMenuRow::Item(item_id),
                 entries: vec![crate::bridge::frame::library::GuiMusicMenuEntryFrame {
                     label: "Play".to_owned(),
                     key_hint: None,

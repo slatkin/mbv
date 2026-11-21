@@ -52,10 +52,13 @@ pub enum GuiLibraryCommand {
     AddToQueue { item_id: String },
     /// Shuffle the artist whose albums are `albumIds`.
     ShuffleArtist { album_ids: Vec<String> },
-    /// Run the item menu's entry at `index`.
-    MenuEntry { item_id: String, index: usize },
-    /// Carry the item's full menu in the section (the right-click item menu).
-    RowMenu { item_id: String },
+    /// Run the row menu's entry at `index`.
+    MenuEntry {
+        row: mbv::GuiLibraryMenuRow,
+        index: usize,
+    },
+    /// Carry the row's full menu in the section (the right-click item menu).
+    RowMenu { row: mbv::GuiLibraryMenuRow },
     /// Select a Home row (add-gui-library-panel design D12): the row the
     /// Hero shows. The core keeps the selection, so the window paints it.
     HomeSelect { row: GuiHomeRowId },
@@ -211,8 +214,8 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::PlayNext { item_id } => Self::PlayNext { item_id },
             GuiLibraryCommand::AddToQueue { item_id } => Self::AddToQueue { item_id },
             GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
-            GuiLibraryCommand::MenuEntry { item_id, index } => Self::MenuEntry { item_id, index },
-            GuiLibraryCommand::RowMenu { item_id } => Self::RowMenu { item_id },
+            GuiLibraryCommand::MenuEntry { row, index } => Self::MenuEntry { row, index },
+            GuiLibraryCommand::RowMenu { row } => Self::RowMenu { row },
             GuiLibraryCommand::HomeSelect { row } => Self::HomeSelect { row: row.into() },
             GuiLibraryCommand::HomePlay { row } => Self::HomePlay { row: row.into() },
             GuiLibraryCommand::HomePlayNext { row } => Self::HomePlayNext { row: row.into() },

@@ -46,7 +46,7 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     send_library(
         &mut test,
         GuiLibraryCommand::MenuEntry {
-            item_id: "alb-ill".into(),
+            row: mbv::GuiLibraryMenuRow::Item("alb-ill".into()),
             index: 0,
         },
     );
@@ -79,7 +79,7 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
     let frame = send_library_frame(
         &mut test,
         GuiLibraryCommand::RowMenu {
-            item_id: "alb-ill".into(),
+            row: mbv::GuiLibraryMenuRow::Item("alb-ill".into()),
         },
     );
 
@@ -87,7 +87,7 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
         .row_menu()
         .cloned()
         .expect("the right-clicked item has a menu");
-    assert_eq!(row_menu.item_id, "alb-ill");
+    assert_eq!(row_menu.row, mbv::GuiLibraryMenuRow::Item("alb-ill".into()));
     let labels: Vec<&str> = row_menu
         .entries
         .iter()
@@ -106,7 +106,7 @@ fn a_row_menu_command_for_an_abandoned_item_carries_no_menu() {
     let frame = send_library_frame(
         &mut test,
         GuiLibraryCommand::RowMenu {
-            item_id: "alb-gone".into(),
+            row: mbv::GuiLibraryMenuRow::Item("alb-gone".into()),
         },
     );
 

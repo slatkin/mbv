@@ -65,7 +65,7 @@ pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,
 };
-pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
+pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
 pub use self::list_sort::{GuiListSort, GuiListSortFrame, GuiSortTarget};
 pub use self::marks::GuiPlayheadMarks;
@@ -174,14 +174,17 @@ pub enum GuiLibraryCommand {
     AddToQueue { item_id: String },
     /// Shuffle the artist whose albums are `album_ids` (design D8).
     ShuffleArtist { album_ids: Vec<String> },
-    /// Run the item menu's entry at `index` (design D8): the entry the frame
-    /// painted for the item, run through the shared context-action executor.
-    MenuEntry { item_id: String, index: usize },
-    /// Carry the item's full menu in the frame (the right-click item menu):
-    /// the next frame's `rowMenu` section names the item and carries the
+    /// Run the row menu's entry at `index` (design D8): the entry the frame
+    /// painted for the row, run through the row's destination menu.
+    MenuEntry {
+        row: GuiLibraryMenuRow,
+        index: usize,
+    },
+    /// Carry the row's full menu in the frame (the right-click item menu):
+    /// the next frame's `rowMenu` section names the row and carries the
     /// TUI menu builder's entries for it, and a chosen entry runs through the
     /// same `MenuEntry` command as the Hero's menu carries.
-    RowMenu { item_id: String },
+    RowMenu { row: GuiLibraryMenuRow },
     /// Select a Home row (design D2, D12, the USER-APPROVED GUI Home design):
     /// the row the Hero shows. The core owns the selection, as the Music
     /// collection groups own their pick (`showDetail`), so the hero re-arms
@@ -352,11 +355,11 @@ impl App {
             }
             // Row 3.6 runs the menu entry the frame carried through the shared
             // context-action executor.
-            GuiLibraryCommand::MenuEntry { item_id, index } => {
-                self.run_gui_library_menu_entry(&item_id, index);
+            GuiLibraryCommand::MenuEntry { row, index } => {
+                self.run_gui_library_menu_entry(&row, index);
             }
-            GuiLibraryCommand::RowMenu { item_id } => {
-                self.gui_library_row_menu_target = Some(item_id);
+            GuiLibraryCommand::RowMenu { row } => {
+                self.gui_library_row_menu_target = Some(row);
             }
             GuiLibraryCommand::HomeSelect { row } => self.select_gui_home_row(&row),
             GuiLibraryCommand::HomePlay { row } => self.play_gui_home_row(&row),

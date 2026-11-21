@@ -45,13 +45,15 @@ fn paint_feeds_row(
     }
 }
 
-/// One painted entry row. A feed entry names no right-click menu — the former
-/// row paints none.
+/// One painted entry row: a press selects the entry the Hero shows, a
+/// double-click plays it, and a right-press opens the row menu.
 fn paint_feeds_item(row: &FeedsItemRow, library: &LibraryState, selected: Option<&str>) -> Element {
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = row.row.id.clone();
     let play_library = library.clone();
+    let menu_id = row.row.id.clone();
+    let menu_library = library.clone();
     paint_item_row(
         ItemRowPaint {
             attr: "feeds",
@@ -63,7 +65,9 @@ fn paint_feeds_item(row: &FeedsItemRow, library: &LibraryState, selected: Option
         },
         Callback::new(move |()| press_library.press_feeds_row(&press_row)),
         Callback::new(move |()| play_library.play_feeds_row(&play_id)),
-        None,
+        Some(Callback::new(move |(x, y): (f32, f32)| {
+            menu_library.open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);
+        })),
     )
 }
 

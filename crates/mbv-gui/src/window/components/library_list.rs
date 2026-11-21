@@ -116,7 +116,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                 menu_library.press_library_row(&menu_row);
                 let coordinates = event.client_coordinates();
                 menu_library.open_row_menu_at(
-                    item_id.clone(),
+                    item_id.clone().map(LibraryState::row_menu_item),
                     f32_from_f64(coordinates.x),
                     f32_from_f64(coordinates.y),
                 );
@@ -210,7 +210,11 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 // An artist press picks no item, so its menu offers no View
                 // Detail.
-                menu_library.open_row_menu_without_detail_at(item_id.clone(), x, y);
+                menu_library.open_row_menu_without_detail_at(
+                    item_id.clone().map(LibraryState::row_menu_item),
+                    x,
+                    y,
+                );
             })),
         }
     }
@@ -266,7 +270,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                 menu_library.press_library_row(&menu_row);
                 let coordinates = event.client_coordinates();
                 menu_library.open_row_menu_at(
-                    item_id.clone(),
+                    item_id.clone().map(LibraryState::row_menu_item),
                     f32_from_f64(coordinates.x),
                     f32_from_f64(coordinates.y),
                 );

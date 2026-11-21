@@ -623,12 +623,18 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
     let mut fixture = built(emby_frame(false, movies()), emby_detail(&movies()));
 
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.open_row_menu_at(Some("m2".to_owned()), 12.0, 34.0));
+    fixture.in_runtime(move || {
+        state.open_row_menu_at(
+            Some(LibraryState::row_menu_item("m2".to_owned())),
+            12.0,
+            34.0,
+        );
+    });
 
     assert_eq!(
         fixture.library_commands(),
         [mbv::GuiLibraryCommand::RowMenu {
-            item_id: "m2".to_owned(),
+            row: mbv::GuiLibraryMenuRow::Item("m2".to_owned()),
         }],
         "the row-menu command names the row's item id"
     );

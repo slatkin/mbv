@@ -450,13 +450,18 @@ fn a_right_press_on_a_row_requests_the_items_menu_for_its_id() {
 
     let row = row_of(&mut fixture, "album:al1");
     let state = fixture.state.clone();
-    fixture
-        .in_runtime(move || state.open_row_menu_at(LibraryState::action_item_id(&row), 10.0, 12.0));
+    fixture.in_runtime(move || {
+        state.open_row_menu_at(
+            LibraryState::action_item_id(&row).map(LibraryState::row_menu_item),
+            10.0,
+            12.0,
+        );
+    });
 
     assert_eq!(
         fixture.library_commands(),
         [mbv::GuiLibraryCommand::RowMenu {
-            item_id: "al1".to_owned(),
+            row: mbv::GuiLibraryMenuRow::Item("al1".to_owned()),
         }]
     );
 }

@@ -477,7 +477,7 @@ fn a_menu_entry_sends_its_index_for_the_picked_item() {
     assert_eq!(
         fixture.library_commands(),
         vec![mbv::GuiLibraryCommand::MenuEntry {
-            item_id: "al1".to_owned(),
+            row: mbv::GuiLibraryMenuRow::Item("al1".to_owned()),
             index: 1,
         }],
         "the menu-entry command names the picked item and the entry's index"
@@ -501,7 +501,7 @@ fn a_menu_press_sends_the_shared_builder_index_past_the_filtered_lists_end() {
     assert_eq!(
         fixture.library_commands(),
         vec![mbv::GuiLibraryCommand::MenuEntry {
-            item_id: "al1".to_owned(),
+            row: mbv::GuiLibraryMenuRow::Item("al1".to_owned()),
             index: 3,
         }],
         "the index passes through as received, past the filtered list's end"

@@ -85,7 +85,7 @@ fn paint_emby_row(
                     on_play: Callback::new(move |()| play_library.play_emby_row(&play_id)),
                     on_context: Some(Callback::new(
                         move |(x, y): (f32, f32)| menu_library.open_row_menu_at(
-                            Some(menu_id.clone()),
+                            Some(LibraryState::row_menu_item(menu_id.clone())),
                             x,
                             y,
                         ),

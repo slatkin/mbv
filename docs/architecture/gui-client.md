@@ -967,11 +967,20 @@ sort, pointer-only and binding no key. The panel also
 paints the right-click item menu (`QueueRowMenu` under the panel), which a
 right-press on a list row or a
 Hero tracklist row opens through the `rowMenu` command: the command names
-the row's stable Service id, the frame's `rowMenu` section carries the
-shared builder's full entries for that item, and the menu paints at the
-pointer position. A press outside the menu, a scroll, or Esc closes it, and
-a chosen entry sends the same `menuEntry` command the Hero's More actions
-sends. The Hero's More actions paints the shared builder's entries minus
+the row's destination identity (`GuiLibraryMenuRow` — a destination row's
+stable Service id, or a Home row's `GuiHomeRowId`), the frame's `rowMenu`
+section carries the shared builder's full entries for that row, and the menu
+paints at the pointer position. Every destination row carries the same
+standard action set its TUI list menu carries, because the App builds it
+from the same shared builders (`build_context_menu_for` for an Emby
+library's items, `build_explicit_item_context_menu` and
+`build_continue_watching_context_menu` for the Home rows,
+`build_audiobookshelf_menu_entries`, and `build_feeds_menu_entries`):
+Music, Shows, the plain Emby libraries, Audiobooks, Podcasts, Feeds, and
+both Home sections. A press outside the menu, a scroll, or Esc closes it,
+and a chosen entry sends the same `menuEntry` command the Hero's More
+actions sends, with the row the frame carried, so the entry runs against
+the row the user saw. The Hero's More actions paints the shared builder's entries minus
 the ones its own buttons already send (`Play`, `Play All`, `Add to
 Queue`), under each entry's carried builder index, and paints no control at
 all when the remainder is empty — the live finding that a Music album's
@@ -1062,8 +1071,9 @@ and the top bar's Home icon marks itself current exactly while `destination` is
 
 `libraryDetail` (`GuiLibraryDetail`) carries the active destination's detail
 part, tagged by the same seven `kind` values: the core's selection, the Hero,
-and the Workspace facts. `rowMenu` (`GuiLibraryRowMenuFrame`) carries `itemId`
-and the shared builder's `entries` while a row menu is open. Each destination
+and the Workspace facts. `rowMenu` (`GuiLibraryRowMenuFrame`) carries `row`
+(the `GuiLibraryMenuRow` the command named) and the shared builder's
+`entries` while a row menu is open. Each destination
 keeps its list and detail parts in one file under `src/bridge/frame/library/`;
 `music.rs`, for example, defines `GuiMusicList` and `GuiMusicDetail`.
 
@@ -1316,8 +1326,8 @@ carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
 `album`, and its `menu` entries with `label`, `key_hint`, and `index` (the
 entry's index in the shared builder's order, so a window that paints only
 some entries still executes the one it painted). The `rowMenu` section
-(`GuiLibraryRowMenuFrame`) carries the item of the `rowMenu` command with the
-TUI menu builder's full entries for it, which the right-click item menu
+(`GuiLibraryRowMenuFrame`) carries the row the `rowMenu` command named, with
+the TUI menu builder's full entries for it, which the right-click item menu
 paints. The Hero's art (`art`) is a `GuiArtRef`: the cached artwork as an `image`
 URL, the bundled placeholder as a `placeholder` URL, or `Loading` with no URL.
 The core never re-encodes artwork: the image fetch's 1280-pixel cap bounds the
@@ -1351,12 +1361,18 @@ variants are `openDestination` (`position`), `collectionToggle` (`target`,
 `showsSetView` (`libIdx`, `view`), `showDetail` (`itemId`), `openAlbum`
 (`albumId`),
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
-`shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), `rowMenu`
-(`itemId`), `rowsInView` (`scope`, `ids`), and the Home commands — `homeSelect`, `homePlay`,
+`shuffleArtist` (`albumIds`), `menuEntry` (`row`, `index`), `rowMenu`
+(`row`), `rowsInView` (`scope`, `ids`), and the Home commands — `homeSelect`, `homePlay`,
 `homePlayNext`, and `homeQueue` (each carrying `row`, the
 `GuiHomeRowId` the frame painted). Item
 identities are stable Service ids, never row positions, so a command built
-from a stale frame addresses the item that frame painted or nothing. The
+from a stale frame addresses the item that frame painted or nothing. A
+`rowMenu` and its `menuEntry` carry the same `GuiLibraryMenuRow`: a
+destination row's Service id, or a Home row's `GuiHomeRowId`, because a Home
+row's menu resolves through the Home sources (the Continue Watching resume
+path) rather than a destination store. The core resolves that row against
+the active destination first and then every store, so an id two
+destinations happen to share resolves to the list on screen. The
 Home row id, not a Music item id, is
 what `App::home_stable_target` resolves: `homePlay` runs the Home flat
 list's play path (`App::home_play_target`, whose resume behaviour the row's

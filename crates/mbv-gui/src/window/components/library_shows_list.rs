@@ -142,7 +142,9 @@ fn paint_shows_series(
     let on_toggle = series
         .expandable
         .then(|| Callback::new(move |()| toggle_library.toggle_shows_node(&toggle_id)));
-    let menu_id = row_source_id(row).map(str::to_owned);
+    let menu_id = row_source_id(row)
+        .map(str::to_owned)
+        .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
     rsx! {
         LibraryItemRow {
@@ -220,7 +222,9 @@ fn paint_shows_season(
         // (gui-tree-indent-guides design D1).
         "relative flex w-full items-center overflow-hidden"
     };
-    let menu_id = row_source_id(row).map(str::to_owned);
+    let menu_id = row_source_id(row)
+        .map(str::to_owned)
+        .map(LibraryState::row_menu_item);
     let menu_row = row.clone();
     let menu_library = library.clone();
     // The expandable node's `aria-expanded` names the open state (the former client
@@ -376,7 +380,7 @@ fn paint_shows_episode(
                 menu_library.press_shows_row(&menu_row);
                 let coordinates = event.client_coordinates();
                 menu_library.open_row_menu_at(
-                    Some(menu_id.clone()),
+                    Some(LibraryState::row_menu_item(menu_id.clone())),
                     f32_from_f64(coordinates.x),
                     f32_from_f64(coordinates.y),
                 );

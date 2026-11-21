@@ -96,7 +96,7 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
     });
     let menu_library = library.clone();
     let on_context = Callback::new(move |(x, y, track_id): (f32, f32, String)| {
-        menu_library.open_library_row_menu(track_id, x, y);
+        menu_library.open_library_row_menu(LibraryState::row_menu_item(track_id), x, y);
     });
 
     rsx! {

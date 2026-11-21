@@ -17,7 +17,7 @@ fn episode_target(episode_id: &str) -> AudiobookshelfMenuTarget {
 
 /// Open the Audiobookshelf menu for `targets` and return the ordered entry
 /// labels.
-fn menu_labels(app: &mut App, targets: Vec<AudiobookshelfMenuTarget>) -> Vec<&'static str> {
+fn menu_labels(app: &mut App, targets: &[AudiobookshelfMenuTarget]) -> Vec<&'static str> {
     app.open_audiobookshelf_context_menu(targets, None);
     match app.pending_overlay.take() {
         Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) => {
@@ -71,7 +71,7 @@ fn audiobookshelf_menu_follows_the_standard_action_set_for(
             is_finished: seed_finished,
         },
     );
-    assert_eq!(menu_labels(&mut app, targets), expected);
+    assert_eq!(menu_labels(&mut app, &targets), expected);
 }
 
 /// `AudiobookshelfEnqueue` with two episode targets appends both resolved

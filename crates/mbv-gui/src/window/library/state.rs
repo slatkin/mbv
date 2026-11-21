@@ -27,14 +27,14 @@ use std::sync::Arc;
 use super::row_memo::RowsMemo;
 use super::scroll::{ListScroll, initial_list_scroll, reset_scroll_top};
 
-/// The right-click item menu's facts (`state.ts`'s `rowMenu`): the item a row
+/// The right-click item menu's facts (`state.ts`'s `rowMenu`): the row a row
 /// right-press named, with the pointer position it opened at. The menu paints
-/// only while the frame carries that item's entries, so a stale open state
+/// only while the frame carries that row's entries, so a stale open state
 /// paints nothing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RowMenu {
-    /// The item the row named.
-    pub item_id: String,
+    /// The row the right-press named, by its destination identity.
+    pub row: mbv::GuiLibraryMenuRow,
     /// The pointer's client x when the menu opened.
     pub x: f32,
     /// The pointer's client y when the menu opened.
@@ -588,48 +588,54 @@ impl LibraryState {
         ui.with_mut(|ui| ui.item_menu_open = false);
     }
 
-    /// Open the right-click item menu for `item_id` (the row-menu command): the
-    /// next frame carries the item's full entries for the menu to paint at the
-    /// pointer position, and a chosen entry sends its index for that item. The
-    /// Hero's own menu closes with it — one menu is up at a time.
-    pub fn open_library_row_menu(&self, item_id: String, x: f32, y: f32) {
-        self.open_row_menu(item_id, x, y, true);
+    /// The row-menu identity of a Library destination row: the row's stable
+    /// Service id, which the core resolves against its destination's stores.
+    #[must_use]
+    pub fn row_menu_item(item_id: String) -> mbv::GuiLibraryMenuRow {
+        mbv::GuiLibraryMenuRow::Item(item_id)
     }
 
-    fn open_row_menu(&self, item_id: String, x: f32, y: f32, detail: bool) {
-        self.link.library(GuiLibraryCommand::RowMenu {
-            item_id: item_id.clone(),
-        });
+    /// Open the right-click item menu for `row` (the row-menu command): the
+    /// next frame carries the row's full entries for the menu to paint at the
+    /// pointer position, and a chosen entry sends its index for that row. The
+    /// Hero's own menu closes with it — one menu is up at a time.
+    pub fn open_library_row_menu(&self, row: mbv::GuiLibraryMenuRow, x: f32, y: f32) {
+        self.open_row_menu(row, x, y, true);
+    }
+
+    fn open_row_menu(&self, row: mbv::GuiLibraryMenuRow, x: f32, y: f32, detail: bool) {
+        self.link
+            .library(GuiLibraryCommand::RowMenu { row: row.clone() });
         let mut ui = self.ui;
         ui.with_mut(|ui| {
             ui.item_menu_open = false;
-            ui.row_menu = Some(RowMenu {
-                item_id,
-                x,
-                y,
-                detail,
-            });
+            ui.row_menu = Some(RowMenu { row, x, y, detail });
         });
     }
 
     /// Open a row's item menu from its right-click (design D8, D15): the row's own
-    /// stable id, or nothing when the row names no item — a letter heading, a spacer,
+    /// stable identity, or nothing when the row names no item — a letter heading, a spacer,
     /// or a node the Service does not resolve. Every destination's list opens its
     /// menu through this one call, so the pointer rule cannot drift between tabs.
     /// The Dioxus handler calls `prevent_default` itself and reads the event's
     /// client coordinates; the open-or-drop decision lives here.
-    pub fn open_row_menu_at(&self, item_id: Option<String>, x: f32, y: f32) {
-        if let Some(item_id) = item_id {
-            self.open_library_row_menu(item_id, x, y);
+    pub fn open_row_menu_at(&self, row: Option<mbv::GuiLibraryMenuRow>, x: f32, y: f32) {
+        if let Some(row) = row {
+            self.open_library_row_menu(row, x, y);
         }
     }
 
     /// Open the item menu of a row whose press picks no item (a Music artist
     /// row): the same menu without View Detail, because the Hero has no item
     /// to show for the row.
-    pub fn open_row_menu_without_detail_at(&self, item_id: Option<String>, x: f32, y: f32) {
-        if let Some(item_id) = item_id {
-            self.open_row_menu(item_id, x, y, false);
+    pub fn open_row_menu_without_detail_at(
+        &self,
+        row: Option<mbv::GuiLibraryMenuRow>,
+        x: f32,
+        y: f32,
+    ) {
+        if let Some(row) = row {
+            self.open_row_menu(row, x, y, false);
         }
     }
 
@@ -660,7 +666,7 @@ impl LibraryState {
         self.close_library_row_menu();
         if let Some(row_menu) = row_menu {
             self.link.library(GuiLibraryCommand::MenuEntry {
-                item_id: row_menu.item_id,
+                row: row_menu.row,
                 index,
             });
         }

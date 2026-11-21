@@ -32,17 +32,18 @@ use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 
-/// The item id a row's right-click menu opens for (design D8, D15): the
-/// `Continue watching` row's Emby item id, which the core resolves for the
-/// shared menu. A `Recently added` row's queue-item content id names no
-/// single Service item the menu resolves, so it opens no menu. An `Upcoming`
-/// row is display-only (gui-collection-dropdown design D9), so it opens no
-/// menu even though its key is a string.
-fn home_menu_item_id(id: &GuiHomeRowIdFrame) -> Option<String> {
-    match id {
-        GuiHomeRowIdFrame::Continue(item_id) => Some(item_id.clone()),
-        GuiHomeRowIdFrame::Recent(_) => None,
-    }
+/// The row one item row's right-click menu opens for (design D8, D15): the
+/// Home row's stable identity, which the core resolves through the Home
+/// sources. A `Continue watching` row is Emby content and a `Recently added`
+/// row names its own Service's item, so both carry a menu. An `Upcoming` row
+/// is display-only (gui-collection-dropdown design D9), and it paints through
+/// the Shows list, not this one.
+fn home_menu_row(id: &GuiHomeRowIdFrame) -> mbv::GuiLibraryMenuRow {
+    let row = match id {
+        GuiHomeRowIdFrame::Continue(item_id) => mbv::GuiHomeRowId::Continue(item_id.clone()),
+        GuiHomeRowIdFrame::Recent(content_id) => mbv::GuiHomeRowId::Recent(content_id.clone()),
+    };
+    mbv::GuiLibraryMenuRow::Home(row)
 }
 
 /// The row's state as the shared part reads it: the resume percent of an
@@ -104,7 +105,7 @@ fn paint_home_item_row(
     let press_library = library.clone();
     let play_id = item.row_id.clone();
     let play_library = library.clone();
-    let menu_item_id = home_menu_item_id(&item.row_id);
+    let menu_row = Some(home_menu_row(&item.row_id));
     let menu_library = library.clone();
     rsx! {
         LibraryItemRow {
@@ -129,7 +130,7 @@ fn paint_home_item_row(
             on_press: Callback::new(move |()| press_library.press_home_row(&press_row)),
             on_play: Callback::new(move |()| play_library.play_home_row(play_id.clone())),
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
-                menu_library.open_row_menu_at(menu_item_id.clone(), x, y);
+                menu_library.open_row_menu_at(menu_row.clone(), x, y);
             })),
         }
     }

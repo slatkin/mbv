@@ -144,11 +144,11 @@ impl Model {
                     .open_explicit_item_context_menu(item.as_ref(), anchor);
             }
             QueueItem::Feed(entry) => {
-                self.app.open_feeds_context_menu(vec![entry], anchor);
+                self.app.open_feeds_context_menu(&[entry], anchor);
             }
             QueueItem::Audiobookshelf(item) => {
                 self.app.open_audiobookshelf_context_menu(
-                    vec![mbv_ui_model::context_menu::AudiobookshelfMenuTarget::for_item(&item)],
+                    &[mbv_ui_model::context_menu::AudiobookshelfMenuTarget::for_item(&item)],
                     anchor,
                 );
             }

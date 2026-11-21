@@ -545,10 +545,10 @@ impl Model {
                 }
             }
             mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries) => {
-                self.app.open_feeds_context_menu(entries, anchor);
+                self.app.open_feeds_context_menu(&entries, anchor);
             }
             mbv_ui_model::context_menu::ContextMenuTargets::Audiobookshelf(targets) => {
-                self.app.open_audiobookshelf_context_menu(targets, anchor);
+                self.app.open_audiobookshelf_context_menu(&targets, anchor);
                 // Re-project the active Audiobookshelf owner (task 5.4): both
                 // pushes self-guard on the active tab being their owner.
                 self.push_audiobookshelf_podcast_content();

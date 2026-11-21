@@ -2,11 +2,34 @@
 //! and enqueue entries the commands call, and the item lookups they share.
 
 use mbv_emby_model::EmbyItem;
+use mbv_queue::FeedEntry;
+use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use mbv_ui_model::ui_util::is_playable;
 
 use super::GuiGroupAlbums;
 use super::collection::GuiCollectionSet;
+use super::podcasts_projection::GuiPodcastEpisodeId;
 use crate::app::App;
+
+/// One GUI Library row's resolved menu target (add-gui-library-panel design
+/// D2): the destination's own identity, so the shared builders pick the
+/// standard action set for the row and a chosen entry runs against the row the
+/// frame painted, never against a cursor.
+pub(in crate::app::gui_library) enum GuiLibraryMenuTarget {
+    /// An Emby Library destination row (Music, Shows, or a plain Emby
+    /// library), with the library its item resolves in.
+    Library { lib_idx: usize, item: EmbyItem },
+    /// A Home Emby row: its item, and whether it is a Continue Watching row,
+    /// whose menu adds the Continue Watching removal.
+    Home {
+        item: EmbyItem,
+        continue_watching: bool,
+    },
+    /// An Audiobookshelf row: a Podcasts episode or an Audiobooks book.
+    Audiobookshelf(AudiobookshelfMenuTarget),
+    /// A Feeds row.
+    Feed(FeedEntry),
+}
 
 impl App {
     /// Show `item_id` in the Hero (design D2, D13; gui-collection-dropdown
@@ -186,6 +209,37 @@ impl App {
             .flatten()
             .find(|track| track.id == item_id)
             .map(|track| (track_lib, track.clone()))
+    }
+
+    /// The Audiobookshelf menu target a Library row's id names, or `None`
+    /// when no Audiobookshelf store holds it: a book the published catalog
+    /// carries, or a podcast episode whose `(show id, episode id)` identity
+    /// decodes and resolves across the podcast browse states.
+    pub(in crate::app::gui_library) fn gui_audiobookshelf_target(
+        &self,
+        item_id: &str,
+    ) -> Option<AudiobookshelfMenuTarget> {
+        let book = self.audiobookshelf_book_browse.iter().any(|state| {
+            state
+                .books
+                .iter()
+                .any(|book| book.library_item_id == item_id)
+        });
+        if book {
+            return Some(AudiobookshelfMenuTarget::Book {
+                library_item_id: item_id.to_string(),
+            });
+        }
+        let episode = GuiPodcastEpisodeId::decode(item_id)?;
+        let known = self.audiobookshelf_browse.iter().any(|state| {
+            state
+                .episode_by_identity(episode.library_item_id(), episode.episode_id())
+                .is_some()
+        });
+        known.then(|| AudiobookshelfMenuTarget::Episode {
+            library_item_id: episode.library_item_id().to_string(),
+            episode_id: episode.episode_id().to_string(),
+        })
     }
 
     /// The season or episode a Shows tree row names (design D14): the cached

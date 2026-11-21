@@ -325,7 +325,7 @@ fn a_menu_entry_executes_for_its_named_item_not_the_cursor_item() {
     send_library(
         &mut test,
         GuiLibraryCommand::MenuEntry {
-            item_id: "ptrk-3".into(),
+            row: mbv::GuiLibraryMenuRow::Item("ptrk-3".into()),
             index: 0,
         },
     );

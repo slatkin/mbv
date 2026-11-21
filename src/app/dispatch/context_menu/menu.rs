@@ -163,12 +163,33 @@ impl App {
         item: &EmbyItem,
         anchor: Option<(u16, u16)>,
     ) {
-        let Some(mut menu) = self.context_menu_from_resolved_target(Some(item), None, false, false)
-        else {
+        let Some(mut menu) = self.build_explicit_item_context_menu(item) else {
             return;
         };
         menu.anchor = menu_anchor(anchor, mbv_ui_model::settings::PanelFocus::Library);
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// The destination row menu for an explicitly resolved Emby item, without
+    /// raising it: the TUI's Home `Recently added` opener and the GUI Library
+    /// panel's carried row menu share these entries, so the two surfaces
+    /// cannot drift.
+    pub(in crate::app) fn build_explicit_item_context_menu(
+        &self,
+        item: &EmbyItem,
+    ) -> Option<ContextMenu> {
+        self.context_menu_from_resolved_target(Some(item), None, false, false)
+    }
+
+    /// The Continue Watching row menu for an explicitly resolved Emby item,
+    /// without raising it: the same entries the TUI's Home Continue row opens
+    /// (Play, Add to Queue, the one mark entry, and Remove from Continue
+    /// Watching), shared with the GUI Library panel's Home rows.
+    pub(in crate::app) fn build_continue_watching_context_menu(
+        &self,
+        item: &EmbyItem,
+    ) -> Option<ContextMenu> {
+        self.context_menu_from_resolved_target(Some(item), None, true, false)
     }
 
     /// The Home mixed-Service multi-selection menu (spec
@@ -359,12 +380,30 @@ impl App {
 
     pub(in crate::app) fn open_feeds_context_menu(
         &mut self,
-        entries: Vec<mbv_queue::FeedEntry>,
+        entries: &[mbv_queue::FeedEntry],
         anchor: Option<(u16, u16)>,
     ) {
         if entries.is_empty() {
             return;
         }
+        let menu_entries = Self::build_feeds_menu_entries(entries);
+        let menu = ContextMenu {
+            anchor: menu_anchor(anchor, PanelFocus::Library),
+            cursor: 0,
+            entries: menu_entries,
+            bounds: None,
+        };
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// The Feeds row menu's standard entries for `entries` (standard-media-
+    /// context-menus design D3), shared by the TUI's opener and the GUI
+    /// Library panel's carried row menu: the split is on entry count, never
+    /// on presentation.
+    pub(in crate::app) fn build_feeds_menu_entries(
+        entries: &[mbv_queue::FeedEntry],
+    ) -> Vec<ContextMenuEntry> {
+        let entries = entries.to_vec();
         let mut menu_entries = Vec::new();
         // Standard action set split on entry count (context-menu spec,
         // standard-media-context-menus design D3): a leaf row offers Play,
@@ -414,13 +453,7 @@ impl App {
                 ContextAction::FeedsMarkUnplayed(entries),
             );
         }
-        let menu = ContextMenu {
-            anchor: menu_anchor(anchor, PanelFocus::Library),
-            cursor: 0,
-            entries: menu_entries,
-            bounds: None,
-        };
-        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        menu_entries
     }
 
     /// Build the Audiobookshelf row menu from component-resolved targets
@@ -431,12 +464,32 @@ impl App {
     /// mark entries.
     pub(in crate::app) fn open_audiobookshelf_context_menu(
         &mut self,
-        targets: Vec<AudiobookshelfMenuTarget>,
+        targets: &[AudiobookshelfMenuTarget],
         anchor: Option<(u16, u16)>,
     ) {
         if targets.is_empty() {
             return;
         }
+        let menu_entries = self.build_audiobookshelf_menu_entries(targets);
+        let menu = ContextMenu {
+            anchor: menu_anchor(anchor, PanelFocus::Library),
+            cursor: ContextMenu::first_selectable(&menu_entries),
+            entries: menu_entries,
+            bounds: None,
+        };
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// The Audiobookshelf row menu's standard entries for `targets`
+    /// (standard-media-context-menus design D3), shared by the TUI's opener
+    /// and the GUI Library panel's carried row menu: a leaf row offers the one
+    /// mark entry its cached progress state chooses, and a multi-selection
+    /// adds Shuffle and both mark entries.
+    pub(in crate::app) fn build_audiobookshelf_menu_entries(
+        &self,
+        targets: &[AudiobookshelfMenuTarget],
+    ) -> Vec<ContextMenuEntry> {
+        let targets = targets.to_vec();
         let mut menu_entries = Vec::new();
         Self::push_context_action(
             &mut menu_entries,
@@ -481,13 +534,7 @@ impl App {
                 ContextAction::AudiobookshelfMarkUnplayed(targets),
             );
         }
-        let menu = ContextMenu {
-            anchor: menu_anchor(anchor, PanelFocus::Library),
-            cursor: ContextMenu::first_selectable(&menu_entries),
-            entries: menu_entries,
-            bounds: None,
-        };
-        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        menu_entries
     }
 
     /// Cached finished state for one menu target across every Audiobookshelf

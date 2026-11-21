@@ -615,12 +615,20 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
     let mut fixture = built(home_frame(), home_detail());
 
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.open_row_menu_at(Some("e1".to_owned()), 5.0, 6.0));
+    fixture.in_runtime(move || {
+        state.open_row_menu_at(
+            Some(mbv::GuiLibraryMenuRow::Home(mbv::GuiHomeRowId::Continue(
+                "e1".to_owned(),
+            ))),
+            5.0,
+            6.0,
+        );
+    });
 
     assert_eq!(
         fixture.library_commands(),
         [mbv::GuiLibraryCommand::RowMenu {
-            item_id: "e1".to_owned(),
+            row: mbv::GuiLibraryMenuRow::Home(mbv::GuiHomeRowId::Continue("e1".to_owned())),
         }],
         "the row-menu command names the row's item id"
     );

@@ -292,9 +292,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     // not to one destination, so a row of any destination opens it. A press
     // runs the entry the core built, resolved by that item's stable id.
     let menu_open = match (menu.as_ref(), ui.row_menu.as_ref()) {
-        (Some(menu), Some(row_menu))
-            if menu.item_id == row_menu.item_id && !menu.entries.is_empty() =>
-        {
+        (Some(menu), Some(row_menu)) if menu.row == row_menu.row && !menu.entries.is_empty() => {
             Some((menu, row_menu))
         }
         _ => None,

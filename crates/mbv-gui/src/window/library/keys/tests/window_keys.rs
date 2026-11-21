@@ -50,7 +50,7 @@ fn esc_closes_the_open_row_menu_from_the_queue_zone() {
     let list = music_list(Vec::new());
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
-        state.open_library_row_menu("al1".to_owned(), 40.0, 60.0);
+        state.open_library_row_menu(mbv::GuiLibraryMenuRow::Item("al1".to_owned()), 40.0, 60.0);
         route_under(state, facts, "escape", "Escape", PointerZone::Queue);
         facts.lock().expect("facts").push(ui_facts(state));
     });
@@ -63,7 +63,7 @@ fn esc_closes_the_open_row_menu_from_the_queue_zone() {
     assert_eq!(
         commands(&rx),
         [GuiLibraryCommand::RowMenu {
-            item_id: "al1".to_owned(),
+            row: mbv::GuiLibraryMenuRow::Item("al1".to_owned()),
         }
         .into()]
     );

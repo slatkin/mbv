@@ -36,7 +36,9 @@ fn view_detail_opens_the_narrow_hero_overlay() {
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.open_library_row_menu("al1".to_owned(), 40.0, 60.0));
+    fixture.in_runtime(move || {
+        state.open_library_row_menu(mbv::GuiLibraryMenuRow::Item("al1".to_owned()), 40.0, 60.0);
+    });
     fixture.carry_row_menu("al1");
 
     assert_eq!(fixture.text_of("[data-menu-entry]"), "View Detail");
@@ -92,7 +94,9 @@ fn open_the_shows_item_menu(fixture: &mut Fixture, x: f32, y: f32) {
     fixture.carry(list, detail);
     seed_idle_status(fixture);
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.open_library_row_menu("s1".to_owned(), x, y));
+    fixture.in_runtime(move || {
+        state.open_library_row_menu(mbv::GuiLibraryMenuRow::Item("s1".to_owned()), x, y);
+    });
     fixture.carry_row_menu("s1");
 }
 
@@ -103,7 +107,7 @@ fn a_press_inside_the_panel_closes_the_open_row_menu() {
     let mut fixture = built(GuiArrangement::Wide);
     let state = fixture.state.clone();
     fixture.in_runtime(move || {
-        state.open_library_row_menu("s1".to_owned(), 40.0, 60.0);
+        state.open_library_row_menu(mbv::GuiLibraryMenuRow::Item("s1".to_owned()), 40.0, 60.0);
     });
     fixture.receiver.try_iter().last();
 

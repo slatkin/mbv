@@ -256,7 +256,7 @@ impl App {
     /// then the other subscriptions' lists, so a play whose selection moved
     /// under a stale frame still addresses the entry it painted. `None` on a
     /// string that is no encoding of a row id and on an entry no list holds.
-    fn gui_feed_entry(&self, item_id: &str) -> Option<FeedEntry> {
+    pub(in crate::app::gui_library) fn gui_feed_entry(&self, item_id: &str) -> Option<FeedEntry> {
         let id = GuiFeedEntryId::decode(item_id)?;
         let listed = self
             .gui_feeds_entries()
