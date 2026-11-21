@@ -976,14 +976,28 @@ The Search control sits at its right end, before the Settings control
 field inline with its `Ctrl K` hint; too narrow it paints the Search icon
 whose press opens a dropdown panel that carries the same field, hint, and
 results, which open downward. `src/window/components/library_panel.rs` paints the destination's list (`LibraryList` with
-`LibraryLetterRail` in Music;
-`LibraryHomeList`, `LibraryShowsList`, `LibraryEmbyList`,
-`LibraryAudiobooksList`, `LibraryPodcastsList`, and `LibraryFeedsList`),
+`LibraryLetterRail` in Music; `LibraryHomeList` in Home;
+`LibraryShowsList` in Shows; and `LibraryLetteredList` in Emby, Audiobooks,
+Podcasts, and Feeds),
 the destination's Hero (`LibraryHero` with `LibraryTracklist` in Music;
 `LibraryHomeHero`, `LibraryShowsHero` with its Workspace,
 `LibraryEmbyHero`, `LibraryAudiobooksHero`, `LibraryPodcastsHero`, and
 `LibraryFeedsHero`), and `LibraryStatusBar`. The panel paints no selector
-row and no pills region between `LibraryTopBar` and the list. Each list
+row and no pills region between `LibraryTopBar` and the list. The lettered
+list is one component for the four destinations (`gui-tech-debt-simplification`
+design D4): the `LetteredDestination` trait (`src/window/library/lettered.rs`)
+names the parts a lettered list needs, and four zero-sized adapters
+(`EmbyList`, `AudiobooksList`, `PodcastsList`, and `FeedsList` in
+`src/window/library/lettered/adapters.rs`) fill them with each destination's
+carried row, its list and detail parts, its attribute word, its art scope, its
+pointer list, its header facts, its notice texts, and its row painter. The row
+model, the `LibraryState` filter, scroll, measure, and letter-jump methods, and
+the list's wiring are then one generic body — `LibraryLetteredList<D>`
+(`src/window/components/library_lettered_list.rs`) — and each destination keeps
+only its data; `play_next` defaults to no play-next, and only Emby overrides it.
+Home and Shows keep their own list modules (`src/window/library/home_list.rs`,
+`src/window/library/shows_list.rs`): Home's rows carry headings and spacers,
+and Shows' rows carry the New and Upcoming modes. Each list
 paints its own header: `LibraryListHeader` paints the heading line — the
 destination's Service mark, or Home's text title alone, the dropdown where
 one applies, and the sort control where one applies — on that line. Music,
@@ -2012,7 +2026,11 @@ season and a filter field, one open state in `LibraryUiState.shows_seasons`),
 `LibraryItemRow` the
 top-level rows of every list, `LibraryLetterHeading` the letter and section
 headings, and `LibraryVirtualList` the scroller of every list. Home still
-paints `LibraryHeroSummary`.
+paints `LibraryHeroSummary`. The episode row state is one module
+(`src/window/library/episode.rs`): `is_played_episode` and
+`episode_progress` read the played state and the resume percent an episode
+row and a Hero paint, whatever destination carries the row, so no other
+destination's Hero imports Shows logic.
 
 ### The top-level Library row and its art
 
