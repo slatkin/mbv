@@ -26,7 +26,7 @@ use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
-use super::lettered::{FeedsList, LetteredItemRow};
+use super::lettered::{FeedsList, LetteredDestination, LetteredItemRow};
 use super::list::ListMove;
 use super::parts::{library_feeds_detail, library_feeds_list};
 use super::state::LibraryState;
@@ -96,11 +96,11 @@ impl PanelKeys for FeedsKeys<'_> {
     }
 
     fn play_item(&self, item_id: &str) {
-        self.state.play_feeds_row(item_id);
+        FeedsList::play(self.state, item_id);
     }
 
     fn queue_item(&self, item_id: &str) {
-        self.state.queue_feeds_row(item_id);
+        FeedsList::queue(self.state, item_id);
     }
 
     fn route_hero(

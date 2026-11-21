@@ -185,6 +185,26 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// carried rows narrowed by [`ListUiState::filter`], under the letter
     /// headings a name sort paints (design D4).
     fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]>;
+
+    /// Select the painted row (design D4, D12): the select command the core
+    /// stores, whose frame paints the Hero. A heading names no row, so its
+    /// select changes nothing.
+    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>);
+
+    /// Play the item `item_id` names: Enter on the hovered row, and a
+    /// double-click's play.
+    fn play(state: &LibraryState, item_id: &str);
+
+    /// Add the item `item_id` names to the queue's tail: `a` on the hovered
+    /// row.
+    fn queue(state: &LibraryState, item_id: &str);
+
+    /// Play the item `item_id` names next: `n` on the hovered row. Only Emby
+    /// overrides this; a destination with no play-next sends nothing, so `n`
+    /// is consumed and does nothing there.
+    fn play_next(state: &LibraryState, item_id: &str) {
+        let _ = (state, item_id);
+    }
 }
 
 /// The plain Emby-library destination's adapter (design D4): its carried rows
@@ -218,6 +238,22 @@ impl LetteredDestination for EmbyList {
 
     fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
         state.emby_rows()
+    }
+
+    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
+        state.select_emby_row(row);
+    }
+
+    fn play(state: &LibraryState, item_id: &str) {
+        state.play_emby_row(item_id);
+    }
+
+    fn queue(state: &LibraryState, item_id: &str) {
+        state.queue_emby_row(item_id);
+    }
+
+    fn play_next(state: &LibraryState, item_id: &str) {
+        state.play_emby_row_next(item_id);
     }
 }
 
@@ -254,6 +290,18 @@ impl LetteredDestination for AudiobooksList {
         let filter = state.audiobooks_ui.peek().filter.clone();
         state.audiobooks_rows(&filter)
     }
+
+    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
+        state.select_audiobooks_row(row);
+    }
+
+    fn play(state: &LibraryState, item_id: &str) {
+        state.play_audiobooks_row(item_id);
+    }
+
+    fn queue(state: &LibraryState, item_id: &str) {
+        state.queue_audiobooks_row(item_id);
+    }
 }
 
 /// The Podcasts destination's adapter (design D4): its carried rows are the
@@ -288,6 +336,20 @@ impl LetteredDestination for PodcastsList {
     fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
         state.podcasts_rows()
     }
+
+    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
+        if let LetteredRow::Item(item) = row {
+            state.select_podcasts_row(item);
+        }
+    }
+
+    fn play(state: &LibraryState, item_id: &str) {
+        state.play_podcasts_row(item_id);
+    }
+
+    fn queue(state: &LibraryState, item_id: &str) {
+        state.queue_podcasts_row(item_id);
+    }
 }
 
 /// The Feeds destination's adapter (design D4): its carried rows are the entry
@@ -320,6 +382,20 @@ impl LetteredDestination for FeedsList {
 
     fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
         state.feeds_rows()
+    }
+
+    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
+        if let LetteredRow::Item(item) = row {
+            state.select_feeds_row(item);
+        }
+    }
+
+    fn play(state: &LibraryState, item_id: &str) {
+        state.play_feeds_row(item_id);
+    }
+
+    fn queue(state: &LibraryState, item_id: &str) {
+        state.queue_feeds_row(item_id);
     }
 }
 

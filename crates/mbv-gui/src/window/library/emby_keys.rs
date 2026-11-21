@@ -20,7 +20,7 @@ use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, route_panel_list_key};
-use super::lettered::{EmbyList, LetteredItemRow};
+use super::lettered::{EmbyList, LetteredDestination, LetteredItemRow};
 use super::list::ListMove;
 use super::parts::{library_emby_detail, library_emby_list};
 use super::state::LibraryState;
@@ -92,15 +92,15 @@ impl PanelKeys for EmbyKeys<'_> {
     }
 
     fn play_item(&self, item_id: &str) {
-        self.state.play_emby_row(item_id);
+        EmbyList::play(self.state, item_id);
     }
 
     fn queue_item(&self, item_id: &str) {
-        self.state.queue_emby_row(item_id);
+        EmbyList::queue(self.state, item_id);
     }
 
     fn play_next_item(&self, item_id: &str) -> bool {
-        self.state.play_emby_row_next(item_id);
+        EmbyList::play_next(self.state, item_id);
         true
     }
 }

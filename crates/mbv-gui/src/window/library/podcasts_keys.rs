@@ -21,7 +21,7 @@ use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, route_panel_list_key};
-use super::lettered::{LetteredItemRow, PodcastsList};
+use super::lettered::{LetteredDestination, LetteredItemRow, PodcastsList};
 use super::list::ListMove;
 use super::parts::{library_podcasts_detail, library_podcasts_list};
 use super::state::LibraryState;
@@ -93,11 +93,11 @@ impl PanelKeys for PodcastsKeys<'_> {
     }
 
     fn play_item(&self, item_id: &str) {
-        self.state.play_podcasts_row(item_id);
+        PodcastsList::play(self.state, item_id);
     }
 
     fn queue_item(&self, item_id: &str) {
-        self.state.queue_podcasts_row(item_id);
+        PodcastsList::queue(self.state, item_id);
     }
 
     // A podcast episode has no play-next: the shared default consumes `n` and

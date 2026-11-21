@@ -23,7 +23,7 @@ use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::audiobooks_workspace::{abs_chapter_at, play_abs_chapter, queue_abs_book};
 use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
-use super::lettered::{AudiobooksList, LetteredItemRow};
+use super::lettered::{AudiobooksList, LetteredDestination, LetteredItemRow};
 use super::list::ListMove;
 use super::parts::{library_audiobooks_detail, library_audiobooks_list};
 use super::state::LibraryState;
@@ -91,11 +91,11 @@ impl PanelKeys for AudiobooksKeys<'_> {
     }
 
     fn play_item(&self, item_id: &str) {
-        self.state.play_audiobooks_row(item_id);
+        AudiobooksList::play(self.state, item_id);
     }
 
     fn queue_item(&self, item_id: &str) {
-        self.state.queue_audiobooks_row(item_id);
+        AudiobooksList::queue(self.state, item_id);
     }
 
     fn route_hero(
