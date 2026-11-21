@@ -992,12 +992,20 @@ names the parts a lettered list needs, and four zero-sized adapters
 carried row, its list and detail parts, its attribute word, its art scope, its
 pointer list, its header facts, its notice texts, and its row painter. The row
 model, the `LibraryState` filter, scroll, measure, and letter-jump methods, and
-the list's wiring are then one generic body — `LibraryLetteredList<D>`
-(`src/window/components/library_lettered_list.rs`) — and each destination keeps
+the list's body over the shared column scaffold are then one generic component,
+`LibraryLetteredList<D>`
+(`src/window/components/library_lettered_list.rs`), and each destination keeps
 only its data; `play_next` defaults to no play-next, and only Emby overrides it.
 Home and Shows keep their own list modules (`src/window/library/home_list.rs`,
 `src/window/library/shows_list.rs`): Home's rows carry headings and spacers,
-and Shows' rows carry the New and Upcoming modes. Each list
+and Shows' rows carry the New and Upcoming modes. Every list's column wiring
+goes through one scaffold, `library_list_column`
+(`src/window/components/library_list_column.rs`), beside the scroll shell
+`library_virtual_list`: the column's own hook, the header block, the notice
+lines, the shell's measure, scroll, and rows-in-view reports, and the row that
+holds the shell beside the letter rail. Each list keeps its own row model, its
+header facts, its notice texts, and its row painter, so the scaffold shares the
+wiring, not the list (`gui-tech-debt-simplification` design D14). Each list
 paints its own header: `LibraryListHeader` paints the heading line — the
 destination's Service mark, or Home's text title alone, the dropdown where
 one applies, and the sort control where one applies — on that line. Music,
