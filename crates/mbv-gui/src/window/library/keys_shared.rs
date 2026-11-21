@@ -341,3 +341,6 @@ fn route_item_key<K: PanelKeys>(key: &DomKey, item_id: Option<&str>, keys: &K) {
     }
     keys.queue_item(item_id);
 }
+
+#[cfg(test)]
+pub(crate) mod tests;

@@ -10,11 +10,7 @@
 //! scenario in one effect over a recording core link, so no test opens a
 //! window or sleeps, and no IPC runs.
 
-use std::sync::{Arc, Mutex, mpsc};
-
-use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
-use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEntryRowFrame,
@@ -22,189 +18,14 @@ use crate::bridge::frame::library::{
     GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiRowArtFrame,
     GuiRowMediaKindFrame,
 };
-use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
-use crate::core_thread::CoreInput;
-use crate::window::arrangement::GuiArrangement;
-use crate::window::channel::CoreLink;
-use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::feeds::initial_feeds_ui;
+use crate::window::library::keys_shared::tests::{
+    commands, route, route_hero, route_row, run, scroll_facts, ui_facts,
+};
 use crate::window::library::lettered::FeedsList;
 use crate::window::library::state::LibraryState;
-use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
-use crate::window::sections::Sections;
-
-/// The facts one scenario recorded, in its run order.
-type Facts = Arc<Mutex<Vec<String>>>;
-
-/// One scenario the harness runs against the built store.
-type Scenario = std::rc::Rc<dyn Fn(&LibraryState, &Facts)>;
-
-/// The root: creates the store once and runs the scenario in one effect.
-fn harness((tx, facts, scenario): (mpsc::Sender<CoreInput>, Facts, Scenario)) -> Element {
-    let state = use_hook(|| {
-        // The playhead position the Feeds list reads: none — the tests hold
-        // it at 0.
-        let playhead_position = Memo::new(|| 0.0);
-        let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
-        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position, clock)
-    });
-    use_effect(move || {
-        scenario(&state, &facts);
-    });
-    rsx! {
-        div { "feeds-keys-harness" }
-    }
-}
-
-/// Run one scenario against a fresh store and return the facts it recorded
-/// and the commands the core link received. Bounded by construction: the
-/// effect runs once and the poll loop stops when the document goes idle.
-fn run(
-    scenario: impl Fn(&LibraryState, &Facts) + 'static,
-) -> (Vec<String>, mpsc::Receiver<CoreInput>) {
-    let (tx, rx) = mpsc::channel::<CoreInput>();
-    let facts: Facts = Arc::new(Mutex::new(Vec::new()));
-    let mut doc = DioxusDocument::new(
-        VirtualDom::new_with_props(
-            harness,
-            (
-                tx,
-                Arc::clone(&facts),
-                std::rc::Rc::new(move |state: &LibraryState, recorded: &Facts| {
-                    scenario(state, recorded);
-                }),
-            ),
-        ),
-        DocumentConfig::default(),
-    );
-    doc.initial_build();
-    poll_until_idle(&mut doc);
-    let recorded = facts.lock().expect("facts").clone();
-    (recorded, rx)
-}
-
-/// Poll the document until its effects have run and their re-renders landed.
-fn poll_until_idle(doc: &mut DioxusDocument) {
-    for _ in 0..8 {
-        if !doc.poll(None) {
-            return;
-        }
-    }
-    panic!("document did not become idle");
-}
-
-/// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
-    let mut commands = Vec::new();
-    while let Ok(input) = rx.try_recv() {
-        if let CoreInput::Library(command) = input {
-            commands.push(command);
-        }
-    }
-    commands
-}
-
-/// One keydown as the DOM names it.
-fn key(value: &str, shift: bool) -> DomKey {
-    DomKey {
-        key: value.to_owned(),
-        code: String::new(),
-        meta_key: false,
-        repeat: false,
-        modifiers: DomModifiers {
-            shift_key: shift,
-            ctrl_key: false,
-            alt_key: false,
-        },
-    }
-}
-
-/// The pointer target a list key routes under: the pointer over the Library
-/// column, not on a list or a Hero control.
-fn library_pointer() -> PointerTarget {
-    PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: None,
-        row: None,
-    }
-}
-
-/// The pointer target over `list`, resting on the row `row` when one is named.
-fn pointer_on(list: PointerList, row: Option<&str>) -> PointerTarget {
-    PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: Some(list),
-        row: row.map(str::to_owned),
-    }
-}
-
-/// Route one keydown under one pointer target and paint the outcome.
-fn route_pointer(
-    state: &LibraryState,
-    facts: &Facts,
-    name: &str,
-    value: &str,
-    pointer: &PointerTarget,
-) {
-    let outcome = super::super::keys::route_library_key(
-        &key(value, false),
-        Some(&state.sections),
-        state,
-        None,
-        GuiArrangement::Wide,
-        pointer,
-    );
-    facts
-        .lock()
-        .expect("facts")
-        .push(format!("{name}={outcome:?}"));
-}
-
-/// Route one keydown with the pointer over the entry list, resting on `row`.
-fn route_row(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
-    route_pointer(
-        state,
-        facts,
-        name,
-        value,
-        &pointer_on(PointerList::Feeds, Some(row)),
-    );
-}
-
-/// Route one keydown with the pointer over the Hero's entry Workspace,
-/// resting on `row` when one is named.
-fn route_workspace(
-    state: &LibraryState,
-    facts: &Facts,
-    name: &str,
-    value: &str,
-    row: Option<&str>,
-) {
-    route_pointer(
-        state,
-        facts,
-        name,
-        value,
-        &pointer_on(PointerList::Workspace, row),
-    );
-}
-
-/// Route one keydown with the pointer over the Library column, on no list.
-fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
-    let outcome = super::super::keys::route_library_key(
-        &key(value, shift),
-        Some(&state.sections),
-        state,
-        None,
-        GuiArrangement::Wide,
-        &library_pointer(),
-    );
-    facts
-        .lock()
-        .expect("facts")
-        .push(format!("{name}={outcome:?}"));
-}
+use crate::window::pointer_target::PointerList;
 
 /// The entry rows the Latest pill merges, newest first.
 fn entries() -> Vec<GuiEntryRowFrame> {
@@ -367,25 +188,6 @@ fn carry_feeds(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail)
     feeds_ui.with_mut(|ui| *ui = initial_feeds_ui());
 }
 
-/// The list's scroll facts the assertions read.
-fn scroll_facts(state: &LibraryState) -> String {
-    let scroll = *state.scrolls.feeds.peek();
-    format!(
-        "top={} viewport={}",
-        scroll.scroll_top, scroll.viewport_height
-    )
-}
-
-/// The filter facts the assertions read.
-fn ui_facts(state: &LibraryState) -> String {
-    let ui = state.ui.peek().clone();
-    let feeds = state.feeds_ui.peek().clone();
-    format!(
-        "filter_open={} dismissed={} item_menu_open={} filter={:?}",
-        ui.filter_open, ui.hero_dismissed, ui.item_menu_open, feeds.filter,
-    )
-}
-
 // Enter on the hovered row plays the entry.
 #[test]
 fn enter_on_the_hovered_row_plays_the_entry() {
@@ -393,7 +195,7 @@ fn enter_on_the_hovered_row_plays_the_entry() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_row(state, facts, "enter", "Enter", "s2::e2");
+        route_row(state, facts, "enter", "Enter", PointerList::Feeds, "s2::e2");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -411,7 +213,7 @@ fn a_on_the_hovered_row_queues_the_entry() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_row(state, facts, "a", "a", "s1::e1");
+        route_row(state, facts, "a", "a", PointerList::Feeds, "s1::e1");
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -430,7 +232,7 @@ fn n_on_the_hovered_row_sends_nothing_and_is_handled() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_row(state, facts, "n", "n", "s1::e1");
+        route_row(state, facts, "n", "n", PointerList::Feeds, "s1::e1");
     });
     assert_eq!(facts, ["n=Handled"]);
     assert_eq!(commands(&rx), []);
@@ -461,8 +263,18 @@ fn down_over_the_feeds_list_scrolls_it_by_one_row() {
         carry_feeds(state, content.clone());
         state.measure_lettered_list::<FeedsList>(40.0);
 
-        route_row(state, facts, "down", "ArrowDown", "s1::e1");
-        facts.lock().expect("facts").push(scroll_facts(state));
+        route_row(
+            state,
+            facts,
+            "down",
+            "ArrowDown",
+            PointerList::Feeds,
+            "s1::e1",
+        );
+        facts
+            .lock()
+            .expect("facts")
+            .push(scroll_facts(state.scrolls.feeds));
     });
     assert_eq!(facts[0], "down=Handled");
     // The first row is 56 px, so one row step moves the 40 px viewport down
@@ -481,7 +293,10 @@ fn down_off_the_feeds_list_is_the_cores_key() {
         state.measure_lettered_list::<FeedsList>(40.0);
 
         route(state, facts, "down", "ArrowDown", false);
-        facts.lock().expect("facts").push(scroll_facts(state));
+        facts
+            .lock()
+            .expect("facts")
+            .push(scroll_facts(state.scrolls.feeds));
     });
     assert_eq!(facts[0], "down=Core(None)");
     assert_eq!(facts[1], "top=0 viewport=40");
@@ -498,7 +313,10 @@ fn slash_opens_the_feeds_filter_and_sends_no_key() {
         carry_feeds(state, content.clone());
 
         route(state, facts, "slash", "/", false);
-        facts.lock().expect("facts").push(ui_facts(state));
+        facts
+            .lock()
+            .expect("facts")
+            .push(ui_facts(state, state.feeds_ui));
     });
     assert_eq!(facts[0], "slash=Handled");
     assert!(facts[1].contains("filter_open=true"));
@@ -519,7 +337,10 @@ fn esc_closes_the_feeds_filter_and_drops_its_text() {
         ui.with_mut(|ui| ui.filter_open = true);
 
         route(state, facts, "esc", "Escape", false);
-        facts.lock().expect("facts").push(ui_facts(state));
+        facts
+            .lock()
+            .expect("facts")
+            .push(ui_facts(state, state.feeds_ui));
     });
     assert_eq!(facts[0], "esc=Handled");
     assert!(facts[1].contains("filter_open=false"));
@@ -541,7 +362,7 @@ fn enter_on_the_hovered_workspace_entry_plays_it() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_workspace(state, facts, "enter", "Enter", Some("s1::e1"));
+        route_hero(state, facts, "enter", "Enter", Some("s1::e1"));
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -565,7 +386,7 @@ fn a_on_the_hovered_workspace_entry_queues_it_not_the_selected_one() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_workspace(state, facts, "a", "a", Some("s1::e1"));
+        route_hero(state, facts, "a", "a", Some("s1::e1"));
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -588,8 +409,8 @@ fn enter_on_no_painted_workspace_entry_sends_nothing() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_workspace(state, facts, "enter", "Enter", Some("s2::e2"));
-        route_workspace(state, facts, "enter", "Enter", None);
+        route_hero(state, facts, "enter", "Enter", Some("s2::e2"));
+        route_hero(state, facts, "enter", "Enter", None);
     });
     assert_eq!(facts, ["enter=Handled", "enter=Handled"]);
     assert_eq!(commands(&rx), []);
@@ -606,7 +427,7 @@ fn n_on_the_workspace_is_consumed_without_a_call() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_workspace(state, facts, "n", "n", Some("s1::e1"));
+        route_hero(state, facts, "n", "n", Some("s1::e1"));
     });
     assert_eq!(facts, ["n=Handled"]);
     assert_eq!(commands(&rx), []);
@@ -624,8 +445,11 @@ fn a_movement_key_on_the_workspace_moves_no_row() {
     let (facts, rx) = run(move |state, facts| {
         carry_feeds(state, content.clone());
 
-        route_workspace(state, facts, "down", "ArrowDown", Some("s1::e1"));
-        facts.lock().expect("facts").push(scroll_facts(state));
+        route_hero(state, facts, "down", "ArrowDown", Some("s1::e1"));
+        facts
+            .lock()
+            .expect("facts")
+            .push(scroll_facts(state.scrolls.feeds));
     });
     assert_eq!(facts[0], "down=Handled");
     assert_eq!(facts[1], "top=0 viewport=0");
