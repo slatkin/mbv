@@ -29,12 +29,15 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart,
+    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX,
 };
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::components::tree_guide::{
+    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides,
+};
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::components::typed_text::TypedText;
 use crate::window::input::f32_from_f64;
@@ -56,18 +59,13 @@ fn is_picked(row: &LibraryRow, picked: Option<&str>) -> bool {
     }
 }
 
-/// A nested album row's indent: the canvas's tree inset by depth (design D2).
-const ALBUM_PADDING: &str = "0 8px 0 26px";
-/// A nested track row's indent.
-const TRACK_PADDING: &str = "0 8px 0 44px";
-
 /// The letter heading above the first artist of the letter (the former client
 /// letter branch).
 fn paint_letter_row(letter: char) -> Element {
     rsx! {
         div {
             class: "flex items-end font-mono",
-            style: "height: {LETTER_ROW_HEIGHT}px; padding: 0 8px 2px; font-size: 12px; color: var(--canvas-type-label);",
+            style: "height: {LETTER_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px 2px; font-size: 12px; color: var(--canvas-type-label);",
             "data-library-letter": "{letter}",
             "{letter}"
         }
@@ -75,7 +73,9 @@ fn paint_letter_row(letter: char) -> Element {
 }
 
 /// The track row under an open album: the number,
-/// the muted name, and the runtime.
+/// the muted name, and the runtime. It is a leaf of the tree, so it paints both
+/// guides that pass through it — the artist's and its album's
+/// (gui-tree-indent-guides design D3).
 fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
     let LibraryRow::Track {
         base,
@@ -88,8 +88,10 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     else {
         return rsx! {};
     };
+    // The leaf inset clears both guides that pass through the row
+    // (gui-tree-indent-guides design D2, D3).
     let style = format!(
-        "height: {TRACK_ROW_HEIGHT}px; padding: {TRACK_PADDING}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     let press_row = row.clone();
@@ -102,7 +104,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     rsx! {
         button {
             "type": "button",
-            class: "flex w-full items-center overflow-hidden",
+            class: "relative flex w-full items-center overflow-hidden",
             style: "{style}",
             "data-library-row": "track",
             "data-library-row-id": "{base.id}",
@@ -136,6 +138,7 @@ fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                 style: "font-size: 12px; color: var(--canvas-muted);",
                 "{duration}"
             }
+            {leaf_guides()}
         }
     }
 }
@@ -158,12 +161,14 @@ fn paint_library_row(row: &LibraryRow, library: &LibraryState, picked: Option<&s
 /// (gui-tree-double-click design D2, D4), so it paints no caret: its
 /// double-click toggles the node and its hover shows the hint. A press picks
 /// nothing (the Hero is album-scoped), and a double-click only opens it, so the
-/// row names no play path.
+/// row names no play path. While it shows album rows it starts its guide under
+/// its thumb (gui-tree-indent-guides design D3).
 fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
     let LibraryRow::Artist {
         base,
         name,
         open,
+        shows_children,
         art,
         media,
         ..
@@ -196,6 +201,7 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
                 media: *media,
             }),
             tree_open: Some(*open),
+            tree_guide: *shows_children,
             on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
             on_play: Callback::new(|()| {}),
             on_toggle: Some(Callback::new(move |()| {
@@ -214,13 +220,16 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
 /// its own painter and height (gui-delineated-rows design D1). It is a tree
 /// parent (gui-tree-double-click design D2, D4): its press picks the album, its
 /// double-click opens or closes the node, its year gives way to the hover hint,
-/// and its indent is the row inset alone — no caret column.
+/// and its indent is the row inset alone — no caret column. It passes the
+/// artist's guide through and, while it shows track rows, starts its own under
+/// its label (gui-tree-indent-guides design D2, D3).
 fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
     let LibraryRow::Album {
         base,
         name,
         year,
         open,
+        shows_children,
         ..
     } = row
     else {
@@ -228,8 +237,10 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
     };
     let color = canvas_var("text");
     let year = (!year.is_empty()).then(|| year.clone());
+    // The nested inset clears the artist's guide that passes through the row
+    // (gui-tree-indent-guides design D2).
     let style = format!(
-        "height: {NODE_ROW_HEIGHT}px; padding: {ALBUM_PADDING}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
+        "height: {NODE_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     let press_row = row.clone();
@@ -289,6 +300,7 @@ fn paint_album_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -
                     }
                 }
             }
+            {nested_parent_guides(NODE_ROW_HEIGHT, *shows_children)}
             TreeHint { open: *open }
         }
     }

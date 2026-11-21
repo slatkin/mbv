@@ -1991,9 +1991,15 @@ design D1 to D3). A press on a tree parent row picks it and opens or closes
 nothing; its double-click opens the row when it is closed and closes it when
 it is open, and plays nothing. No tree row paints an open-or-closed glyph or
 keeps a spacer where one stood: the nested rows' indent comes only from the
-row inset (Music artist 8 px, album 26 px, track 44 px; Shows series 8 px,
-season 26 px, episode 44 px; Playlists playlist 8 px, item 32 px). The part
-carries the row's `aria-expanded`, and while the pointer rests on the row it
+row inset (Music artist 8 px, album 56 px, track 68 px; Shows series 8 px,
+season 56 px, episode 68 px; Playlists playlist 8 px, item 32 px). Every open
+tree parent that shows child rows hangs a 1 px guide under its leading element
+through its subtree, painted per row by the shared `TreeGuide` part
+(`crates/mbv-gui/src/window/components/tree_guide.rs`), so the guide stays
+whole while only the rows in view paint. A top-level parent's guide paints in
+`--canvas-tree-guide` and a nested parent's guide in
+`--canvas-tree-guide-nested`. The part carries the row's `aria-expanded`, and
+while the pointer rests on the row it
 shows the shared `TreeHint`
 (`crates/mbv-gui/src/window/components/tree_hint.rs`) — `Double-click to
 expand` when the row is closed, `Double-click to collapse` when it is open —

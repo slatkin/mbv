@@ -73,6 +73,10 @@ pub struct ShowsSeriesRow {
     pub letter: char,
     /// Whether the row paints open.
     pub open: bool,
+    /// Whether the open series shows child rows: the row starts its guide under
+    /// its thumb only while a kept season row paints under it
+    /// (gui-tree-indent-guides design D4).
+    pub shows_children: bool,
     /// Whether the node opens.
     pub expandable: bool,
     /// The series' art (gui-delineated-rows design D4): the cached row image
@@ -108,6 +112,19 @@ pub struct ShowsSeasonRow {
     /// Whether the season's episode load has landed: an open season without
     /// one asks the core for them.
     pub loaded: bool,
+}
+
+impl ShowsSeasonRow {
+    /// Whether the open season shows child rows: the row starts its guide only
+    /// while an episode row paints under it, so a season whose episodes have not
+    /// landed shows none (gui-tree-indent-guides design D4). The row's own
+    /// fields already carry the three facts the builder knows — it paints open,
+    /// its episode load has landed, and its kept episodes are not empty — so the
+    /// flag derives here instead of taking a fourth bool field.
+    #[must_use]
+    pub fn shows_children(&self) -> bool {
+        self.open && self.loaded && self.expandable
+    }
 }
 
 /// A painted episode leaf (design D14): the Music track row's counterpart.
@@ -339,6 +356,7 @@ fn series_row(
     id: String,
     letter: char,
     open: bool,
+    shows_children: bool,
     top: f32,
 ) -> ShowsListRow {
     ShowsListRow::Series(ShowsSeriesRow {
@@ -347,6 +365,7 @@ fn series_row(
         title: node.title.clone(),
         letter,
         open,
+        shows_children,
         expandable: node.expandable,
         top,
         height: SHOWS_SERIES_ROW_HEIGHT,
@@ -405,7 +424,14 @@ fn series_shows_rows(
         } else {
             tree.open.contains(&node_id)
         };
-        built.push(series_row(node, node_id.clone(), letter, series_open, top));
+        built.push(series_row(
+            node,
+            node_id.clone(),
+            letter,
+            series_open,
+            series_open && !kept_seasons.is_empty(),
+            top,
+        ));
         top += SHOWS_SERIES_ROW_HEIGHT;
         if !series_open {
             continue;
