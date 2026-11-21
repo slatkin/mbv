@@ -128,7 +128,6 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     const HERO_BUTTON_LABELS: [&str; 3] = ["Play", "Play All", "Add to Queue"];
 
     let library = consume_context::<LibraryState>();
-    let row_slot: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
     // The Music part of the carried detail, narrowed from the handle in this
     // body (`share-gui-sections-by-rc` design D3), and the Hero's facts,
@@ -214,7 +213,6 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
                 top: "52px".to_owned(),
                 right: Some("0".to_owned()),
                 on_select: Some(on_select),
-                row_slot,
             }
         }
     };

@@ -218,7 +218,6 @@ pub fn PlaylistsPanel(props: PlaylistsPanelProps) -> Element {
     let mut reset_widths = widths_store;
     let pick: Signal<Option<Pick>> = use_signal(|| None);
     let mut menu: Signal<Option<RowMenu>> = use_signal(|| None);
-    let menu_row_slots: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
     let Some(frame) = sections.playlists.cloned() else {
         return rsx! {};
@@ -312,7 +311,6 @@ pub fn PlaylistsPanel(props: PlaylistsPanelProps) -> Element {
                     left: Some(format!("{}px", row_menu.x)),
                     on_select: Some(on_select),
                     label: "Playlist actions".to_owned(),
-                    row_slot: menu_row_slots,
                 }
             }
         }

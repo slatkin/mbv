@@ -59,7 +59,6 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
         .pick_menu
         .cloned()
         .filter(|menu| menu.setting == props.setting);
-    let row_slot: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
     let aria = format!("{}: {}", props.label, pick_value_label(&props.value));
     let onpress = props.onpress;
     let entries: Vec<GuiRowMenuEntry> = menu
@@ -128,7 +127,6 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
                         on_select: Some(Callback::new(move |index: usize| {
                             select.select_pick_value(index);
                         })),
-                        row_slot,
                     }
                 }
             }

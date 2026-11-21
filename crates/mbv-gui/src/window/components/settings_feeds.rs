@@ -270,7 +270,6 @@ fn FeedKindControl(kind: FeedKind) -> Element {
         .feed_form
         .as_ref()
         .and_then(|form| form.kind_menu);
-    let row_slot: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
     let toggle = settings.clone();
     let press = settings.clone();
     let menu_press = settings.clone();
@@ -326,7 +325,6 @@ fn FeedKindControl(kind: FeedKind) -> Element {
                             on_select: Some(Callback::new(move |index: usize| {
                                 choose.choose_feed_kind(index);
                             })),
-                            row_slot,
                         }
                     }
                 }

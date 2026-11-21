@@ -297,7 +297,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
         }
         _ => None,
     };
-    let menu_row_slots: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
     // The Wide Hero pane's and the Narrow overlay's Hero fact, resolved once
     // per render.
     let pair_paints_hero = pair.as_ref().is_some_and(pair_has_hero);
@@ -464,7 +463,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                                 top,
                                 left: Some(left),
                                 on_select: Some(on_select),
-                                row_slot: menu_row_slots,
                             }
                         }
                     }
