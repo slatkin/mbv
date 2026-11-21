@@ -20,9 +20,7 @@ use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::arrangement::QUEUE_RAIL_WIDTH_PX;
 use crate::window::components::art_image::ArtImage;
 use crate::window::icons::{ChevronsLeft, Pause, Play, SkipForward};
-use crate::window::layout::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
-};
+use crate::window::layout::region_set::use_region_set;
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
 use crate::window::theme::{glyph_color, role_var};
@@ -53,59 +51,24 @@ pub struct CollapsedRailProps {
 pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
     let sections = consume_context::<Sections>();
     let playhead = consume_context::<Playhead>();
-    let epoch = consume_context::<LayoutEpoch>();
-    let reporter = consume_context::<LayoutReporter>();
-    let key = use_hook(LayoutKey::next);
 
-    let mut art_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut play_pause_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut next_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut expand_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-
-    // No region outlives the rail: the contribution retracts on unmount, as
-    // the former client `onMount` teardown did.
-    let mut drop_reporter = reporter.clone();
-
-    // Each paint that moved a region reports (design D4): this effect runs
-    // after the DOM update, and the layout epoch reports layout-driven moves.
-    // The reporter dedupes an unchanged contribution.
+    // Each paint that moved a region reports (design D1): the region set's one
+    // effect watches the playback band and the layout epoch. The marks run in
+    // this render, in today's report order — the transport's two controls, the
+    // artwork slot, then the expand control — which is not the paint order:
+    // the ring paints first but was the third region reported.
     let watch_playback = sections.playback;
-    let watch_epoch = epoch.0;
-    use_effect(move || {
+    let region_set = use_region_set(0, move || {
         let _playback = watch_playback.cloned();
-        let _epoch = watch_epoch.cloned();
-        let art = art_mounted.cloned();
-        let play_pause = play_pause_mounted.cloned();
-        let next = next_mounted.cloned();
-        let expand = expand_mounted.cloned();
-        let mut effect_reporter = reporter.clone();
-        spawn(async move {
-            // The painted regions (design D4): the transport's two controls,
-            // the artwork slot, and the expand control.
-            let mut regions: Vec<crate::bridge::layout::LayoutRegion> = Vec::new();
-            for (mounted, id) in [
-                (play_pause, QueuePlaybackTargetId::PlayPause),
-                (next, QueuePlaybackTargetId::Next),
-                (art, QueuePlaybackTargetId::VisualSlot),
-                (expand, QueuePlaybackTargetId::Collapse),
-            ] {
-                if let Some(mounted) = mounted.as_ref() {
-                    regions.extend(element_region(mounted, RegionTarget::QueuePlayback(id)).await);
-                }
-            }
-            effect_reporter.report_layout(
-                key,
-                LayoutContribution {
-                    lists: Vec::new(),
-                    regions,
-                },
-            );
-        });
     });
-
-    use_drop(move || {
-        drop_reporter.retract_layout(key);
-    });
+    let play_pause_mark = region_set.mark(RegionTarget::QueuePlayback(
+        QueuePlaybackTargetId::PlayPause,
+    ));
+    let next_mark = region_set.mark(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Next));
+    let art_mark = region_set.mark(RegionTarget::QueuePlayback(
+        QueuePlaybackTargetId::VisualSlot,
+    ));
+    let expand_mark = region_set.mark(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse));
 
     let playback = sections.playback.cloned();
     // Whether the transport is paused: the anchor's fact (design D5). `true`
@@ -143,7 +106,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                 class: "relative flex shrink-0 items-center justify-center",
                 style: "width: {RING_SIZE_PX}px; height: {RING_SIZE_PX}px;",
                 "data-target": "visualSlot",
-                onmounted: move |event| art_mounted.set(Some(event)),
+                onmounted: art_mark,
                 svg {
                     class: "absolute inset-0 -rotate-90",
                     view_box: "0 0 {RING_SIZE_PX} {RING_SIZE_PX}",
@@ -193,7 +156,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                 title: if paused { "Play" } else { "Pause" },
                 style: "background: var(--mbv-secondary);",
                 "data-target": "playPause",
-                onmounted: move |event| play_pause_mounted.set(Some(event)),
+                onmounted: play_pause_mark,
                 if paused {
                     Play {
                         size: 16,
@@ -214,7 +177,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                 "data-target": "next",
                 "aria-label": "Next",
                 title: "Next",
-                onmounted: move |event| next_mounted.set(Some(event)),
+                onmounted: next_mark,
                 SkipForward {
                     size: 18,
                     fill: "{next_glyph}",
@@ -243,7 +206,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                 "data-target": "collapse",
                 "aria-label": "Expand panel",
                 title: "Expand panel (z)",
-                onmounted: move |event| expand_mounted.set(Some(event)),
+                onmounted: expand_mark,
                 ChevronsLeft {
                     size: 16,
                     color: role_var(GuiRole::TextMuted),

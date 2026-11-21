@@ -8,7 +8,9 @@
 //! whole box. The media box is the stage's clipped sibling, so a chip popover
 //! that hangs past the artwork is never cut. The top and bottom layers are
 //! absolute siblings over the media box; a press on a control lands on the
-//! control's own region, which the panel pushes after the stage's (design D4).
+//! control's own region, which the panel's region set marks after the stage's
+//! (design D1, D4). The panel owns every mark and hands the closures down as
+//! props: a child never marks (design D1).
 //!
 //! The control rows are one component ([`ControlRow`]) because two
 //! arrangements paint them: the stage's bottom layer, and the no-image column
@@ -34,6 +36,7 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::track_chips::TrackChips;
 use crate::window::icons::{Pause, Play, SkipBack, SkipForward};
+use crate::window::layout::region_set::MarkHandler;
 use crate::window::playhead::Playhead;
 use crate::window::theme::{EfToken, ef_var, glyph_color, role_var};
 use crate::window::time::minus;
@@ -79,23 +82,24 @@ pub(super) fn player_scale(stage_height: f32) -> f32 {
     (stage_height / 3.0 / BOTTOM_FULL_HEIGHT_PX).min(1.0)
 }
 
-/// The mounted handles the control row sets: the panel holds every handle and
-/// hands the same set to the stage and to the no-image column (design D8), so
-/// one region report covers both arrangements.
-#[derive(Clone, Copy, PartialEq)]
+/// The marks the control row carries: the panel's region set marks each
+/// control and hands the same closures to the stage and to the no-image column
+/// (design D1, D8), so one report covers both arrangements. A block that paints
+/// no control row passes the default set, whose handlers record nothing.
+#[derive(Clone, Copy, Default, PartialEq)]
 pub struct ControlRowHandles {
     /// The play/pause button.
-    pub play_pause: Signal<Option<Event<MountedData>>>,
+    pub play_pause: MarkHandler,
     /// The previous button.
-    pub previous: Signal<Option<Event<MountedData>>>,
+    pub previous: MarkHandler,
     /// The back-10 s button.
-    pub seek_back: Signal<Option<Event<MountedData>>>,
+    pub seek_back: MarkHandler,
     /// The forward-30 s button.
-    pub seek_forward: Signal<Option<Event<MountedData>>>,
+    pub seek_forward: MarkHandler,
     /// The next button.
-    pub next: Signal<Option<Event<MountedData>>>,
+    pub next: MarkHandler,
     /// The scrubber's slider box.
-    pub seekbar: Signal<Option<Event<MountedData>>>,
+    pub seekbar: MarkHandler,
 }
 
 /// The stage's props: the artwork, the two overlay layers' facts, and the
@@ -123,9 +127,10 @@ pub struct ArtStageProps {
     /// The control row's scale (design D3): the measured stage height's
     /// one-third share of the rows' full height, never above 1.0.
     pub scale: f32,
-    /// The stage's own mounted event: the `visualSlot` region.
-    pub stage_mounted: Signal<Option<Event<MountedData>>>,
-    /// The control row's handles.
+    /// The stage's mark: the handler that records its mounted event as the
+    /// `visualSlot` region.
+    pub stage_mounted: MarkHandler,
+    /// The control row's marks.
     pub rows: ControlRowHandles,
 }
 
@@ -148,7 +153,6 @@ impl std::fmt::Debug for ArtStageProps {
 /// and the control row.
 #[component]
 pub fn ArtStage(props: ArtStageProps) -> Element {
-    let mut stage_mounted = props.stage_mounted;
     let scale = format!("{:.4}", props.scale);
     // The media box's content: the image, or the empty 16:9 box a loading
     // reference reserves at the panel's width (design D6).
@@ -177,7 +181,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             // presence (design D2).
             "data-auto-hide": props.auto_hide.then_some(""),
             "data-playing": (!props.paused).then_some(""),
-            onmounted: move |event| stage_mounted.set(Some(event)),
+            onmounted: props.stage_mounted,
             // The clip belongs to the media box, never to the stage: the
             // overlay layers and the chip popovers paint past its edges
             // (design D1).
@@ -275,12 +279,6 @@ impl std::fmt::Debug for ControlRowProps {
 #[component]
 pub fn ControlRow(props: ControlRowProps) -> Element {
     let playhead = consume_context::<Playhead>();
-    let mut play_pause_mounted = props.rows.play_pause;
-    let mut prev_mounted = props.rows.previous;
-    let mut seek_back_mounted = props.rows.seek_back;
-    let mut seek_forward_mounted = props.rows.seek_forward;
-    let mut next_mounted = props.rows.next;
-    let seekbar_mounted = props.rows.seekbar;
     let glyph = glyph_color(props.availability.previous, GuiRole::TextPrimary);
     let next_glyph = glyph_color(props.availability.next, GuiRole::TextPrimary);
     // The clocks are the playhead's prediction (design D5 of
@@ -307,7 +305,7 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
                 style: "width: calc(30px * var(--player-scale)); height: calc(30px * var(--player-scale));",
                 "data-target": "previous",
                 "aria-label": "Previous",
-                onmounted: move |event| prev_mounted.set(Some(event)),
+                onmounted: props.rows.previous,
                 SkipBack {
                     class: "player-glyph",
                     size: 20,
@@ -322,7 +320,7 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
                 "data-target": "seekBack",
                 "aria-label": "Back 10 seconds",
                 title: "Back 10 s",
-                onmounted: move |event| seek_back_mounted.set(Some(event)),
+                onmounted: props.rows.seek_back,
                 "−10"
             }
             button {
@@ -332,7 +330,7 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
                 "data-target": "seekForward",
                 "aria-label": "Forward 30 seconds",
                 title: "Forward 30 s",
-                onmounted: move |event| seek_forward_mounted.set(Some(event)),
+                onmounted: props.rows.seek_forward,
                 "+30"
             }
             button {
@@ -341,7 +339,7 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
                 style: "width: calc(30px * var(--player-scale)); height: calc(30px * var(--player-scale));",
                 "data-target": "next",
                 "aria-label": "Next",
-                onmounted: move |event| next_mounted.set(Some(event)),
+                onmounted: props.rows.next,
                 SkipForward {
                     class: "player-glyph",
                     size: 20,
@@ -355,7 +353,7 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
         div {
             class: "flex flex-col",
             style: "{column_style}",
-            Scrubber { seekbar_mounted }
+            Scrubber { seekbar_mounted: props.rows.seekbar }
             div {
                 class: "flex items-center",
                 style: "{transport_style} gap: calc(8px * var(--player-scale));",
@@ -368,7 +366,7 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
                     ),
                     "data-target": "playPause",
                     "aria-label": if props.paused { "Play" } else { "Pause" },
-                    onmounted: move |event| play_pause_mounted.set(Some(event)),
+                    onmounted: props.rows.play_pause,
                     if props.paused {
                         Play {
                             class: "player-play-glyph",

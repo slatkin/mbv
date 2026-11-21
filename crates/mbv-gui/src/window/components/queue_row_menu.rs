@@ -18,17 +18,19 @@
 //! The hint glyph is a paint-time map (design DR7): the core keeps the raw
 //! `Enter` chord that `direct_select` matches.
 //!
-//! The component is presentation-only: `QueuePanel` measures the
-//! `[data-menu-entry]` rows through their mounted handles and reports their
-//! `rowMenuEntry` regions under its own second report key, inserted when the
-//! menu opens — the same technique `TrackChips` uses for its popover rows —
-//! so the entries land after the queue's regions in the merged report and
-//! win the hit map where the menu paints over a queue row beneath it (the
-//! hit map's last push wins). Reporting from the parent, not from this
-//! child's mount effect, keeps that order even when the first painted frame
-//! already carries the open menu: a child's mount effect runs before the
-//! parent's, so a child-held key would land first and the entries would lose
-//! to the rows beneath them.
+//! The component is presentation-only. The surface that owns the menu marks
+//! its `[data-menu-entry]` rows: it passes one closure per painted row, from
+//! its region set's `mark_over` at the menu's position in its `rsx`, so the
+//! entries report under the owner's overlay key, after the surface's own
+//! regions in the merged report, and win the hit map where the menu paints
+//! over the surface beneath it (the hit map's last push wins). Reporting from
+//! the owner, not from this child's mount effect, keeps that order even when
+//! the first painted frame already carries the open menu: a child's mount
+//! effect runs before the parent's, so a child-held key would land first and
+//! the entries would lose to the regions beneath them. The window's own menus
+//! (the Library's item menu, the Hero's, the Playlists', the Settings pick and
+//! Feed kind) pass no marks and report nothing: their entries' presses run
+//! `on_select`, never the hit map.
 
 use std::fmt::Write as _;
 
@@ -37,7 +39,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
-use crate::window::components::row_handle::record_row_handle;
+use crate::window::layout::region_set::MarkHandler;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The props of the row menu (the `QueueRowMenu` props, in order):
@@ -77,9 +79,11 @@ pub struct QueueRowMenuProps {
     /// `Row actions`).
     #[props(default = "Row actions".to_owned())]
     pub label: String,
-    /// The painted rows' mounted events, by their entry index — the handles
-    /// the parent's menu-entry regions read.
-    pub row_slot: Signal<Vec<Option<Event<MountedData>>>>,
+    /// The painted rows' marks, in row order — the closures the surface that
+    /// owns the menu produced with its region set's `mark_over`. A row takes
+    /// its own entry when the vector reaches it.
+    #[props(default)]
+    pub row_marks: Vec<MarkHandler>,
 }
 
 /// The painted hint: the canvas draws `⏎` where the core's hint chord is
@@ -141,7 +145,7 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                     let label = entry.label.clone();
                     let hint = entry.key_hint.as_deref().map(paint_hint);
                     let entry_index = entry.index.unwrap_or(index);
-                    let row_slot = props.row_slot;
+                    let row_mark = props.row_marks.get(index).copied();
                     rsx! {
                         if entry.destructive {
                             // The canvas's divider above the destructive entry.
@@ -178,7 +182,13 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                                 }
                             },
                             onmounted: move |event| {
-                                record_row_handle(row_slot, index, event);
+                                // The surface that owns the menu marks this row:
+                                // the closure records the handle its overlay
+                                // region reads. A menu whose rows never report
+                                // passes no mark and records nothing.
+                                if let Some(mark) = row_mark {
+                                    mark.call(event);
+                                }
                             },
                             // The check entry's small box paints the state
                             // ahead of the label; a plain entry paints none

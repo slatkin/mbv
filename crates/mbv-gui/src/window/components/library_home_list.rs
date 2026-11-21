@@ -23,9 +23,11 @@ use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
     LibraryItemRow, LibraryRowThumb, LibraryTrailPart, name_color,
 };
-use crate::window::components::library_list_header::{LibraryListHeader, LibraryListHeading};
-use crate::window::components::library_virtual_list::library_virtual_list;
-use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
+use crate::window::components::library_list_column::{
+    ListColumnBody, ListColumnWiring, library_list_column,
+};
+use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
 use crate::window::library::parts::{library_home_detail, library_home_list};
 use crate::window::library::state::LibraryState;
@@ -164,64 +166,65 @@ pub fn LibraryHomeList() -> Element {
 
     // The list's two DOM facts report to the scroll store (design D9), the
     // rows in view report to the core for its row art fetches (design D7),
-    // and the rows paint over the interaction state this render read.
+    // and the rows paint over the interaction state this render read. The
+    // column's wiring is the one scaffold every list paints through (design
+    // D14); Home paints no rail, so its rows fill the column themselves.
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let art_library = library.clone();
     let paint_library = library.clone();
-    let paint_selected = detail.and_then(|detail| detail.selected.clone());
-    let virtual_list = library_virtual_list(
-        rows.as_ref(),
-        scroll,
-        "home",
-        PointerList::Home,
-        "8px 8px 8px 8px",
-        Callback::new(move |height: f32| measure_library.measure_home_list(height)),
-        Callback::new(move |top: f32| scroll_library.scroll_home_list(top)),
-        Some(Callback::new(move |ids: Vec<String>| {
+    let wiring = ListColumnWiring {
+        rows: rows.as_ref(),
+        view: scroll,
+        attr: "home",
+        list: PointerList::Home,
+        padding: "8px 8px 8px 8px",
+        on_measure: Callback::new(move |height: f32| measure_library.measure_home_list(height)),
+        on_scroll: Callback::new(move |top: f32| scroll_library.scroll_home_list(top)),
+        rows_in_view: Some(Callback::new(move |ids: Vec<String>| {
             art_library.report_rows_in_view(GuiRowArtScopeFrame::Home, ids);
         })),
-        move |row: &HomeListRow| paint_home_row(row, &paint_library, paint_selected.as_ref()),
-    );
+    };
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The header's facts (design D15): Home keeps its text title
+    // (gui-library-header-service-marks design D5), the whole destination is
+    // the default scope so it paints no label, and the `/` filter field
+    // narrows it.
+    let header = LibraryListHeaderProps {
+        heading: LibraryListHeading::Title("Home".to_owned()),
+        label: String::new(),
+        label_attr: None,
+        collections: None,
+        view: None,
+        sort: None,
+        filter: filter.clone(),
+        placeholder: "Filter home".to_owned(),
+        aria_label: "Filter home".to_owned(),
+        on_input: Callback::new(move |value: String| filter_library.set_home_filter(value)),
+        on_accept: Callback::new(move |()| accept_library.accept_destination_filter()),
+    };
 
-    rsx! {
-        div {
-            class: "flex min-h-0 min-w-0 flex-1 flex-col",
-            "data-library-home-list-column": "",
-            // The Music list's header (design D15): Home keeps its text title
-            // (gui-library-header-service-marks design D5), the whole destination
-            // is the default scope so it paints no label, and the `/` filter
-            // field narrows it.
-            div {
-                class: "flex flex-none flex-col",
-                LibraryListHeader {
-                    heading: LibraryListHeading::Title("Home".to_owned()),
-                    label: String::new(),
-                    filter: filter.clone(),
-                    placeholder: "Filter home".to_owned(),
-                    aria_label: "Filter home".to_owned(),
-                    on_input: move |value: String| filter_library.set_home_filter(value),
-                    on_accept: move |()| accept_library.accept_destination_filter(),
-                }
-            }
-            if let Some(frame) = frame {
-                // The Home content has not landed yet (design D12), or it holds
-                // nothing to play: one line per state.
-                ListFrameNotices {
-                    loading: frame.loading.then(|| {
-                        ListFrameNoticeLine::loading("data-library-home-loading")
-                    }),
-                    empty: (!frame.loading && frame.rows.is_empty()).then(|| {
-                        ListFrameNoticeLine::new("data-library-home-empty", "Nothing to play")
-                    }),
-                }
-            }
-            {virtual_list}
-        }
-    }
+    // The Home content has not landed yet (design D12), or it holds nothing to
+    // play: one line per state.
+    let notices = frame.map(|frame| ListFrameNoticesProps {
+        loading: frame
+            .loading
+            .then(|| ListFrameNoticeLine::loading("data-library-home-loading")),
+        empty: (!frame.loading && frame.rows.is_empty())
+            .then(|| ListFrameNoticeLine::new("data-library-home-empty", "Nothing to play")),
+        failed: None,
+    });
+
+    let paint_selected = detail.and_then(|detail| detail.selected.clone());
+    library_list_column(
+        &wiring,
+        move |row: &HomeListRow| paint_home_row(row, &paint_library, paint_selected.as_ref()),
+        header,
+        notices,
+        ListColumnBody::Shell,
+    )
 }
 
 #[cfg(test)]

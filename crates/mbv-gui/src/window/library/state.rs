@@ -15,7 +15,10 @@ use dioxus_native::prelude::*;
 use mbv::GuiCollections;
 use mbv::{GuiCollectionTarget, GuiListSort, GuiShowsView, GuiSortTarget};
 
-use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiLibraryDetail, GuiLibraryList};
+use crate::bridge::frame::library::{
+    GuiAudiobooksRowFrame, GuiCollectionsFrame as _, GuiEmbyRowFrame, GuiEntryRowFrame,
+    GuiLibraryDetail, GuiLibraryList,
+};
 use crate::bridge::library::{GuiLibraryCommand, GuiRowArtScopeFrame};
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
@@ -24,8 +27,12 @@ use crate::window::sections::Sections;
 
 use std::sync::Arc;
 
+use super::home_list::HomeListRow;
+use super::lettered::LetteredItemRow;
+use super::list::{LetteredRow, LibraryRow, MusicRowsFacts};
 use super::row_memo::RowsMemo;
 use super::scroll::{ListScroll, initial_list_scroll, reset_scroll_top};
+use super::shows_list::{ShowsListRow, ShowsRowsFacts};
 
 /// The right-click item menu's facts (`state.ts`'s `rowMenu`): the row a row
 /// right-press named, with the pointer position it opened at. The menu paints
@@ -64,6 +71,12 @@ pub struct LibraryUiState {
     /// narrows its season rows by — the collection dropdown's one-value
     /// pattern, so a close clears the filter by construction.
     pub shows_seasons: Option<String>,
+    /// The Shows view dropdown's open fact (gui-collection-dropdown design D8,
+    /// gtds design D15): `Open` while the All, New, and Upcoming rows paint
+    /// under the trigger. The popover mounts no filter field, so the fact
+    /// carries no text, and the collection dropdown's `collections` names the
+    /// collection dropdowns alone.
+    pub shows_view_open: ShowsViewOpen,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
     pub open_nodes: Vec<String>,
@@ -98,6 +111,7 @@ impl LibraryUiState {
             filter: String::new(),
             collections: None,
             shows_seasons: None,
+            shows_view_open: ShowsViewOpen::Closed,
             search_control: SearchControlState::default(),
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
@@ -107,6 +121,28 @@ impl LibraryUiState {
             item_menu_open: false,
             row_menu: None,
         }
+    }
+}
+
+/// Whether the Shows view dropdown paints its popover (gtds design D15): the
+/// trigger toggles it, a chosen view and every closing path clear it. The
+/// collection and season dropdowns carry their filter text instead, so their
+/// one value closes and clears together; this popover has no filter, so its
+/// open fact stands alone.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ShowsViewOpen {
+    /// The popover paints no rows.
+    #[default]
+    Closed,
+    /// The popover paints the All, New, and Upcoming rows.
+    Open,
+}
+
+impl ShowsViewOpen {
+    /// Whether the popover paints.
+    #[must_use]
+    pub fn is_open(self) -> bool {
+        self == Self::Open
     }
 }
 
@@ -155,20 +191,23 @@ pub struct LibraryState {
     pub search: Signal<super::search::LibrarySearchState>,
     /// The pending query send's timer (D10), or `None` while none is armed.
     pub search_send: Signal<Option<crate::window::clock::TimerId>>,
-    /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`).
-    pub home_rows_memo: super::home_list::HomeRowsMemo,
-    /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`).
-    pub emby_rows_memo: super::emby_list::EmbyRowsMemo,
+    /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`), keyed on the
+    /// filter text.
+    pub home_rows_memo: RowsMemo<HomeListRow, String>,
+    /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`), keyed on the
+    /// filter text.
+    pub emby_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>, String>,
     /// The Shows list's row memo (`shows-list.ts`'s `showsRowsOf`).
-    pub shows_rows_memo: super::shows_list::ShowsRowsMemo,
+    pub shows_rows_memo: RowsMemo<ShowsListRow, ShowsRowsFacts>,
     /// The Audiobooks list's row memo (`audiobooks-list.ts`'s
-    /// `audiobooksRowsOf`).
-    pub audiobooks_rows_memo: super::audiobooks_list::AudiobooksRowsMemo,
+    /// `audiobooksRowsOf`), keyed on the filter text.
+    pub audiobooks_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>, String>,
     /// The Podcasts list's row memo (`podcasts-list.ts`'s
-    /// `podcastsRowsOf`).
-    pub podcasts_rows_memo: super::podcasts_list::PodcastsRowsMemo,
-    /// The Feeds list's row memo (`feeds-list.ts`'s `feedsRowsOf`).
-    pub feeds_rows_memo: super::feeds_list::FeedsRowsMemo,
+    /// `podcastsRowsOf`), keyed on the filter text.
+    pub podcasts_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiEntryRowFrame>>, String>,
+    /// The Feeds list's row memo (`feeds-list.ts`'s `feedsRowsOf`), keyed on
+    /// the filter text.
+    pub feeds_rows_memo: RowsMemo<LetteredRow<LetteredItemRow<GuiEntryRowFrame>>, String>,
     /// The playhead's predicted position, in ticks (design D5): the
     /// Audiobooks chapter Workspace reads it to mark the playing chapter row.
     /// The playhead's own memo, shared — never a second prediction.
@@ -187,7 +226,7 @@ pub struct LibraryState {
     pub pending_reveal_row: Signal<Option<String>>,
     /// The canvas tree's row memo (`state.ts`'s `musicRowsOf`, built over
     /// `row-memo.ts`).
-    pub rows_memo: RowsMemo,
+    pub rows_memo: RowsMemo<LibraryRow, MusicRowsFacts>,
     /// The active tab the carried Library list section last named (design D2
     /// of `gui-pointer-target-interaction`), `None` before the first carried
     /// section. The destination reset rides a change of this value, so the
@@ -228,12 +267,12 @@ impl LibraryState {
             feeds_ui: Signal::new(super::feeds::initial_feeds_ui()),
             search: Signal::new(super::search::initial_library_search()),
             search_send: Signal::new(None),
-            home_rows_memo: super::home_list::HomeRowsMemo::default(),
-            emby_rows_memo: super::emby_list::EmbyRowsMemo::default(),
-            shows_rows_memo: super::shows_list::ShowsRowsMemo::default(),
-            audiobooks_rows_memo: super::audiobooks_list::AudiobooksRowsMemo::default(),
-            podcasts_rows_memo: super::podcasts_list::PodcastsRowsMemo::default(),
-            feeds_rows_memo: super::feeds_list::FeedsRowsMemo::default(),
+            home_rows_memo: RowsMemo::default(),
+            emby_rows_memo: RowsMemo::default(),
+            shows_rows_memo: RowsMemo::default(),
+            audiobooks_rows_memo: RowsMemo::default(),
+            podcasts_rows_memo: RowsMemo::default(),
+            feeds_rows_memo: RowsMemo::default(),
             playhead_position,
             sections,
             link,
@@ -395,6 +434,37 @@ impl LibraryState {
         ui.with_mut(|ui| ui.collections = Some(filter));
     }
 
+    /// Open or close the Shows view dropdown (gui-collection-dropdown design
+    /// D8, gtds design D15): a press on the trigger opens it when it is closed
+    /// and closes it when it is open.
+    pub fn toggle_shows_view_dropdown(&self) {
+        if self.shows_view_open() {
+            self.close_shows_view_dropdown();
+        } else {
+            let mut ui = self.ui;
+            ui.with_mut(|ui| ui.shows_view_open = ShowsViewOpen::Open);
+        }
+    }
+
+    /// Close the Shows view dropdown (design D8, D15): a press outside it, Esc,
+    /// a destination change, a chosen view, and a second press on the trigger
+    /// all land here. A press while it is closed already writes nothing: the
+    /// window's every-press path calls this on each press, and the write would
+    /// repaint the panel for no change.
+    pub fn close_shows_view_dropdown(&self) {
+        if !self.shows_view_open() {
+            return;
+        }
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.shows_view_open = ShowsViewOpen::Closed);
+    }
+
+    /// Whether the Shows view dropdown is open (design D8, D15).
+    #[must_use]
+    pub fn shows_view_open(&self) -> bool {
+        self.ui.peek().shows_view_open.is_open()
+    }
+
     /// Open or close the Shows Hero's season dropdown (user request
     /// 2026-11-19): a press on the trigger opens it when it is closed and
     /// closes it when it is open. A close drops the filter text, so the next
@@ -526,9 +596,9 @@ impl LibraryState {
     /// Reset the state an open leaves behind (design D2 of
     /// `gui-pointer-target-interaction`): the core's default row is not a
     /// pick, so the Narrow arrangement shows the new destination's list and
-    /// paints no overlay Hero, and an open row menu, item menu, or collection
-    /// dropdown closes (gui-collection-dropdown design D7: a destination change
-    /// closes the dropdown and clears its filter).
+    /// paints no overlay Hero, and an open row menu, item menu, collection
+    /// dropdown, or Shows view dropdown closes (gui-collection-dropdown design
+    /// D7, D8: a destination change closes the dropdown and clears its filter).
     pub fn reset_for_destination(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {
@@ -537,6 +607,7 @@ impl LibraryState {
             ui.row_menu = None;
             ui.collections = None;
             ui.shows_seasons = None;
+            ui.shows_view_open = ShowsViewOpen::Closed;
         });
     }
 

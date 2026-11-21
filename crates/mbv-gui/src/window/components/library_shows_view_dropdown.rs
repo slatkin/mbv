@@ -40,7 +40,7 @@ fn view_rows(active: GuiShowsView) -> Vec<LibraryDropdownRow> {
 pub fn LibraryShowsViewDropdown(props: LibraryShowsViewDropdownProps) -> Element {
     let library = consume_context::<LibraryState>();
     let active = props.view;
-    let open = library.ui.cloned().collections.is_some();
+    let open = library.ui.cloned().shows_view_open.is_open();
     let lib_idx = library
         .sections
         .library_list
@@ -50,7 +50,7 @@ pub fn LibraryShowsViewDropdown(props: LibraryShowsViewDropdownProps) -> Element
         .map(|shows| shows.lib_idx);
 
     let toggle_library = library.clone();
-    let on_toggle = Callback::new(move |()| toggle_library.toggle_collections_dropdown());
+    let on_toggle = Callback::new(move |()| toggle_library.toggle_shows_view_dropdown());
     let inside_library = library.clone();
     let on_inside_press = Callback::new(move |()| inside_library.close_library_row_menu());
     let on_filter = Callback::new(move |_: String| {});
@@ -62,7 +62,7 @@ pub fn LibraryShowsViewDropdown(props: LibraryShowsViewDropdownProps) -> Element
         if let Some(lib_idx) = lib_idx {
             select_library.select_shows_view(lib_idx, view);
         }
-        select_library.close_collections_dropdown();
+        select_library.close_shows_view_dropdown();
     });
 
     rsx! {

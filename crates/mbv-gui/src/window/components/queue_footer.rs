@@ -56,11 +56,10 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::theme::GuiRole;
-use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
+use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
+use crate::window::components::prefix_badge::PrefixBadge;
 use crate::window::icons::{ChevronsRight, SaveCheck, SaveOff};
-use crate::window::layout::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
-};
+use crate::window::layout::region_set::use_region_set;
 use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var, role_var};
@@ -92,50 +91,18 @@ fn footer_time(secs: i64, partial: bool) -> String {
 #[component]
 pub fn QueueFooter(props: QueueFooterProps) -> Element {
     let sections = consume_context::<Sections>();
-    let epoch = consume_context::<LayoutEpoch>();
-    let reporter = consume_context::<LayoutReporter>();
-    let key = use_hook(LayoutKey::next);
 
-    let mut collapse_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-
-    // No region outlives the band: the contributions retract on unmount, as
-    // the former client `onMount` teardown did.
-    let mut drop_reporter = reporter.clone();
-
+    // Each paint that moved a region reports (design D1): the region set's one
+    // effect watches the footer, the summary, the Status bar, and the layout
+    // epoch. The band's one mark is the collapse control, painted in this
+    // render.
     let watch_footer = sections.footer;
     let watch_summary = sections.summary;
     let watch_status = sections.status;
-    let watch_epoch = epoch.0;
-    use_effect(move || {
+    let region_set = use_region_set(0, move || {
         let _footer = watch_footer.cloned();
         let _summary = watch_summary.cloned();
         let _status = watch_status.cloned();
-        let _epoch = watch_epoch.cloned();
-        let collapse = collapse_mounted.cloned();
-        let mut effect_reporter = reporter.clone();
-        spawn(async move {
-            let mut regions: Vec<LayoutRegion> = Vec::new();
-            if let Some(mounted) = collapse {
-                regions.extend(
-                    element_region(
-                        &mounted,
-                        RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
-                    )
-                    .await,
-                );
-            }
-            effect_reporter.report_layout(
-                key,
-                LayoutContribution {
-                    lists: Vec::new(),
-                    regions,
-                },
-            );
-        });
-    });
-
-    use_drop(move || {
-        drop_reporter.retract_layout(key);
     });
 
     let footer = sections.footer.cloned();
@@ -191,7 +158,9 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                         "data-target": "collapse",
                         "aria-label": "Collapse panel",
                         title: "Collapse panel (z)",
-                        onmounted: move |event| collapse_mounted.set(Some(event)),
+                        onmounted: region_set.mark(RegionTarget::QueuePlayback(
+                            QueuePlaybackTargetId::Collapse,
+                        )),
                         ChevronsRight { size: 18, stroke_width: 1.8, color: role_var(GuiRole::TextMuted) }
                     }
                     if let Some(autosave) = footer.autosave.as_ref() {
@@ -239,11 +208,7 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                     class: "flex min-w-0 flex-1 items-center justify-center",
                     style: "gap: 12px; padding-inline: 16px;",
                     if prefix {
-                        span {
-                            class: "shrink-0 font-bold",
-                            style: "color: var(--mbv-accent);",
-                            "PREFIX"
-                        }
+                        PrefixBadge { class: "shrink-0 font-bold" }
                     }
                 }
                 // The right group: the marked rows' total while rows are

@@ -108,14 +108,7 @@ fn scrubber_app(props: FixtureProps) -> Element {
     });
     let playhead = use_hook(move || Playhead::new(Arc::clone(&clock), times));
     provide_context(playhead.clone());
-    let rows = ControlRowHandles {
-        play_pause: use_signal(|| None::<Event<MountedData>>),
-        previous: use_signal(|| None::<Event<MountedData>>),
-        seek_back: use_signal(|| None::<Event<MountedData>>),
-        seek_forward: use_signal(|| None::<Event<MountedData>>),
-        next: use_signal(|| None::<Event<MountedData>>),
-        seekbar: use_signal(|| None::<Event<MountedData>>),
-    };
+    let rows = ControlRowHandles::default();
     let availability = playing().availability;
     handle.borrow_mut().replace((sections, playhead));
     rsx! {

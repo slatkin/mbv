@@ -7,11 +7,10 @@ use mbv::{
     NowPlayingMediaKind, PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection,
     TrackChip, TrackChips, TrackChoice,
 };
-use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::QueueSurface;
-use mbv_ui_model::media_list::{MediaListRow, MediaSemanticState};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 
+use super::queue::active_slot;
 use super::theme::GuiRole;
 use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 /// The Queue playback band's facts for one build.
@@ -323,19 +322,6 @@ impl GuiPlayhead {
             runtime_ticks: state.runtime_ticks,
             paused: state.paused,
         }
-    }
-}
-
-/// The slot of a row that carries the now-playing marker — the same rule the
-/// queue section's `active` reads (`bridge/frame/queue.rs`).
-fn active_slot(row: &MediaListRow<QueueSlotId>) -> Option<u64> {
-    match row {
-        MediaListRow::Item {
-            target,
-            semantic_state: MediaSemanticState::NowPlaying { .. },
-            ..
-        } => Some(target.raw()),
-        MediaListRow::Item { .. } | MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
     }
 }
 

@@ -32,6 +32,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::chrome::GuiStatusBar;
 use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame};
+use crate::window::components::prefix_badge::PrefixBadge;
 use crate::window::library::status::library_location;
 use crate::window::sections::SectionRef;
 
@@ -88,11 +89,9 @@ pub fn LibraryStatusBar(props: LibraryStatusBarProps) -> Element {
                 span {
                     class: "overflow-hidden",
                     if props.status.prefix_armed {
-                        span {
+                        PrefixBadge {
                             class: "font-bold",
-                            style: "color: var(--mbv-accent);",
-                            "data-library-status-prefix": "",
-                            "PREFIX"
+                            hook: "data-library-status-prefix",
                         }
                     }
                 }

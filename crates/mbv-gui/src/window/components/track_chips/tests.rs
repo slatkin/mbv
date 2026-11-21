@@ -238,20 +238,7 @@ impl Fixture {
 
     /// The region targets of the last merged layout report.
     fn last_reported_targets(&self) -> Vec<RegionTarget> {
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Layout(report) => Some(
-                    report
-                        .regions
-                        .into_iter()
-                        .map(|region| region.target)
-                        .collect::<Vec<_>>(),
-                ),
-                _ => None,
-            })
-            .last()
-            .unwrap_or_default()
+        crate::window::layout::region_set::last_reported_targets(&self.receiver)
     }
 }
 

@@ -101,6 +101,11 @@ impl std::fmt::Debug for LibraryScrolls {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LibraryScrolls")
             .field("shows", &self.shows.peek().clone())
-            .finish_non_exhaustive()
+            .field("audiobooks", &self.audiobooks.peek().clone())
+            .field("home", &self.home.peek().clone())
+            .field("emby", &self.emby.peek().clone())
+            .field("feeds", &self.feeds.peek().clone())
+            .field("podcasts", &self.podcasts.peek().clone())
+            .finish()
     }
 }

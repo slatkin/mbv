@@ -10,8 +10,8 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{
-    LibraryRow, ListMove, album_row_id, artist_row_id, jump_to_letter, letter_rail, scroll_step,
-    scroll_top_to_show_cursor,
+    LibraryRow, LibraryTree, ListMove, MusicRowsFacts, album_row_id, artist_row_id,
+    build_library_rows, jump_to_letter, letter_rail, scroll_step, scroll_top_to_show_cursor,
 };
 use crate::window::library::parts::library_music_list;
 use crate::window::library::scroll::set_scroll_top;
@@ -40,10 +40,19 @@ impl LibraryState {
             library_music_list(list.as_deref()).map_or(&[][..], |music| music.artists.as_slice());
         self.rows_memo.rows(
             self.sections.library_list_revision(),
-            artists,
-            &ui.open_nodes,
-            &ui.filter_closed,
-            &ui.filter,
+            MusicRowsFacts {
+                open: ui.open_nodes.clone(),
+                closed: ui.filter_closed.clone(),
+                filter: ui.filter.clone(),
+            },
+            |facts| {
+                build_library_rows(LibraryTree {
+                    artists,
+                    open: &facts.open,
+                    closed: &facts.closed,
+                    filter: &facts.filter,
+                })
+            },
         )
     }
 

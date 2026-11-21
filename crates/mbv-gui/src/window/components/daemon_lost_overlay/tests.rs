@@ -17,10 +17,11 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::DaemonLostOverlay;
 use crate::bridge::frame::overlay::{GuiConfirmButton, GuiConfirmButtonTone};
-use crate::bridge::layout::{DaemonLostTargetId, LayoutReport, RegionTarget};
+use crate::bridge::layout::{DaemonLostTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
-use crate::window::layout::use_layout_reporter;
+use crate::window::layout::region_set::last_reported_targets;
+use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 
 #[derive(Clone)]
 struct FixtureProps {
@@ -34,6 +35,7 @@ struct FixtureProps {
 /// The root: provides the reporter's contexts and paints the dialog.
 fn daemon_lost_app(props: FixtureProps) -> Element {
     provide_context(CoreLink::new(props.sender));
+    provide_context(use_hook(LayoutEpoch::new));
     let reporter = use_layout_reporter();
     provide_context(reporter);
     rsx! {
@@ -103,24 +105,6 @@ impl Fixture {
         node.attr(local_name!("style")).map(str::to_owned)
     }
 
-    /// The region targets of the last merged layout report.
-    fn last_reported_targets(&mut self) -> Vec<RegionTarget> {
-        self.poll_until_idle();
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Layout(LayoutReport { regions, .. }) => Some(
-                    regions
-                        .into_iter()
-                        .map(|region| region.target)
-                        .collect::<Vec<_>>(),
-                ),
-                _ => None,
-            })
-            .last()
-            .unwrap_or_default()
-    }
-
     /// Poll the document until the effects have run and their re-renders
     /// landed.
     fn poll_until_idle(&mut self) {
@@ -167,8 +151,9 @@ fn the_dialog_paints_its_diagnostics_and_its_recovery_choices() {
     assert!(text.contains("Restart and resume"));
     assert!(text.contains("Restart, don't resume"));
     assert!(text.contains("Quit"));
+    fixture.poll_until_idle();
     assert_eq!(
-        fixture.last_reported_targets(),
+        last_reported_targets(&fixture.receiver),
         vec![
             RegionTarget::DaemonLost(DaemonLostTargetId::Button(0)),
             RegionTarget::DaemonLost(DaemonLostTargetId::Button(1)),

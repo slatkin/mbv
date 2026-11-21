@@ -15,20 +15,23 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
-use blitz_dom::{Document as _, LocalName, NodeData};
+use blitz_dom::{Document as _, LocalName};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::{AbsAction, LibraryAudiobooksHero, act_book, play_chapter_row};
+use super::{LibraryAudiobooksHero, play_chapter_row};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame,
-    GuiAudiobooksWorkspaceFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiAudiobooksList, GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiLibraryDetail,
+    GuiLibraryList, GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::library::hero::hero_command;
+use crate::window::library::lettered::{AudiobooksList, LetteredDestination};
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::ticks_f64;
 use crate::window::sections::{SectionRef, Sections};
@@ -105,6 +108,22 @@ fn detail(
     }
 }
 
+/// The Audiobooks list part the destination's commands read the library index
+/// from (design D12).
+fn audiobooks_library_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: None,
+        destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {
+            lib_idx: LIB_IDX,
+            loading: false,
+            failed: false,
+            rows: Vec::new(),
+            sort: None,
+        }),
+    }
+}
+
 /// The harness's props: the carried Audiobooks content, the playhead position
 /// the mark reads, the mock core sender, and the handle the test reads the
 /// store through.
@@ -143,8 +162,12 @@ fn abs_hero_app(props: FixtureProps) -> Element {
         // The playhead position the interaction state reads: the test's fixed
         // position, stamped before the build (design D5).
         let playhead_position = Memo::new(move || position_ticks);
+        let mut sections = Sections::new();
+        sections
+            .library_list
+            .set(Some(SectionRef::new(audiobooks_library_list())));
         LibraryState::new(
-            Sections::new(),
+            sections,
             CoreLink::new(sender),
             playhead_position,
             Arc::clone(&clock),
@@ -249,19 +272,6 @@ impl Fixture {
                     .to_owned()
             })
             .collect()
-    }
-
-    /// The tag name of the first node the selector names.
-    fn tag_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        match &dom.get_node(id).expect("the node is in the document").data {
-            NodeData::Element(data) => data.name.local.to_string(),
-            _ => panic!("{selector} is an element"),
-        }
     }
 
     /// The Library commands the core link received, in send order.
@@ -538,7 +548,9 @@ fn play_sends_the_play_command_for_the_selected_book() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act_book(&state, AbsAction::Play, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<AudiobooksList>(&state, &detail, AudiobooksList::play);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -559,7 +571,9 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_book() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act_book(&state, AbsAction::Queue, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<AudiobooksList>(&state, &detail, AudiobooksList::queue);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -568,24 +582,5 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_book() {
             item_id: "book1".to_owned(),
         }],
         "the enqueue command names the selected book"
-    );
-}
-
-/// Contract (`LibraryAudiobooksHero.test.ts`): the Hero paints the frame's
-/// header band, as Music and Shows do — the kicker over the title, above the
-/// artwork (the frame is one look for every Hero).
-#[test]
-fn the_hero_paints_the_frame_header_above_its_artwork() {
-    let fixture = built_book();
-
-    assert_eq!(
-        fixture.text_of("[data-library-abs-hero-kicker]"),
-        "audiobook",
-        "the kicker is the audiobook label"
-    );
-    assert_eq!(
-        fixture.tag_of("[data-library-abs-hero-title]"),
-        "h1",
-        "the title paints in the header band's h1"
     );
 }

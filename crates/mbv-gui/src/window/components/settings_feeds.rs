@@ -39,7 +39,9 @@ use crate::window::components::settings_button::{SettingsButton, SettingsButtonV
 use crate::window::components::settings_card::SettingsCard;
 use crate::window::components::settings_entry_row::SettingsEntryRow;
 use crate::window::components::settings_field::SettingsField;
-use crate::window::components::settings_screen::settings_section_view;
+use crate::window::components::settings_screen::{
+    SETTINGS_PANES_GRID_STYLE, SettingsPaneScaffold, settings_pane,
+};
 use crate::window::icons::ChevronDown;
 use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
@@ -52,28 +54,26 @@ use crate::window::truncate::{TextStyle, Truncate};
 /// The one Feeds pane.
 #[component]
 pub fn SettingsFeeds() -> Element {
-    let sections = consume_context::<Sections>();
-    let settings = consume_context::<SettingsState>();
-    let Some(view) = settings_section_view(&sections, &settings) else {
+    let Some(SettingsPaneScaffold {
+        sections,
+        settings,
+        frame,
+        onpress,
+        cursor_id,
+        ..
+    }) = settings_pane()
+    else {
         return rsx! {};
     };
     let GuiSettingsContent::Feeds {
         subscriptions,
         adding,
-    } = &view.frame.content
+    } = &frame.content
     else {
         return rsx! {};
     };
     let adding = *adding;
     let ui = settings.ui.cloned();
-
-    // A press on the add control, a subscription row, or a remove button:
-    // the entry's activation, the same one the keyboard's Enter runs.
-    let press_settings = settings.clone();
-    let press_entries = view.entries;
-    let onpress = Callback::new(move |id: String| {
-        press_settings.press_settings_entry(&press_entries, &id);
-    });
 
     // The count line the card's header paints.
     let count = subscriptions.len();
@@ -88,11 +88,10 @@ pub fn SettingsFeeds() -> Element {
     let add_press = onpress;
     let feed_press = onpress;
     let remove_press = onpress;
-    let cursor_id = view.cursor_id.clone();
     rsx! {
         div {
             class: "grid",
-            style: "grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start;",
+            style: SETTINGS_PANES_GRID_STYLE,
             "data-settings-feeds": "",
             SettingsCard {
                 title: Some("Subscriptions".to_owned()),
@@ -158,7 +157,7 @@ pub fn SettingsFeeds() -> Element {
                     rsx! {
                         SettingsCard {
                             title: Some(if form.identity.is_none() { "Add feed".to_owned() } else { "Edit feed".to_owned() }),
-                            { feed_form(&form_settings, &form_sections, &view.frame.content, form) }
+                            { feed_form(&form_settings, &form_sections, &frame.content, form) }
                         }
                     }
                 }
@@ -270,7 +269,6 @@ fn FeedKindControl(kind: FeedKind) -> Element {
         .feed_form
         .as_ref()
         .and_then(|form| form.kind_menu);
-    let row_slot: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
     let toggle = settings.clone();
     let press = settings.clone();
     let menu_press = settings.clone();
@@ -326,7 +324,6 @@ fn FeedKindControl(kind: FeedKind) -> Element {
                             on_select: Some(Callback::new(move |index: usize| {
                                 choose.choose_feed_kind(index);
                             })),
-                            row_slot,
                         }
                     }
                 }

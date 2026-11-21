@@ -532,26 +532,12 @@ impl Fixture {
 
     /// The region targets of the last merged layout report.
     pub(super) fn last_reported_targets(&self) -> Vec<RegionTarget> {
-        self.last_report()
-            .map(|report| {
-                report
-                    .regions
-                    .into_iter()
-                    .map(|region| region.target)
-                    .collect()
-            })
-            .unwrap_or_default()
+        crate::window::layout::region_set::last_reported_targets(&self.receiver)
     }
 
     /// The last merged layout report.
     pub(super) fn last_report(&self) -> Option<LayoutReport> {
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Layout(report) => Some(report),
-                _ => None,
-            })
-            .last()
+        crate::window::layout::region_set::last_report(&self.receiver)
     }
 
     /// Lay the document out again at a new viewport size, as a window resize

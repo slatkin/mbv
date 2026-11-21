@@ -14,6 +14,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::playback::GuiScrubberHover;
+use crate::window::layout::region_set::MarkHandler;
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var};
@@ -46,15 +47,14 @@ const THUMB_RING_PX: f32 = 2.0;
 /// pixels: a tip is not a row size (design D4).
 const HOVER_TIP_OFFSET_PX: f64 = -22.0;
 
-/// The seekbar region's element handle (design D4): the seek row is the
-/// `seekbar` region of the panel's one report, so the panel holds the handle
-/// and the row sets it on mount.
+/// The seekbar region's mark (design D1, D4): the seek row is the `seekbar`
+/// region of the panel's one report, so the panel's region set marks it and
+/// hands the closure to this component.
 #[derive(Props, Clone, PartialEq)]
 pub struct ScrubberProps {
-    /// The `seekbar` element's mounted event, `None` while the element is
-    /// absent.
+    /// The `seekbar` element's mark.
     #[props(default)]
-    pub seekbar_mounted: Signal<Option<Event<MountedData>>>,
+    pub seekbar_mounted: MarkHandler,
 }
 
 /// The scrubber (`main` audits 9–12; `gui-queue-panel-redesign` design D4):
@@ -69,7 +69,7 @@ pub struct ScrubberProps {
 ///
 /// The played fraction is the playhead's; the hover facts are the frame's.
 #[component]
-pub fn Scrubber(mut props: ScrubberProps) -> Element {
+pub fn Scrubber(props: ScrubberProps) -> Element {
     let sections = consume_context::<Sections>();
     let playhead = consume_context::<Playhead>();
 
@@ -126,7 +126,7 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
             "aria-valuenow": "{progress_pct.round()}",
             style: "{row_style}",
             "data-target": "seekbar",
-            onmounted: move |event| props.seekbar_mounted.set(Some(event)),
+            onmounted: props.seekbar_mounted,
             if let Some(hover) = hover_preview.clone() {
                 // The time tip at the pointer's position. No frame and no
                 // chapter name ride it (design D4).

@@ -16,9 +16,10 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::AttachScreen;
 use crate::bridge::frame::GuiAttachState;
-use crate::bridge::layout::{AttachTargetId, LayoutReport, RegionTarget};
+use crate::bridge::layout::{AttachTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::layout::region_set::last_reported_targets;
 use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 use crate::window::sections::Sections;
 
@@ -74,23 +75,6 @@ impl Fixture {
             }
         }
         out
-    }
-
-    /// The region targets of the last merged layout report.
-    fn last_reported_targets(&self) -> Vec<RegionTarget> {
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Layout(LayoutReport { regions, .. }) => Some(
-                    regions
-                        .into_iter()
-                        .map(|region| region.target)
-                        .collect::<Vec<_>>(),
-                ),
-                _ => None,
-            })
-            .last()
-            .unwrap_or_default()
     }
 
     /// Poll the document until the effects have run and their re-renders
@@ -202,7 +186,7 @@ fn the_mismatch_buttons_appear_in_the_reported_regions() {
     let mut fixture = built();
     fixture.set_attach(GuiAttachState::Mismatch("the mismatch text".to_owned()));
     assert_eq!(
-        fixture.last_reported_targets(),
+        last_reported_targets(&fixture.receiver),
         vec![
             RegionTarget::Attach(AttachTargetId::Restart),
             RegionTarget::Attach(AttachTargetId::Quit),

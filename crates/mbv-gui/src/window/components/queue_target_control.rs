@@ -12,24 +12,27 @@
 //! The popover hangs under the button (`top`), as the Queue chooser's dropdown
 //! hangs under its switcher. Each row reports its `targetChoice` index — the
 //! core resolves a row press against the same live choice list the frame
-//! carries — under a second report key first inserted when the chooser opens,
-//! so it lands after the queue rows in the merged report: the hit map's last
-//! push wins where a row paints over a queue row beneath it. The window holds
-//! no open, cursor, or hover state; Esc and a press elsewhere close the popover
-//! through the core's key and pointer paths.
+//! carries — under the control's one overlay key, first inserted when the
+//! chooser opens, so it lands after the queue rows in the merged report: the
+//! hit map's last push wins where a row paints over a queue row beneath it. The
+//! window holds no open, cursor, or hover state; Esc and a press elsewhere close
+//! the popover through the core's key and pointer paths.
+//!
+//! The control owns its one region set: the button is its base contribution and
+//! the open chooser's rows are its one overlay. The control marks both in its
+//! own render — the row closures reach the presentation-only popover as props —
+//! so a painted chooser's rows always record and a closed chooser's overlay
+//! retracts, whatever order the mount effects run in.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{GuiTargetChoice, GuiTargetKey};
 use crate::bridge::frame::theme::GuiRole;
-use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
+use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
-use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::{Check, ChevronDown, Monitor};
-use crate::window::layout::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
-};
+use crate::window::layout::region_set::{MarkHandler, use_region_set};
 use crate::window::sections::Sections;
 use crate::window::theme::role_var;
 use crate::window::truncate::{TextStyle, Truncate};
@@ -54,22 +57,23 @@ fn target_icon(choice: &GuiTargetChoice, size: u16) -> Element {
 }
 
 /// The playback-target control: the button, and the open chooser's popover.
-/// Every paint that moved a region reports — the button's region under the
-/// control's key, and the open chooser's rows under the chooser's.
+/// Every paint that moved a region reports — the button's region as the
+/// control's base contribution, and the open chooser's rows as its one overlay.
 #[component]
 pub fn QueueTargetControl() -> Element {
     let sections = consume_context::<Sections>();
-    let epoch = consume_context::<LayoutEpoch>();
-    let reporter = consume_context::<LayoutReporter>();
-    let key = use_hook(LayoutKey::next);
-    let chooser_key = use_hook(LayoutKey::next);
 
-    let mut target_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The open chooser's painted rows, by their choice index.
-    let chooser_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
-
-    // No region outlives the control: the contributions retract on unmount.
-    let mut drop_reporter = reporter.clone();
+    // Each paint that moved a region reports (design D1): the region set's one
+    // effect watches the `playback` and `overlay` sections and the layout epoch
+    // through the set's own read. The button is the base contribution; the open
+    // chooser's rows are overlay 0, so they merge after the areas beneath the
+    // popover and the overlay retracts while the popover is closed.
+    let watch_playback = sections.playback;
+    let watch_overlay = sections.overlay;
+    let region_set = use_region_set(1, move || {
+        let _playback = watch_playback.cloned();
+        let _overlay = watch_overlay.cloned();
+    });
 
     // The playback target chooser: the overlay section's `targetChooser`
     // variant, `None` while another overlay (or none) is up.
@@ -78,70 +82,9 @@ pub fn QueueTargetControl() -> Element {
         _ => None,
     };
 
-    let watch_playback = sections.playback;
-    let watch_overlay = sections.overlay;
-    let watch_epoch = epoch.0;
-    use_effect(move || {
-        let _playback = watch_playback.cloned();
-        let overlay_open = watch_overlay.cloned();
-        let _epoch = watch_epoch.cloned();
-        let chooser_open = matches!(
-            overlay_open.as_ref(),
-            Some(GuiOverlayFrame::TargetChooser { .. })
-        );
-        let rows = chooser_rows.cloned();
-        let target = target_mounted.cloned();
-        let mut effect_reporter = reporter.clone();
-        spawn(async move {
-            let mut regions: Vec<LayoutRegion> = Vec::new();
-            if let Some(mounted) = target {
-                regions.extend(
-                    element_region(
-                        &mounted,
-                        RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
-                    )
-                    .await,
-                );
-            }
-            effect_reporter.report_layout(
-                key,
-                LayoutContribution {
-                    lists: Vec::new(),
-                    regions,
-                },
-            );
-            if chooser_open {
-                let mut chooser_regions: Vec<LayoutRegion> = Vec::new();
-                for (index, mounted) in rows.iter().enumerate() {
-                    if let Some(mounted) = mounted {
-                        chooser_regions.extend(
-                            element_region(
-                                mounted,
-                                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(
-                                    index,
-                                )),
-                            )
-                            .await,
-                        );
-                    }
-                }
-                effect_reporter.report_layout(
-                    chooser_key,
-                    LayoutContribution {
-                        lists: Vec::new(),
-                        regions: chooser_regions,
-                    },
-                );
-            } else {
-                effect_reporter.retract_layout(chooser_key);
-            }
-        });
-    });
-
-    use_drop(move || {
-        drop_reporter.retract_layout(key);
-        drop_reporter.retract_layout(chooser_key);
-    });
+    let target_mark = region_set.mark(RegionTarget::QueuePlayback(
+        QueuePlaybackTargetId::PlaybackTarget,
+    ));
 
     let playback = sections.playback.cloned();
     // The control's colour: the flag picks the local or the remote role.
@@ -172,7 +115,7 @@ pub fn QueueTargetControl() -> Element {
                 "data-target": "playbackTarget",
                 "aria-label": "Playback target",
                 title: "Playback target",
-                onmounted: move |event| target_mounted.set(Some(event)),
+                onmounted: move |event| target_mark.call(event),
                 if let Some(attached) = attached.as_ref() {
                     span {
                         class: "flex shrink-0 items-center",
@@ -194,26 +137,47 @@ pub fn QueueTargetControl() -> Element {
                 ChevronDown { size: 12, color: "currentColor" }
             }
             if let Some((cursor, choices)) = chooser {
-                TargetChooserPopover {
-                    cursor,
-                    choices,
-                    chooser_rows,
+                {
+                    // The chooser's rows mark the set's one overlay, one per
+                    // painted row in row order (design D1, D2): each row's
+                    // `targetChoice` index is its region target, and a closed
+                    // chooser marks none, so the overlay retracts.
+                    let row_marks = (0..choices.len())
+                        .map(|index| {
+                            region_set.mark_over(
+                                0,
+                                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(
+                                    index,
+                                )),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    rsx! {
+                        TargetChooserPopover {
+                            cursor,
+                            choices,
+                            row_marks,
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/// The open playback-target chooser's props: the core's cursor and live
-/// choice list, and the row handles the chooser's regions read.
+/// The open playback-target chooser's props: the core's cursor, the live choice
+/// list, and the marks of the rows the control reports.
 #[derive(Props, Clone, PartialEq)]
 struct TargetChooserPopoverProps {
     /// The core's cursor row.
     cursor: usize,
     /// The choices the frame's `targetChoices` list carries.
     choices: Vec<GuiTargetChoice>,
-    /// The painted rows' mounted events, by their choice index.
-    chooser_rows: Signal<Vec<Option<Event<MountedData>>>>,
+    /// The painted rows' marks, in row order — the closures the control that
+    /// owns the chooser produced with its region set's `mark_over`. A row takes
+    /// its own entry when the vector reaches it.
+    #[props(default)]
+    row_marks: Vec<MarkHandler>,
 }
 
 impl std::fmt::Debug for TargetChooserPopoverProps {
@@ -226,8 +190,8 @@ impl std::fmt::Debug for TargetChooserPopoverProps {
 }
 
 /// The chooser's popover, hung under the button with its leading edge on the
-/// button's. Each row's `onmounted` hands its event to the control's
-/// chooser-regions signal, under the row's `data-choice` index.
+/// button's. Each row's `onmounted` hands its event to the control's mark for
+/// that row, under the row's `data-choice` index.
 #[component]
 fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
     rsx! {
@@ -252,8 +216,15 @@ fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
                             style: "padding: calc(var(--mbv-cell-row) / 4) calc(var(--mbv-cell-col) * 1); gap: var(--mbv-cell-col); color: {row_color};",
                             "data-choice": "{index}",
                             onmounted: {
-                                let chooser_rows = props.chooser_rows;
-                                move |event| record_row_handle(chooser_rows, index, event)
+                                let row_mark = props.row_marks.get(index).copied();
+                                move |event| {
+                                    // The control that owns the chooser marks
+                                    // this row: the closure records the handle
+                                    // its overlay region reads.
+                                    if let Some(mark) = row_mark {
+                                        mark.call(event);
+                                    }
+                                }
                             },
                             span {
                                 class: "flex w-4 shrink-0 justify-center",

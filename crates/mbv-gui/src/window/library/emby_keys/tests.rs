@@ -10,182 +10,20 @@
 //! effect over a recording core link, so no test opens a window or sleeps, and
 //! no IPC runs.
 
-use std::sync::{Arc, Mutex, mpsc};
-
-use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
-use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame,
     GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
-use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::GuiSectionBatch;
-use crate::core_thread::CoreInput;
-use crate::window::arrangement::GuiArrangement;
-use crate::window::channel::CoreLink;
-use crate::window::clock::{Clock, RecordingClock};
+use crate::window::library::keys_shared::tests::{
+    commands, route, route_row, run, scroll_facts, ui_facts,
+};
+use crate::window::library::lettered::EmbyList;
 use crate::window::library::state::LibraryState;
-use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
-use crate::window::sections::Sections;
-
-/// The facts one scenario recorded, in its run order.
-type Facts = Arc<Mutex<Vec<String>>>;
-
-/// One scenario the harness runs against the built store.
-type Scenario = std::rc::Rc<dyn Fn(&LibraryState, &Facts)>;
-
-/// The root: creates the store once and runs the scenario in one effect.
-fn harness((tx, facts, scenario): (mpsc::Sender<CoreInput>, Facts, Scenario)) -> Element {
-    let state = use_hook(|| {
-        // The playhead position the Audiobooks Workspace reads: the tests
-        // hold it at 0, which marks no chapter but feeds the resolution.
-        let playhead_position = Memo::new(|| 0.0);
-        let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
-        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position, clock)
-    });
-    use_effect(move || {
-        scenario(&state, &facts);
-    });
-    rsx! {
-        div { "emby-keys-harness" }
-    }
-}
-
-/// Run one scenario against a fresh store and return the facts it recorded
-/// and the commands the core link received. Bounded by construction: the
-/// effect runs once and the poll loop stops when the document goes idle.
-fn run(
-    scenario: impl Fn(&LibraryState, &Facts) + 'static,
-) -> (Vec<String>, mpsc::Receiver<CoreInput>) {
-    let (tx, rx) = mpsc::channel::<CoreInput>();
-    let facts: Facts = Arc::new(Mutex::new(Vec::new()));
-    let mut doc = DioxusDocument::new(
-        VirtualDom::new_with_props(
-            harness,
-            (
-                tx,
-                Arc::clone(&facts),
-                std::rc::Rc::new(move |state: &LibraryState, recorded: &Facts| {
-                    scenario(state, recorded);
-                }),
-            ),
-        ),
-        DocumentConfig::default(),
-    );
-    doc.initial_build();
-    poll_until_idle(&mut doc);
-    let recorded = facts.lock().expect("facts").clone();
-    (recorded, rx)
-}
-
-/// Poll the document until its effects have run and their re-renders landed.
-fn poll_until_idle(doc: &mut DioxusDocument) {
-    for _ in 0..8 {
-        if !doc.poll(None) {
-            return;
-        }
-    }
-    panic!("document did not become idle");
-}
-
-/// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
-    let mut commands = Vec::new();
-    while let Ok(input) = rx.try_recv() {
-        if let CoreInput::Library(command) = input {
-            commands.push(command);
-        }
-    }
-    commands
-}
-
-/// One keydown as the DOM names it.
-fn key(value: &str, shift: bool) -> DomKey {
-    DomKey {
-        key: value.to_owned(),
-        code: String::new(),
-        meta_key: false,
-        repeat: false,
-        modifiers: DomModifiers {
-            shift_key: shift,
-            ctrl_key: false,
-            alt_key: false,
-        },
-    }
-}
-
-/// Route one keydown against the given section stores and paint the outcome.
-fn route_on(
-    state: &LibraryState,
-    facts: &Facts,
-    name: &str,
-    value: &str,
-    shift: bool,
-    sections: &Sections,
-) {
-    let outcome = super::super::keys::route_library_key(
-        &key(value, shift),
-        Some(sections),
-        state,
-        None,
-        GuiArrangement::Wide,
-        &library_pointer(),
-    );
-    facts
-        .lock()
-        .expect("facts")
-        .push(format!("{name}={outcome:?}"));
-}
-
-/// The pointer target a list key routes under: the pointer over the Library
-/// column, not on a Hero list.
-fn library_pointer() -> PointerTarget {
-    PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: None,
-        row: None,
-    }
-}
-
-/// Route one keydown with the pointer over the Emby list, resting on the row
-/// `row` (design D1, D2), against the window's own section stores.
-fn route_on_row(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
-    let pointer = PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: Some(PointerList::Emby),
-        row: Some(row.to_owned()),
-    };
-    let outcome = super::super::keys::route_library_key(
-        &key(value, false),
-        Some(&state.sections),
-        state,
-        None,
-        GuiArrangement::Wide,
-        &pointer,
-    );
-    facts
-        .lock()
-        .expect("facts")
-        .push(format!("{name}={outcome:?}"));
-}
-
-/// Route one keydown against the window's own section stores and paint the
-/// outcome.
-fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
-    route_on(state, facts, name, value, shift, &state.sections);
-}
-
-/// The Emby list's scroll facts the assertions read.
-fn scroll_facts(state: &LibraryState) -> String {
-    let scroll = *state.scrolls.emby.peek();
-    format!(
-        "top={} viewport={}",
-        scroll.scroll_top, scroll.viewport_height
-    )
-}
+use crate::window::pointer_target::PointerList;
 
 /// The plain mode's name-sorted rows: two `A` movies and one `B` movie.
 fn movies() -> Vec<GuiEmbyRowFrame> {
@@ -322,16 +160,6 @@ fn carry_emby(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail))
     });
 }
 
-/// The filter facts the assertions read.
-fn ui_facts(state: &LibraryState) -> String {
-    let ui = state.ui.peek().clone();
-    let emby = state.emby_ui.peek().clone();
-    format!(
-        "filter_open={} emby_filter={:?}",
-        ui.filter_open, emby.filter,
-    )
-}
-
 // Enter on the hovered row plays it.
 #[test]
 fn enter_on_the_hovered_row_plays_it() {
@@ -339,7 +167,7 @@ fn enter_on_the_hovered_row_plays_it() {
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
 
-        route_on_row(state, facts, "enter", "Enter", "m2");
+        route_row(state, facts, "enter", "Enter", PointerList::Emby, "m2");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -359,7 +187,7 @@ fn enter_on_a_collection_row_plays_it() {
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
 
-        route_on_row(state, facts, "enter", "Enter", "f1");
+        route_row(state, facts, "enter", "Enter", PointerList::Emby, "f1");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -378,8 +206,8 @@ fn n_and_a_play_the_hovered_row_next_and_queue_it() {
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
 
-        route_on_row(state, facts, "n", "n", "m1");
-        route_on_row(state, facts, "a", "a", "m1");
+        route_row(state, facts, "n", "n", PointerList::Emby, "m1");
+        route_row(state, facts, "a", "a", PointerList::Emby, "m1");
     });
     assert_eq!(facts, ["n=Handled", "a=Handled"]);
     assert_eq!(
@@ -420,10 +248,13 @@ fn down_over_the_emby_list_scrolls_it_by_one_row() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
-        state.measure_emby_list(40.0);
+        state.measure_lettered_list::<EmbyList>(40.0);
 
-        route_on_row(state, facts, "down", "ArrowDown", "m1");
-        facts.lock().expect("facts").push(scroll_facts(state));
+        route_row(state, facts, "down", "ArrowDown", PointerList::Emby, "m1");
+        facts
+            .lock()
+            .expect("facts")
+            .push(scroll_facts(state.scrolls.emby));
     });
     assert_eq!(facts[0], "down=Handled");
     // The letter heading covers the list's top edge, so the step is its 24 px.
@@ -438,10 +269,13 @@ fn down_off_the_emby_list_is_the_cores_key() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
-        state.measure_emby_list(40.0);
+        state.measure_lettered_list::<EmbyList>(40.0);
 
         route(state, facts, "down", "ArrowDown", false);
-        facts.lock().expect("facts").push(scroll_facts(state));
+        facts
+            .lock()
+            .expect("facts")
+            .push(scroll_facts(state.scrolls.emby));
     });
     assert_eq!(facts[0], "down=Core(None)");
     assert_eq!(facts[1], "top=0 viewport=40");
@@ -458,7 +292,10 @@ fn slash_opens_the_emby_filter_and_sends_no_key() {
         carry_emby(state, content.clone());
 
         route(state, facts, "slash", "/", false);
-        facts.lock().expect("facts").push(ui_facts(state));
+        facts
+            .lock()
+            .expect("facts")
+            .push(ui_facts(state, state.emby_ui));
     });
     assert_eq!(facts[0], "slash=Handled");
     assert!(facts[1].contains("filter_open=true"));
@@ -479,10 +316,13 @@ fn esc_closes_the_emby_filter_and_drops_its_text() {
         ui.with_mut(|ui| ui.filter_open = true);
 
         route(state, facts, "esc", "Escape", false);
-        facts.lock().expect("facts").push(ui_facts(state));
+        facts
+            .lock()
+            .expect("facts")
+            .push(ui_facts(state, state.emby_ui));
     });
     assert_eq!(facts[0], "esc=Handled");
     assert!(facts[1].contains("filter_open=false"));
-    assert!(facts[1].contains("emby_filter=\"\""));
+    assert!(facts[1].contains("filter=\"\""));
     assert_eq!(commands(&rx), []);
 }

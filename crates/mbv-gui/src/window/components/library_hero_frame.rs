@@ -352,3 +352,6 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

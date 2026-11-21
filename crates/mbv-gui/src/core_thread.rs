@@ -18,32 +18,27 @@ use std::time::{Duration, Instant};
 
 use mbv::{App, CLIENT_IDLE_CADENCE, ClientCore, GuiInput, load_config};
 use mbv_config::ensure_runtime_dir;
-use mbv_queue::QueueSlotId;
-use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
+use mbv_surfaces::gesture::PointerGestureState;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_surfaces::status_bar::StatusBarSurface;
 use mbv_surfaces::{FocusStack, HitMap};
 use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
+use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, Position};
 
 use crate::art::ArtRequest;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::keys::KeyTarget;
-use crate::bridge::layout::{
-    ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, RegionTarget, hit_map,
-};
+use crate::bridge::layout::{LayoutReport, LayoutSize, ListId, RegionTarget, hit_map};
 use crate::bridge::sections::GuiSectionBatch;
-use crate::leaves::{
-    PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
-    seekbar_region,
-};
+use crate::leaves::QueueLeaf;
 use crate::painted_choices::PaintedChoices;
 use crate::sections::{SectionLedger, SectionSources, SentRevisions};
 
 mod launch_restore;
 mod overlays;
+mod pointer;
 mod settings;
 mod tick_host;
 
@@ -430,14 +425,6 @@ impl CoreThread {
         self.queue.set_hover(row_hover);
     }
 
-    /// The Queue row the pointer rests on, the shared region rule the leaf's
-    /// click path resolves with too: the row's own region or the chrome
-    /// painted over it (its grip and actions button), so moving onto the
-    /// chrome keeps the row hovered.
-    fn queue_row_at(&self, at: Position) -> Option<QueueSlotId> {
-        row_slot_at(&self.regions, at)
-    }
-
     /// Route one translated key chord through the shared router with the
     /// focused surface as the leaf (design D4, task row 2.4). The first
     /// slice's only focusable surface is the Queue; with no focused surface
@@ -467,192 +454,6 @@ impl CoreThread {
         } = self;
         let mut leaf = QueueLeaf::new(queue, regions);
         app.route_gui_input(GuiInput::Key(key), Some(&mut leaf))
-    }
-
-    /// Route one translated pointer event (design D4, task row 2.4): disarm
-    /// prefix mode first, recognize the gesture over the window's logical
-    /// points, resolve the gesture's point against the combined hit map of
-    /// the last `LayoutReport`, apply the focus change the matching TUI click
-    /// applies, and hand the surface that owns the region to
-    /// [`App::route_gui_pointer`]. A gesture whose point resolves to no
-    /// reported region — and a `DragEnd`, which carries no point — resolves
-    /// to nothing (`client-interaction-core`: pointer targets resolve from a
-    /// semantic hit map); the disarm precedes all of it, so every pointer
-    /// event cancels an armed prefix even when nothing resolves.
-    fn route_pointer(&mut self, event: PointerEvent) -> bool {
-        // Any pointer event disarms prefix mode first — the shared contract
-        // `App::route_gui_input`'s pointer arm carries, the same silent
-        // disarm every terminal mouse event applies in the TUI. The call
-        // runs before the gesture and region resolution, so a hover move, a
-        // drag end, or a press on no reported region still cancels an armed
-        // prefix; the pointer arm itself delivers nothing else.
-        self.app.route_gui_input(GuiInput::Pointer(event), None);
-        // A cancelled gesture (the window lost the pointer, or the pointer
-        // left the window; never an element's blur, which every press on a
-        // row causes) drops the drag state and the double-click pair without
-        // a move (add-tauri-gui-client row 6.5, finding
-        // P1-2): the release that would have ended the drag never arrives.
-        if event.kind == PointerKind::Cancel {
-            self.pointer_at = None;
-            self.gestures.cancel();
-            self.queue.cancel_row_drag();
-            self.queue.set_hover(None);
-            self.playback.set_scrubber_hover(None);
-            return false;
-        }
-        self.pointer_at = Some(event.position);
-        // A new press while a row drag is armed discards the stale drag
-        // first: a release the window never saw cannot make the next click's
-        // DragEnd move the old slot.
-        if matches!(event.kind, PointerKind::Press | PointerKind::RightPress) {
-            self.queue.cancel_row_drag();
-        }
-        // The scrubber's hover preview (design D4: "a move over the
-        // scrubber carries the hover"): the event's position resolves
-        // against the painted bar through the same fraction rule a seek
-        // uses, and a position away from the bar clears it.
-        let hover = seekbar_region(&self.regions, event.position)
-            .and_then(|bar| self.playback.seek_target(bar, event.position.x));
-        self.playback.set_scrubber_hover(hover);
-        // The canvas queue's row hover (add-tauri-gui-client row 6.5): the row
-        // the pointer rests on, its chrome regions included. The window paints
-        // the hovered row's grip and actions button.
-        let row_hover = self.queue_row_at(event.position);
-        self.queue.set_hover(row_hover);
-        // An open overlay owns the keyboard and the window's presses: a press
-        // outside its own targets dismisses it and does not reach what is
-        // painted beneath (the canvas's outside press; the TUI's blocking
-        // context menu dismisses the same way).
-        if self.press_outside_open_overlay(&event) {
-            self.app.dismiss_open_gui_overlay();
-            return false;
-        }
-        let now = Instant::now();
-        let Some(gesture) =
-            self.gestures
-                .recognize(event.kind, event.modifiers, event.position, now)
-        else {
-            return false;
-        };
-        // A press names the gesture it recognized and the region it landed
-        // on, so a click that does nothing (a double click that never plays)
-        // shows in the log where it stopped.
-        if matches!(event.kind, PointerKind::Press) {
-            let gesture_label = gesture_name(&gesture);
-            let region = self.regions.resolve(event.position);
-            tracing::info!(
-                name: "gui.pointer.press",
-                target: "gui_pointer",
-                { x = event.position.x, y = event.position.y, gesture = gesture_label, region = ?region },
-                "press recognized"
-            );
-        }
-        // The row drag's motion and release address the Queue Surface state
-        // directly (add-tauri-gui-client row 6.5, design D5): motion only
-        // previews the drop, and the release emits the one move request. A
-        // drag the row drag does not own keeps the generic path (the
-        // seekbar's scrub is a drag too).
-        if matches!(
-            gesture,
-            PointerGesture::Drag { .. } | PointerGesture::DragEnd
-        ) && self.route_row_drag_gesture(gesture)
-        {
-            return false;
-        }
-        let Some(point) = gesture_point(&gesture) else {
-            return false;
-        };
-        match self.regions.resolve(point) {
-            Some(RegionTarget::Queue(_)) => {
-                // The TUI click's effects, run through the Queue leaf: a click,
-                // double click, or right click on a queue row dispatches the
-                // TUI's `QueueRowClick` and `QueueRowActivate`, which move the
-                // Queue's own cursor (the GUI's active row) and its marks. A
-                // press stores no focus (ADR 0040): the window has none, and
-                // the next key sets the core's Panel focus from its own
-                // target. The pill and the wheel take no focus, exactly as the
-                // TUI's matching gestures do not.
-                let Self {
-                    app,
-                    queue,
-                    regions,
-                    ..
-                } = self;
-                let mut leaf = QueueLeaf::new(queue, regions);
-                app.route_gui_pointer(gesture, Some(&mut leaf));
-            }
-            Some(RegionTarget::QueuePlayback(_)) => {
-                // The TUI's playback-panel click applies no focus change, so
-                // the core applies none: the press works while the Queue
-                // panel holds focus (design D4). The projection's
-                // availability gates the transport; the chooser and popover
-                // rows resolve their painted indexes against the last
-                // sent choice lists, not this read.
-                let projection = self.app.queue_playback_projection();
-                let availability = projection.availability;
-                let Self {
-                    app,
-                    playback,
-                    regions,
-                    painted,
-                    ..
-                } = self;
-                let mut leaf = PlaybackLeaf::new(
-                    playback,
-                    regions,
-                    TransportAvailability {
-                        stop: availability.stop,
-                        previous: availability.previous,
-                        next: availability.next,
-                    },
-                    painted,
-                );
-                app.route_gui_pointer(gesture, Some(&mut leaf));
-            }
-            Some(RegionTarget::StatusBar(_)) => {
-                // The TUI's status-row click applies no focus change either.
-                let Self { app, regions, .. } = self;
-                let mut leaf = StatusBarLeaf::new(regions);
-                app.route_gui_pointer(gesture, Some(&mut leaf));
-            }
-            // A pre-attach button region is the attach campaign's target: the
-            // attached slice resolves nothing for it, even when a stale
-            // report carried one — and so does a point in no reported region.
-            // A confirm button's press answers the modal through the same
-            // execution the button's key hint applies; the outside-press
-            // dismissal above already left confirm regions un-dismissed.
-            Some(RegionTarget::Confirm(ConfirmTargetId::Button(index))) => {
-                self.confirm_button_press(gesture, *index);
-            }
-            // The daemon-lost dialog's buttons answer through the same
-            // execution their key hints apply; the press that lands outside
-            // them left the dialog up (it is not dismissible).
-            Some(RegionTarget::DaemonLost(DaemonLostTargetId::Button(index))) => {
-                return self.daemon_lost_button_press(gesture, *index);
-            }
-            Some(RegionTarget::Attach(_)) | None => {}
-        }
-        false
-    }
-
-    /// Deliver a gesture the row drag owns to the Queue leaf: motion previews
-    /// the drop and the release sends the move request, both through the leaf
-    /// entry so a message the drag arm returns is dispatched, never dropped.
-    /// Returns whether the drag owned the gesture; `false` leaves it to the
-    /// generic region path (a drag that started off a grip is no row drag).
-    fn route_row_drag_gesture(&mut self, gesture: PointerGesture<Position>) -> bool {
-        if self.queue.row_drag().is_none() {
-            return false;
-        }
-        let Self {
-            app,
-            queue,
-            regions,
-            ..
-        } = self;
-        let mut leaf = QueueLeaf::new(queue, regions);
-        app.route_gui_pointer(gesture, Some(&mut leaf));
-        true
     }
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
@@ -782,17 +583,5 @@ impl fmt::Debug for CoreThread {
             .field("pending", &self.pending.len())
             .field("painted", &self.painted)
             .finish_non_exhaustive()
-    }
-}
-
-/// The gesture's name for the press log.
-fn gesture_name(gesture: &PointerGesture<Position>) -> &'static str {
-    match gesture {
-        PointerGesture::Click { .. } => "click",
-        PointerGesture::DoubleClick(_) => "double-click",
-        PointerGesture::RightClick(_) => "right-click",
-        PointerGesture::Scroll { .. } => "scroll",
-        PointerGesture::Drag { .. } => "drag",
-        PointerGesture::DragEnd => "drag-end",
     }
 }

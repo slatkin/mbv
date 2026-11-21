@@ -40,7 +40,7 @@ use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
 use crate::window::components::tree_hint::TreeHint;
 use crate::window::icons::{EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
-use crate::window::library::shows_workspace::episode_progress;
+use crate::window::library::episode::episode_progress;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 

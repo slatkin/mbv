@@ -293,21 +293,7 @@ impl Fixture {
 
     /// The region targets of the last merged layout report.
     pub(super) fn last_reported_targets(&self) -> Vec<RegionTarget> {
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Layout(report) => Some(report),
-                _ => None,
-            })
-            .last()
-            .map(|report| {
-                report
-                    .regions
-                    .into_iter()
-                    .map(|region| region.target)
-                    .collect()
-            })
-            .unwrap_or_default()
+        crate::window::layout::region_set::last_reported_targets(&self.receiver)
     }
 
     /// Stamp the playhead anchor over the fixed clock and paint the

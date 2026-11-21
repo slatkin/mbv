@@ -7,9 +7,6 @@
 //! structural, the cursor never rests on them. The model is plain data over
 //! fixed heights, so the geometry is asserted without a layout.
 
-use std::sync::Arc;
-
-use dioxus_native::prelude::*;
 use mbv_queue::QueueItemContentId;
 
 use crate::bridge::frame::library::{
@@ -242,66 +239,6 @@ pub fn build_home_rows(rows: &[GuiHomeRowFrame], filter: &str) -> Vec<HomeListRo
         }
     }
     built
-}
-
-/// The rows the memo handed back last, with the cheap key and the filter they
-/// were built from. The rows sit behind an `Arc` because the former semantics
-/// the memo preserves are shared state: one scroll step reads the same rows
-/// the last one built, and the list repaints only its visible window.
-#[derive(Debug, Clone)]
-struct HomeMemoEntry {
-    /// The `libraryList` section revision the rows came from (design D6): a
-    /// section's value at one revision is immutable, so equal revisions carry
-    /// equal rows and the hit test never compares the union.
-    revision: Option<u64>,
-    filter: String,
-    rows: Arc<[HomeListRow]>,
-}
-
-/// The Home rows, memoized on the carried rows and the filter (design D9).
-/// One slot, because a list paints one content at a time.
-#[derive(Clone, Default)]
-pub struct HomeRowsMemo {
-    last: Signal<Option<HomeMemoEntry>>,
-}
-
-impl std::fmt::Debug for HomeRowsMemo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HomeRowsMemo").finish_non_exhaustive()
-    }
-}
-
-impl HomeRowsMemo {
-    /// The rows `build_home_rows` leaves over the carried rows and `filter`:
-    /// the ones it built last while the arguments are the same, and a fresh
-    /// build otherwise. The rows come keyed on the `libraryList` section
-    /// revision they borrowed from (design D6); the caller must pass the slice
-    /// the section's current value carries.
-    #[must_use]
-    pub fn rows(
-        &self,
-        revision: Option<u64>,
-        rows: &[GuiHomeRowFrame],
-        filter: &str,
-    ) -> Arc<[HomeListRow]> {
-        // `peek`, never `read`: a caller inside an effect that writes the
-        // memo (a settle that moves the cursor) would re-queue itself on the
-        // write below otherwise.
-        if let Some(entry) = self.last.peek().as_ref()
-            && entry.revision == revision
-            && entry.filter == filter
-        {
-            return Arc::clone(&entry.rows);
-        }
-        let built: Arc<[HomeListRow]> = build_home_rows(rows, filter).into();
-        let mut last = self.last;
-        last.set(Some(HomeMemoEntry {
-            revision,
-            filter: filter.to_owned(),
-            rows: Arc::clone(&built),
-        }));
-        built
-    }
 }
 
 #[cfg(test)]

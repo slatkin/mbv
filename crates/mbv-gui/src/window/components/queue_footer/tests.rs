@@ -35,6 +35,7 @@ use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::layout::LayoutEpoch;
+use crate::window::layout::region_set::last_report;
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var};
 
@@ -290,17 +291,6 @@ impl Fixture {
         self.doc.vdom.in_runtime(move || epoch.bump());
         self.poll_until_idle();
     }
-
-    /// The last merged layout report.
-    fn last_report(&self) -> Option<crate::bridge::layout::LayoutReport> {
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Layout(report) => Some(report),
-                _ => None,
-            })
-            .last()
-    }
 }
 
 /// A fixture over the footer line alone, laid out into a 640×900 viewport
@@ -548,7 +538,7 @@ fn the_band_reports_the_moved_controls_regions() {
     let mut fixture = built();
     fixture.show(footer_frame(), summary(), idle_status());
 
-    let report = fixture.last_report().expect("the mounted surface reports");
+    let report = last_report(&fixture.receiver).expect("the mounted surface reports");
     assert!(report.lists.is_empty(), "{report:?}");
     assert_eq!(
         report

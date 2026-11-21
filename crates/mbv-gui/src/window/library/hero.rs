@@ -9,7 +9,13 @@
 //! and a time on one line each carry their own kind, and the painter paints the
 //! kinds through `TypedText`.
 
-use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame};
+use crate::bridge::frame::library::{
+    GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame,
+};
+use crate::window::sections::SectionRef;
+
+use super::lettered::LetteredDestination;
+use super::state::LibraryState;
 
 /// One meta row as the frames carry it: a line of typed segments.
 pub type MetaRow = Vec<GuiMetaSegmentFrame>;
@@ -239,8 +245,29 @@ pub fn hero_attr(attr: &str, name: &str) -> String {
 /// Hero is gone sends nothing, and the guard reads the same in every
 /// destination's Hero.
 #[must_use]
-pub fn selected_with_hero<T>(selected: Option<&T>, hero_present: bool) -> Option<&T> {
+pub fn selected_with_hero<T: ?Sized>(selected: Option<&T>, hero_present: bool) -> Option<&T> {
     if hero_present { selected } else { None }
+}
+
+/// The command a Hero's button sends (`gui-tech-debt-simplification` design
+/// D12): destination `D`'s command over the frame's selected item, which sends
+/// only while the frame holds both the selection and a Hero. The frame's
+/// narrowing and the guard read the same in every lettered destination's Hero,
+/// so a Hero names the destination's command and holds no mapping of its own.
+/// The `IMDb` link and the chapter and episode Workspace plays name no
+/// destination command, so they stay in their Heroes.
+pub fn hero_command<D: LetteredDestination>(
+    state: &LibraryState,
+    detail: &SectionRef<GuiLibraryDetail>,
+    command: fn(&LibraryState, &str),
+) {
+    let Some(part) = D::detail(Some(detail)) else {
+        return;
+    };
+    let Some(item_id) = selected_with_hero(D::selected(part), D::hero_present(part)) else {
+        return;
+    };
+    command(state, item_id);
 }
 
 /// The facts every Hero carries, as the core's frames declare them.

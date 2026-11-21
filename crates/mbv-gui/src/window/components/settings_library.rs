@@ -13,17 +13,19 @@ use crate::bridge::frame::settings::GuiSettingsContent;
 use crate::window::components::settings_card::SettingsCard;
 use crate::window::components::settings_entry_row::SettingsEntryRow;
 use crate::window::components::settings_rows::SettingsRows;
-use crate::window::components::settings_screen::settings_section_view;
-use crate::window::sections::Sections;
+use crate::window::components::settings_screen::{SettingsPaneScaffold, settings_pane};
 use crate::window::settings::entries::entry_id;
-use crate::window::settings::state::SettingsState;
 
 /// The one Library pane.
 #[component]
 pub fn SettingsLibrary() -> Element {
-    let sections = consume_context::<Sections>();
-    let settings = consume_context::<SettingsState>();
-    let Some(view) = settings_section_view(&sections, &settings) else {
+    let Some(SettingsPaneScaffold {
+        frame,
+        onpress,
+        cursor_id,
+        ..
+    }) = settings_pane()
+    else {
         return rsx! {};
     };
     let GuiSettingsContent::Library {
@@ -31,19 +33,10 @@ pub fn SettingsLibrary() -> Element {
         selected,
         devices,
         ..
-    } = &view.frame.content
+    } = &frame.content
     else {
         return rsx! {};
     };
-
-    // A press on a route row, the automatic entry, or a device: the entry's
-    // activation, the same one the keyboard's Enter runs.
-    let press_settings = settings.clone();
-    let press_entries = view.entries;
-    let onpress = Callback::new(move |id: String| {
-        press_settings.press_settings_entry(&press_entries, &id);
-    });
-    let cursor_id = view.cursor_id.clone();
 
     rsx! {
         div {

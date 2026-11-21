@@ -11,7 +11,7 @@
 //! and controls name.
 
 use crate::bridge::frame::library::{
-    GuiHomeRowStateFrame, GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsWorkspaceFrame,
+    GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsWorkspaceFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
 
@@ -107,22 +107,6 @@ pub fn queue_shows_episode(state: &LibraryState, lib_idx: usize, episode_id: &st
         lib_idx,
         item_id: episode_id.to_owned(),
     });
-}
-
-/// Whether a row paints the played state: a played episode without a resume
-/// position (the shared row state the Home rows carry).
-#[must_use]
-pub fn is_played_episode(state: &GuiHomeRowStateFrame) -> bool {
-    matches!(state, GuiHomeRowStateFrame::Played)
-}
-
-/// The resume percent an active episode row paints, or `None`.
-#[must_use]
-pub fn episode_progress(state: &GuiHomeRowStateFrame) -> Option<u8> {
-    match state {
-        GuiHomeRowStateFrame::Active { progress } => *progress,
-        _ => None,
-    }
 }
 
 #[cfg(test)]

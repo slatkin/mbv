@@ -17,9 +17,7 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::components::art_image::ArtImage;
 use crate::window::icons::{Pause, Play, SkipForward};
-use crate::window::layout::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
-};
+use crate::window::layout::region_set::use_region_set;
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
 use crate::window::theme::{glyph_color, role_var};
@@ -48,55 +46,14 @@ pub struct CompactStripProps {
 pub fn CompactStrip(props: CompactStripProps) -> Element {
     let sections = consume_context::<Sections>();
     let playhead = consume_context::<Playhead>();
-    let epoch = consume_context::<LayoutEpoch>();
-    let reporter = consume_context::<LayoutReporter>();
-    let key = use_hook(LayoutKey::next);
 
-    let mut still_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut play_pause_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut next_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-
-    // No region outlives the strip: the contribution retracts on unmount,
-    // as the former client `onMount` teardown did.
-    let mut drop_reporter = reporter.clone();
-
-    // Each paint that moved a region reports (design D4): this effect runs
-    // after the DOM update, and the layout epoch reports layout-driven moves.
-    // The reporter dedupes an unchanged contribution.
+    // Each paint that moved a region reports (design D1): the region set's one
+    // effect watches the playback band and the layout epoch. The marks run in
+    // this render, in paint order — the still's slot, then the transport's two
+    // controls — so the report keeps today's region order.
     let watch_playback = sections.playback;
-    let watch_epoch = epoch.0;
-    use_effect(move || {
+    let region_set = use_region_set(0, move || {
         let _playback = watch_playback.cloned();
-        let _epoch = watch_epoch.cloned();
-        let still = still_mounted.cloned();
-        let play_pause = play_pause_mounted.cloned();
-        let next = next_mounted.cloned();
-        let mut effect_reporter = reporter.clone();
-        spawn(async move {
-            // The painted regions (design D4): the still's slot, the
-            // transport's two controls.
-            let mut regions: Vec<crate::bridge::layout::LayoutRegion> = Vec::new();
-            for (mounted, id) in [
-                (still, QueuePlaybackTargetId::VisualSlot),
-                (play_pause, QueuePlaybackTargetId::PlayPause),
-                (next, QueuePlaybackTargetId::Next),
-            ] {
-                if let Some(mounted) = mounted.as_ref() {
-                    regions.extend(element_region(mounted, RegionTarget::QueuePlayback(id)).await);
-                }
-            }
-            effect_reporter.report_layout(
-                key,
-                LayoutContribution {
-                    lists: Vec::new(),
-                    regions,
-                },
-            );
-        });
-    });
-
-    use_drop(move || {
-        drop_reporter.retract_layout(key);
     });
 
     let playback = sections.playback.cloned();
@@ -135,7 +92,9 @@ pub fn CompactStrip(props: CompactStripProps) -> Element {
                 class: "flex shrink-0 items-center justify-center overflow-hidden rounded-sm",
                 style: "width: {STILL_WIDTH_PX}px; height: {STILL_HEIGHT_PX}px;",
                 "data-target": "visualSlot",
-                onmounted: move |event| still_mounted.set(Some(event)),
+                onmounted: region_set.mark(RegionTarget::QueuePlayback(
+                    QueuePlaybackTargetId::VisualSlot,
+                )),
                 ArtImage {
                     art: props.art.clone(),
                     alt: String::new(),
@@ -183,7 +142,9 @@ pub fn CompactStrip(props: CompactStripProps) -> Element {
                 title: if paused { "Play" } else { "Pause" },
                 style: "background: var(--mbv-secondary);",
                 "data-target": "playPause",
-                onmounted: move |event| play_pause_mounted.set(Some(event)),
+                onmounted: region_set.mark(RegionTarget::QueuePlayback(
+                    QueuePlaybackTargetId::PlayPause,
+                )),
                 if paused {
                     Play {
                         size: 16,
@@ -204,7 +165,9 @@ pub fn CompactStrip(props: CompactStripProps) -> Element {
                 "data-target": "next",
                 "aria-label": "Next",
                 title: "Next",
-                onmounted: move |event| next_mounted.set(Some(event)),
+                onmounted: region_set.mark(RegionTarget::QueuePlayback(
+                    QueuePlaybackTargetId::Next,
+                )),
                 SkipForward {
                     size: 18,
                     fill: "{next_glyph}",

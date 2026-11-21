@@ -108,15 +108,6 @@ fn retry_delay(count: u64) -> Duration {
     Duration::from_millis(RETRY_BASE_MS.saturating_mul(factor).min(RETRY_CAP_MS))
 }
 
-/// The URL the reference names, `None` while it names none (a `loading`
-/// reference or a missing one paints the fill).
-fn src_of(art: Option<&GuiArtRef>) -> Option<String> {
-    match art {
-        Some(GuiArtRef::Image { src } | GuiArtRef::Placeholder { src }) => Some(src.clone()),
-        Some(GuiArtRef::Loading) | None => None,
-    }
-}
-
 /// The props of the art painter (the `ArtImage` props, in order).
 #[derive(Props, Clone, PartialEq)]
 pub struct ArtImageProps {
@@ -318,7 +309,13 @@ pub fn ArtImage(props: ArtImageProps) -> Element {
     let clock = consume_context::<Arc<dyn Clock>>();
     let scale = consume_context::<ScaleFactor>();
 
-    let src = src_of(props.art.as_ref());
+    // The owned URL: the effects below capture it, and a `loading` reference
+    // or a missing one paints the fill (it names no URL).
+    let src = props
+        .art
+        .as_ref()
+        .and_then(GuiArtRef::src)
+        .map(str::to_owned);
 
     // A new URL starts a fresh load: drop the old failure and its pending
     // retry. Unmount cancels the same timer.

@@ -20,12 +20,13 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
-use super::feeds_list::FeedsItemRow;
 use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
+use super::lettered::{FeedsList, LetteredDestination, LetteredItemRow};
 use super::list::ListMove;
 use super::parts::{library_feeds_detail, library_feeds_list};
 use super::state::LibraryState;
@@ -59,7 +60,7 @@ impl<'a> FeedsKeys<'a> {
 
 impl PanelKeys for FeedsKeys<'_> {
     type Frame = FeedsFrame;
-    type Item = FeedsItemRow;
+    type Item = LetteredItemRow<GuiEntryRowFrame>;
 
     fn frame(&self) -> Option<FeedsFrame> {
         FeedsFrame::carry(self.state)
@@ -75,14 +76,14 @@ impl PanelKeys for FeedsKeys<'_> {
         library_feeds_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn row(&self, pointer: &PointerTarget) -> Option<FeedsItemRow> {
+    fn row(&self, pointer: &PointerTarget) -> Option<LetteredItemRow<GuiEntryRowFrame>> {
         if pointer.list != Some(PointerList::Feeds) {
             return None;
         }
         self.state.feeds_row_at(pointer.row.as_deref()?)
     }
 
-    fn item_id(&self, item: &FeedsItemRow) -> Option<String> {
+    fn item_id(&self, item: &LetteredItemRow<GuiEntryRowFrame>) -> Option<String> {
         Some(item.row.id.clone())
     }
 
@@ -90,16 +91,16 @@ impl PanelKeys for FeedsKeys<'_> {
         if pointer.list != Some(PointerList::Feeds) {
             return false;
         }
-        self.state.step_feeds_scroll(mv);
+        self.state.step_lettered_scroll::<FeedsList>(mv);
         true
     }
 
     fn play_item(&self, item_id: &str) {
-        self.state.play_feeds_row(item_id);
+        FeedsList::play(self.state, item_id);
     }
 
     fn queue_item(&self, item_id: &str) {
-        self.state.queue_feeds_row(item_id);
+        FeedsList::queue(self.state, item_id);
     }
 
     fn route_hero(

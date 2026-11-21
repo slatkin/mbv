@@ -6,7 +6,7 @@
 //! owns the selected row and the feed-group selection (the frame's `selected`
 //! and `collections`), so nothing here mirrors them: a press and an Enter send
 //! the command, and the frame carries the choice back. The row model is
-//! [`super::emby_list`]'s; the Hero overlay stays in [`super::state`]'s shared
+//! [`super::lettered`]'s; the Hero overlay stays in [`super::state`]'s shared
 //! store, and the Hero carries no Workspace and no cursor of its own.
 //!
 //! The list keeps no cursor: the keys act on the row the pointer marks
@@ -22,15 +22,13 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEmbyRowFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::emby_list::EmbyItemRow;
-use crate::window::library::list::{
-    LetteredRow, ListMove, jump_to_letter, lettered_rail, scroll_step,
-};
+use crate::window::library::lettered::{EmbyList, LetteredItemRow, build_rows};
+use crate::window::library::list::LetteredRow;
 use crate::window::library::parts::library_emby_list;
 
 use super::list_state::ListUiState;
-use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Emby list's interaction state: the shared filtered-list state over the
@@ -57,14 +55,16 @@ impl LibraryState {
     /// a name, flat under a date sort, narrowed by the state's filter text. No
     /// carried Emby content paints no rows.
     #[must_use]
-    pub fn emby_rows(&self) -> Arc<[LetteredRow<EmbyItemRow>]> {
+    pub fn emby_rows(&self) -> Arc<[LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>]> {
         let list = self.sections.library_list.peek();
         let Some(frame) = library_emby_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
         let filter = self.emby_ui.peek().filter.clone();
-        self.emby_rows_memo.rows(revision, &frame.rows, &filter)
+        self.emby_rows_memo.rows(revision, filter, |filter| {
+            build_rows::<EmbyList>(&frame.rows, filter)
+        })
     }
 
     /// The row the pointer's marker names (design D1, D2): the marker carries
@@ -72,7 +72,7 @@ impl LibraryState {
     /// id names no item. `None` while no painted item row carries the id — a
     /// letter heading carries none at all.
     #[must_use]
-    pub fn emby_row_at(&self, row_id: &str) -> Option<EmbyItemRow> {
+    pub fn emby_row_at(&self, row_id: &str) -> Option<LetteredItemRow<GuiEmbyRowFrame>> {
         let rows = self.emby_rows();
         rows.iter().find_map(|row| match row {
             LetteredRow::Item(item) if item.id == row_id => Some(item.clone()),
@@ -80,31 +80,12 @@ impl LibraryState {
         })
     }
 
-    /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule). The filter narrows the rows and selects
-    /// nothing, and the scroll stays inside the narrower list.
-    pub fn set_emby_filter(&self, filter: String) {
-        let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|ui| ui.filter = filter);
-        self.clamp_emby_scroll();
-    }
-
-    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
-    /// a closed filter narrows nothing. The scroll follows the widened rows.
-    pub fn close_emby_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|ui| ui.filter.clear());
-        self.clamp_emby_scroll();
-    }
-
     /// Select the row (row 8.1): the select command the core stores, whose
     /// frame paints the Hero. A select never opens the Narrow arrangement's
-    /// Hero overlay (only View Detail does) and closes an open menu, because the facts they paint belong to
-    /// the previous row, as a Music pick's do. A heading names no row, so its
-    /// select changes nothing.
-    pub fn select_emby_row(&self, row: &LetteredRow<EmbyItemRow>) {
+    /// Hero overlay (only View Detail does) and closes an open menu, because
+    /// the facts they paint belong to the previous row, as a Music pick's do.
+    /// A heading names no row, so its select changes nothing.
+    pub fn select_emby_row(&self, row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>) {
         let LetteredRow::Item(item) = row else {
             return;
         };
@@ -124,7 +105,7 @@ impl LibraryState {
 
     /// Press a row (row 8.1): the press selects the row the Hero shows, as a
     /// Home press does. A heading names no row, so its press changes nothing.
-    pub fn press_emby_row(&self, row: &LetteredRow<EmbyItemRow>) {
+    pub fn press_emby_row(&self, row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>) {
         self.select_emby_row(row);
     }
 
@@ -162,49 +143,5 @@ impl LibraryState {
             lib_idx,
             item_id: row_id.to_owned(),
         });
-    }
-
-    /// Scroll the list by one movement key (design D6): Up and Down move by the
-    /// height of the row at the top edge, Page Up and Page Down by the viewport
-    /// height, and Home and End go to the list's ends, inside the list's range.
-    pub fn step_emby_scroll(&self, mv: ListMove) {
-        let rows = self.emby_rows();
-        let held = *self.scrolls.emby.peek();
-        set_scroll_top(self.scrolls.emby, &rows, scroll_step(&rows, held, mv));
-    }
-
-    /// Jump to a letter of the rail (row 8.1, design D7): the list scrolls so
-    /// the first row under the letter paints fully. A letter without rows
-    /// changes nothing.
-    pub fn jump_emby_to_letter(&self, letter: char) {
-        let rows = self.emby_rows();
-        let view = *self.scrolls.emby.peek();
-        let Some((_, scroll_top)) = jump_to_letter(&lettered_rail(&rows), &rows, letter, view)
-        else {
-            return;
-        };
-        set_scroll_top(self.scrolls.emby, &rows, scroll_top);
-    }
-
-    /// Report the list's measured viewport height (row 8.1): the rows in view
-    /// follow it, and the scroll offset stays inside the narrower range.
-    pub fn measure_emby_list(&self, viewport_height: f32) {
-        let mut emby = self.scrolls.emby;
-        emby.with_mut(|scroll| scroll.viewport_height = viewport_height);
-        self.clamp_emby_scroll();
-    }
-
-    /// Report the list's native scroll offset (row 8.1): a user scroll moves
-    /// the rows in view, and the offset stays inside the list's range.
-    pub fn scroll_emby_list(&self, scroll_top: f32) {
-        let rows = self.emby_rows();
-        set_scroll_top(self.scrolls.emby, &rows, scroll_top);
-    }
-
-    /// Hold the Emby list's scroll offset inside the rows the filter leaves.
-    fn clamp_emby_scroll(&self) {
-        let rows = self.emby_rows();
-        let held = *self.scrolls.emby.peek();
-        set_scroll_top(self.scrolls.emby, &rows, held.scroll_top);
     }
 }

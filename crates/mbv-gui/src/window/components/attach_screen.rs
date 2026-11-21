@@ -15,9 +15,7 @@ use crate::bridge::frame::GuiAttachState;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{AttachTargetId, RegionTarget};
 use crate::window::icons::{LoaderCircle, RotateCcw, X};
-use crate::window::layout::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
-};
+use crate::window::layout::region_set::use_region_set;
 use crate::window::sections::Sections;
 use crate::window::theme::role_var;
 
@@ -66,50 +64,17 @@ fn detail_color(attach: Option<&GuiAttachState>) -> String {
 #[component]
 pub fn AttachScreen() -> Element {
     let sections = consume_context::<Sections>();
-    let epoch = consume_context::<LayoutEpoch>();
-    let reporter = consume_context::<LayoutReporter>();
-    let key = use_hook(LayoutKey::next);
-
-    let mut screen_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut restart_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut quit_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-
-    // No region outlives the screen: the contribution retracts on unmount,
-    // as `observeLayout`'s cleanup did.
-    let mut drop_reporter = reporter.clone();
 
     let attach = sections.attach.cloned();
 
-    // Each paint that moved a region reports (design D4): the attach change
-    // and the layout epoch — the ResizeObserver the former effect watched —
-    // re-measure.
+    // Each paint that moved a region reports (design D1): the region set's one
+    // effect watches the attach change and the layout epoch — the
+    // ResizeObserver the former effect watched — re-measures. The marks run in
+    // this render, and only the mismatch state paints the two controls, so
+    // every other state reports its empty contribution.
     let watch_attach = sections.attach;
-    use_effect(move || {
+    let region_set = use_region_set(0, move || {
         let _watch_attach = watch_attach.cloned();
-        let _watch_epoch = epoch.0.cloned();
-        let restart = restart_mounted.cloned();
-        let quit = quit_mounted.cloned();
-        let mut effect_reporter = reporter.clone();
-        spawn(async move {
-            let mut regions = Vec::new();
-            if let Some(event) = restart {
-                regions.extend(
-                    element_region(&event, RegionTarget::Attach(AttachTargetId::Restart)).await,
-                );
-            }
-            if let Some(event) = quit {
-                regions.extend(
-                    element_region(&event, RegionTarget::Attach(AttachTargetId::Quit)).await,
-                );
-            }
-            effect_reporter.report_layout(
-                key,
-                LayoutContribution {
-                    lists: Vec::new(),
-                    regions,
-                },
-            );
-        });
     });
 
     let waiting = waiting(attach.as_ref());
@@ -117,13 +82,10 @@ pub fn AttachScreen() -> Element {
     let detail_color = detail_color(attach.as_ref());
     let mismatch = matches!(attach.as_ref(), Some(GuiAttachState::Mismatch(_)));
 
-    use_drop(move || drop_reporter.retract_layout(key));
-
     rsx! {
         div {
             class: "flex h-full flex-col items-center justify-center",
             style: "gap: var(--mbv-cell-col); padding-inline: calc(var(--mbv-cell-col) * 2);",
-            onmounted: move |event| screen_mounted.set(Some(event)),
             if waiting {
                 // The wait before the first frame and the wait for a
                 // shutting-down Owner read the same: the core is still
@@ -149,7 +111,9 @@ pub fn AttachScreen() -> Element {
                             class: "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
                             style: "background: {CHROME_SECONDARY}; border-color: {CHROME_BORDER}; color: {role_var(GuiRole::TextPrimary)};",
                             "data-target": "restart",
-                            onmounted: move |event| restart_mounted.set(Some(event)),
+                            onmounted: region_set.mark(RegionTarget::Attach(
+                                AttachTargetId::Restart,
+                            )),
                             RotateCcw { size: 14, color: role_var(GuiRole::Accent) }
                             "Restart"
                             span {
@@ -163,7 +127,7 @@ pub fn AttachScreen() -> Element {
                             class: "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
                             style: "background: {CHROME_SECONDARY}; border-color: {CHROME_BORDER}; color: {role_var(GuiRole::TextPrimary)};",
                             "data-target": "quit",
-                            onmounted: move |event| quit_mounted.set(Some(event)),
+                            onmounted: region_set.mark(RegionTarget::Attach(AttachTargetId::Quit)),
                             X { size: 14, color: role_var(GuiRole::StatusError) }
                             "Quit"
                             span {

@@ -24,6 +24,8 @@
 //! layout's viewport is the logical size) — the unit every threshold and report
 //! value names.
 
+pub mod region_set;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;

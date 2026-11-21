@@ -233,7 +233,7 @@ fn filtered_viewport(
 }
 
 /// The slot of a row that carries the now-playing marker.
-fn active_slot(row: &MediaListRow<QueueSlotId>) -> Option<u64> {
+pub(crate) fn active_slot(row: &MediaListRow<QueueSlotId>) -> Option<u64> {
     match row {
         MediaListRow::Item {
             target,

@@ -325,6 +325,10 @@ Mark:
 Membership of one stable target in a Multi-selection. The seam `MarkSelection` carrier owns the ordered marks of a list. Add, remove, toggle, and clear of marks are the operations on that carrier. A mark is multi-selection membership. It is not a row highlight. Selection alone continues to mean the cursor row.
 _Avoid_: marked rows (for the membership), mark (for the cursor row)
 
+Region mark:
+The claim one painted GUI element makes on its stable target in its surface's layout report. One region set serves a surface instance: it holds that surface's report keys and its one report task. The surface owner makes a base mark with the set's `mark` verb, an overlay mark with `mark_over`, and a measured list's mark with `mark_list`, each of which returns a `MarkHandler` that the owner passes to the child component that owns the element as a prop. Marks run only in the owner's own render, and mark order is report order. An overlay's marks merge after the surface's base marks, in overlay index order, and an overlay with no marks retracts, so its next open pushes at the end again. It is not the Multi-selection *Mark*.
+_Avoid_: hit region, row handle, painted target
+
 WideMediaList:
 The provider-neutral one-column fixed-row TuiRealm Component over a `MediaList<Target>`. It is the canonical control for Library browser rails, Workspace lists, and Queue rows in every Panel mode. It never selects a Service or destination. The Library panel owns placement and supplies the current row flow rectangle. The destination keeps Service content and typed translation.
 _Avoid_: generic list, two-column list, Inline Search

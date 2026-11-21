@@ -188,55 +188,78 @@ impl Sections {
     /// Sections the batch leaves out leave their signals as they are. Every
     /// write of one batch happens here, in the caller's one task poll, so
     /// Dioxus renders the batch once.
+    ///
+    /// The batch is destructured with every field named and no `..` (D8), so a
+    /// batch field this write does not apply fails the build. The playhead
+    /// anchor is the one field this write stores nothing for: the window's
+    /// caller stamps it, and the binding stays named here so a new batch field
+    /// still fails the build.
+    ///
+    /// `connected` is written only on its false-to-true flip (D15): an equal
+    /// write marks the root as a subscriber, so a batch the root does not read
+    /// would re-render it.
     pub fn apply_batch(&mut self, batch: &GuiSectionBatch) {
-        self.connected.set(true);
+        let GuiSectionBatch {
+            attach,
+            theme,
+            queue,
+            summary,
+            panel,
+            overlay,
+            playback,
+            hover,
+            footer,
+            status,
+            toasts,
+            library_list,
+            library_detail,
+            row_menu,
+            search,
+            settings,
+            playlists,
+            playhead: _playhead,
+        } = batch;
+        if !*self.connected.peek() {
+            self.connected.set(true);
+        }
         let mut held = self.held.write();
-        write(batch.attach.as_ref(), &mut held.attach, self.attach);
-        write(batch.theme.as_ref(), &mut held.theme, self.theme);
+        write(attach.as_ref(), &mut held.attach, self.attach);
+        write(theme.as_ref(), &mut held.theme, self.theme);
+        write_shared(queue.as_ref(), &mut held.queue, self.queue, SectionRef::new);
+        write(summary.as_ref(), &mut held.summary, self.summary);
+        write(panel.as_ref(), &mut held.panel, self.panel);
+        write(overlay.as_ref(), &mut held.overlay, self.overlay);
+        write(playback.as_ref(), &mut held.playback, self.playback);
+        write(hover.as_ref(), &mut held.hover, self.hover);
+        write(footer.as_ref(), &mut held.footer, self.footer);
+        write(status.as_ref(), &mut held.status, self.status);
+        write(toasts.as_ref(), &mut held.toasts, self.toasts);
         write_shared(
-            batch.queue.as_ref(),
-            &mut held.queue,
-            self.queue,
-            SectionRef::new,
-        );
-        write(batch.summary.as_ref(), &mut held.summary, self.summary);
-        write(batch.panel.as_ref(), &mut held.panel, self.panel);
-        write(batch.overlay.as_ref(), &mut held.overlay, self.overlay);
-        write(batch.playback.as_ref(), &mut held.playback, self.playback);
-        write(batch.hover.as_ref(), &mut held.hover, self.hover);
-        write(batch.footer.as_ref(), &mut held.footer, self.footer);
-        write(batch.status.as_ref(), &mut held.status, self.status);
-        write(batch.toasts.as_ref(), &mut held.toasts, self.toasts);
-        write_shared(
-            batch.library_list.as_ref(),
+            library_list.as_ref(),
             &mut held.library_list,
             self.library_list,
             shared_option,
         );
         write_shared(
-            batch.library_detail.as_ref(),
+            library_detail.as_ref(),
             &mut held.library_detail,
             self.library_detail,
             shared_option,
         );
-        write(batch.row_menu.as_ref(), &mut held.row_menu, self.row_menu);
+        write(row_menu.as_ref(), &mut held.row_menu, self.row_menu);
         write_shared(
-            batch.search.as_ref(),
+            search.as_ref(),
             &mut held.search,
             self.search,
             shared_option,
         );
         write_shared(
-            batch.settings.as_ref(),
+            settings.as_ref(),
             &mut held.settings,
             self.settings,
             shared_option,
         );
-        write(
-            batch.playlists.as_ref(),
-            &mut held.playlists,
-            self.playlists,
-        );
+        write(playlists.as_ref(), &mut held.playlists, self.playlists);
     }
 }
 

@@ -32,6 +32,19 @@ pub enum GuiArtRef {
     Loading,
 }
 
+impl GuiArtRef {
+    /// The URL this reference names, `None` while it names none: a `loading`
+    /// reference paints no image, so no art answer can land for it. Every
+    /// painter takes the source's URL from here, so the rule lives once.
+    #[must_use]
+    pub fn src(&self) -> Option<&str> {
+        match self {
+            Self::Image { src } | Self::Placeholder { src } => Some(src),
+            Self::Loading => None,
+        }
+    }
+}
+
 /// The URL for `path`, as the window requests it (design D7): one place owns
 /// the scheme name, so the wire spelling lives here alone.
 #[must_use]

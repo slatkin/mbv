@@ -13,9 +13,10 @@
 //! from the chapter, and the hovered row paints its play control. Books have no
 //! play next, and a chapter enqueues nothing: only the play control paints.
 //!
-//! Play, and Add to queue (`a`), send the Audiobooks commands with the
-//! frame's selected book — the core owns the selection, so the actions name
-//! the book the frame painted and never a position.
+//! Play, and Add to queue (`a`), send the Audiobooks destination's commands
+//! with the frame's selected book (design D12) — the core owns the selection,
+//! so the actions name the book the frame painted and never a position, and
+//! the destination's list part names the library index.
 
 use dioxus_native::prelude::*;
 
@@ -29,7 +30,8 @@ use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
 use crate::window::library::audiobooks_workspace::{marked_chapter_of, workspace_of};
-use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
+use crate::window::library::hero::{HeroLayoutFacts, hero_command, hero_layout};
+use crate::window::library::lettered::{AudiobooksList, LetteredDestination};
 use crate::window::library::parts::library_audiobooks_detail;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
@@ -48,40 +50,6 @@ pub struct LibraryAudiobooksHeroProps {
     /// as the one handle every reader clones (`share-gui-sections-by-rc`
     /// design D3).
     pub detail: SectionRef<GuiLibraryDetail>,
-}
-
-/// The Audiobooks action a button sends.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AbsAction {
-    /// Play the selected book from its saved position.
-    Play,
-    /// Add the selected book to the queue.
-    Queue,
-}
-
-/// Send the book command for the frame's selected book (design D12, row
-/// 9.1): the book the frame painted, never a position. The command sends
-/// only while the frame holds both the selection and a Hero. The handle is
-/// narrowed here, so the press reads the carried detail without the Hero
-/// cloning it per render (`share-gui-sections-by-rc` design D3).
-fn act_book(
-    library: &LibraryState,
-    action: AbsAction,
-    lib_idx: usize,
-    detail: &SectionRef<GuiLibraryDetail>,
-) {
-    let Some(detail) = library_audiobooks_detail(Some(detail)) else {
-        return;
-    };
-    let Some(item_id) = selected_with_hero(detail.selected.as_ref(), detail.hero.is_some()) else {
-        return;
-    };
-    let item_id = item_id.clone();
-    let command = match action {
-        AbsAction::Play => GuiLibraryCommand::AbsPlay { lib_idx, item_id },
-        AbsAction::Queue => GuiLibraryCommand::AbsQueue { lib_idx, item_id },
-    };
-    library.link.library(command);
 }
 
 /// Play or seek from one chapter (design D12): the double-click and the row's
@@ -192,12 +160,12 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     let play_library = library.clone();
     let play_detail = props.detail.clone();
     let on_play = Callback::new(move |()| {
-        act_book(&play_library, AbsAction::Play, lib_idx, &play_detail);
+        hero_command::<AudiobooksList>(&play_library, &play_detail, AudiobooksList::play);
     });
     let queue_library = library.clone();
     let queue_detail = props.detail.clone();
     let on_queue = Callback::new(move |()| {
-        act_book(&queue_library, AbsAction::Queue, lib_idx, &queue_detail);
+        hero_command::<AudiobooksList>(&queue_library, &queue_detail, AudiobooksList::queue);
     });
     let actions = rsx! {
         LibraryHeroActions {

@@ -156,10 +156,10 @@ only the server bytes and the size from the image header, and never decodes
 pixels; only the TUI decodes, for its terminal graphics. The panel
 reports the slot's `visualSlot` region (the TUI's hit target), and the art
 element's resizes report the regions a swapped bitmap moved. Inside one
-report key the last region pushed wins, so the panel pushes `visualSlot`
-first and the transport buttons and the seekbar follow it, while the chips
-and the footer's controls report
-under their own later keys — so a press on a control over the artwork lands
+report the last region pushed wins, so the panel marks `visualSlot` first and
+the transport buttons and the seekbar follow it in mark order, while the chips
+and the footer's controls report from their own region sets after it — so a
+press on a control over the artwork lands
 on the control, not on the artwork. The section also carries the core's
 `auto_hide` preference, the fact the stage's `data-auto-hide` attribute
 reads (below); the window derives the stage's `data-playing` fact from the
@@ -239,18 +239,49 @@ id, and no key of the window works at all.
 ## Layout reports and the hit map
 
 `src/window/layout.rs` is the single layout registry. Every mounted
-surface registers a contribution of list capacities and painted regions
-under a `Symbol` key; the reporter merges all contributions into one
-`LayoutReport` and sends it through `LayoutReporter::report_layout`. Reports coalesce to one
-send per turn of the event loop, and a contribution identical to its last
-value sends nothing — a batch that moves only the active row moves no
-region.
+surface reports through one region set (`src/window/layout/region_set.rs`),
+created once in its own body with `use_region_set` for a signal-driven
+surface or `use_region_set_for` for one that triggers through reactive
+props. The set holds the surface's report keys — one for its base
+contribution and one per overlay, made in that order — and the reporter
+merges every set's contribution of list capacities and painted regions into
+one `LayoutReport` and sends it through `LayoutReporter::report_layout`.
+Reports coalesce to one send per turn of the event loop, and a contribution
+identical to its last value sends nothing — a batch that moves only the
+active row moves no region.
+
+A set's `mark`, `mark_over`, and `mark_list` calls are the surface's whole
+report: each call records the region target or measured list it paints, and
+mark order is report order. Marks run only in the surface owner's own
+render — inline in its `rsx` or in `let`s before it — and each returns a
+`MarkHandler` (`EventHandler<Event<MountedData>>`) that the owner passes to
+the child component that owns the element as a prop; the queue header's
+controls, the playback stage's and scrubber's controls, and each popover's
+rows take theirs this way. A child never calls `mark`: Dioxus memoizes a
+child whose props compare equal and renders it after its parent, so a mark
+inside a child could be skipped while its element still paints, or land after
+the parent's own marks. Each render starts at the hook call, which clears
+the painted list, so one render's marks are the whole of what it reports.
+
+One effect spawns one report task. It resolves the base contribution's
+painted targets in mark order and reports them under the base key, then does
+the same for each overlay in index order, so a popover's regions merge after
+the content beneath it (the hit map's last push wins) and an overlay with no
+marks retracts its key, which lets its next open push at the end again. A
+base with no marks still reports its empty contribution. The task keeps only
+the handles of the targets the latest render painted, so a row that scrolled
+away leaves no region behind; that prune replaced the popovers' per-row
+truncation, which is gone on purpose. The merge rule is unchanged: a key
+keeps its insertion position, a re-set updates in place, and the core's hit
+map rebuilds from each merged report. The set retracts every key in
+`use_drop`.
+
 A report marks no section and forces no batch (design D4): a layout change
 that moves a section's content moves it through the section's own compare,
 and a report that moves nothing sends nothing. The core rebuilds its whole
 hit map from each report, so a surface must
 never send a partial one: report on mount, report after each paint that
-moved a region, and `LayoutReporter::retract_layout` on unmount. Even a surface with no
+moved a region, and retract on unmount. Even a surface with no
 interactive regions reports its (empty) contribution, so the merged report
 accounts for it.
 
@@ -585,10 +616,10 @@ artwork or controls sends
 `PlaybackRequest::OpenPlayerMenu` with the pointer's whole-pixel anchor, the
 core opens its `PlayerMenu` overlay — the cursor over the one auto-hide entry
 plus the anchor — and the frame projects it. The panel paints the card in
-the shared menu-card face at the anchor, and the entry reports its
-`PlayerMenuEntry` region under the menu's own report key, first inserted
-while the menu is open, so the card wins the hit map where it paints over
-the panel. A press on the entry sends `PlaybackRequest::PlayerMenuSelect`,
+the shared menu-card face at the anchor, and it marks the entry in its
+overlay, which merges after the panel's own regions, so the card wins the hit
+map where it paints over the panel. A press on the entry sends
+`PlaybackRequest::PlayerMenuSelect`,
 which runs the same execution the menu's Enter applies — the shared toggle
 that flips the field and saves the prefs — and closes the menu with the
 choice. The overlay's list key rules own the keyboard while it is open: Esc
@@ -734,9 +765,9 @@ cannot be renamed.
 
 The chooser rides the `overlay` section as the `GuiOverlayFrame::QueueChooser`
 variant: the core's cursor, the entries, and the rename draft while one is
-open. Its entry rows report their own regions under a third report key the
-panel inserts while the chooser is open, naming each painted entry's own
-identity, so the dropdown wins the hit map over the queue rows beneath it.
+open. Its entry rows are the panel's second overlay, marked after the row menu's
+overlay, naming each painted entry's own identity, so the dropdown wins the
+hit map over the queue rows beneath it.
 
 The shown entry decides which queue the panel shows and which owner the
 player panel follows (ADR 0041). While a local Named queue is shown, the
@@ -878,10 +909,10 @@ Queue header. The playback target control leads the Queue header, to the left
 of the Queue switcher (`queue_target_control.rs`, user request 2026-11-20): its
 glyph is the one the chooser paints for the attached choice (the local
 monitor, or the Cast, Emby, or direct-peer mark), never a fixed Cast glyph. Its
-press opens the target chooser as a popover hung under the control, under a
-second report key the control owns, so a press on a popover row wins over the
-queue row beneath it (D4); the collapse control's press runs the same toggle as
-the `z` chord.
+press opens the target chooser as a popover hung under the control, in the
+control's overlay, which merges after its own regions, so a press on a
+popover row wins over the queue row beneath it (D4); the collapse control's
+press runs the same toggle as the `z` chord.
 No surface paints the now-playing status word (D5): the footer carries no
 status fact, and the `playback` section no longer carries one.
 
@@ -945,14 +976,36 @@ The Search control sits at its right end, before the Settings control
 field inline with its `Ctrl K` hint; too narrow it paints the Search icon
 whose press opens a dropdown panel that carries the same field, hint, and
 results, which open downward. `src/window/components/library_panel.rs` paints the destination's list (`LibraryList` with
-`LibraryLetterRail` in Music;
-`LibraryHomeList`, `LibraryShowsList`, `LibraryEmbyList`,
-`LibraryAudiobooksList`, `LibraryPodcastsList`, and `LibraryFeedsList`),
+`LibraryLetterRail` in Music; `LibraryHomeList` in Home;
+`LibraryShowsList` in Shows; and `LibraryLetteredList` in Emby, Audiobooks,
+Podcasts, and Feeds),
 the destination's Hero (`LibraryHero` with `LibraryTracklist` in Music;
 `LibraryHomeHero`, `LibraryShowsHero` with its Workspace,
 `LibraryEmbyHero`, `LibraryAudiobooksHero`, `LibraryPodcastsHero`, and
 `LibraryFeedsHero`), and `LibraryStatusBar`. The panel paints no selector
-row and no pills region between `LibraryTopBar` and the list. Each list
+row and no pills region between `LibraryTopBar` and the list. The lettered
+list is one component for the four destinations (`gui-tech-debt-simplification`
+design D4): the `LetteredDestination` trait (`src/window/library/lettered.rs`)
+names the parts a lettered list needs, and four zero-sized adapters
+(`EmbyList`, `AudiobooksList`, `PodcastsList`, and `FeedsList` in
+`src/window/library/lettered/adapters.rs`) fill them with each destination's
+carried row, its list and detail parts, its attribute word, its art scope, its
+pointer list, its header facts, its notice texts, and its row painter. The row
+model, the `LibraryState` filter, scroll, measure, and letter-jump methods, and
+the list's body over the shared column scaffold are then one generic component,
+`LibraryLetteredList<D>`
+(`src/window/components/library_lettered_list.rs`), and each destination keeps
+only its data; `play_next` defaults to no play-next, and only Emby overrides it.
+Home and Shows keep their own list modules (`src/window/library/home_list.rs`,
+`src/window/library/shows_list.rs`): Home's rows carry headings and spacers,
+and Shows' rows carry the New and Upcoming modes. Every list's column wiring
+goes through one scaffold, `library_list_column`
+(`src/window/components/library_list_column.rs`), beside the scroll shell
+`library_virtual_list`: the column's own hook, the header block, the notice
+lines, the shell's measure, scroll, and rows-in-view reports, and the row that
+holds the shell beside the letter rail. Each list keeps its own row model, its
+header facts, its notice texts, and its row painter, so the scaffold shares the
+wiring, not the list (`gui-tech-debt-simplification` design D14). Each list
 paints its own header: `LibraryListHeader` paints the heading line — the
 destination's Service mark, or Home's text title alone, the dropdown where
 one applies, and the sort control where one applies — on that line. Music,
@@ -1981,7 +2034,11 @@ season and a filter field, one open state in `LibraryUiState.shows_seasons`),
 `LibraryItemRow` the
 top-level rows of every list, `LibraryLetterHeading` the letter and section
 headings, and `LibraryVirtualList` the scroller of every list. Home still
-paints `LibraryHeroSummary`.
+paints `LibraryHeroSummary`. The episode row state is one module
+(`src/window/library/episode.rs`): `is_played_episode` and
+`episode_progress` read the played state and the resume percent an episode
+row and a Hero paint, whatever destination carries the row, so no other
+destination's Hero imports Shows logic.
 
 ### The top-level Library row and its art
 

@@ -14,21 +14,24 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
-use blitz_dom::{Document as _, LocalName, NodeData};
+use blitz_dom::{Document as _, LocalName};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
-use super::{LibraryPodcastsHero, PodcastsAction, act};
+use super::LibraryPodcastsHero;
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiPodcastsDetail,
-    GuiPodcastsHeroFrame,
+    GuiArtShapeFrame, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
+    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiPodcastsDetail, GuiPodcastsHeroFrame,
+    GuiPodcastsList,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::library::hero::hero_command;
+use crate::window::library::lettered::{LetteredDestination, PodcastsList};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::{SectionRef, Sections};
 
@@ -68,6 +71,28 @@ fn detail(facts: Option<GuiPodcastsHeroFrame>) -> GuiPodcastsDetail {
     }
 }
 
+/// The Podcasts list part the destination's commands read the library index
+/// from (design D12).
+fn podcasts_library_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: None,
+        destination: GuiDestinationList::Podcasts(GuiPodcastsList {
+            lib_idx: LIB_IDX,
+            collections: GuiCollections {
+                target: mbv::GuiCollectionTarget::Podcasts(LIB_IDX),
+                all: true,
+                entries: Vec::new(),
+                noun: mbv::GuiCollectionNoun::Shows,
+            },
+            loading: false,
+            failed: false,
+            rows: Vec::new(),
+            sort: None,
+        }),
+    }
+}
+
 /// The harness's props: the carried Podcasts content, the mock core sender,
 /// and the handle the test reads the store through.
 #[derive(Clone)]
@@ -103,8 +128,12 @@ fn podcasts_hero_app(props: FixtureProps) -> Element {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.
         let playhead_position = Memo::new(|| 0.0);
+        let mut sections = Sections::new();
+        sections
+            .library_list
+            .set(Some(SectionRef::new(podcasts_library_list())));
         LibraryState::new(
-            Sections::new(),
+            sections,
             CoreLink::new(sender),
             playhead_position,
             Arc::clone(&clock),
@@ -113,7 +142,7 @@ fn podcasts_hero_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace((state, detail.clone()));
     rsx! {
-        LibraryPodcastsHero { lib_idx: LIB_IDX, detail }
+        LibraryPodcastsHero { detail }
     }
 }
 
@@ -209,19 +238,6 @@ impl Fixture {
                     .to_owned()
             })
             .collect()
-    }
-
-    /// The tag name of the first node the selector names.
-    fn tag_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        match &dom.get_node(id).expect("the node is in the document").data {
-            NodeData::Element(data) => data.name.local.to_string(),
-            _ => panic!("{selector} is an element"),
-        }
     }
 
     /// The Library commands the core link received, in send order.
@@ -378,7 +394,9 @@ fn play_sends_the_play_command_for_the_selected_episode() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, PodcastsAction::Play, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<PodcastsList>(&state, &detail, PodcastsList::play);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -399,7 +417,9 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_episode() {
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || act(&state, PodcastsAction::Queue, LIB_IDX, &detail));
+    fixture.in_runtime(move || {
+        hero_command::<PodcastsList>(&state, &detail, PodcastsList::queue);
+    });
 
     assert_eq!(
         fixture.library_commands(),
@@ -427,24 +447,5 @@ fn the_hero_paints_no_play_next_control() {
             .text_of("[data-library-podcasts-hero-block]")
             .contains("Play next"),
         "the block names no play-next"
-    );
-}
-
-/// Contract (`LibraryPodcastsHero.test.ts`): the Hero paints the frame's
-/// header band, as Music and Shows do — the kicker over the title, above the
-/// artwork (the frame is one look for every Hero).
-#[test]
-fn the_hero_paints_the_frame_header_above_its_artwork() {
-    let fixture = built_hero();
-
-    assert_eq!(
-        fixture.text_of("[data-library-podcasts-hero-kicker]"),
-        "podcast",
-        "the kicker is the podcast label"
-    );
-    assert_eq!(
-        fixture.tag_of("[data-library-podcasts-hero-title]"),
-        "h1",
-        "the title paints in the header band's h1"
     );
 }

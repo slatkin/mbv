@@ -24,34 +24,35 @@
 //! block caret the Queue filter's entry paints, because the core holds the text
 //! (design D8).
 //!
-//! `QueuePanel` measures the `[data-chooser-entry]` rows through their mounted
-//! handles and reports their entry regions under its own second report key,
-//! inserted when the chooser opens — the row menu's technique — so the entries
-//! land after the queue's regions in the merged report and win the hit map where
-//! the dropdown paints over a queue row beneath it (the hit map's last push
-//! wins). A child-held key would land first, before the parent's, and lose.
-//! `QueuePanel` builds the card and mounts it in the header's switcher anchor,
-//! which changes nothing about that order: the key belongs to the panel, not to
-//! where the card mounts.
+//! The component is presentation-only. The surface that owns the dropdown marks
+//! its `[data-chooser-entry]` rows: `QueuePanel` passes one closure per painted
+//! row, from its region set's `mark_over` at the dropdown's position in its
+//! `rsx`, so the entries report under the panel's overlay key, after the queue's
+//! regions in the merged report, and win the hit map where the dropdown paints
+//! over a queue row beneath it (the hit map's last push wins). Reporting from
+//! the owner, not from this child's mount effect, keeps that order even when
+//! the first painted frame already carries the open chooser: a child's mount
+//! effect runs before the parent's, so a child-held key would land first and
+//! the entries would lose to the regions beneath them. `QueuePanel` builds the
+//! card and mounts it in the header's switcher anchor, which changes nothing
+//! about that order: the key belongs to the panel, not to where the card mounts.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::queue_panel::geometry::{MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX};
-use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::{AudioLines, Check};
+use crate::window::layout::region_set::MarkHandler;
 use crate::window::theme::{EfToken, ef_var};
 
 /// The current queue's mark: the dot's diameter in logical pixels.
 const CURRENT_MARK_PX: u16 = 8;
 
 /// One entry's height and the gap between two items are the queue rows' own
-/// (designs D8 and D9 of `gui-queue-panel-redesign`, now the delineated row's
-/// 40 px and its 0 px gap, design D3 of `gui-delineated-rows`); the card's
-/// padding is its own inset.
-const ITEM_HEIGHT_PX: u16 = ROW_HEIGHT_PX;
-const ITEM_GAP_PX: u16 = ROW_GAP_PX;
+/// (`ROW_HEIGHT_PX` and `ROW_GAP_PX`: the delineated row's 40 px and its 0 px
+/// gap, design D3 of `gui-delineated-rows`); the card's padding is its own
+/// inset.
 const CARD_PADDING_PX: u16 = 4;
 
 /// The open Queue chooser's dropdown facts, as the frame's overlay carries
@@ -86,8 +87,8 @@ impl QueueChooserMenuState {
 }
 
 /// The props of the Queue chooser's dropdown: the core's cursor, the frame's
-/// entries in paint order, the rename draft while one is open, and the handles
-/// the panel's entry regions read.
+/// entries in paint order, the rename draft while one is open, and the marks of
+/// the rows the panel's entry regions read.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct QueueChooserMenuProps {
     /// The core's cursor row.
@@ -97,8 +98,9 @@ pub struct QueueChooserMenuProps {
     pub entries: Vec<GuiQueueChooserEntry>,
     /// The rename draft, while a name is open for edit.
     pub renaming: Option<GuiQueueChooserRename>,
-    /// The painted rows' mounted events, by their entry index.
-    pub row_slot: Signal<Vec<Option<Event<MountedData>>>>,
+    /// The painted rows' marks, in row order — the closures `QueuePanel`
+    /// produced with its region set's `mark_over`. A row takes its own entry.
+    pub row_marks: Vec<MarkHandler>,
 }
 
 /// One entry's paint facts: the text it paints, and whether that text is the
@@ -146,7 +148,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
             role: "menu",
             "aria-label": "Queue chooser",
             style: format!(
-                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
+                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ROW_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
                 ef_var(EfToken::Bg2),
                 ef_var(EfToken::Bg4)
             ),
@@ -161,7 +163,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                         String::new()
                     };
                     let row_style = format!(
-                        "height: {ITEM_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
+                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
                         ef_var(EfToken::Fg)
                     );
                     let label_align = if paint.draft {
@@ -185,7 +187,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                     let current = entry.current;
                     let playing = entry.playing;
                     let peer = entry.queue.is_none();
-                    let row_slot = props.row_slot;
+                    let row_mark = props.row_marks.get(index).copied();
                     rsx! {
                         button {
                             "type": "button",
@@ -195,7 +197,11 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                             "data-chooser-entry": "{key}",
                             "aria-label": "{label}",
                             onmounted: move |event| {
-                                record_row_handle(row_slot, index, event);
+                                // The panel marks this row: the closure records the
+                                // handle its overlay region reads.
+                                if let Some(mark) = row_mark {
+                                    mark.call(event);
+                                }
                             },
                             div {
                                 class: "flex min-w-0 items-center",

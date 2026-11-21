@@ -416,8 +416,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
 }
 
 /// The carried Shows content: the Shows destination's series list, whose view
-/// dropdown reuses the collection dropdown's open fact and mounts no filter
-/// field (design D8).
+/// dropdown has its own open fact and mounts no filter field (design D8, D15).
 fn shows_list() -> GuiLibraryList {
     GuiLibraryList {
         tabs: Vec::new(),

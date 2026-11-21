@@ -244,6 +244,21 @@ pub struct LibraryTree<'a> {
     pub filter: &'a str,
 }
 
+/// The interaction facts the canvas tree's rows are memoized on (design D11 of
+/// `gui-tech-debt-simplification`): the open nodes, the ones the filter closed,
+/// and the filter text. The carried artists come from the memo's
+/// `libraryList` revision, so the hit test compares only these.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MusicRowsFacts {
+    /// The open node ids (artist and album row ids).
+    pub open: Vec<String>,
+    /// The node ids the user closed while the filter was narrowing the rows.
+    pub closed: Vec<String>,
+    /// The filter text: the list paints only the rows whose name contains it,
+    /// without case (design D7).
+    pub filter: String,
+}
+
 /// The painted rows of the canvas tree (design D7): the artists of the union in
 /// their carried order, each with its albums when the artist is open and its
 /// tracks when the album is open, under the letter heading of the first artist

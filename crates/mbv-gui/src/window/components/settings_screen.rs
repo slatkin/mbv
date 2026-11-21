@@ -99,6 +99,51 @@ pub(crate) struct SettingsSectionView {
     pub cursor_id: Option<String>,
 }
 
+/// The two-column grid every section pane's cards sit in (design D13, the
+/// canvas's Services grid). The Library pane stacks its own cards in one
+/// column, because it paints the Rows pane first.
+pub(crate) const SETTINGS_PANES_GRID_STYLE: &str =
+    "grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start;";
+
+/// The prologue every section pane runs (design D13): the two stores it
+/// reads, its shown frame, the press its controls call, and the content
+/// cursor's entry id.
+pub(crate) struct SettingsPaneScaffold {
+    /// The section stores.
+    pub sections: Sections,
+    /// The Settings store.
+    pub settings: SettingsState,
+    /// The shown frame.
+    pub frame: SectionRef<GuiSettingsFrame>,
+    /// A control's press: the entry's activation through the section's full
+    /// entry list, the same one the keyboard's Enter runs.
+    pub onpress: Callback<String>,
+    /// The entry id the content cursor rests on.
+    pub cursor_id: Option<String>,
+}
+
+/// The panes' shared prologue: consume the two contexts, read
+/// [`settings_section_view`], and build the press over the view's entries.
+/// A pane returns an empty element while no frame is shown.
+#[must_use]
+pub(crate) fn settings_pane() -> Option<SettingsPaneScaffold> {
+    let sections = consume_context::<Sections>();
+    let settings = consume_context::<SettingsState>();
+    let view = settings_section_view(&sections, &settings)?;
+    let press_settings = settings.clone();
+    let press_entries = view.entries;
+    let onpress = Callback::new(move |id: String| {
+        press_settings.press_settings_entry(&press_entries, &id);
+    });
+    Some(SettingsPaneScaffold {
+        sections,
+        settings,
+        frame: view.frame,
+        onpress,
+        cursor_id: view.cursor_id,
+    })
+}
+
 /// The view the screen's components paint.
 pub(crate) fn settings_section_view(
     sections: &Sections,

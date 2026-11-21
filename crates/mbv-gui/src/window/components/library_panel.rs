@@ -46,22 +46,20 @@ use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiMusicMe
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
-use crate::window::components::library_audiobooks_list::LibraryAudiobooksList;
 use crate::window::components::library_emby_hero::LibraryEmbyHero;
-use crate::window::components::library_emby_list::LibraryEmbyList;
 use crate::window::components::library_feeds_hero::LibraryFeedsHero;
-use crate::window::components::library_feeds_list::LibraryFeedsList;
 use crate::window::components::library_hero::LibraryHero;
 use crate::window::components::library_home_hero::LibraryHomeHero;
 use crate::window::components::library_home_list::LibraryHomeList;
+use crate::window::components::library_lettered_list::LibraryLetteredList;
 use crate::window::components::library_list::LibraryList;
 use crate::window::components::library_podcasts_hero::LibraryPodcastsHero;
-use crate::window::components::library_podcasts_list::LibraryPodcastsList;
 use crate::window::components::library_shows_hero::LibraryShowsHero;
 use crate::window::components::library_shows_list::LibraryShowsList;
 use crate::window::components::library_status_bar::LibraryStatusBar;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
+use crate::window::library::lettered::{AudiobooksList, EmbyList, FeedsList, PodcastsList};
 use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerZone;
@@ -83,9 +81,10 @@ pub struct LibraryPanelProps {
 
 /// A press inside the panel (design D8, D15; gui-collection-dropdown design
 /// D7): the press closes the right-click item menu — the outside-press rule —
-/// and the open collection dropdown, whose next open starts with an empty
-/// filter. The menu's and the dropdown's own handlers stop this one from
-/// running, so a press on either surface acts on it instead of closing it.
+/// the open collection dropdown, whose next open starts with an empty filter,
+/// and the Shows view and season dropdowns. The menu's and the dropdowns' own
+/// handlers stop this one from running, so a press on either surface acts on
+/// it instead of closing it.
 fn press_in_panel(library: &LibraryState) {
     if library.ui.peek().row_menu.is_some() {
         library.close_library_row_menu();
@@ -93,6 +92,7 @@ fn press_in_panel(library: &LibraryState) {
     if library.ui.peek().collections.is_some() {
         library.close_collections_dropdown();
     }
+    library.close_shows_view_dropdown();
     library.close_shows_seasons_dropdown();
 }
 
@@ -126,16 +126,16 @@ fn list_painter(pair: LibraryPair) -> Element {
             LibraryShowsList {}
         },
         LibraryPair::Emby(..) => rsx! {
-            LibraryEmbyList {}
+            LibraryLetteredList::<EmbyList> {}
         },
         LibraryPair::Audiobooks(..) => rsx! {
-            LibraryAudiobooksList {}
+            LibraryLetteredList::<AudiobooksList> {}
         },
         LibraryPair::Podcasts(..) => rsx! {
-            LibraryPodcastsList {}
+            LibraryLetteredList::<PodcastsList> {}
         },
         LibraryPair::Feeds(..) => rsx! {
-            LibraryFeedsList {}
+            LibraryLetteredList::<FeedsList> {}
         },
     }
 }
@@ -143,11 +143,10 @@ fn list_painter(pair: LibraryPair) -> Element {
 /// The active destination's Hero painter: the same painter the Wide pane and
 /// the Narrow overlay mount, so the two cannot drift (design D4). The Music,
 /// Home, Shows, plain Emby, Audiobooks, Podcasts, and Feeds Heroes are rows
-/// 7.5 and 7.6's ports; the props carry what each Hero reads — the Emby,
-/// Shows, Audiobooks, and Podcasts commands name the library index, and each
-/// Hero takes the carried handle and narrows its own part in its body, so a
-/// panel repaint clones no section's content (`share-gui-sections-by-rc`
-/// design D3).
+/// 7.5 and 7.6's ports; the props carry what each Hero reads — the Shows and
+/// Audiobooks chapters' commands name the library index, and each Hero takes
+/// the carried handle and narrows its own part in its body, so a panel repaint
+/// clones no section's content (`share-gui-sections-by-rc` design D3).
 fn hero_painter(
     list: Option<&SectionRef<GuiLibraryList>>,
     detail: Option<&SectionRef<GuiLibraryDetail>>,
@@ -168,9 +167,8 @@ fn hero_painter(
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Emby(list_part, _) => rsx! {
+        LibraryPair::Emby(..) => rsx! {
             LibraryEmbyHero {
-                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
@@ -180,9 +178,8 @@ fn hero_painter(
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Podcasts(list_part, _) => rsx! {
+        LibraryPair::Podcasts(..) => rsx! {
             LibraryPodcastsHero {
-                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
@@ -297,7 +294,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
         }
         _ => None,
     };
-    let menu_row_slots: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
     // The Wide Hero pane's and the Narrow overlay's Hero fact, resolved once
     // per render.
     let pair_paints_hero = pair.as_ref().is_some_and(pair_has_hero);
@@ -464,7 +460,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                                 top,
                                 left: Some(left),
                                 on_select: Some(on_select),
-                                row_slot: menu_row_slots,
                             }
                         }
                     }

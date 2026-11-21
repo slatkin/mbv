@@ -17,7 +17,6 @@ use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
 use crate::bridge::frame::library::GuiLibraryTabFrame;
-use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::DomKey;
 use crate::bridge::pointer::DomPointerKind;
 use crate::bridge::sections::GuiSectionBatch;
@@ -27,15 +26,10 @@ use crate::window::channel::{CoreLink, EventSlot, WindowEvent};
 use crate::window::clock::{Clock, FiredTimers};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::components::attach_screen::AttachScreen;
-use crate::window::components::confirm_overlay::ConfirmOverlay;
-use crate::window::components::daemon_lost_overlay::DaemonLostOverlay;
-use crate::window::components::library_panel::LibraryPanel;
 use crate::window::components::library_top_bar::{HOME_POSITION, LibraryTopBar};
-use crate::window::components::panel::Panel;
 use crate::window::components::panel_divider::{
     DividerDrag, DividerName, DividerSide, PanelDivider,
 };
-use crate::window::components::playlists_panel::PlaylistsPanel;
 use crate::window::components::settings_screen::SettingsScreen;
 use crate::window::components::toast_stack::ToastStack;
 use crate::window::input::KeyOutcome;
@@ -54,6 +48,7 @@ use crate::window::sections::Sections;
 use crate::window::settings::state::SettingsState;
 use crate::window::theme::{ThemeStyle, canvas_var};
 use crate::window::{input, resize};
+use render::{library_column, overlay_layer, queue_column};
 
 /// The generated stylesheet (D11): `make gui-css` builds it from
 /// `assets/app.css` over the Rust sources, and the output is committed.
@@ -600,13 +595,16 @@ pub fn App() -> Element {
             },
             onpointerdown: move |event: PointerEvent| {
                 // A press outside the collection dropdown closes it and clears
-                // its filter text, and a press outside the collapsed Search
-                // control's panel closes it, wherever in the window the press
-                // lands (gui-collection-dropdown design D7; user request
-                // 2026-11-19). The control's own surface stops this handler,
-                // so a press inside acts on the control. The close changes no
-                // pointer fact, so the press still reaches the core.
+                // its filter text, a press outside the Shows view popover or
+                // the season dropdown closes it, and a press outside the
+                // collapsed Search control's panel closes it, wherever in the
+                // window the press lands (gui-collection-dropdown design D7,
+                // D8; gtds design D15; user request 2026-11-19). The control's
+                // own surface stops this handler, so a press inside acts on
+                // the control. The close changes no pointer fact, so the press
+                // still reaches the core.
                 press_library.close_collections_dropdown();
+                press_library.close_shows_view_dropdown();
                 press_library.close_shows_seasons_dropdown();
                 press_library.close_search_panel();
                 input::on_pointer(DomPointerKind::Press, &event.data, &press_link);
@@ -682,21 +680,13 @@ pub fn App() -> Element {
                         } else {
                             // Paint order, left to right: Library panel, Queue
                             // divider, Queue column (design D1).
-                            if library_visible && playlists_open {
-                                // The Playlists screen takes the Library panel's
-                                // slot, with the Queue to its right.
-                                PlaylistsPanel {
-                                    arrangement,
-                                    list_width: widths.list,
-                                    library_column: widths.library_column,
-                                }
-                            } else if library_visible && has_library_list {
-                                LibraryPanel {
-                                    arrangement,
-                                    list_width: widths.list,
-                                    library_column: widths.library_column,
-                                }
-                            }
+                            {library_column(
+                                library_visible,
+                                playlists_open,
+                                has_library_list,
+                                arrangement,
+                                widths,
+                            )}
                             if two_columns && !panel.collapsed {
                                 // The Queue panel's divider (design D4): dragging
                                 // it resizes the Queue column and, with it, the
@@ -715,60 +705,18 @@ pub fn App() -> Element {
                                     },
                                 }
                             }
-                            if queue_visible {
-                                div {
-                                    class: queue_column_class(two_columns, panel.collapsed),
-                                    "data-queue-column": "",
-                                    style: if two_columns {
-                                        format!("width: {}px;", widths.queue)
-                                    } else {
-                                        String::new()
-                                    },
-                                    Panel {
-                                        container: container.cloned(),
-                                        library_visible,
-                                    }
-                                }
-                            }
+                            {queue_column(
+                                queue_visible,
+                                two_columns,
+                                queue_column_class(two_columns, panel.collapsed),
+                                widths.queue,
+                                container,
+                                library_visible,
+                            )}
                         }
                     }
                 }
-                if let Some(frame) = overlay.as_ref() {
-                    match frame {
-                        // The App's raised confirmation modal, window-modal
-                        // over every panel (add-gui-library-panel queue
-                        // fixes): Enter and Esc answer in the core's overlay
-                        // key rules, and the buttons report their press
-                        // regions.
-                        GuiOverlayFrame::Confirm { message, buttons } => rsx! {
-                            ConfirmOverlay {
-                                message: message.clone(),
-                                buttons: buttons.clone(),
-                            }
-                        },
-                        // The App's raised daemon-lost recovery dialog,
-                        // window-modal over every panel: the dialog blocks
-                        // every other input until one of its choices runs,
-                        // and the buttons report their press regions.
-                        GuiOverlayFrame::DaemonLost {
-                            last_playing_title,
-                            daemon_log_path,
-                            restart_error,
-                            buttons,
-                        } => rsx! {
-                            DaemonLostOverlay {
-                                last_playing_title: last_playing_title.clone(),
-                                daemon_log_path: daemon_log_path.clone(),
-                                restart_error: restart_error.clone(),
-                                buttons: buttons.clone(),
-                            }
-                        },
-                        // The row menu, track popover, and playback-target
-                        // chooser paint inside their panels; the root mounts
-                        // nothing for them, as `App` does.
-                        _ => rsx! {},
-                    }
-                }
+                {overlay_layer(overlay.as_ref())}
                 // The floating toast cards (design D7 of `gui-floating-toasts`):
                 // mounted last, so they paint over the panels, the Settings
                 // screen, and the overlays, and nothing while none is live.
@@ -783,6 +731,8 @@ pub fn App() -> Element {
         }
     }
 }
+
+mod render;
 
 #[cfg(test)]
 mod tests;

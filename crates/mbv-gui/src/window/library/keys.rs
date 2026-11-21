@@ -16,6 +16,7 @@ use crate::window::sections::Sections;
 use dioxus_native::prelude::*;
 
 use super::keys_shared::{bare, core_target, cursor_move};
+use super::lettered::{AudiobooksList, EmbyList, FeedsList, PodcastsList};
 use super::state::LibraryState;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::settings::keys::route_settings_key;
@@ -40,11 +41,11 @@ fn close_active_filter(state: &LibraryState) {
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => state.close_home_filter(),
-        Some(GuiDestinationList::Emby(_)) => state.close_emby_filter(),
+        Some(GuiDestinationList::Emby(_)) => state.close_lettered_filter::<EmbyList>(),
         Some(GuiDestinationList::Shows(_)) => state.close_shows_filter(),
-        Some(GuiDestinationList::Audiobooks(_)) => state.close_audiobooks_filter(),
-        Some(GuiDestinationList::Podcasts(_)) => state.close_podcasts_filter(),
-        Some(GuiDestinationList::Feeds(_)) => state.close_feeds_filter(),
+        Some(GuiDestinationList::Audiobooks(_)) => state.close_lettered_filter::<AudiobooksList>(),
+        Some(GuiDestinationList::Podcasts(_)) => state.close_lettered_filter::<PodcastsList>(),
+        Some(GuiDestinationList::Feeds(_)) => state.close_lettered_filter::<FeedsList>(),
         _ => state.close_library_filter(),
     }
 }
@@ -79,8 +80,7 @@ fn types_into_filter(key: &DomKey) -> bool {
 }
 
 /// Whether the open popover mounts a filter field: the collection dropdown
-/// does, and the Shows view dropdown reuses the open fact without one (design
-/// D8), so a destination that carries no collection selector mounts none.
+/// does, and a destination that carries no collection selector mounts none.
 fn collections_filter_mounted(state: &LibraryState) -> bool {
     let list = state.sections.library_list.peek();
     list.as_ref()
@@ -91,9 +91,7 @@ fn collections_filter_mounted(state: &LibraryState) -> bool {
 /// design D7): Esc closes it and clears its filter text, and the filter takes
 /// the typed keys and Backspace wherever the pointer is. Every other key
 /// passes to the rest of the routing, so the dropdown binds nothing else. A
-/// popover with no filter field takes no typed key: the Shows view dropdown
-/// reuses the open fact (design D8), so its keys stay the panel's and the
-/// core's.
+/// destination that mounts no filter field takes no typed key.
 fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     if key.key == "Escape" && bare(key) {
         state.close_collections_dropdown();
@@ -103,6 +101,18 @@ fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyO
         return None;
     }
     types_into_filter(key).then_some(KeyOutcome::Text)
+}
+
+/// Route a key while the Shows view dropdown is open (gui-collection-dropdown
+/// design D8, gtds design D15): Esc closes it. The popover mounts no filter
+/// field, so every other key passes to the rest of the routing and stays the
+/// panel's and the core's.
+fn route_shows_view_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+    if key.key == "Escape" && bare(key) {
+        state.close_shows_view_dropdown();
+        return Some(KeyOutcome::Handled);
+    }
+    None
 }
 
 /// Route a key while the Shows Hero's season dropdown is open: Esc closes it
@@ -117,18 +127,20 @@ fn route_seasons_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutco
 }
 
 /// Route a key while an open text field of the panel holds the keyboard (design
-/// D3, step 2; gui-collection-dropdown design D7): the list's `/` filter takes
-/// every key, and the collection dropdown's own filter takes the typed keys,
-/// Backspace, and Esc — everywhere the pointer is. `None` while no field of the
-/// panel is open, so the rest of the routing answers the key.
+/// D3, step 2; gui-collection-dropdown design D7, D8): the list's `/` filter
+/// takes every key, the collection dropdown's own filter takes the typed keys,
+/// Backspace, and Esc, and the Shows view popover takes Esc — everywhere the
+/// pointer is. `None` while no field or popover of the panel is open, so the
+/// rest of the routing answers the key.
 fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     // The facts are copied out of the store: a route may write it, and a held
     // read would meet that write.
-    let (filter_open, collections_open, seasons_open) = {
+    let (filter_open, collections_open, shows_view_open, seasons_open) = {
         let ui = state.ui.peek();
         (
             ui.filter_open,
             ui.collections.is_some(),
+            ui.shows_view_open.is_open(),
             ui.shows_seasons.is_some(),
         )
     };
@@ -137,6 +149,9 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
     }
     if collections_open {
         return route_collections_open_key(state, key);
+    }
+    if shows_view_open {
+        return route_shows_view_open_key(state, key);
     }
     if seasons_open {
         return route_seasons_open_key(state, key);
@@ -441,6 +456,126 @@ fn rename_field_key(key: &DomKey, settings: &SettingsState) -> KeyOutcome {
     KeyOutcome::Text
 }
 
+/// Route the `Ctrl+K` chord and the Search field's keyboard hold (design D3,
+/// step 2 and 3, row 12.1): the Search field takes the keyboard wherever its
+/// element paints, and the top bar's Search control paints at the window's top
+/// edge in every screen but Settings — above the Queue, above the Library
+/// panel, and above the Playlists screen. So this step runs before the
+/// Playlists screen and the Library-presence gates of [`route_window_gate`]: a
+/// focused field must type there too, not hand its keystrokes to the core's
+/// keybinds. Only one element holds DOM focus, so the order against the field
+/// the Panel routes is safe.
+///
+/// The chord arms the field only while a mounted element paints it: the control
+/// mounts it while it paints the field — inline, or inside its collapsed panel
+/// — so a collapsed-and-closed control holds no field, and the chord opens the
+/// panel instead: the field the panel paints mounts and takes the keyboard the
+/// next frame (user request 2026-11-19). It runs before the open-field checks —
+/// even while the filter holds the keyboard, where the DOM focus move closes the
+/// filter the way any other focus move does.
+///
+/// `None` while neither the chord nor a focused field answers the key, so the
+/// rest of the routing does.
+fn route_search_hold_key(
+    key: &DomKey,
+    sections: &Sections,
+    state: &LibraryState,
+) -> Option<KeyOutcome> {
+    if key.modifiers.ctrl_key
+        && !key.meta_key
+        && !key.modifiers.alt_key
+        && !key.modifiers.shift_key
+        && matches!(key.key.as_str(), "k" | "K")
+    {
+        if state.search_collapsed() && !state.search_panel_open() {
+            state.open_search_panel();
+        }
+        if state.search_field_mounted() {
+            state.focus_search_field();
+            return Some(KeyOutcome::Handled);
+        }
+    }
+    // (2) The focused Search field takes the keys: its hold on the keyboard is
+    // DOM focus, which no panel key runs while it types (the key-leak rule),
+    // and the field's typing is the `Text` answer the forwarder lets through
+    // (design D3, step 2, row 12.1). Both facts must hold: a stale armed fact
+    // an unmounted control retracted must never route a key under it (the same
+    // key-leak gate).
+    if state.search_field_mounted() && state.search_field_focused() {
+        return Some(route_search_key(
+            state,
+            key,
+            sections.search.peek().as_deref(),
+        ));
+    }
+    None
+}
+
+/// Route the keys no Library step may answer, in the design's order (design D2,
+/// step 1): an open core overlay or an armed prefix, the Queue filter's text
+/// entry, the Settings screen, the Search field's keyboard hold, the Playlists
+/// screen, and a window that carries no Library panel. `None` when none of them
+/// answers the key, so the Library keys run.
+///
+/// The section facts are the window's own section stores
+/// (`gui-change-driven-sections` design D6), read through `peek` — a keydown
+/// copies none of their values.
+fn route_window_gate(
+    key: &DomKey,
+    sections: &Sections,
+    state: &LibraryState,
+    settings: Option<&SettingsState>,
+    target: KeyTarget,
+) -> Option<KeyOutcome> {
+    // (1) An open core overlay or an armed prefix keeps the keyboard with the
+    // core: both are section facts, and the core's own router answers them.
+    if sections.overlay.peek().is_some() || sections.status.peek().prefix_armed {
+        return Some(KeyOutcome::Core(target));
+    }
+    // The Queue filter's text entry is the core's, so while it holds the
+    // keyboard every key is the core's to type (`text_entry_focused` in
+    // `src/app/input/gui.rs`). It is the Queue's wherever the pointer is: the
+    // keys the filter does not consume reach the Queue leaf (design D2).
+    if sections.summary.peek().filter_active {
+        return Some(KeyOutcome::Core(KeyTarget::Queue));
+    }
+    // The Settings screen takes every key the overlay step leaves while its
+    // frame section is present (add-gui-settings-screen design D11): the
+    // window paints the screen in place of the two panels then, so no Library
+    // step runs. The Settings steps route ahead of the Library ones (row
+    // 8.1); a harness that carries no Settings store answers the core.
+    if let Some(frame) = sections.settings.peek().as_ref() {
+        return Some(match settings {
+            Some(settings) => route_settings_key(key, frame, settings, target),
+            None => KeyOutcome::Core(target),
+        });
+    }
+    if let Some(outcome) = route_search_hold_key(key, sections, state) {
+        return Some(outcome);
+    }
+    // The Playlists screen takes the rename field's keys while it holds the
+    // keyboard, and the core takes every other key: the Library panel is not
+    // painted, so no Library step runs.
+    if sections.playlists.peek().is_some() {
+        if let Some(settings) = settings
+            && settings.ui.peek().text_field.is_some()
+        {
+            return Some(rename_field_key(key, settings));
+        }
+        return Some(KeyOutcome::Core(target));
+    }
+    // The attach states carry no slice, and no Library panel means no Library
+    // keys: the core takes every one of them. The panel's presence is one fact
+    // for the window and the router (design D2, D10): sections that carry no
+    // Library list take no Library key, even while the window still holds the
+    // content of an earlier frame. The content names the active destination's
+    // section (design D12).
+    if !LibraryState::library_shown(sections.library_list.peek().as_deref()) {
+        return Some(KeyOutcome::Core(target));
+    }
+    None
+}
+
 /// Route one keydown (design D2): the window does its part, and the answer is
 /// what the input forwarder must do with the key. The section facts the routing
 /// reads come from the window's own section stores (`gui-change-driven-sections`
@@ -467,88 +602,9 @@ pub fn route_library_key(
     let Some(sections) = sections else {
         return KeyOutcome::Core(target);
     };
-    // (1) An open core overlay or an armed prefix keeps the keyboard with the
-    // core: both are section facts, and the core's own router answers them.
-    if sections.overlay.peek().is_some() || sections.status.peek().prefix_armed {
-        return KeyOutcome::Core(target);
-    }
-    // The Queue filter's text entry is the core's, so while it holds the
-    // keyboard every key is the core's to type (`text_entry_focused` in
-    // `src/app/input/gui.rs`). It is the Queue's wherever the pointer is: the
-    // keys the filter does not consume reach the Queue leaf (design D2).
-    if sections.summary.peek().filter_active {
-        return KeyOutcome::Core(KeyTarget::Queue);
-    }
-    // The Settings screen takes every key the overlay step leaves while its
-    // frame section is present (add-gui-settings-screen design D11): the
-    // window paints the screen in place of the two panels then, so no Library
-    // step runs. The Settings steps route ahead of the Library ones (row
-    // 8.1); a harness that carries no Settings store answers the core.
-    if let Some(frame) = sections.settings.peek().as_ref() {
-        return match settings {
-            Some(settings) => route_settings_key(key, frame, settings, target),
-            None => KeyOutcome::Core(target),
-        };
-    }
-    // The `Ctrl+K` chord and the keyboard hold (design D3, step 2 and 3, row
-    // 12.1): the Search field takes the keyboard wherever its element paints,
-    // and the top bar's Search control paints at the window's top edge in every
-    // screen but Settings — above the Queue, above the Library panel, and
-    // above the Playlists screen. So this step runs before the Playlists screen
-    // and the Library-presence gates below: a focused field must type there
-    // too, not hand its keystrokes to the core's keybinds. Only one element
-    // holds DOM focus, so the order against the field the Panel routes is safe.
-    //
-    // The chord arms the field only while a mounted element paints it: the
-    // control mounts it while it paints the field — inline, or inside its
-    // collapsed panel — so a collapsed-and-closed control holds no field, and
-    // the chord opens the panel instead: the field the panel paints mounts and
-    // takes the keyboard the next frame (user request 2026-11-19). It runs
-    // before the open-field checks — even while the filter holds the keyboard,
-    // where the DOM focus move closes the filter the way any other focus move
-    // does.
-    if key.modifiers.ctrl_key
-        && !key.meta_key
-        && !key.modifiers.alt_key
-        && !key.modifiers.shift_key
-        && matches!(key.key.as_str(), "k" | "K")
-    {
-        if state.search_collapsed() && !state.search_panel_open() {
-            state.open_search_panel();
-        }
-        if state.search_field_mounted() {
-            state.focus_search_field();
-            return KeyOutcome::Handled;
-        }
-    }
-    // (2) The focused Search field takes the keys: its hold on the keyboard is
-    // DOM focus, which no panel key runs while it types (the key-leak rule),
-    // and the field's typing is the `Text` answer the forwarder lets through
-    // (design D3, step 2, row 12.1). Both facts must hold: a stale armed fact
-    // an unmounted control retracted must never route a key under it (the same
-    // key-leak gate).
-    if state.search_field_mounted() && state.search_field_focused() {
-        return route_search_key(state, key, sections.search.peek().as_deref());
-    }
-    // The Playlists screen takes the rename field's keys while it holds the
-    // keyboard, and the core takes every other key: the Library panel is not
-    // painted, so no Library step runs.
-    if sections.playlists.peek().is_some() {
-        if let Some(settings) = settings
-            && settings.ui.peek().text_field.is_some()
-        {
-            return rename_field_key(key, settings);
-        }
-        return KeyOutcome::Core(target);
-    }
-    // The attach states carry no slice, and no Library panel means no Library
-    // keys: the core takes every one of them. The panel's presence is one fact
-    // for the window and the router (design D2, D10): sections that carry no
-    // Library list take no Library key, even while the window still holds the
-    // content of an earlier frame. The content names the active destination's
-    // section (design D12).
-    if !LibraryState::library_shown(sections.library_list.peek().as_deref()) {
-        return KeyOutcome::Core(target);
+    // (1) The gates the window itself answers, in the design's order.
+    if let Some(outcome) = route_window_gate(key, sections, state, settings, target) {
+        return outcome;
     }
     // (2) An open text field of the panel takes the keys (design D3, step 2).
     if let Some(outcome) = route_open_field_key(state, key) {
