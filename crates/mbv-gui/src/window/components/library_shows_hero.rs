@@ -32,12 +32,12 @@ use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceLoading, WorkspaceRow,
     WorkspaceRowState,
 };
+use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::library::hero::{
     HeroLayoutFacts, hero_layout, join_meta_rows, label_segments, plain_segments,
 };
 use crate::window::library::list::filter_match;
 use crate::window::library::parts::library_shows_detail;
-use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;

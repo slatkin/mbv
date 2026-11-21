@@ -25,9 +25,9 @@ use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, Libra
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow, WorkspaceRowState,
 };
+use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
-use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;
