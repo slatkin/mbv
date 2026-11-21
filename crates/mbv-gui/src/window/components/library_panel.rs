@@ -46,14 +46,13 @@ use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiMusicMe
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
-use crate::window::components::library_audiobooks_list::LibraryAudiobooksList;
 use crate::window::components::library_emby_hero::LibraryEmbyHero;
-use crate::window::components::library_emby_list::LibraryEmbyList;
 use crate::window::components::library_feeds_hero::LibraryFeedsHero;
 use crate::window::components::library_feeds_list::LibraryFeedsList;
 use crate::window::components::library_hero::LibraryHero;
 use crate::window::components::library_home_hero::LibraryHomeHero;
 use crate::window::components::library_home_list::LibraryHomeList;
+use crate::window::components::library_lettered_list::LibraryLetteredList;
 use crate::window::components::library_list::LibraryList;
 use crate::window::components::library_podcasts_hero::LibraryPodcastsHero;
 use crate::window::components::library_podcasts_list::LibraryPodcastsList;
@@ -62,6 +61,7 @@ use crate::window::components::library_shows_list::LibraryShowsList;
 use crate::window::components::library_status_bar::LibraryStatusBar;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
+use crate::window::library::lettered::{AudiobooksList, EmbyList};
 use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerZone;
@@ -126,10 +126,10 @@ fn list_painter(pair: LibraryPair) -> Element {
             LibraryShowsList {}
         },
         LibraryPair::Emby(..) => rsx! {
-            LibraryEmbyList {}
+            LibraryLetteredList::<EmbyList> {}
         },
         LibraryPair::Audiobooks(..) => rsx! {
-            LibraryAudiobooksList {}
+            LibraryLetteredList::<AudiobooksList> {}
         },
         LibraryPair::Podcasts(..) => rsx! {
             LibraryPodcastsList {}

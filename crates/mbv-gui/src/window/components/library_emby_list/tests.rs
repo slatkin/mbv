@@ -20,7 +20,6 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::LibraryEmbyList;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
     GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
@@ -28,6 +27,7 @@ use crate::bridge::frame::library::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::components::library_lettered_list::LibraryLetteredList;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::lettered::{EmbyList, LetteredItemRow};
 use crate::window::library::list::GeometryRow;
@@ -88,7 +88,7 @@ fn emby_list_app(props: FixtureProps) -> Element {
     provide_context(epoch);
     handle.borrow_mut().replace((state, epoch));
     rsx! {
-        LibraryEmbyList {}
+        LibraryLetteredList::<EmbyList> {}
     }
 }
 

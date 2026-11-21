@@ -16,24 +16,26 @@
 use std::sync::Arc;
 
 use dioxus_native::prelude::*;
+use mbv::{GuiCollections, GuiListSortFrame};
 
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiEmbyDetail, GuiEmbyList,
-    GuiEmbyRowFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiLibraryDetail,
-    GuiLibraryList, GuiPodcastsDetail, GuiPodcastsList,
+    GuiAudiobooksRowFrame, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail, GuiLibraryList,
 };
+use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::library::list::{
     GeometryRow, LIBRARY_ROW_HEIGHT, LetteredRow, ListMove, SortLetter, build_lettered_rows,
     filter_match, jump_to_letter, lettered_rail, scroll_step,
 };
-use crate::window::library::parts::{
-    library_audiobooks_detail, library_audiobooks_list, library_emby_detail, library_emby_list,
-    library_feeds_detail, library_feeds_list, library_podcasts_detail, library_podcasts_list,
-};
 use crate::window::library::scroll::{ListScroll, set_scroll_top};
+use crate::window::pointer_target::PointerList;
+use crate::window::service_mark::ServiceMark;
 
 use super::list_state::ListUiState;
 use super::state::LibraryState;
+
+mod adapters;
+
+pub use adapters::{AudiobooksList, EmbyList, FeedsList, PodcastsList};
 
 /// The entry row's height in logical pixels (gui-delineated-rows design D2):
 /// the shared top-level row part's height, which paints the entry's two-line
@@ -140,12 +142,81 @@ impl<Row: CarriedRow> SortLetter for LetteredItemRow<Row> {
     }
 }
 
+/// The notice lines a lettered list paints above its rows (design D4): the
+/// load line every destination paints with the same text, and the failure and
+/// empty lines, each with its own attribute and text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LetteredNotices {
+    /// The load line's attribute.
+    pub loading_attr: &'static str,
+    /// The failure line's attribute.
+    pub failed_attr: &'static str,
+    /// The empty line's attribute.
+    pub empty_attr: &'static str,
+    /// The failure line's text.
+    pub failed_text: &'static str,
+    /// The empty line's text.
+    pub empty_text: &'static str,
+}
+
+/// The load facts a lettered list part carries (design D4): each notice line
+/// paints while its fact holds. The empty line paints only over a landed row
+/// set, so a landing list shows the load line alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LetteredLoadFacts {
+    /// Whether the list has not landed yet.
+    pub loading: bool,
+    /// Whether the list's fetch failed.
+    pub failed: bool,
+    /// Whether the landed list holds no row.
+    pub empty: bool,
+}
+
+impl LetteredLoadFacts {
+    /// The load facts of a part that says whether it loads, whether it
+    /// failed, and whether it holds no row: the empty line is the fact that
+    /// holds over a landed row set alone.
+    #[must_use]
+    pub fn of(loading: bool, failed: bool, no_rows: bool) -> Self {
+        Self {
+            loading,
+            failed,
+            empty: !loading && !failed && no_rows,
+        }
+    }
+}
+
+/// The facts a lettered list's header paints (design D4): the Service mark or
+/// title that names the destination, the selection label where one paints,
+/// the collection selector and sort control where they paint, and the `/`
+/// filter field's texts. The filter text and the field's callbacks are the
+/// list's, not the header's, so they do not ride here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LetteredHeader {
+    /// The mark that names the destination at the heading line's left end.
+    pub mark: ServiceMark,
+    /// The carried selection's label: empty where the destination paints
+    /// none.
+    pub label: String,
+    /// The destination's own label attribute, when it has one.
+    pub label_attr: Option<&'static str>,
+    /// The destination's collection selector, when it has one.
+    pub collections: Option<GuiCollections>,
+    /// The destination's sort control, when its list has one.
+    pub sort: Option<GuiListSortFrame>,
+    /// The filter field's placeholder, which names the selection it narrows.
+    pub placeholder: String,
+    /// The filter field's accessible name.
+    pub aria_label: &'static str,
+}
+
 /// One of the Library's lettered destinations (design D4): the plain Emby
 /// library, Audiobooks, Podcasts, or Feeds. A destination is a zero-sized
 /// adapter that names its carried row, its list and detail parts, its
-/// interaction state, and its scroll store, so the row model and the list's
-/// wiring are one generic body over the four. The adapters compare and copy,
-/// so a generic component takes one as a prop.
+/// interaction state, its scroll store, and its own painted data, so the row
+/// model, the list's wiring, and the list component are one generic body over
+/// the four. The adapters compare and copy, so the component names one as its
+/// type parameter.
 pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// The carried row the destination paints.
     type Row: CarriedRow + Clone;
@@ -155,6 +226,26 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
 
     /// The destination's detail part.
     type Detail;
+
+    /// The attribute word the destination's DOM hooks carry (design D4): the
+    /// list column (`data-library-<word>-list-column`), the scroll shell's
+    /// list and row hooks, the letter headings
+    /// (`data-library-<word>-letter`), and the item rows.
+    const ATTR: &'static str;
+
+    /// The list's padding, as the scroll shell applies it.
+    const PADDING: &'static str;
+
+    /// The scope the list reports its rows in view under, so the core queues
+    /// their row art (gui-delineated-rows design D7).
+    const ART_SCOPE: GuiRowArtScopeFrame;
+
+    /// The list kind the destination's scroller carries as its pointer marker
+    /// (`gui-pointer-target-interaction` D1).
+    const POINTER_LIST: PointerList;
+
+    /// The destination's notice lines and their texts (design D4).
+    const NOTICES: LetteredNotices;
 
     /// The heading id prefix (gui-flat-list-sort design D8): each
     /// destination's letter headings keep their own hook.
@@ -172,6 +263,20 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// destination holds the window.
     fn detail(detail: Option<&GuiLibraryDetail>) -> Option<&Self::Detail>;
 
+    /// The row the list paints raised: the core's selected row in `detail`,
+    /// as the frame painted it.
+    fn selected(detail: &Self::Detail) -> Option<&str>;
+
+    /// The load facts the destination's list part carries (design D4): the
+    /// load line, the failure line, and the empty line each paint while their
+    /// fact holds.
+    fn load_facts(list: &Self::List) -> LetteredLoadFacts;
+
+    /// The header the destination paints above its rows: its mark, its
+    /// selection label, its collection selector, its sort control, and its
+    /// filter field's texts.
+    fn header(list: Option<&Self::List>) -> LetteredHeader;
+
     /// The destination's filter state: every lettered destination's `/`
     /// filter is the one [`ListUiState`] text, so the generic filter, scroll,
     /// letter-jump, measure, and scroll methods read and write it here.
@@ -185,6 +290,15 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// carried rows narrowed by [`ListUiState::filter`], under the letter
     /// headings a name sort paints (design D4).
     fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]>;
+
+    /// One painted row of the list (design D4): the letter heading, or the
+    /// item row the destination paints. The destination's own paint code, so
+    /// the component paints every row through this one call.
+    fn paint_row(
+        row: &LetteredRow<LetteredItemRow<Self::Row>>,
+        library: &LibraryState,
+        selected: Option<&str>,
+    ) -> Element;
 
     /// Select the painted row (design D4, D12): the select command the core
     /// stores, whose frame paints the Hero. A heading names no row, so its
@@ -204,198 +318,6 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// is consumed and does nothing there.
     fn play_next(state: &LibraryState, item_id: &str) {
         let _ = (state, item_id);
-    }
-}
-
-/// The plain Emby-library destination's adapter (design D4): its carried rows
-/// are the Emby row frames, and its list, detail, ui, and scroll are the Emby
-/// ones.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EmbyList;
-
-impl LetteredDestination for EmbyList {
-    type Row = GuiEmbyRowFrame;
-    type List = GuiEmbyList;
-    type Detail = GuiEmbyDetail;
-
-    const HEADING_KEY: &'static str = "emby-letter";
-
-    fn list(list: Option<&GuiLibraryList>) -> Option<&Self::List> {
-        library_emby_list(list)
-    }
-
-    fn detail(detail: Option<&GuiLibraryDetail>) -> Option<&Self::Detail> {
-        library_emby_detail(detail)
-    }
-
-    fn ui(state: &LibraryState) -> Signal<ListUiState> {
-        state.emby_ui
-    }
-
-    fn scroll(state: &LibraryState) -> Signal<ListScroll> {
-        state.scrolls.emby
-    }
-
-    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
-        state.emby_rows()
-    }
-
-    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
-        state.select_emby_row(row);
-    }
-
-    fn play(state: &LibraryState, item_id: &str) {
-        state.play_emby_row(item_id);
-    }
-
-    fn queue(state: &LibraryState, item_id: &str) {
-        state.queue_emby_row(item_id);
-    }
-
-    fn play_next(state: &LibraryState, item_id: &str) {
-        state.play_emby_row_next(item_id);
-    }
-}
-
-/// The Audiobooks destination's adapter (design D4): its carried rows are the
-/// book row frames, and its list, detail, ui, and scroll are the Audiobooks
-/// ones.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AudiobooksList;
-
-impl LetteredDestination for AudiobooksList {
-    type Row = GuiAudiobooksRowFrame;
-    type List = GuiAudiobooksList;
-    type Detail = GuiAudiobooksDetail;
-
-    const HEADING_KEY: &'static str = "abs-letter";
-
-    fn list(list: Option<&GuiLibraryList>) -> Option<&Self::List> {
-        library_audiobooks_list(list)
-    }
-
-    fn detail(detail: Option<&GuiLibraryDetail>) -> Option<&Self::Detail> {
-        library_audiobooks_detail(detail)
-    }
-
-    fn ui(state: &LibraryState) -> Signal<ListUiState> {
-        state.audiobooks_ui
-    }
-
-    fn scroll(state: &LibraryState) -> Signal<ListScroll> {
-        state.scrolls.audiobooks
-    }
-
-    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
-        let filter = state.audiobooks_ui.peek().filter.clone();
-        state.audiobooks_rows(&filter)
-    }
-
-    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
-        state.select_audiobooks_row(row);
-    }
-
-    fn play(state: &LibraryState, item_id: &str) {
-        state.play_audiobooks_row(item_id);
-    }
-
-    fn queue(state: &LibraryState, item_id: &str) {
-        state.queue_audiobooks_row(item_id);
-    }
-}
-
-/// The Podcasts destination's adapter (design D4): its carried rows are the
-/// entry row frames, and its list, detail, ui, and scroll are the Podcasts
-/// ones.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PodcastsList;
-
-impl LetteredDestination for PodcastsList {
-    type Row = GuiEntryRowFrame;
-    type List = GuiPodcastsList;
-    type Detail = GuiPodcastsDetail;
-
-    const HEADING_KEY: &'static str = "podcasts-letter";
-
-    fn list(list: Option<&GuiLibraryList>) -> Option<&Self::List> {
-        library_podcasts_list(list)
-    }
-
-    fn detail(detail: Option<&GuiLibraryDetail>) -> Option<&Self::Detail> {
-        library_podcasts_detail(detail)
-    }
-
-    fn ui(state: &LibraryState) -> Signal<ListUiState> {
-        state.podcasts_ui
-    }
-
-    fn scroll(state: &LibraryState) -> Signal<ListScroll> {
-        state.scrolls.podcasts
-    }
-
-    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
-        state.podcasts_rows()
-    }
-
-    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
-        if let LetteredRow::Item(item) = row {
-            state.select_podcasts_row(item);
-        }
-    }
-
-    fn play(state: &LibraryState, item_id: &str) {
-        state.play_podcasts_row(item_id);
-    }
-
-    fn queue(state: &LibraryState, item_id: &str) {
-        state.queue_podcasts_row(item_id);
-    }
-}
-
-/// The Feeds destination's adapter (design D4): its carried rows are the entry
-/// row frames, and its list, detail, ui, and scroll are the Feeds ones.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FeedsList;
-
-impl LetteredDestination for FeedsList {
-    type Row = GuiEntryRowFrame;
-    type List = GuiFeedsList;
-    type Detail = GuiFeedsDetail;
-
-    const HEADING_KEY: &'static str = "feeds-letter";
-
-    fn list(list: Option<&GuiLibraryList>) -> Option<&Self::List> {
-        library_feeds_list(list)
-    }
-
-    fn detail(detail: Option<&GuiLibraryDetail>) -> Option<&Self::Detail> {
-        library_feeds_detail(detail)
-    }
-
-    fn ui(state: &LibraryState) -> Signal<ListUiState> {
-        state.feeds_ui
-    }
-
-    fn scroll(state: &LibraryState) -> Signal<ListScroll> {
-        state.scrolls.feeds
-    }
-
-    fn painted_rows(state: &LibraryState) -> Arc<[LetteredRow<LetteredItemRow<Self::Row>>]> {
-        state.feeds_rows()
-    }
-
-    fn select(state: &LibraryState, row: &LetteredRow<LetteredItemRow<Self::Row>>) {
-        if let LetteredRow::Item(item) = row {
-            state.select_feeds_row(item);
-        }
-    }
-
-    fn play(state: &LibraryState, item_id: &str) {
-        state.play_feeds_row(item_id);
-    }
-
-    fn queue(state: &LibraryState, item_id: &str) {
-        state.queue_feeds_row(item_id);
     }
 }
 

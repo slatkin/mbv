@@ -13,11 +13,9 @@ pub mod dialog_frame;
 pub mod folded_queue;
 pub mod library_attr;
 pub mod library_audiobooks_hero;
-pub mod library_audiobooks_list;
 pub mod library_collection_dropdown;
 pub mod library_dropdown;
 pub mod library_emby_hero;
-pub mod library_emby_list;
 pub mod library_feeds_hero;
 pub mod library_feeds_list;
 pub mod library_filter_field;
@@ -31,6 +29,7 @@ pub mod library_home_list;
 pub mod library_item_row;
 pub mod library_letter_heading;
 pub mod library_letter_rail;
+pub mod library_lettered_list;
 pub mod library_list;
 pub mod library_list_header;
 pub mod library_list_notice;
@@ -83,3 +82,18 @@ pub mod tree_guide;
 pub mod tree_hint;
 pub mod typed_text;
 pub mod use_focus_while;
+
+// The two lettered lists the generic component serves keep their own suites in
+// their own directories, and each keeps the module path (and so the nextest
+// filter) it had while it was a component of its own
+// (`gui-tech-debt-simplification` design D10; task 4.6 merges the four suites
+// into `library_lettered_list/tests.rs`).
+#[cfg(test)]
+mod library_emby_list {
+    mod tests;
+}
+
+#[cfg(test)]
+mod library_audiobooks_list {
+    mod tests;
+}
