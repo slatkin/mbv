@@ -436,12 +436,27 @@ impl App {
         &self,
         targets: &[AudiobookshelfMenuTarget],
     ) -> Vec<QueueItem> {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return Vec::new();
-        };
         targets
             .iter()
-            .filter_map(|target| match target {
+            .filter_map(|target| self.audiobookshelf_menu_target_queue_item(target))
+            .collect()
+    }
+
+    /// One menu target's queue item (standard-media-context-menus design D4):
+    /// the active Audiobookshelf library first, because its cache is the one
+    /// the destination menu painted, then every other library. The fallback is
+    /// what resolves a Home `Recently added` row: the tab is Home there, so a
+    /// tab-gated lookup found nothing and every Play, Shuffle, and Add to Queue
+    /// entry on that row did nothing.
+    fn audiobookshelf_menu_target_queue_item(
+        &self,
+        target: &AudiobookshelfMenuTarget,
+    ) -> Option<QueueItem> {
+        let active = self.tab.audiobookshelf_index();
+        active
+            .into_iter()
+            .chain((0..self.audiobookshelf_libraries.len()).filter(|index| Some(*index) != active))
+            .find_map(|index| match target {
                 AudiobookshelfMenuTarget::Episode {
                     library_item_id,
                     episode_id,
@@ -457,7 +472,6 @@ impl App {
                     audiobookshelf_book_queue_item_for_id(state, library_item_id)
                 }
             })
-            .collect()
     }
 
     pub(in crate::app) fn selected_audiobookshelf_queue_item_target(

@@ -293,8 +293,9 @@ fn paint_shows_season(
 /// A flat New or Upcoming row (gui-collection-dropdown design D9;
 /// gui-delineated-rows design D1, D2): the shared top-level row part over the
 /// two title lines and the date gutter the old Home sections carried, with the
-/// row's art thumb. An Upcoming row paints no play affordance and takes no
-/// select.
+/// row's art thumb. An Upcoming row paints no play affordance, takes no
+/// select, and opens no row menu, because it is display-only; a New row is a
+/// playable episode and opens the row menu its episode rows do.
 fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option<&str>) -> Element {
     let id = row.id.clone();
     let selected_row = Some(id.as_str()) == selected;
@@ -303,6 +304,8 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
     let press_library = library.clone();
     let play_id = id.clone();
     let play_library = library.clone();
+    let menu_id = (!display_only).then(|| LibraryState::row_menu_item(id.clone()));
+    let menu_library = library.clone();
     rsx! {
         LibraryItemRow {
             attr: "shows",
@@ -329,7 +332,11 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
                     play_library.play_shows_row(&play_id);
                 }
             }),
-            on_context: None,
+            // The shared row part presses on a right-click before it calls
+            // `on_context`, so the menu's View Detail shows this row.
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
+                menu_library.open_row_menu_at(menu_id.clone(), x, y);
+            })),
         }
     }
 }

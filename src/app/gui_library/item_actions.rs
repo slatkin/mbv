@@ -9,6 +9,7 @@ use mbv_ui_model::ui_util::is_playable;
 use super::GuiGroupAlbums;
 use super::collection::GuiCollectionSet;
 use super::podcasts_projection::GuiPodcastEpisodeId;
+use super::request::GuiSectionRequest;
 use crate::app::App;
 
 /// One GUI Library row's resolved menu target (add-gui-library-panel design
@@ -175,8 +176,9 @@ impl App {
 
     /// The item a command names, with the library it belongs to: the album
     /// lists the GUI store holds, then the plain Emby libraries' root lists,
-    /// then the navigation levels the TUI also loads, then the picked album's
-    /// cached tracks (design D5, row 8.1).
+    /// then the navigation levels the TUI also loads, then the Shows New
+    /// fetch's landed rows, then the picked album's cached tracks (design D5,
+    /// row 8.1, D9).
     pub(super) fn gui_library_item(&self, item_id: &str) -> Option<(usize, EmbyItem)> {
         for (lib_idx, lib) in self.libs.iter().enumerate() {
             let stored = self
@@ -192,7 +194,20 @@ impl App {
                     .rev()
                     .find_map(|level| level.items.iter().find(|item| item.id == item_id))
             };
-            if let Some(item) = stored.or_else(emby_root).or_else(browsed) {
+            // A Shows New row names one of the library's latest episodes, and
+            // only its own fetch's landed rows hold that list (design D9).
+            let shows_new = || {
+                self.gui_shows_new
+                    .get(&lib.library.id)
+                    .into_iter()
+                    .flat_map(GuiSectionRequest::items)
+                    .find(|item| item.id == item_id)
+            };
+            if let Some(item) = stored
+                .or_else(emby_root)
+                .or_else(browsed)
+                .or_else(shows_new)
+            {
                 return Some((lib_idx, item.clone()));
             }
             // A series tree row names a season or an episode, which only the
