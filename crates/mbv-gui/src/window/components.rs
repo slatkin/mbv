@@ -50,6 +50,7 @@ pub mod menu_card;
 pub mod panel;
 pub mod panel_divider;
 pub mod playlists_panel;
+pub mod prefix_badge;
 pub mod queue_chooser_menu;
 pub mod queue_footer;
 pub mod queue_header;

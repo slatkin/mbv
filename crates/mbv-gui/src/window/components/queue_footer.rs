@@ -57,6 +57,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
+use crate::window::components::prefix_badge::PrefixBadge;
 use crate::window::icons::{ChevronsRight, SaveCheck, SaveOff};
 use crate::window::layout::region_set::use_region_set;
 use crate::window::pointer_target::PointerZone;
@@ -207,11 +208,7 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                     class: "flex min-w-0 flex-1 items-center justify-center",
                     style: "gap: 12px; padding-inline: 16px;",
                     if prefix {
-                        span {
-                            class: "shrink-0 font-bold",
-                            style: "color: var(--mbv-accent);",
-                            "PREFIX"
-                        }
+                        PrefixBadge { class: "shrink-0 font-bold" }
                     }
                 }
                 // The right group: the marked rows' total while rows are

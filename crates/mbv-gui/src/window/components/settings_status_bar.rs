@@ -10,6 +10,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::chrome::GuiStatusBar;
+use crate::window::components::prefix_badge::PrefixBadge;
 
 /// The screen's fixed keys (design D11), which `[keys]` does not configure,
 /// so the text is fixed.
@@ -44,11 +45,9 @@ pub fn SettingsStatusBar(props: SettingsStatusBarProps) -> Element {
                 style: "gap: 12px;",
                 "data-settings-status-hints": "",
                 if props.status.prefix_armed {
-                    span {
+                    PrefixBadge {
                         class: "font-bold",
-                        style: "color: var(--mbv-accent);",
-                        "data-settings-status-prefix": "",
-                        "PREFIX"
+                        hook: "data-settings-status-prefix",
                     }
                 }
                 if !props.status.prefix_armed {
