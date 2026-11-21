@@ -34,7 +34,7 @@ use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::icons::{Check, ChevronDown, Monitor};
 use crate::window::layout::region_set::{MarkHandler, use_region_set};
 use crate::window::sections::Sections;
-use crate::window::theme::role_var;
+use crate::window::theme::{EfToken, ef_var, role_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The glyph a target choice paints, in the chooser's rows and on the control's
@@ -82,6 +82,18 @@ pub fn QueueTargetControl() -> Element {
         _ => None,
     };
 
+    // The pill's open state: the Queue switcher's own pair while its chooser
+    // hangs open, so the two controls look alike at rest, hovered, and open.
+    let open_look = if chooser.is_some() {
+        format!(
+            " border-color: {}; background: {};",
+            ef_var(EfToken::Grey0),
+            ef_var(EfToken::Bg3)
+        )
+    } else {
+        String::new()
+    };
+
     let target_mark = region_set.mark(RegionTarget::QueuePlayback(
         QueuePlaybackTargetId::PlaybackTarget,
     ));
@@ -111,7 +123,7 @@ pub fn QueueTargetControl() -> Element {
             button {
                 "type": "button",
                 class: "flex min-w-0 items-center",
-                style: "height: 32px; padding: 0 8px; gap: 6px; border-radius: 6px; font-size: 13px; color: {target_color};",
+                style: "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; font-size: 13px; color: {target_color};{open_look}",
                 "data-target": "playbackTarget",
                 "aria-label": "Playback target",
                 title: "Playback target",

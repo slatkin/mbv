@@ -337,8 +337,9 @@ button:not(:disabled):hover,
 }
 
 /* The Queue header's controls and the Queue chooser's items paint their own
-   hover (gui-queue-panel-redesign design D7, D8): the switcher takes a raised
-   fill and a brighter border, each icon button a raised fill and a brighter
+   hover (gui-queue-panel-redesign design D7, D8): the switcher and the
+   playback target control (one pill look) take a raised fill and a brighter
+   border, each icon button a raised fill and a brighter
    glyph, the enabled close the destructive pair, and each chooser item the
    raised fill its cursor row paints. The colours read the `--ef-*` palette
    through `window/theme.rs::ef_var`, so the rules live here rather than in
@@ -350,11 +351,13 @@ button:not(:disabled):hover,
 	background-color: var(--ef-bg3);
 	color: var(--ef-fg);
 }
-[data-queue-header] [data-queue-chooser] {
+[data-queue-header] [data-queue-chooser],
+[data-queue-header] [data-target='playbackTarget'] {
 	background-color: var(--ef-bg2);
 	border-color: var(--ef-bg4);
 }
-[data-queue-header] [data-queue-chooser]:hover {
+[data-queue-header] [data-queue-chooser]:hover,
+[data-queue-header] [data-target='playbackTarget']:hover {
 	background-color: var(--ef-bg3);
 	border-color: var(--ef-bg5);
 }
