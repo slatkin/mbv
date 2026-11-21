@@ -15,10 +15,9 @@
 //!      pills over the episodes), passed as the children.
 //!
 //! A destination supplies facts and rows and never restates the layout, so a
-//! fix here lands in all of them. The artwork arm is `LibraryHeroArt`'s: the
-//! canvas's 300 px box for a square or portrait cover, and the 16:9 still for
-//! a landscape one. The text sits beside either when 320 px or more is free
-//! and wraps below the art when the Hero is narrower.
+//! fix here lands in all of them. The detail block — the artwork box and the
+//! text beside it — is `LibraryHeroDetail`'s, the one block the Home Hero paints
+//! through too, so the art's size and place are the same in every destination.
 //!
 //! `attr` names the destination's own attributes: the Music Hero's are
 //! `data-library-hero-*` (`attr` empty) and the Shows Hero's are
@@ -29,7 +28,7 @@ use dioxus_native::prelude::*;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::GuiArtShapeFrame;
 use crate::window::components::library_attr::library_attr;
-use crate::window::components::library_hero_art::LibraryHeroArt;
+use crate::window::components::library_hero_detail::LibraryHeroDetail;
 use crate::window::components::typed_text::TypedText;
 use crate::window::library::hero::{HeroMetaRole, HeroMetaRow, Segments};
 
@@ -208,11 +207,9 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
         children,
     } = props;
 
-    let band = art_shape == GuiArtShapeFrame::Landscape;
     let root_attrs = vec![Attribute::new(root, "", None, false)];
     let kicker_attrs = vec![Attribute::new(own(attr, "kicker"), "", None, false)];
     let title_attrs = vec![Attribute::new(own(attr, "title"), "", None, false)];
-    let block_attrs = vec![Attribute::new(own(attr, "block"), "", None, false)];
     let overview_attrs = vec![Attribute::new(own(attr, "overview"), "", None, false)];
 
     rsx! {
@@ -250,99 +247,84 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                     { action }
                 }
             }
-            section {
-                // Every art shape wraps: the text drops under the art when the
-                // Hero is too narrow to hold both side by side (the text's
-                // 320 px basis), not only for a landscape still.
-                class: "flex flex-wrap items-start",
-                style: "gap: 18px 32px;",
-                "aria-label": "{block.label}",
-                ..block_attrs,
-                LibraryHeroArt {
-                    shape: art_shape,
-                    art,
-                    title: art_title,
-                    attr,
-                    placeholder: art_placeholder,
-                }
-                div {
-                    class: "flex min-w-0 flex-1 flex-col",
-                    style: if band {
-                        "gap: 18px; flex-basis: 320px; padding-top: 0;"
-                    } else {
-                        "gap: 18px; flex-basis: 320px; padding-top: 8px;"
-                    },
-                    if painted(block.eyebrow.as_ref())
-                        || named(block.name.as_deref())
-                        || painted(block.facts.as_ref())
-                        || !block.meta.is_empty()
-                    {
-                        div {
-                            class: "flex flex-col",
-                            style: "gap: 6px;",
-                            if let Some(eyebrow) = block.eyebrow.as_ref().filter(|eyebrow| !eyebrow.is_empty()) {
-                                span {
-                                    class: "font-mono",
-                                    style: "font-size: 12px; letter-spacing: 0.08em; color: var(--canvas-muted);",
-                                    TypedText { segments: eyebrow.clone() }
-                                }
+            LibraryHeroDetail {
+                attr,
+                block_attr: own(attr, "block"),
+                label: block.label.clone(),
+                art_shape,
+                art,
+                art_title,
+                art_placeholder,
+                if painted(block.eyebrow.as_ref())
+                    || named(block.name.as_deref())
+                    || painted(block.facts.as_ref())
+                    || !block.meta.is_empty()
+                {
+                    div {
+                        class: "flex flex-col",
+                        style: "gap: 6px;",
+                        if let Some(eyebrow) = block.eyebrow.as_ref().filter(|eyebrow| !eyebrow.is_empty()) {
+                            span {
+                                class: "font-mono",
+                                style: "font-size: 12px; letter-spacing: 0.08em; color: var(--canvas-muted);",
+                                TypedText { segments: eyebrow.clone() }
                             }
-                            if let Some(name) = block.name.as_ref().filter(|name| !name.is_empty()) {
-                                h2 {
-                                    style: "margin: 0; font-size: 24px; font-weight: 600; color: var(--canvas-heading);",
-                                    ..vec![Attribute::new(
-                                        own(attr, "block-name"),
-                                        "",
-                                        None,
-                                        false,
-                                    )],
-                                    "{name}"
-                                }
+                        }
+                        if let Some(name) = block.name.as_ref().filter(|name| !name.is_empty()) {
+                            h2 {
+                                style: "margin: 0; font-size: 24px; font-weight: 600; color: var(--canvas-heading);",
+                                ..vec![Attribute::new(
+                                    own(attr, "block-name"),
+                                    "",
+                                    None,
+                                    false,
+                                )],
+                                "{name}"
                             }
-                            if let Some(facts) = block.facts.as_ref().filter(|facts| !facts.is_empty()) {
-                                span {
-                                    class: "font-mono",
-                                    style: "font-size: 13px; color: var(--canvas-muted);",
-                                    ..block_facts_attrs(attr),
-                                    TypedText { segments: facts.clone() }
-                                }
+                        }
+                        if let Some(facts) = block.facts.as_ref().filter(|facts| !facts.is_empty()) {
+                            span {
+                                class: "font-mono",
+                                style: "font-size: 13px; color: var(--canvas-muted);",
+                                ..block_facts_attrs(attr),
+                                TypedText { segments: facts.clone() }
                             }
-                            for (index, row) in block.meta.iter().enumerate() {
-                                {
-                                    let (class, color) = row_paint(row);
-                                    let role_attrs = vec![Attribute::new(
-                                        own(attr, "role"),
-                                        row.role.wire(),
-                                        None,
-                                        false,
-                                    )];
-                                    rsx! {
-                                        span {
-                                            key: "{index}",
-                                            class: "{class}",
-                                            style: "font-size: 13px; color: {color};",
-                                            ..role_attrs,
-                                            TypedText { segments: row.segments.clone() }
-                                        }
+                        }
+                        for (index, row) in block.meta.iter().enumerate() {
+                            {
+                                let (class, color) = row_paint(row);
+                                let role_attrs = vec![Attribute::new(
+                                    own(attr, "role"),
+                                    row.role.wire(),
+                                    None,
+                                    false,
+                                )];
+                                rsx! {
+                                    span {
+                                        key: "{index}",
+                                        class: "{class}",
+                                        style: "font-size: 13px; color: {color};",
+                                        ..role_attrs,
+                                        TypedText { segments: row.segments.clone() }
                                     }
                                 }
                             }
                         }
                     }
-                    if let Some(actions) = actions {
-                        div {
-                            class: "relative flex flex-wrap items-center",
-                            style: "gap: 8px;",
-                            { actions }
-                        }
+                }
+                if let Some(actions) = actions {
+                    div {
+                        class: "relative flex flex-wrap items-center",
+                        style: "gap: 8px;",
+                        { actions }
                     }
-                    if let Some(overview) = block.overview.as_ref().filter(|overview| !overview.is_empty()) {
-                        p {
-                            class: "min-w-0",
-                            style: "margin: 0; font-size: 14px; line-height: 1.5; color: var(--canvas-muted);",
-                            ..overview_attrs,
-                            "{overview}"
-                        }
+                }
+                if let Some(overview) = block.overview.as_ref().filter(|overview| !overview.is_empty()) {
+                    p {
+                        class: "min-w-0",
+                        style: "margin: 0; font-size: 14px; line-height: 1.5; color: var(--canvas-muted);",
+                        ..overview_attrs,
+                        "{overview}"
                     }
                 }
             }
