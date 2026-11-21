@@ -168,9 +168,12 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     let underline = role_var(GuiRole::TabSelectedUnderline);
 
     // The Home icon's and the tabs' painted colours and the current tab's
-    // weight, resolved before the markup.
+    // weight, resolved before the markup. The icon tabs mark active in
+    // mauve — the TabSelectedUnderline role — because the near-white
+    // heading colour reads too close to the muted resting grey
+    // (user request 2026-11-21).
     let home_color = if props.home_active {
-        canvas_var("heading")
+        role_var(GuiRole::TabSelectedUnderline)
     } else {
         canvas_var("muted")
     };
@@ -223,7 +226,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
             {
                 let playlists_library = library.clone();
                 let playlists_color = if props.playlists_active {
-                    canvas_var("heading")
+                    role_var(GuiRole::TabSelectedUnderline)
                 } else {
                     canvas_var("muted")
                 };
