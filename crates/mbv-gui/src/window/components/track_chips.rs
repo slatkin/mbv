@@ -43,7 +43,7 @@ use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiTrackChipKind, GuiTrackP
 use crate::bridge::frame::playback::{GuiTrackChip, GuiTrackChips};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
-use crate::window::icons::{AudioLines, Captions, Check, MonitorPlay};
+use crate::window::icons::{AudioLines, Check, ClosedCaption, MonitorPlay};
 use crate::window::layout::region_set::{MarkHandler, RegionSet, use_region_set_for};
 use crate::window::theme::{canvas_var, role_var};
 use crate::window::truncate::{TextStyle, Truncate};
@@ -220,7 +220,7 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
                     "aria-expanded": "{subtitles_open}",
                     "data-chip": "subtitles",
                     onmounted: move |event| subtitle_mark.call(event),
-                    Captions { size: 12, color: role_var(GuiRole::TextMuted) }
+                    ClosedCaption { size: 12, color: role_var(GuiRole::TextMuted) }
                     span { "{chip_label(&chips.subtitles, GuiTrackChipKind::Subtitles)}" }
                 }
                 if subtitles_open {

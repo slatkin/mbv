@@ -151,10 +151,11 @@ lucide_icons! {
         path { d: "M22 10v3" }
     }
 
-    /// The Lucide `captions` icon (`lucide-subtitles` is its alias class).
-    Captions("captions", "subtitles") {
-        rect { width: "18", height: "14", x: "3", y: "5", rx: "2", ry: "2" }
-        path { d: "M7 15h4M15 15h2M7 11h2M13 11h4" }
+    /// The Lucide `closed-caption` icon.
+    ClosedCaption("closed-caption") {
+        path { d: "M10 9.17a3 3 0 1 0 0 5.66" }
+        path { d: "M17 9.17a3 3 0 1 0 0 5.66" }
+        rect { width: "20", height: "14", x: "2", y: "5", rx: "2" }
     }
 
     /// The Lucide `cast` icon.
