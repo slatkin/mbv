@@ -83,6 +83,10 @@ pub enum LibraryRow {
         item_id: Option<String>,
         /// Whether the row paints open.
         open: bool,
+        /// Whether the open artist shows child rows: the row starts its guide
+        /// under its thumb only while a kept album row paints under it
+        /// (gui-tree-indent-guides design D4).
+        shows_children: bool,
         /// The row's art (gui-delineated-rows design D4): the artist's cached
         /// image and the fit its pixels ask for, a fetch in flight, a source
         /// with no image, or a kind with no art source.
@@ -103,6 +107,10 @@ pub enum LibraryRow {
         year: String,
         /// Whether the row paints open.
         open: bool,
+        /// Whether the open album shows child rows: the row starts its guide
+        /// only while a track row paints under it, so an album whose tracks
+        /// have not loaded shows none (gui-tree-indent-guides design D4).
+        shows_children: bool,
         /// Whether the carried content holds the album's tracklist: an album
         /// without one asks the core to load it when it opens (design D5).
         tracks_loaded: bool,
@@ -353,6 +361,7 @@ fn push_letter_and_artist(
                 crate::bridge::frame::library::GuiArtistKey::Fallback(_) => None,
             },
             open: artist_open,
+            shows_children: artist_open && any_kept_albums,
             art: artist.art.clone(),
             media: artist.media,
         },
@@ -395,6 +404,7 @@ fn push_albums(
                 name: album.name.clone(),
                 year: album.year.clone(),
                 open: album_open,
+                shows_children: album_open && !tracks.is_empty(),
                 tracks_loaded: album.tracks.is_some(),
             },
             NODE_ROW_HEIGHT,

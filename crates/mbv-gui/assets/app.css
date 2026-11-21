@@ -156,6 +156,13 @@
 	--canvas-library-panel: #2d353b; /* the list column's and the Search dropdown's raised fill */
 	--canvas-library-raise: #343f44; /* the Hero's raised fill: the hovered and cursor track row, the album art box, and the secondary controls */
 	--canvas-library-control: #475258; /* the Hero's control border */
+	/* The GUI trees' indent guides (gui-tree-indent-guides design D5): the
+	   neutral tone a top-level parent's guide paints in — Everforest bg5, the
+	   nearest palette value to the mockup's #4f5862, which reads as a rule and
+	   not as content — and the accent tone a nested parent's guide paints in,
+	   the mockup's #83c092 default accent. */
+	--canvas-tree-guide: #4f5b58; /* a top-level parent's guide: the neutral tone */
+	--canvas-tree-guide-nested: var(--canvas-insertion); /* a nested parent's guide: the accent tone */
 	/* The Queue panel column's backdrop beside the Library panel: the dim
 	   tier, so the raised library panel contrasts against it. One fill at
 	   every focus state (user decision 2026-11-15). */
