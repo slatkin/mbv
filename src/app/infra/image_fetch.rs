@@ -282,8 +282,7 @@ impl App {
     }
 }
 
-mod fetch;
-mod protocol;
+pub(crate) mod fetch;
 
 #[cfg(test)]
 mod tests {

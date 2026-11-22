@@ -7,8 +7,10 @@ use mbv_images::{ImageFetchReq, ImageSource};
 use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key};
 
 mod card_images;
+mod completions;
 mod level_artists;
 mod level_warmup;
+pub(crate) mod transport;
 
 #[cfg(test)]
 mod batch_tests;

@@ -2,8 +2,7 @@
 //! the shared 1280-pixel quality-90 cap; a Row request asks for the declared
 //! kind and tag at the row box's 2x size.
 
-use super::FetchedBytes;
-use super::fetch_url;
+use crate::app::infra::image_fetch::fetch::transport::{FetchedBytes, fetch_url};
 use mbv_images::ImageRendition;
 
 /// The Emby image fetch's long-side cap. Every Client shows the cached bytes
@@ -29,7 +28,7 @@ const ROW_SQUARE_MAX_SIDE: u32 = 72;
 /// A row image's JPEG quality (design D6).
 const ROW_IMAGE_QUALITY: u8 = 80;
 
-pub(super) fn fetch_emby_image(
+pub(crate) fn fetch_emby_image(
     cache_key: &str,
     item_id: &str,
     series_id: &str,

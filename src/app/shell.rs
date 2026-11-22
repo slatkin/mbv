@@ -6,9 +6,7 @@ use super::{
     PanelMode, QueueLink, SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection,
     ToastSeverity,
 };
-use super::{
-    QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
-};
+use super::{QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog};
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
 #[cfg(test)]
 use crate::app::state::home_latest::current_launch_secs;
@@ -40,6 +38,7 @@ mod feeds_manage;
 mod focus;
 mod home;
 mod home_content;
+pub(crate) mod image_protocol;
 mod inline_search;
 mod input_port;
 mod library;
@@ -57,7 +56,10 @@ mod root;
 mod run;
 mod settings;
 pub(in crate::app) mod teardown;
+mod terminal;
 pub(in crate::app) mod tv_wide;
+pub(crate) use terminal::set_mouse_capture;
+pub(in crate::app) use terminal::{init_terminal, open_url, restore_terminal};
 mod tv_workspace;
 mod twitch_url;
 mod ui_state_reset;
