@@ -19,9 +19,8 @@ workspace = true
 [dependencies]
 ab_glyph.workspace = true
 mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-ui-model = { path = "../mbv-ui-model" }
 num-traits.workspace = true
-ratatui.workspace = true
-ratatui-image = { workspace = true, features = ["crossterm"] }
 image.workspace = true
 foldhash.workspace = true
 

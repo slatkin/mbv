@@ -3824,9 +3824,8 @@ dependencies = [
  "foldhash 0.2.0",
  "image",
  "mbv-emby-model",
+ "mbv-ui-model",
  "num-traits",
- "ratatui",
- "ratatui-image",
  "rstest",
 ]
 
@@ -3952,6 +3951,7 @@ dependencies = [
  "image",
  "mbv-images",
  "mbv-theme",
+ "mbv-ui-model",
  "ratatui",
  "ratatui-image",
  "rstest",

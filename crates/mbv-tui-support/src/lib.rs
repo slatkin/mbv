@@ -10,13 +10,17 @@
 //!
 //! * `ToRatatui`, the conversion from `mbv_theme` colour values to `ratatui`
 //!   colours, so a caller names the meaning and paints it.
+//! * `ToCellSize`, the conversion from the terminal's font measurement to the
+//!   neutral `mbv_ui_model::geom::CellSize` that pixel composition sizes with.
 //! * The terminal image protocol, which speaks `ratatui-image` and `crossterm`
 //!   on behalf of `mbv-images`.
 
+mod cell;
 mod protocol;
 mod resize;
 mod rgb;
 
+pub use cell::ToCellSize;
 pub use protocol::*;
 pub use resize::{ResizeRegisterTx, ResizeResponseRx, spawn_resize_worker};
 #[doc(inline)]

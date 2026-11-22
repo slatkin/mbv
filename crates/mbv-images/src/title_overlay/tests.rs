@@ -1,6 +1,6 @@
 use super::{TitleOverlayColours, TitleOverlayText, compose_title_overlay, split_one_part_title};
 use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
-use ratatui_image::FontSize;
+use mbv_ui_model::geom::CellSize;
 use rstest::rstest;
 
 /// Contract: a one-part title splits at the space nearest its middle.
@@ -22,7 +22,7 @@ fn long_one_part_title_paints_the_bottom_row() {
     let composed = compose_title_overlay(
         &base,
         None,
-        FontSize::new(8, 16),
+        CellSize::new(8, 16),
         TitleOverlayText {
             context: None,
             title: "Strawberry Breakfast",

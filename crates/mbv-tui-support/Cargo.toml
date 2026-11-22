@@ -19,6 +19,7 @@ workspace = true
 [dependencies]
 mbv-theme = { path = "../mbv-theme" }
 mbv-images = { path = "../mbv-images" }
+mbv-ui-model = { path = "../mbv-ui-model" }
 image.workspace = true
 ratatui.workspace = true
 ratatui-image = { workspace = true, features = ["crossterm"] }
