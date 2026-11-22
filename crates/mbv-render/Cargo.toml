@@ -17,7 +17,8 @@ workspace = true
 test = []
 
 [dependencies]
-mbv-theme = { path = "../mbv-theme", features = ["ratatui"] }
+mbv-theme = { path = "../mbv-theme" }
+mbv-tui-support = { path = "../mbv-tui-support" }
 mbv-images = { path = "../mbv-images" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 ratatui.workspace = true
