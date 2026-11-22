@@ -1,5 +1,6 @@
 use mbv_theme as palette;
 use mbv_theme::Role;
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
