@@ -79,7 +79,7 @@ Where a GUI-only and a TUI-only entry point wrap one shared function, the shared
 | `src/main.rs`, `src/startup.rs` (args, `-q`, `--toggle`, `-d`, `--pin`, TUI run) | `mbv-tui` |
 | `src/app/shell/`, `src/app/shell.rs` | `mbv-tui`, except the `impl App` blocks below (Rust allows no inherent `impl App` outside the core) |
 | `src/app/shell/playback.rs`: `impl App` (`handle_playback_request`, the D4a command seam; `slotless_playback_title_parts`); `src/app/shell/ui_state_reset.rs`: `impl App` (`reset_browse_root_defaults`, `reset_library_browse_root`) | `mbv-client-core` (`impl App`); the `impl Model` halves stay in `mbv-tui` |
-| `src/app/shell/draw.rs`: `impl App` (`compute_frame_layout`, `compute_chrome_geometry`, `queue_panel_placement`, `compose_root_frame`) | `mbv-tui`, as shell free functions over `App` reads (as for the ratatui projections): `effective_panel_mode`, `effective_panel_focus`, `effective_playback_state`, `queue_column_width`. The terminal size and `layout` it writes become shell `Model` fields (D4, D13 Rule B) |
+| `src/app/shell/draw.rs`: `impl App` (`compute_frame_layout`, `compute_chrome_geometry`, `queue_panel_placement`, `compose_root_frame`) | `mbv-tui`, as shell free functions over `App` reads (as for the ratatui projections): `effective_panel_mode`, `effective_panel_focus`, `effective_playback_state`, `queue_column_width`. The terminal size and `layout` (`AppLayout`) it writes become shell `Model` fields (D4, D13 Rule B). The core keeps only the neutral left panel area that the TUI pushes (D13 Rule B, `AppLayout` row) |
 | `src/app/input/` (router, key policy, resolver, per-surface key modules) | `mbv-client-core` |
 | `src/app/input/gui.rs`, `src/app/input/gui/` | `mbv-gui` |
 | crossterm key translation in `src/app/input/` | `mbv-tui` |
@@ -110,11 +110,32 @@ Where a GUI-only and a TUI-only entry point wrap one shared function, the shared
 
 `App` lives in `mbv-client-core`. Each Client owns it:
 
-- TUI: the shell `Model` already owns `App`. It also takes the TUI-only state that leaves `App`: `terminal_width`, `terminal_height`, the narrow-terminal Mini view state, and every other field that only the shell reads.
+- TUI: the shell `Model` already owns `App`. It also takes the TUI-only state that leaves `App`: `terminal_width`, `terminal_height`, the narrow-terminal Mini view state, `layout` (D13 Rule B), and every other field that only the shell reads or writes.
 - GUI: a new `GuiCore { app: App, gui: GuiClientState }` in `mbv-gui` owns `App` and all GUI state. Of the 26 `gui_*` fields, 24 leave `App` for `GuiClientState`. The other two do not move: `gui_client` is replaced by `ClientCapabilities`, and `gui_shown_entry` stays in the core as `shown_entry` (D6). The `impl App` blocks of the GUI modules become `impl GuiCore` blocks.
 - Prefs: the file format and every key name stay the same. The core keeps `load_prefs` and writes only the keys that the core owns. It gets one `pub fn save_client_pref(key: &str, value: serde_json::Value)` with the same read, change, and write. Each Client reads its own keys from `load_prefs` at start and writes them through `save_client_pref` when they change: the GUI owns `gui_player_auto_hide`, and the TUI owns every key whose field rule D2 moves to the shell `Model`. A key whose field stays in the core stays a core key.
 
-`App` fields stay `pub(crate)` inside the core. A Client reads and changes `App` only through `pub` methods. The 38 non-GUI fields that the GUI modules read directly get a `pub` read method each, or the GUI code calls an existing core method that already does the work. No field becomes `pub`.
+`App` fields stay `pub(crate)` inside the core. A Client reads and changes `App` only through `pub` methods. No field becomes `pub`, also not under the `test` feature.
+
+#### D4b. The access surface lands before any crate move
+
+Today the shell, its tests, and the GUI modules all sit inside `crate::app`, so they use `App` fields directly. Measured at plan time (`rg`, HEAD `7b9317a49`):
+
+| Code that leaves the core | Direct `App` field sites | Distinct fields |
+|---|---|---|
+| Shell production code (`src/app/shell/`, `shell.rs`, non-test) | 303 | 68, of which 37 are assigned and 9 more are changed through a `&mut` call (`push`, `insert`, `take`, ...) |
+| Shell tests (`src/app/shell/**` test files) | 250 | 39 |
+| TUI-staying tests outside the shell (the 5.2 rule: they name `shell::`, ratatui, crossterm, tuirealm, `mbv_components`, or `mbv_render`) | 793 in 40 files | 77 |
+| GUI modules (`gui_*`, `input/gui*`), non-`gui_*` fields | 187 | 42 |
+
+If these move with the files, the move step fails with hundreds of errors in one row. So the access surface is built while everything is still one crate (tasks 4.11–4.14), and each step compiles. The crate moves in groups 5 and 6 then only change paths. The rules:
+
+1. Production read: a `pub` read method on `App` (`fn panel_mode(&self) -> PanelMode`), or an existing core method that already does the work.
+2. Production write: first, a `pub` core method that names the intent and holds the logic the shell runs today (`fn open_settings(&mut self, dest)`), so the rule stays in the core. A plain setter only where the shell alone owns the decision (`set_list_pane_width`). Never a `&mut` getter that hands out a field.
+3. A field that, after 4.7, only one Client reads or writes leaves `App` for that Client (rule D2.2). It gets no method.
+4. Test fixture state: a test that asserts only core behaviour and does not need the shell `Model` moves to the core with its private access, and gets no seam. A test that needs the shell `Model` sets core state through `test`-feature seams in `app_stub.rs` (the pattern `mbv-gui` already uses: `stub_app_with_queue_and_cmd_rx`). A seam names the fixture it builds (`seed_queue_column(width, hidden)`), not one field, and one seam serves every test that builds that fixture. A test that reads core state to assert uses the production read methods.
+5. Each new `pub` method is recorded in the task note. Task 6.7 (iii) narrows every method that no Client calls after the split.
+
+The verifier for the shell and its tests is `rg -P '\bapp\.[a-z_][a-z0-9_]*\b(?!\s*(\(|::<))'`: every match at plan time is an `App` field, so zero matches means no direct field access. The GUI modules use `self`, which other structs in those files also use, so their verifier names the 42 fields (task 4.14). Destructuring `App { .. }` outside the core is forbidden for the same reason.
 
 Alternatives considered:
 
@@ -259,6 +280,9 @@ No new external dependency, and no version change. Each existing workspace depen
 | `TransportAvailability` | `mbv-render` `components/chrome_player.rs` |
 | `hero_content_queue`, `hero_content_feed`, `hero_content_emby`, `hero_content_abs_episode`, `hero_content_abs_book` | `mbv-components` `library_panel/hero.rs` |
 | `HeroArtwork`, `ArtworkSource`, `ArtworkShape`, `HeroFacts`, `PanelHeroImagePaint` (data only) | `mbv-components` `library_panel/content.rs` |
+| `hero_content_series_with_episode`, `HeroContentData` | `mbv-components` `library_panel/hero.rs` |
+| `emby_artwork_policy`, `abs_book_artwork_policy`, `abs_episode_artwork_policy`, `feed_artwork_policy` | `mbv-components` `library_panel/hero.rs` |
+| `painted_shape_for_pixels`, `HeroArtwork::painted_shape` | `mbv-components` `library_panel/content.rs` |
 | `premiere_number_label` | `mbv-components` `tv_content/episode_rows.rs` |
 | `sanitize_url` | `mbv-components` `library_panel/overview_box.rs` |
 
@@ -266,9 +290,11 @@ Where an item's type holds a ratatui value, the item splits: the neutral data mo
 
 **Rule B: TUI terminal geometry stays in the TUI crates, and its readers move to `mbv-tui`.** If a core rule needs the result, the TUI pushes it to the core as a neutral value (as with the single-panel fact in D6a).
 
+`AppLayout` (`left_area`, `card`, `root_frame`; the `App::layout` field). It holds ratatui `Rect`s, and three core files read it: `dispatch/actions.rs` (`lib_page_size` from `left_area.height`), `dispatch/context_menu/menu.rs` (the visualizer menu bounds from `left_area`), and `state/projection/tv_wide.rs` (`card.height`, which moves to the TUI in task 4.1). `layout` moves to the shell `Model`. The core keeps one neutral field `left_panel_area: mbv_ui_model::geom::Rect` (default zero), and the TUI sets it with `App::set_left_panel_area` in `compose_root_frame`, with the same value it writes to `layout.left_area` today (zero when the frame is under 4 rows), so readers see the last composed frame, as today. `lib_page_size` and the menu bounds read that field. The GUI never sets it, so it gets what it gets today from the default `AppLayout`: a page size of 1 and no menu bounds.
+
 `MINI_VIEW_THRESHOLD`, `TABBAR_LEFT_RESERVE`, `LEFT_WIDTH_DEFAULT`, `rect_to_presentation`, `LIBRARY_PILL_THRESHOLD`, `chrome_geometry`, `ChromeGeometryInput`, `tab_strip_text_width`, `wide_library_panes`, `normalize_queue_column_width`, `wide_hero_fits`, `visible_tab_range`, `service_state_color`, `components::card`, `hero_artwork_box`, `MusicWideRenderCtx`, `LibraryListRenderCtx`.
 
-An item that the compiler finds later goes by the same two rules. After the split, `cargo tree -p mbv-client-core` and `cargo tree -p mbv-gui` list neither `mbv-render` nor `mbv-components`.
+These lists are a start, not the definition. The `rg` checks of tasks 1.5 and 4.8 define the set, and an item that they or the compiler find later goes by the same two rules. After the split, `cargo tree -p mbv-client-core` and `cargo tree -p mbv-gui` list neither `mbv-render` nor `mbv-components`.
 
 ## Risks / Trade-offs
 
@@ -278,6 +304,7 @@ An item that the compiler finds later goes by the same two rules. After the spli
 - [The held `mbv` file pins an old inode on disk until the Owner exits] → Same cost as today, where the Owner's own running file pins its inode.
 - [`/proc/<pid>/fd/<n>` needs the same-user `/proc` access that `/proc/<pid>/exe` needs today] → No new access rule. Hardened kernels that block it today already block the current path.
 - [A dev build that runs `mbv-gui` alone finds no fresh `mbv-owner`] → The `Makefile` GUI targets build all three. The mismatch prompt still catches a stale sibling.
+- [A move row carries hundreds of direct field accesses and fails as one large error set, as the first attempt at row 5.3 did (94 lib and 697 test errors)] → D4b builds the access surface in compile-green steps in group 4, each with a measured baseline and an `rg` check that reaches zero. No move row starts before those checks pass.
 - [A move row names items that the core still uses, so its check cannot pass] → Each move row states its seam (D4a) before it names a move. A row's `rg` check is tested against the code before the row is dispatched.
 - [Compile time] → `mbv-gui` stops compiling ratatui, crossterm, and TuiRealm. `mbv` stops compiling GUI modules.
 
