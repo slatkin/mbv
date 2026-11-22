@@ -121,7 +121,7 @@ pub enum ClientLibraryEffect {
 
 The core collects the effects of one event in a local list and applies them through `stores` after that event and before the next one, the same order as today's direct calls. The trait takes `app` as a parameter, so the same signature serves while the GUI fields are still on `App` (a transitional unit implementor in the GUI modules reads them through `app`) and after they move to `GuiClientState` (which then implements it). `handle_feed_home_video_selection_failed` splits: the fetch-mark retirement and the log stay in the core, and the claim insert becomes `FeedTargetFailed`. The claim retirement in `handle_feed_home_video_selection_loaded` becomes `FeedTargetLanded`. The TUI passes `None`, so it does nothing, as today.
 
-**Order.** The seam lands first, while the GUI fields are still on `App` (tasks group 3). No step adds a GUI parameter to a core function. Then the GUI fields group into `GuiClientState`, the GUI impl blocks become `impl GuiCore` (callers first), and the state leaves `App` last.
+**Order.** The seam lands first, while the GUI fields are still on `App` (tasks group 10). No step adds a GUI parameter to a core function. Then the GUI fields group into `GuiClientState`, the GUI impl blocks become `impl GuiCore` (callers first), and the state leaves `App` last.
 
 Alternatives considered:
 
@@ -219,7 +219,8 @@ The tab-strip scroll is TUI presentation: `tab_scroll`, `ensure_tab_visible`, `v
 | `book_rows` | `mbv-render` `components/audiobookshelf_book.rs` |
 | `HeroImageState` | `mbv-render` `components/tv_wide.rs` |
 | `MUSIC_ALBUM_IMAGE_TYPES` | `mbv-render` `components/widgets.rs` |
-| `IndicatorStyle`, `StatusIndicator` (data only) | `mbv-render` `components/indicators.rs` |
+| `IndicatorStyle`, `StatusIndicator`, `IndicatorData`, `IndicatorFlags`, `short_resolution_label` (data only) | `mbv-render` `components/indicators.rs` |
+| `MusicWideRenderCtx`, `LibraryListRenderCtx` (struct and constructor; they hold no ratatui type, and core state builds them) | `mbv-render` `components/music_wide.rs`, `components/list_rows.rs` |
 | `TransportAvailability` | `mbv-render` `components/chrome_player.rs` |
 | `hero_content_queue`, `hero_content_feed`, `hero_content_emby`, `hero_content_abs_episode`, `hero_content_abs_book` | `mbv-components` `library_panel/hero.rs` |
 | `HeroArtwork`, `ArtworkSource`, `ArtworkShape`, `HeroFacts`, `PanelHeroImagePaint` (data only) | `mbv-components` `library_panel/content.rs` |
@@ -233,15 +234,17 @@ Where an item's type holds a ratatui value, the item splits: the neutral data mo
 
 **Rule B: TUI terminal geometry stays in the TUI crates, and its readers move to the shell.** If a core rule needs the result, the TUI pushes it to the core as a neutral value (as with the single-panel fact in D6a). A pushed value is allowed only where today's core already reads a value that the TUI records at the same point (a resize, or a frame composition), and the TUI pushes it at every such point. Where today's core computes the value live inside a dispatch (from the panel mode, focus, queue column width, or playback state of that moment), a push would let the dispatch read a value one step old (the first attempt did this: `edac3bdfc`). Such a rule moves to the shell and the core sets a request (as with the tab reveal in D6b), or the core keeps the rule over neutral inputs.
 
-`AppLayout` (`left_area`, `card`, `root_frame`; the `App::layout` field). It holds ratatui `Rect`s, and three core files read it: `dispatch/actions.rs` (`lib_page_size` from `left_area.height`), `dispatch/context_menu/menu.rs` (the visualizer menu bounds from `left_area`), and `state/projection/tv_wide.rs` (`card.height`, which moves to the shell in task 2.1). `layout` moves to the shell `Model`. The core keeps one neutral field `left_panel_area: mbv_ui_model::geom::Rect` (default zero), and the TUI sets it with `App::set_left_panel_area` in `compose_root_frame`, with the same value it writes to `layout.left_area` today (zero when the frame is under 4 rows), so readers see the last composed frame, as today. `lib_page_size` and the menu bounds read that field. The GUI never sets it, so it gets what it gets today from the default `AppLayout`: a page size of 1 and no menu bounds.
+`AppLayout` (`left_area`, `card`, `root_frame`; the `App::layout` field). It holds ratatui `Rect`s, and three core files read it: `dispatch/actions.rs` (`lib_page_size` from `left_area.height`), `dispatch/context_menu/menu.rs` (the visualizer menu bounds from `left_area`), and `state/projection/tv_wide.rs` (`card.height`, which moves to the shell in task 4.3). `layout` moves to the shell `Model`. The core keeps one neutral field `left_panel_area: mbv_ui_model::geom::Rect` (default zero), and the TUI sets it with `App::set_left_panel_area` in `compose_root_frame`, with the same value it writes to `layout.left_area` today (zero when the frame is under 4 rows), so readers see the last composed frame, as today. `lib_page_size` and the menu bounds read that field. The GUI never sets it, so it gets what it gets today from the default `AppLayout`: a page size of 1 and no menu bounds.
 
-`MINI_VIEW_THRESHOLD`, `TABBAR_LEFT_RESERVE`, `LEFT_WIDTH_DEFAULT`, `rect_to_presentation`, `LIBRARY_PILL_THRESHOLD`, `chrome_geometry`, `ChromeGeometryInput`, `tab_strip_text_width`, `wide_library_panes`, `normalize_queue_column_width`, `wide_hero_fits`, `visible_tab_range`, `service_state_color`, `components::card`, `hero_artwork_box`, `MusicWideRenderCtx`, `LibraryListRenderCtx`.
+`MINI_VIEW_THRESHOLD`, `TABBAR_LEFT_RESERVE`, `rect_to_presentation`, `chrome_geometry`, `ChromeGeometryInput`, `tab_strip_text_width`, `wide_library_panes`, `normalize_queue_column_width` (it reads the terminal width), `wide_hero_fits`, `PANE_PAD_X`, `PANE_PAD_Y`, `visible_tab_range`, `service_state_color`, `components::card`, `hero_artwork_box`.
 
-These lists are a start, not the definition. The `rg` checks of tasks 1.5 and 2.8 define the set, and an item that they or the compiler find later goes by the same two rules.
+The core keeps these rules over neutral inputs, and their constants move to `mbv-ui-model`: `LIBRARY_PILL_THRESHOLD` (a count over `library_total`, read by core dispatch and `state/library_position.rs`), and `LEFT_WIDTH_DEFAULT` and `LEFT_WIDTH_STEP` (widths over the core field `queue_column_width`, read by `state/construct.rs` and `input/queue_keys.rs`). `LetterFilter` and `LetterFilterKind` already live in `mbv_ui_model::sort_filter`; only their import path changes.
+
+These lists are a start, not the definition. The checks of gates 3.12 and 8.3 define the set, and an item that they or the compiler find later goes by the same two rules.
 
 ## Risks / Trade-offs
 
-- [The change touches most of `src/app/`, so the diff is large] → Move in compile-green steps: first the leaf-crate cuts, then the TUI types, then the GUI state. Each step builds and tests green before the next.
+- [The change touches most of `src/app/`, so the diff is large, and one refactor step can fill an agent's context] → Move in order: first the leaf-crate cuts, then the TUI types, then the GUI state. Rows are edit-only and sized for one agent context (about six hand-edited files, or one mechanical sweep). Each group ends with a gate that builds and tests the workspace green. A gate that finds errors in more than about six files sends them back to the rows that own them, so a repair never grows past one context.
 - [A seam row names a method that the core still uses, so its check cannot pass] → Each row states its seam (D4a) before it names a move. A row's `rg` check is tested against the code before the row is dispatched.
 - [The plan describes code from another branch, not `main`] → D4a's *Today* is measured at HEAD. A row's premise names the symbol and file it depends on, and the row is checked against `main` before dispatch.
 - [A pushed value is one step old] → D13 Rule B allows a push only at the points where the TUI records the value today; a live rule becomes a request (D6b).
