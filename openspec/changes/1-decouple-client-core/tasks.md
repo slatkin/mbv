@@ -22,8 +22,8 @@ Rows 1.5–1.7 leave a transitional `pub use mbv_ui_model::...` at each old path
 
 ## 2. TUI types leave shared code, and menu anchors become neutral (design D3, D6)
 
-- [ ] 2.1 Move the ratatui part of `src/app/state/projection/card.rs` (745 lines) under `src/app/shell/` as shell functions over `App` reads, with the tests in `projection/card/` that own it. Keep any part that builds no ratatui value in `state/`.
-- [ ] 2.2 Do the same for `state/projection/chrome_status.rs`, `state/projection/tv_wide.rs`, and `state/projection/visualizer.rs`.
+- [x] 2.1 Move the ratatui part of `src/app/state/projection/card.rs` (745 lines) under `src/app/shell/` as shell functions over `App` reads, with the tests in `projection/card/` that own it. Keep any part that builds no ratatui value in `state/`.
+- [x] 2.2 Do the same for `state/projection/chrome_status.rs`, `state/projection/tv_wide.rs`, and `state/projection/visualizer.rs`.
 - [ ] 2.3 Make the `impl App` block of `src/app/shell/draw.rs` (`compute_frame_layout`, `compute_chrome_geometry`, `queue_panel_placement`, `compose_root_frame`) into shell free functions over `App` reads, and change their callers in `src/app/shell/`. Split `src/app/dispatch/run_loop/teardown.rs`: the shared teardown over `App` stays in `dispatch`, and the part that names `shell::Model` moves under `src/app/shell/`.
 - [ ] 2.4 Move `src/app/infra/terminal.rs` and `src/app/infra/image_fetch/protocol.rs` (with `protocol/protocol_tests.rs`) under `src/app/shell/`. Move the ratatui parts of `src/app/infra/image_fetch.rs` (`wide_hero_fits`, `PANE_PAD_X`/`PANE_PAD_Y`, and the `HeroArtwork` geometry) under `src/app/shell/`. Fetch and decode stay in `infra`.
 - [ ] 2.5 In `src/app/dispatch/context_menu/menu.rs` and `menu/emby.rs`, fold `build_queue_selection_menu_at` into `build_queue_selection_menu` and remove every `anchor: Option<(u16, u16)>` parameter. Remove the `x`/`y` (`col`/`row`) parameters from `open_context_menu_for_at`, `open_context_menu_at`, `open_context_menu_at_for_item`, `open_visual_slot_context_menu`, and `handle_mouse_right_click_queue`, and from their core caller `src/app/dispatch/mouse_gestures.rs`.
