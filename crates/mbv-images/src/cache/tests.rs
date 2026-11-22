@@ -6,17 +6,7 @@ use std::sync::mpsc;
 
 fn cache(capacity: usize) -> ImageCache {
     let (card_image_tx, card_image_rx) = mpsc::channel();
-    let (resize_register_tx, _) = mpsc::channel();
-    let (_, resize_response_rx) = mpsc::channel();
-    let mut cache = ImageCache::new(
-        capacity,
-        None,
-        true,
-        card_image_tx,
-        card_image_rx,
-        resize_register_tx,
-        resize_response_rx,
-    );
+    let mut cache = ImageCache::new(capacity, None, true, card_image_tx, card_image_rx);
     cache.set_cache_capacity_for_test(capacity);
     cache
 }
@@ -27,55 +17,9 @@ fn image() -> CachedImage {
             image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])),
         )),
         source: None,
-        protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,
     }
-}
-
-/// Issue #895 (M-PANIC-CONTINUATION): after the resize worker exits (a
-/// caught panic closes the shared response channel), the respawn must
-/// install a live worker and drop every cached protocol — the old
-/// worker took their per-key request receivers with it, so each entry
-/// re-encodes and re-registers on its next paint.
-#[test]
-fn respawn_replaces_a_dead_worker_and_clears_cached_protocols() {
-    let mut cache = cache(2);
-    let mut entry = image();
-    let (tx, _rx) = mpsc::channel();
-    entry.protocols.insert(
-        "halfblock",
-        ratatui_image::thread::ThreadProtocol::new(
-            tx,
-            Some(
-                ratatui_image::picker::Picker::halfblocks()
-                    .new_resize_protocol(entry.img.clone().expect("test image")),
-            ),
-        ),
-    );
-    cache.insert_image("base:P".into(), entry);
-    // The `cache` helper drops the response sender at construction —
-    // the same disconnected channel a worker exit produces.
-    assert!(matches!(
-        cache.try_recv_resize_response(),
-        Err(mpsc::TryRecvError::Disconnected)
-    ));
-
-    cache.respawn_resize_worker();
-
-    assert!(
-        matches!(
-            cache.try_recv_resize_response(),
-            Err(mpsc::TryRecvError::Empty)
-        ),
-        "the respawned worker's response channel must be live"
-    );
-    assert!(
-        cache
-            .image("base:P")
-            .is_some_and(|entry| entry.protocols.is_empty()),
-        "cached protocols must be dropped so they re-register with the new worker"
-    );
 }
 
 fn fetch_req(key: &str) -> super::ImageFetchReq {

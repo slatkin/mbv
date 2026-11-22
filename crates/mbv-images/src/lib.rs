@@ -119,7 +119,6 @@ pub struct CachedImage {
     /// fetched image, `None` for an entry the app derived itself (a composed
     /// title overlay, the bundled placeholder) or a fetch with no artwork.
     pub source: Option<SourceImage>,
-    pub protocols: std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
     /// The hero artwork box (cells) the current protocols were built from
     /// (task 5.10, design D5's cover fit): the panel hero projection
     /// `resize_to_fill`s the source to the box's pixel size before encoding,
@@ -140,7 +139,6 @@ impl CachedImage {
         Self {
             img: None,
             source: None,
-            protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
         }

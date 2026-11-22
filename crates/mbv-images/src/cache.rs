@@ -1,7 +1,5 @@
 use super::{CachedImage, ImageFetchOutcome, ImageFetchReq};
-use crate::resize::{ResizeRegisterTx, ResizeResponseRx};
 use crate::title_overlay::DERIVED_SEP;
-use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -39,24 +37,11 @@ pub struct ImageCache {
     image_fetches_active: usize,
     card_image_tx: mpsc::Sender<(String, ImageFetchOutcome)>,
     card_image_rx: mpsc::Receiver<(String, ImageFetchOutcome)>,
-    /// Registers a freshly created per-cache-key `ResizeRequest` receiver
-    /// with the resize worker thread (see `spawn_resize_worker`), so the
-    /// worker can service many concurrently-alive `ThreadProtocol`s off the
-    /// render thread while still routing each `ResizeResponse` back to the
-    /// right cache entry (#164). `ResizeRequest`/`ResizeResponse` carry no key
-    /// of their own — each cache key needs its own dedicated channel.
-    resize_register_tx: ResizeRegisterTx,
-    /// Completed off-thread resize+encode results, tagged with the cache key.
-    resize_response_rx: ResizeResponseRx,
-    image_picker: Option<Picker>,
-    halfblock_picker: Option<Picker>,
     cache_size_total: usize,
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
     #[cfg(any(test, feature = "test"))]
     card_image_fetch_calls: u32,
-    #[cfg(any(test, feature = "test"))]
-    image_protocol_builds: std::cell::Cell<u32>,
 }
 
 #[derive(Debug)]
@@ -74,8 +59,6 @@ impl ImageCache {
         image_protocol_enabled: bool,
         card_image_tx: mpsc::Sender<(String, ImageFetchOutcome)>,
         card_image_rx: mpsc::Receiver<(String, ImageFetchOutcome)>,
-        resize_register_tx: ResizeRegisterTx,
-        resize_response_rx: ResizeResponseRx,
     ) -> Self {
         Self {
             card_image_states: foldhash::HashMap::default(),
@@ -92,38 +75,12 @@ impl ImageCache {
             image_fetches_active: 0,
             card_image_tx,
             card_image_rx,
-            resize_register_tx,
-            resize_response_rx,
-            image_picker: None,
-            halfblock_picker: None,
             cache_size_total: cache_size.saturating_mul(2),
             image_protocol,
             image_protocol_enabled,
             #[cfg(any(test, feature = "test"))]
             card_image_fetch_calls: 0,
-            #[cfg(any(test, feature = "test"))]
-            image_protocol_builds: std::cell::Cell::new(0),
         }
-    }
-
-    pub(crate) fn initialize_image_pickers(&mut self, image: Picker, halfblock: Picker) {
-        self.image_picker = Some(image);
-        self.halfblock_picker = Some(halfblock);
-    }
-
-    #[cfg(any(test, feature = "test"))]
-    pub fn set_image_pickers_for_test(&mut self, image: Picker, halfblock: Picker) {
-        self.initialize_image_pickers(image, halfblock);
-    }
-
-    #[must_use]
-    pub fn image_picker(&self) -> Option<&Picker> {
-        self.image_picker.as_ref()
-    }
-
-    #[must_use]
-    pub fn halfblock_picker(&self) -> Option<&Picker> {
-        self.halfblock_picker.as_ref()
     }
 
     #[must_use]
@@ -431,47 +388,10 @@ impl ImageCache {
         self.card_image_rx.try_recv()
     }
 
-    pub fn try_recv_resize_response(
-        &self,
-    ) -> Result<(String, ratatui_image::thread::ResizeResponse), mpsc::TryRecvError> {
-        self.resize_response_rx.try_recv()
-    }
-
-    /// Rebuild the resize worker after its thread exited — the only owner-
-    /// visible sign of a caught `resize_encode` panic is the shared response
-    /// channel closing (M-PANIC-CONTINUATION, issue #895). Spawns a fresh
-    /// worker and drops every cached protocol: the old worker took each
-    /// entry's per-key `ResizeRequest` receiver with it, so no cached
-    /// protocol can receive resize results any more; every entry re-encodes
-    /// and re-registers lazily on its next paint (via
-    /// `cached_image_protocol_for_suffix_mut`'s missing-suffix rebuild path)
-    /// from the retained source image.
-    pub fn respawn_resize_worker(&mut self) {
-        let (register_tx, response_rx) = crate::resize::spawn_resize_worker();
-        self.resize_register_tx = register_tx;
-        self.resize_response_rx = response_rx;
-        for entry in self.card_image_states.values_mut() {
-            entry.protocols.clear();
-        }
-    }
-
     #[must_use]
     pub fn card_image_tx(&self) -> &mpsc::Sender<(String, ImageFetchOutcome)> {
         &self.card_image_tx
     }
-
-    pub(crate) fn resize_register_tx(&self) -> &ResizeRegisterTx {
-        &self.resize_register_tx
-    }
-
-    #[cfg(any(test, feature = "test"))]
-    pub fn record_protocol_build(&self) {
-        self.image_protocol_builds
-            .set(self.image_protocol_builds.get() + 1);
-    }
-
-    #[cfg(not(any(test, feature = "test")))]
-    pub fn record_protocol_build(&self) {}
 
     pub fn reserve_card_image_fetch(
         &mut self,
@@ -496,13 +416,9 @@ impl ImageCache {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn card_image_fetch_calls(&self) -> u32 {
         self.card_image_fetch_calls
-    }
-
-    #[cfg(any(test, feature = "test"))]
-    pub fn image_protocol_builds(&self) -> u32 {
-        self.image_protocol_builds.get()
     }
 
     #[cfg(any(test, feature = "test"))]

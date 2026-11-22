@@ -3828,7 +3828,6 @@ dependencies = [
  "ratatui",
  "ratatui-image",
  "rstest",
- "tracing",
 ]
 
 [[package]]
@@ -3950,10 +3949,13 @@ dependencies = [
 name = "mbv-tui-support"
 version = "0.28.3"
 dependencies = [
+ "image",
  "mbv-images",
  "mbv-theme",
  "ratatui",
  "ratatui-image",
+ "rstest",
+ "tracing",
 ]
 
 [[package]]

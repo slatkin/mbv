@@ -1,31 +1,79 @@
 //! The terminal image protocol (design D7): the pickers, the per-key protocol
 //! storage, and the encode. `mbv-images` keeps the decoded art, the cache, and
-//! the pixel processing; this module speaks `ratatui-image` on its behalf.
+//! the pixel processing; this store speaks `ratatui-image` on its behalf.
+//!
+//! The store is the only place a `ratatui-image` value lives. A cache entry
+//! holds no protocol, and the cache holds no picker, so a Client that paints
+//! no terminal protocol (`mbv-gui`) builds no encoding at all.
 
 use mbv_images::cache::ImageCache;
 use mbv_images::{CachedImage, SourceImage, mem_key};
 use ratatui_image::picker::Picker;
+use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
+use std::collections::HashMap;
+use std::sync::mpsc;
 
-impl ImageCache {
-    /// Query the terminal for its image protocol and apply the configured
-    /// protocol override when one is set.
-    fn build_image_picker(&self) -> Picker {
-        use ratatui_image::picker::ProtocolType;
-        let protocol_override = self.protocol_override().map(str::to_owned);
-        let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
-        let proto = protocol_override
-            .as_deref()
-            .and_then(|s| match s.to_lowercase().as_str() {
-                "sixel" => Some(ProtocolType::Sixel),
-                "kitty" => Some(ProtocolType::Kitty),
-                "iterm2" => Some(ProtocolType::Iterm2),
-                "halfblocks" => Some(ProtocolType::Halfblocks),
-                _ => None, // "auto" or unknown: use picker's detected protocol
-            });
-        if let Some(proto) = proto {
-            picker.set_protocol_type(proto);
+use crate::resize::{ResizeRegisterTx, ResizeResponseRx, spawn_resize_worker};
+
+/// A just-fetched cache entry and the protocol the store encoded for it.
+pub struct BuiltEntry {
+    pub entry: CachedImage,
+    /// The protocol to record for the entry's cache key, once the caller has
+    /// stored `entry` in the [`ImageCache`].
+    pub protocol: Option<ThreadProtocol>,
+}
+
+impl std::fmt::Debug for BuiltEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BuiltEntry")
+            .field("entry", &self.entry)
+            .field("protocol", &self.protocol.is_some())
+            .finish()
+    }
+}
+
+/// One Client's terminal image protocols: the pickers, the resize worker
+/// channels, and the per-cache-key protocols the painters render.
+pub struct ImageProtocols {
+    /// Each cache key's protocols, by protocol suffix. A key's protocols are
+    /// dropped when the cache drops the entry (invariant 38).
+    protocols: HashMap<String, HashMap<&'static str, ThreadProtocol>>,
+    image_picker: Option<Picker>,
+    halfblock_picker: Option<Picker>,
+    /// Registers a freshly created per-cache-key `ResizeRequest` receiver
+    /// with the resize worker thread (see `spawn_resize_worker`), so the
+    /// worker can service many concurrently-alive `ThreadProtocol`s off the
+    /// render thread while still routing each `ResizeResponse` back to the
+    /// right cache entry (#164). `ResizeRequest`/`ResizeResponse` carry no key
+    /// of their own — each cache key needs its own dedicated channel.
+    resize_register_tx: ResizeRegisterTx,
+    /// Completed off-thread resize+encode results, tagged with the cache key.
+    resize_response_rx: ResizeResponseRx,
+    /// How many protocols this store has encoded. Only tests read it, through
+    /// [`ImageProtocols::protocol_builds`].
+    protocol_builds: std::cell::Cell<u32>,
+}
+
+impl ImageProtocols {
+    /// A store with a live resize worker.
+    #[must_use]
+    pub fn new() -> Self {
+        let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
+        Self::with_worker(resize_register_tx, resize_response_rx)
+    }
+
+    fn with_worker(
+        resize_register_tx: ResizeRegisterTx,
+        resize_response_rx: ResizeResponseRx,
+    ) -> Self {
+        Self {
+            protocols: HashMap::new(),
+            image_picker: None,
+            halfblock_picker: None,
+            resize_register_tx,
+            resize_response_rx,
+            protocol_builds: std::cell::Cell::new(0),
         }
-        picker
     }
 
     /// Populate `image_picker` (terminal-detected, with the config override)
@@ -38,7 +86,7 @@ impl ImageCache {
     /// picker falls back to a wrong cell size, and Kitty renders images clipped
     /// on the right/bottom (#654).
     pub fn init_image_pickers(&mut self) {
-        let picker = self.build_image_picker();
+        let picker = build_image_picker(None);
         tracing::debug!(
             name: "startup.image_picker.initialized",
             target: "startup",
@@ -47,6 +95,26 @@ impl ImageCache {
             "image picker initialized"
         );
         self.initialize_image_pickers(picker, Picker::halfblocks());
+    }
+
+    fn initialize_image_pickers(&mut self, image: Picker, halfblock: Picker) {
+        self.image_picker = Some(image);
+        self.halfblock_picker = Some(halfblock);
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_image_pickers_for_test(&mut self, image: Picker, halfblock: Picker) {
+        self.initialize_image_pickers(image, halfblock);
+    }
+
+    #[must_use]
+    pub fn image_picker(&self) -> Option<&Picker> {
+        self.image_picker.as_ref()
+    }
+
+    #[must_use]
+    pub fn halfblock_picker(&self) -> Option<&Picker> {
+        self.halfblock_picker.as_ref()
     }
 
     /// The picker that encodes the given protocol suffix.
@@ -59,62 +127,19 @@ impl ImageCache {
         }
     }
 
-    /// Builds a fresh cache entry for a just-fetched image: keeps the decoded
-    /// source so it can be re-encoded with a different protocol picker later
-    /// (#451), and encodes the protocol for the active suffix.
-    /// `img: None` with a `source` is a source-only fetch (design D14): no
-    /// protocol is encoded, since no picker paints in such a Client.
-    /// `img: None` with no `source` records a resolved-but-empty fetch (the
-    /// "no art" marker renderers branch on).
+    /// Whether the configured protocol is halfblocks, from the override or
+    /// from terminal detection.
     #[must_use]
-    pub fn build_cached_image(
-        &self,
-        bare_key: &str,
-        img: Option<image::DynamicImage>,
-        source: Option<SourceImage>,
-        suffix: &'static str,
-    ) -> CachedImage {
-        let mut entry = CachedImage {
-            img,
-            source,
-            protocols: std::collections::HashMap::new(),
-            cover_box: None,
-            applied_logo_key: None,
-        };
-        if let Some(img) = entry.img.clone()
-            && let Some(picker) = self.picker_for_suffix(suffix)
-        {
-            let proto = self.build_protocol(bare_key, suffix, picker, img);
-            entry.protocols.insert(suffix, proto);
-        }
-        entry
-    }
-
-    #[must_use]
-    pub fn build_protocol(
-        &self,
-        bare_key: &str,
-        suffix: &'static str,
-        picker: &Picker,
-        img: image::DynamicImage,
-    ) -> ratatui_image::thread::ThreadProtocol {
-        #[cfg(any(test, feature = "test"))]
-        self.record_protocol_build();
-        let mem_key = mem_key(bare_key, suffix);
-        let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
-        let _ = self.resize_register_tx().send((mem_key, req_rx));
-        ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
-    }
-
-    #[must_use]
-    pub fn is_halfblock_configured(&self) -> bool {
-        self.protocol_override()
-            .is_some_and(|s| s.eq_ignore_ascii_case("halfblocks"))
+    pub fn is_halfblock_configured(&self, protocol_override: Option<&str>) -> bool {
+        protocol_override.is_some_and(|s| s.eq_ignore_ascii_case("halfblocks"))
             || self.image_picker().is_some_and(|p| {
                 p.protocol_type() == ratatui_image::picker::ProtocolType::Halfblocks
             })
     }
 
+    /// The configured protocol's name: the cache-key suffix its protocol is
+    /// encoded under, and the name logs report.
+    #[must_use]
     pub fn configured_protocol_name(&self) -> &'static str {
         use ratatui_image::picker::ProtocolType;
         match self.image_picker().map(Picker::protocol_type) {
@@ -125,17 +150,107 @@ impl ImageCache {
         }
     }
 
+    /// Builds a fresh cache entry for a just-fetched image: keeps the decoded
+    /// source so it can be re-encoded with a different protocol picker later
+    /// (#451), and encodes the protocol for the active suffix.
+    /// `img: None` with a `source` is a source-only fetch (design D14): no
+    /// protocol is encoded, since no picker paints in such a Client.
+    /// `img: None` with no `source` records a resolved-but-empty fetch (the
+    /// "no art" marker renderers branch on).
+    ///
+    /// The caller stores `entry` in the [`ImageCache`] under `bare_key`, then
+    /// records `protocol` with [`ImageProtocols::insert_protocol`].
     #[must_use]
-    pub fn images_enabled(&self) -> bool {
-        self.protocol_enabled()
+    pub fn build_entry(
+        &mut self,
+        bare_key: &str,
+        img: Option<image::DynamicImage>,
+        source: Option<SourceImage>,
+        suffix: &'static str,
+    ) -> BuiltEntry {
+        let entry = CachedImage {
+            img,
+            source,
+            cover_box: None,
+            applied_logo_key: None,
+        };
+        let mut protocol = None;
+        if let Some(img) = entry.img.clone()
+            && let Some(picker) = self.picker_for_suffix(suffix).cloned()
+        {
+            protocol = Some(self.build_protocol(bare_key, suffix, &picker, img));
+        }
+        BuiltEntry { entry, protocol }
+    }
+
+    /// Encode `img` as `suffix`'s protocol for `bare_key`, registering its
+    /// dedicated resize channel with the worker.
+    #[must_use]
+    pub fn build_protocol(
+        &mut self,
+        bare_key: &str,
+        suffix: &'static str,
+        picker: &Picker,
+        img: image::DynamicImage,
+    ) -> ThreadProtocol {
+        self.record_protocol_build();
+        let mem_key = mem_key(bare_key, suffix);
+        let (req_tx, req_rx) = mpsc::channel::<ResizeRequest>();
+        let _ = self.resize_register_tx.send((mem_key, req_rx));
+        ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
+    }
+
+    /// Record `protocol` as `bare_key`'s encoding for `suffix`.
+    pub fn insert_protocol(
+        &mut self,
+        bare_key: &str,
+        suffix: &'static str,
+        protocol: ThreadProtocol,
+    ) {
+        self.protocols
+            .entry(bare_key.to_owned())
+            .or_default()
+            .insert(suffix, protocol);
+    }
+
+    /// `bare_key`'s protocol for `suffix`, when one is cached.
+    #[must_use]
+    pub fn protocol_mut(&mut self, bare_key: &str, suffix: &str) -> Option<&mut ThreadProtocol> {
+        self.protocols.get_mut(bare_key)?.get_mut(suffix)
+    }
+
+    /// Whether `bare_key` has a protocol cached for `suffix`.
+    #[must_use]
+    pub fn contains(&self, bare_key: &str, suffix: &str) -> bool {
+        self.protocols
+            .get(bare_key)
+            .is_some_and(|by_suffix| by_suffix.contains_key(suffix))
+    }
+
+    /// Whether any protocol is cached for `bare_key`.
+    #[must_use]
+    pub fn has_any(&self, bare_key: &str) -> bool {
+        self.protocols
+            .get(bare_key)
+            .is_some_and(|by_suffix| !by_suffix.is_empty())
+    }
+
+    /// Drop every protocol cached for `bare_key`, so the next paint re-encodes
+    /// from the retained source.
+    pub fn clear_key(&mut self, bare_key: &str) {
+        self.protocols.remove(bare_key);
     }
 
     /// Resolve an optional Logo cache key to the key of a Logo that has decoded
     /// pixels to composite: a pending, absent, or failed Logo is not a
     /// decoration input, so the base-only protocol stays valid.
-    pub fn ready_logo_key(&self, logo_cache_key: Option<&str>) -> Option<String> {
+    pub fn ready_logo_key(
+        &self,
+        cache: &ImageCache,
+        logo_cache_key: Option<&str>,
+    ) -> Option<String> {
         logo_cache_key
-            .filter(|key| self.image(key).is_some_and(|entry| entry.img.is_some()))
+            .filter(|key| cache.image(key).is_some_and(|entry| entry.img.is_some()))
             .map(str::to_owned)
     }
 
@@ -144,15 +259,78 @@ impl ImageCache {
     #[must_use]
     pub fn decorate_with_logo(
         &self,
+        cache: &ImageCache,
         img: image::DynamicImage,
         logo_cache_key: Option<&str>,
     ) -> image::DynamicImage {
         let Some(logo) = logo_cache_key
-            .and_then(|key| self.image(key))
+            .and_then(|key| cache.image(key))
             .and_then(|entry| entry.img.as_ref())
         else {
             return img;
         };
         mbv_images::composite_landscape_logo(&img, logo)
     }
+
+    /// The next completed resize, tagged `"bare@suffix"`.
+    pub fn try_recv_resize_response(&self) -> Result<(String, ResizeResponse), mpsc::TryRecvError> {
+        self.resize_response_rx.try_recv()
+    }
+
+    /// Rebuild the resize worker after its thread exited — the only owner-
+    /// visible sign of a caught `resize_encode` panic is the shared response
+    /// channel closing (M-PANIC-CONTINUATION, issue #895). Spawns a fresh
+    /// worker and drops every cached protocol: the old worker took each
+    /// entry's per-key `ResizeRequest` receiver with it, so no cached
+    /// protocol can receive resize results any more; every entry re-encodes
+    /// and re-registers lazily on its next paint from the retained source
+    /// image.
+    pub fn respawn_resize_worker(&mut self) {
+        let (register_tx, response_rx) = spawn_resize_worker();
+        self.resize_register_tx = register_tx;
+        self.resize_response_rx = response_rx;
+        self.protocols.clear();
+    }
+
+    #[must_use]
+    pub fn protocol_builds(&self) -> u32 {
+        self.protocol_builds.get()
+    }
+
+    fn record_protocol_build(&self) {
+        self.protocol_builds.set(self.protocol_builds.get() + 1);
+    }
 }
+
+impl Default for ImageProtocols {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for ImageProtocols {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageProtocols").finish_non_exhaustive()
+    }
+}
+
+/// Query the terminal for its image protocol and apply the configured
+/// protocol override when one is set.
+fn build_image_picker(protocol_override: Option<&str>) -> Picker {
+    use ratatui_image::picker::ProtocolType;
+    let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
+    let proto = protocol_override.and_then(|s| match s.to_lowercase().as_str() {
+        "sixel" => Some(ProtocolType::Sixel),
+        "kitty" => Some(ProtocolType::Kitty),
+        "iterm2" => Some(ProtocolType::Iterm2),
+        "halfblocks" => Some(ProtocolType::Halfblocks),
+        _ => None, // "auto" or unknown: use picker's detected protocol
+    });
+    if let Some(proto) = proto {
+        picker.set_protocol_type(proto);
+    }
+    picker
+}
+
+#[cfg(test)]
+mod tests;

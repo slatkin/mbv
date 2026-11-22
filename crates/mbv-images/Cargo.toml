@@ -23,7 +23,6 @@ num-traits.workspace = true
 ratatui.workspace = true
 ratatui-image = { workspace = true, features = ["crossterm"] }
 image.workspace = true
-tracing.workspace = true
 foldhash.workspace = true
 
 [dev-dependencies]
