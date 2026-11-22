@@ -1,6 +1,7 @@
 use crate::arrangements::playback_transport::{QueueBandRows, queue_band_rows, transport_rows};
 use mbv_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
