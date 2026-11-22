@@ -217,11 +217,11 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
             "hiding preserves the paint checkpoint"
         );
 
-        let root = harness
-            .model()
-            .app
-            .compute_chrome_geometry(Rect::new(0, 0, width, 40))
-            .root;
+        let root = crate::app::shell::draw::compute_chrome_geometry(
+            &harness.model().app,
+            Rect::new(0, 0, width, 40),
+        )
+        .root;
         let playback = root.queue_playback.expect("queue playback placed");
         let queue = root.queue.expect("queue placed");
         assert_eq!(
@@ -272,11 +272,11 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
     let card_height = harness.model().app.layout.card.height;
     assert!(card_height > 0, "the slot has a reservation while playing");
 
-    let root = harness
-        .model()
-        .app
-        .compute_chrome_geometry(Rect::new(0, 0, 100, 40))
-        .root;
+    let root = crate::app::shell::draw::compute_chrome_geometry(
+        &harness.model().app,
+        Rect::new(0, 0, 100, 40),
+    )
+    .root;
     let playback = root
         .queue_playback
         .expect("queue playback placed while playing");
@@ -312,11 +312,11 @@ fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
         .unwrap();
-    let root = harness
-        .model()
-        .app
-        .compute_chrome_geometry(Rect::new(0, 0, 100, 40))
-        .root;
+    let root = crate::app::shell::draw::compute_chrome_geometry(
+        &harness.model().app,
+        Rect::new(0, 0, 100, 40),
+    )
+    .root;
     let playback = root
         .queue_playback
         .expect("queue playback placed while playing");
@@ -369,11 +369,11 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
         .unwrap();
-    let root = harness
-        .model()
-        .app
-        .compute_chrome_geometry(Rect::new(0, 0, 100, 40))
-        .root;
+    let root = crate::app::shell::draw::compute_chrome_geometry(
+        &harness.model().app,
+        Rect::new(0, 0, 100, 40),
+    )
+    .root;
     let playback = root
         .queue_playback
         .expect("queue playback placed while idle: the header band is always visible");
@@ -537,10 +537,10 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
 
     // The rows the slot/transport would have occupied — here the panel's
     // collapsed region above the queue panel — resolve no playback intent.
-    let chrome = harness
-        .model()
-        .app
-        .compute_chrome_geometry(Rect::new(0, 0, 80, 40));
+    let chrome = crate::app::shell::draw::compute_chrome_geometry(
+        &harness.model().app,
+        Rect::new(0, 0, 80, 40),
+    );
     let collapsed_row = chrome.left_content.y + 1;
     harness.inject(click(chrome.left_content.x + 5, collapsed_row));
     let outcome = harness.step();
@@ -744,11 +744,11 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
         visualizer: false,
         title_site: NowPlayingTitleSite::Header,
     };
-    let placement = reference
-        .compute_chrome_geometry(Rect::new(0, 0, 120, 40))
-        .root
-        .queue_playback
-        .expect("queue playback placed while playing");
+    let placement =
+        crate::app::shell::draw::compute_chrome_geometry(&reference, Rect::new(0, 0, 120, 40))
+            .root
+            .queue_playback
+            .expect("queue playback placed while playing");
     let slot = mbv_render::arrangements::chrome::queue_playback_slot_region(placement);
     let target_area = ratatui::layout::Rect {
         height: mbv_render::components::card::queue_card_height_cap(40),

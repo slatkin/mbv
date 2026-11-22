@@ -90,13 +90,13 @@ impl Model {
             );
             // The queue panel's placement (task 3.1): computed from the
             // same paint-free checkpoint the draw path consumes (the last
-            // published card geometry; see `App::queue_panel_placement`).
+            // published card geometry; see `draw::queue_panel_placement`).
             // The frame is an appearance surface: unpinned mini view always
             // rests; a pinned mini view follows the window focus, while 80+
             // columns ignores window focus.
             queue.set_frame_focused(self.app.panel_appearance_focus(PanelFocus::Queue));
             queue.set_mini_view(self.app.is_mini_view());
-            queue.set_area(self.app.queue_panel_placement().panel_area);
+            queue.set_area(super::draw::queue_panel_placement(&self.app).panel_area);
         }
     }
 

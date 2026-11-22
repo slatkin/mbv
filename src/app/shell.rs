@@ -32,7 +32,7 @@ mod audiobookshelf_book;
 mod audiobookshelf_podcast;
 mod chrome_panels;
 mod chrome_status;
-mod draw;
+pub(in crate::app) mod draw;
 mod emby_library;
 mod emby_library_content;
 mod feeds;

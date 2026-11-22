@@ -19,8 +19,10 @@ const HEIGHT: u16 = 40;
 
 /// Draw one real shell frame and return the queue footer row's text.
 fn footer_row_text(harness: &mut TickHarness) -> String {
-    let footer = queue_footer_row(harness.model().app.queue_panel_placement().panel_area)
-        .expect("queue footer row in a queue-visible layout");
+    let footer = queue_footer_row(
+        crate::app::shell::draw::queue_panel_placement(&harness.model().app).panel_area,
+    )
+    .expect("queue footer row in a queue-visible layout");
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))

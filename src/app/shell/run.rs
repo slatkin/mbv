@@ -146,7 +146,7 @@ impl Model {
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
-        self.app.compose_root_frame(f);
+        super::draw::compose_root_frame(&mut self.app, f);
         // Root composition is data-driven: this is the sole panel paint loop.
         // The queue playback placement is deliberately handled by its panel
         // method; its transport geometry was projected during sync from the

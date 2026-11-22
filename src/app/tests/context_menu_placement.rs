@@ -44,7 +44,7 @@ fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_root_frame(f);
+        crate::app::shell::draw::compose_root_frame(&mut model.app, f);
         model.render_context_menu_overlay(f);
     })
     .unwrap();
@@ -325,12 +325,13 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
     // Publish the frame layout first: the live loop always has a painted
     // frame before the slot can be clicked, and the menu resolves its
     // queue-column bounds from that published layout.
-    term.draw(|f| model.app.compose_root_frame(f)).unwrap();
+    term.draw(|f| crate::app::shell::draw::compose_root_frame(&mut model.app, f))
+        .unwrap();
     model.app.open_visual_slot_context_menu(2, 20);
     model.sync_modal_requests();
 
     term.draw(|f| {
-        model.app.compose_root_frame(f);
+        crate::app::shell::draw::compose_root_frame(&mut model.app, f);
         let library_area = model
             .app
             .layout

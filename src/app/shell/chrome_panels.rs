@@ -29,9 +29,11 @@ use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
 pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
-    let area = app
-        .compute_chrome_geometry(Rect::new(0, 0, app.terminal_width, app.terminal_height))
-        .panel_area;
+    let area = super::draw::compute_chrome_geometry(
+        app,
+        Rect::new(0, 0, app.terminal_width, app.terminal_height),
+    )
+    .panel_area;
     (area.width > 0 && area.height > 0).then_some(area)
 }
 
@@ -44,12 +46,10 @@ impl Model {
             self.app.layout.card = CardGeometry::default();
             return;
         }
-        let chrome = self.app.compute_chrome_geometry(Rect::new(
-            0,
-            0,
-            self.app.terminal_width,
-            self.app.terminal_height,
-        ));
+        let chrome = super::draw::compute_chrome_geometry(
+            &self.app,
+            Rect::new(0, 0, self.app.terminal_width, self.app.terminal_height),
+        );
         if chrome.left_area.width == 0 {
             self.app.layout.card = CardGeometry::default();
             return;
@@ -74,22 +74,20 @@ impl Model {
         };
     }
 
-    /// Paint-free chrome geometry for the sync pass. `compute_chrome_geometry`
-    /// is a pure read of `App` state (its S0 doc comment), so the panel mounts
+    /// Paint-free chrome geometry for the sync pass.
+    /// `draw::compute_chrome_geometry` is a pure read of `App` state (its S0
+    /// doc comment), so the panel mounts
     /// are decidable here — before any draw — from the same computation the
     /// draw path publishes as `AppLayout.root_frame`. Deciding from the
     /// published `root_frame` instead would leave a placement that just
     /// appeared (startup, or leaving mini-view) unmounted for the first frame
     /// that shows it.
     fn sync_chrome_root(&self) -> RootFrame {
-        self.app
-            .compute_chrome_geometry(ratatui::layout::Rect::new(
-                0,
-                0,
-                self.app.terminal_width,
-                self.app.terminal_height,
-            ))
-            .root
+        super::draw::compute_chrome_geometry(
+            &self.app,
+            ratatui::layout::Rect::new(0, 0, self.app.terminal_width, self.app.terminal_height),
+        )
+        .root
     }
 }
 

@@ -73,7 +73,7 @@ impl App {
         // Residual A: derive the tab-strip width from the shared arrangement
         // primitive instead of reading the painted `layout.tabs_area`.
         let area = ratatui::layout::Rect::new(0, 0, self.terminal_width, self.terminal_height);
-        let chrome = self.compute_chrome_geometry(area);
+        let chrome = crate::app::shell::draw::compute_chrome_geometry(self, area);
         let tab_w = if chrome.right_visible {
             mbv_render::arrangements::chrome::tab_strip_text_width(chrome.tab_bar_area.width)
         } else {

@@ -99,7 +99,7 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
         resting_zebra, focused_zebra,
         "the QueueColumn focus pair must differ for this proof to bind"
     );
-    let panel = harness.model().app.queue_panel_placement().panel_area;
+    let panel = crate::app::shell::draw::queue_panel_placement(&harness.model().app).panel_area;
     assert!(panel.width > 2 && panel.height > 0, "queue panel placed");
     let buf = terminal.backend().buffer();
     // The placement's outer frame columns stay outside the inset list box,
