@@ -1,6 +1,7 @@
 use super::chrome;
 use mbv_keybinds::{KEYBIND_ACTIONS, KeyGate, KeySection, Keybinds, action_by_id};
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 use ratatui::Frame;
