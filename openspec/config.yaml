@@ -18,6 +18,7 @@ rules:
     - A task that adds or upgrades a dependency names the version from design.md.
     - Tasks are for implementing agents, not humans.
     - There should never be a task calling calling for a human decision. These decisions need to be made during proposals.
+    - Units NEVER need to pass gates or be build-able as a requirement so long that is recorded for the next unit to expect. These are not project-end gates only.
   specs:
     - Specs state behavior and layout, never paint.
     - Never pin strings, glyphs, colors, spacing, alignment, truncation.
