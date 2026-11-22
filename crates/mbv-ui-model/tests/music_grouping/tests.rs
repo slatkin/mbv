@@ -1,4 +1,4 @@
-use mbv_render::sorted_group_album_order;
+use mbv_ui_model::music_grouping::sorted_group_album_order;
 
 /// Regression for the 2026-11-18 GUI Music bug: the `McCoy Tyner` albums painted
 /// 1967, 1972, 1972, 1968 because the server's `SortName` order was kept

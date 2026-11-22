@@ -53,8 +53,6 @@ pub use components::library_routes::{LibraryRoutesRenderModel, render_library_ro
 #[doc(inline)]
 pub use components::list_rows::LibraryListRenderCtx;
 #[doc(inline)]
-pub use screens::album_plan::group_album_plan;
-#[doc(inline)]
 pub use screens::feeds_model::{FeedDisplayRow, feed_display_rows};
 // `LetterFilter` is already `pub(crate)` re-exported below (ui_model::sort_filter).
 #[doc(inline)]
@@ -102,7 +100,6 @@ pub use components::chrome::{render_panel_shell_at, render_sidebar_scrollbar};
 pub use components::indicators;
 use components::widgets::render_right_scrollbar;
 #[doc(inline)]
-pub use mbv_ui_model::music_grouping::sorted_group_album_order;
 pub use mbv_ui_model::sort_filter::{
     LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, initial_group_artist_sort_key,
 };

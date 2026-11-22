@@ -10,7 +10,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-use mbv_ui_model::music_grouping::ArtistKey;
+use mbv_ui_model::music_grouping::{ArtistKey, group_album_plan, sorted_group_album_order};
 use mbv_ui_model::sort_filter::strip_article;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
@@ -267,7 +267,7 @@ impl App {
 
     /// The albums of the checked groups (design D1, D2): each checked
     /// group's whole album list, with the `(artist, year, name)` facts and
-    /// stable `ArtistKey` that `mbv_render::group_album_plan` derives from
+    /// stable `ArtistKey` that `group_album_plan` derives from
     /// `album_artist_cache`. All is every group's list; a failed fetch names
     /// the group in the failure line.
     fn gui_music_union(&self, lib_idx: usize, group_ids: &[&str]) -> GuiMusicUnion<'_> {
@@ -305,7 +305,7 @@ impl App {
     }
 
     /// Append one loaded group's albums to the union, de-duplicated by album
-    /// id, with the facts and stable identity `mbv_render::group_album_plan`
+    /// id, with the facts and stable identity `group_album_plan`
     /// derives from `album_artist_cache` (design D5).
     fn extend_gui_music_union<'a>(
         &'a self,
@@ -313,7 +313,7 @@ impl App {
         seen: &mut HashSet<&'a str>,
         albums: &'a [EmbyItem],
     ) {
-        let (facts, keys) = mbv_render::group_album_plan(&self.album_artist_cache, albums, None);
+        let (facts, keys) = group_album_plan(&self.album_artist_cache, albums, None);
         for ((facts, key), album) in facts.into_iter().zip(keys).zip(albums) {
             if seen.insert(album.id.as_str()) {
                 union.albums.push(album);
@@ -324,10 +324,10 @@ impl App {
     }
 
     /// The union's artist rows in artist sort-name order (design D5): the
-    /// `mbv_render::sorted_group_album_order` order of the union's facts,
+    /// `sorted_group_album_order` order of the union's facts,
     /// grouped into one row per `ArtistKey` at its first occurrence.
     fn gui_music_artists(&self, union: &GuiMusicUnion<'_>) -> Vec<GuiMusicArtist> {
-        let order = mbv_render::sorted_group_album_order(&union.facts);
+        let order = sorted_group_album_order(&union.facts);
         let mut artists: Vec<GuiMusicArtist> = Vec::new();
         let mut positions: HashMap<&ArtistKey, usize> = HashMap::new();
         for &index in &order {
