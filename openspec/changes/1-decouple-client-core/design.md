@@ -1,8 +1,8 @@
-# Design: decouple-client-core
+# Design: 1-decouple-client-core
 
 ## Context
 
-See proposal.md (Why). This is change 1 of 3 (`decouple-client-core`, `split-tui-gui-clients`, `add-owner-program`). The decision numbers (D2, D4, ...) are the numbers of the original single-change plan, kept in all three designs so that cross-references stay true. This design holds D2, part of D3, D4, D4a, D5, D6, D6a, D6b, D7, and D13. `split-tui-gui-clients` holds D1, the rest of D3, D4b, D4c, D10 (part), D11, and D12. `add-owner-program` holds D8, D9, and the Owner parts of D3 and D10.
+See proposal.md (Why). This is change 1 of 3 (`1-decouple-client-core`, `2-split-tui-gui-clients`, `3-add-owner-program`). The decision numbers (D2, D4, ...) are the numbers of the original single-change plan, kept in all three designs so that cross-references stay true. This design holds D2, part of D3, D4, D4a, D5, D6, D6a, D6b, D7, and D13. `2-split-tui-gui-clients` holds D1, the rest of D3, D4b, D4c, D10 (part), D11, and D12. `3-add-owner-program` holds D8, D9, and the Owner parts of D3 and D10.
 
 The current state that shapes the approach:
 
@@ -30,9 +30,9 @@ The current state that shapes the approach:
 
 **Non-Goals:**
 
-- No new crate for the core or a Client (`split-tui-gui-clients`).
-- No `pub` access surface for `App` beyond what a step needs. The GUI modules and the shell stay inside `crate::app` and keep their direct access; `split-tui-gui-clients` builds the surface (D4b).
-- No Owner program and no packaging change (`add-owner-program`).
+- No new crate for the core or a Client (`2-split-tui-gui-clients`).
+- No `pub` access surface for `App` beyond what a step needs. The GUI modules and the shell stay inside `crate::app` and keep their direct access; `2-split-tui-gui-clients` builds the surface (D4b).
+- No Owner program and no packaging change (`3-add-owner-program`).
 - No new user feature, key, screen, or command. No change to the ctrl protocol or the wire schema. No change to `mbvd`.
 - No merge of the TUI Library and the GUI Library panel. They present different surfaces.
 
@@ -67,7 +67,7 @@ Where a GUI-only and a TUI-only entry point wrap one shared function, the shared
 `App` stays the shared state. Each Client owns it:
 
 - TUI: the shell `Model` already owns `App`. It also takes the TUI-only state that leaves `App`: `terminal_width`, `terminal_height`, the narrow-terminal Mini view state, `layout` (D13 Rule B), `tab_scroll` (D6b), and every other field that only the shell reads or writes.
-- GUI: `GuiCore { app: App, gui: GuiClientState }` owns `App` and all GUI state. `GuiClientState` holds the 24 `gui_*` fields that remain after D6a (of 26: `gui_client` is replaced by `ClientCapabilities`, and `gui_shown_entry` stays in the core as `shown_entry`), plus `panel_collapsed` and `queue_folded`, which only GUI code reads or writes. The `impl App` blocks of the GUI modules become `impl GuiCore` blocks. `GuiCore` is defined in `src/gui.rs`, in the root package but outside `crate::app`, so that `split-tui-gui-clients` does not need to move it inside the package (its D4c puts the GUI modules beside it). The GUI's `CoreThread` holds `GuiCore` and keeps its `ClientTickHost` implementation.
+- GUI: `GuiCore { app: App, gui: GuiClientState }` owns `App` and all GUI state. `GuiClientState` holds the 24 `gui_*` fields that remain after D6a (of 26: `gui_client` is replaced by `ClientCapabilities`, and `gui_shown_entry` stays in the core as `shown_entry`), plus `panel_collapsed` and `queue_folded`, which only GUI code reads or writes. The `impl App` blocks of the GUI modules become `impl GuiCore` blocks. `GuiCore` is defined in `src/gui.rs`, in the root package but outside `crate::app`, so that `2-split-tui-gui-clients` does not need to move it inside the package (its D4c puts the GUI modules beside it). The GUI's `CoreThread` holds `GuiCore` and keeps its `ClientTickHost` implementation.
 - Prefs: the file format and every key name stay the same. The core keeps `load_prefs` and writes only the keys that the core owns. It gets one `pub fn save_client_pref(key: &str, value: serde_json::Value)` with the same read, change, and write. Each Client reads its own keys from `load_prefs` at start and writes them through `save_client_pref` when they change: the GUI owns `gui_player_auto_hide`, and the TUI owns every key whose field D2 moves to the shell `Model`. A key whose field stays in the core stays a core key.
 
 No `App` field becomes `pub` in this change.
@@ -96,7 +96,7 @@ Alternatives considered:
 | `dispatch/library/event.rs` | `gui_queue_in_view_row_fetches`, `handle_feed_home_video_selection_failed` | Library effect (c) |
 | `dispatch/feeds/feed.rs` | `gui_emby_feed_wants_target`, and the `gui_emby_libs` claim in `handle_feed_home_video_selection_loaded` | Library query and effect (c) |
 
-Also on that list today, and handled elsewhere: `client_arranges_panels` and `visual_slot_controls` (D6a), the `gui_*` field reads in `state/named_queues.rs`, `state/queue_link.rs`, `state/playback.rs` (D6a), `save_prefs` (D4), and `gui_queue_end_offsets` in `queue_summary_projection.rs` (it reads no GUI state; `split-tui-gui-clients` renames it).
+Also on that list today, and handled elsewhere: `client_arranges_panels` and `visual_slot_controls` (D6a), the `gui_*` field reads in `state/named_queues.rs`, `state/queue_link.rs`, `state/playback.rs` (D6a), `save_prefs` (D4), and `gui_queue_end_offsets` in `queue_summary_projection.rs` (it reads no GUI state; `2-split-tui-gui-clients` renames it).
 
 **(a) GUI half.** The arm in `App::dispatch` or `App::handle_playback_request` becomes a documented core no-op, as `PanelIntent::MoveQueueRow(_) => {}` is today. Every variant stays listed; no wildcard arm. The GUI entry (`input/gui.rs`: its `Command::App` arm and its `Msg::Playback` arm) calls the core first, then its own half. The TUI never sends these commands (the router gates them on `TransportChipKeys`, D6a), so its behaviour does not change.
 

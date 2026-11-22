@@ -1,8 +1,8 @@
-# Proposal: add-owner-program
+# Proposal: 3-add-owner-program
 
 ## Why
 
-This is change 3 of 3. It starts after `split-tui-gui-clients` is merged. After that change, the Client core, the TUI, and the GUI are separate crates. But the per-user Owner process still runs as `mbv --__local-daemon`, from the TUI crate `mbv-tui`. So the Owner process links the whole terminal UI, and the GUI Client must find and start the TUI program to host its Owner: the GUI still depends on the TUI at run time. `CONTEXT.md` and the agent guides must still explain that the TUI binary is also the Owner, which is the confusion the split removes elsewhere.
+This is change 3 of 3. It starts after `2-split-tui-gui-clients` is merged. After that change, the Client core, the TUI, and the GUI are separate crates. But the per-user Owner process still runs as `mbv --__local-daemon`, from the TUI crate `mbv-tui`. So the Owner process links the whole terminal UI, and the GUI Client must find and start the TUI program to host its Owner: the GUI still depends on the TUI at run time. `CONTEXT.md` and the agent guides must still explain that the TUI binary is also the Owner, which is the confusion the split removes elsewhere.
 
 ## What Changes
 

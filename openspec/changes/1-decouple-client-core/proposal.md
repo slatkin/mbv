@@ -1,4 +1,4 @@
-# Proposal: decouple-client-core
+# Proposal: 1-decouple-client-core
 
 ## Why
 
@@ -6,9 +6,9 @@ The TUI Client and the GUI Client are not separated in the code. The GUI program
 
 This change is the first of three sequential changes:
 
-1. `decouple-client-core` (this change): the shared code loses its TUI types and its GUI state, and names no Client. Everything stays in the root package.
-2. `split-tui-gui-clients`: the core, the TUI, and the GUI become separate crates.
-3. `add-owner-program`: the Owner process runs from its own `mbv-owner` program.
+1. `1-decouple-client-core` (this change): the shared code loses its TUI types and its GUI state, and names no Client. Everything stays in the root package.
+2. `2-split-tui-gui-clients`: the core, the TUI, and the GUI become separate crates.
+3. `3-add-owner-program`: the Owner process runs from its own `mbv-owner` program.
 
 This change has value alone: after it, shared code names no toolkit and no Client, and GUI state lives only in GUI code. It also makes change 2 possible, because the crate split needs a core that holds no Client code.
 

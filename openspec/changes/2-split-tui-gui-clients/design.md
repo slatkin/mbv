@@ -1,16 +1,16 @@
-# Design: split-tui-gui-clients
+# Design: 2-split-tui-gui-clients
 
 ## Context
 
-See proposal.md (Why). This is change 2 of 3 (`decouple-client-core`, `split-tui-gui-clients`, `add-owner-program`). The decision numbers are the numbers of the original single-change plan, kept in all three designs so that cross-references stay true. This design holds D1, D2 (restated), D3 (the crate placement), D4 (restated), D4b, D4c, D10 (part), D11, and D12. `decouple-client-core` holds D4a, D5, D6, D6a, D6b, D7, and D13. `add-owner-program` holds D8, D9, and the Owner parts of D3 and D10.
+See proposal.md (Why). This is change 2 of 3 (`1-decouple-client-core`, `2-split-tui-gui-clients`, `3-add-owner-program`). The decision numbers are the numbers of the original single-change plan, kept in all three designs so that cross-references stay true. This design holds D1, D2 (restated), D3 (the crate placement), D4 (restated), D4b, D4c, D10 (part), D11, and D12. `1-decouple-client-core` holds D4a, D5, D6, D6a, D6b, D7, and D13. `3-add-owner-program` holds D8, D9, and the Owner parts of D3 and D10.
 
-The state after `decouple-client-core` that shapes the approach:
+The state after `1-decouple-client-core` that shapes the approach:
 
 - The root package `mbv` is a library and the `mbv` binary. Its `src/app/` holds the shared `App`, dispatch, state, infra, and the keyboard router, plus the TUI shell (`src/app/shell/`) and the GUI-only modules `gui_library`, `gui_settings`, `gui_playlists`, `gui_client_state`, and `input/gui*`. `src/gui.rs` holds `GuiCore { app, gui }`.
 - Shared code outside the shell and the GUI modules names no ratatui, crossterm, tuirealm, `mbv-render`, or `mbv-components` in non-test files. `App` holds no GUI state. The core names no Client (`ClientCapabilities`).
 - `crates/mbv-gui` depends on the root `mbv` package. So it links ratatui, crossterm, and TuiRealm, and every GUI edit recompiles the root package.
 - `App` fields and most core methods are `pub(in crate::app)`. The shell and the GUI modules sit inside `crate::app`, so they reach both directly (D4b measures it).
-- The Owner process is `mbv --__local-daemon` (`src/startup.rs`, `src/local_daemon.rs`). It stays so in this change; `add-owner-program` moves it.
+- The Owner process is `mbv --__local-daemon` (`src/startup.rs`, `src/local_daemon.rs`). It stays so in this change; `3-add-owner-program` moves it.
 - A first attempt at the split failed at one row (94 library and 697 test errors in one step), because the shell, its tests, and the GUI modules reached `App` internals directly. D4b and D4c answer that failure.
 
 ## Goals / Non-Goals
@@ -24,7 +24,7 @@ The state after `decouple-client-core` that shapes the approach:
 
 **Non-Goals:**
 
-- No Owner program (`add-owner-program`). The `mbv` program keeps the hidden `--__local-daemon` Owner host, and the GUI keeps starting the sibling `mbv` to host its Owner.
+- No Owner program (`3-add-owner-program`). The `mbv` program keeps the hidden `--__local-daemon` Owner host, and the GUI keeps starting the sibling `mbv` to host its Owner.
 - No new user feature, key, screen, or command. No change to the ctrl protocol or the wire schema. No change to `mbvd`.
 - No redesign of `App`. The core API that the Clients use mirrors today's `App` methods; this change makes it explicit and narrow, not deep.
 - No merge of the TUI Library and the GUI Library panel.
@@ -48,7 +48,7 @@ The state after `decouple-client-core` that shapes the approach:
   remote-player, player, daemon, visualizer, net, ws, ids, core)
 ```
 
-The root `Cargo.toml` becomes a virtual workspace (`[workspace]`, `[workspace.package]`, `[workspace.dependencies]`, `[workspace.lints]` only). `default-members` lists every crate except `mbv-gui`, as today, and adds `mbv-client-core` and `mbv-tui`. Until `add-owner-program`, `mbv-tui` also hosts the Owner process (`--__local-daemon`).
+The root `Cargo.toml` becomes a virtual workspace (`[workspace]`, `[workspace.package]`, `[workspace.dependencies]`, `[workspace.lints]` only). `default-members` lists every crate except `mbv-gui`, as today, and adds `mbv-client-core` and `mbv-tui`. Until `3-add-owner-program`, `mbv-tui` also hosts the Owner process (`--__local-daemon`).
 
 Alternatives considered:
 
@@ -79,7 +79,7 @@ For each function, type, field, and test:
 | `src/config.rs`: the image disk cache family (`image_disk_cache_dir`, `image_disk_cache_path`, `read_`/`write_`/`clear_image_disk_cache*`, `evict_old_image_cache`, their private helpers) | `mbv-config`: the Owner's MPRIS hook and the core's Client MPRIS (`state/construct/remote.rs`) both pass `image_disk_cache_path` |
 | `src/startup.rs`: `parse_log_level_arg` | `mbv-core` (`applog`, beside `LogSpec`, with an `applog` error in place of `UiModelError`). `print_usage` stays in `mbv-tui` |
 | `src/owner_restart.rs`: pure `follow_up` decision | `mbv-client-core`; the terminal prompt goes to `mbv-tui` |
-| `src/local_daemon.rs`: `run_local_daemon_main`, swap launch, tray hooks (the Owner host) | `mbv-tui`, as a root module beside `startup`, until `add-owner-program` moves it to `mbv-owner` |
+| `src/local_daemon.rs`: `run_local_daemon_main`, swap launch, tray hooks (the Owner host) | `mbv-tui`, as a root module beside `startup`, until `3-add-owner-program` moves it to `mbv-owner` |
 | `src/local_daemon.rs`: `spawn_detached`, `local_daemon_args`, `session_display_env`, `to_io`, `READY_TIMEOUT`, `READY_POLL_INTERVAL` (a Client starts the Owner) | `mbv-client-core` (`owner_link`) |
 | `src/local_daemon.rs`: `detach` (the Owner's swap launch and the Client's `spawn_detached` both use it) | `mbv-desktop` (`launch` module) |
 | `src/single_instance.rs` (`resolve`, `Resolution`, `LockGuard` with `write_pid`, `socket_path`) | `mbv-daemon` (`owner_lock`, beside `try_lock`, `write_pid`, `locked_owner_pid`): one function serves the Owner's lock holder, `owner_link::find_owner`, and the core's Owner-restart and session-switch probes |
@@ -90,17 +90,17 @@ For each function, type, field, and test:
 | `src/startup.rs`: `install_signal_handlers`, `install_panic_hook`, `write_crash_log` | `mbv-tui` |
 | `src/app/tests/` | each test moves with the code it owns: ratatui and tick-integration tests to `mbv-tui`, core tests to `mbv-client-core`, GUI tests to `mbv-gui` |
 
-The leaf-crate moves (`mbv-desktop`, `mbv-daemon`, `mbv-core`, `mbv-config`) land first (tasks group 1), because the crates of group 4 and the Owner program of `add-owner-program` both need them.
+The leaf-crate moves (`mbv-desktop`, `mbv-daemon`, `mbv-core`, `mbv-config`) land first (tasks group 1), because the crates of group 4 and the Owner program of `3-add-owner-program` both need them.
 
 ### D4. Each Client wraps `App` by composition (restated)
 
-`App` lives in `mbv-client-core`. The TUI shell `Model` owns it and the TUI-only state; `GuiCore { app, gui }` owns it and all GUI state (`decouple-client-core` built both). `App` fields stay `pub(in crate::app)` inside the core. A Client reads and changes `App` only through `pub` methods. No field becomes `pub`, also not under the `test` feature.
+`App` lives in `mbv-client-core`. The TUI shell `Model` owns it and the TUI-only state; `GuiCore { app, gui }` owns it and all GUI state (`1-decouple-client-core` built both). `App` fields stay `pub(in crate::app)` inside the core. A Client reads and changes `App` only through `pub` methods. No field becomes `pub`, also not under the `test` feature.
 
 ### D4b. The access surface lands before any crate move
 
 Every crate move in this plan must be a path-only move. So the surface that the Clients need is built while everything is one crate, and the compiler proves it before any crate exists (D4c).
 
-Measured at plan time (HEAD `9a7a2f11c`, before `decouple-client-core`). `decouple-client-core` moves some sites (terminal size, layout, GUI fields), so re-measure before you dispatch each row. These counts are guides for slicing; the compiler at the rehearsal (D4c) is the gate:
+Measured at plan time (HEAD `9a7a2f11c`, before `1-decouple-client-core`). `1-decouple-client-core` moves some sites (terminal size, layout, GUI fields), so re-measure before you dispatch each row. These counts are guides for slicing; the compiler at the rehearsal (D4c) is the gate:
 
 | Code that leaves the core | What it reaches | Count |
 |---|---|---|
@@ -174,7 +174,7 @@ No new external dependency, and no version change. Each existing workspace depen
 - [Making `App` reads `pub` widens the core API, and the API mirrors `App` internals] → Add a read method only where a Client needs one; prefer intent methods; never make a field `pub`. Task 4.1 narrows every item that no Client needs. A deeper core API (splitting `App`) is out of scope.
 - [Tests move with code and some depend on private items] → A test stays a `src/` test of the crate whose private items it uses. Public-API tests go in the crate's `tests/<name>.rs` binary. No visibility widens to keep a test: a TUI or GUI test that needs core state or a core action uses a `test`-feature seam (D4b rule 5).
 - [A move row carries hundreds of private accesses and fails as one large error set, as the first attempt did] → D4b builds the access surface in compile-green slices, and the D4c rehearsal proves it with the compiler while everything is still one crate. The crate moves start only after the rehearsal compiles and its tests pass.
-- [The plan's counts were measured before `decouple-client-core`] → Re-measure each inventory before its row is dispatched. A row's `rg` check is tested against the code before dispatch.
+- [The plan's counts were measured before `1-decouple-client-core`] → Re-measure each inventory before its row is dispatched. A row's `rg` check is tested against the code before dispatch.
 - [Compile time] → `mbv-gui` stops compiling ratatui, crossterm, and TuiRealm. A GUI edit no longer recompiles the TUI, and a TUI edit no longer recompiles the GUI modules.
 
 ## Migration Plan

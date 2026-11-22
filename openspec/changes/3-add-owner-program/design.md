@@ -1,10 +1,10 @@
-# Design: add-owner-program
+# Design: 3-add-owner-program
 
 ## Context
 
-See proposal.md (Why). This is change 3 of 3 (`decouple-client-core`, `split-tui-gui-clients`, `add-owner-program`). The decision numbers are the numbers of the original single-change plan, kept in all three designs so that cross-references stay true. This design holds D3 (the Owner rows), D8, D9, D10 (the Owner part), and D11 (the Owner part).
+See proposal.md (Why). This is change 3 of 3 (`1-decouple-client-core`, `2-split-tui-gui-clients`, `3-add-owner-program`). The decision numbers are the numbers of the original single-change plan, kept in all three designs so that cross-references stay true. This design holds D3 (the Owner rows), D8, D9, D10 (the Owner part), and D11 (the Owner part).
 
-The state after `split-tui-gui-clients` that shapes the approach:
+The state after `2-split-tui-gui-clients` that shapes the approach:
 
 - The Owner process is `mbv --__local-daemon`. `crates/mbv-tui/src/startup.rs` takes the hidden flag and calls `run_local_daemon_main` in `crates/mbv-tui/src/local_daemon.rs`, which also holds the swap launch and the tray hooks. `crates/mbv-tui/src/main.rs` installs the allocator; `startup.rs` installs the signal handlers and the panic hook, whose crash writer makes crossterm calls.
 - The shared helpers the Owner needs already sit in leaf crates: `launch_exe`, `detach`, `notify`, `toggle_panel`, and the pinwin request runner in `mbv-desktop` (`launch`); the Owner lock in `mbv-daemon` (`owner_lock`); `parse_log_level_arg` in `mbv_core::applog`; the image disk cache in `mbv-config`.

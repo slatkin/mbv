@@ -1,6 +1,6 @@
 # Tasks
 
-Start only after `split-tui-gui-clients` is merged. Run every cargo command in the foreground and wait for it to finish. Do not background it, sleep, or poll. Run `cargo fmt` after each Rust change. Move files with `git mv` so history follows them. Keep the module layout rules in `AGENTS.md` (no `mod.rs`, no `#[path]`, no `include!`). Add no lint suppression. Each group ends with the workspace green: `cargo check --workspace --all-targets` and `cargo clippy --workspace --all-targets -- -D warnings` pass. A test moves with the code it owns; add a test only where a task names its contract. Before you dispatch a row, check its premises (the symbols and files it names) against the code.
+Start only after `2-split-tui-gui-clients` is merged. Run every cargo command in the foreground and wait for it to finish. Do not background it, sleep, or poll. Run `cargo fmt` after each Rust change. Move files with `git mv` so history follows them. Keep the module layout rules in `AGENTS.md` (no `mod.rs`, no `#[path]`, no `include!`). Add no lint suppression. Each group ends with the workspace green: `cargo check --workspace --all-targets` and `cargo clippy --workspace --all-targets -- -D warnings` pass. A test moves with the code it owns; add a test only where a task names its contract. Before you dispatch a row, check its premises (the symbols and files it names) against the code.
 
 ## 1. The Owner program
 
@@ -21,4 +21,4 @@ Start only after `split-tui-gui-clients` is merged. Run every cargo command in t
 
 - [ ] 4.1 Check the dependency-graph scenarios in the change's specs: `cargo tree -p mbv-owner -e normal --prefix none` lists no terminal UI library, no GUI toolkit, and no Client crate. Verify by the command output.
 - [ ] 4.2 Run the full gate set: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --release --test-threads=4`, `cargo nextest run --release --test-threads=4 -p mbv-gui`, and `make check-code-file-lines`. Verify that every command passes.
-- [ ] 4.3 Run `openspec validate add-owner-program` and confirm the delta specs still match the built behaviour. Verify that the command reports the change valid.
+- [ ] 4.3 Run `openspec validate 3-add-owner-program` and confirm the delta specs still match the built behaviour. Verify that the command reports the change valid.
