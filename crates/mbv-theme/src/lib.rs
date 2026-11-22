@@ -14,10 +14,10 @@
 //!   which reads the surface's (resting, focused) slot pair against the
 //!   active theme.
 //!
-//! Everything resolves to the neutral [`Rgb`]; the render toolkit's colour
-//! conversion lives behind the crate's `ratatui` feature, which only the TUI
-//! crates enable. Layout and painting live in `mbv-render`, which consumes
-//! these roles and surfaces.
+//! Everything resolves to the neutral [`Rgb`]; `mbv_tui_support::ToRatatui`
+//! converts it for the TUI crates, and this crate depends on no render
+//! toolkit. Layout and painting live in `mbv-render`, which consumes these
+//! roles and surfaces.
 
 #[cfg(test)]
 mod palette_json;

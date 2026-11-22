@@ -107,8 +107,8 @@ impl Role {
     }
 
     /// The role's colour, resolved through the active theme. The value is
-    /// the neutral [`Rgb`]; the render toolkit converts under the crate's
-    /// `ratatui` feature.
+    /// the neutral [`Rgb`]; `mbv_tui_support::ToRatatui` converts it for a
+    /// TUI painter.
     #[must_use]
     pub fn color(self) -> Rgb {
         self.color_in(active())

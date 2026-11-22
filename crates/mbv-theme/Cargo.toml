@@ -13,11 +13,5 @@ readme = "../../README.md"
 [lints]
 workspace = true
 
-[dependencies]
-ratatui = { workspace = true, optional = true }
-
 [dev-dependencies]
 serde_json.workspace = true
-
-[features]
-ratatui = ["dep:ratatui"]

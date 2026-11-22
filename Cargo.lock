@@ -3941,7 +3941,6 @@ dependencies = [
 name = "mbv-theme"
 version = "0.28.3"
 dependencies = [
- "ratatui",
  "serde_json",
 ]
 
