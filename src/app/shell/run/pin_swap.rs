@@ -28,7 +28,7 @@ impl Model {
         // The swap is worth more than the snapshot: answer even when
         // the save failed (design D6).
         let launch_state = self.launch_state_snapshot();
-        crate::app::dispatch::run_loop::teardown::save_launch_state(&launch_state);
+        super::super::teardown::save_launch_state(&launch_state);
         if !self
             .pin_swap_reply(link)
             .send_ctrl_cmd(CtrlCmd::SwapPrepared)

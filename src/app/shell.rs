@@ -56,6 +56,7 @@ pub(in crate::app) mod queue_card;
 mod root;
 mod run;
 mod settings;
+pub(in crate::app) mod teardown;
 pub(in crate::app) mod tv_wide;
 mod tv_workspace;
 mod twitch_url;

@@ -1,7 +1,7 @@
 //! Shutdown/teardown handling, split out of `run_loop_events.rs` to keep that
-//! file within the repository's file-size limit.
+//! file within the repository's file-size limit. The part that names the
+//! shell `Model` lives in `shell::teardown`.
 
-use crate::app::shell::Model;
 use crate::app::{App, QUIT_REQUESTED};
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
@@ -39,22 +39,6 @@ fn join_visualizer_capture(handle: Option<JoinHandle<()>>) {
     }
 }
 
-impl Model {
-    /// Finish an orderly TUI teardown after taking the selected destination's
-    /// bounded launch snapshot. The App remains the persistence authority;
-    /// this shell query is the only reverse read from the mounted owner.
-    pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
-        let exit_kind = if self.swapped_out_exit {
-            ExitKind::SwappedOut
-        } else {
-            ExitKind::Quit {
-                launch_state: self.launch_state_snapshot(),
-            }
-        };
-        self.app.teardown(quit_timeout, exit_kind);
-    }
-}
-
 impl App {
     /// Persist exit state, apply the daemon lifetime policy, and stop the
     /// visualizer during either signal-triggered or in-app teardown.
@@ -80,18 +64,6 @@ impl App {
         if let Err(e) = mbv_config::save_last_remote_connection(Some(&last)) {
             tracing::warn!(name: "auto_reconnect.target_persist.failed", target: "auto_reconnect", error = %e, "current target persistence failed");
         }
-    }
-
-    /// Run the normal teardown for the shell-chosen exit kind. An orderly
-    /// exit persists the shell-supplied launch snapshot; a swapped-out exit
-    /// skips both the snapshot save and the coordinated shutdown request
-    /// (tray-pin-swap design D6).
-    pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration, exit_kind: ExitKind) {
-        let swapped_out = matches!(exit_kind, ExitKind::SwappedOut);
-        if let ExitKind::Quit { launch_state } = exit_kind {
-            save_launch_state(&launch_state);
-        }
-        self.teardown_inner(quit_timeout, swapped_out);
     }
 
     /// Run the exit teardown every Client shares, once, at its own exit
@@ -130,7 +102,7 @@ impl App {
         self.pending_exit_message.as_deref()
     }
 
-    fn teardown_inner(&mut self, quit_timeout: Duration, swapped_out: bool) {
+    pub(in crate::app) fn teardown_inner(&mut self, quit_timeout: Duration, swapped_out: bool) {
         // Stop the visualizer before requesting daemon shutdown so its worker
         // can exit concurrently with the remote request.
         let visualizer_handle = self.visualizer.take().and_then(|mut worker| {
@@ -390,7 +362,7 @@ mod tests {
         app.teardown(
             Duration::ZERO,
             ExitKind::Quit {
-                launch_state: super::test_quit_launch_state(),
+                launch_state: test_quit_launch_state(),
             },
         );
 
