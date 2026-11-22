@@ -305,6 +305,7 @@ impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
 mod tests {
     use super::*;
     use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole};
+    use mbv_tui_support::ToRatatui;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use rstest::rstest;
