@@ -11,19 +11,9 @@ The Client core (the shared Client state, command dispatch, keyboard router, Cli
 - **WHEN** the Client core is built alone
 - **THEN** its dependency graph contains no terminal library, terminal UI framework, or GUI toolkit
 
-### Requirement: Shared Client state uses neutral values
-
-Shared Client state and the calls that both Clients make SHALL use neutral values only: positions in logical units or items, never terminal cells or toolkit types. Each Client SHALL keep its own size facts (terminal size, window size) and its own placement of shared content, such as where a context menu opens.
-
-#### Scenario: A context menu opens at the pointer
-
-- **WHEN** the user opens a context menu with a pointer press in either Client
-- **THEN** the Client core builds the same menu entries for the same target in both Clients
-- **AND** each Client places the menu from its own pointer position
-
 ### Requirement: No Client contains another Client's code
 
-The TUI Client SHALL NOT depend on GUI Client code, and the GUI Client SHALL NOT depend on TUI Client code. Code that both Clients use SHALL live once, in the Client core or in a shared crate below it, and both Clients SHALL import it from there. Code and state that only one Client uses SHALL live in that Client. The Client core SHALL NOT name a Client: where the Clients differ, it SHALL read a neutral capability that each Client declares, and each Client's behaviour SHALL stay as it is.
+The TUI Client SHALL NOT depend on GUI Client code, and the GUI Client SHALL NOT depend on TUI Client code. Code that both Clients use SHALL live once, in the Client core or in a shared crate below it, and both Clients SHALL import it from there. Code that only one Client uses SHALL live in that Client.
 
 #### Scenario: The GUI program carries no terminal UI
 
@@ -39,12 +29,6 @@ The TUI Client SHALL NOT depend on GUI Client code, and the GUI Client SHALL NOT
 
 - **WHEN** a rule that both Clients follow changes, such as how a selection is enqueued
 - **THEN** the change is made once, in the Client core, and both Clients show the new behaviour
-
-#### Scenario: A rule applies to one Client only
-
-- **WHEN** a shared rule applies only to a Client that shows one picked queue entry at a time
-- **THEN** the Client core gates it on that capability, not on which Client runs
-- **AND** a Client that declares the capability gets the rule, and a Client that does not keeps its own behaviour
 
 #### Scenario: A GUI-only feature changes
 
