@@ -60,7 +60,7 @@ pub(in crate::app) mod teardown;
 mod terminal;
 pub(in crate::app) mod tv_wide;
 pub(crate) use terminal::set_mouse_capture;
-pub(in crate::app) use terminal::{init_terminal, open_url, restore_terminal};
+pub(in crate::app) use terminal::{init_terminal, restore_terminal};
 mod tv_workspace;
 mod twitch_url;
 mod ui_state_reset;

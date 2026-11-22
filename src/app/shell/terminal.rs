@@ -21,38 +21,6 @@ pub(in crate::app) fn init_terminal(
     Ok(Terminal::new(CrosstermBackend::new(stdout))?)
 }
 
-pub(in crate::app) fn open_url(url: &str) -> std::io::Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map(|_| ())
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(url)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map(|_| ())
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(url)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map(|_| ())
-    }
-}
-
 fn set_shift_escape_mode<W: Write>(writer: &mut W, enabled: bool) -> std::io::Result<()> {
     writer.write_all(if enabled { b"\x1b[>1s" } else { b"\x1b[>0s" })
 }

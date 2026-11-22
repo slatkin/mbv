@@ -85,6 +85,7 @@ pub use self::gui_settings::{
     SetupSecret,
 };
 pub use self::infra::image_fetch::CardImageDrain;
+pub(in crate::app) use self::infra::open_url::open_url;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,
@@ -103,7 +104,6 @@ pub use self::queue_playback_projection::{
 };
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
 pub use self::queue_surface::QueueSurfaceProjection;
-pub(in crate::app) use self::shell::open_url;
 pub(crate) use self::shell::set_mouse_capture;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
