@@ -117,6 +117,23 @@ Alternatives considered:
 - `Box<dyn Any>` client slot with downcasts. Rejected: it hides the boundary from the compiler.
 - An extension trait on `App` in each Client crate. Rejected: it needs `pub` fields.
 
+### D4a. The core calls no GUI function: a two-part seam
+
+Today shared core code takes `Option<&mut GuiClientState>` and calls `gui_library` functions (the command dispatch, playback requests, the library event handlers, and feed loads). `GuiClientState` also holds about 15 `gui_library` types. A move row cannot compile, and its `rg` check cannot pass, while the core names these items. So two seams land before any file moves:
+
+1. Commands. `App::dispatch` and `App::handle_playback_request` stop taking the GUI state. An arm that only the GUI acts on becomes a documented no-op in the core, as `PanelIntent::MoveQueueRow(_) => {}` is today. The GUI entry calls the core first, then does its own half. Every variant is listed; no wildcard arm.
+2. Library events. The library event handlers take `Option<&mut dyn ClientLibraryStores>`, a core trait with `wants_feed_target(&self, app: &App, lib_idx, &FeedHomeVideoSelection) -> bool` and `defer(&mut self, ClientLibraryEffect)`. The effects are `RowArtSourcesChanged`, `FeedTargetLanded`, and `FeedTargetFailed`. The GUI applies each deferred effect after the event that raised it, before the next event. The TUI passes `None`, so it does nothing, as today.
+
+Also part of the seam: the App half of the artist-name lookup stays in the core under the neutral name `ArtistNameLookup`, and its answer stays gated on client presence. `handle_feed_home_video_selection_failed` splits: the fetch-mark retirement and the log stay in the core, and the claim insert becomes `FeedTargetFailed`. The `gui_overlay` accessors move onto `GuiClientState`.
+
+Move order: the `impl` blocks move first, callers first. The types and `GuiClientState` move last and together, because they cross the boundary together. A type or helper stays in the core while any core file still names it. A `pub` that a step widens is recorded in the row's task note and narrowed at the end. The eight `Gui*` key-policy bindings and `OverlayFocus::SettingsScreen` get neutral names in the last step.
+
+Alternatives considered:
+
+- A hook that runs GUI code inside the core handler. Rejected: `gui_queue_in_view_row_fetches` reaches most destinations.
+- An async channel. Rejected: it changes the event order, and it cannot answer the feed-wanted query.
+- Keep the types in the core. Rejected: it is against D3, D4, and the Goals.
+
 ### D5. Client-only events leave the shared event enum
 
 The shared event enum loses `GuiGroupAlbums`, `GuiEmbyRootItems`, and `GuiShowsNew`. GUI fetch workers report on a channel that `GuiCore` owns. `ClientTickHost` gets one more hook, `drain_client_events(&mut self) -> bool`, which runs in the shared tick after `drain_lib_events`. The GUI implementation drains its channel. The TUI implementation is a documented no-op that returns `false`. The waker is the same `ClientWaker`, so a GUI worker result still wakes the tick.
@@ -256,6 +273,7 @@ An item that the compiler finds later goes by the same two rules. After the spli
 - [The held `mbv` file pins an old inode on disk until the Owner exits] → Same cost as today, where the Owner's own running file pins its inode.
 - [`/proc/<pid>/fd/<n>` needs the same-user `/proc` access that `/proc/<pid>/exe` needs today] → No new access rule. Hardened kernels that block it today already block the current path.
 - [A dev build that runs `mbv-gui` alone finds no fresh `mbv-owner`] → The `Makefile` GUI targets build all three. The mismatch prompt still catches a stale sibling.
+- [A move row names items that the core still uses, so its check cannot pass] → Each move row states its seam (D4a) before it names a move. A row's `rg` check is tested against the code before the row is dispatched.
 - [Compile time] → `mbv-gui` stops compiling ratatui, crossterm, and TuiRealm. `mbv` stops compiling GUI modules.
 
 ## Migration Plan
