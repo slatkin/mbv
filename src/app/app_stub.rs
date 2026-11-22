@@ -603,7 +603,7 @@ fn built_app(
         library_routes: std::collections::BTreeMap::new(),
         music_levels: Vec::new(),
         use_nerd_fonts: false,
-        indicator_style: mbv_render::indicators::IndicatorStyle::default(),
+        indicator_style: mbv_ui_model::indicators::IndicatorStyle::default(),
         image_cache_size: 50,
         image_decode: mbv_images::ImageDecode::Pixels,
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),

@@ -2,10 +2,10 @@
 //! resolution, audio, and subtitle facts the queue band paints as plain
 //! text, uppercased, each in the role its state resolves.
 
-use mbv_render::components::indicators::{
+use mbv_theme::Role;
+use mbv_ui_model::indicators::{
     IndicatorData, IndicatorFlags, StatusIndicator, status_indicator_items,
 };
-use mbv_theme::Role;
 use rstest::rstest;
 
 fn data(

@@ -3,7 +3,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, QueueLink, QueueTarget};
 use mbv_ctrl::player::PlayerCommand;
 use mbv_remote_player::QueueOp;
-use mbv_render::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
+use mbv_ui_model::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
 use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {

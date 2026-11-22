@@ -13,7 +13,6 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::QueueSlotId;
-use mbv_render as render;
 use mbv_render::layout;
 use mbv_ui_model::browse::{AlbumIndexState, SeriesDetail};
 use mbv_ui_model::feed::IdleFeed;
@@ -491,7 +490,7 @@ pub struct App {
     /// `state::queue_deferrals`; this is the only place slot ownership lives.
     pub(in crate::app) queue_deferrals: QueueDeferrals,
     pub(in crate::app) use_nerd_fonts: bool,
-    pub(in crate::app) indicator_style: render::indicators::IndicatorStyle,
+    pub(in crate::app) indicator_style: mbv_ui_model::indicators::IndicatorStyle,
     pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,

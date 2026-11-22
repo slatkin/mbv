@@ -39,6 +39,7 @@ pub mod feed_tab;
 pub mod feeds_manage;
 pub mod geom;
 pub mod home_latest;
+pub mod indicators;
 pub mod library;
 pub mod library_tab;
 pub mod media_list;

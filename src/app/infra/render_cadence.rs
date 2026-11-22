@@ -20,13 +20,13 @@ impl App {
 
     pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
         let indicator_style = match self.indicator_style {
-            mbv_render::indicators::IndicatorStyle::Brackets => "brackets",
-            mbv_render::indicators::IndicatorStyle::Chips => "chips",
-            mbv_render::indicators::IndicatorStyle::Outlined => "outlined",
-            mbv_render::indicators::IndicatorStyle::Dots => "dots",
-            mbv_render::indicators::IndicatorStyle::Pipes => "pipes",
-            mbv_render::indicators::IndicatorStyle::KeyValue => "keyvalue",
-            mbv_render::indicators::IndicatorStyle::Powerline => "powerline",
+            mbv_ui_model::indicators::IndicatorStyle::Brackets => "brackets",
+            mbv_ui_model::indicators::IndicatorStyle::Chips => "chips",
+            mbv_ui_model::indicators::IndicatorStyle::Outlined => "outlined",
+            mbv_ui_model::indicators::IndicatorStyle::Dots => "dots",
+            mbv_ui_model::indicators::IndicatorStyle::Pipes => "pipes",
+            mbv_ui_model::indicators::IndicatorStyle::KeyValue => "keyvalue",
+            mbv_ui_model::indicators::IndicatorStyle::Powerline => "powerline",
         };
         crate::config::UiConfig {
             image_protocol: self.images.protocol_override().map(str::to_owned),

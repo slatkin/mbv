@@ -13,7 +13,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::toasts::LiveToast;
 use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
 use mbv_render::components::widgets::service_state_color;
-use mbv_render::indicators;
+use mbv_render::indicators as indicator_paint;
 use mbv_tui_support::ToRatatui;
 use mbv_ui_model::toast::{StatusToast, ToastCard};
 use ratatui::style::{Color, Modifier, Style};
@@ -70,7 +70,7 @@ impl App {
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
     pub(in crate::app) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
         let data = crate::app::LocalPlaybackTarget::indicator_data(self)?;
-        Some(indicators::indicator_spans(
+        Some(indicator_paint::indicator_spans(
             self.indicator_style,
             &data,
             self.use_nerd_fonts,
