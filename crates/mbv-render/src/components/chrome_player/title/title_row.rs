@@ -6,6 +6,7 @@ use super::transport::width_u16;
 use super::transport::{control_glyphs, padded_status_pill, render_transport_glyphs};
 use crate::arrangements::playback_transport::{TransportMeasure, transport_buttons_fit};
 use mbv_queue::PlaybackTitleParts;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::ui_util::fmt_duration_short;
 use ratatui::Frame;
 use ratatui::layout::Rect;
