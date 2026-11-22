@@ -38,7 +38,7 @@ mod feeds_manage;
 mod focus;
 mod home;
 mod home_content;
-pub(crate) mod image_protocol;
+pub(in crate::app) mod image_protocol;
 mod inline_search;
 mod input_port;
 mod library;

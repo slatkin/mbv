@@ -1,8 +1,8 @@
 //! The image fetch's transport and decode (`extract-client-core` design D3):
 //! the per-Service byte reads and the shared pixel-or-source decode. The Emby
-//! URL shapes live in the TUI shell's protocol module, which builds them.
+//! URL shapes live in `emby`.
 
-use crate::app::shell::image_protocol::emby::fetch_emby_image;
+use super::emby::fetch_emby_image;
 use mbv_images::{
     ImageDecode, ImageFetchOutcome, ImageFetchReq, ImageRendition, ImageSource, SourceImage,
 };
@@ -12,7 +12,7 @@ use std::io::Read as IoRead;
 /// for pixels (design D14), or `Empty` when the bytes are no image. A
 /// source-only fetch reads the header alone, so its size and MIME type come
 /// from the bytes without a pixel decode.
-pub(crate) fn decode_fetched(bytes: Vec<u8>, decode: ImageDecode) -> ImageFetchOutcome {
+pub(in crate::app) fn decode_fetched(bytes: Vec<u8>, decode: ImageDecode) -> ImageFetchOutcome {
     match decode {
         ImageDecode::Pixels => {
             let Ok(img) = image::load_from_memory(&bytes) else {
@@ -34,7 +34,7 @@ pub(crate) fn decode_fetched(bytes: Vec<u8>, decode: ImageDecode) -> ImageFetchO
 
 /// One image request's result (invariant 27).
 #[derive(Debug, PartialEq)]
-pub(crate) enum FetchedBytes {
+pub(in crate::app) enum FetchedBytes {
     Bytes(Vec<u8>),
     /// The server answered without an image: the next kind may have one.
     Missing,
@@ -42,7 +42,11 @@ pub(crate) enum FetchedBytes {
     Interrupted,
 }
 
-pub(crate) fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> FetchedBytes {
+pub(in crate::app) fn fetch_image_bytes(
+    req: ImageFetchReq,
+    emby_url: &str,
+    token: &str,
+) -> FetchedBytes {
     let ImageFetchReq {
         cache_key,
         item_id,
@@ -111,7 +115,7 @@ fn fetch_audiobookshelf_image(
     }
 }
 
-pub(crate) fn fetch_url(url: &str) -> FetchedBytes {
+pub(in crate::app) fn fetch_url(url: &str) -> FetchedBytes {
     let agent = mbv_net::native_tls_agent(
         mbv_net::HttpService::Emby,
         None,
@@ -134,7 +138,7 @@ pub(crate) fn fetch_url(url: &str) -> FetchedBytes {
 }
 
 /// A status code is the server's answer; every other failure is no answer.
-pub(crate) fn request_failure(error: &ureq::Error) -> FetchedBytes {
+pub(in crate::app) fn request_failure(error: &ureq::Error) -> FetchedBytes {
     if matches!(error, ureq::Error::StatusCode(_)) {
         FetchedBytes::Missing
     } else {

@@ -8,12 +8,16 @@ use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache
 
 mod card_images;
 mod completions;
+mod emby;
 mod level_artists;
 mod level_warmup;
-pub(crate) mod transport;
+pub(in crate::app) mod transport;
 
 #[cfg(test)]
 mod batch_tests;
+
+#[cfg(test)]
+mod emby_tests;
 
 impl App {
     /// Proactively fetches the full track list for `album_id` so the view's

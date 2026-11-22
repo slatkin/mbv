@@ -11,8 +11,6 @@ use mbv_theme as palette;
 use mbv_tui_support::{RENDER_FILTER, ToCellSize, ToRatatui};
 use ratatui_image::picker::Picker;
 
-pub(crate) mod emby;
-
 #[cfg(test)]
 mod tests;
 

@@ -2,7 +2,8 @@
 //! D10): the one loop both Clients run — spawning queued requests inside the
 //! in-flight limit, then folding each completion into the image cache. The
 //! protocol encoding of a completed entry, and its painting, are the TUI
-//! Client's (`crate::app::shell::image_protocol`), which this module requires.
+//! Client's alone (`crate::app::shell::image_protocol`); this module reaches no
+//! shell type, so a Client with no terminal protocol keeps the same cache.
 
 use super::super::super::super::App;
 use super::super::{CardImageDrain, MAX_IMAGE_FETCHES};

@@ -282,7 +282,7 @@ impl App {
     }
 }
 
-pub(crate) mod fetch;
+pub(in crate::app) mod fetch;
 
 #[cfg(test)]
 mod tests {

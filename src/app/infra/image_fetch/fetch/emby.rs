@@ -2,7 +2,7 @@
 //! the shared 1280-pixel quality-90 cap; a Row request asks for the declared
 //! kind and tag at the row box's 2x size.
 
-use crate::app::infra::image_fetch::fetch::transport::{FetchedBytes, fetch_url};
+use super::transport::{FetchedBytes, fetch_url};
 use mbv_images::ImageRendition;
 
 /// The Emby image fetch's long-side cap. Every Client shows the cached bytes
@@ -28,7 +28,7 @@ const ROW_SQUARE_MAX_SIDE: u32 = 72;
 /// A row image's JPEG quality (design D6).
 const ROW_IMAGE_QUALITY: u8 = 80;
 
-pub(crate) fn fetch_emby_image(
+pub(in crate::app) fn fetch_emby_image(
     cache_key: &str,
     item_id: &str,
     series_id: &str,
@@ -75,7 +75,7 @@ pub(crate) fn fetch_emby_image(
 }
 
 /// Walks the image kinds in order: only `Missing` moves on to the next kind.
-pub(super) fn first_image(
+pub(in crate::app) fn first_image(
     kinds: &[String],
     mut fetch: impl FnMut(&str) -> FetchedBytes,
 ) -> FetchedBytes {
@@ -126,7 +126,7 @@ fn fetch_emby_image_type(
 /// The URL of one Emby image kind, addressed the way the kind addresses its
 /// source: `Logo`, `Backdrop`, and `Thumb` with a `series_id` address the
 /// series, every other combination addresses the item.
-pub(super) fn emby_type_url(
+pub(in crate::app) fn emby_type_url(
     kind: &str,
     item_id: &str,
     series_id: &str,
