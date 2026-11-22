@@ -29,7 +29,6 @@ fn cached(img: Option<image::DynamicImage>) -> CachedImage {
     CachedImage {
         img,
         source: None,
-        protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,
     }
@@ -46,7 +45,7 @@ fn app_with_card_image() -> App {
     let mut configured = Picker::halfblocks();
     configured.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
-    app.images
+    app.image_protocols
         .set_image_pickers_for_test(configured, Picker::halfblocks());
     app.images
         .insert_image(CARD_KEY.to_owned(), cached(Some(card_image(4, 2))));
@@ -178,7 +177,7 @@ fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
 
     let variant =
         ensure(&mut app).expect("the variant builds while the configured protocol is active");
-    let builds_after_open = app.images.image_protocol_builds();
+    let builds_after_open = app.image_protocols.protocol_builds();
 
     app.dim_backdrop_active = true;
     assert_eq!(
@@ -187,7 +186,7 @@ fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
         "the dimmed backdrop must not size the overlay into a new variant key"
     );
     assert_eq!(
-        app.images.image_protocol_builds(),
+        app.image_protocols.protocol_builds(),
         builds_after_open,
         "the sizing path must measure the configured protocol, not build fallback re-encodes"
     );

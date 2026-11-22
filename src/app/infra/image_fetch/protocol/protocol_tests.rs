@@ -22,7 +22,6 @@ fn cached(img: Option<image::DynamicImage>) -> CachedImage {
     CachedImage {
         img,
         source: None,
-        protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,
     }
@@ -33,7 +32,7 @@ fn app_with_base() -> App {
     let mut picker = Picker::halfblocks();
     picker.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
-    app.images
+    app.image_protocols
         .set_image_pickers_for_test(picker, Picker::halfblocks());
     app.images
         .insert_image(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
@@ -67,7 +66,7 @@ fn an_interrupted_kind_stops_the_image_chain() {
 }
 
 fn build_count(app: &App) -> u32 {
-    app.images.image_protocol_builds()
+    app.image_protocols.protocol_builds()
 }
 
 fn ensure_title_overlay_protocol(

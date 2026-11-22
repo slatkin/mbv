@@ -282,7 +282,6 @@ fn the_series_heroes_art_box_follows_the_fetched_images_own_aspect() {
         mbv_images::CachedImage {
             source: Some(crate::app::queue_card_artwork::test_source(&still)),
             img: Some(still),
-            protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
         },

@@ -299,7 +299,6 @@ fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
                 image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])),
             )),
             source: None,
-            protocols: HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
         },

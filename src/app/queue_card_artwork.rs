@@ -100,7 +100,6 @@ impl App {
             mbv_images::CachedImage {
                 source: Some(test_source(&img)),
                 img: Some(img),
-                protocols: std::collections::HashMap::new(),
                 cover_box: None,
                 applied_logo_key: None,
             },

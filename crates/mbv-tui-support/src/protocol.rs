@@ -129,6 +129,19 @@ impl ImageProtocols {
         self.initialize_image_pickers(image, halfblock);
     }
 
+    /// A store over the given resize worker channels, so a test can stand in
+    /// a worker that has already exited: a response channel whose sender was
+    /// dropped reads Disconnected immediately, without any cross-thread
+    /// waiting.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn with_resize_worker_for_test(
+        resize_register_tx: ResizeRegisterTx,
+        resize_response_rx: ResizeResponseRx,
+    ) -> Self {
+        Self::with_worker(resize_register_tx, resize_response_rx)
+    }
+
     #[must_use]
     pub fn image_picker(&self) -> Option<&Picker> {
         self.image_picker.as_ref()

@@ -52,7 +52,6 @@ fn cached_colour_image(width: u32, height: u32) -> CachedImage {
             image::RgbaImage::from_pixel(width, height, image::Rgba([20, 40, 60, 255])),
         )),
         source: None,
-        protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,
     }
@@ -72,7 +71,7 @@ fn overlay_app() -> App {
     let mut picker = Picker::halfblocks();
     picker.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
-    app.images
+    app.image_protocols
         .set_image_pickers_for_test(picker, Picker::halfblocks());
     // (height, width): the card box the overlay is composed for.
     app.images.record_card_size(4, 8);
@@ -111,11 +110,11 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork,
         "the warm sync decides the site before the panel first displays"
     );
-    let baseline = app.images.image_protocol_builds();
+    let baseline = app.image_protocols.protocol_builds();
 
     app.refresh_queue_card_image(true);
     assert_eq!(
-        app.images.image_protocol_builds(),
+        app.image_protocols.protocol_builds(),
         baseline,
         "no overlay variant is composed while the column drag is active"
     );
@@ -132,7 +131,7 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
 
     app.refresh_queue_card_image(false);
     assert_eq!(
-        app.images.image_protocol_builds(),
+        app.image_protocols.protocol_builds(),
         baseline,
         "the drag composes nothing and the warm sync's variant is reused at the unchanged size"
     );

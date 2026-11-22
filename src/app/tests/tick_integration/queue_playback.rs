@@ -682,7 +682,7 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
         let mut configured = ratatui_image::picker::Picker::halfblocks();
         configured.set_protocol_type(ratatui_image::picker::ProtocolType::Kitty);
         app.images.configure_protocol(None, true);
-        app.images
+        app.image_protocols
             .set_image_pickers_for_test(configured, ratatui_image::picker::Picker::halfblocks());
         // A cached square artwork for the active item (the fixture's shared
         // "id", a Movie: its landscape card key) so the slot paints instead
@@ -694,7 +694,6 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
                     image::RgbaImage::from_pixel(200, 200, image::Rgba([20, 40, 60, 255])),
                 )),
                 source: None,
-                protocols: std::collections::HashMap::new(),
                 cover_box: None,
                 applied_logo_key: None,
             },

@@ -177,7 +177,6 @@ fn cached_pixel() -> mbv_images::CachedImage {
             image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])),
         )),
         source: None,
-        protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,
     }
