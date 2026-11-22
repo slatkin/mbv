@@ -74,9 +74,9 @@ impl App {
         list_pane_width: Option<u16>,
         overlay_box: Option<(u16, u16)>,
         resizing: bool,
-    ) -> mbv_render::components::tv_wide::HeroImageState {
+    ) -> mbv_ui_model::playback::HeroImageState {
         use mbv_components::library_panel::content::ArtworkSource;
-        use mbv_render::components::tv_wide::HeroImageState as State;
+        use mbv_ui_model::playback::HeroImageState as State;
         let artwork = &facts.artwork;
         let Some(source) = &artwork.source else {
             return State::None;

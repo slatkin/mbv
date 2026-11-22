@@ -20,9 +20,9 @@ use mbv_components::library_panel::owner::LaunchSelector;
 use mbv_components::library_panel::{LibraryContentOwner, LibraryPanel};
 use mbv_components::podcast_content::PodcastContent;
 use mbv_queue::ServiceKind;
-use mbv_render::components::tv_wide::HeroImageState;
 use mbv_tui_support::ToRatatui;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_msg::ComponentId;
 
 /// How long after the last drag event the image hold stays on (invariant

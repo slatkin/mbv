@@ -249,7 +249,7 @@ impl App {
     /// selected row, and its Hero. The time the 14-day cutoff reads is read
     /// once per call, as each TUI Home push reads it once.
     pub fn gui_home_projection(&mut self) -> GuiHomeProjection {
-        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        let now_secs = mbv_ui_model::feed_age::current_time_secs();
         // The `Continue watching` rows keep the snapshot's order, with no
         // gutter date — the TUI's flat list's rule.
         let continue_items: Vec<QueueItem> = self

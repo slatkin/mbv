@@ -26,13 +26,13 @@ use super::media_list::{
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::components::tv_wide::HeroImageState;
-use mbv_render::current_time_secs;
 use mbv_ui_model::audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection, PodcastDisplayRow,
     podcast_display_rows,
 };
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
+use mbv_ui_model::feed_age::current_time_secs;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::ui_util::{row_date, trunc_str};
 use mbv_ui_msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,

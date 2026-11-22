@@ -21,7 +21,7 @@ use mbv_ui_msg::{LeafKeyResult, Msg};
 
 use super::content::LibraryPanelContent;
 use super::hero::HeroContentData;
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 
 /// A semantic slot event the panel resolved from pointer input against its
 /// own painted geometry (design D3). `List` delegation is already normalized

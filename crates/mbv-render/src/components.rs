@@ -1,7 +1,5 @@
 pub mod artwork_placeholder;
 
-pub mod audiobookshelf_book;
-
 pub mod backdrop;
 pub mod card;
 pub mod chrome;

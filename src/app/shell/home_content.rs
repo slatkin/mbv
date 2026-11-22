@@ -167,7 +167,7 @@ impl Model {
             // Feeds has no store entry: its rows derive from `all_entries`
             // at merge time, filtered to the same 14-day cutoff.
             DestinationLatestSource::Feeds => {
-                let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+                let now_secs = mbv_ui_model::feed_age::current_time_secs();
                 self.app.feed_tab.all_entries.iter().any(|entry| {
                     mbv_ui_model::home_latest::timestamp_in_launch_window(
                         entry.pub_date_secs,

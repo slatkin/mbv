@@ -49,7 +49,7 @@ pub fn paint_hero_pane_content(
     );
     let image_ready = matches!(
         content.facts.artwork.image,
-        mbv_render::components::tv_wide::HeroImageState::Ready { .. }
+        mbv_ui_model::playback::HeroImageState::Ready { .. }
     );
     if artwork.width > 0 && artwork.height > 0 && !image_ready {
         // Placeholder at full box size while loading or imageless (spec: the

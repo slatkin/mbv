@@ -10,10 +10,10 @@ use std::time::Instant;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use mbv_render::components::chrome_player::{
-    PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, TransportAvailability,
-    render_title_row,
+    PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, render_title_row,
 };
 use mbv_theme::Surface;
+use mbv_ui_model::playback::TransportAvailability;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;

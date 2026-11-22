@@ -187,7 +187,7 @@ impl App {
         if let Some(item) = continued {
             return Some(QueueItem::Emby(Box::new(item.clone())));
         }
-        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        let now_secs = mbv_ui_model::feed_age::current_time_secs();
         self.home_recent_rows(now_secs)
             .into_iter()
             .find(|row| GuiHomeRowId::Recent(row.item.content_id()).rows_in_view_id() == id)

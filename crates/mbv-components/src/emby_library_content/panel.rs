@@ -12,7 +12,7 @@ use crate::library_panel::hero::hero_content_emby;
 use crate::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use crate::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::sort_filter::LetterFilter;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
 

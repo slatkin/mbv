@@ -157,7 +157,7 @@ impl LibraryContentOwner for FixtureOwner {
                             shape: crate::library_panel::ArtworkShape::Landscape,
                             source: None,
                             decoration: None,
-                            image: mbv_render::components::tv_wide::HeroImageState::None,
+                            image: mbv_ui_model::playback::HeroImageState::None,
                         },
                     },
                     overview: self.overview.clone(),

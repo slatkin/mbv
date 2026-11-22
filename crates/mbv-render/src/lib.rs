@@ -18,9 +18,6 @@ pub mod screens;
 #[doc(inline)]
 pub use components::artwork_placeholder::render_artwork_placeholder;
 #[doc(inline)]
-pub use components::audiobookshelf_book::book_rows;
-
-#[doc(inline)]
 pub use components::chrome_player::{
     HeaderTitle, PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, render_header_title,
     render_player_panel, target_icon,
@@ -58,7 +55,7 @@ pub use components::list_rows::LibraryListRenderCtx;
 #[doc(inline)]
 pub use screens::album_plan::group_album_plan;
 #[doc(inline)]
-pub use screens::feeds_model::{FeedDisplayRow, current_time_secs, feed_display_rows};
+pub use screens::feeds_model::{FeedDisplayRow, feed_display_rows};
 // `LetterFilter` is already `pub(crate)` re-exported below (ui_model::sort_filter).
 #[doc(inline)]
 pub use components::media_list::render_wide_media_list_component;

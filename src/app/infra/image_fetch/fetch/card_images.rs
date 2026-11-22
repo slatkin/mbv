@@ -167,7 +167,7 @@ impl App {
                 format!("{album_id}:P"),
                 album_id.to_string(),
                 String::new(),
-                mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES,
+                mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES,
             );
         }
     }

@@ -5,7 +5,7 @@
 //! (title, author, duration, `Finished`/`N%`), and the chapters as the
 //! Hero's Workspace, with `AudioFile` `Part N` rows when the book holds no
 //! chapters. The projection reads `App` data only, and its row, label, and
-//! now-playing rules are the TUI's own (`mbv_render::book_rows`,
+//! now-playing rules are the TUI's own (`mbv_ui_model::audiobookshelf_browse::book_rows`,
 //! `book_content::chapter_rows`, `hero_content_abs_book`), so the two
 //! Clients cannot drift.
 

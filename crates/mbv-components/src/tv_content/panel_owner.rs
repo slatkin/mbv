@@ -4,7 +4,7 @@ use super::{
     LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow,
     TvContent, TvTreeTarget, Workspace, hero_content_emby, hero_content_series_with_episode,
 };
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 
 impl TvContent {
     /// The flat Latest hero: the selected episode's facts. `None` for Upcoming,

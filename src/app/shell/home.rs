@@ -208,7 +208,7 @@ impl Model {
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
         let loading = self.app.home_content.loading;
-        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        let now_secs = mbv_ui_model::feed_age::current_time_secs();
         let recent_rows = self.app.home_recent_rows(now_secs);
         self.update_home_owner(|home| {
             home.set_snapshot(continue_items, loading, recent_rows, now_secs);
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn recently_added_age_cutoff_uses_now_not_the_launch_instant() {
         let mut model = Model::new(make_app_stub());
-        let now = mbv_render::screens::feeds_model::current_time_secs();
+        let now = mbv_ui_model::feed_age::current_time_secs();
         let day = 24 * 60 * 60;
         model.app.home_latest_launch_window = mbv_ui_model::home_latest::HomeLatestLaunchWindow {
             previous: None,

@@ -10,7 +10,7 @@
 use mbv_components::library_panel::content::{
     ArtworkShape, ArtworkSource, painted_shape_for_pixels,
 };
-use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
+use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 
 use crate::app::App;
 use mbv_images::SourceImage;

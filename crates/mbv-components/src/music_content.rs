@@ -27,9 +27,9 @@ use mbv_render::MusicWideRenderCtx;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::targets::MusicArtistTarget;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
 use mbv_ui_msg::LeafKeyResult;

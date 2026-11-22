@@ -2,6 +2,7 @@ use crate::arrangements::playback_transport::{QueueBandRows, queue_band_rows, tr
 use mbv_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
 use mbv_theme as palette;
 use mbv_tui_support::ToRatatui;
+use mbv_ui_model::playback::TransportAvailability;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
@@ -256,10 +257,4 @@ pub fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
         PlaybackTitlePartRole::Title => palette::Role::PlaybackTitleFg.color().to_ratatui(),
         PlaybackTitlePartRole::Context => palette::Role::PlaybackContextFg.color().to_ratatui(),
     }
-}
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TransportAvailability {
-    pub stop: bool,
-    pub next: bool,
-    pub previous: bool,
 }

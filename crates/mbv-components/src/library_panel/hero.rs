@@ -13,12 +13,12 @@ use mbv_queue::{
 
 use mbv_render::components::hero_model::{SERIES_LANDSCAPE_IMAGE_TYPES, emby_hero_meta_rows_plain};
 use mbv_render::components::home_video::format_release_date;
-use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
+use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
 use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroLink};
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 
 /// A producer's output (design D5): the facts plus the item's overview.
 /// Destinations attach a `Workspace` when assembling [`HeroContent`]; the

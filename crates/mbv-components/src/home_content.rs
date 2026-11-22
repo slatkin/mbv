@@ -20,9 +20,9 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::MediaListCarrier;
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
-use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::home_latest::HomeRecentRow;
 use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_msg::{LeafKeyResult, Msg};
 

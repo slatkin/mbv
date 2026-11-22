@@ -5,7 +5,7 @@ use super::{
     LibraryPanelContent, LibrarySlotEvent, MediaListSurfaceInput, Msg, MusicContent,
     MusicTreeAction, RowIntent, SelectorIdentity, ShellRequest, TreeOperation,
 };
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 
 impl InlineSearchHost for MusicContent {
     fn inline_search(&self) -> &InlineSearch {

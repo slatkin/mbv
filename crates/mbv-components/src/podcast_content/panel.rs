@@ -6,7 +6,7 @@ use super::{
 };
 use crate::library_panel::HeroContentData;
 use crate::media_list::RowIntent;
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 use tuirealm::event::{Key, KeyEvent};
 
 impl LibraryContentOwner for PodcastContent {

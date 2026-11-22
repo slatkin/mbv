@@ -66,7 +66,7 @@ fn recent_feed_entry(guid: &str, pub_date_secs: u64) -> mbv_queue::FeedEntry {
 /// cutoff at seeding time (`SystemTime::now`-relative, as the store
 /// accepts at land time).
 fn seed_recently_added(app: &mut App) {
-    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let now = mbv_ui_model::feed_age::current_time_secs();
     app.home_recently_added.insert(
         DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
         vec![recent_episode("recent-episode", now - 3600)],
@@ -325,7 +325,7 @@ fn square_row_image() -> image::DynamicImage {
 fn home_rows_paint_their_row_art_and_fetch_nothing_before_rows_in_view() {
     let _guard = TestStateDirGuard::new();
     let server = "http://127.0.0.1:1";
-    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let now = mbv_ui_model::feed_age::current_time_secs();
     let mut movie = continue_item(
         "cw-first",
         "Movie One",
@@ -427,7 +427,7 @@ fn a_continue_row_shows_the_time_left(
 #[test]
 fn a_recently_added_row_keeps_its_date() {
     let _guard = TestStateDirGuard::new();
-    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let now = mbv_ui_model::feed_age::current_time_secs();
     let mut app = home_app(Vec::new());
     app.home_recently_added.insert(
         DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),

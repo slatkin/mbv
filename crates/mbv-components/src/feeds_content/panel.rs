@@ -10,7 +10,7 @@ use super::{
     MAX_GROUP_LABEL, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity, ShellRequest,
     TerminalObserverEvent, WatchedFilter, trunc_str,
 };
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 
 impl FeedsContent {
     fn on_selector_picked(&mut self, index: usize) -> Option<Msg> {

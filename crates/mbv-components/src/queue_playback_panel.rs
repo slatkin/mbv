@@ -34,7 +34,6 @@ use crate::media_list::hit_region;
 use crate::mouse::gesture::MouseGestureState;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
-use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
     HeaderTitle, PlaybackRenderContext, render_header_title, render_player_panel, target_icon,
@@ -46,6 +45,7 @@ use mbv_surfaces::queue_playback::{
 };
 use mbv_theme as palette;
 use mbv_tui_support::ToRatatui;
+use mbv_ui_model::playback::TransportAvailability;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};

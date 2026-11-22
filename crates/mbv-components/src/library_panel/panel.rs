@@ -33,7 +33,7 @@ use super::wide::{
     render_wide_skeleton,
 };
 use crate::inline_search::InlineSearchHost;
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 
 /// The painted split's pointer→width resolution inputs, shared by the drag
 /// gesture's arming and resolution (the same facts the old

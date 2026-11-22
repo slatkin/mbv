@@ -25,12 +25,12 @@ use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceIn
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 use mbv_ui_msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -269,7 +269,8 @@ impl BookContent {
     /// owner before view (design.md D6). An unchanged projection keeps the
     /// retained frame valid.
     fn set_book_rows(&mut self) {
-        let rows = mbv_render::book_rows(&self.state, self.selected_bucket);
+        let rows =
+            mbv_ui_model::audiobookshelf_browse::book_rows(&self.state, self.selected_bucket);
         if self.carrier.rows() != rows.as_slice() {
             self.carrier.set_content(rows);
         }
