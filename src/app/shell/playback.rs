@@ -185,7 +185,7 @@ impl Model {
             now_playing_title,
             title_parts,
             title_site: self.app.queue_card_projection.title_site,
-            status_indicators: self.app.build_status_indicator_spans(),
+            status_indicators: super::chrome_status::build_status_indicator_spans(&self.app),
             idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {
                     (

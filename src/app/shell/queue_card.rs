@@ -117,7 +117,7 @@ fn render_card_visualizer(
     let bg = mbv_theme::surface_colors(mbv_theme::Surface::QueueCardVisualizer, false)
         .fill
         .to_ratatui();
-    app.render_visualizer(f, rect, bg);
+    super::visualizer::render_visualizer(app, f, rect, bg);
     (rect.height, rect.width, false)
 }
 

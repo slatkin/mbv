@@ -81,7 +81,7 @@ impl super::super::Model {
                     .and_then(mbv_components::music_content::MusicContent::selected_item)
                     .is_some_and(|selected| selected.id == item.id);
                 if self.app.tab.emby_library_index().is_some()
-                    && !self.app.is_right_panel_wide()
+                    && !crate::app::shell::tv_wide::is_right_panel_wide(&self.app)
                     && owner_has_target
                 {
                     self.open_library_hero_overlay();
@@ -91,7 +91,7 @@ impl super::super::Model {
                 // Right on an already expanded artist root (task 6.4):
                 // non-Wide geometry opens the artist's Library Hero overlay.
                 if self.app.tab.emby_library_index().is_some()
-                    && !self.app.is_right_panel_wide()
+                    && !crate::app::shell::tv_wide::is_right_panel_wide(&self.app)
                     && self.music_owner().is_some_and(|owner| {
                         owner
                             .artist_detail_target()

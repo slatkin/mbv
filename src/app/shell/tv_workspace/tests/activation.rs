@@ -176,8 +176,8 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     model.sync_tv_content();
     model.sync_active_destination();
 
-    assert!(model.app.wide_tv_show_area(0).is_none());
-    assert!(model.app.wide_tv_show_area(1).is_some());
+    assert!(crate::app::shell::tv_wide::wide_tv_show_area(&model.app, 0).is_none());
+    assert!(crate::app::shell::tv_wide::wide_tv_show_area(&model.app, 1).is_some());
 
     assert!(model.app.activate_selected_series(1));
     assert!(

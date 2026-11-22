@@ -242,9 +242,9 @@ impl Model {
             .filter(|summary| summary.count > 0)
             .map(|summary| (self.app.effective_panel_focus(), summary.count));
         let model = StatusBarModel {
-            mute: self.app.mute_status_spans(),
-            volume: self.app.volume_status_spans(),
-            right: self.app.status_bar_right_spans(),
+            mute: super::chrome_status::mute_status_spans(&self.app),
+            volume: super::chrome_status::volume_status_spans(&self.app),
+            right: super::chrome_status::status_bar_right_spans(self),
             visual_mode: self
                 .visual_selection
                 .map(|(_, count)| VisualModeIndicator { count }),

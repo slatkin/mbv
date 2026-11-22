@@ -9,41 +9,39 @@ use std::collections::HashSet;
 const SILENCE_THRESHOLD: f32 = 0.0001;
 const DISPLAY_GAIN: f32 = 4.0;
 
-impl App {
-    pub(in crate::app) fn render_visualizer(&self, f: &mut Frame, area: Rect, bg: Color) {
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-        let bg_style = Style::default().bg(bg);
-        for y in area.y..area.y + area.height {
-            for x in area.x..area.x + area.width {
-                if let Some(cell) = f.buffer_mut().cell_mut((x, y)) {
-                    cell.set_symbol(" ").set_style(bg_style);
-                }
+pub(in crate::app) fn render_visualizer(app: &App, f: &mut Frame, area: Rect, bg: Color) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let bg_style = Style::default().bg(bg);
+    for y in area.y..area.y + area.height {
+        for x in area.x..area.x + area.width {
+            if let Some(cell) = f.buffer_mut().cell_mut((x, y)) {
+                cell.set_symbol(" ").set_style(bg_style);
             }
         }
-        let inner = Rect {
-            x: area.x + 2,
-            y: area.y + 1,
-            width: area.width.saturating_sub(4),
-            height: area.height.saturating_sub(2),
-        };
-        if inner.width == 0 || inner.height == 0 || is_silent(&self.visualizer_window.samples) {
-            return;
-        }
+    }
+    let inner = Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    };
+    if inner.width == 0 || inner.height == 0 || is_silent(&app.visualizer_window.samples) {
+        return;
+    }
 
-        let mut seen = HashSet::new();
-        for sample in &self.visualizer_window.samples {
-            let Some((x, y)) = sample_to_cell(*sample, inner.width, inner.height) else {
-                continue;
-            };
-            if !seen.insert((x, y)) {
-                continue;
-            }
-            if let Some(cell) = f.buffer_mut().cell_mut((inner.x + x, inner.y + y)) {
-                cell.set_symbol(&self.visualizer_glyph);
-                cell.set_style(Style::default().fg(point_color(*sample)).bg(bg));
-            }
+    let mut seen = HashSet::new();
+    for sample in &app.visualizer_window.samples {
+        let Some((x, y)) = sample_to_cell(*sample, inner.width, inner.height) else {
+            continue;
+        };
+        if !seen.insert((x, y)) {
+            continue;
+        }
+        if let Some(cell) = f.buffer_mut().cell_mut((inner.x + x, inner.y + y)) {
+            cell.set_symbol(&app.visualizer_glyph);
+            cell.set_style(Style::default().fg(point_color(*sample)).bg(bg));
         }
     }
 }

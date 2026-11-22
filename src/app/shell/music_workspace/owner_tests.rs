@@ -84,7 +84,7 @@ fn narrow_enter_requests_album_activation() {
         .local_view
         .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
-    assert!(!model.app.is_right_panel_wide());
+    assert!(!crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
     expand_and_descend_to_first_album(&mut model);
 
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
@@ -138,7 +138,7 @@ fn wide_enter_enters_inline_track_focus() {
     model.app.panel_focus = PanelFocus::Library;
     wide(&mut model);
     model.sync_mounted_surfaces();
-    assert!(model.app.is_right_panel_wide());
+    assert!(crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
 
     model.test_music_owner_mut().on_key(&KeyEvent {
         code: Key::Enter,
@@ -165,7 +165,7 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
         .local_view
         .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
-    assert!(!model.app.is_right_panel_wide());
+    assert!(!crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
     expand_and_descend_to_first_album(&mut model);
 
     model.music_track_focus_request = Some(MusicTrackFocusRequest::Enter {

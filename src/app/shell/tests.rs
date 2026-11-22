@@ -74,7 +74,7 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
     let mut model = Model::new(make_app_stub());
     model.app.terminal_width = 60;
     model.app.terminal_height = 24;
-    assert!(!model.app.is_right_panel_wide());
+    assert!(!crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
     let mut music_resize = false;
     let mut tv_resize = false;
     apply_terminal_observer(
@@ -88,7 +88,7 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
     );
     assert_eq!(model.app.terminal_width, 150);
     assert_eq!(model.app.terminal_height, 24);
-    assert!(model.app.is_right_panel_wide());
+    assert!(crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
 }
 
 /// Regression guard for an expanded pinned panel at 120 columns, the width
@@ -103,7 +103,7 @@ fn the_default_pinned_expanded_width_is_wide() {
     let mut model = Model::new(make_app_stub());
     model.app.terminal_width = 120;
     model.app.terminal_height = 40;
-    assert!(model.app.is_right_panel_wide());
+    assert!(crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
 }
 
 fn music_album(id: &str) -> EmbyItem {

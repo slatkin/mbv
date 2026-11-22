@@ -31,6 +31,7 @@ pub(in crate::app) use arbitration::{arbitrate_key, fold_mouse_messages};
 mod audiobookshelf_book;
 mod audiobookshelf_podcast;
 mod chrome_panels;
+pub(in crate::app) mod chrome_status;
 mod draw;
 mod emby_library;
 mod emby_library_content;
@@ -55,9 +56,11 @@ pub(in crate::app) mod queue_card;
 mod root;
 mod run;
 mod settings;
+pub(in crate::app) mod tv_wide;
 mod tv_workspace;
 mod twitch_url;
 mod ui_state_reset;
+mod visualizer;
 
 /// How often the ``TuiRealm`` crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is

@@ -178,7 +178,7 @@ impl Model {
         let context = self.project_music_workspace_context(&key, index, cursor);
         self.fetch_music_workspace_album_tracks(&context);
         let reanchor = self.resolve_pending_music_reanchor(index);
-        let wide = self.app.is_right_panel_wide();
+        let wide = super::tv_wide::is_right_panel_wide(&self.app);
         let request = self.music_track_focus_request.take();
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
         // Activation can outrun the album's track fetch (its tracks are not

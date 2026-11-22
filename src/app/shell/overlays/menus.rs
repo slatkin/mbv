@@ -1,4 +1,5 @@
 use super::super::Model;
+use super::super::tv_wide::wide_tv_show_area;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::{
     ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
@@ -91,7 +92,7 @@ impl Model {
                     let panel = match self.app.effective_panel_focus() {
                         PanelFocus::Library
                             if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
-                                self.app.wide_tv_show_area(lib_idx).is_some()
+                                wide_tv_show_area(&self.app, lib_idx).is_some()
                             }) =>
                         {
                             // Task 8.2 deleted the `tv_wide_*` pane rects; the
@@ -100,7 +101,7 @@ impl Model {
                             self.app
                                 .tab
                                 .emby_library_index()
-                                .and_then(|lib_idx| self.app.wide_tv_show_area(lib_idx))
+                                .and_then(|lib_idx| wide_tv_show_area(&self.app, lib_idx))
                                 .unwrap_or_default()
                         }
                         PanelFocus::Library => self

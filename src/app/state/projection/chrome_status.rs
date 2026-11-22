@@ -1,23 +1,23 @@
-//! Status-bar span builders (task 2.2).
+//! Status-bar content that builds no ratatui value (task 2.2, design D3).
 //!
 //! The mounted `StatusBarPanel` Interactive Component
 //! (`crates/mbv-components/src/status_bar_panel.rs`) owns the status row's pill hit
 //! regions, overflow drop-order and click/scroll resolution. The `impl App`
-//! methods here are content production only: they read app state and build
-//! the pill/right-segment spans the shell projects into the component.
+//! methods here are content production only: they read app state and produce
+//! the presented facts the shell's painters turn into spans.
+//!
+//! The span builders themselves moved to `shell::chrome_status`: they build
+//! ratatui values, so they belong to the TUI edge. The playback target's
+//! labels and the in-app toast gate stay here, because they build no ratatui
+//! value and every Client reads them.
 //!
 //! The Local/Peer queue-link pills are queue concern and paint in the
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::toasts::LiveToast;
-use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
-use mbv_render::components::widgets::service_state_color;
-use mbv_render::indicators as indicator_paint;
-use mbv_tui_support::ToRatatui;
+use crate::app::{App, QueueLink, RemoteSlotState};
 use mbv_ui_model::toast::{StatusToast, ToastCard};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
 use std::time::Instant;
 
 impl App {
@@ -63,18 +63,6 @@ impl App {
                 toast: presented_toast(toast),
             })
             .collect()
-    }
-
-    /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
-    /// Returns None if the local player is not active.
-    /// Callers wrap these in [ ... ] with whatever surrounding style they need.
-    pub(in crate::app) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
-        let data = crate::app::LocalPlaybackTarget::indicator_data(self)?;
-        Some(indicator_paint::indicator_spans(
-            self.indicator_style,
-            &data,
-            self.use_nerd_fonts,
-        ))
     }
 
     /// The label naming the remote receiver that is the owner's playback
@@ -193,209 +181,6 @@ impl App {
             .or_else(|| self.connected_player_endpoint_label())
             .unwrap_or_else(mbv_emby::device_name)
     }
-
-    pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        crate::app::LocalPlaybackTarget::displayed_mute(self).then(|| {
-            vec![
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill
-                    .to_ratatui()),
-                ),
-                Span::styled(
-                    "muted",
-                    Style::default()
-                        .fg(mbv_theme::Role::StatusError.color().to_ratatui())
-                        .bg(
-                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill
-                                .to_ratatui(),
-                        )
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill
-                    .to_ratatui()),
-                ),
-            ]
-        })
-    }
-
-    pub(in crate::app) fn volume_status_spans(&self) -> Vec<Span<'static>> {
-        let volume = crate::app::LocalPlaybackTarget::displayed_volume(self);
-        // Speaker glyph reflects the volume state (0 / low / mid / high).
-        let icon = if volume == 0 {
-            "\u{1F507}"
-        } else if volume <= 25 {
-            "\u{1F508}"
-        } else if volume <= 75 {
-            "\u{1F509}"
-        } else {
-            "\u{1F50A}"
-        };
-        vec![
-            Span::styled(
-                " ",
-                Style::default().bg(mbv_theme::surface_colors(
-                    mbv_theme::Surface::StatusBarPill,
-                    false,
-                )
-                .fill
-                .to_ratatui()),
-            ),
-            Span::styled(
-                icon,
-                Style::default()
-                    .fg(mbv_theme::Role::PlaybackMetaFg.color().to_ratatui())
-                    .bg(
-                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                            .fill
-                            .to_ratatui(),
-                    ),
-            ),
-            Span::styled(
-                format!(" {volume}"),
-                Style::default()
-                    .fg(mbv_theme::Role::Accent.color().to_ratatui())
-                    .bg(
-                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                            .fill
-                            .to_ratatui(),
-                    )
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]
-    }
-
-    /// The status row's right segment: queue-source link label, username,
-    /// and the service-state glyphs (Emby,
-    /// Audiobookshelf, stay-alive) — always visible, coloured by state. Built
-    /// shell-side (task 2.2); the mounted `StatusBarPanel` positions and
-    /// paints it.
-    pub(in crate::app) fn status_bar_right_spans(&self) -> Vec<Span<'static>> {
-        let (username, stay_alive) = {
-            let config = self.config.lock().unwrap();
-            (config.username.clone(), config.stay_alive)
-        };
-        // Stay-alive indicator: red whenever this process runs in stay-alive
-        // mode (the daemon persists after quit), yellow when that daemon is
-        // lost, grey when stay-alive is off. Deliberately independent of the
-        // current player target: a stay-alive client that routes playback to
-        // another daemon is still in stay-alive mode.
-        let alive_color = if !stay_alive {
-            mbv_theme::Role::TextMuted.color().to_ratatui()
-        } else if self.player.is_remote_disconnected() {
-            mbv_theme::Role::TextFocusAccent.color().to_ratatui()
-        } else {
-            mbv_theme::Role::StatusError.color().to_ratatui()
-        };
-        let mut right_spans: Vec<Span> = Vec::new();
-        let source_label = queue_source_status_label(
-            self.playback_queue().source(),
-            matches!(self.effective_panel_focus(), PanelFocus::Queue),
-        );
-        let append_right = |right_spans: &mut Vec<Span<'static>>, span: Span<'static>| {
-            if !right_spans.is_empty() {
-                right_spans.push(Span::raw(" "));
-            }
-            right_spans.push(span);
-        };
-        if let Some((label, color)) = source_label {
-            append_right(
-                &mut right_spans,
-                Span::styled(
-                    format!(" {label} "),
-                    Style::default().fg(color).bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill
-                    .to_ratatui()),
-                ),
-            );
-        }
-        if !username.is_empty() {
-            if !right_spans.is_empty() {
-                right_spans.push(Span::raw(" "));
-            }
-            right_spans.push(Span::styled(
-                " 🯅",
-                Style::default()
-                    .fg(mbv_theme::Role::TextMetadata.color().to_ratatui())
-                    .bg(
-                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                            .fill
-                            .to_ratatui(),
-                    ),
-            ));
-            right_spans.push(Span::styled(
-                format!(" {username} "),
-                Style::default()
-                    .fg(mbv_theme::Role::PlaybackMetaFg.color().to_ratatui())
-                    .bg(
-                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                            .fill
-                            .to_ratatui(),
-                    ),
-            ));
-        }
-        // Service-state indicators — Emby and Audiobookshelf coloured by
-        // state (brand colour when ready, grey when not configured, error
-        // otherwise), stay-alive daemon lost = yellow. One leading space
-        // per indicator, no trailing space. Without Nerd Fonts the Emby
-        // and Audiobookshelf private-use code points fall back to the
-        // plain labels the sessions panel uses (bug fix: the service
-        // glyphs ignored `use_nerd_fonts` and painted as missing-glyph
-        // boxes under the default config).
-        right_spans.extend([
-            Span::raw(" "),
-            Span::styled(
-                if self.use_nerd_fonts {
-                    "\u{F06B4}"
-                } else {
-                    "EMBY"
-                },
-                Style::default().fg(service_state_color(
-                    self.emby_runtime.state,
-                    mbv_theme::Role::Accent.color().to_ratatui(),
-                )),
-            ),
-            Span::raw(" "),
-            Span::styled(
-                if self.use_nerd_fonts {
-                    "\u{EDE2}"
-                } else {
-                    "ABS"
-                },
-                Style::default().fg(service_state_color(
-                    self.audiobookshelf_runtime.state,
-                    mbv_theme::Role::AccentAudiobookshelf.color().to_ratatui(),
-                )),
-            ),
-            Span::raw(" "),
-            Span::styled(
-                if self.use_nerd_fonts {
-                    "\u{f004}"
-                } else {
-                    "\u{2665}"
-                },
-                Style::default().fg(alive_color),
-            ),
-            Span::raw(" "),
-        ]);
-        // Peer queue link is omitted here: the active queue is already
-        // apparent from the queue UI.
-        right_spans
-    }
 }
 
 /// The presented facts of one live toast: its text and its severity. The id
@@ -407,28 +192,6 @@ fn presented_toast(toast: &LiveToast) -> StatusToast {
     }
 }
 
-fn queue_source_status_label(
-    source: &mbv_queue::QueueSource,
-    queue_focused: bool,
-) -> Option<(String, Color)> {
-    if !queue_focused {
-        return None;
-    }
-    let label = match source {
-        mbv_queue::QueueSource::Album => "ALBUM".to_string(),
-        mbv_queue::QueueSource::Series => "SERIES".to_string(),
-        // Shuffle is no pill (2026-10-09 user rule): the shuffle-sourced
-        // queue's pill was never requested, so it reads as no label at all.
-        mbv_queue::QueueSource::Shuffle => return None,
-        mbv_queue::QueueSource::Remote => "REMOTE Q".to_string(),
-        mbv_queue::QueueSource::Collection { collection_type } => collection_type.to_uppercase(),
-        mbv_queue::QueueSource::Playlist { .. } | mbv_queue::QueueSource::Unknown => {
-            return None;
-        }
-    };
-    Some((label, mbv_theme::Role::TextMuted.color().to_ratatui()))
-}
-
 #[cfg(test)]
 mod tests {
     use crate::app::App;
@@ -436,8 +199,6 @@ mod tests {
     use crate::app::tests::{
         make_app_stub, make_audio_items, make_local_daemon_app_stub_with_cmd_rx,
     };
-    use mbv_render::components::widgets::service_state_color;
-    use mbv_tui_support::ToRatatui;
 
     /// The queue owner label names the connected peer's endpoint when its
     /// device name is empty — the connected endpoint, never a configured or
@@ -503,55 +264,6 @@ mod tests {
 
         assert_eq!(host, "Living Room (disconnected)");
         assert!(is_remote);
-    }
-
-    /// With the default (non-Nerd-Font) config, the service indicators emit
-    /// the plain text labels instead of Nerd Font private-use code points,
-    /// which would paint as missing-glyph boxes (bug: the service glyphs
-    /// ignored `use_nerd_fonts`).
-    #[test]
-    fn service_indicators_fall_back_to_text_without_nerd_fonts() {
-        let app = make_app_stub();
-        assert!(!app.use_nerd_fonts, "the stub defaults to no Nerd Fonts");
-
-        let spans = app.status_bar_right_spans();
-
-        assert!(
-            !spans
-                .iter()
-                .any(|span| span.content.contains('\u{F06B4}')
-                    || span.content.contains('\u{EDE2}')),
-            "no Nerd Font private-use glyph without use_nerd_fonts"
-        );
-        assert!(spans.iter().any(|span| span.content.contains("EMBY")));
-        assert!(spans.iter().any(|span| span.content.contains("ABS")));
-    }
-
-    /// The status row's Audiobookshelf glyph colours through the same
-    /// `service_state_color` policy as the Emby glyph (issue #976: it was
-    /// always painted `AccentAudiobookshelf`, so an unconfigured, connecting,
-    /// or failed Service looked healthy).
-    #[rstest::rstest]
-    #[case::not_configured(mbv_core::service_runtime::ServiceState::NotConfigured)]
-    #[case::ready(mbv_core::service_runtime::ServiceState::Ready)]
-    #[case::unavailable(mbv_core::service_runtime::ServiceState::Unavailable)]
-    fn the_abs_glyph_colour_follows_the_audiobookshelf_service_state(
-        #[case] state: mbv_core::service_runtime::ServiceState,
-    ) {
-        let mut app = make_app_stub();
-        app.audiobookshelf_runtime.state = state;
-
-        let expected = service_state_color(
-            state,
-            mbv_theme::Role::AccentAudiobookshelf.color().to_ratatui(),
-        );
-
-        let spans = app.status_bar_right_spans();
-        let abs = spans
-            .iter()
-            .find(|span| span.content.contains("ABS"))
-            .expect("the status row shows the Audiobookshelf glyph");
-        assert_eq!(abs.style.fg, Some(expected));
     }
 
     /// A live toast projects its message with the severity color on the
