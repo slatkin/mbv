@@ -163,12 +163,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyrender"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fb671c97c38d56a3cb01f9f7ba1eaaf5dadddcce6c3acda7420bf601050ff77"
+dependencies = [
+ "image_filters_types",
+ "kurbo",
+ "peniko",
+ "raw-window-handle",
+ "smallvec",
+]
+
+[[package]]
 name = "anyrender_svg"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39327debd1bdca190d086c107825a5dc4c665be31e99e5c0854345a050d08cad"
 dependencies = [
- "anyrender",
+ "anyrender 0.14.0",
  "image",
  "kurbo",
  "peniko",
@@ -181,7 +194,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a09d9356dd2b2f032345711a350c0e2326a854cb5070f899265bc80fb33884b1"
 dependencies = [
- "anyrender",
+ "anyrender 0.14.0",
  "bytemuck",
  "color",
  "debug_timer",
@@ -199,7 +212,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5139465733e457ebd2dd04efbee5aa6fbc1d8747d0e3fe0f81b8de4f240cb01"
 dependencies = [
- "anyrender",
+ "anyrender 0.14.0",
  "debug_timer",
  "futures-channel",
  "glifo",
@@ -494,7 +507,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a814bfd3ad19e6d8d26f99c75188062baca499564f9abe44250230962427d183"
 dependencies = [
  "accesskit",
- "anyrender",
+ "anyrender 0.14.0",
  "app_units",
  "atomic_refcell",
  "bitflags 2.13.2",
@@ -544,7 +557,7 @@ version = "0.3.0-beta.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28803328124d7b7ea5f8f41501513ccb005559e9f6baf33fa0c1fb7612654a93"
 dependencies = [
- "anyrender",
+ "anyrender 0.14.0",
  "anyrender_svg",
  "blitz-dom",
  "blitz-traits",
@@ -568,7 +581,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d80b952b007a4bd82012583da8540d95cfd276b3c790ded39299fce728864fdb"
 dependencies = [
  "android-activity",
- "anyrender",
+ "anyrender 0.14.0",
  "atomic_refcell",
  "blitz-dom",
  "blitz-paint",
@@ -1632,7 +1645,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd1cb86fdf731605cbeaf33c8a0a4752ee012f5c6a61ee506ba5963a4a1c8b3"
 dependencies = [
  "android-activity",
- "anyrender",
+ "anyrender 0.14.0",
  "anyrender_vello_cpu",
  "anyrender_vello_hybrid",
  "blitz-dom",
@@ -2803,6 +2816,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "image_filters_types"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9184827780888f6c0f664837d309ac0d2f0adb05f313ab9fed8a00c0bb042f21"
+dependencies = [
+ "kurbo",
+ "peniko",
+ "smallvec",
+]
+
+[[package]]
 name = "imagesize"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3769,7 +3793,7 @@ dependencies = [
 name = "mbv-gui"
 version = "0.28.3"
 dependencies = [
- "anyrender",
+ "anyrender 0.15.0",
  "blitz-dom",
  "blitz-paint",
  "blitz-shell",
@@ -5080,7 +5104,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31c2ba47171f8376a1cd74f8d575f1d729c033fc007f59a9da3688c31187264b"
 dependencies = [
- "anyrender",
+ "anyrender 0.14.0",
  "debug_timer",
  "pixels",
 ]
