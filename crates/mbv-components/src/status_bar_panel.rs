@@ -28,6 +28,7 @@ use mbv_render::{StatusBarChrome, StatusBarModel, StatusBarRegions, render_statu
 use mbv_surfaces::HitMap;
 use mbv_surfaces::status_bar::{StatusBarFrameReport, StatusBarHitTarget, StatusBarSurface};
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_model::toast::{StatusToast, ToastSeverity};
