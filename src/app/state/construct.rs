@@ -1,7 +1,7 @@
 use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::playback::HomeContent;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use crate::app::{App, AppInit, spawn_resize_worker, spawn_waking_relay};
+use crate::app::{App, AppInit, spawn_waking_relay};
 use indexmap::IndexMap;
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
@@ -87,7 +87,6 @@ impl App {
         let prefs = Self::load_prefs();
         let launch_restore =
             mbv_config::load_tui_launch_state().map_or(LaunchRestore::Done, LaunchRestore::Pending);
-        let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         // The Owner-snapshot link relays share this wake handle (design D7
         // of `extract-client-core`); `ClientCore` adopts it so a Client's
@@ -141,9 +140,8 @@ impl App {
                 init.image_protocol_enabled,
                 init.card_image_tx,
                 init.card_image_rx,
-                resize_register_tx,
-                resize_response_rx,
             ),
+            image_protocols: mbv_tui_support::ImageProtocols::new(),
             image_decode: init.image_decode,
             library_position_state: load_position_state_without_pills(),
             hidden_libraries: init.hidden_libraries,
@@ -329,9 +327,13 @@ impl App {
         app
     }
 
-    /// Initialize terminal image pickers before the TUI listener starts.
+    /// Initialize terminal image pickers before the TUI listener starts: the
+    /// configured protocol override (`ImageCache::protocol_override`) replaces
+    /// the detected one, and the pickers live in this Client's
+    /// [`ImageProtocols`](mbv_tui_support::ImageProtocols) store.
     pub(crate) fn init_image_pickers(&mut self) {
-        self.images.init_image_pickers();
+        self.image_protocols
+            .init_image_pickers(self.images.protocol_override());
     }
 }
 

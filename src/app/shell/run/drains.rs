@@ -262,7 +262,7 @@ impl Model {
     pub(super) fn drain_resize_responses(&mut self) -> bool {
         let mut had_events = false;
         loop {
-            match self.app.images.try_recv_resize_response() {
+            match self.app.image_protocols.try_recv_resize_response() {
                 Ok((key, response)) => {
                     had_events = true;
                     // Responses are tagged with the per-suffix mem-key
@@ -271,22 +271,31 @@ impl Model {
                     let Some((bare_key, suffix)) = key.rsplit_once('@') else {
                         continue;
                     };
-                    let Some(entry) = self.app.images.image_mut(bare_key) else {
-                        continue;
-                    };
-                    if let Some(state) = entry.protocols.get_mut(suffix) {
+                    if let Some(state) =
+                        self.app
+                            .image_protocols
+                            .protocol_mut(&self.app.images, bare_key, suffix)
+                    {
                         state.update_resized_protocol(response);
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    self.app.images.respawn_resize_worker();
+                    self.app.image_protocols.respawn_resize_worker();
                     had_events = true;
                     break;
                 }
             }
         }
         had_events
+    }
+
+    /// Drop every stored image protocol whose cache entry the cache has since
+    /// replaced, evicted, or cleared (invariant 38). A completed fetch stores
+    /// its entry under its key, so a sync point after a drain keeps the store
+    /// from holding encodings of entries the cache no longer has.
+    pub(super) fn prune_image_protocols(&mut self) {
+        self.app.image_protocols.prune(&self.app.images);
     }
 
     /// Drain ctrl transport commands through the Client core's drain.

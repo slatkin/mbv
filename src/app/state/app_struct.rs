@@ -691,6 +691,11 @@ pub struct App {
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
     pub(in crate::app) images: mbv_images::cache::ImageCache,
+    /// This Client's terminal image protocols: the pickers, the resize worker,
+    /// and the encoding of every cached key a TUI painter renders (design
+    /// D7). A Client that paints no terminal protocol (`mbv-gui`) never
+    /// initializes the pickers, so its store builds no encoding.
+    pub(in crate::app) image_protocols: mbv_tui_support::ImageProtocols,
     /// What this Client's image fetches keep (design D14), chosen at
     /// construction and passed to every fetch thread.
     pub(in crate::app) image_decode: mbv_images::ImageDecode,

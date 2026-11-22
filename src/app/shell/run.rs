@@ -189,6 +189,9 @@ impl Model {
     /// arrived.
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let drain = self.app.drain_card_image_completions();
+        // Every completion stores its entry under its key, so the store's
+        // encodings are refreshed once the loop has run (invariant 38).
+        self.prune_image_protocols();
         if drain.series_key_changed {
             self.push_tv_workspace_content();
         }
