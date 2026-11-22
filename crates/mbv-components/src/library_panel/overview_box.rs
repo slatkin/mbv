@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::mouse::hit::HitRegions;
 use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::meta::meta_row_text;
 use mbv_ui_model::ui_util::trunc_str;
 
