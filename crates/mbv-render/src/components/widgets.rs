@@ -3,6 +3,7 @@ use crate::components::media_list::queue_row_background;
 use mbv_core::service_runtime::ServiceState;
 use mbv_theme as palette;
 use mbv_theme::{HINT_CHIPS, Role};
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
