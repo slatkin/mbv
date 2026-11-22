@@ -19,6 +19,7 @@ use super::mouse::gesture::MouseGestureState;
 use mbv_render::components::three_line_flat_list::{ThreeLineItem, ThreeLineRole, ThreeLineSpan};
 use mbv_surfaces::gesture::PointerGesture;
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::panel_targets::{SessionTargetKey, SessionTargetRow};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
