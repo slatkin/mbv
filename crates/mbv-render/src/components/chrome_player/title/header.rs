@@ -3,6 +3,7 @@ use super::super::title_part_fg;
 use super::palette;
 use crate::components::queue_playback::{header_status_word, status_color};
 use mbv_queue::PlaybackTitleParts;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use ratatui::Frame;
