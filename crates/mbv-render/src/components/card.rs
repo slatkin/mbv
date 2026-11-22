@@ -1,5 +1,6 @@
 use mbv_images::RENDER_FILTER;
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback::QueueCardProjection;
 use ratatui::Frame;
 use ratatui::layout::Rect;
