@@ -6,6 +6,7 @@
 //! the throbber, percent, and seekbar.
 
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
 /// The header's status word for one now-playing status.
