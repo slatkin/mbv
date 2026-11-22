@@ -447,7 +447,7 @@ pub struct App {
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
     pub(in crate::app) queue_card_projection: mbv_ui_model::playback::QueueCardProjection,
-    pub(in crate::app) title_log_gate: crate::app::state::projection::card::TitleLogGate,
+    pub(in crate::app) title_log_gate: crate::app::shell::queue_card::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,

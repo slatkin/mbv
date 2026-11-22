@@ -68,7 +68,7 @@ fn paint_slot_in(app: &mut App, area: Rect) {
     let mut terminal = Terminal::new(TestBackend::new(48, 30)).unwrap();
     terminal
         .draw(|frame| {
-            app.render_queue_playback_slot(frame, area, true);
+            super::render_queue_playback_slot(app, frame, area, true);
         })
         .unwrap();
 }

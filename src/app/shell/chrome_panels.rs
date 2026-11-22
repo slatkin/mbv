@@ -374,8 +374,7 @@ impl Model {
             slot_region,
         );
         if self.app.visual_slot_shown() {
-            self.app
-                .render_queue_playback_slot(frame, slot_region, wide);
+            super::queue_card::render_queue_playback_slot(&mut self.app, frame, slot_region, wide);
         }
         self.application.view(&id, frame, placement);
     }

@@ -31,7 +31,7 @@ impl Model {
         // same gate the card's render used.
         if self.app.visual_slot_shown() {
             let resizing = self.refresh_resize_drag_hold();
-            self.app.refresh_queue_card_image(resizing);
+            super::queue_card::refresh_queue_card_image(&mut self.app, resizing);
         } else if self.app.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing (the user's hide toggle): the
             // artwork can no longer carry the title, so the header is its

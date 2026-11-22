@@ -51,6 +51,7 @@ mod overlays;
 mod playback;
 mod playlists;
 mod queue;
+pub(in crate::app) mod queue_card;
 mod root;
 mod run;
 mod settings;

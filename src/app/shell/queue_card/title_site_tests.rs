@@ -1,7 +1,7 @@
 //! Queue artwork ownership: movies fetch landscape art, episodes never show
 //! series art; overlay composition stays off the tick thread during a drag.
 
-use super::{card_cache_key, card_cache_key_for_id, card_image_types};
+use super::{card_cache_key, card_cache_key_for_id, card_image_types, refresh_queue_card_image};
 use crate::app::App;
 use crate::app::tests::render_fixtures::make_queue_app;
 use mbv_images::CachedImage;
@@ -104,7 +104,7 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
         .expect("the base card protocol is available");
 
     // Warm sync: eligibility passes and the site is decided before any paint.
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
     assert_eq!(
         app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork,
@@ -112,7 +112,7 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
     );
     let baseline = app.image_protocols.protocol_builds();
 
-    app.refresh_queue_card_image(true);
+    refresh_queue_card_image(&mut app, true);
     assert_eq!(
         app.image_protocols.protocol_builds(),
         baseline,
@@ -129,7 +129,7 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
         "the resize drag must not resurrect the header: the site carries over"
     );
 
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
     assert_eq!(
         app.image_protocols.protocol_builds(),
         baseline,
@@ -160,7 +160,7 @@ fn the_site_is_decided_while_the_art_fetch_is_pending() {
             .is_none(),
         "the test fixture starts with the art fetch pending"
     );
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
     assert_eq!(
         app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork,
@@ -174,7 +174,7 @@ fn the_site_is_decided_while_the_art_fetch_is_pending() {
 #[test]
 fn a_mode_gate_forces_the_header_back_from_the_artwork_site() {
     let (mut app, _base_key) = overlay_app_with_base_image(overlay_app());
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
     assert_eq!(
         app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork
@@ -183,7 +183,7 @@ fn a_mode_gate_forces_the_header_back_from_the_artwork_site() {
     // The visualizer replaces the artwork: the artwork can no longer carry
     // the title, so the header is its home again.
     app.visualizer_enabled = true;
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
     assert_eq!(
         app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Header,
@@ -222,7 +222,7 @@ fn slotless_session_episode_fetches_its_series_logo() {
     let mut app = slotless_session_app();
     let fetches_before = app.images.card_image_fetch_calls();
 
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
 
     assert!(
         app.images.is_loading("remote-series:Logo"),
@@ -247,7 +247,7 @@ fn slotless_session_episode_composes_the_logo_overlay_variant() {
     app.images
         .insert_image("remote-series:Logo".to_string(), cached_colour_image(4, 2));
 
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
 
     assert_eq!(
         app.queue_card_projection.title_site,
@@ -286,7 +286,7 @@ fn slotless_session_without_logo_reference_keeps_the_text_overlay() {
     }
     let fetches_before = app.images.card_image_fetch_calls();
 
-    app.refresh_queue_card_image(false);
+    refresh_queue_card_image(&mut app, false);
 
     assert!(!app.images.is_loading("remote-series:Logo"));
     assert_eq!(

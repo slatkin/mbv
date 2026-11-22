@@ -709,7 +709,9 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
             let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
             terminal
                 .draw(|frame| {
-                    app.render_queue_playback_slot(frame, area, true);
+                    crate::app::shell::queue_card::render_queue_playback_slot(
+                        app, frame, area, true,
+                    );
                 })
                 .unwrap();
             size = app.images.last_card_size();
