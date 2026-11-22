@@ -1,0 +1,20 @@
+[package]
+name = "mbv-tui-support"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "TUI-only support shared by mbv's terminal crates: theme colour conversion and the terminal image protocol."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-theme = { path = "../mbv-theme" }
+mbv-images = { path = "../mbv-images" }
+ratatui.workspace = true
+ratatui-image = { workspace = true, features = ["crossterm"] }
