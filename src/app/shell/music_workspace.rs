@@ -259,7 +259,7 @@ impl Model {
         key: &LibraryKey,
         index: usize,
         cursor: Option<usize>,
-    ) -> mbv_render::MusicWideRenderCtx {
+    ) -> mbv_ui_model::music_wide::MusicWideRenderCtx {
         let base_context = self.app.wide_music_render_ctx(index, cursor);
         // The artist detail projection (design D7, tasks 6.1–6.3): read the
         // owner's component-resolved artist target, re-bind it to this push's
@@ -284,7 +284,10 @@ impl Model {
         }
     }
 
-    fn fetch_music_workspace_album_tracks(&mut self, context: &mbv_render::MusicWideRenderCtx) {
+    fn fetch_music_workspace_album_tracks(
+        &mut self,
+        context: &mbv_ui_model::music_wide::MusicWideRenderCtx,
+    ) {
         // Album fetch follows the tree owner's resolved album; an artist root
         // has no album and never starts an album-track fetch.
         let owner_selection_is_artist = self
@@ -302,7 +305,7 @@ impl Model {
 
     fn push_music_workspace_owner(
         &mut self,
-        context: mbv_render::MusicWideRenderCtx,
+        context: mbv_ui_model::music_wide::MusicWideRenderCtx,
         reanchor: Option<mbv_components::music_tree_target::MusicTreeTarget>,
         wide: bool,
         focused: bool,

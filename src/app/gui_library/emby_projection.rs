@@ -14,7 +14,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-use mbv_render::effective_sort_str;
 use mbv_ui_model::feed::FeedHomeVideoTarget;
 use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::library_hero::ArtworkSource;
@@ -31,6 +30,7 @@ use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
+use mbv_ui_model::sort_filter::effective_sort_str;
 
 /// One row's kind (row 8.1): `Collection` when the row is a folder or a
 /// boxset — the container the folder-play rule expands — and `Media` on a

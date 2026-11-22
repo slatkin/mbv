@@ -2,6 +2,7 @@ use crate::app::App;
 use mbv_ui_model::browse::BrowseLevel;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use mbv_ui_model::feed::FeedHomeVideoState;
+use mbv_ui_model::sort_filter::LIBRARY_PILL_THRESHOLD;
 impl App {
     /// Keeps the legacy browse snapshot current in memory for the migration
     /// reader. It deliberately never writes the legacy per-library document;
@@ -133,10 +134,10 @@ impl App {
             .is_some_and(|root| match root.tv_content_mode.as_ref() {
                 Some(mbv_queue::TvContentMode::All) => root
                     .library_total
-                    .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD),
+                    .is_some_and(|total| total > LIBRARY_PILL_THRESHOLD),
                 Some(mbv_queue::TvContentMode::Range(_)) => root
                     .library_total
-                    .is_some_and(|total| total <= mbv_render::LIBRARY_PILL_THRESHOLD),
+                    .is_some_and(|total| total <= LIBRARY_PILL_THRESHOLD),
                 _ => false,
             })
     }

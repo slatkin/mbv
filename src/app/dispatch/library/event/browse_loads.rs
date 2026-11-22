@@ -2,6 +2,7 @@ use crate::app::state::events::BrowseEvent;
 use crate::app::{App, BrowseLevel};
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
+use mbv_ui_model::sort_filter::LIBRARY_PILL_THRESHOLD;
 
 impl App {
     pub(super) fn handle_browse_event(&mut self, ev: BrowseEvent) {
@@ -230,7 +231,7 @@ impl App {
             }
             return;
         }
-        if total <= mbv_render::LIBRARY_PILL_THRESHOLD {
+        if total <= LIBRARY_PILL_THRESHOLD {
             return;
         }
         let filter = mbv_ui_model::sort_filter::LetterFilter::default_filter_for_kind(filter_kind);

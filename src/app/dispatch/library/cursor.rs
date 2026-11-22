@@ -3,9 +3,11 @@ use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
-use mbv_render::{LetterFilter, LetterFilterKind, effective_sort_str};
 use mbv_ui_model::browse::ServerRows;
-use mbv_ui_model::sort_filter::LIBRARY_PILL_THRESHOLD;
+use mbv_ui_model::sort_filter::{
+    LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, effective_sort_str,
+    initial_group_artist_sort_key,
+};
 
 impl App {
     pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
@@ -368,7 +370,7 @@ impl App {
             && !last.items.is_empty()
         {
             let mut order: Vec<usize> = (0..last.items.len()).collect();
-            order.sort_by_key(|&i| mbv_render::initial_group_artist_sort_key(&last.items[i]));
+            order.sort_by_key(|&i| initial_group_artist_sort_key(&last.items[i]));
             last.set_resting_cursor(order[0]);
         }
     }

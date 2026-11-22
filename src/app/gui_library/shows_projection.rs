@@ -11,7 +11,6 @@ mod hero;
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{QueueItem, TvContentMode};
-use mbv_render::effective_sort_str;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::{fmt_duration_short, premiere_number_label, row_date};
 
@@ -29,6 +28,7 @@ use super::tabs::GuiDestinationKind;
 use super::tv::GuiTvShowsSelection;
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
+use mbv_ui_model::sort_filter::effective_sort_str;
 
 /// One flat row of the New or Upcoming list (gui-collection-dropdown design
 /// D9): the row's stable identity, the two title lines the old Home sections

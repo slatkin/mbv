@@ -97,9 +97,11 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     assert!(app.should_show_letter_pills(0));
     assert_eq!(
         app.libs[0].nav_stack[0].letter_filter,
-        Some(mbv_render::LetterFilter::default_filter_for_kind(
-            mbv_render::LetterFilterKind::Movie
-        )),
+        Some(
+            mbv_ui_model::sort_filter::LetterFilter::default_filter_for_kind(
+                mbv_ui_model::sort_filter::LetterFilterKind::Movie
+            )
+        ),
         "large restored library should get the default A-C pill applied"
     );
 }
