@@ -12,6 +12,7 @@ use unicode_width::UnicodeWidthStr;
 use mbv_render::{WrappedHeroLine, paint_wide_hero_text, render_artwork_placeholder};
 use mbv_theme as palette;
 use mbv_theme::HERO_META_ROLES;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::meta::meta_row_text;
 use mbv_ui_model::ui_util::trunc_str;
 
