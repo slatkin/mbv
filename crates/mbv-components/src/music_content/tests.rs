@@ -3,7 +3,7 @@ use self::tree_fixtures::{press, tree_owner};
 use super::*;
 use crate::list::tree_browser::TreeConsumed;
 use mbv_emby_model::test_support::make_item;
-use mbv_render::LibraryListRenderCtx;
+use mbv_ui_model::list_ctx::LibraryListRenderCtx;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};

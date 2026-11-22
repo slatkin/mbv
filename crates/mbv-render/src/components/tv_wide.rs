@@ -7,9 +7,9 @@
 //! the paint-free breakpoint/area helpers the shell's mount/focus gates
 //! read.
 
-use crate::components::list_rows::LibraryListRenderCtx;
 use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use mbv_ui_model::browse::SeriesDetail;
+use mbv_ui_model::list_ctx::LibraryListRenderCtx;
 use mbv_ui_model::playback::HeroImageState;
 
 /// All App-derived data needed to paint the wide TV workspace.

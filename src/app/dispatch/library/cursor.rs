@@ -3,8 +3,9 @@ use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
-use mbv_render::{LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, effective_sort_str};
+use mbv_render::{LetterFilter, LetterFilterKind, effective_sort_str};
 use mbv_ui_model::browse::ServerRows;
+use mbv_ui_model::sort_filter::LIBRARY_PILL_THRESHOLD;
 
 impl App {
     pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {

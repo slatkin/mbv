@@ -23,11 +23,11 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::music_tree_target::MusicTreeTarget;
 use crate::list::tree_browser::{TreeBrowser, TreeOperation};
-use mbv_render::MusicWideRenderCtx;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::music_wide::MusicWideRenderCtx;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::targets::MusicArtistTarget;

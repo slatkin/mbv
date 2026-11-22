@@ -4,7 +4,7 @@ use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{App, AppInit, spawn_waking_relay};
 use indexmap::IndexMap;
 use mbv_render::layout;
-use mbv_render::layout::LEFT_WIDTH_DEFAULT;
+use mbv_ui_model::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_model::tab_selection::TabSelection;
 use std::sync::mpsc;

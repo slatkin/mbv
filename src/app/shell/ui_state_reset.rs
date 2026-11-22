@@ -23,9 +23,10 @@ use crate::app::state::app_struct::LaunchRestore;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::queue::QueueComponent;
 use mbv_queue::TvContentMode;
-use mbv_render::layout::LEFT_WIDTH_DEFAULT;
+
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
+use mbv_ui_model::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::{ComponentId, PopupId};
 

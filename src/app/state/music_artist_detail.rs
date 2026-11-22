@@ -19,7 +19,6 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
 use crate::app::{App, LibEvent, MusicEvent};
-use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 use mbv_ui_model::music_artist_detail::track_matches_album;
 use mbv_ui_model::music_artist_detail::{
@@ -27,6 +26,7 @@ use mbv_ui_model::music_artist_detail::{
     ArtistSummary, ArtistTrackGroup,
 };
 use mbv_ui_model::music_grouping::ArtistKey;
+use mbv_ui_model::music_wide::MusicWideRenderCtx;
 use mbv_ui_model::targets::MusicArtistTarget;
 use mbv_ui_model::ui_util::sort_audio_tracks;
 

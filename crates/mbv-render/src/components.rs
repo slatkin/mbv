@@ -24,7 +24,6 @@ pub mod marquee;
 pub mod media_list;
 pub mod modal_frame;
 pub mod multiselect;
-pub mod music_wide;
 pub mod playlists;
 pub mod queue;
 pub mod queue_playback;

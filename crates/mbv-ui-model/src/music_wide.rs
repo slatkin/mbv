@@ -1,8 +1,14 @@
-//! Grouped Music's wide Wide hero component.
+//! Grouped Music's wide hero content: the settled album catalog the Music
+//! workspace reads and the artist tree it groups the albums by.
+//!
+//! The shell projects this value every time the settled catalog or the
+//! workspace selection changes; the owner treats it as content, never as
+//! cursor or focus authority.
 
-use crate::components::list_rows::LibraryListRenderCtx;
+use crate::list_ctx::LibraryListRenderCtx;
+use crate::music_artist_detail::ArtistDetailProjection;
+use crate::music_grouping::ArtistKey;
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::music_grouping::ArtistKey;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -27,7 +33,7 @@ pub struct MusicWideRenderCtx {
     pub catalog_revision: u64,
     /// The focused artist's projected summary and grouped track Workspace
     /// (tasks 6.2/6.3), when the tree owner is on an artist root.
-    pub artist_detail: Option<mbv_ui_model::music_artist_detail::ArtistDetailProjection>,
+    pub artist_detail: Option<ArtistDetailProjection>,
 }
 
 impl MusicWideRenderCtx {

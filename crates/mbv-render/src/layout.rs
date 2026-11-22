@@ -18,8 +18,6 @@
 
 use ratatui::layout::Rect;
 
-pub const LEFT_WIDTH_DEFAULT: u16 = 40;
-pub const LEFT_WIDTH_STEP: u16 = 5;
 /// The single wide/narrow breakpoint. Minimum list-pane / Home-pane width at
 /// which the view switches to a two-column layout. Every screen and
 /// arrangement reads this one constant instead of testing width itself.

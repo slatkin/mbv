@@ -1,6 +1,6 @@
 use crate::app::App;
-use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::music_grouping::{group_album_plan, sorted_group_album_order};
+use mbv_ui_model::music_wide::MusicWideRenderCtx;
 
 impl App {
     pub(in crate::app) fn wide_music_render_ctx(

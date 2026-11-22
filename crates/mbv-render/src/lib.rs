@@ -60,8 +60,6 @@ pub use components::media_list::render_wide_media_list_component;
 #[doc(inline)]
 pub use components::multiselect::{MultiSelectRenderModel, render_multiselect_content};
 #[doc(inline)]
-pub use components::music_wide::MusicWideRenderCtx;
-#[doc(inline)]
 pub use components::playlists::{
     PlaylistsRenderGeometry, PlaylistsViewState, render_playlists_content,
     render_save_playlist_content,
@@ -84,6 +82,8 @@ pub use components::tv_wide::TvWideRenderCtx;
 pub use components::twitch_url::{TwitchUrlRenderGeometry, render_twitch_url_content};
 #[doc(inline)]
 pub use components::widgets::{PillBar, PillBarWindow, render_pill_bar, render_placeholder};
+#[doc(inline)]
+pub use mbv_ui_model::music_wide::MusicWideRenderCtx;
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
 // Interactive Components in `mbv_ui_model::components` (task 3.2+).
