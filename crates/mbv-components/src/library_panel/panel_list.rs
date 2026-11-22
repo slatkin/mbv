@@ -14,7 +14,6 @@ use crate::inline_search::InlineSearch;
 use crate::media_list::MediaListCarrier;
 use mbv_render::components::media_list::WideMediaListPaintPolicy;
 use mbv_theme::Surface;
-use mbv_tui_support::ToRatatui;
 
 use super::content::{PanelList, PanelListPaintPolicy};
 
@@ -143,6 +142,7 @@ mod panel_list_tests {
     use super::*;
     use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use mbv_theme as palette;
+    use mbv_tui_support::ToRatatui;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
