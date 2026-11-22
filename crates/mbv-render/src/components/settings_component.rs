@@ -1,4 +1,5 @@
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::settings::{SettingValueKind, SettingsDestination};
 use ratatui::Frame;
 use ratatui::layout::Rect;
