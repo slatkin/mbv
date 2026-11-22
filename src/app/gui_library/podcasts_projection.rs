@@ -16,11 +16,11 @@
 use mbv_audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfProgress, AudiobookshelfShow,
 };
-use mbv_components::library_panel::hero::hero_content_abs_episode;
 use mbv_emby_model::seconds_to_ticks;
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter};
 use mbv_ui_model::library_hero::ArtworkSource;
+use mbv_ui_model::library_hero::producers::hero_content_abs_episode;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 use mbv_ui_msg::PodcastEpisodeTarget;

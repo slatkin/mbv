@@ -1,8 +1,6 @@
-use super::super::library_panel::HeroContentData;
 use super::super::library_panel::content::{
     HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
 };
-use super::super::library_panel::hero::hero_content_feed;
 use super::super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::super::media_list::MediaListOperation;
 use super::{
@@ -10,6 +8,8 @@ use super::{
     MAX_GROUP_LABEL, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity, ShellRequest,
     TerminalObserverEvent, WatchedFilter, trunc_str,
 };
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::library_hero::producers::hero_content_feed;
 use mbv_ui_model::playback::HeroImageState;
 
 impl FeedsContent {

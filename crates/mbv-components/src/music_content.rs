@@ -13,12 +13,10 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use self::workspace::WorkspaceOwner;
 use super::inline_search::{InlineSearch, InlineSearchHost};
-use super::library_panel::HeroContentData;
 use super::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroSlot, LibraryPanelContent, ListSlot,
     SelectorRow, Workspace, WorkspaceHeader,
 };
-use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::music_tree_target::MusicTreeTarget;
@@ -26,6 +24,9 @@ use crate::list::tree_browser::{TreeBrowser, TreeOperation};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
+use mbv_ui_model::library_hero::producers::HeroContentData;
+#[doc(inline)]
+pub use mbv_ui_model::library_hero::producers::{hero_content_music_album, music_album_artwork};
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::music_wide::MusicWideRenderCtx;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;

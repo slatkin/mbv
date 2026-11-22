@@ -4,8 +4,8 @@ use super::{
     MediaListSurfaceInput, Msg, PillSelection, PodcastContent, PodcastEpisodeIntent,
     STATE_PILL_COUNT, SelectorIdentity, ShellRequest, TerminalObserverEvent,
 };
-use crate::library_panel::HeroContentData;
 use crate::media_list::RowIntent;
+use mbv_ui_model::library_hero::producers::HeroContentData;
 use mbv_ui_model::playback::HeroImageState;
 use tuirealm::event::{Key, KeyEvent};
 

@@ -5,9 +5,9 @@
 // their data path from their actions. All shows the series tree; New and
 // Upcoming show the merged flat lists the Home sections used to carry.
 
-use mbv_components::library_panel::hero::hero_content_queue;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
+use mbv_ui_model::library_hero::producers::hero_content_queue;
 
 use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;

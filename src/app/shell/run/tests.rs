@@ -12,8 +12,8 @@ use mbv_audiobookshelf::{
 };
 use mbv_core::service_runtime::ServiceState;
 use mbv_images::series_image_cache_key;
-use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use mbv_ui_model::browse::ServerRows;
+use mbv_ui_model::library_hero::SERIES_LANDSCAPE_IMAGE_TYPES;
 use rstest::rstest;
 use std::collections::HashMap;
 

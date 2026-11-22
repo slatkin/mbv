@@ -20,7 +20,7 @@ use mbv_ui_msg::SelectionSummary;
 use mbv_ui_msg::{LeafKeyResult, Msg};
 
 use super::content::LibraryPanelContent;
-use super::hero::HeroContentData;
+use mbv_ui_model::library_hero::producers::HeroContentData;
 use mbv_ui_model::playback::HeroImageState;
 
 /// A semantic slot event the panel resolved from pointer input against its

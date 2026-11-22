@@ -10,10 +10,10 @@
 //! its row art is one cache read per row, never a fetch — so the TUI's own
 //! projections and paint do not change.
 
-use mbv_components::library_panel::hero::hero_content_queue;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::{QueueItem, QueueItemContentId};
 use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
+use mbv_ui_model::library_hero::producers::hero_content_queue;
 use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource};
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::tab_selection::TabSelection;

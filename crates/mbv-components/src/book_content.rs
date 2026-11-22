@@ -15,11 +15,9 @@ use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
 
-use super::library_panel::HeroContentData;
 use super::library_panel::content::{
     HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
-use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_render::components::media_list::{
@@ -28,6 +26,8 @@ use mbv_render::components::media_list::{
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::library_hero::producers::hero_content_queue;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::playback::HeroImageState;

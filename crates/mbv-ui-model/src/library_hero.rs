@@ -1,13 +1,27 @@
-//! The Library Hero's plain artwork data (design D3/D5, task 1.7): the
-//! artwork shape the header reserves a box for, where that artwork comes
-//! from, the hero facts both Clients read, and the panel's retained image
-//! paint. Plain data — no painting, no styling primitive (`HeroFacts` carries
-//! no `Span`/`Style`/width; the header painter owns colours, truncation and
+//! The Library Hero's plain artwork data and producers (design D3/D5, task
+//! 1.7): the artwork shape the header reserves a box for, where that artwork
+//! comes from, the hero facts both Clients read, the panel's retained image
+//! paint, and one producer and artwork policy per content type. Plain data —
+//! no painting, no styling primitive (`HeroFacts` carries no
+//! `Span`/`Style`/width; the header painter owns colours, truncation and
 //! wrapping, design D5), and no toolkit type.
 
 use crate::geom::Rect;
 use crate::meta::{MetaSegment, meta_row_text};
 use crate::playback::HeroImageState;
+
+pub mod producers;
+#[doc(inline)]
+pub use producers::{
+    HeroContentData, HeroCredit, abs_book_artwork_policy, abs_episode_artwork_policy,
+    emby_artwork_policy, emby_hero_meta_rows_plain, feed_artwork_policy, hero_content_abs_book,
+    hero_content_abs_episode, hero_content_emby, hero_content_feed, hero_content_music_album,
+    hero_content_queue, hero_content_series_with_episode, hero_content_twitch, music_album_artwork,
+};
+
+/// Canonical TV Wide Series image-type candidate chain. The artwork policy
+/// reuses this chain for Series landscape arms.
+pub const SERIES_LANDSCAPE_IMAGE_TYPES: &[&str] = &["Thumb", "Primary", "Backdrop", "Logo"];
 
 /// The artwork shape the header reserves a box for (spec: the Wide Hero
 /// header's three types). Chosen by the artwork policy (design D5, task

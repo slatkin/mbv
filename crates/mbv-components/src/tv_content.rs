@@ -16,9 +16,8 @@
 //! `ShellRequest::TvHit*` messages the deleted component emitted.
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::{
-    HeroContent, HeroContentData, HeroSlot, LibraryContentOwner, LibraryPanelContent,
-    LibrarySlotEvent, ListSlot, SelectorRow, Workspace, hero_content_emby,
-    hero_content_series_with_episode,
+    HeroContent, HeroSlot, LibraryContentOwner, LibraryPanelContent, LibrarySlotEvent, ListSlot,
+    SelectorRow, Workspace,
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
@@ -30,6 +29,10 @@ use mbv_render::components::media_list::{
 };
 use mbv_render::{
     LetterFilter, LetterFilterKind, TvWideRenderCtx, effective_sort_str, letter_bucket,
+};
+#[doc(inline)]
+pub use mbv_ui_model::library_hero::producers::{
+    HeroContentData, hero_content_emby, hero_content_series_with_episode,
 };
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, natural_sort_key, row_date};

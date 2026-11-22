@@ -1,13 +1,16 @@
 // The module's documentation and shared imports live in the parent module.
 use super::{
-    ArtworkShape, EmbyItem, HeroArtwork, HeroContent, HeroContentData, HeroFacts, HeroImageState,
-    HeroSlot, LibraryPanelContent, ListSlot, MediaKind, MediaListRow, MediaListTrailing,
-    MediaSemanticState, Msg, MusicArtistTarget, MusicContent, MusicTreeAction, MusicTreeTarget,
+    ArtworkShape, EmbyItem, HeroArtwork, HeroContent, HeroFacts, HeroImageState, HeroSlot,
+    LibraryPanelContent, ListSlot, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+    Msg, MusicArtistTarget, MusicContent, MusicTreeAction, MusicTreeTarget,
     NEIGHBOUR_PREFETCH_AHEAD, NEIGHBOUR_PREFETCH_BEHIND, SelectorRow, ShellRequest,
-    TICKS_PER_SECOND, Workspace, WorkspaceHeader, fmt_duration_gutter, hero_content_music_album,
-    music_album_artwork, trunc_str, wide_album_metadata,
+    TICKS_PER_SECOND, Workspace, WorkspaceHeader, fmt_duration_gutter, trunc_str,
+    wide_album_metadata,
 };
 use crate::now_playing::apply_emby_now_playing;
+use mbv_ui_model::library_hero::producers::{
+    HeroContentData, hero_content_music_album, music_album_artwork,
+};
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
 pub fn track_row_label(track: &EmbyItem, index: usize) -> String {

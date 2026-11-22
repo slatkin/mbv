@@ -5,8 +5,8 @@
 //! wrapping, design D5).
 //!
 //! The hero's plain artwork data — `ArtworkShape`, `ArtworkSource`,
-//! `HeroArtwork`, `HeroFacts`, and `PanelHeroImagePaint` — lives in
-//! `mbv_ui_model::library_hero` (task 1.7); this module re-exports it so the
+//! `HeroArtwork`, `HeroFacts`, `PanelHeroImagePaint`, and `HeroCredit` — lives
+//! in `mbv_ui_model::library_hero` (task 1.7); this module re-exports it so the
 //! panel's existing paths keep resolving until task 1.8 deletes the
 //! re-exports.
 
@@ -16,14 +16,9 @@ use ratatui::layout::Rect;
 use crate::inline_search::InlineSearch;
 #[doc(inline)]
 pub use mbv_ui_model::library_hero::{
-    ArtworkShape, ArtworkSource, HeroArtwork, HeroFacts, HeroLink, PanelHeroImagePaint,
+    ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroLink, PanelHeroImagePaint,
     painted_shape_for_pixels,
 };
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HeroCredit {
-    pub name: String,
-    pub role: String,
-}
 
 /// The Wide Hero header (spec: exactly three types). Its arm is the artwork
 /// policy's shape and [`HeroHeader::from`] is the only constructor, so no

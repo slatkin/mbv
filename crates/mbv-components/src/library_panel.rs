@@ -32,7 +32,6 @@ pub use content::{
     PanelHeroImagePaint, SelectorRow, Workspace,
 };
 #[doc(inline)]
-pub use hero::{HeroContentData, hero_content_emby, hero_content_series_with_episode};
 #[doc(inline)]
 pub use overview_box::sanitize_url;
 #[doc(inline)]

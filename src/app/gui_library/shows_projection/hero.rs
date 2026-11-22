@@ -5,8 +5,8 @@
 //! neighbour artwork warm. The projection's own vocabulary and list rules live
 //! one level up.
 
-use mbv_components::library_panel::hero::{HeroContentData, hero_content_series_with_episode};
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::library_hero::producers::{HeroContentData, hero_content_series_with_episode};
 use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource};
 
 use super::super::home::artwork_shape;

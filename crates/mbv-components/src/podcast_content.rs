@@ -14,11 +14,9 @@ use mbv_emby_model::{
 };
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 
-use super::library_panel::HeroContentData;
 use super::library_panel::content::{
     HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
 };
-use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{
     MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
@@ -32,6 +30,8 @@ use mbv_ui_model::audiobookshelf_browse::{
 };
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
 use mbv_ui_model::feed_age::current_time_secs;
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::library_hero::producers::hero_content_abs_episode;
 use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::ui_util::{row_date, trunc_str};
 use mbv_ui_msg::{

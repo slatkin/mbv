@@ -14,9 +14,9 @@
 //! (`FeedTabState::rebuild_all_entries`), so the two Clients cannot drift; the
 //! projection reads `App` data only.
 
-use mbv_components::library_panel::hero::hero_content_feed;
 use mbv_feed::FeedPlatform;
 use mbv_queue::FeedEntry;
+use mbv_ui_model::library_hero::producers::hero_content_feed;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
