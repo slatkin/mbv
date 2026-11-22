@@ -4,9 +4,9 @@ use super::{
     row_date,
 };
 use crate::now_playing::apply_emby_now_playing;
-use mbv_render::effective_sort_str;
 use mbv_ui_model::home_latest::provider_timestamp_secs;
-use mbv_ui_model::ui_util::natural_sort_key;
+use mbv_ui_model::sort_filter::effective_sort_str;
+use mbv_ui_model::ui_util::{natural_sort_key, premiere_number_label};
 
 pub fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
@@ -75,13 +75,6 @@ fn upcoming_date_heading(date: Date, today: Date) -> String {
         _ => format!("{}, {} {}", date.weekday(), date.month(), date.day()),
     }
 }
-
-/// "S02:E07", "S02" or "E07"; "no number" when the notice carries neither.
-///
-/// Transitional re-export: the body moved to `mbv-ui-model` (task 1.7); row
-/// 1.8 deletes this path.
-#[doc(inline)]
-pub use mbv_ui_model::ui_util::premiere_number_label;
 
 pub fn upcoming_premiere_rows(
     premieres: &[UpcomingPremiere],

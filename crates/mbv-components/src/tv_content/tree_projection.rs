@@ -1,8 +1,9 @@
 use super::super::list::tree_browser::{TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
 use super::TvContent;
 use mbv_emby_model::EmbyItem;
+use mbv_render::TvWideRenderCtx;
 use mbv_render::components::media_list::MediaSemanticState;
-use mbv_render::{TvWideRenderCtx, effective_sort_str, letter_bucket};
+use mbv_ui_model::sort_filter::{effective_sort_str, letter_bucket};
 use mbv_ui_model::ui_util::natural_sort_key;
 use mbv_ui_msg::TvTreeTarget;
 use mbv_ui_msg::{Msg, ShellRequest};

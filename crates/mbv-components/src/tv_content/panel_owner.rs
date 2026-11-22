@@ -1,10 +1,13 @@
 use super::{
-    EmbyItem, HeroContent, HeroContentData, HeroSlot, InlineSearch, InlineSearchHost, KeyEvent,
-    LeafKeyResult, LetterFilter, LetterFilterKind, LibraryContentOwner, LibraryItemIdentity,
-    LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow,
-    TvContent, TvTreeTarget, Workspace, hero_content_emby, hero_content_series_with_episode,
+    EmbyItem, HeroContent, HeroSlot, InlineSearch, InlineSearchHost, KeyEvent, LeafKeyResult,
+    LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg,
+    Pane, SelectorIdentity, SelectorRow, TvContent, TvTreeTarget, Workspace,
+};
+use mbv_ui_model::library_hero::producers::{
+    HeroContentData, hero_content_emby, hero_content_series_with_episode,
 };
 use mbv_ui_model::playback::HeroImageState;
+use mbv_ui_model::sort_filter::{LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind};
 
 impl TvContent {
     /// The flat Latest hero: the selected episode's facts. `None` for Upcoming,
@@ -130,7 +133,7 @@ impl TvContent {
             .context
             .list
             .library_total
-            .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
+            .is_some_and(|total| total > LIBRARY_PILL_THRESHOLD);
         let mut pills = vec!["New".to_string(), "Upcoming".to_string()];
         if large {
             pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));

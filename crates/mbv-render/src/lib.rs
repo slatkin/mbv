@@ -51,11 +51,6 @@ pub use components::hero::render_search_box;
 #[doc(inline)]
 pub use components::library_routes::{LibraryRoutesRenderModel, render_library_routes_content};
 #[doc(inline)]
-pub use components::list_rows::LibraryListRenderCtx;
-#[doc(inline)]
-pub use screens::feeds_model::{FeedDisplayRow, feed_display_rows};
-// `LetterFilter` is already `pub(crate)` re-exported below (ui_model::sort_filter).
-#[doc(inline)]
 pub use components::media_list::render_wide_media_list_component;
 #[doc(inline)]
 pub use components::multiselect::{MultiSelectRenderModel, render_multiselect_content};
@@ -83,7 +78,7 @@ pub use components::twitch_url::{TwitchUrlRenderGeometry, render_twitch_url_cont
 #[doc(inline)]
 pub use components::widgets::{PillBar, PillBarWindow, render_pill_bar, render_placeholder};
 #[doc(inline)]
-pub use mbv_ui_model::music_wide::MusicWideRenderCtx;
+pub use screens::feeds_model::{FeedDisplayRow, feed_display_rows};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
 // Interactive Components in `mbv_ui_model::components` (task 3.2+).
@@ -99,13 +94,6 @@ pub use components::chrome::{render_panel_shell_at, render_sidebar_scrollbar};
 #[doc(inline)]
 pub use components::indicators;
 use components::widgets::render_right_scrollbar;
-#[doc(inline)]
-pub use mbv_ui_model::sort_filter::{
-    LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, initial_group_artist_sort_key,
-};
-pub use mbv_ui_model::sort_filter::{
-    effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
-};
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.

@@ -323,18 +323,11 @@ pub fn premiere_number_label(premiere: &UpcomingPremiere) -> String {
 /// the app does not intend to launch.
 #[must_use]
 pub fn sanitize_url(url: &str) -> Option<&str> {
-    if url.is_empty() || url.chars().any(is_control_char) {
+    if url.is_empty() || url.chars().any(mbv_text::text_safety::is_control_char) {
         return None;
     }
     let scheme = url.split_once(':')?.0;
     (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")).then_some(url)
-}
-
-/// The C0, DEL and C1 control characters (`mbv_text::text_safety` owns the
-/// shared predicate; this crate keeps its own so a UI model holds no text
-/// crate dependency).
-fn is_control_char(ch: char) -> bool {
-    ch.is_ascii_control() || matches!(ch, '\u{80}'..='\u{9f}')
 }
 
 #[must_use]

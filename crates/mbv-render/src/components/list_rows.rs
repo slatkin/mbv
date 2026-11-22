@@ -5,7 +5,4 @@
 //! `Scrollbar`.
 //!
 //! The input itself is a shared presentation model: `LibraryListRenderCtx`
-//! lives in `mbv-ui-model` and is re-exported here for the paths that read it
-//! from this module.
-
-pub use mbv_ui_model::list_ctx::LibraryListRenderCtx;
+//! lives in `mbv_ui_model::list_ctx`; read it from there.

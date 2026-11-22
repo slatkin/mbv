@@ -3969,6 +3969,7 @@ dependencies = [
  "mbv-feed",
  "mbv-ids",
  "mbv-queue",
+ "mbv-text",
  "mbv-theme",
  "rstest",
  "time",

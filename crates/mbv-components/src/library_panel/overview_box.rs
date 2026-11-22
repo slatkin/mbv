@@ -12,10 +12,11 @@ use crate::mouse::hit::HitRegions;
 use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 use mbv_theme as palette;
 use mbv_tui_support::ToRatatui;
+use mbv_ui_model::library_hero::{HeroCredit, HeroFacts};
 use mbv_ui_model::meta::meta_row_text;
-use mbv_ui_model::ui_util::trunc_str;
+use mbv_ui_model::ui_util::{sanitize_url, trunc_str};
 
-use super::content::{HeroContent, HeroCredit, HeroFacts};
+use super::content::HeroContent;
 
 /// The painted Main content box and its scroll metrics, retained by the
 /// Library panel for interaction against the same geometry painted here.
@@ -363,20 +364,11 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
     }
 }
 
-fn contains_control(text: &str) -> bool {
-    text.chars().any(mbv_text::text_safety::is_control_char)
-}
-
 /// The display form of a hero link's URL, or `None` when the URL must not be
-/// offered as a link.
-///
-/// Transitional re-export: the body moved to `mbv-ui-model` (task 1.7); row
-/// 1.8 deletes this path.
-#[doc(inline)]
-pub use mbv_ui_model::ui_util::sanitize_url;
-
+/// offered as a link. Gated by the shared `mbv_ui_model::ui_util::sanitize_url`;
+/// the link is painted only when the label carries no control character.
 fn sanitize_label(label: &str) -> Option<&str> {
-    (!contains_control(label)).then_some(label)
+    (!label.chars().any(mbv_text::text_safety::is_control_char)).then_some(label)
 }
 
 fn underline_link_cells(f: &mut Frame, cell: Rect, offset: usize, label_width: usize) {

@@ -12,7 +12,6 @@ pub mod daemon_lost_modal;
 pub mod feeds_manage;
 pub mod help;
 pub mod hero;
-pub mod hero_model;
 // Feed/home-video group browsing is painted by the embedded EmbyLibraryContent
 // owner; the shell owns loading and projects FeedHomeVideoState into its context.
 pub mod home_video;
