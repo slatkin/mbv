@@ -13,7 +13,14 @@
 //! * The terminal image protocol, which speaks `ratatui-image` and `crossterm`
 //!   on behalf of `mbv-images`.
 
+mod protocol;
+mod resize;
 mod rgb;
 
+pub use protocol::*;
+pub use resize::{ResizeRegisterTx, ResizeResponseRx, spawn_resize_worker};
 #[doc(inline)]
 pub use rgb::ToRatatui;
+
+/// The filter the terminal protocols resample with.
+pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;

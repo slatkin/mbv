@@ -1,3 +1,6 @@
+//! The resize worker (design D7): one off-thread `resize_encode` loop that
+//! services every cache key's own `ResizeRequest` channel.
+
 use ratatui_image::thread::{ResizeRequest, ResizeResponse};
 use std::sync::mpsc;
 use std::time::Duration;

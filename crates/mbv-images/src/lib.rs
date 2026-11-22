@@ -1,15 +1,12 @@
-//! Image cache, loading, and terminal image protocol support.
+//! Image cache, loading, and pixel processing.
 //!
-//! The `ImageCache`, resize worker, title-overlay composition, and per-Service
-//! cache-key helpers live here. It prepares pixels; the Library and Queue panels
-//! own placement and painting.
+//! The `ImageCache` and per-Service cache-key helpers live here. It decodes and
+//! caches pixels; the terminal image protocol and its placement live in
+//! `mbv-tui-support`, and the Library and Queue panels own painting.
 
 pub mod cache;
-mod protocol;
-pub mod resize;
 pub mod row;
 pub mod title_overlay;
-pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
 pub const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 pub static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
     include_bytes!("../../../assets/power-card-placeholder.webp");

@@ -1,5 +1,9 @@
-use super::cache::ImageCache;
-use super::{CachedImage, SourceImage, mem_key};
+//! The terminal image protocol (design D7): the pickers, the per-key protocol
+//! storage, and the encode. `mbv-images` keeps the decoded art, the cache, and
+//! the pixel processing; this module speaks `ratatui-image` on its behalf.
+
+use mbv_images::cache::ImageCache;
+use mbv_images::{CachedImage, SourceImage, mem_key};
 use ratatui_image::picker::Picker;
 
 impl ImageCache {
@@ -149,6 +153,6 @@ impl ImageCache {
         else {
             return img;
         };
-        crate::composite_landscape_logo(&img, logo)
+        mbv_images::composite_landscape_logo(&img, logo)
     }
 }
