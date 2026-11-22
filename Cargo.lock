@@ -3548,7 +3548,7 @@ dependencies = [
  "mbv-visualizer",
  "mbv-ws",
  "mimalloc",
- "nix 0.31.3",
+ "nix 0.32.0",
  "openssl",
  "rand 0.10.3",
  "ratatui",
@@ -3631,7 +3631,7 @@ version = "0.28.3"
 dependencies = [
  "mbv-keybinds",
  "mbv-queue",
- "nix 0.31.3",
+ "nix 0.32.0",
  "rstest",
  "serde",
  "serde_json",
@@ -3690,7 +3690,7 @@ dependencies = [
  "mbv-player",
  "mbv-queue",
  "mbv-ws",
- "nix 0.31.3",
+ "nix 0.32.0",
  "num-traits",
  "rand 0.10.3",
  "rstest",
@@ -4002,7 +4002,7 @@ dependencies = [
  "mbv-emby",
  "mbv-queue",
  "mimalloc",
- "nix 0.31.3",
+ "nix 0.32.0",
  "openssl",
  "serde_json",
  "tracing",
@@ -4259,9 +4259,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.31.3"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+checksum = "77730ed34f01f4990cb2ea67fec715ecebc6fab9a6396cf83c5529b13f581bdc"
 dependencies = [
  "bitflags 2.13.2",
  "cfg-if",
