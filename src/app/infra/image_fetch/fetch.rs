@@ -1,10 +1,9 @@
-use super::{
-    App, Instant, LevelFillAction, LevelFillState, LibEvent, MAX_IMAGE_FETCHES, NAV_IDLE_DELAY,
-    PAGE_SIZE,
-};
-use crate::app::{MusicEvent, SeriesEvent};
+use super::{App, MAX_IMAGE_FETCHES, NAV_IDLE_DELAY, PAGE_SIZE};
+use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
+use crate::app::{LibEvent, MusicEvent, SeriesEvent};
 use mbv_images::{ImageFetchReq, ImageSource};
 use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key};
+use std::time::Instant;
 
 mod card_images;
 mod completions;

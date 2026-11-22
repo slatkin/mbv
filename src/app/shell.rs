@@ -36,6 +36,7 @@ mod emby_library_content;
 mod feeds;
 mod feeds_manage;
 mod focus;
+mod hero_image_projection;
 mod home;
 mod home_content;
 pub(in crate::app) mod image_protocol;
