@@ -4,6 +4,7 @@ use super::header::clip_to_width;
 use super::palette;
 use super::transport::width_u16;
 use super::transport::{control_glyphs, render_transport_controls_row};
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::ui_util::fmt_duration_short;
 use ratatui::Frame;
 use ratatui::layout::Rect;
