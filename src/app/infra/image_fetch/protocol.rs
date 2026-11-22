@@ -266,11 +266,12 @@ impl App {
         )
     }
 
-    /// The size `key`'s cached protocol paints within `available`, if it is ready.
+    /// The size `key`'s cached protocol paints within `available` (a card box in
+    /// cells, `width` and `height`), if it is ready.
     fn title_protocol_size(
         &mut self,
         key: &str,
-        available: ratatui::layout::Size,
+        available: (u16, u16),
     ) -> Option<ratatui::layout::Size> {
         // While the dimmed backdrop forces the halfblock fallback, measure on
         // the configured protocol's grid: the overlay's cache key encodes the
@@ -283,15 +284,21 @@ impl App {
         } else {
             self.current_protocol_suffix()
         };
+        let available = ratatui::layout::Size {
+            width: available.0,
+            height: available.1,
+        };
         self.cached_image_protocol_for_suffix_mut(key, suffix)?
             .size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), available)
     }
 
-    /// Compose and encode the title artwork at the size the base card protocol paints.
+    /// Compose and encode the title artwork at the size the base card protocol
+    /// paints. `available` is the card box in cells (`width`, `height`), passed
+    /// as plain numbers so the caller of this core path needs no ratatui value.
     pub(in crate::app) fn ensure_title_overlay_protocol(
         &mut self,
         cache_key: &str,
-        available: ratatui::layout::Size,
+        available: (u16, u16),
         parts: &mbv_queue::PlaybackTitleParts,
         logo_cache_key: Option<&str>,
         item_kind: &str,

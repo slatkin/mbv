@@ -50,7 +50,7 @@ impl App {
     pub fn queue_card_artwork(&mut self) -> QueueCardArtwork {
         if self.visual_slot_shown() {
             // The GUI has no resize drag: the hold is always off.
-            crate::app::shell::queue_card::refresh_queue_card_image(self, false);
+            crate::app::state::projection::card::refresh_queue_card_image(self, false);
         } else if self.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing: the artwork can no longer
             // carry the title, so the header is its only home again — the

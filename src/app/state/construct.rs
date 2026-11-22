@@ -248,7 +248,7 @@ impl App {
             // window sends a choice or the launch file installs one.
             gui_list_sorts: Vec::new(),
             gui_search: crate::app::gui_library::GuiSearchStore::default(),
-            title_log_gate: crate::app::shell::queue_card::TitleLogGate::default(),
+            title_log_gate: crate::app::state::projection::card::artwork::TitleLogGate::default(),
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
             settings_save_at: None,

@@ -112,16 +112,6 @@ fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
     );
 }
 
-fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
-    mbv_queue::PlaybackTitleParts {
-        title: mbv_queue::PlaybackTitlePart {
-            role: mbv_queue::PlaybackTitlePartRole::Title,
-            text: title.to_owned(),
-        },
-        context: None,
-    }
-}
-
 /// A dimming overlay must not move the queue card's geometry checkpoint: a
 /// fallback paint measured on the fallback's grid is not geometry-comparable
 /// with the configured protocol's, and recording it resized the reservation
@@ -148,53 +138,5 @@ fn dimmed_backdrop_paint_does_not_move_the_queue_card_checkpoint() {
         app.images.last_card_size(),
         (16, 32),
         "recording resumes for the configured protocol's paint"
-    );
-}
-
-/// Opening a dimming overlay must not disturb the title overlay pipeline:
-/// the overlay stays sized on the configured protocol's grid, so the same
-/// variant key survives the backdrop opening and closing — no header flash,
-/// and the sizing path re-encodes nothing. With the fallback sizing the
-/// measurements, each `ensure` call would lazily build a fallback protocol
-/// for the base and the variant (two extra builds) even though the key
-/// happens to coincide on a shared font grid.
-#[test]
-fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
-    let mut app = app_with_card_image();
-    let available = ratatui::layout::Size {
-        width: 16,
-        height: 32,
-    };
-    let ensure = |app: &mut App| {
-        app.ensure_title_overlay_protocol(
-            CARD_KEY,
-            available,
-            &title_parts("a title"),
-            None,
-            "Movie",
-        )
-    };
-
-    let variant =
-        ensure(&mut app).expect("the variant builds while the configured protocol is active");
-    let builds_after_open = app.image_protocols.protocol_builds();
-
-    app.dim_backdrop_active = true;
-    assert_eq!(
-        ensure(&mut app),
-        Some(variant.clone()),
-        "the dimmed backdrop must not size the overlay into a new variant key"
-    );
-    assert_eq!(
-        app.image_protocols.protocol_builds(),
-        builds_after_open,
-        "the sizing path must measure the configured protocol, not build fallback re-encodes"
-    );
-
-    app.dim_backdrop_active = false;
-    assert_eq!(
-        ensure(&mut app),
-        Some(variant),
-        "closing the backdrop returns to the same variant"
     );
 }

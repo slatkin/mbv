@@ -1,7 +1,8 @@
 //! Queue artwork ownership: movies fetch landscape art, episodes never show
 //! series art; overlay composition stays off the tick thread during a drag.
 
-use super::{card_cache_key, card_cache_key_for_id, card_image_types, refresh_queue_card_image};
+use super::super::artwork::{card_cache_key, card_cache_key_for_id, card_image_types};
+use super::super::refresh_queue_card_image;
 use crate::app::App;
 use crate::app::tests::render_fixtures::make_queue_app;
 use mbv_images::CachedImage;

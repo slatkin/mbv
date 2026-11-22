@@ -31,7 +31,7 @@ pub(in crate::app) use arbitration::{arbitrate_key, fold_mouse_messages};
 mod audiobookshelf_book;
 mod audiobookshelf_podcast;
 mod chrome_panels;
-pub(in crate::app) mod chrome_status;
+mod chrome_status;
 mod draw;
 mod emby_library;
 mod emby_library_content;

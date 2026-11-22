@@ -4,6 +4,7 @@
 //! projection that reads them is the shell's (`queue_card.rs`), and the GUI
 //! Home projection re-reads the same chains (design D12).
 
+use crate::app::App;
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 
@@ -13,6 +14,18 @@ use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 pub(in crate::app) struct TitleLogGate {
     decision: Option<(String, &'static str)>,
     paint: Option<(String, &'static str)>,
+}
+
+impl App {
+    /// The artwork log gate, read and written by every title-overlay path.
+    pub(in crate::app) fn title_log_gate(&mut self) -> &mut TitleLogGate {
+        &mut self.title_log_gate
+    }
+
+    /// The decision reason the last logged decision recorded.
+    pub(in crate::app) fn title_log_decision_reason(&self) -> Option<&'static str> {
+        self.title_log_gate.last_decision_reason()
+    }
 }
 
 impl TitleLogGate {

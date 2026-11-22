@@ -72,7 +72,7 @@ fn build_count(app: &App) -> u32 {
 fn ensure_title_overlay_protocol(
     app: &mut App,
     cache_key: &str,
-    available: ratatui::layout::Size,
+    available: (u16, u16),
     parts: &mbv_queue::PlaybackTitleParts,
     logo_cache_key: Option<&str>,
 ) -> Option<String> {
@@ -104,18 +104,8 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
     app.cached_image_protocol_mut(BASE_KEY)
         .expect("base protocol is available under the configured suffix");
     let baseline = build_count(&app);
-    let available = ratatui::layout::Size {
-        width: 8,
-        height: 4,
-    };
     let ensure = |app: &mut App, title: &str| {
-        ensure_title_overlay_protocol(
-            app,
-            BASE_KEY,
-            available,
-            &title_parts(title),
-            Some(LOGO_KEY),
-        )
+        ensure_title_overlay_protocol(app, BASE_KEY, (8, 4), &title_parts(title), Some(LOGO_KEY))
     };
 
     let text_variant =
@@ -202,17 +192,8 @@ fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
         context: None,
     };
 
-    let variant = ensure_title_overlay_protocol(
-        &mut app,
-        plain_key,
-        ratatui::layout::Size {
-            width: 8,
-            height: 4,
-        },
-        &parts,
-        None,
-    )
-    .expect("measurable plain art builds an overlay variant");
+    let variant = ensure_title_overlay_protocol(&mut app, plain_key, (8, 4), &parts, None)
+        .expect("measurable plain art builds an overlay variant");
 
     assert_ne!(variant, plain_key);
     assert_eq!(app.images.image(plain_key).unwrap().img, plain_before);
