@@ -314,7 +314,7 @@ mbv-ws = { path = "crates/mbv-ws" }
 mbv-text = { path = "crates/mbv-text" }
 mbv-theme = { path = "crates/mbv-theme" }
 mbv-images = { path = "crates/mbv-images" }
-mbv-tui-support = { path = "crates/mbv-tui-support", features = ["test"] }
+mbv-tui-support = { path = "crates/mbv-tui-support" }
 mbv-ui-model = { path = "crates/mbv-ui-model" }
 mbv-ui-msg = { path = "crates/mbv-ui-msg" }
 mbv-surfaces = { path = "crates/mbv-surfaces" }
@@ -359,6 +359,7 @@ mbv-emby = { path = "crates/mbv-emby", features = ["test"] }
 mbv-ui-model = { path = "crates/mbv-ui-model", features = ["test"] }
 mbv-render = { path = "crates/mbv-render", features = ["test"] }
 mbv-components = { path = "crates/mbv-components", features = ["test"] }
+mbv-tui-support = { path = "crates/mbv-tui-support", features = ["test"] }
 uuid = { workspace = true, features = ["v4", "fast-rng"] }
 rstest.workspace = true
 
