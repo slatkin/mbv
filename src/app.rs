@@ -137,7 +137,6 @@ pub(crate) use crate::app::state::queue_view::QueueView;
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
 use mbv_emby_model::EmbyItem;
-pub(crate) use mbv_images::resize::spawn_resize_worker;
 #[cfg(test)]
 use mbv_ui_model::browse::restore_library_position;
 use mbv_ui_model::browse::{

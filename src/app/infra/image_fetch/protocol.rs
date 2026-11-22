@@ -2,11 +2,10 @@ use super::super::super::{App, MusicEvent};
 use super::CardImageDrain;
 use mbv_images::{
     ImageDecode, ImageFetchOutcome, ImageFetchReq, ImageRendition, ImageSource,
-    QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, SourceImage,
-    cover_fill_hero_box,
+    QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY, SourceImage, cover_fill_hero_box,
 };
 use mbv_theme as palette;
-use mbv_tui_support::ToRatatui;
+use mbv_tui_support::{RENDER_FILTER, ToCellSize, ToRatatui};
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 
@@ -46,7 +45,13 @@ fn compose_title_overlay_bitmap(
         RENDER_FILTER,
     );
     let colours = title_overlay_colours();
-    mbv_images::title_overlay::compose_title_overlay(&base, logo, font, text, colours)
+    mbv_images::title_overlay::compose_title_overlay(
+        &base,
+        logo,
+        font.to_cell_size(),
+        text,
+        colours,
+    )
 }
 
 impl App {
@@ -81,7 +86,7 @@ impl App {
                 )
             })
             .collect();
-        if self.images.images_enabled() {
+        if self.images.protocol_enabled() {
             for (cache_key, item_id, series_id) in prefetch {
                 self.fetch_list_card_image_when_idle(cache_key, item_id, series_id, &["Primary"]);
             }
@@ -92,30 +97,46 @@ impl App {
         if self.images.is_cached(QUEUE_CARD_PLACEHOLDER_KEY) {
             return;
         }
-        if self.picker_and_suffix().is_none() {
+        let Some(suffix) = self.current_protocol_suffix_opt() else {
             return;
-        }
+        };
         let Ok(img) = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES) else {
             return;
         };
-        let entry = self.images.build_cached_image(
-            QUEUE_CARD_PLACEHOLDER_KEY,
-            Some(img),
-            None,
-            self.current_protocol_suffix(),
-        );
+        let built =
+            self.image_protocols
+                .build_entry(QUEUE_CARD_PLACEHOLDER_KEY, Some(img), None, suffix);
         self.images
-            .insert_image(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), entry);
+            .insert_image(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), built.entry);
+        if let Some(protocol) = built.protocol {
+            self.image_protocols.insert_protocol(
+                &self.images,
+                QUEUE_CARD_PLACEHOLDER_KEY,
+                suffix,
+                protocol,
+            );
+        }
     }
 
+    /// The picker that encodes the active protocol suffix, and that suffix:
+    /// the halfblock picker's while a dimmed backdrop is up, else the
+    /// configured picker's. `None` until the pickers are initialized.
     fn picker_and_suffix(&self) -> Option<(&Picker, &'static str)> {
         if self.dim_halfblock_forced() {
-            self.images.halfblock_picker().map(|p| (p, "halfblock"))
+            self.image_protocols
+                .halfblock_picker()
+                .map(|p| (p, "halfblock"))
         } else {
-            self.images
+            self.image_protocols
                 .image_picker()
-                .map(|p| (p, self.images.configured_protocol_name()))
+                .map(|p| (p, self.image_protocols.configured_protocol_name()))
         }
+    }
+
+    /// [`App::picker_and_suffix`] without the picker, for a caller that only
+    /// needs the suffix: `None` until the pickers are initialized.
+    fn current_protocol_suffix_opt(&self) -> Option<&'static str> {
+        self.picker_and_suffix().map(|(_, suffix)| suffix)
     }
 
     /// Whether the dimmed backdrop has forced the halfblock fallback picker
@@ -129,7 +150,9 @@ impl App {
     pub(in crate::app) fn dim_halfblock_forced(&self) -> bool {
         self.dim_backdrop_active
             && self.images.protocol_enabled()
-            && !self.images.is_halfblock_configured()
+            && !self
+                .image_protocols
+                .is_halfblock_configured(self.images.protocol_override())
     }
 
     /// The suffix of the protocol currently active: the halfblock picker's
@@ -163,11 +186,13 @@ impl App {
         bare_key: &str,
         suffix: &'static str,
     ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
-        let picker = self.images.picker_for_suffix(suffix)?;
-        let reencode = self
-            .images
-            .image(bare_key)
-            .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
+        let picker = self.image_protocols.picker_for_suffix(suffix).cloned()?;
+        let reencode = self.images.image(bare_key).is_some_and(|e| {
+            e.img.is_some()
+                && !self
+                    .image_protocols
+                    .contains(&self.images, bare_key, suffix)
+        });
         if reencode {
             let (img, cover_box, stored_logo_key) = self
                 .images
@@ -178,7 +203,9 @@ impl App {
                         .map(|img| (img, e.cover_box, e.applied_logo_key.clone()))
                 })
                 .expect("img present, just checked");
-            let logo_key = self.images.ready_logo_key(stored_logo_key.as_deref());
+            let logo_key = self
+                .image_protocols
+                .ready_logo_key(&self.images, stored_logo_key.as_deref());
             // A hero entry's protocols carry the cover-fit crop (task 5.10,
             // design D5): rebuild from the source through the same cover step
             // so a suffix switch keeps the cropped aspect.
@@ -189,14 +216,20 @@ impl App {
                 }
                 None => img,
             };
-            let img = self.images.decorate_with_logo(img, logo_key.as_deref());
-            let proto = self.images.build_protocol(bare_key, suffix, picker, img);
+            let img =
+                self.image_protocols
+                    .decorate_with_logo(&self.images, img, logo_key.as_deref());
+            let proto = self
+                .image_protocols
+                .build_protocol(bare_key, suffix, &picker, img);
+            self.image_protocols
+                .insert_protocol(&self.images, bare_key, suffix, proto);
             if let Some(entry) = self.images.image_mut(bare_key) {
-                entry.protocols.insert(suffix, proto);
                 entry.applied_logo_key = logo_key;
             }
         }
-        self.images.image_mut(bare_key)?.protocols.get_mut(suffix)
+        self.image_protocols
+            .protocol_mut(&self.images, bare_key, suffix)
     }
 
     /// The active picker's terminal font size — the cell-to-pixel ratio the
@@ -217,7 +250,7 @@ impl App {
     /// same key at the fallback's hardcoded grid would bake a stretched
     /// bitmap into a key that outlives the modal.
     fn title_overlay_font_size(&self) -> ratatui_image::FontSize {
-        self.images.image_picker().map_or(
+        self.image_protocols.image_picker().map_or(
             ratatui_image::FontSize::new(10, 20),
             ratatui_image::picker::Picker::font_size,
         )
@@ -246,7 +279,7 @@ impl App {
         // until the fallback paint landed (user-reported: the now-playing
         // title flashed to the header for a moment on every modal open).
         let suffix = if self.dim_halfblock_forced() {
-            self.images.configured_protocol_name()
+            self.image_protocols.configured_protocol_name()
         } else {
             self.current_protocol_suffix()
         };
@@ -287,7 +320,9 @@ impl App {
         // The ready logo joins the variant key (design D7): a late-arriving
         // logo builds a new variant, while an absent or failed one leaves the
         // text variant valid.
-        let ready_logo_key = self.images.ready_logo_key(logo_cache_key);
+        let ready_logo_key = self
+            .image_protocols
+            .ready_logo_key(&self.images, logo_cache_key);
         let key = mbv_images::title_overlay::title_overlay_cache_key(
             cache_key,
             cols,
@@ -356,10 +391,15 @@ impl App {
             text,
         );
         let suffix = self.current_protocol_suffix();
-        let entry = self
-            .images
-            .build_cached_image(key, Some(composed), None, suffix);
-        self.images.insert_derived_image(key.to_owned(), entry);
+        let built = self
+            .image_protocols
+            .build_entry(key, Some(composed), None, suffix);
+        self.images
+            .insert_derived_image(key.to_owned(), built.entry);
+        if let Some(protocol) = built.protocol {
+            self.image_protocols
+                .insert_protocol(&self.images, key, suffix, protocol);
+        }
         tracing::debug!(
             name: "queue.title_overlay.built",
             target: "queue_art",
@@ -397,10 +437,12 @@ impl App {
         let Some(source) = entry.img.clone() else {
             return false;
         };
-        let desired_logo_key = self.images.ready_logo_key(logo_cache_key);
+        let desired_logo_key = self
+            .image_protocols
+            .ready_logo_key(&self.images, logo_cache_key);
         if entry.cover_box == Some(box_cells)
             && entry.applied_logo_key == desired_logo_key
-            && !entry.protocols.is_empty()
+            && self.image_protocols.has_any(&self.images, cache_key)
         {
             return true;
         }
@@ -416,17 +458,19 @@ impl App {
             return false;
         };
         let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
-        let cropped = self.images.decorate_with_logo(
+        let cropped = self.image_protocols.decorate_with_logo(
+            &self.images,
             cover_fill_hero_box(&source, px_w, px_h),
             desired_logo_key.as_deref(),
         );
         let bare_key = cache_key.to_string();
         let proto = self
-            .images
+            .image_protocols
             .build_protocol(&bare_key, suffix, &picker, cropped);
+        self.image_protocols.clear_key(cache_key);
+        self.image_protocols
+            .insert_protocol(&self.images, cache_key, suffix, proto);
         if let Some(entry) = self.images.image_mut(cache_key) {
-            entry.protocols.clear();
-            entry.protocols.insert(suffix, proto);
             entry.cover_box = Some(box_cells);
             entry.applied_logo_key = desired_logo_key;
         }
@@ -514,12 +558,15 @@ impl App {
                 ImageFetchOutcome::Image { img, source } => (img, Some(source)),
                 ImageFetchOutcome::Empty | ImageFetchOutcome::Interrupted => (None, None),
             };
-            let entry = self.images.build_cached_image(
-                &cache_key,
-                img_opt,
-                source,
-                self.current_protocol_suffix(),
-            );
+            // Store the entry BEFORE its protocol: the store records a
+            // protocol only for a key the cache holds an entry for, and it
+            // tags the encoding with that entry's generation (invariant 38).
+            let suffix = self.current_protocol_suffix();
+            let built = self
+                .image_protocols
+                .build_entry(&cache_key, img_opt, source, suffix);
+            let entry = built.entry;
+            let protocol = built.protocol;
             // Artist artwork: a fetch reserved through the typed artist
             // request identity completes as its own typed event; the generic
             // image cache stays provider/generic.
@@ -541,7 +588,17 @@ impl App {
             if interrupted && artist_completion.is_none() {
                 self.images.fetch_interrupted(cache_key);
             } else {
-                self.images.complete_fetch(cache_key, entry);
+                // Both stores have changed now: the cache holds the entry, so
+                // its encoding is recordable under the new generation.
+                self.images.complete_fetch(cache_key.clone(), entry);
+                if let Some(protocol) = protocol {
+                    self.image_protocols.insert_protocol(
+                        &self.images,
+                        &cache_key,
+                        suffix,
+                        protocol,
+                    );
+                }
             }
             if let Some(event) = artist_completion {
                 let _ = self.channels.lib_tx.send(event);

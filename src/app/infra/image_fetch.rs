@@ -81,7 +81,7 @@ impl App {
         let Some(source) = &artwork.source else {
             return State::None;
         };
-        if !self.images.images_enabled() {
+        if !self.images.protocol_enabled() {
             return State::None;
         }
         // The one fetch per key (fetch dedupes on its own reservation set).
@@ -143,7 +143,7 @@ impl App {
             if let Some(entry) = self.images.image_mut(&cache_key)
                 && entry.cover_box.take().is_some()
             {
-                entry.protocols.clear();
+                self.image_protocols.clear_key(&cache_key);
             }
         } else if mbv_render::wide_hero_fits(panel_area) {
             if let Some(panes) = mbv_render::arrangements::library::wide_library_panes(
@@ -203,7 +203,7 @@ impl App {
             library_item_id,
             self.current_protocol_suffix(),
         );
-        if self.images.images_enabled() {
+        if self.images.protocol_enabled() {
             self.fetch_audiobookshelf_image(
                 cache_key.clone(),
                 setup.server_url.clone(),
@@ -228,7 +228,7 @@ impl App {
             library_item_id,
             self.current_protocol_suffix(),
         );
-        if self.images.images_enabled() {
+        if self.images.protocol_enabled() {
             self.fetch_audiobookshelf_image(
                 cache_key.clone(),
                 setup.server_url.clone(),
