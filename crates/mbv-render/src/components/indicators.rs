@@ -6,6 +6,7 @@
 
 use mbv_theme as palette;
 use mbv_theme::Role;
+use mbv_tui_support::ToRatatui;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
