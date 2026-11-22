@@ -1,10 +1,19 @@
-//! The terminal image protocol (design D7): the pickers, the per-key protocol
-//! storage, and the encode. `mbv-images` keeps the decoded art, the cache, and
-//! the pixel processing; this store speaks `ratatui-image` on its behalf.
+//! The terminal image protocol (design D7): the pickers, the per-cache-key
+//! protocols, and the encode. `mbv-images` keeps the decoded art, the cache,
+//! and the pixel processing; this store speaks `ratatui-image` on its behalf.
 //!
 //! The store is the only place a `ratatui-image` value lives. A cache entry
 //! holds no protocol, and the cache holds no picker, so a Client that paints
 //! no terminal protocol (`mbv-gui`) builds no encoding at all.
+//!
+//! A stored protocol never outlives the cache entry it was encoded from
+//! (invariant 38). The store tags each key's protocols with the generation the
+//! cache held for that key when they were built
+//! ([`ImageCache::entry_generation`]), which changes whenever the cache stores
+//! another entry under the key or drops it. So a key the cache evicted,
+//! replaced, or cleared reads as having no protocol, and
+//! [`ImageProtocols::prune`] drops the stored encodings of every key whose
+//! entry moved on.
 
 use mbv_images::cache::ImageCache;
 use mbv_images::{CachedImage, SourceImage, mem_key};
@@ -32,12 +41,21 @@ impl std::fmt::Debug for BuiltEntry {
     }
 }
 
+/// One cache key's protocols, tagged with the cache entry generation they were
+/// encoded from.
+struct EntryProtocols {
+    generation: u64,
+    by_suffix: HashMap<&'static str, ThreadProtocol>,
+}
+
 /// One Client's terminal image protocols: the pickers, the resize worker
 /// channels, and the per-cache-key protocols the painters render.
 pub struct ImageProtocols {
-    /// Each cache key's protocols, by protocol suffix. A key's protocols are
-    /// dropped when the cache drops the entry (invariant 38).
-    protocols: HashMap<String, HashMap<&'static str, ThreadProtocol>>,
+    /// Each cache key's protocols. A key's protocols are valid only while its
+    /// tagged generation matches the cache's generation for the key, so the
+    /// store never hands out an encoding of an entry the cache evicted or
+    /// replaced.
+    protocols: HashMap<String, EntryProtocols>,
     image_picker: Option<Picker>,
     halfblock_picker: Option<Picker>,
     /// Registers a freshly created per-cache-key `ResizeRequest` receiver
@@ -78,6 +96,10 @@ impl ImageProtocols {
 
     /// Populate `image_picker` (terminal-detected, with the config override)
     /// and `halfblock_picker` (the #451 dimmed-backdrop fallback).
+    /// `protocol_override` is the configured protocol (`ImageCache`'s
+    /// `protocol_override()`): a `Some` naming one of `sixel`, `kitty`,
+    /// `iterm2`, or `halfblocks` replaces the detected protocol, and `None` or
+    /// any other value keeps it.
     ///
     /// MUST run before the `TuiRealm` crossterm listener starts
     /// (`Application::init`): `Picker::from_query_stdio` writes a `CSI 16 t`
@@ -85,8 +107,8 @@ impl ImageProtocols {
     /// read. If the listener is already draining stdin it eats the reply, the
     /// picker falls back to a wrong cell size, and Kitty renders images clipped
     /// on the right/bottom (#654).
-    pub fn init_image_pickers(&mut self) {
-        let picker = build_image_picker(None);
+    pub fn init_image_pickers(&mut self, protocol_override: Option<&str>) {
+        let picker = build_image_picker(protocol_override);
         tracing::debug!(
             name: "startup.image_picker.initialized",
             target: "startup",
@@ -200,39 +222,84 @@ impl ImageProtocols {
         ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
-    /// Record `protocol` as `bare_key`'s encoding for `suffix`.
+    /// Record `protocol` as `bare_key`'s encoding for `suffix`, tagged with
+    /// the cache entry's current generation. A protocol for a key the cache
+    /// holds no entry for is dropped: nothing paints it. Recording also drops
+    /// every protocol whose entry the cache has since replaced or dropped
+    /// (invariant 38).
     pub fn insert_protocol(
         &mut self,
+        cache: &ImageCache,
         bare_key: &str,
         suffix: &'static str,
         protocol: ThreadProtocol,
     ) {
+        let Some(generation) = cache.entry_generation(bare_key) else {
+            return;
+        };
+        self.prune(cache);
         self.protocols
             .entry(bare_key.to_owned())
-            .or_default()
+            .or_insert_with(|| EntryProtocols {
+                generation,
+                by_suffix: HashMap::new(),
+            })
+            .by_suffix
             .insert(suffix, protocol);
     }
 
-    /// `bare_key`'s protocol for `suffix`, when one is cached.
+    /// `bare_key`'s protocol for `suffix`, when one is cached for the entry the
+    /// cache still holds.
     #[must_use]
-    pub fn protocol_mut(&mut self, bare_key: &str, suffix: &str) -> Option<&mut ThreadProtocol> {
-        self.protocols.get_mut(bare_key)?.get_mut(suffix)
+    pub fn protocol_mut(
+        &mut self,
+        cache: &ImageCache,
+        bare_key: &str,
+        suffix: &str,
+    ) -> Option<&mut ThreadProtocol> {
+        self.drop_key_if_stale(cache, bare_key);
+        self.protocols.get_mut(bare_key)?.by_suffix.get_mut(suffix)
     }
 
-    /// Whether `bare_key` has a protocol cached for `suffix`.
+    /// Whether `bare_key` has a protocol cached for `suffix` and the entry the
+    /// cache still holds.
     #[must_use]
-    pub fn contains(&self, bare_key: &str, suffix: &str) -> bool {
+    pub fn contains(&mut self, cache: &ImageCache, bare_key: &str, suffix: &str) -> bool {
+        self.drop_key_if_stale(cache, bare_key);
         self.protocols
             .get(bare_key)
-            .is_some_and(|by_suffix| by_suffix.contains_key(suffix))
+            .is_some_and(|stored| stored.by_suffix.contains_key(suffix))
     }
 
-    /// Whether any protocol is cached for `bare_key`.
+    /// Whether any protocol is cached for `bare_key` and the entry the cache
+    /// still holds.
     #[must_use]
-    pub fn has_any(&self, bare_key: &str) -> bool {
+    pub fn has_any(&mut self, cache: &ImageCache, bare_key: &str) -> bool {
+        self.drop_key_if_stale(cache, bare_key);
         self.protocols
             .get(bare_key)
-            .is_some_and(|by_suffix| !by_suffix.is_empty())
+            .is_some_and(|stored| !stored.by_suffix.is_empty())
+    }
+
+    /// Drop every stored protocol whose cache entry the cache has since
+    /// replaced or removed. A Client runs it at a sync point after cache
+    /// mutation, so a key evicted while no painter asked about it does not
+    /// linger in the store.
+    pub fn prune(&mut self, cache: &ImageCache) {
+        self.protocols
+            .retain(|key, stored| cache.entry_generation(key) == Some(stored.generation));
+    }
+
+    /// Drop `bare_key`'s protocols when the entry they were encoded from is
+    /// gone or has been replaced.
+    fn drop_key_if_stale(&mut self, cache: &ImageCache, bare_key: &str) {
+        let stale = self
+            .protocols
+            .get(bare_key)
+            .is_some_and(|stored| cache.entry_generation(bare_key) != Some(stored.generation));
+        if stale {
+            self.protocols.remove(bare_key);
+        }
     }
 
     /// Drop every protocol cached for `bare_key`, so the next paint re-encodes

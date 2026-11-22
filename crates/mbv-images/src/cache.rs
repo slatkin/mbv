@@ -37,6 +37,13 @@ pub struct ImageCache {
     image_fetches_active: usize,
     card_image_tx: mpsc::Sender<(String, ImageFetchOutcome)>,
     card_image_rx: mpsc::Receiver<(String, ImageFetchOutcome)>,
+    /// Each cached entry's generation: a number that changes every time an
+    /// entry is stored under a key. A value derived from an entry (the
+    /// terminal protocol that encodes its art) records the generation it was
+    /// built from, so a value built from an entry the cache has since evicted
+    /// or replaced is recognisably stale (invariant 38).
+    entry_generations: foldhash::HashMap<String, u64>,
+    next_entry_generation: u64,
     cache_size_total: usize,
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
@@ -75,6 +82,8 @@ impl ImageCache {
             image_fetches_active: 0,
             card_image_tx,
             card_image_rx,
+            entry_generations: foldhash::HashMap::default(),
+            next_entry_generation: 0,
             cache_size_total: cache_size.saturating_mul(2),
             image_protocol,
             image_protocol_enabled,
@@ -174,23 +183,42 @@ impl ImageCache {
 
     pub fn insert_image(&mut self, key: String, entry: CachedImage) {
         self.remove_derived_variants_for(&key);
-        self.card_image_states.insert(key, entry);
+        self.store_entry(key, entry);
     }
 
     pub fn remove_image(&mut self, key: &str) -> Option<CachedImage> {
         self.image_lru.retain(|cached| cached != key);
         self.row_image_lru.retain(|cached| cached != key);
         self.remove_derived_variants_for(key);
+        self.entry_generations.remove(key);
         self.card_image_states.remove(key)
     }
 
     pub fn insert_derived_image(&mut self, key: String, entry: CachedImage) {
         let Some((identity, _)) = key.split_once(DERIVED_SEP) else {
-            self.card_image_states.insert(key, entry);
+            self.store_entry(key, entry);
             return;
         };
         self.remove_derived_variants_for_identity(identity);
+        self.store_entry(key, entry);
+    }
+
+    /// Store `entry` under `key` with a fresh generation, so every value
+    /// derived from the entry it replaces is stale from now on.
+    fn store_entry(&mut self, key: String, entry: CachedImage) {
+        self.next_entry_generation = self.next_entry_generation.wrapping_add(1);
+        self.entry_generations
+            .insert(key.clone(), self.next_entry_generation);
         self.card_image_states.insert(key, entry);
+    }
+
+    /// The generation of the entry stored under `key`, or `None` when the
+    /// cache holds no entry for the key. It changes whenever another entry
+    /// takes the key's place, so a value built from the previous entry can be
+    /// recognised as stale (invariant 38).
+    #[must_use]
+    pub fn entry_generation(&self, key: &str) -> Option<u64> {
+        self.entry_generations.get(key).copied()
     }
 
     fn remove_derived_variants_for(&mut self, cache_key: &str) {
@@ -202,10 +230,13 @@ impl ImageCache {
         self.card_image_states
             .retain(|key, _| !key.starts_with(&prefix));
         self.image_lru.retain(|key| !key.starts_with(&prefix));
+        self.entry_generations
+            .retain(|key, _| !key.starts_with(&prefix));
     }
 
     pub fn clear_images_and_loading(&mut self) {
         self.card_image_states.clear();
+        self.entry_generations.clear();
         self.card_image_loading.clear();
         self.interrupted_fetches.clear();
         self.pending_row_fetches.clear();
@@ -217,6 +248,7 @@ impl ImageCache {
                 || key.starts_with(crate::ABS_ROW_CACHE_KEY_PREFIX)
         }
         self.card_image_states.retain(|key, _| !audiobookshelf(key));
+        self.entry_generations.retain(|key, _| !audiobookshelf(key));
         self.card_image_loading.retain(|key| !audiobookshelf(key));
         self.interrupted_fetches
             .retain(|key, _| !audiobookshelf(key));
@@ -342,7 +374,7 @@ impl ImageCache {
         if entry.has_art() {
             self.touch_cache_budget(&key);
         }
-        self.card_image_states.insert(key, entry);
+        self.store_entry(key, entry);
     }
 
     /// Mark the cached row image `key` as read now, so the row budget evicts
