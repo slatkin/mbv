@@ -24,10 +24,10 @@ pub struct CardImageDrain {
 }
 
 fn wide_landscape_hero_eligible(
-    artwork: &mbv_components::library_panel::HeroArtwork,
+    artwork: &mbv_ui_model::library_hero::HeroArtwork,
     panel_area: ratatui::layout::Rect,
 ) -> bool {
-    artwork.shape == mbv_components::library_panel::ArtworkShape::Landscape
+    artwork.shape == mbv_ui_model::library_hero::ArtworkShape::Landscape
         && mbv_render::wide_hero_fits(panel_area)
 }
 impl App {
@@ -40,10 +40,10 @@ impl App {
     /// and the placeholder shows for at most that one frame.
     fn fetch_hero_logo(
         &mut self,
-        artwork: &mbv_components::library_panel::HeroArtwork,
+        artwork: &mbv_ui_model::library_hero::HeroArtwork,
         panel_area: ratatui::layout::Rect,
     ) -> Option<String> {
-        use mbv_components::library_panel::content::ArtworkSource;
+        use mbv_ui_model::library_hero::ArtworkSource;
         if !wide_landscape_hero_eligible(artwork, panel_area) {
             return None;
         }
@@ -68,14 +68,14 @@ impl App {
 
     pub(in crate::app) fn project_hero_image(
         &mut self,
-        facts: &mbv_components::library_panel::HeroFacts,
+        facts: &mbv_ui_model::library_hero::HeroFacts,
         workspace_present: bool,
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
         overlay_box: Option<(u16, u16)>,
         resizing: bool,
     ) -> mbv_ui_model::playback::HeroImageState {
-        use mbv_components::library_panel::content::ArtworkSource;
+        use mbv_ui_model::library_hero::ArtworkSource;
         use mbv_ui_model::playback::HeroImageState as State;
         let artwork = &facts.artwork;
         let Some(source) = &artwork.source else {
@@ -137,7 +137,7 @@ impl App {
         // Portrait/Square artwork fit-resizes (the whole image, aspect
         // preserved) through the plain protocol.
         let landscape =
-            artwork.painted_shape() == mbv_components::library_panel::ArtworkShape::Landscape;
+            artwork.painted_shape() == mbv_ui_model::library_hero::ArtworkShape::Landscape;
         if !landscape {
             // Drop any stale cover crop so the plain fit protocol rebuilds.
             if let Some(entry) = self.images.image_mut(&cache_key)

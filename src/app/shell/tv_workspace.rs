@@ -365,7 +365,7 @@ impl Model {
     pub(in crate::app) fn test_paint_library_panel(
         &mut self,
         area: ratatui::layout::Rect,
-    ) -> Option<mbv_components::library_panel::PanelHeroImagePaint> {
+    ) -> Option<mbv_ui_model::library_hero::PanelHeroImagePaint> {
         let mut terminal =
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
                 .expect("test terminal");

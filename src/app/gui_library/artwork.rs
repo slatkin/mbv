@@ -7,9 +7,7 @@
 //! `rows` holds the top-level row art model (gui-delineated-rows design D4): the
 //! art state each row paints, its Hero artwork source, and the row cache read.
 
-use mbv_components::library_panel::content::{
-    ArtworkShape, ArtworkSource, painted_shape_for_pixels,
-};
+use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource, painted_shape_for_pixels};
 use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 
 use crate::app::App;
@@ -149,7 +147,7 @@ impl App {
 
     /// The Hero's art box: the declared policy arm, re-armed by the fetched
     /// image's own pixels once the cache holds them — the rule the TUI's
-    /// [`mbv_components::library_panel::HeroArtwork::painted_shape`] applies
+    /// [`mbv_ui_model::library_hero::HeroArtwork::painted_shape`] applies
     /// (design D5). A `Primary` chain that serves a landscape still (an
     /// episode), or a `Thumb` chain that falls through to the portrait
     /// poster, therefore paints the box its image needs instead of the box

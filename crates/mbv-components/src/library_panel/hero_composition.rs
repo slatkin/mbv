@@ -89,7 +89,7 @@ pub fn paint_library_hero_content(
         (&hero.facts.artwork.image, image_box)
     {
         geometry.hero_image = Some(PanelHeroImagePaint {
-            area: image_area,
+            area: mbv_render::layout::rect_to_presentation(image_area),
             cache_key: cache_key.clone(),
             centered: true,
         });

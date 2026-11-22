@@ -8,10 +8,6 @@
 //! queues a `Row` fetch.
 
 use mbv_audiobookshelf::{AudiobookshelfBook, AudiobookshelfShow};
-use mbv_components::library_panel::HeroArtwork;
-use mbv_components::library_panel::content::{
-    ArtworkShape, ArtworkSource, painted_shape_for_pixels,
-};
 use mbv_components::library_panel::hero::{
     abs_book_artwork_policy, abs_episode_artwork_policy, emby_artwork_policy, feed_artwork_policy,
 };
@@ -20,6 +16,9 @@ use mbv_images::ImageFetchReq;
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, FeedKind,
     QueueItem,
+};
+use mbv_ui_model::library_hero::{
+    ArtworkShape, ArtworkSource, HeroArtwork, painted_shape_for_pixels,
 };
 use mbv_ui_model::music_grouping::ArtistKey;
 

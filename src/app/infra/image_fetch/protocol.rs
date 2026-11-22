@@ -486,23 +486,24 @@ impl App {
     pub(in crate::app) fn paint_panel_hero_image(
         &mut self,
         f: &mut ratatui::Frame,
-        paint: &mbv_components::library_panel::PanelHeroImagePaint,
+        paint: &mbv_ui_model::library_hero::PanelHeroImagePaint,
     ) {
         if paint.area.width == 0 || paint.area.height == 0 {
             return;
         }
         if let Some(state) = self.cached_image_protocol_mut(&paint.cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+            let area = mbv_render::layout::presentation_to_rect(paint.area);
             let avail = ratatui::layout::Size {
-                width: paint.area.width,
-                height: paint.area.height,
+                width: area.width,
+                height: area.height,
             };
             if let Some(actual) =
                 state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
             {
                 let img_rect = ratatui::layout::Rect {
-                    x: paint.area.x + paint.area.width.saturating_sub(actual.width) / 2,
-                    y: paint.area.y,
+                    x: area.x + area.width.saturating_sub(actual.width) / 2,
+                    y: area.y,
                     width: actual.width,
                     height: actual.height,
                 };
@@ -523,7 +524,7 @@ impl App {
                 .fill
                 .to_ratatui()),
             ),
-            paint.area,
+            mbv_render::layout::presentation_to_rect(paint.area),
         );
     }
 

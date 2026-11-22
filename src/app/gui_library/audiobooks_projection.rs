@@ -9,12 +9,12 @@
 //! `book_content::chapter_rows`, `hero_content_abs_book`), so the two
 //! Clients cannot drift.
 
-use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_abs_book;
 use mbv_emby_model::saturating_i64_from_f64;
 use mbv_emby_model::seconds_to_ticks;
 use mbv_ui_model::audiobookshelf_browse::BookRow;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_item;
+use mbv_ui_model::library_hero::ArtworkSource;
 use mbv_ui_model::ui_util::fmt_duration_gutter;
 
 use super::GuiLibraryArtwork;

@@ -13,12 +13,12 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_emby;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_render::effective_sort_str;
 use mbv_ui_model::feed::FeedHomeVideoTarget;
 use mbv_ui_model::home_latest::emby_date_added_secs;
+use mbv_ui_model::library_hero::ArtworkSource;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;

@@ -17,7 +17,9 @@ use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
-use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroLink};
+use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource, HeroArtwork, HeroFacts, HeroLink};
+
+use super::content::HeroCredit;
 use mbv_ui_model::playback::HeroImageState;
 
 /// A producer's output (design D5): the facts plus the item's overview.

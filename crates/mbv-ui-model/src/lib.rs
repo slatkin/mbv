@@ -42,6 +42,7 @@ pub mod home_latest;
 pub mod indicators;
 pub mod layout;
 pub mod library;
+pub mod library_hero;
 pub mod library_tab;
 pub mod list_ctx;
 pub mod media_list;
