@@ -85,7 +85,7 @@ mbv = { path = "../..", features = ["test"] }
 # with usvg, so a test that asserts what the painter paints reads that tree.
 # The same version Blitz parses with, default features off so Cargo unifies
 # the copy the window stack already builds.
-usvg = { version = "=0.48.1", default-features = false }
+usvg = { version = "=0.50.0", default-features = false }
 # The core-thread tests assert the ctrl commands a selection or transport
 # request records on the stub player's command channel.
 mbv-ctrl = { path = "../mbv-ctrl" }
