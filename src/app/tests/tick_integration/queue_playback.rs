@@ -13,6 +13,7 @@ use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
 use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use mbv_render::arrangements::chrome::QUEUE_PLAYBACK_HEADER_ROWS;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_msg::PlaybackRequest;

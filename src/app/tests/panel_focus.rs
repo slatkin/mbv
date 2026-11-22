@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::state::panel_focus::{PanelPresentation, panel_appearance_focus_decision};
 use crate::app::tests::tick_integration::harness::TickHarness;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_msg::{Msg, TerminalObserverEvent};
 use rstest::rstest;
 use tuirealm::event::Event;

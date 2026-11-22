@@ -3,6 +3,7 @@ use super::{PanelFocus, QueueLink};
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{FooterPill, QueueSurfaceProjection};
 use mbv_components::QueueComponent;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueRequest};
 use ratatui::style::{Modifier, Style};

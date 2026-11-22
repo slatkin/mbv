@@ -1,5 +1,4 @@
 use super::*;
-use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

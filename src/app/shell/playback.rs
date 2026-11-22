@@ -2,6 +2,7 @@ use super::Model;
 use super::{PanelFocus, palette};
 use crate::app::dispatch::action::{AppCommand, PanelIntent};
 use mbv_components::PlaybackProjection;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_msg::PlaybackRequest;
 
 impl crate::app::App {

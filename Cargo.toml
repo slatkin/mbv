@@ -312,8 +312,9 @@ mbv-keybinds = { path = "crates/mbv-keybinds" }
 mbv-net = { path = "crates/mbv-net" }
 mbv-ws = { path = "crates/mbv-ws" }
 mbv-text = { path = "crates/mbv-text" }
-mbv-theme = { path = "crates/mbv-theme", features = ["ratatui"] }
+mbv-theme = { path = "crates/mbv-theme" }
 mbv-images = { path = "crates/mbv-images" }
+mbv-tui-support = { path = "crates/mbv-tui-support" }
 mbv-ui-model = { path = "crates/mbv-ui-model" }
 mbv-ui-msg = { path = "crates/mbv-ui-msg" }
 mbv-surfaces = { path = "crates/mbv-surfaces" }

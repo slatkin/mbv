@@ -24,6 +24,7 @@ use mbv_render::components::card::queue_card_reserved_rect;
 use mbv_render::components::widgets::fill_surface;
 use mbv_render::layout::CardGeometry;
 use mbv_render::{StatusBarModel, VisualModeIndicator};
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 

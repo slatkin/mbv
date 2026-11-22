@@ -3,6 +3,7 @@ use super::super::SidebarId;
 use mbv_components::{
     HelpComponent, PlaylistsComponent, SearchSidebarComponent, SessionsComponent, SettingsComponent,
 };
+use mbv_tui_support::ToRatatui;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
 use tuirealm::component::AppComponent;
 

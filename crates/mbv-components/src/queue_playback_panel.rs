@@ -45,6 +45,7 @@ use mbv_surfaces::queue_playback::{
     QueuePlaybackFrameReport, QueuePlaybackHitTarget, QueuePlaybackSurface,
 };
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};

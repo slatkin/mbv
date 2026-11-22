@@ -6,6 +6,7 @@ use mbv_images::{
 use mbv_queue::QueueItem;
 use mbv_render::components::card::{queue_card_reserved_rect, render_card_painting};
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 

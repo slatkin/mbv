@@ -26,6 +26,7 @@ use mbv_render::arrangements::padded_rect;
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::{PANE_PAD_X, PANE_PAD_Y, PillBarWindow, place_media_list_below};
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 
 /// Blank rows between the header/overview content's painted bottom edge and
 /// the Workspace box (design D3: the Workspace sits below the overview).

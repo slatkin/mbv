@@ -14,6 +14,7 @@ use crate::app::state::toasts::LiveToast;
 use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::toast::{StatusToast, ToastCard};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
@@ -436,6 +437,7 @@ mod tests {
         make_app_stub, make_audio_items, make_local_daemon_app_stub_with_cmd_rx,
     };
     use mbv_render::components::widgets::service_state_color;
+    use mbv_tui_support::ToRatatui;
 
     /// The queue owner label names the connected peer's endpoint when its
     /// device name is empty — the connected endpoint, never a configured or

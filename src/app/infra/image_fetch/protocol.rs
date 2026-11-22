@@ -6,6 +6,7 @@ use mbv_images::{
     cover_fill_hero_box,
 };
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 
