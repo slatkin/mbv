@@ -94,20 +94,17 @@ pub fn emby_queue_landscape_cache_key(item_id: &str) -> String {
 /// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
 /// No other cache-key namespace uses it, which is what lets the image-completion
 /// gate recognise the whole Series family from the key alone.
-pub const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
+///
+/// Owned by `mbv-ui-model` (the hero policy formats the same key), re-exported
+/// here so the shell's image layer keeps importing it from the image crate.
+pub use mbv_ui_model::library_hero::producers::SERIES_IMAGE_CACHE_KEY_INFIX;
 
 /// Cache key for Series artwork under the `{id}:ser:{types}` scheme.
 /// Shared by the panel's Emby artwork projection and shell-side
 /// prefetch/loading lookups so they cannot format the key differently and
 /// silently miss each other's cache entries. Formats only;
-/// chain ownership stays with the callers.
-#[must_use]
-pub fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
-    format!(
-        "{item_id}{SERIES_IMAGE_CACHE_KEY_INFIX}{}",
-        image_types.join(",")
-    )
-}
+/// chain ownership stays with the callers. Owned by `mbv-ui-model`.
+pub use mbv_ui_model::library_hero::producers::series_image_cache_key;
 pub struct CachedImage {
     /// The decoded image. `None` for a fetch that resolved without artwork,
     /// and for every fetch a [`ImageDecode::SourceOnly`] Client keeps (design

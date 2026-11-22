@@ -9,12 +9,11 @@
 
 mod hero;
 
-use mbv_components::tv_content::premiere_number_label;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{QueueItem, TvContentMode};
 use mbv_render::effective_sort_str;
 use mbv_ui_model::media_list::MediaSemanticState;
-use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
+use mbv_ui_model::ui_util::{fmt_duration_short, premiere_number_label, row_date};
 
 use super::GuiLibraryArtwork;
 use super::GuiListSort;

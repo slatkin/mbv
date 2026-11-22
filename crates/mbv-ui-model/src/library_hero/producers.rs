@@ -264,14 +264,16 @@ fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
 /// The `:ser:` infix that opens a Series artwork key: `{id}:ser:{types}`.
 /// No other cache-key namespace uses it, which is what lets the
 /// image-completion gate recognise the whole Series family from the key
-/// alone. `mbv-images` formats the same infix
-/// (`mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX`).
-const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
+/// alone. The one owner: `mbv-images` re-exports this and its
+/// `series_image_cache_key` formatter, so the hero policy, the shell's
+/// prefetch/loading lookups, and the completion gate cannot format the key
+/// differently and silently miss each other's cache entries.
+pub const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
 
 /// The Series artwork cache key under the `{id}:ser:{types}` scheme, shared by
-/// the policy here and the shell-side prefetch/loading lookups so they cannot
-/// format the key differently and silently miss each other's cache entries.
-fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
+/// the hero policy here and the shell-side prefetch/loading lookups.
+#[must_use]
+pub fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
     format!(
         "{item_id}{SERIES_IMAGE_CACHE_KEY_INFIX}{}",
         image_types.join(",")

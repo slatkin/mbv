@@ -598,7 +598,7 @@ impl App {
     /// https URL reaches the opener, and any other scheme is logged and
     /// dropped. A failed spawn logs and changes nothing else.
     fn open_gui_library_url(url: &str) {
-        if mbv_components::library_panel::sanitize_url(url).is_none() {
+        if mbv_ui_model::ui_util::sanitize_url(url).is_none() {
             Self::log_ignored_library_command(
                 "openUrl",
                 format_args!("the url's scheme is not http or https"),

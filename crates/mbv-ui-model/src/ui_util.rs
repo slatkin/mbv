@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use mbv_emby_model::EmbyItem;
+use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use time::{OffsetDateTime, UtcOffset};
 use unicode_width::UnicodeWidthStr;
 
@@ -301,6 +301,40 @@ pub fn fmt_wall_clock(secs: i64, offset: UtcOffset) -> String {
 #[must_use]
 pub fn clean_overview(s: &str) -> String {
     regex_strip_urls(s).trim().to_string()
+}
+
+/// "S02:E07", "S02" or "E07"; "no number" when the notice carries neither.
+/// The one owner of the premiere number's text: the TUI's upcoming rows and
+/// the GUI Client's Home `Upcoming` rows both paint it.
+#[must_use]
+pub fn premiere_number_label(premiere: &UpcomingPremiere) -> String {
+    match (premiere.season, premiere.episode) {
+        (Some(season), Some(episode)) => format!("S{season:02}:E{episode:02}"),
+        (Some(season), None) => format!("S{season:02}"),
+        (None, Some(episode)) => format!("E{episode:02}"),
+        (None, None) => "no number".into(),
+    }
+}
+
+/// The display form of a hero link's URL, or `None` when the URL must not be
+/// offered as a link: empty, carrying a control character, or using any
+/// scheme but http/https. Every Client gates its link opener on this, so a
+/// provider-supplied URL can never reach an external opener with a scheme
+/// the app does not intend to launch.
+#[must_use]
+pub fn sanitize_url(url: &str) -> Option<&str> {
+    if url.is_empty() || url.chars().any(is_control_char) {
+        return None;
+    }
+    let scheme = url.split_once(':')?.0;
+    (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")).then_some(url)
+}
+
+/// The C0, DEL and C1 control characters (`mbv_text::text_safety` owns the
+/// shared predicate; this crate keeps its own so a UI model holds no text
+/// crate dependency).
+fn is_control_char(ch: char) -> bool {
+    ch.is_ascii_control() || matches!(ch, '\u{80}'..='\u{9f}')
 }
 
 #[must_use]

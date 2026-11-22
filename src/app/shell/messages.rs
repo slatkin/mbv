@@ -264,7 +264,7 @@ impl Model {
     }
 
     fn handle_open_url_request(&mut self, url: &str) {
-        if mbv_components::library_panel::sanitize_url(url).is_some()
+        if mbv_ui_model::ui_util::sanitize_url(url).is_some()
             && let Err(error) = crate::app::open_url(url)
         {
             tracing::warn!(name: "library_link.open.failed", target: "library_link", { url = %url, error = %error }, "failed to open provider link");

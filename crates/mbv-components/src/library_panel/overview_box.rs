@@ -367,14 +367,13 @@ fn contains_control(text: &str) -> bool {
     text.chars().any(mbv_text::text_safety::is_control_char)
 }
 
-#[must_use]
-pub fn sanitize_url(url: &str) -> Option<&str> {
-    if url.is_empty() || contains_control(url) {
-        return None;
-    }
-    let scheme = url.split_once(':')?.0;
-    (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")).then_some(url)
-}
+/// The display form of a hero link's URL, or `None` when the URL must not be
+/// offered as a link.
+///
+/// Transitional re-export: the body moved to `mbv-ui-model` (task 1.7); row
+/// 1.8 deletes this path.
+#[doc(inline)]
+pub use mbv_ui_model::ui_util::sanitize_url;
 
 fn sanitize_label(label: &str) -> Option<&str> {
     (!contains_control(label)).then_some(label)
