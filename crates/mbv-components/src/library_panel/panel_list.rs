@@ -14,6 +14,7 @@ use crate::inline_search::InlineSearch;
 use crate::media_list::MediaListCarrier;
 use mbv_render::components::media_list::WideMediaListPaintPolicy;
 use mbv_theme::Surface;
+use mbv_tui_support::ToRatatui;
 
 use super::content::{PanelList, PanelListPaintPolicy};
 
