@@ -57,7 +57,7 @@ impl App {
             // same reset the TUI's sync runs.
             self.queue_card_projection.title_site = NowPlayingTitleSite::Header;
         }
-        if !self.visual_slot_shown() || self.visualizer_enabled || !self.images.images_enabled() {
+        if !self.visual_slot_shown() || self.visualizer_enabled || !self.images.protocol_enabled() {
             return QueueCardArtwork::Hidden;
         }
         let Some(cache_key) = self.queue_card_projection.cache_key.clone() else {

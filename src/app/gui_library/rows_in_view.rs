@@ -62,7 +62,7 @@ impl App {
     /// Nothing queues while navigation is in flight, and a row whose artwork
     /// policy declares no source makes no request.
     pub fn gui_queue_in_view_row_fetches(&mut self) {
-        if !self.navigation_idle() || !self.images.images_enabled() {
+        if !self.navigation_idle() || !self.images.protocol_enabled() {
             return;
         }
         let Some(scope) = self.gui_row_art_scope() else {

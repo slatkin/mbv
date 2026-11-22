@@ -102,7 +102,10 @@ fn title_site_skip_reason(
         // the overlay once the hold lifts. The header stays hidden across
         // the drag.
         Some(TitleSiteGate::Transient("ResizeDragHold"))
-    } else if app.images.is_halfblock_configured() {
+    } else if app
+        .image_protocols
+        .is_halfblock_configured(app.images.protocol_override())
+    {
         Some(TitleSiteGate::ForceHeader("HalfblockConfigured"))
     } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
         Some(TitleSiteGate::ForceHeader("NoSlot"))
@@ -530,7 +533,7 @@ impl App {
         let mut projection = QueueCardProjection {
             cache_key: None,
             plain_cache_key: None,
-            images_enabled: self.images.images_enabled(),
+            images_enabled: self.images.protocol_enabled(),
             visualizer: self.visualizer_enabled,
             title_site: self.queue_card_projection.title_site,
         };

@@ -108,7 +108,7 @@ impl App {
         picked: usize,
         source_of: impl Fn(&Self, &str) -> Option<ArtworkSource>,
     ) {
-        if !self.images.images_enabled() || picked >= ids.len() {
+        if !self.images.protocol_enabled() || picked >= ids.len() {
             return;
         }
         let start = picked.saturating_sub(HERO_WARM_BEHIND);
@@ -134,7 +134,7 @@ impl App {
     /// presentation, as [`App::queue_card_artwork`] does for the visual slot.
     #[must_use]
     pub fn gui_library_artwork(&mut self, album_id: &str) -> GuiLibraryArtwork {
-        if album_id.is_empty() || !self.images.images_enabled() {
+        if album_id.is_empty() || !self.images.protocol_enabled() {
             return GuiLibraryArtwork::Placeholder;
         }
         let Some((cache_key, item_id, series_id, image_types)) =

@@ -305,7 +305,7 @@ impl App {
             );
             return;
         }
-        if !self.images.images_enabled() {
+        if !self.images.protocol_enabled() {
             self.artist_artwork_status
                 .insert(key, ArtistArtworkStatus::None);
             return;
