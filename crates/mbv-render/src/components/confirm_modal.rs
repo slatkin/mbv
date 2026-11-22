@@ -1,5 +1,6 @@
 use crate::components::modal_frame::render_modal_frame_bounds;
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::confirm::{ConfirmButton, ConfirmButtonTone};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
