@@ -14,9 +14,9 @@ Source and consumer tasks follow dependency order, but a later task does not req
 
 ## 1. TUI support crate and colour conversion (old 1.1–1.2)
 
-- [ ] 1.1 Create the `mbv-tui-support` manifest and library root and register the crate in workspace members and default-members. Use workspace version, edition, and lints; `ratatui` 0.30, `ratatui-image` 11 with `crossterm`, `mbv-theme`, and `mbv-images`, as in D7. Verify the manifest entries and module root by inspection; no build is required.
-- [ ] 1.2 Define `ToRatatui` in `mbv-tui-support`, preserving the conversion results of `mbv-theme/src/rgb.rs`. Verify the old and new conversion arms correspond; leave removal of the old API to 1.6.
-- [ ] 1.3 Move the conversion's existing separate tests to the new owner. Verify the assertions are preserved; do not add cases or require execution.
+- [x] 1.1 Create the `mbv-tui-support` manifest and library root and register the crate in workspace members and default-members. Use workspace version, edition, and lints; `ratatui` 0.30, `ratatui-image` 11 with `crossterm`, `mbv-theme`, and `mbv-images`, as in D7. Verify the manifest entries and module root by inspection; no build is required.
+- [x] 1.2 Define `ToRatatui` in `mbv-tui-support`, preserving the conversion results of `mbv-theme/src/rgb.rs`. Verify the old and new conversion arms correspond; leave removal of the old API to 1.6.
+- [x] 1.3 Move the conversion's existing separate tests to the new owner. Verify the assertions are preserved; do not add cases or require execution.
 - [ ] 1.4 Inventory colour-conversion callers in `mbv-render` and add one migration row per caller module below this row, with at most one manifest-wiring row. Verify every current caller has a named row; do not migrate callers in this inventory task.
 - [ ] 1.5 Inventory colour-conversion callers in `mbv-components` and the root package and add one migration row per caller module below this row, with separate manifest-wiring rows where needed. Verify every current caller has a named row; do not migrate callers in this inventory task.
 - [ ] 1.6 Remove `to_ratatui`, the ratatui feature, and the ratatui dependency from `mbv-theme` after the caller edit rows. Verify those definitions are absent by inspection; record remaining callers rather than repairing them here.
