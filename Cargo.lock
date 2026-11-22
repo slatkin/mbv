@@ -3945,6 +3945,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-tui-support"
+version = "0.28.3"
+dependencies = [
+ "mbv-images",
+ "mbv-theme",
+ "ratatui",
+ "ratatui-image",
+]
+
+[[package]]
 name = "mbv-ui-model"
 version = "0.28.3"
 dependencies = [

@@ -12,3 +12,8 @@
 //!   colours, so a caller names the meaning and paints it.
 //! * The terminal image protocol, which speaks `ratatui-image` and `crossterm`
 //!   on behalf of `mbv-images`.
+
+mod rgb;
+
+#[doc(inline)]
+pub use rgb::ToRatatui;
