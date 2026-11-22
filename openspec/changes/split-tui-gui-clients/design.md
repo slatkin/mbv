@@ -48,9 +48,9 @@ See proposal.md (Why). The current state that shapes the approach:
   shared leaf crates: mbv-surfaces, mbv-ui-model, mbv-ui-msg, mbv-keybinds,
   mbv-text, mbv-theme, mbv-images, mbv-desktop, and the domain and
   provider crates (queue, ctrl, config, emby, audiobookshelf, feed, cast,
-  remote-player, player, visualizer, net, ws, ids, core)
+  remote-player, player, daemon, visualizer, net, ws, ids, core)
 
-  crates/mbv-owner (bin "mbv-owner") --> mbv-daemon, mbv-desktop, mbv-config, mbv-ctrl
+  crates/mbv-owner (bin "mbv-owner") --> mbv-daemon, mbv-desktop, mbv-config, mbv-ctrl, mbv-core
   (no dependency on mbv-client-core, mbv-tui, or mbv-gui)
 ```
 
@@ -77,7 +77,9 @@ Where a GUI-only and a TUI-only entry point wrap one shared function, the shared
 | Today | Goes to |
 |---|---|
 | `src/main.rs`, `src/startup.rs` (args, `-q`, `--toggle`, `-d`, `--pin`, TUI run) | `mbv-tui` |
-| `src/app/shell/`, `src/app/shell.rs` | `mbv-tui` |
+| `src/app/shell/`, `src/app/shell.rs` | `mbv-tui`, except the `impl App` blocks below (Rust allows no inherent `impl App` outside the core) |
+| `src/app/shell/playback.rs`: `impl App` (`handle_playback_request`, the D4a command seam; `slotless_playback_title_parts`); `src/app/shell/ui_state_reset.rs`: `impl App` (`reset_browse_root_defaults`, `reset_library_browse_root`) | `mbv-client-core` (`impl App`); the `impl Model` halves stay in `mbv-tui` |
+| `src/app/shell/draw.rs`: `impl App` (`compute_frame_layout`, `compute_chrome_geometry`, `queue_panel_placement`, `compose_root_frame`) | `mbv-tui`, as shell free functions over `App` reads (as for the ratatui projections): `effective_panel_mode`, `effective_panel_focus`, `effective_playback_state`, `queue_column_width`. The terminal size and `layout` it writes become shell `Model` fields (D4, D13 Rule B) |
 | `src/app/input/` (router, key policy, resolver, per-surface key modules) | `mbv-client-core` |
 | `src/app/input/gui.rs`, `src/app/input/gui/` | `mbv-gui` |
 | crossterm key translation in `src/app/input/` | `mbv-tui` |
@@ -92,12 +94,15 @@ Where a GUI-only and a TUI-only entry point wrap one shared function, the shared
 | `src/app/input.rs`: the tab-strip width from `terminal_width`, `terminal_height`, a ratatui `Rect`, and `chrome_geometry` | `mbv-tui`; the TUI pushes the resulting width to the core as a value |
 | queue, status bar, and footer projections without ratatui | `mbv-client-core` |
 | `src/owner_link.rs` + `owner_link/`, `src/client_kind.rs`, `src/config.rs` | `mbv-client-core` |
+| `src/config.rs`: the image disk cache family (`image_disk_cache_dir`, `image_disk_cache_path`, `read_`/`write_`/`clear_image_disk_cache*`, `evict_old_image_cache`, their private helpers) | `mbv-config`: the Owner's MPRIS hook and the core's Client MPRIS (`state/construct/remote.rs`) both pass `image_disk_cache_path` |
+| `src/startup.rs`: `parse_log_level_arg` | `mbv-core` (`applog`, beside `LogSpec`, with an `applog` error in place of `UiModelError`); the TUI and the Owner both call it. `print_usage` stays in `mbv-tui`; `mbv-owner` prints its own usage (D8) |
 | `src/owner_restart.rs`: pure `follow_up` decision | `mbv-client-core`; the terminal prompt goes to `mbv-tui` |
-| `src/local_daemon.rs`: `run_local_daemon_main`, swap launch, tray hooks | `mbv-owner` |
+| `src/local_daemon.rs`: `run_local_daemon_main`, swap launch, tray hooks | `mbv-owner` (it calls `mbv_config::load_config` directly) |
 | `src/local_daemon.rs`: `spawn_detached` (a Client starts the Owner) | `mbv-client-core` (`owner_link`) |
-| `src/single_instance.rs`: lock holder | `mbv-owner`; the Client-side probe goes to `mbv-client-core` |
-| `src/pin.rs`: pinwin argv, `--pin`, `--in-panel`, panel identity | `mbv-tui` |
-| `src/pin.rs`: `terminal_prefix`, `notify` | `mbv-desktop` (new `launch` module); the Owner and the TUI both call it |
+| `src/single_instance.rs` (`resolve`, `Resolution`, `LockGuard` with `write_pid`, `socket_path`) | `mbv-daemon` (`owner_lock`, beside `try_lock`, `write_pid`, `locked_owner_pid`): one function serves the Owner's lock holder, `owner_link::find_owner`, and the core's Owner-restart and session-switch probes |
+| `src/pin.rs`: `--pin` launch (`launch`, `run_argv`, `finish`, `exit_action`, `PinStartError`), `IN_PANEL_FLAG`, `toggle_running` and its failure report, `fatal` | `mbv-tui` |
+| `src/pin.rs`: panel identity and swap-token claims (`claim_panel_identity`, `is_pinned`, `claim_swap_token`, `swap_token`); `src/pin/swap.rs` (`claim_pin_swap_participant`, `pin_swap_participant`, `pin_swap_hello`); the pinned-setting requests (`PinnedSettingRequest`, `PanelReserveMode`, `PanelGutter`, `spawn_pinned_request`, its argv builders and test seams) | `mbv-client-core` (`pin` module): core dispatch and state, `client_kind`, and both Clients' `owner_link` call them. The TUI calls the claims at start and builds `run_argv` from the `pub` argv parts |
+| `src/pin.rs`: `terminal_prefix`, `notify`, and the pinwin request runner (`PANEL_NAME`, `toggle_argv`, `run_request`, `request_result`, `PinRequestError`, `PinSpawnError`), `toggle_panel` | `mbv-desktop` (new `launch` module). `run_request` takes the pinwin socket as a parameter: the Owner passes `None` (its starting Client removed `PINWIN_SOCKET`), the TUI and the core pass the claimed one. The Owner's tray hook calls `toggle_panel`; `toggle_running` and `spawn_pinned_request` call `run_request`. Nothing is copied |
 | `src/launch.rs` (`launch_exe`) | `mbv-desktop` (`launch` module) |
 | `src/app/tests/` | each test moves with the code it owns: ratatui and tick-integration tests to `mbv-tui`, core tests to `mbv-client-core` |
 
