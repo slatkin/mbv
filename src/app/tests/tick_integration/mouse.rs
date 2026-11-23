@@ -365,7 +365,6 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
     assert!(
         !harness
             .model()
-            .app
             .layout
             .root_frame
             .tab

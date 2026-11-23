@@ -247,6 +247,12 @@ pub struct Model {
     /// (`App::set_single_panel`) and the queue-column clamp from these.
     pub(in crate::app) terminal_width: u16,
     pub(in crate::app) terminal_height: u16,
+    /// The last fully composed frame's layout geometry (design D2/D13 Rule
+    /// B): `left_area`, the queue card checkpoint, and the root panel
+    /// placements. Shell presentation data built from ratatui `Rect`s, so it
+    /// lives here. The core reads only the neutral copy the draw path pushes
+    /// (`App::set_left_panel_area`).
+    pub(in crate::app) layout: mbv_render::layout::AppLayout,
     /// The Home "new content" launch window (row 4.4 of design D2): the launch
     /// instant and the previous launch, read by the shell's destination-latest
     /// markers. Set once at `Model` construction.
@@ -387,6 +393,7 @@ impl Model {
             tab_scroll: 0,
             terminal_width: initial_terminal_size.0,
             terminal_height: initial_terminal_size.1,
+            layout: mbv_render::layout::AppLayout::default(),
             home_latest_launch_window,
             resize_drag_activity: None,
         };

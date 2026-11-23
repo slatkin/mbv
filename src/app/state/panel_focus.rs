@@ -47,6 +47,15 @@ impl App {
         self.single_panel = single_panel;
     }
 
+    /// Record the left panel column the TUI shell composed this frame (design
+    /// D13 Rule B). Layout geometry is TUI presentation and lives on the shell
+    /// `Model`; the core reads only this neutral area, and the TUI pushes it
+    /// from the value it writes to its own layout, so a core reader sees the
+    /// last composed frame. A Client that composes no frame never sets it.
+    pub(in crate::app) fn set_left_panel_area(&mut self, area: mbv_ui_model::geom::Rect) {
+        self.left_panel_area = area;
+    }
+
     /// Whether the two-panel layout's queue column is hidden this frame
     /// because the displayed queue has no slots. Mini view and queue-only keep
     /// the

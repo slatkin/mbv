@@ -68,7 +68,7 @@ impl Model {
         entries: &[ContextMenuEntry],
         bounds: Option<mbv_ui_model::geom::Rect>,
     ) -> Rect {
-        let layout = &self.app.layout;
+        let layout = &self.layout;
         let size = ContextMenu::rendered_size(entries);
         // An opener-named containing panel (the queue visual slot's chrome
         // menu) wins ahead of the destination-derived panel: the slot menu is

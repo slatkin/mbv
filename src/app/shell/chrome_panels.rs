@@ -31,6 +31,7 @@ use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 pub(crate) fn sync_panel_area(app: &App, terminal_size: (u16, u16)) -> Option<Rect> {
     let area = super::draw::compute_chrome_geometry(
         app,
+        0,
         terminal_size.0,
         Rect::new(0, 0, terminal_size.0, terminal_size.1),
     )
@@ -44,22 +45,23 @@ impl Model {
     /// remains read-only with respect to `AppLayout`.
     pub(in crate::app) fn sync_queue_card_geometry(&mut self) {
         if !self.app.visual_slot_shown() {
-            self.app.layout.card = CardGeometry::default();
+            self.layout.card = CardGeometry::default();
             return;
         }
         let chrome = super::draw::compute_chrome_geometry(
             &self.app,
+            self.layout.card.height,
             self.terminal_width,
             Rect::new(0, 0, self.terminal_width, self.terminal_height),
         );
         if chrome.left_area.width == 0 {
-            self.app.layout.card = CardGeometry::default();
+            self.layout.card = CardGeometry::default();
             return;
         }
         // The slot region below the always-reserved header band, resolved
         // from the same placement the sync/paint passes use.
         let Some(placement) = chrome.root.queue_playback else {
-            self.app.layout.card = CardGeometry::default();
+            self.layout.card = CardGeometry::default();
             return;
         };
         let slot_region = queue_playback_slot_region(placement);
@@ -70,7 +72,7 @@ impl Model {
             slot_region,
             wide,
         );
-        self.app.layout.card = CardGeometry {
+        self.layout.card = CardGeometry {
             height: rect.height,
             width: rect.width,
         };
@@ -87,6 +89,7 @@ impl Model {
     fn sync_chrome_root(&self) -> RootFrame {
         super::draw::compute_chrome_geometry(
             &self.app,
+            self.layout.card.height,
             self.terminal_width,
             ratatui::layout::Rect::new(0, 0, self.terminal_width, self.terminal_height),
         )
@@ -289,7 +292,7 @@ impl Model {
             placement.map(|placement| {
                 let slot_region = queue_playback_slot_region(placement);
                 let wide = queue_playback_column_wide(placement.width);
-                let card = &self.app.layout.card;
+                let card = &self.layout.card;
                 queue_playback_transport_area(slot_region, wide, card.width, card.height)
             })
         };

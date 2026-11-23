@@ -3,7 +3,6 @@ use crate::app::state::playback::HomeContent;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{App, AppInit, spawn_waking_relay};
 use indexmap::IndexMap;
-use mbv_render::layout;
 use mbv_ui_model::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_model::tab_selection::TabSelection;
@@ -151,7 +150,7 @@ impl App {
             indicator_style: init.indicator_style,
             libs: Vec::new(),
             toasts: crate::app::state::toasts::ToastList::default(),
-            layout: layout::AppLayout::default(),
+            left_panel_area: mbv_ui_model::geom::Rect::default(),
             single_panel: false,
             pinned_width: mbv_ui_model::settings::PinnedWidth::default(),
             pinned_request_pending: None,

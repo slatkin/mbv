@@ -97,7 +97,14 @@ impl Model {
             // columns ignores window focus.
             queue.set_frame_focused(self.app.panel_appearance_focus(PanelFocus::Queue));
             queue.set_mini_view(self.app.is_mini_view());
-            queue.set_area(super::draw::queue_panel_placement(&self.app, terminal_size).panel_area);
+            queue.set_area(
+                super::draw::queue_panel_placement(
+                    &self.app,
+                    self.layout.card.height,
+                    terminal_size,
+                )
+                .panel_area,
+            );
         }
     }
 

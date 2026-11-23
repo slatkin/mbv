@@ -22,6 +22,7 @@ fn footer_row_text(harness: &mut TickHarness) -> String {
     let footer = queue_footer_row(
         crate::app::shell::draw::queue_panel_placement(
             &harness.model().app,
+            harness.model().layout.card.height,
             harness.model().terminal_size(),
         )
         .panel_area,

@@ -151,7 +151,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     // The panel paints from `RootFrame.library` (task 5.9); publish it
     // directly, wide enough for the Wide skeleton's split.
     let library_area = Rect::new(0, 0, 100, 30);
-    model.app.layout.root_frame.library = Some(library_area);
+    model.layout.root_frame.library = Some(library_area);
     // The mounted panel only paints its active owner's surface; the shell's
     // sync pass points it at the Home owner (`sync_library_panel`), which
     // this test drives directly rather than through `sync_mounted_surfaces`.
@@ -161,7 +161,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     let mut term = Terminal::new(backend).unwrap();
     // Paint only the panel so its `view()` produces the authoritative placed
     // geometry while the legacy `AppLayout` copies stay untouched.
-    let area = model.app.layout.root_frame.library.unwrap();
+    let area = model.layout.root_frame.library.unwrap();
     term.draw(|f| model.render_library_panel_at(f, area))
         .unwrap();
 
@@ -175,7 +175,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
         .menu_geometry()
         .expect("panel painted geometry");
     let (panel, selected) = painted;
-    model.app.layout.left_area = Rect::new(0, 0, 200, 200);
+    model.layout.left_area = Rect::new(0, 0, 200, 200);
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -256,14 +256,14 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     // Narrow enough (below `TWO_COLUMN_THRESHOLD`) to force the Narrow
     // skeleton instead of the Wide split.
     let library_area = Rect::new(0, 0, 60, 30);
-    model.app.layout.root_frame.library = Some(library_area);
+    model.layout.root_frame.library = Some(library_area);
     model.sync_library_panel();
 
     let backend = TestBackend::new(60, 30);
     let mut term = Terminal::new(backend).unwrap();
     // Paint only the panel so its `view()` produces the authoritative placed
     // geometry while the legacy `AppLayout` copies stay untouched.
-    let area = model.app.layout.root_frame.library.unwrap();
+    let area = model.layout.root_frame.library.unwrap();
     term.draw(|f| model.render_library_panel_at(f, area))
         .unwrap();
 
@@ -294,7 +294,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         panel, narrow.list_area,
         "the anchor is the pane, not the row-flow inset"
     );
-    model.app.layout.left_area = Rect::new(0, 0, 200, 200);
+    model.layout.left_area = Rect::new(0, 0, 200, 200);
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -364,12 +364,7 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
 
     term.draw(|f| {
         crate::app::shell::draw::compose_root_frame(&mut model, f);
-        let library_area = model
-            .app
-            .layout
-            .root_frame
-            .library
-            .expect("library placement");
+        let library_area = model.layout.root_frame.library.expect("library placement");
         model.render_library_panel_at(f, library_area);
         model.render_context_menu_overlay(f);
     })
@@ -381,7 +376,7 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
         "the visual slot right-click menu must be mounted"
     );
     let rect = mounted_context_menu_rect(&model);
-    let column = model.app.layout.left_area;
+    let column = model.layout.left_area;
     assert!(
         rect.right() <= column.right() && rect.bottom() <= column.bottom(),
         "the slot menu must clamp inside the queue column {column:?}: {rect:?}"

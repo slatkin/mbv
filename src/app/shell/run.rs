@@ -158,7 +158,7 @@ impl Model {
         // The queue playback placement is deliberately handled by its panel
         // method; its transport geometry was projected during sync from the
         // prior-paint card checkpoint, so this draw path remains read-only.
-        for placement in self.app.layout.root_frame.placements() {
+        for placement in self.layout.root_frame.placements() {
             let Some(placement) = placement else { continue };
             match placement {
                 mbv_render::arrangements::chrome::PanelPlacement::Tab(area) => {

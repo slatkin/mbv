@@ -11,6 +11,7 @@ use ratatui::layout::Rect;
 fn right_panel_lib_area(app: &App, terminal_size: (u16, u16)) -> Option<Rect> {
     let chrome = super::draw::compute_chrome_geometry(
         app,
+        0,
         terminal_size.0,
         Rect::new(0, 0, terminal_size.0, terminal_size.1),
     );

@@ -56,7 +56,7 @@ fn reveal_scroll(app: &App, terminal_size: (u16, u16), anchor: usize) -> usize {
 /// primitive instead of reading the painted `layout.tabs_area`.
 fn tab_strip_width(app: &App, terminal_size: (u16, u16)) -> u16 {
     let area = Rect::new(0, 0, terminal_size.0, terminal_size.1);
-    let chrome = super::draw::compute_chrome_geometry(app, terminal_size.0, area);
+    let chrome = super::draw::compute_chrome_geometry(app, 0, terminal_size.0, area);
     if chrome.right_visible {
         tab_strip_text_width(chrome.tab_bar_area.width)
     } else {

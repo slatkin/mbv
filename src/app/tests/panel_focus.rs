@@ -101,6 +101,7 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     );
     let panel = crate::app::shell::draw::queue_panel_placement(
         &harness.model().app,
+        harness.model().layout.card.height,
         harness.model().terminal_size(),
     )
     .panel_area;

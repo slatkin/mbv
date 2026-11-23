@@ -60,7 +60,6 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
     harness.model_mut().sync_mounted_surfaces();
     let boundary = harness
         .model()
-        .app
         .layout
         .root_frame
         .queue_boundary
@@ -283,7 +282,6 @@ fn image_hold_outlives_the_drag_by_the_settle_window() {
     harness.model_mut().sync_mounted_surfaces();
     let boundary = harness
         .model()
-        .app
         .layout
         .root_frame
         .queue_boundary

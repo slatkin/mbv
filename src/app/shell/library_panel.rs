@@ -470,7 +470,7 @@ impl Model {
 
     /// The library content rect painted by the mounted panel.
     pub(in crate::app) fn library_panel_content_area(&self) -> Option<Rect> {
-        let area = self.app.layout.root_frame.library?;
+        let area = self.layout.root_frame.library?;
         let collapsed = self.app.effective_panel_mode() != PanelMode::Both;
         Some(mbv_render::components::widgets::right_panel_content_area(
             area, collapsed,

@@ -14,7 +14,6 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::QueueSlotId;
-use mbv_render::layout;
 use mbv_ui_model::browse::{AlbumIndexState, SeriesDetail};
 use mbv_ui_model::feed::IdleFeed;
 use mbv_ui_model::feed_tab::FeedTabState;
@@ -183,9 +182,13 @@ pub struct App {
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,
-    // Per-frame layout geometry from last render, used for mouse hit-testing.
-    // See src/app/layout.rs for the grouping rationale.
-    pub(in crate::app) layout: layout::AppLayout,
+    /// The left panel column of the last composed frame, as a neutral
+    /// rectangle (design D13 Rule B). The TUI shell owns the ratatui
+    /// `AppLayout`; the core keeps only this area, which the TUI pushes from
+    /// the frame it composed (`App::set_left_panel_area`). A Client that
+    /// composes no such frame leaves it zero, which is what the default
+    /// `AppLayout` gave the core readers before the move.
+    pub(in crate::app) left_panel_area: mbv_ui_model::geom::Rect,
     /// The single-panel fact the TUI pushes from its terminal width
     /// (`App::set_single_panel`). `is_mini_view` reads it.
     pub(in crate::app) single_panel: bool,

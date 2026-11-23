@@ -127,7 +127,6 @@ mod strip_hits {
         // The strip painted this frame and retained real hit geometry.
         let strip = harness
             .model()
-            .app
             .layout
             .root_frame
             .library_playback
@@ -195,8 +194,8 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
 
         harness.model_mut().sync_queue_card_geometry();
         let shown_card = (
-            harness.model().app.layout.card.height,
-            harness.model().app.layout.card.width,
+            harness.model().layout.card.height,
+            harness.model().layout.card.width,
         );
         assert!(shown_card.0 > 0, "slot has a reservation at width {width}");
         assert!(shown_card.1 > 0, "slot has a width at width {width}");
@@ -206,8 +205,8 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         harness.model_mut().sync_queue_card_geometry();
         assert_eq!(
             (
-                harness.model().app.layout.card.height,
-                harness.model().app.layout.card.width,
+                harness.model().layout.card.height,
+                harness.model().layout.card.width,
             ),
             (0, 0)
         );
@@ -216,9 +215,13 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
             checkpoint,
             "hiding preserves the paint checkpoint"
         );
+        // The chrome geometry feeds on the card checkpoint the shell now
+        // holds, which the hidden slot collapsed to zero rows.
+        let collapsed_card_height = harness.model().layout.card.height;
 
         let root = crate::app::shell::draw::compute_chrome_geometry(
             &harness.model().app,
+            collapsed_card_height,
             width,
             Rect::new(0, 0, width, 40),
         )
@@ -244,8 +247,8 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         harness.model_mut().sync_queue_card_geometry();
         assert_eq!(
             (
-                harness.model().app.layout.card.height,
-                harness.model().app.layout.card.width,
+                harness.model().layout.card.height,
+                harness.model().layout.card.width,
             ),
             shown_card
         );
@@ -270,11 +273,12 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
     // Set after the geometry sync so the projected fact the header reads is
     // exactly the one under test.
     harness.model_mut().app.queue_card_projection.title_site = NowPlayingTitleSite::Artwork;
-    let card_height = harness.model().app.layout.card.height;
+    let card_height = harness.model().layout.card.height;
     assert!(card_height > 0, "the slot has a reservation while playing");
 
     let root = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        harness.model().layout.card.height,
         100,
         Rect::new(0, 0, 100, 40),
     )
@@ -316,6 +320,7 @@ fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
         .unwrap();
     let root = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        harness.model().layout.card.height,
         100,
         Rect::new(0, 0, 100, 40),
     )
@@ -374,6 +379,7 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
         .unwrap();
     let root = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        harness.model().layout.card.height,
         100,
         Rect::new(0, 0, 100, 40),
     )
@@ -543,6 +549,7 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     // collapsed region above the queue panel — resolve no playback intent.
     let chrome = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        harness.model().layout.card.height,
         80,
         Rect::new(0, 0, 80, 40),
     );
@@ -585,7 +592,7 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
                 .unwrap();
         }
         let model = harness.model();
-        let root = &model.app.layout.root_frame;
+        let root = &model.layout.root_frame;
         // The expected panel is mounted and the other is not (the D1 mount
         // rule), and its retained hits cover the transport it painted.
         assert_eq!(
@@ -749,11 +756,15 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
         visualizer: false,
         title_site: NowPlayingTitleSite::Header,
     };
-    let placement =
-        crate::app::shell::draw::compute_chrome_geometry(&reference, 120, Rect::new(0, 0, 120, 40))
-            .root
-            .queue_playback
-            .expect("queue playback placed while playing");
+    let placement = crate::app::shell::draw::compute_chrome_geometry(
+        &reference,
+        0,
+        120,
+        Rect::new(0, 0, 120, 40),
+    )
+    .root
+    .queue_playback
+    .expect("queue playback placed while playing");
     let slot = mbv_render::arrangements::chrome::queue_playback_slot_region(placement);
     let target_area = ratatui::layout::Rect {
         height: mbv_render::components::card::queue_card_height_cap(40),
