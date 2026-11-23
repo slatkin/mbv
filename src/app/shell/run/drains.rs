@@ -2,7 +2,8 @@
 //! (issue #800). Behaviour-preserving extractions; `run` keeps the ordering.
 
 use super::super::{
-    Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages,
+    Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages, indexed,
+    right_press_cell,
 };
 use super::pin_swap::PinSwapLink;
 use super::{Duration, Instant, PollStrategy};
@@ -348,8 +349,8 @@ impl Model {
     }
 
     /// Record this tick's right-press cell as the context-menu pointer and
-    /// mark it current (design D6), before any of the tick's messages is
-    /// drained.
+    /// scope it to the right-click's own request (design D6), before any of
+    /// the tick's messages is drained.
     ///
     /// `Application::tick` returns the focused component's message first and
     /// the `UiRoot` observer's second, and both folds keep that order. A
@@ -357,21 +358,40 @@ impl Model {
     /// request before the observer reports the press, so a shell that learned
     /// the pointer only from the observer would open that menu at the
     /// keyboard anchor. Reading the raw tick messages here makes every
-    /// right-click raise pointer-anchored regardless of delivery order. The
-    /// flag still resets every tick, so a keyboard opening keeps the
-    /// selected-item anchor.
+    /// right-click raise pointer-anchored regardless of delivery order.
+    ///
+    /// The flag is scoped to that request: it stays false for every message
+    /// that arrives before the right-press report, so a keyboard-raised menu
+    /// request dispatched earlier in the same tick keeps the selected-item
+    /// anchor. It stays false for a tick without a right press, so a keyboard
+    /// opening anchors as before.
     pub(in crate::app) fn record_right_press(&mut self, messages: &[Msg]) {
-        self.menu_pointer_current = false;
-        let cell = messages.iter().find_map(|msg| match msg {
-            Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { column, row }) => {
-                Some((*column, *row))
-            }
-            _ => None,
+        let press = messages.iter().position(|msg| {
+            matches!(
+                msg,
+                Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { .. })
+            )
         });
-        if let Some(cell) = cell {
-            self.menu_pointer = Some(cell);
+        self.menu_pointer_press_at = press;
+        self.menu_pointer_current = false;
+        if let Some(press) = press
+            && let Some((column, row)) = messages.get(press).and_then(right_press_cell)
+        {
+            self.menu_pointer = Some((column, row));
             self.menu_pointer_current = true;
         }
+    }
+
+    /// Set whether the message now being dispatched counts as raised by this
+    /// tick's right-click (see [`Model::record_right_press`]). Both folds keep
+    /// the tick's message order, and the dispatcher indexes each message with
+    /// its position in the raw tick list, so a menu request dispatches as this
+    /// tick's pointer raise only when it arrived no earlier than the
+    /// right-press report.
+    pub(in crate::app) fn scope_menu_pointer(&mut self, index: usize) {
+        self.menu_pointer_current = self
+            .menu_pointer_press_at
+            .is_some_and(|press| index >= press);
     }
 
     /// Poll the terminal, arbitrate the keyboard router, and dispatch the
@@ -420,7 +440,7 @@ impl Model {
         // subscribed component) down to at most one before the keyboard
         // router fold and `handle_terminal_message` dispatch. A keyboard
         // tick passes through untouched.
-        let messages = fold_mouse_messages(messages);
+        let messages = indexed(fold_mouse_messages(messages));
         if messages.is_empty() {
             return false;
         }
@@ -444,8 +464,17 @@ impl Model {
         // semantic command and discards the leaf's message, `Swallow`
         // runs nothing and discards it, `FallThrough` lets the leaf's
         // own request stand.
-        let router = self.router_outcome(&messages);
-        let (messages, diagnostic) = arbitrate_key(messages, focused.as_ref(), &router);
+        let raw = messages
+            .iter()
+            .map(|(_, msg)| msg.clone())
+            .collect::<Vec<_>>();
+        let router = self.router_outcome(&raw);
+        let positions: Vec<usize> = messages.iter().map(|(index, _)| *index).collect();
+        let (messages, diagnostic) = arbitrate_key(
+            messages.into_iter().map(|(_, msg)| msg).collect(),
+            focused.as_ref(),
+            &router,
+        );
         // Issue #940: name every arbitrated key tick, so a swallowed or
         // deferred chord is visible in the log at debug level. Mouse-only
         // ticks (no chord) stay silent.
@@ -473,7 +502,13 @@ impl Model {
         // commands never quit, so it does not feed the loop's quit
         // flag.
         self.apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
-        for msg in messages {
+        // Design D6: `menu_pointer_current` is set per message, so only the
+        // request this tick's right-click raised anchors at the pointer; a
+        // keyboard request in the same tick keeps the selected-item anchor.
+        // Both folds keep the tick's order, so the raw positions stay aligned
+        // with the messages that survived them.
+        for (index, msg) in positions.into_iter().zip(messages) {
+            self.scope_menu_pointer(index);
             if self.handle_terminal_message(msg, music_resize, tv_resize) {
                 quit = true;
             }

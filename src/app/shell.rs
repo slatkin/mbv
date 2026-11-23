@@ -25,7 +25,9 @@ mod arbitration;
 #[cfg(test)]
 pub(in crate::app) use arbitration::fold_keyboard_messages;
 pub(in crate::app) type ArbitrationDiagnostic = arbitration::ArbitrationDiagnostic;
-pub(in crate::app) use arbitration::{arbitrate_key, fold_mouse_messages};
+pub(in crate::app) use arbitration::{
+    arbitrate_key, fold_mouse_messages, indexed, right_press_cell,
+};
 mod audiobookshelf_book;
 mod audiobookshelf_podcast;
 mod chrome_panels;
@@ -199,14 +201,19 @@ pub struct Model {
     /// signal and places a pointer-anchored menu here. `None` leaves a pointer
     /// menu at its panel's top-left corner, as an unset anchor always did.
     pub(in crate::app) menu_pointer: Option<(u16, u16)>,
-    /// Whether `menu_pointer` was recorded by a right-click in the tick now
-    /// being dispatched. A right-click and the component request it raises
-    /// reach the shell in one tick, so this is what separates a pointer
-    /// opening (anchor at `menu_pointer`) from a keyboard opening (keep the
-    /// core's selected-item anchor). Recorded from the tick's raw messages
-    /// before any is drained (`Model::record_right_press`) and reset every
-    /// tick.
+    /// Whether the message now being dispatched is the one this tick's
+    /// right-click raised, so it anchors at `menu_pointer` instead of the
+    /// core's selected-item anchor. A right-click and the component request it
+    /// raises reach the shell in one tick, delivered in either order; the
+    /// shell records the right-press position from the tick's raw messages
+    /// (`Model::record_right_press`) and sets this per message as it dispatches
+    /// them (`Model::scope_menu_pointer`), so a keyboard request arriving
+    /// earlier in the same tick keeps the selected-item anchor.
     pub(in crate::app) menu_pointer_current: bool,
+    /// The position in the tick's raw message list where the `MouseRightClick`
+    /// observer report arrived; `None` for a tick without a right press. Menu
+    /// requests at or after it are the ones this tick's right-click raised.
+    pub(in crate::app) menu_pointer_press_at: Option<usize>,
     pub(in crate::app) context_action_snapshot: Option<
         mbv_ui_model::context_menu::ContextActionSnapshot<
             mbv_ui_model::context_menu::ContextMenuTargets,
@@ -387,6 +394,7 @@ impl Model {
             context_menu_origin: None,
             menu_pointer: None,
             menu_pointer_current: false,
+            menu_pointer_press_at: None,
             context_action_snapshot: None,
             keybinds,
             focus_stack,
@@ -497,11 +505,12 @@ fn apply_terminal_observer(
         // already recorded it before draining any message
         // (`Model::record_right_press`), because the focused panel's own
         // request arrives first; this repeats the record for a tick that
-        // reaches the observer by another route. It is also a mouse event, so
-        // it disarms prefix mode like every other.
+        // reaches the observer by another route. It does not mark it current:
+        // `Model::scope_menu_pointer` derives that per message, so the report
+        // itself never rescues a keyboard request in the same tick. It is also
+        // a mouse event, so it disarms prefix mode like every other.
         TerminalObserverEvent::MouseRightClick { column, row } => {
             model.menu_pointer = Some((*column, *row));
-            model.menu_pointer_current = true;
             model.disarm_prefix_mode();
         }
         TerminalObserverEvent::MouseClick { .. } | TerminalObserverEvent::Mouse => {
