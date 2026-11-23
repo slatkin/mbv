@@ -82,7 +82,7 @@ For each function, type, field, and test:
 | `src/local_daemon.rs`: `run_local_daemon_main`, swap launch, tray hooks (the Owner host) | `mbv-tui`, as a root module beside `startup`, until `3-add-owner-program` moves it to `mbv-owner` |
 | `src/local_daemon.rs`: `spawn_detached`, `local_daemon_args`, `session_display_env`, `to_io`, `READY_TIMEOUT`, `READY_POLL_INTERVAL` (a Client starts the Owner) | `mbv-client-core` (`owner_link`) |
 | `src/local_daemon.rs`: `detach` (the Owner's swap launch and the Client's `spawn_detached` both use it) | `mbv-desktop` (`launch` module) |
-| `src/single_instance.rs` (`resolve`, `Resolution`, `LockGuard` with `write_pid`, `socket_path`) | `mbv-daemon` (`owner_lock`, beside `try_lock`, `write_pid`, `locked_owner_pid`): one function serves the Owner's lock holder, `owner_link::find_owner`, and the core's Owner-restart and session-switch probes |
+| `src/single_instance.rs` (`resolve`, `Resolution`, `LockGuard` with `write_pid`, `socket_path`) | `mbv-daemon` (merged into the existing `owner_lock.rs`, beside `try_lock`, `write_pid`, `locked_owner_pid`): one function serves the Owner's lock holder, `owner_link::find_owner`, and the core's Owner-restart and session-switch probes |
 | `src/pin.rs`: `--pin` launch (`launch`, `run_argv`, `finish`, `exit_action`, `PinStartError`), `IN_PANEL_FLAG`, `toggle_running` and its failure report, `fatal` | `mbv-tui` |
 | `src/pin.rs`: panel identity and swap-token claims (`claim_panel_identity`, `is_pinned`, `claim_swap_token`, `swap_token`); `src/pin/swap.rs` (`claim_pin_swap_participant`, `pin_swap_participant`, `pin_swap_hello`); the pinned-setting requests (`PinnedSettingRequest`, `PanelReserveMode`, `PanelGutter`, `spawn_pinned_request`, its argv builders and test seams) | `mbv-client-core` (`pin` module): core dispatch and state, `client_hello_claims`, and both Clients' `owner_link` call them. The TUI calls the claims at start and builds `run_argv` from the `pub` argv parts |
 | `src/pin.rs`: `terminal_prefix`, `notify`, and the pinwin request runner (`PANEL_NAME`, `toggle_argv`, `run_request`, `request_result`, `PinRequestError`, `PinSpawnError`), `toggle_panel` | `mbv-desktop` (new `launch` module). `run_request` takes the pinwin socket as a parameter: the Owner host passes `None` (its starting Client removed `PINWIN_SOCKET`), the TUI and the core pass the claimed one. The Owner's tray hook calls `toggle_panel`; `toggle_running` and `spawn_pinned_request` call `run_request`. Nothing is copied |
@@ -124,6 +124,7 @@ The rules:
    - sets core state through `test`-feature fixture seams in `app_stub.rs` (the pattern `mbv-gui` already uses: `stub_app_with_queue_and_cmd_rx`). A seam names the fixture it builds (`seed_queue_column(width, hidden)`), not one field, and one seam serves every test that builds that fixture;
    - asserts through production read methods;
    - acts through production entry points (`Command` dispatch, `Msg`, the Client tick) where one exists, and else through a named `test`-feature action seam (`app_stub::play_item_for_test`). A private method never becomes `pub` only for a test.
+   - A `cfg(test)`-only core item that a Client test needs follows D4e; it never becomes a `pub` field or a `pub` method for the test.
 6. The widening is transient where no Client needs it. The commits that widen are recorded in the task note (base and end commit). Task 4.1 narrows every widened item that no non-test target of `mbv-tui` or `mbv-gui` names, and keeps every `test`-feature seam.
 
 `rg` patterns in the tasks find the bulk of each inventory. They are not the gate: they cannot see every binding name or path form. The gate is the compile of the rehearsal moves in D4c.
@@ -142,6 +143,10 @@ Because `App` fields and the not-yet-widened core items are `pub(in crate::app)`
 A rehearsal move is a single `git mv` plus path edits, so it cannot compile in slices. Its rule: if the move leaves more than 40 compile errors, undo it, add a conversion slice for the largest error class, and try again. The rows before it are sized so that the move leaves only a few errors.
 
 Alternative considered: rely on `rg` checks and fix the rest at the crate move. Rejected: that is how the first attempt failed. An `rg` check can pass while a binding name or a path form it does not know still reaches a private item.
+
+### D4e. `cfg(test)` does not cross a crate boundary
+
+A TUI or GUI test links the core compiled without `cfg(test)`. So a core guard that keeps a test off a real system (MPRIS, the image cache, the Owner lock and socket) or that adds a test-only item turns off for those tests, and the one-crate rehearsal cannot see it: the build stays green while a real call runs. Every such guard moves to `cfg(any(test, feature = "test"))` before the crates exist (precedent: `src/app/state/construct.rs:84`), and Client test builds enable the core's `test` feature.
 
 ### D10 (part). Packaging and build
 
@@ -175,6 +180,7 @@ No new external dependency, and no version change. Each existing workspace depen
 - [Tests move with code and some depend on private items] → A test stays a `src/` test of the crate whose private items it uses. Public-API tests go in the crate's `tests/<name>.rs` binary. No visibility widens to keep a test: a TUI or GUI test that needs core state or a core action uses a `test`-feature seam (D4b rule 5).
 - [A move row carries hundreds of private accesses and fails as one large error set, as the first attempt did] → D4b builds the access surface in compile-green slices, and the D4c rehearsal proves it with the compiler while everything is still one crate. The crate moves start only after the rehearsal compiles and its tests pass.
 - [The plan's counts were measured before `1-decouple-client-core`] → Re-measure each inventory before its row is dispatched. A row's `rg` check is tested against the code before dispatch.
+- [A core `cfg(test)` guard turns off for Client tests and a real system call runs] → D4e and row 2.8.
 - [Compile time] → `mbv-gui` stops compiling ratatui, crossterm, and TuiRealm. A GUI edit no longer recompiles the TUI, and a TUI edit no longer recompiles the GUI modules.
 
 ## Migration Plan
