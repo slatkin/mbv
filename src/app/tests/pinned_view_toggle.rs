@@ -6,9 +6,9 @@
 //! no `pinwin` process runs and nothing sleeps.
 
 use super::*;
+use crate::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use crate::app::shell::test_support::{Terminal, TestBackend};
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_components::QueuePlaybackPanel;
 use mbv_ui_model::settings::PinnedWidth;
 use mbv_ui_msg::ComponentId;
@@ -135,7 +135,7 @@ fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request()
     assert_eq!(requests.len(), 1, "one collapse request for the play");
     assert_eq!(
         requests[0],
-        crate::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
+        crate::app::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
     );
     assert!(app.drain_pinned_requests());
     assert_eq!(app.pinned_width, PinnedWidth::Collapsed);

@@ -114,7 +114,7 @@ impl App {
     /// `effective_panel_focus`; this bit is for appearance (surface palette
     /// selection) only.
     pub(in crate::app) fn panel_appearance_focus(&self, panel: PanelFocus) -> bool {
-        let presentation = match (self.is_mini_view(), crate::pin::is_pinned()) {
+        let presentation = match (self.is_mini_view(), crate::app::pin::is_pinned()) {
             (false, _) => PanelPresentation::Wide,
             (true, false) => PanelPresentation::MiniUnpinned,
             (true, true) => PanelPresentation::MiniPinned {

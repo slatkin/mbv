@@ -32,10 +32,14 @@ impl App {
         &mut self,
         pending: PinnedRequestPending,
         config: &PanelConfig,
-        request: crate::pin::PinnedSettingRequest,
+        request: crate::app::pin::PinnedSettingRequest,
     ) -> Result<(), String> {
         self.pinned_request_pending = Some(pending);
-        match crate::pin::spawn_pinned_request(config, request, self.channels.pinned_tx.clone()) {
+        match crate::app::pin::spawn_pinned_request(
+            config,
+            request,
+            self.channels.pinned_tx.clone(),
+        ) {
             Ok(()) => Ok(()),
             Err(reason) => {
                 self.pinned_request_pending = None;

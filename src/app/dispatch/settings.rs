@@ -1,7 +1,7 @@
 use super::super::super::App;
 use super::notify::ToastSeverity;
+use crate::app::pin::{PanelReserveMode, PinnedSettingRequest};
 use crate::app::state::playback::HomeContent;
-use crate::pin::{PanelReserveMode, PinnedSettingRequest};
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::PinnedWidth;
@@ -173,7 +173,7 @@ impl App {
     /// no request at all — there a push would reserve the full expanded strip
     /// (change `panel-reserve-space`, design D4).
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
-        self.apply_panel_setting_pinned(key, delta, crate::pin::is_pinned());
+        self.apply_panel_setting_pinned(key, delta, crate::app::pin::is_pinned());
     }
 
     /// The Panel-row path with the pinned decision supplied, so a test can
@@ -487,19 +487,19 @@ fn pinned_setting_request(
         }
         SettingKey::PanelSide => Some(PinnedSettingRequest::Side(candidate.side)),
         SettingKey::PanelGutterTop => Some(PinnedSettingRequest::Gutter(
-            crate::pin::PanelGutter::Top,
+            crate::app::pin::PanelGutter::Top,
             candidate.gutter_top,
         )),
         SettingKey::PanelGutterBottom => Some(PinnedSettingRequest::Gutter(
-            crate::pin::PanelGutter::Bottom,
+            crate::app::pin::PanelGutter::Bottom,
             candidate.gutter_bottom,
         )),
         SettingKey::PanelGutterLeft => Some(PinnedSettingRequest::Gutter(
-            crate::pin::PanelGutter::Left,
+            crate::app::pin::PanelGutter::Left,
             candidate.gutter_left,
         )),
         SettingKey::PanelGutterRight => Some(PinnedSettingRequest::Gutter(
-            crate::pin::PanelGutter::Right,
+            crate::app::pin::PanelGutter::Right,
             candidate.gutter_right,
         )),
         SettingKey::PanelReserve => match active_width {

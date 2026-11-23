@@ -194,8 +194,8 @@ mod tests {
         #[case] start_position_ticks: i64,
         #[case] expected_positions: Vec<(&str, i64)>,
     ) {
-        let _guard = crate::pin::PINNED_REQUEST_TEST_LOCK.lock().unwrap();
-        crate::pin::PINNED_REQUESTS.lock().unwrap().clear();
+        let _guard = crate::app::pin::PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+        crate::app::pin::PINNED_REQUESTS.lock().unwrap().clear();
         let http = mbv_net::mock_http::MockHttp::new();
         http.respond(200, response);
         let mut app = app_with_mock_emby(&http);
@@ -228,7 +228,7 @@ mod tests {
         assert_eq!(app.panel_focus, PanelFocus::Library);
         assert_eq!(app.pinned_width, PinnedWidth::Expanded);
         assert!(
-            crate::pin::PINNED_REQUESTS.lock().unwrap().is_empty(),
+            crate::app::pin::PINNED_REQUESTS.lock().unwrap().is_empty(),
             "a remote Play sends no pinwin request"
         );
     }

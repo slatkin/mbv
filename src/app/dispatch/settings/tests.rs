@@ -6,11 +6,11 @@
 //! is the pure row-to-request mapping.
 
 use super::*;
-use crate::app::tests::make_app_stub;
-use crate::pin::{
+use crate::app::pin::{
     PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS, PanelGutter,
     PinnedSettingRequest,
 };
+use crate::app::tests::make_app_stub;
 use mbv_config::{PanelConfig, PanelSide};
 use rstest::rstest;
 

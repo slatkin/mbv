@@ -61,12 +61,12 @@ pub use self::app::owner_link::{
     OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,
     refusal_text, start_owner,
 };
+pub use self::app::pin::claim_pin_swap_participant;
 pub use self::app::playing_track_id_for_shell;
 /// The GUI Client's core state (design D4 of `decouple-client-core`): the
 /// shared `App` it owns, wrapped by composition. A Client outside `crate::app`
 /// names it here.
 pub use self::gui::GuiCore;
-pub use self::pin::claim_pin_swap_participant;
 pub use self::startup::run;
 pub use mbv_feed::FeedPlatform;
 pub use mbv_images::ImageDecode;

@@ -453,7 +453,7 @@ impl App {
         if let Err(reason) = self.begin_pinned_request(
             pending,
             &config,
-            crate::pin::PinnedSettingRequest::Width(width),
+            crate::app::pin::PinnedSettingRequest::Width(width),
         ) {
             self.apply_pinned_view(width, Err(reason));
         }
@@ -515,7 +515,7 @@ impl App {
         // A pinned panel binds `x` to its two view states; the three-state
         // cycle and the
         // mini-view toggle are unreachable while pinned.
-        if crate::pin::is_pinned() {
+        if crate::app::pin::is_pinned() {
             self.pinned_view_toggle();
             return;
         }

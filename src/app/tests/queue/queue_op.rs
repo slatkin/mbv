@@ -5,13 +5,13 @@
 //! zeroed bound — no real sleeps.
 
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{
     QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
 use crate::app::{App, QueueLink, QueueTarget};
-use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::QueueItem;
@@ -548,7 +548,7 @@ fn an_accepted_play_at_the_expanded_pinned_width_records_one_collapse_request() 
     assert_eq!(requests.len(), 1, "one collapse request for the play");
     assert_eq!(
         requests[0],
-        crate::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
+        crate::app::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
     );
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }

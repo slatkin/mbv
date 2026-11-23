@@ -33,6 +33,7 @@ pub use self::app_stub::{
 mod infra;
 mod input;
 pub mod owner_link;
+pub mod pin;
 mod queue_card_artwork;
 mod queue_footer_projection;
 mod queue_playback_projection;

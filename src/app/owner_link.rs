@@ -141,7 +141,7 @@ pub(crate) fn hello_claims(
     endpoint: &DaemonEndpoint,
 ) -> ClientHelloClaims {
     ClientHelloClaims {
-        pin_swap: crate::pin::pin_swap_hello(),
+        pin_swap: crate::app::pin::pin_swap_hello(),
         named_queues: endpoint.is_local() && capabilities.has(ClientCapability::ShownQueueEntries),
     }
 }
