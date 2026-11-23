@@ -76,12 +76,6 @@ impl App {
         self.libs.get(index).map(|tab| tab.library.name.as_str())
     }
 
-    /// The Service id of the Emby library at `index`.
-    #[must_use]
-    pub fn emby_library_id(&self, index: usize) -> Option<&str> {
-        self.libs.get(index).map(|tab| tab.library.id.as_str())
-    }
-
     /// The tab index of the Emby library whose Service id is `library_id`.
     #[must_use]
     pub fn emby_library_index_of(&self, library_id: &str) -> Option<usize> {
@@ -121,24 +115,6 @@ impl App {
     #[must_use]
     pub fn emby_library_level(&self, index: usize) -> Option<&mbv_ui_model::browse::BrowseLevel> {
         self.libs.get(index)?.nav_stack.last()
-    }
-
-    /// The Emby library's root level at `index`, or `None` before the library
-    /// opens its first level. The root is the level a library's folder catalog
-    /// reads.
-    #[must_use]
-    pub fn emby_library_root_level(
-        &self,
-        index: usize,
-    ) -> Option<&mbv_ui_model::browse::BrowseLevel> {
-        self.libs.get(index)?.nav_stack.first()
-    }
-
-    /// The TV content mode the Emby library at `index` last chose, whatever its
-    /// open level chose since.
-    #[must_use]
-    pub fn emby_library_stored_tv_mode(&self, index: usize) -> Option<&mbv_queue::TvContentMode> {
-        self.libs.get(index)?.tv_content_mode.as_ref()
     }
 
     /// The identifier of the item the Emby library at `index` rests its cursor
@@ -293,13 +269,6 @@ impl App {
         self.audiobookshelf_browse.get(index)
     }
 
-    /// Every retained Audiobookshelf podcast browse state, one per stored
-    /// library.
-    #[must_use]
-    pub fn audiobookshelf_browse_states(&self) -> &[AudiobookshelfBrowseState] {
-        &self.audiobookshelf_browse
-    }
-
     /// The Audiobookshelf book browse state of the library at `index`.
     #[must_use]
     pub fn audiobookshelf_book_browse_state(
@@ -307,13 +276,6 @@ impl App {
         index: usize,
     ) -> Option<&AudiobookshelfBookBrowseState> {
         self.audiobookshelf_book_browse.get(index)
-    }
-
-    /// Every retained Audiobookshelf book browse state, one per stored
-    /// library.
-    #[must_use]
-    pub fn audiobookshelf_book_states(&self) -> &[AudiobookshelfBookBrowseState] {
-        &self.audiobookshelf_book_browse
     }
 
     /// The Feeds tab state: subscriptions and their entries.
