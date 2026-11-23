@@ -24,22 +24,22 @@ impl App {
     pub(in crate::app) fn restart_local_daemon(
         &mut self,
     ) -> Result<(), mbv_remote_player::RemotePlayerError> {
-        let socket_path = crate::single_instance::socket_path();
+        let socket_path = mbv_daemon::socket_path();
         let lock_path = mbv_config::owner_lock_path();
-        match crate::single_instance::resolve(&socket_path, &lock_path) {
-            Ok(crate::single_instance::Resolution::Attach) => {
+        match mbv_daemon::resolve(&socket_path, &lock_path) {
+            Ok(mbv_daemon::Resolution::Attach) => {
                 // A daemon is already up -- another client raced ahead and
                 // restarted it first. The flock arbitrates this; nothing
                 // more to do here (design.md decision 6).
             }
-            Ok(crate::single_instance::Resolution::Fresh(guard)) => {
+            Ok(mbv_daemon::Resolution::Fresh(guard)) => {
                 // This process was only a liveness probe: release the lock
                 // immediately (the spawned daemon reacquires it for real)
                 // before attaching as a client.
                 drop(guard);
                 self.start_local_daemon()?;
             }
-            Ok(crate::single_instance::Resolution::Refuse) => {
+            Ok(mbv_daemon::Resolution::Refuse) => {
                 return Err(std::io::Error::other(
                     "another process holds the playback lock without a reachable daemon socket",
                 )

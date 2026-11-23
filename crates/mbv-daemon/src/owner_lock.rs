@@ -1,13 +1,29 @@
-//! Owner-lock probing and signalling.
+//! Owner-lock resolution, probing, and signalling.
 //!
 //! A live Player owner holds an advisory `flock` on its PID record
 //! (`mbv.lock` via the single-instance lock, `mbv.pid` when packaged, ADR
 //! 0006; harden-owner-process-boundaries decision D1). The lock is the
 //! liveness truth: a PID is only read out — and only signalled — while
 //! another descriptor still holds the flock on the same file.
+//!
+//! Single-instance detection lives here too (`resolve`), so one function
+//! serves the Owner's lock holder ([`lock_pid_file`]), the Client's Owner
+//! discovery (`owner_link::find_owner`), and the Owner-restart and
+//! session-switch probes. Stay-alive is never a factor: the flock is always
+//! taken. The runtime directory's `mbv.lock` (`$XDG_RUNTIME_DIR/mbv.lock`,
+//! `/run/mbv/mbv.lock` for a system instance, or the private
+//! `/tmp/mbv-<uid>/mbv.lock` fallback) is held for the whole lifetime of the
+//! Player-owning app. The kernel auto-releases it on any process death, so a
+//! held lock always means a live app — there is no stale-lock case to reason
+//! about. Resolution is a non-blocking flock: acquired -> fresh start;
+//! would-block -> a live app exists, and socket connectability (never file
+//! existence) disambiguates "a local daemon exists, attach as a client" from
+//! "bare foreground TUI owns it, refuse".
 
 use std::fs::File;
 use std::io::{self, Read, Seek, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -48,7 +64,6 @@ pub fn locked_owner_pid(path: &Path) -> Option<u32> {
 /// live lock holder the guard represents. Dropping it releases the flock
 /// (which also happens automatically on any process death).
 pub type PidFileLock = nix::fcntl::Flock<File>;
-
 /// Why a packaged Owner process could not take its PID record and start.
 ///
 /// The record's flock is already held by another Owner process (so a
@@ -137,6 +152,74 @@ pub fn lock_pid_file(path: &Path) -> Result<PidFileLock, OwnerLockError> {
     Ok(lock)
 }
 
+/// The control socket this machine's Owner binds and its Clients connect to.
+#[must_use]
+pub fn socket_path() -> PathBuf {
+    PathBuf::from(mbv_config::control_socket_path())
+}
+
+/// The result of [`resolve`]: who may be the Player-owning app now.
+pub enum Resolution {
+    /// No live app holds the lock: acquired it fresh. Caller owns the
+    /// guard for as long as it wants to be the Player-owning app.
+    Fresh(LockGuard),
+    /// A live app holds the lock AND its control socket is connectable: a
+    /// live local daemon exists. Caller should attach as a client alongside
+    /// any others already attached.
+    Attach,
+    /// A live app holds the lock but the control socket is refused/absent:
+    /// the Owner process is not accepting connections. Caller should
+    /// refuse.
+    Refuse,
+}
+
+/// Raised when a message does not fit a consumer's expectations.
+///
+/// The lock file is held for the process lifetime of the Player-owning app:
+/// dropping it releases the flock (which also happens automatically on any
+/// process death).
+pub struct LockGuard {
+    file: PidFileLock,
+}
+
+impl std::fmt::Debug for LockGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LockGuard").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Resolution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fresh(guard) => f.debug_tuple("Fresh").field(guard).finish(),
+            Self::Attach => f.write_str("Attach"),
+            Self::Refuse => f.write_str("Refuse"),
+        }
+    }
+}
+
+impl LockGuard {
+    /// Overwrite the lock file with this process's PID, so `mbv -q` /
+    /// tray-Quit can find it to send SIGTERM.
+    pub fn write_pid(&mut self) -> io::Result<()> {
+        write_pid(&mut self.file)
+    }
+}
+
+/// Non-blocking flock probe + (if held) socket-connectability check.
+pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
+    let Some(file) = try_lock(lock)? else {
+        // A live app holds the lock. Never trust socket-file existence — only
+        // a successful connect counts (ADR 0006).
+        return match UnixStream::connect(socket) {
+            Ok(_) => Ok(Resolution::Attach),
+            Err(_) => Ok(Resolution::Refuse),
+        };
+    };
+    let _ = std::fs::set_permissions(lock, std::fs::Permissions::from_mode(0o600));
+    Ok(Resolution::Fresh(LockGuard { file }))
+}
+
 /// Why an Owner process could not be signalled.
 #[derive(Debug)]
 pub enum SignalOwnerError {
@@ -181,4 +264,75 @@ pub fn signal_owner(path: &Path) -> Result<u32, SignalOwnerError> {
         pid,
         error: io::Error::from_raw_os_error(errno as i32),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::net::UnixListener;
+
+    /// Temp dir removed on drop, so a panicking assertion cannot leak it.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!("mbv-si-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&dir).expect("create temp dir");
+            Self(dir)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// `Fresh` + PID round-trip: a free lock is acquired and, while that guard
+    /// still holds the flock, `locked_owner_pid` (the `mbv -q` probe) must
+    /// recover this process's id.
+    #[test]
+    fn fresh_lock_round_trips_the_pid() {
+        let dir = TempDir::new();
+        let lock = dir.path().join("mbv.lock");
+        let socket = dir.path().join("mbv.sock");
+
+        let Ok(Resolution::Fresh(mut guard)) = resolve(&socket, &lock) else {
+            panic!("expected a fresh lock on an unused path");
+        };
+        guard.write_pid().expect("write pid under the held lock");
+        assert_eq!(locked_owner_pid(&lock), Some(std::process::id()));
+    }
+
+    /// Held lock: `Attach` iff the socket actually connects. A plain file at the
+    /// socket path must not count (ADR 0006). The held lock is reproducible
+    /// because flocks attach to the open file description.
+    #[test]
+    fn held_lock_attaches_only_to_a_connectable_socket() {
+        let dir = TempDir::new();
+        let lock = dir.path().join("mbv.lock");
+        let socket = dir.path().join("mbv.sock");
+
+        let Ok(Resolution::Fresh(_guard)) = resolve(&socket, &lock) else {
+            panic!("expected the first resolve to take a fresh lock");
+        };
+
+        // No socket file at all: a bare foreground TUI owns the lock.
+        assert!(matches!(resolve(&socket, &lock), Ok(Resolution::Refuse)));
+
+        // A non-listening file at the socket path must not be mistaken for a
+        // daemon.
+        std::fs::write(&socket, b"").expect("seed socket path with a plain file");
+        assert!(matches!(resolve(&socket, &lock), Ok(Resolution::Refuse)));
+
+        // A real listener: attach as a client.
+        std::fs::remove_file(&socket).expect("clear path for bind");
+        let listener = UnixListener::bind(&socket).expect("bind test listener");
+        assert!(matches!(resolve(&socket, &lock), Ok(Resolution::Attach)));
+        drop(listener);
+    }
 }

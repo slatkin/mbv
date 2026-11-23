@@ -173,15 +173,15 @@ impl App {
         }
         #[cfg(not(test))]
         {
-            let socket_path = crate::single_instance::socket_path();
+            let socket_path = mbv_daemon::socket_path();
             let lock_path = mbv_config::owner_lock_path();
-            match crate::single_instance::resolve(&socket_path, &lock_path)? {
-                crate::single_instance::Resolution::Fresh(guard) => {
+            match mbv_daemon::resolve(&socket_path, &lock_path)? {
+                mbv_daemon::Resolution::Fresh(guard) => {
                     drop(guard);
                     self.start_local_daemon()?;
                 }
-                crate::single_instance::Resolution::Attach => {}
-                crate::single_instance::Resolution::Refuse => {
+                mbv_daemon::Resolution::Attach => {}
+                mbv_daemon::Resolution::Refuse => {
                     return Err(std::io::Error::other(
                         "the local Player owner is not accepting connections",
                     )

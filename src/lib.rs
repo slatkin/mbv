@@ -16,7 +16,6 @@ mod local_daemon;
 mod owner_link;
 mod owner_restart;
 mod pin;
-mod single_instance;
 mod startup;
 
 pub use self::app::{

@@ -55,8 +55,8 @@ pub use cast_resolve::{
 mod owner_lock;
 #[doc(inline)]
 pub use owner_lock::{
-    OwnerLockError, SignalOwnerError, lock_pid_file, locked_owner_pid, pid_file, signal_owner,
-    try_lock, write_pid,
+    LockGuard, OwnerLockError, Resolution, SignalOwnerError, lock_pid_file, locked_owner_pid,
+    pid_file, resolve, signal_owner, socket_path, try_lock, write_pid,
 };
 mod core_ctrl_spawn;
 #[doc(inline)]

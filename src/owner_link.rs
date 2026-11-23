@@ -19,7 +19,6 @@ use std::path::Path;
 use crate::app::App;
 use crate::config::Config;
 use crate::local_daemon;
-use crate::single_instance;
 use crate::{ClientCapabilities, ClientCapability};
 use mbv_emby::EmbyClient;
 use mbv_remote_player::{ClientHelloClaims, DaemonEndpoint, RemotePlayer, RemotePlayerError};
@@ -54,15 +53,15 @@ pub struct OwnerStartOptions<'a> {
 /// is released here: a Client never holds the Owner lock, so the Owner that
 /// [`start_owner`] launches re-acquires it as part of its own startup.
 pub fn find_owner() -> io::Result<OwnerState> {
-    let socket = single_instance::socket_path();
+    let socket = mbv_daemon::socket_path();
     let lock = mbv_config::owner_lock_path();
-    Ok(match single_instance::resolve(&socket, &lock)? {
-        single_instance::Resolution::Fresh(guard) => {
+    Ok(match mbv_daemon::resolve(&socket, &lock)? {
+        mbv_daemon::Resolution::Fresh(guard) => {
             drop(guard);
             OwnerState::Start
         }
-        single_instance::Resolution::Attach => OwnerState::Attach,
-        single_instance::Resolution::Refuse => OwnerState::Refuse,
+        mbv_daemon::Resolution::Attach => OwnerState::Attach,
+        mbv_daemon::Resolution::Refuse => OwnerState::Refuse,
     })
 }
 
@@ -74,7 +73,7 @@ pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerEr
         None => std::env::current_exe()
             .map_err(|e| io::Error::new(e.kind(), format!("cannot locate binary: {e}")))?,
     };
-    let socket = single_instance::socket_path();
+    let socket = mbv_daemon::socket_path();
     local_daemon::spawn_detached(&exe, &socket.to_string_lossy(), options.log_level.cloned())
 }
 

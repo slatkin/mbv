@@ -245,9 +245,9 @@ pub fn run_local_daemon_main() -> ! {
     // control socket, so `mbv -q` can find us (the launcher already dropped
     // its own liveness-probe guard before spawning us).
     let lock_path = mbv_config::owner_lock_path();
-    let socket_path = crate::single_instance::socket_path();
-    let mut guard = match crate::single_instance::resolve(&socket_path, &lock_path) {
-        Ok(crate::single_instance::Resolution::Fresh(guard)) => guard,
+    let socket_path = mbv_daemon::socket_path();
+    let mut guard = match mbv_daemon::resolve(&socket_path, &lock_path) {
+        Ok(mbv_daemon::Resolution::Fresh(guard)) => guard,
         Ok(_) => {
             eprintln!("mbv: local daemon: another instance took ownership before startup");
             std::process::exit(1);
