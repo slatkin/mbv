@@ -131,17 +131,19 @@ fn app_with_stored_groups(
 ) -> App {
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups.insert(
+    app.gui.library_groups.insert(
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec![HIPHOP.to_string()]),
         },
     );
-    app.gui_music_albums
+    app.gui
+        .music_albums
         .entry(0)
         .or_default()
         .insert(HIPHOP.to_string(), GuiGroupAlbums::Loaded(hiphop));
-    app.gui_music_albums
+    app.gui
+        .music_albums
         .entry(0)
         .or_default()
         .insert(SOUL.to_string(), GuiGroupAlbums::Loaded(soul));
@@ -409,7 +411,7 @@ fn a_collection_toggle_checks_two_groups() {
             1989,
         )],
     );
-    app.gui_library_groups.remove(&0);
+    app.gui.library_groups.remove(&0);
 
     app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
         target: GuiCollectionTarget::Music(0),
@@ -421,7 +423,7 @@ fn a_collection_toggle_checks_two_groups() {
     });
 
     assert_eq!(
-        app.gui_library_groups.get(&0).map(|stored| &stored.set),
+        app.gui.library_groups.get(&0).map(|stored| &stored.set),
         Some(&GuiCollectionSet::Checked(vec![
             HIPHOP.to_string(),
             SOUL.to_string(),
@@ -447,7 +449,7 @@ fn a_collection_toggle_checks_two_groups() {
 fn a_stored_group_the_library_lost_falls_back_to_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
-    app.gui_library_groups.insert(
+    app.gui.library_groups.insert(
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec!["grp-gone".to_string()]),
@@ -483,7 +485,7 @@ fn no_stored_choice_selects_all() {
         )],
         Vec::new(),
     );
-    app.gui_library_groups.remove(&0);
+    app.gui.library_groups.remove(&0);
 
     let projection = app.gui_music_projection(0);
 
@@ -524,13 +526,14 @@ fn a_failed_selected_group_shows_a_failure_line() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups.insert(
+    app.gui.library_groups.insert(
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec![SOUL.to_string()]),
         },
     );
-    app.gui_music_albums
+    app.gui
+        .music_albums
         .entry(0)
         .or_default()
         .insert(SOUL.to_string(), GuiGroupAlbums::Failed);

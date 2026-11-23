@@ -26,7 +26,7 @@ impl App {
         cursor: usize,
         text: String,
     ) {
-        self.gui_overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
+        self.gui.overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
             cursor,
             renaming: Some(QueueRenameDraft::selecting(queue, text)),
         }));

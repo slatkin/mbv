@@ -244,7 +244,7 @@ fn a_stale_selection_falls_back_to_the_first_row() {
         series_item("series-a", "Alfred", "Alfred"),
         series_item("series-b", "Bridgerton", "Bridgerton"),
     ]);
-    app.gui_tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
+    app.gui.tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
 
     let projection = app.gui_shows_projection(0);
 
@@ -336,7 +336,7 @@ fn one_shows_view_is_active_at_a_time() {
         app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView { lib_idx: 0, view });
         assert_eq!(app.gui_shows_view(0), view);
     }
-    assert!(app.gui_shows_views.contains_key(&0));
+    assert!(app.gui.shows_views.contains_key(&0));
 }
 
 /// Contract (design D9): New paints the merged latest episodes, newest first,
@@ -345,14 +345,14 @@ fn one_shows_view_is_active_at_a_time() {
 fn the_new_view_paints_the_merged_latest_episodes() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
-    app.gui_shows_new.insert(
+    app.gui.shows_new.insert(
         "lib-a".into(),
         GuiSectionRequest::Landed(vec![
             new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
             new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
         ]),
     );
-    app.gui_shows_new.insert(
+    app.gui.shows_new.insert(
         "lib-b".into(),
         GuiSectionRequest::Landed(vec![
             new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),

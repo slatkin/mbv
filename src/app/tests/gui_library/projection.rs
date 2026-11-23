@@ -299,7 +299,7 @@ fn a_second_group_keeps_the_hero() {
 /// (gui-collection-dropdown "Each Music group keeps its last picked album",
 /// review P2): the pick rule reads the effective set the projection paints,
 /// so a stored set the catalog trimmed to one group still saves the pick to
-/// `gui_library_picks`, which the launch file persists — never to the
+/// `library_picks`, which the launch file persists — never to the
 /// session-only union pick.
 #[test]
 fn a_pick_under_the_effectively_single_group_is_kept() {
@@ -318,7 +318,7 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
     app.libs[0].nav_stack[0]
         .items
         .retain(|group| group.id == HIPHOP);
-    app.gui_library_groups.insert(
+    app.gui.library_groups.insert(
         0,
         GuiCollectionSelection {
             set: GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
@@ -335,7 +335,7 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
         "the pick lands in the kept per-group pick"
     );
     assert!(
-        !app.gui_music_union_picks.contains_key(&0),
+        !app.gui.music_union_picks.contains_key(&0),
         "the session-only union pick stays empty"
     );
 }
@@ -351,7 +351,7 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
         vec![stored_album("alb-zeb", "Zebra Album", "Zebra", 1990)],
         vec![stored_album("alb-aar", "Aardvark Album", "Aardvark", 1989)],
     );
-    app.gui_library_groups.remove(&0);
+    app.gui.library_groups.remove(&0);
 
     app.install_gui_library_collection(
         0,
@@ -359,7 +359,7 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
     );
 
     assert!(
-        !app.gui_music_union_picks.contains_key(&0),
+        !app.gui.music_union_picks.contains_key(&0),
         "no union pick is seeded from a list-order first album"
     );
     assert_eq!(

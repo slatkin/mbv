@@ -56,12 +56,12 @@ fn open_sessions_request_toggles_the_target_chooser() {
 
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
     assert!(matches!(
-        app.gui_overlay,
+        app.gui.overlay,
         Some(GuiOverlay::TargetChooser(_))
     ));
 
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
-    assert!(app.gui_overlay.is_none());
+    assert!(app.gui.overlay.is_none());
 }
 
 // The chooser's local row returns a remote output to this machine, asked
@@ -97,7 +97,7 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
     // The GUI drain presents the raised request as the canvas's own
     // blocking overlay.
     super::present_pending_modal(&mut app);
-    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
+    assert!(matches!(app.gui.overlay, Some(GuiOverlay::Confirm(_))));
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
         None,
@@ -106,7 +106,7 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
     let selections = output_selections(&cmd_rx);
     assert_eq!(selections.len(), 1);
     assert!(matches!(selections[0], mbv_ctrl::OutputSelection::Local));
-    assert!(app.gui_overlay.is_none());
+    assert!(app.gui.overlay.is_none());
 }
 
 // The GUI-only `r` chord opens the chooser (add-tauri-gui-client row 6.4):
@@ -122,7 +122,7 @@ fn gui_context_r_opens_the_target_chooser() {
         None,
     );
     assert!(matches!(
-        app.gui_overlay,
+        app.gui.overlay,
         Some(GuiOverlay::TargetChooser(_))
     ));
 
@@ -130,7 +130,7 @@ fn gui_context_r_opens_the_target_chooser() {
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
         None,
     );
-    assert!(app.gui_overlay.is_none());
+    assert!(app.gui.overlay.is_none());
 }
 
 // A chooser Enter selects the cursor choice's output through the same
@@ -161,7 +161,7 @@ fn target_chooser_enter_selects_the_cursor_choice() {
     // The GUI drain presents the raised request as the canvas's own
     // blocking overlay.
     super::present_pending_modal(&mut app);
-    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
+    assert!(matches!(app.gui.overlay, Some(GuiOverlay::Confirm(_))));
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
         None,
@@ -173,7 +173,7 @@ fn target_chooser_enter_selects_the_cursor_choice() {
         selections[0],
         mbv_ctrl::OutputSelection::Cast { ref receiver_id, .. } if receiver_id == "receiver-1"
     ));
-    assert!(app.gui_overlay.is_none());
+    assert!(app.gui.overlay.is_none());
 }
 
 // A chooser row's press emits the `SelectSession` request the TUI's
@@ -195,7 +195,7 @@ fn select_session_request_selects_the_output_and_closes() {
         "the gate asks before anything is sent"
     );
     super::present_pending_modal(&mut app);
-    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
+    assert!(matches!(app.gui.overlay, Some(GuiOverlay::Confirm(_))));
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
         None,
@@ -203,5 +203,5 @@ fn select_session_request_selects_the_output_and_closes() {
 
     let selections = output_selections(&cmd_rx);
     assert_eq!(selections.len(), 1);
-    assert!(app.gui_overlay.is_none());
+    assert!(app.gui.overlay.is_none());
 }

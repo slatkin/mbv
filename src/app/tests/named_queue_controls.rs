@@ -161,7 +161,7 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
         0,
         "the new queue is empty"
     );
-    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
+    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the new queue's name is open for edit in the chooser");
     };
     assert_eq!(chooser.cursor, 2, "the cursor rests on the new queue");
@@ -235,7 +235,7 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         3,
         "the current queue's rows are never the shown queue's"
     );
-    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
+    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the new queue's name is open for edit");
     };
     assert_eq!(
@@ -498,7 +498,7 @@ fn a_chooser_entry_press_shows_the_painted_queue() {
         "the press shows the entry it painted"
     );
     assert!(
-        !app.gui_overlay_is_open(),
+        !app.gui.overlay_is_open(),
         "the chooser dismisses on the entry it showed"
     );
     assert!(
@@ -534,7 +534,7 @@ fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
         "the panel falls back to the current local queue"
     );
     assert!(
-        !app.gui_overlay_is_open(),
+        !app.gui.overlay_is_open(),
         "the chooser dismisses on the entry it pressed"
     );
     assert!(

@@ -170,7 +170,7 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
         .map(|season| season.id.as_str())
         .collect();
     assert_eq!(seasons, ["season-1", "season-2"]);
-    let selection = &app.gui_tv_shows[&0];
+    let selection = &app.gui.tv_shows[&0];
     assert_eq!(selection.series_id.as_deref(), Some("series-a"));
     assert_eq!(
         selection.season_id, None,
@@ -189,7 +189,7 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
         .map(|episode| episode.id.as_str())
         .collect();
     assert_eq!(episodes, ["ep-2a", "ep-2b"]);
-    assert_eq!(app.gui_tv_shows[&0].season_id.as_deref(), Some("season-2"));
+    assert_eq!(app.gui.tv_shows[&0].season_id.as_deref(), Some("season-2"));
 }
 
 /// The frame path's ensure loads the selected series' first season without a
@@ -211,7 +211,7 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
     // any frame pass runs, so the frame ensure starts no root reload here.
     app.libs[0].tv_content_mode = Some(TvContentMode::All);
     app.libs[0].nav_stack[0].items = vec![series_item("series-a", "Alfred")];
-    app.gui_tv_shows.insert(
+    app.gui.tv_shows.insert(
         0,
         crate::app::gui_library::GuiTvShowsSelection {
             series_id: Some("series-a".into()),

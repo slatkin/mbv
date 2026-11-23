@@ -95,7 +95,7 @@ impl QueueRenameDraft {
 
 /// The GUI Client's open overlay (design D4a): the row menu, a track chip's
 /// popover, the playback-target chooser, the Queue chooser, the shared
-/// confirmation modal, or the daemon-lost recovery dialog. `App::gui_overlay`
+/// confirmation modal, or the daemon-lost recovery dialog. `App::overlay`
 /// holds the open one.
 pub(in crate::app) enum GuiOverlay {
     RowMenu(GuiRowMenu),
@@ -341,11 +341,10 @@ fn apply_rename_key(draft: &mut QueueRenameDraft, key: KeyEvent) -> RenameKeyOut
 impl App {
     /// Whether an overlay holds the GUI Client's keyboard (the row menu, a
     /// track popover, the playback-target chooser, or the Queue chooser). The
-    /// GUI Client's core reads it to dismiss the overlay on an outside press
-    /// (row 6.5).
+    /// GUI Client's core reads it to dismiss the overlay on an outside press.
     #[must_use]
     pub fn gui_overlay_is_open(&self) -> bool {
-        self.gui_overlay.is_some()
+        self.gui.overlay_is_open()
     }
 
     /// The open overlay's key rules: the overlay owns the keyboard while it
@@ -355,12 +354,12 @@ impl App {
     pub(in crate::app) fn apply_gui_overlay_key(&mut self, key: KeyEvent) -> bool {
         // The confirmation modal answers before the overlay borrow, because
         // its answer replaces the overlay it reads.
-        if matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
+        if matches!(self.gui.overlay, Some(GuiOverlay::Confirm(_))) {
             return self.apply_gui_confirm_key(key);
         }
         // The popover's cursor clamps against its live choice list, read
         // before the overlay borrow so the two reads cannot interleave.
-        let popover_chip = match &self.gui_overlay {
+        let popover_chip = match &self.gui.overlay {
             Some(GuiOverlay::TrackPopover(popover)) => Some(popover.chip),
             _ => None,
         };
@@ -369,25 +368,25 @@ impl App {
             .map_or(0, |choices| choices.len());
         // The chooser's cursor clamps against the same live list the frame
         // projects, read before the overlay borrow as the popover's is.
-        let chooser_choices = if matches!(self.gui_overlay, Some(GuiOverlay::TargetChooser(_))) {
+        let chooser_choices = if matches!(self.gui.overlay, Some(GuiOverlay::TargetChooser(_))) {
             self.playback_target_choices().len()
         } else {
             0
         };
         // The Queue chooser's cursor clamps against its live entry list — the
         // same list the frame projects — read before the overlay borrow too.
-        let queue_choices = if matches!(self.gui_overlay, Some(GuiOverlay::QueueChooser(_))) {
+        let queue_choices = if matches!(self.gui.overlay, Some(GuiOverlay::QueueChooser(_))) {
             self.queue_chooser_entries()
         } else {
             Vec::new()
         };
         // The daemon-lost dialog's chords name its painted choices; read
         // before the overlay borrow, as the two cursors above are.
-        let daemon_lost_entry = match &self.gui_overlay {
+        let daemon_lost_entry = match &self.gui.overlay {
             Some(GuiOverlay::DaemonLost(_)) => daemon_lost_entry_index(key.code),
             _ => None,
         };
-        let outcome = match &mut self.gui_overlay {
+        let outcome = match &mut self.gui.overlay {
             Some(GuiOverlay::RowMenu(menu)) => menu.apply_key(key),
             Some(GuiOverlay::PlayerMenu(menu)) => apply_overlay_list_key(&mut menu.cursor, key, 1),
             Some(GuiOverlay::TrackPopover(popover)) => {
@@ -415,7 +414,7 @@ impl App {
         match outcome {
             OverlayKeyOutcome::Consumed => false,
             OverlayKeyOutcome::Dismiss => {
-                self.gui_overlay = None;
+                self.gui.overlay = None;
                 false
             }
             OverlayKeyOutcome::Execute(index) => self.execute_gui_overlay_entry(index),
@@ -431,7 +430,7 @@ impl App {
     /// TUI's Confirm component (`confirm_intent_for_key`) rule for rule.
     /// Every other chord is consumed and the modal stays up.
     fn apply_gui_confirm_key(&mut self, key: KeyEvent) -> bool {
-        let Some(GuiOverlay::Confirm(modal)) = &self.gui_overlay else {
+        let Some(GuiOverlay::Confirm(modal)) = &self.gui.overlay else {
             return false;
         };
         let action = modal.on_confirm.clone();
@@ -450,7 +449,7 @@ impl App {
             _ => None,
         };
         if let Some(key) = answering {
-            self.gui_overlay = None;
+            self.gui.overlay = None;
             self.apply_confirm_action(action, key);
         }
         false
@@ -466,10 +465,10 @@ impl App {
         // keeps its own held state while the answer runs: a failed restart
         // writes its diagnostic into that same state, so the overlay is not
         // taken here.
-        if matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
+        if matches!(self.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
             return self.apply_gui_daemon_lost_choice(index);
         }
-        let Some(overlay) = self.gui_overlay.take() else {
+        let Some(overlay) = self.gui.overlay.take() else {
             return false;
         };
         match overlay {
@@ -534,7 +533,7 @@ impl App {
                     return false;
                 };
                 let action = modal.on_confirm.clone();
-                self.gui_overlay = None;
+                self.gui.overlay = None;
                 self.apply_confirm_action(action, KeyEvent::new(key, KeyModifiers::NONE));
             }
             GuiOverlay::DaemonLost(_) => return false,

@@ -38,7 +38,8 @@ fn app_with_rows(items: Vec<EmbyItem>) -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui_emby_roots
+    app.gui
+        .emby_roots
         .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
     app
 }

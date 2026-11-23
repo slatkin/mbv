@@ -23,7 +23,7 @@ impl App {
             let Some(menu) = self.build_queue_selection_menu(targets) else {
                 return;
             };
-            self.gui_overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
+            self.gui.overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
                 anchor_slot: targets[0],
                 cursor: 0,
                 pending_delete: false,
@@ -107,7 +107,7 @@ impl App {
                 key_hint: Some("c"),
             });
         }
-        self.gui_overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
+        self.gui.overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
             anchor_slot: slot,
             cursor: 0,
             pending_delete: false,
@@ -123,7 +123,7 @@ impl App {
     /// slot executes nothing. The menu's entries carry their resolved queue
     /// targets, so the index executes what the frame painted.
     pub(in crate::app) fn select_gui_row_menu_entry(&mut self, index: usize) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::RowMenu(_))) {
+        if matches!(self.gui.overlay, Some(GuiOverlay::RowMenu(_))) {
             self.execute_gui_overlay_entry(index);
         }
     }

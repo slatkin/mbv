@@ -87,15 +87,15 @@ impl App {
     /// replaces whatever overlay was open, as the TUI's
     /// `dismiss_blocking_modals` does.
     pub fn present_gui_daemon_lost(&mut self, modal: DaemonLostModal) {
-        self.gui_overlay = Some(GuiOverlay::DaemonLost(modal));
+        self.gui.overlay = Some(GuiOverlay::DaemonLost(modal));
     }
 
     /// Clear the held daemon-lost dialog: the GUI drain's answer to
     /// `OverlayRequest::DismissDaemonLost` (a successful restart raises it).
     /// Another open overlay stays.
     pub fn dismiss_gui_daemon_lost(&mut self) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
-            self.gui_overlay = None;
+        if matches!(self.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
+            self.gui.overlay = None;
         }
     }
 
@@ -108,7 +108,7 @@ impl App {
     /// open overlay being the dialog, so a stale press while another overlay
     /// or none holds the slot answers nothing.
     pub(in crate::app) fn apply_gui_daemon_lost_choice(&mut self, index: usize) -> bool {
-        if !matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
+        if !matches!(self.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
             return false;
         }
         let Some(intent) = daemon_lost_choice(index) else {
@@ -117,13 +117,13 @@ impl App {
         match self.apply_daemon_lost_intent(intent) {
             DaemonLostAnswer::Restarted => false,
             DaemonLostAnswer::RestartFailed(error) => {
-                if let Some(GuiOverlay::DaemonLost(modal)) = &mut self.gui_overlay {
+                if let Some(GuiOverlay::DaemonLost(modal)) = &mut self.gui.overlay {
                     modal.restart_error = Some(error);
                 }
                 false
             }
             DaemonLostAnswer::Quit(quit) => {
-                self.gui_overlay = None;
+                self.gui.overlay = None;
                 quit
             }
         }

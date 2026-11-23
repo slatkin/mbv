@@ -253,7 +253,7 @@ impl App {
     /// order — each with its rail letter only while the sort is a name sort,
     /// and no pill, and the selected row's Hero.
     fn gui_emby_plain_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
-        let (items, loading, failed) = match self.gui_emby_roots.get(&lib_idx) {
+        let (items, loading, failed) = match self.gui.emby_roots.get(&lib_idx) {
             Some(super::GuiEmbyRootItems::Loaded(items)) => (items.as_slice(), false, false),
             Some(super::GuiEmbyRootItems::Loading) | None => (&[][..], true, false),
             Some(super::GuiEmbyRootItems::Failed) => (&[][..], false, true),
@@ -448,7 +448,8 @@ impl App {
     /// the list still carries it, else the first row — the Hero default.
     fn gui_emby_selected(&self, lib_idx: usize, rows: &[GuiEmbyRow]) -> Option<String> {
         let stored = self
-            .gui_emby_libs
+            .gui
+            .emby_libs
             .get(&lib_idx)
             .and_then(|selection| selection.picked_row.clone());
         stored

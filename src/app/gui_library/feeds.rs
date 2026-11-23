@@ -86,11 +86,11 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
     }
 
     fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
-        &app.gui_feeds_selection.selection.set
+        &app.gui.feeds_selection.selection.set
     }
 
     fn has_stored_selection(&self, app: &App) -> bool {
-        app.gui_feeds_selection.selection != GuiCollectionSelection::default()
+        app.gui.feeds_selection.selection != GuiCollectionSelection::default()
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -112,7 +112,7 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
     }
 
     fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
-        app.gui_feeds_selection.selection.set = set;
+        app.gui.feeds_selection.selection.set = set;
     }
 }
 
@@ -162,7 +162,7 @@ impl App {
             Self::log_stale_library_item("feedsSelect", &entry.encode());
             return;
         }
-        self.gui_feeds_selection.picked_entry = Some(entry.encode());
+        self.gui.feeds_selection.picked_entry = Some(entry.encode());
     }
 
     /// Play the entry a row id names (row 11.1): Enter on the row, or the
@@ -205,7 +205,7 @@ impl App {
     /// the list, so the Hero's default is never blank.
     #[must_use]
     pub fn gui_feeds_picked_entry(&self) -> Option<&str> {
-        self.gui_feeds_selection.picked_entry.as_deref()
+        self.gui.feeds_selection.picked_entry.as_deref()
     }
 
     /// The entries the selection lists (row 11.1), in App order.

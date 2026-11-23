@@ -63,7 +63,8 @@ impl App {
     /// library `lib_idx` (add-gui-library-panel row 9.1).
     #[must_use]
     pub fn gui_abs_picked_book_for_test(&self, lib_idx: usize) -> Option<&str> {
-        self.gui_abs_libs
+        self.gui
+            .abs_libs
             .get(&lib_idx)
             .and_then(|selection| selection.picked_book.as_deref())
     }

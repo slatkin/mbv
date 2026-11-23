@@ -59,7 +59,8 @@ impl App {
     /// while the group's union holds it.
     #[cfg(feature = "test")]
     pub fn pick_gui_album_for_test(&mut self, lib_idx: usize, group_id: &str, album_id: &str) {
-        self.gui_library_picks
+        self.gui
+            .library_picks
             .insert((lib_idx, group_id.to_string()), album_id.to_string());
     }
 }

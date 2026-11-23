@@ -142,8 +142,8 @@ impl App {
     /// stale frame logs its receipt at debug level and changes nothing.
     pub fn apply_gui_settings_command(&mut self, command: GuiSettingsCommand) {
         tracing::debug!(
-            name: "gui_settings.command",
-            target: "gui_settings",
+            name: "settings.command",
+            target: "settings",
             command = ?command,
             "the GUI Settings screen sent a command"
         );

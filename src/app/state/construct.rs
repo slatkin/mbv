@@ -104,9 +104,6 @@ impl App {
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_shelf_cache: std::collections::HashMap::new(),
             audiobookshelf_shelf_requested: std::collections::HashSet::new(),
-            gui_shows_flat_selection: None,
-            gui_shows_views: std::collections::HashMap::new(),
-            gui_shows_new: std::collections::HashMap::new(),
             tv_upcoming_snapshots: std::collections::HashMap::new(),
             tv_upcoming_fetches: std::collections::HashMap::new(),
             audiobookshelf_browse: Vec::new(),
@@ -157,9 +154,6 @@ impl App {
             accent_custom: None,
 
             pending_overlay: None,
-            gui_settings: None,
-            gui_playlists_open: false,
-            gui_ui_reset_epoch: 0,
             pending_exit_message: None,
             pending_delete_slot: None,
             pending_delete_selection: None,
@@ -191,22 +185,19 @@ impl App {
                 }),
             list_pane_width: list_pane_width_from_prefs(&prefs),
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
-            gui_player_auto_hide: gui_player_auto_hide_from_prefs(&prefs),
+            // The GUI Client's own state starts empty (design D4 of
+            // `decouple-client-core`): the window content's first command
+            // selects a destination's collections and an item's detail, and
+            // the open overlay and screens start closed.
+            gui: crate::app::gui_client_state::GuiClientState::new(
+                gui_player_auto_hide_from_prefs(&prefs),
+            ),
             panel_mode: PanelMode::default(),
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the terminal-cell panel rules and the visual-slot
             // controls.
             client_capabilities:
                 crate::app::state::client_capabilities::ClientCapabilities::default(),
-            // The GUI Library panel's Client-core state starts empty:
-            // the window content's first command selects a destination's
-            // collections and an item's detail (add-gui-library-panel
-            // design D2, D5).
-            gui_library_groups: std::collections::HashMap::new(),
-            gui_music_albums: std::collections::HashMap::new(),
-            gui_library_picks: std::collections::HashMap::new(),
-            gui_music_union_picks: std::collections::HashMap::new(),
-            gui_library_row_menu_target: None,
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
             // Always start on Home until the saved launch tab settles.
@@ -228,19 +219,6 @@ impl App {
             visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
             visualizer_glyph: init.visualizer_glyph,
             queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
-            gui_rows_in_view: std::collections::HashMap::new(),
-            gui_home_selection: None,
-            gui_tv_shows: std::collections::HashMap::new(),
-            gui_emby_libs: std::collections::HashMap::new(),
-            gui_emby_roots: std::collections::HashMap::new(),
-            gui_emby_feed_sets: std::collections::HashMap::new(),
-            gui_abs_libs: std::collections::HashMap::new(),
-            gui_podcast_libs: std::collections::HashMap::new(),
-            gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection::default(),
-            // Every destination starts on its target's default sort until the
-            // window sends a choice or the launch file installs one.
-            gui_list_sorts: Vec::new(),
-            gui_search: crate::app::gui_library::GuiSearchStore::default(),
             title_log_gate: crate::app::state::projection::card::artwork::TitleLogGate::default(),
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
@@ -276,11 +254,8 @@ impl App {
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
             prefix_armed: false,
-            panel_collapsed: false,
-            queue_folded: false,
             queue_filter: String::new(),
             queue_filter_active: false,
-            gui_overlay: None,
             tab_reveal_requested: false,
             tv_workspace_wide: std::collections::HashSet::new(),
             last_nav_at: Instant::now()

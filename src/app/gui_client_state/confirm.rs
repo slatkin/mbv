@@ -12,14 +12,14 @@ impl App {
     /// overlay: the GUI drain's answer to `OverlayRequest::Confirm`, which the
     /// GUI mounts no TUI modal component for.
     pub fn present_gui_confirm(&mut self, modal: ConfirmModal) {
-        self.gui_overlay = Some(GuiOverlay::Confirm(modal));
+        self.gui.overlay = Some(GuiOverlay::Confirm(modal));
     }
 
     /// Clear the held confirmation: the GUI drain's answer to
     /// `OverlayRequest::DismissConfirm`. Another open overlay stays.
     pub fn dismiss_gui_confirm(&mut self) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
-            self.gui_overlay = None;
+        if matches!(self.gui.overlay, Some(GuiOverlay::Confirm(_))) {
+            self.gui.overlay = None;
         }
     }
 
@@ -29,7 +29,7 @@ impl App {
     /// the open overlay being the confirm — a stale press while another
     /// overlay or none holds the slot executes nothing.
     pub fn execute_gui_confirm_button(&mut self, index: usize) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
+        if matches!(self.gui.overlay, Some(GuiOverlay::Confirm(_))) {
             self.execute_gui_overlay_entry(index);
         }
     }
@@ -43,10 +43,10 @@ impl App {
     /// (`daemon-disconnect-handling`: the dialog blocks all other input
     /// until the user chooses), so an outside press leaves it up.
     pub fn dismiss_open_gui_overlay(&mut self) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
+        if matches!(self.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
             return;
         }
-        if let Some(GuiOverlay::Confirm(modal)) = self.gui_overlay.take() {
+        if let Some(GuiOverlay::Confirm(modal)) = self.gui.overlay.take() {
             self.apply_confirm_action(
                 modal.on_confirm,
                 KeyEvent::new(Key::Esc, KeyModifiers::NONE),

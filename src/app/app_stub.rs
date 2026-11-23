@@ -276,7 +276,7 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     // choice, so it opens nothing.
     if let Some(choices) = app.track_popover_choices(chip) {
         let cursor = choices.iter().position(|choice| choice.chosen).unwrap_or(0);
-        app.gui_overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
+        app.gui.overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
     }
     app
 }

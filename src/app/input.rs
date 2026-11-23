@@ -75,7 +75,7 @@ impl App {
         v["pre_mute_volume"] = serde_json::json!(self.pre_mute_volume);
         v["queue_column_width"] = serde_json::json!(self.queue_column_width);
         v["visual_slot_hidden"] = serde_json::json!(self.visual_slot_hidden);
-        v["gui_player_auto_hide"] = serde_json::json!(self.gui_player_auto_hide);
+        v["player_auto_hide"] = serde_json::json!(self.gui.player_auto_hide);
         write_prefs_object(&path, &v);
     }
 }
@@ -124,12 +124,9 @@ mod prefs_tests {
     fn gui_player_auto_hide_prefs_round_trip() {
         let (mut app, _guard) = stub();
 
-        app.gui_player_auto_hide = true;
+        app.gui.player_auto_hide = true;
         app.save_prefs();
-        assert_eq!(
-            App::load_prefs()["gui_player_auto_hide"].as_bool(),
-            Some(true)
-        );
+        assert_eq!(App::load_prefs()["player_auto_hide"].as_bool(), Some(true));
     }
 
     /// `list_pane_width` is a Client key (design D4): the core's `save_prefs`

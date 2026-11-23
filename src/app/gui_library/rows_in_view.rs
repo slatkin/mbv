@@ -35,7 +35,7 @@ impl App {
         ids: Vec<String>,
     ) {
         self.touch_gui_in_view_row_images(scope, &ids);
-        self.gui_rows_in_view.insert(scope, ids);
+        self.gui.rows_in_view.insert(scope, ids);
         self.stamp_navigation();
         self.drop_pending_row_fetches();
         self.gui_queue_in_view_row_fetches();
@@ -68,7 +68,7 @@ impl App {
         let Some(scope) = self.gui_row_art_scope() else {
             return;
         };
-        let Some(ids) = self.gui_rows_in_view.get(&scope).cloned() else {
+        let Some(ids) = self.gui.rows_in_view.get(&scope).cloned() else {
             return;
         };
         if scope == GuiRowArtScope::Music {

@@ -415,7 +415,7 @@ fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
     app.tab = TabSelection::EmbyLibrary(0);
     let mut first = make_item("A Movie", "Movie");
     first.id = "m-1".into();
-    app.gui_emby_roots.insert(
+    app.gui.emby_roots.insert(
         0,
         crate::app::gui_library::GuiEmbyRootItems::Loaded(vec![first]),
     );
@@ -501,7 +501,8 @@ fn plain_movies_app(items: Vec<EmbyItem>) -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui_emby_roots
+    app.gui
+        .emby_roots
         .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
     app
 }
@@ -727,7 +728,7 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
     let mut boxset = make_item("Boxset", "BoxSet");
     boxset.id = "box-1".into();
     let mut app = plain_movies_app(vec![boxset]);
-    app.gui_emby_libs.insert(
+    app.gui.emby_libs.insert(
         0,
         crate::app::gui_library::GuiEmbyLibrarySelection {
             picked_row: Some("box-1".into()),

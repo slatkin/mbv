@@ -273,7 +273,7 @@ impl App {
     fn gui_music_union(&self, lib_idx: usize, group_ids: &[&str]) -> GuiMusicUnion<'_> {
         let mut union = GuiMusicUnion::default();
         let mut seen: HashSet<&str> = HashSet::new();
-        let groups = self.gui_music_albums.get(&lib_idx);
+        let groups = self.gui.music_albums.get(&lib_idx);
         for group_id in group_ids {
             let Some(state) = groups.and_then(|groups| groups.get(*group_id)) else {
                 union.loading = true;
@@ -417,7 +417,7 @@ impl App {
             return Some(pick.clone());
         }
         if single_group.is_none()
-            && let Some(pick) = self.gui_music_union_picks.get(&lib_idx)
+            && let Some(pick) = self.gui.music_union_picks.get(&lib_idx)
             && holds(pick.as_str())
         {
             return Some(pick.clone());
@@ -433,7 +433,8 @@ impl App {
     /// by the owned id pair, so the lookup scans its few entries against the
     /// borrowed id instead of cloning the id for a key.
     fn gui_library_group_pick(&self, lib_idx: usize, group_id: &str) -> Option<&String> {
-        self.gui_library_picks
+        self.gui
+            .library_picks
             .iter()
             .find(|((idx, id), _)| *idx == lib_idx && id == group_id)
             .map(|(_, pick)| pick)

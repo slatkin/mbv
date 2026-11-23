@@ -72,7 +72,7 @@ fn the_chooser_opens_by_key_with_its_cursor_on_the_shown_entry() {
 
     press(&mut app, letter('t'));
 
-    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
+    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the `t` chord opened the Queue chooser");
     };
     assert_eq!(
@@ -81,7 +81,7 @@ fn the_chooser_opens_by_key_with_its_cursor_on_the_shown_entry() {
     );
 
     press(&mut app, letter('t'));
-    assert!(app.gui_overlay.is_none(), "`t` closes the open chooser");
+    assert!(app.gui.overlay.is_none(), "`t` closes the open chooser");
 }
 
 /// The chooser lists the local queues in queue order and then the peer, marks
@@ -120,7 +120,7 @@ fn the_open_chooser_shows_the_entry_under_its_cursor() {
     press(&mut app, KeyEvent::new(Key::Down, KeyModifiers::NONE));
     press(&mut app, KeyEvent::new(Key::Enter, KeyModifiers::NONE));
 
-    assert!(app.gui_overlay.is_none(), "Enter closes the chooser");
+    assert!(app.gui.overlay.is_none(), "Enter closes the chooser");
     assert!(
         matches!(
             cmd_rx.try_recv(),
@@ -153,7 +153,7 @@ fn a_queue_renames_by_key_from_the_chooser() {
         ),
         "the rename names the queue under the cursor and the typed text alone"
     );
-    assert!(app.gui_overlay.is_none(), "the confirmed rename closes it");
+    assert!(app.gui.overlay.is_none(), "the confirmed rename closes it");
 }
 
 /// A name open for edit is selected, so Enter accepts it unchanged and
@@ -177,7 +177,7 @@ fn an_open_name_is_selected_so_enter_keeps_it_and_backspace_clears_it() {
     press(&mut app, KeyEvent::new(Key::Down, KeyModifiers::NONE));
     press(&mut app, letter('r'));
     press(&mut app, KeyEvent::new(Key::Backspace, KeyModifiers::NONE));
-    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
+    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the chooser is open");
     };
     let draft = chooser.renaming.as_ref().expect("the name is open");
@@ -206,7 +206,7 @@ fn a_peer_entry_cannot_be_renamed() {
     // on it: `r` is the chord under test.
     press(&mut app, letter('r'));
 
-    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
+    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the chooser is open");
     };
     assert!(chooser.renaming.is_none(), "a peer entry opens no draft");
@@ -324,7 +324,7 @@ fn the_queue_chords_need_the_queue_pointer_target() {
     );
 
     assert!(
-        app.gui_overlay.is_none(),
+        app.gui.overlay.is_none(),
         "no Queue chord opened the chooser over the Library column"
     );
 }
@@ -342,7 +342,7 @@ fn the_header_chooser_press_opens_the_chooser_review_p1a() {
     app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::QueueChooserToggle));
 
     assert!(
-        matches!(app.gui_overlay, Some(GuiOverlay::QueueChooser(_))),
+        matches!(app.gui.overlay, Some(GuiOverlay::QueueChooser(_))),
         "the header press opened the Queue chooser"
     );
 }

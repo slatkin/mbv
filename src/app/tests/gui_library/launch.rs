@@ -73,16 +73,16 @@ fn seed_launch_selection(app: &mut App, target: &GuiCollectionTarget, keys: &[&s
     let selection = GuiCollectionSelection { set };
     match target {
         GuiCollectionTarget::Music(lib_idx) => {
-            app.gui_library_groups.insert(*lib_idx, selection);
+            app.gui.library_groups.insert(*lib_idx, selection);
         }
         GuiCollectionTarget::Podcasts(lib_idx) => {
-            app.gui_podcast_libs.entry(*lib_idx).or_default().selection = selection;
+            app.gui.podcast_libs.entry(*lib_idx).or_default().selection = selection;
         }
         GuiCollectionTarget::Feeds => {
-            app.gui_feeds_selection.selection = selection;
+            app.gui.feeds_selection.selection = selection;
         }
         GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            app.gui_emby_feed_sets.insert(*lib_idx, selection);
+            app.gui.emby_feed_sets.insert(*lib_idx, selection);
         }
     }
 }
@@ -94,21 +94,24 @@ fn restored_launch_selection<'a>(
 ) -> &'a GuiCollectionSet {
     match target {
         GuiCollectionTarget::Music(lib_idx) => {
-            &app.gui_library_groups
+            &app.gui
+                .library_groups
                 .get(lib_idx)
                 .expect("the set was restored")
                 .set
         }
         GuiCollectionTarget::Podcasts(lib_idx) => {
-            &app.gui_podcast_libs
+            &app.gui
+                .podcast_libs
                 .get(lib_idx)
                 .expect("the set was restored")
                 .selection
                 .set
         }
-        GuiCollectionTarget::Feeds => &app.gui_feeds_selection.selection.set,
+        GuiCollectionTarget::Feeds => &app.gui.feeds_selection.selection.set,
         GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            &app.gui_emby_feed_sets
+            &app.gui
+                .emby_feed_sets
                 .get(lib_idx)
                 .expect("the set was restored")
                 .set
@@ -251,7 +254,8 @@ fn a_saved_resting_music_set_installs_without_a_group_list() {
     );
 
     let stored = app
-        .gui_library_groups
+        .gui
+        .library_groups
         .get(&0)
         .expect("the saved resting set installs with no group list to retain against");
     assert_eq!(
@@ -308,7 +312,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
         "the switch abandons the restore"
     );
     assert!(
-        !app.gui_podcast_libs.contains_key(&1),
+        !app.gui.podcast_libs.contains_key(&1),
         "the saved show never installs under the destination the user moved to"
     );
 }
@@ -339,7 +343,7 @@ fn a_saved_group_no_longer_held_restores_as_all() {
     assert!(app.restore_gui_launch_collections(&state, &destination));
 
     assert!(
-        !app.gui_library_groups.contains_key(&0),
+        !app.gui.library_groups.contains_key(&0),
         "the vanished group restores as All: no entry is stored"
     );
     assert!(
@@ -359,7 +363,7 @@ fn the_shows_view_survives_a_restart() {
     library.collection_type = "tvshows".into();
     app.libs.push(crate::app::LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui_shows_views.insert(0, GuiShowsView::Upcoming);
+    app.gui.shows_views.insert(0, GuiShowsView::Upcoming);
 
     let saved = app.gui_launch_state();
     assert_eq!(saved.shows_view, mbv_config::GuiLaunchShowsView::Upcoming);

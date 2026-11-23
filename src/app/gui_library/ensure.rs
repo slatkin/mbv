@@ -181,7 +181,8 @@ impl GuiDestinationLoads for MusicLoads {
             .collect::<Vec<_>>();
         if group_ids.iter().any(|group_id| {
             matches!(
-                app.gui_music_albums
+                app.gui
+                    .music_albums
                     .get(&self.lib_idx)
                     .and_then(|groups| groups.get(group_id)),
                 Some(GuiGroupAlbums::Loading)
@@ -190,7 +191,8 @@ impl GuiDestinationLoads for MusicLoads {
             return GuiStepOutcome::Continue;
         }
         let Some(group_id) = group_ids.into_iter().find(|group_id| {
-            !app.gui_music_albums
+            !app.gui
+                .music_albums
                 .get(&self.lib_idx)
                 .is_some_and(|groups| groups.contains_key(group_id))
         }) else {

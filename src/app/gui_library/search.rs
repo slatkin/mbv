@@ -91,13 +91,13 @@ impl App {
     /// ignored Library command is logged — never a silent empty result.
     pub fn gui_search_query(&mut self, query: String) {
         if query.trim().is_empty() {
-            self.gui_search = GuiSearchStore::default();
+            self.gui.search = GuiSearchStore::default();
             return;
         }
-        self.gui_search.query.clone_from(&query);
-        self.gui_search.loading = false;
-        self.gui_search.failed = false;
-        self.gui_search.rows.clear();
+        self.gui.search.query.clone_from(&query);
+        self.gui.search.loading = false;
+        self.gui.search.failed = false;
+        self.gui.search.rows.clear();
         let Some(client) = self.emby_snapshot() else {
             Self::log_ignored_library_command(
                 "searchQuery",
@@ -105,14 +105,14 @@ impl App {
             );
             return;
         };
-        self.gui_search.loading = true;
+        self.gui.search.loading = true;
         self.spawn_search_sidebar_query(client, query);
     }
 
     /// Close the GUI's Search results (row 12.1): Esc in the field. The live
     /// query, its rows, and its flags go, so the next query starts clean.
     pub fn gui_search_close(&mut self) {
-        self.gui_search = GuiSearchStore::default();
+        self.gui.search = GuiSearchStore::default();
     }
 
     /// Activate a result (row 12.1): Enter on the row, a press, or the
@@ -127,7 +127,8 @@ impl App {
     /// nowhere.
     pub fn gui_search_activate(&mut self, item_id: String, item_type: String) {
         let known = self
-            .gui_search
+            .gui
+            .search
             .rows
             .iter()
             .any(|row| row.id == item_id && row.item_type == item_type);
@@ -136,7 +137,7 @@ impl App {
             return;
         }
         let libs = self.library_tabs_for_nav();
-        self.gui_search = GuiSearchStore::default();
+        self.gui.search = GuiSearchStore::default();
         self.spawn_navigate_to_item(item_id, item_type, libs);
     }
 
@@ -161,14 +162,14 @@ impl App {
     /// a closed field projects nothing, so the frame rides it as `null`.
     #[must_use]
     pub fn gui_search_projection(&self) -> Option<GuiSearchProjection> {
-        if self.gui_search.query.trim().is_empty() && self.gui_search.rows.is_empty() {
+        if self.gui.search.query.trim().is_empty() && self.gui.search.rows.is_empty() {
             return None;
         }
         Some(GuiSearchProjection {
-            query: self.gui_search.query.clone(),
-            loading: self.gui_search.loading,
-            failed: self.gui_search.failed,
-            rows: self.gui_search.rows.clone(),
+            query: self.gui.search.query.clone(),
+            loading: self.gui.search.loading,
+            failed: self.gui.search.failed,
+            rows: self.gui.search.rows.clone(),
         })
     }
 
@@ -183,24 +184,24 @@ impl App {
         query: &str,
         result: Result<Vec<EmbyItem>, EmbyError>,
     ) -> bool {
-        if query != self.gui_search.query {
+        if query != self.gui.search.query {
             return false;
         }
-        self.gui_search.loading = false;
+        self.gui.search.loading = false;
         match result {
             Ok(items) => {
-                self.gui_search.failed = false;
-                self.gui_search.rows = items
+                self.gui.search.failed = false;
+                self.gui.search.rows = items
                     .iter()
                     .filter(|item| is_navigable_type(&item.item_type))
                     .map(gui_search_row)
                     .collect();
             }
             Err(error) => {
-                self.gui_search.failed = true;
-                self.gui_search.rows.clear();
+                self.gui.search.failed = true;
+                self.gui.search.rows.clear();
                 tracing::info!(
-                    name: "gui_search.query.failed",
+                    name: "search.query.failed",
                     target: "gui_library",
                     query,
                     error = %error,

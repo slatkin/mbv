@@ -90,7 +90,7 @@ impl App {
     /// carries. `None` while no right-click has named a row, the named row is
     /// gone, or another panel holds focus.
     pub fn gui_library_row_menu(&mut self) -> Option<GuiLibraryRowMenu> {
-        let row = self.gui_library_row_menu_target.clone()?;
+        let row = self.gui.library_row_menu_target.clone()?;
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             return None;
         }

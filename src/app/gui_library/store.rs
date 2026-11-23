@@ -61,9 +61,10 @@ impl App {
         let previous = self.gui_effective_music_set(lib_idx);
         let next_single = matches!(&set, GuiCollectionSet::Checked(keys) if keys.len() == 1);
         if !next_single && let Some(album_id) = self.gui_hero_album_under(lib_idx, &previous) {
-            self.gui_music_union_picks.insert(lib_idx, album_id);
+            self.gui.music_union_picks.insert(lib_idx, album_id);
         }
-        self.gui_library_groups
+        self.gui
+            .library_groups
             .insert(lib_idx, GuiCollectionSelection { set });
         self.clear_failed_music_groups(lib_idx);
         self.ensure_gui_destination(GuiDestinationKind::Music { lib_idx });
@@ -80,7 +81,7 @@ impl App {
             .into_iter()
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        let Some(groups) = self.gui_music_albums.get_mut(&lib_idx) else {
+        let Some(groups) = self.gui.music_albums.get_mut(&lib_idx) else {
             return;
         };
         for group_id in group_ids {
@@ -100,11 +101,12 @@ impl App {
     fn gui_hero_album_under(&self, lib_idx: usize, set: &GuiCollectionSet) -> Option<String> {
         match set {
             GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
-                if let Some(pick) = self.gui_library_picks.get(&(lib_idx, keys[0].clone())) {
+                if let Some(pick) = self.gui.library_picks.get(&(lib_idx, keys[0].clone())) {
                     return Some(pick.clone());
                 }
                 match self
-                    .gui_music_albums
+                    .gui
+                    .music_albums
                     .get(&lib_idx)
                     .and_then(|groups| groups.get(&keys[0]))
                 {
@@ -114,7 +116,7 @@ impl App {
                     Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Failed) | None => None,
                 }
             }
-            _ => self.gui_music_union_picks.get(&lib_idx).cloned(),
+            _ => self.gui.music_union_picks.get(&lib_idx).cloned(),
         }
     }
 
@@ -154,7 +156,8 @@ impl App {
     /// lands in the store outside `nav_stack`.
     pub(in crate::app) fn fetch_gui_group_albums(&mut self, lib_idx: usize, group_id: String) {
         if matches!(
-            self.gui_music_albums
+            self.gui
+                .music_albums
                 .get(&lib_idx)
                 .and_then(|groups| groups.get(&group_id)),
             Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Loaded(_))
@@ -170,7 +173,8 @@ impl App {
             // would change the built content between collects with no mark.
             return;
         };
-        self.gui_music_albums
+        self.gui
+            .music_albums
             .entry(lib_idx)
             .or_default()
             .insert(group_id.clone(), GuiGroupAlbums::Loading);
@@ -207,7 +211,8 @@ impl App {
                 GuiGroupAlbums::Failed
             }
         };
-        self.gui_music_albums
+        self.gui
+            .music_albums
             .entry(lib_idx)
             .or_default()
             .insert(group_id, state);
@@ -238,22 +243,25 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
     }
 
     fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
-        app.gui_library_groups
+        app.gui
+            .library_groups
             .get(&self.0)
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.set)
     }
 
     fn has_stored_selection(&self, app: &App) -> bool {
-        app.gui_library_groups.contains_key(&self.0)
+        app.gui.library_groups.contains_key(&self.0)
             || app
-                .gui_library_picks
+                .gui
+                .library_picks
                 .keys()
                 .any(|(lib_idx, _)| *lib_idx == self.0)
     }
 
     fn saved_picks(&self, app: &App) -> Vec<GuiGroupPick> {
         let mut picks: Vec<GuiGroupPick> = app
-            .gui_library_picks
+            .gui
+            .library_picks
             .iter()
             .filter(|((pick_lib, _), _)| *pick_lib == self.0)
             .map(|((_, group_id), album_id)| GuiGroupPick {
@@ -267,7 +275,8 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
 
     fn install_picks(&self, app: &mut App, picks: &[GuiGroupPick]) {
         for pick in picks {
-            app.gui_library_picks
+            app.gui
+                .library_picks
                 .entry((self.0, pick.group_id.clone()))
                 .or_insert_with(|| pick.album_id.clone());
         }

@@ -78,7 +78,7 @@ impl App {
             Self::log_stale_library_item("absSelect", book_id);
             return;
         }
-        self.gui_abs_libs.entry(lib_idx).or_default().picked_book = Some(book_id.to_string());
+        self.gui.abs_libs.entry(lib_idx).or_default().picked_book = Some(book_id.to_string());
         // The loader reads the active tab's own browse state, so the load
         // starts for the destination that is open; the frame path's ensure
         // covers the pick a restore or a late select left unloaded.
@@ -120,7 +120,8 @@ impl App {
     pub(in crate::app) fn gui_abs_effective_pick(&self, lib_idx: usize) -> Option<String> {
         let state = self.audiobookshelf_book_browse.get(lib_idx)?;
         picked_or_first(
-            self.gui_abs_libs
+            self.gui
+                .abs_libs
                 .get(&lib_idx)
                 .and_then(|selection| selection.picked_book.clone()),
             |picked| {

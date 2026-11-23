@@ -118,7 +118,7 @@ fn row_labels(row: &GuiHomeRow) -> (&str, Option<&str>) {
 /// Seed both TV list sources, which now belong to Shows, so the Home
 /// projection's two-section contract is checked against populated sources.
 fn seed_relocated_tv_lists(app: &mut App) {
-    app.gui_shows_new.insert(
+    app.gui.shows_new.insert(
         "lib-tv".into(),
         crate::app::gui_library::GuiSectionRequest::Landed(vec![make_item(
             "An episode",
@@ -264,7 +264,7 @@ fn a_stale_selection_falls_back_to_the_first_item_row() {
         continue_item("cw-first", "Movie One", 0, 0),
         continue_item("cw-second", "Movie Two", 0, 0),
     ]);
-    app.gui_home_selection = Some(GuiHomeRowId::Recent(QueueItemContentId::Feed(
+    app.gui.home_selection = Some(GuiHomeRowId::Recent(QueueItemContentId::Feed(
         "gone".into(),
     )));
 

@@ -361,7 +361,7 @@ impl App {
                 self.run_gui_library_menu_entry(&row, index);
             }
             GuiLibraryCommand::RowMenu { row } => {
-                self.gui_library_row_menu_target = Some(row);
+                self.gui.library_row_menu_target = Some(row);
             }
             GuiLibraryCommand::HomeSelect { row } => self.select_gui_home_row(&row),
             GuiLibraryCommand::HomePlay { row } => self.play_gui_home_row(&row),
@@ -562,7 +562,7 @@ impl App {
     /// selection is the core's, so the frame carries it back and the launch
     /// of a window-content reload keeps it.
     fn select_gui_home_row(&mut self, row: &GuiHomeRowId) {
-        self.gui_home_selection = Some(row.clone());
+        self.gui.home_selection = Some(row.clone());
     }
 
     /// Play a Home row (design D12): the Home flat list's play path, whose

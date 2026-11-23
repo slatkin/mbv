@@ -28,22 +28,22 @@ impl App {
         // Step 2: the GUI Library's selections. The fetched content stays —
         // the reset is presentation only, and no refetch follows it, as the
         // TUI's reset keeps its fetched content too.
-        self.gui_library_groups.clear();
-        self.gui_library_picks.clear();
-        self.gui_music_union_picks.clear();
-        self.gui_home_selection = None;
-        self.gui_tv_shows.clear();
-        self.gui_emby_libs.clear();
-        self.gui_abs_libs.clear();
-        self.gui_podcast_libs.clear();
+        self.gui.library_groups.clear();
+        self.gui.library_picks.clear();
+        self.gui.music_union_picks.clear();
+        self.gui.home_selection = None;
+        self.gui.tv_shows.clear();
+        self.gui.emby_libs.clear();
+        self.gui.abs_libs.clear();
+        self.gui.podcast_libs.clear();
         // Step 3's App half: the canvas panel's two toggles. The Queue
         // Surface state's cursor, marks, and viewport belong to the core.
-        self.panel_collapsed = false;
-        self.queue_folded = false;
+        self.gui.panel_toggles.collapsed = false;
+        self.gui.panel_toggles.queue_folded = false;
         // Step 4: the GUI's blocking overlay (a confirmation or the
         // daemon-lost dialog) and the Settings screen. A pending shell
         // request the GUI has not drained goes with them.
-        self.gui_overlay = None;
+        self.gui.overlay = None;
         self.pending_overlay = None;
         self.close_gui_settings();
     }
@@ -63,6 +63,6 @@ impl App {
     /// Design D10's step 6: the frame's reset counter, which the window
     /// content watches to reset its own interaction stores.
     pub fn bump_gui_ui_reset_epoch(&mut self) {
-        self.gui_ui_reset_epoch = self.gui_ui_reset_epoch.wrapping_add(1);
+        self.gui.ui_reset_epoch = self.gui.ui_reset_epoch.wrapping_add(1);
     }
 }

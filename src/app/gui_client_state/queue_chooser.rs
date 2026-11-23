@@ -72,8 +72,8 @@ impl App {
     /// cursor on the shown entry, so Enter leaves the shown queue as it is, and
     /// it starts no rename draft.
     pub(in crate::app) fn toggle_gui_queue_chooser(&mut self) {
-        if let Some(GuiOverlay::QueueChooser(_)) = &self.gui_overlay {
-            self.gui_overlay = None;
+        if let Some(GuiOverlay::QueueChooser(_)) = &self.gui.overlay {
+            self.gui.overlay = None;
             return;
         }
         let cursor = self
@@ -81,7 +81,7 @@ impl App {
             .iter()
             .position(|entry| entry.shown)
             .unwrap_or(0);
-        self.gui_overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
+        self.gui.overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
             cursor,
             renaming: None,
         }));
@@ -99,8 +99,8 @@ impl App {
     /// the current queue, as it does after a close, so the shown entry never
     /// names a queue with no label and no edits.
     pub(in crate::app) fn show_gui_queue_chooser_entry(&mut self, queue: Option<NamedQueueId>) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::QueueChooser(_))) {
-            self.gui_overlay = None;
+        if matches!(self.gui.overlay, Some(GuiOverlay::QueueChooser(_))) {
+            self.gui.overlay = None;
         }
         match queue {
             Some(queue) if !self.named_queues.holds(queue) => self.show_local_current_entry(),
@@ -119,7 +119,7 @@ impl App {
         if name.is_empty() {
             return;
         }
-        self.gui_overlay = None;
+        self.gui.overlay = None;
         if let Some(op) = self.send_named_queue_cmd("rename", |remote| {
             remote.send_named_queue_rename(queue, name.to_string())
         }) {

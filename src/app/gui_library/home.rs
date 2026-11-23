@@ -285,7 +285,8 @@ impl App {
         let items: Vec<&GuiHomeItem> = continue_rows.iter().chain(recent_rows.iter()).collect();
         let default_hero = items.first().map(|item| item.row.id.clone());
         let selected = self
-            .gui_home_selection
+            .gui
+            .home_selection
             .clone()
             .filter(|selected| items.iter().any(|item| item.id() == selected))
             .or(default_hero);

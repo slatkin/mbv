@@ -27,7 +27,7 @@ fn player_menu_right_click_opens_at_the_pointer() {
         PlaybackRequest::OpenPlayerMenu { x: 30.0, y: 40.0 },
     );
 
-    assert!(matches!(app.gui_overlay, Some(GuiOverlay::PlayerMenu(_))));
+    assert!(matches!(app.gui.overlay, Some(GuiOverlay::PlayerMenu(_))));
     let playback = app.queue_playback_projection();
     let Some(GuiOverlayProjection::PlayerMenu { cursor, x, y }) =
         app.gui_overlay_projection(&playback)
@@ -45,15 +45,15 @@ fn player_menu_esc_closes_with_no_toggle() {
         &mut app,
         PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 },
     );
-    let before = app.gui_player_auto_hide;
+    let before = app.gui.player_auto_hide;
 
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
         None,
     );
 
-    assert!(app.gui_overlay.is_none());
-    assert_eq!(app.gui_player_auto_hide, before);
+    assert!(app.gui.overlay.is_none());
+    assert_eq!(app.gui.player_auto_hide, before);
 }
 
 // Enter on the menu toggles the persisted preference through the same
@@ -65,15 +65,15 @@ fn player_menu_enter_toggles_and_closes() {
         &mut app,
         PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 },
     );
-    let before = app.gui_player_auto_hide;
+    let before = app.gui.player_auto_hide;
 
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
         None,
     );
 
-    assert!(app.gui_overlay.is_none());
-    assert_eq!(app.gui_player_auto_hide, !before);
+    assert!(app.gui.overlay.is_none());
+    assert_eq!(app.gui.player_auto_hide, !before);
 }
 
 // The entry press runs the same toggle and close as the menu's Enter, and a
@@ -85,12 +85,12 @@ fn player_menu_entry_press_toggles_and_a_stale_press_changes_nothing() {
         &mut app,
         PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 },
     );
-    let before = app.gui_player_auto_hide;
+    let before = app.gui.player_auto_hide;
 
     gui_request(&mut app, PlaybackRequest::PlayerMenuSelect);
-    assert!(app.gui_overlay.is_none());
-    assert_eq!(app.gui_player_auto_hide, !before);
+    assert!(app.gui.overlay.is_none());
+    assert_eq!(app.gui.player_auto_hide, !before);
 
     gui_request(&mut app, PlaybackRequest::PlayerMenuSelect);
-    assert_eq!(app.gui_player_auto_hide, !before);
+    assert_eq!(app.gui.player_auto_hide, !before);
 }

@@ -1,7 +1,7 @@
 //! The GUI Library panel's one list sort (gui-flat-list-sort design D1, D2,
 //! D3): the single-choice order every flat list carries, the target each
 //! list's sort is keyed by, and the choices and default of each target. The
-//! store sits beside them (`App::gui_list_sorts`), keyed by the
+//! store sits beside them (`App::list_sorts`), keyed by the
 //! destination's stable identity, because a sort is sticky per destination
 //! and survives a restart through the launch file.
 
@@ -253,12 +253,13 @@ impl App {
         sort: GuiListSort,
     ) {
         match self
-            .gui_list_sorts
+            .gui
+            .list_sorts
             .iter_mut()
             .find(|(stored, _)| stored == &identity)
         {
             Some(entry) => entry.1 = sort,
-            None => self.gui_list_sorts.push((identity, sort)),
+            None => self.gui.list_sorts.push((identity, sort)),
         }
     }
 
@@ -270,7 +271,8 @@ impl App {
         &self,
         identity: &TabIdentity,
     ) -> Option<GuiListSort> {
-        self.gui_list_sorts
+        self.gui
+            .list_sorts
             .iter()
             .find(|(stored, _)| stored == identity)
             .map(|(_, sort)| *sort)

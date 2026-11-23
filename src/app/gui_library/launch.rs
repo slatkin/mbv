@@ -74,7 +74,8 @@ impl App {
     /// changed, so a destination the session never touched opens on its own
     /// default.
     fn gui_launch_sorts(&self) -> Vec<GuiLaunchListSort> {
-        self.gui_list_sorts
+        self.gui
+            .list_sorts
             .iter()
             .map(|(destination, sort)| GuiLaunchListSort {
                 destination: destination.clone(),
@@ -125,7 +126,7 @@ impl App {
             let GuiDestinationKind::Shows { lib_idx } = kind else {
                 continue;
             };
-            if !self.gui_shows_views.contains_key(&lib_idx) {
+            if !self.gui.shows_views.contains_key(&lib_idx) {
                 self.set_gui_shows_view(lib_idx, shows_view(view));
             }
         }

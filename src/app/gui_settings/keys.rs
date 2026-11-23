@@ -145,7 +145,7 @@ impl App {
                 "Key bindings changed but the save failed ({error})"
             ));
         }
-        if let Some(state) = self.gui_settings.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.refusal = None;
         }
     }
@@ -154,13 +154,13 @@ impl App {
     /// the rule and, for a collision, the other action the load message names.
     fn set_gui_settings_key_refusal(&mut self, action: Option<&str>, text: &str) {
         tracing::info!(
-            name: "gui_settings.keys.refused",
-            target: "gui_settings",
+            name: "settings.keys.refused",
+            target: "settings",
             action = action.unwrap_or("prefix"),
             reason = %text,
             "the Keys edit was refused"
         );
-        if let Some(state) = self.gui_settings.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.refusal = Some(GuiSettingsKeyRefusalProjection {
                 action: action.unwrap_or("prefix").to_string(),
                 text: text.to_string(),

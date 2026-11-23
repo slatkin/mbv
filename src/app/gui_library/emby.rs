@@ -126,7 +126,8 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
     }
 
     fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
-        app.gui_emby_feed_sets
+        app.gui
+            .emby_feed_sets
             .get(&self.0)
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.set)
     }
@@ -135,7 +136,7 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
         // Only a user press or the launch restore stores a set: the shown
         // pass's claim is not a selection, so a painted frame never blocks
         // the saved folders.
-        app.gui_emby_feed_sets.contains_key(&self.0)
+        app.gui.emby_feed_sets.contains_key(&self.0)
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -192,10 +193,10 @@ impl App {
             // until the library is opened again"), so the open clears the
             // failed mark the root step's fetch would otherwise honour.
             if matches!(
-                self.gui_emby_roots.get(&lib_idx),
+                self.gui.emby_roots.get(&lib_idx),
                 Some(GuiEmbyRootItems::Failed)
             ) {
-                self.gui_emby_roots.remove(&lib_idx);
+                self.gui.emby_roots.remove(&lib_idx);
             }
         }
         self.ensure_gui_destination(GuiDestinationKind::Library { lib_idx });
@@ -220,14 +221,15 @@ impl App {
             return;
         }
         let unchanged = self
-            .gui_emby_libs
+            .gui
+            .emby_libs
             .get(&lib_idx)
             .and_then(|selection| selection.picked_row.as_deref())
             == Some(item_id);
         if unchanged {
             return;
         }
-        self.gui_emby_libs.entry(lib_idx).or_default().picked_row = Some(item_id.to_string());
+        self.gui.emby_libs.entry(lib_idx).or_default().picked_row = Some(item_id.to_string());
         // A pick move is library navigation: it closes the image warm gate, so
         // fast arrow traffic warms no neighbour art (the TUI's own rule).
         self.stamp_navigation();
@@ -245,7 +247,7 @@ impl App {
             let (items, loading) = self.gui_emby_feed_gathered(lib_idx, set.as_ref());
             return loading || items.iter().any(|item| item.id == item_id);
         }
-        match self.gui_emby_roots.get(&lib_idx) {
+        match self.gui.emby_roots.get(&lib_idx) {
             Some(GuiEmbyRootItems::Loaded(items)) => items.iter().any(|item| item.id == item_id),
             Some(GuiEmbyRootItems::Failed) => false,
             Some(GuiEmbyRootItems::Loading) | None => true,
@@ -269,14 +271,16 @@ impl App {
     /// missing (row 8.1; gui-collection-dropdown design D5): the one write
     /// the toggle and All presses share.
     fn install_gui_emby_feed_set(&mut self, lib_idx: usize, set: GuiCollectionSet) {
-        self.gui_emby_feed_sets
+        self.gui
+            .emby_feed_sets
             .insert(lib_idx, GuiCollectionSelection { set });
         // A user press (or the launch restore) is the one refetch trigger
         // (design D3): clearing the failed marks here lets the ensure step
         // start the selection's failed targets again, and an automatic
         // repaint never does.
         if let Some(claim) = self
-            .gui_emby_libs
+            .gui
+            .emby_libs
             .get_mut(&lib_idx)
             .and_then(|selection| selection.feed_claim.as_mut())
         {
@@ -302,7 +306,8 @@ impl App {
         // so a painted frame never blocks the launch restore. A Client that
         // never shows the destination claims nothing, so the TUI's own
         // stale-drop rule alone governs its results.
-        self.gui_emby_libs
+        self.gui
+            .emby_libs
             .entry(lib_idx)
             .or_default()
             .feed_claim
@@ -348,7 +353,8 @@ impl App {
     /// leaves the TUI's own stale-drop rule alone in a Client that never
     /// shows the destination.
     fn gui_emby_feed_claim(&self, lib_idx: usize) -> Option<&GuiEmbyFeedClaim> {
-        self.gui_emby_libs
+        self.gui
+            .emby_libs
             .get(&lib_idx)
             .and_then(|selection| selection.feed_claim.as_ref())
     }
@@ -467,7 +473,7 @@ impl App {
     /// re-issues it.
     pub(in crate::app) fn fetch_gui_emby_root_items(&mut self, lib_idx: usize) {
         if matches!(
-            self.gui_emby_roots.get(&lib_idx),
+            self.gui.emby_roots.get(&lib_idx),
             Some(
                 GuiEmbyRootItems::Loading | GuiEmbyRootItems::Loaded(_) | GuiEmbyRootItems::Failed
             )
@@ -475,7 +481,8 @@ impl App {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
-            self.gui_emby_roots
+            self.gui
+                .emby_roots
                 .insert(lib_idx, GuiEmbyRootItems::Failed);
             return;
         };
@@ -487,7 +494,8 @@ impl App {
             "the root-list store reads the name sort"
         );
         debug_assert_eq!(sort_order.as_str(), "Ascending");
-        self.gui_emby_roots
+        self.gui
+            .emby_roots
             .insert(lib_idx, GuiEmbyRootItems::Loading);
         let parent_id = self.libs[lib_idx].library.id.clone();
         let tx = self.channels.lib_tx.clone();
@@ -517,7 +525,7 @@ impl App {
                 GuiEmbyRootItems::Failed
             }
         };
-        self.gui_emby_roots.insert(lib_idx, state);
+        self.gui.emby_roots.insert(lib_idx, state);
     }
 
     /// Play the plain Emby-library row a command names (design D12, row
@@ -569,7 +577,7 @@ impl App {
         &self,
         lib_idx: usize,
     ) -> impl Iterator<Item = &EmbyItem> {
-        match self.gui_emby_roots.get(&lib_idx) {
+        match self.gui.emby_roots.get(&lib_idx) {
             Some(GuiEmbyRootItems::Loaded(items)) => items.iter(),
             Some(GuiEmbyRootItems::Loading | GuiEmbyRootItems::Failed) | None => [].iter(),
         }

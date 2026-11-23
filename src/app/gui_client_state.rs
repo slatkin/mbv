@@ -20,9 +20,11 @@ mod projection;
 mod queue_chooser;
 mod queue_controls;
 mod row_menu;
+mod state;
 mod target;
 
 pub(in crate::app) use self::overlay::GuiOverlay;
+pub(in crate::app) use self::state::GuiClientState;
 // The one `overlay` value the test stub builds by hand, so its re-export
 // follows the stub's own gate and a shipped build carries no unused import.
 #[cfg(any(test, feature = "test"))]
@@ -43,15 +45,15 @@ impl App {
     /// the section build reads it here rather than from the window.
     #[must_use]
     pub fn gui_player_auto_hide(&self) -> bool {
-        self.gui_player_auto_hide
+        self.gui.player_auto_hide
     }
 
     /// The canvas panel's collapse and queue-fold facts (design D10).
     #[must_use]
     pub fn panel_toggles_projection(&self) -> PanelTogglesProjection {
         PanelTogglesProjection {
-            collapsed: self.panel_collapsed,
-            queue_folded: self.queue_folded,
+            collapsed: self.gui.panel_toggles.collapsed,
+            queue_folded: self.gui.panel_toggles.queue_folded,
         }
     }
 
@@ -96,11 +98,11 @@ impl App {
 
     /// The `z` toggle (design D10): collapse the panel to the rail.
     pub(in crate::app) fn toggle_panel_collapse(&mut self) {
-        self.panel_collapsed = !self.panel_collapsed;
+        self.gui.panel_toggles.collapsed = !self.gui.panel_toggles.collapsed;
     }
 
     /// The `q` toggle (design D10): fold the expanded panel's queue.
     pub(in crate::app) fn toggle_queue_fold(&mut self) {
-        self.queue_folded = !self.queue_folded;
+        self.gui.panel_toggles.queue_folded = !self.gui.panel_toggles.queue_folded;
     }
 }

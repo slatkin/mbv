@@ -35,7 +35,8 @@ impl ClientLibraryStores for GuiLibraryStores {
             // cache miss can fetch it again.
             ClientLibraryEffect::FeedTargetLanded { lib_idx, selection } => {
                 if let Some(claim) = app
-                    .gui_emby_libs
+                    .gui
+                    .emby_libs
                     .get_mut(&lib_idx)
                     .and_then(|stored| stored.feed_claim.as_mut())
                 {
@@ -46,7 +47,8 @@ impl ClientLibraryStores for GuiLibraryStores {
             // until a user press clears it and no repaint retries it.
             ClientLibraryEffect::FeedTargetFailed { lib_idx, selection } => {
                 if let Some(claim) = app
-                    .gui_emby_libs
+                    .gui
+                    .emby_libs
                     .get_mut(&lib_idx)
                     .and_then(|stored| stored.feed_claim.as_mut())
                 {

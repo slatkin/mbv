@@ -84,13 +84,14 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
     }
 
     fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
-        app.gui_podcast_libs
+        app.gui
+            .podcast_libs
             .get(&self.0)
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.selection.set)
     }
 
     fn has_stored_selection(&self, app: &App) -> bool {
-        app.gui_podcast_libs.contains_key(&self.0)
+        app.gui.podcast_libs.contains_key(&self.0)
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -154,7 +155,8 @@ impl App {
     /// path installs the change, the store records it, and the loads the
     /// selection needs start (gui-collection-dropdown design D2, D5).
     fn install_gui_podcast_set(&mut self, lib_idx: usize, set: GuiCollectionSet) {
-        self.gui_podcast_libs
+        self.gui
+            .podcast_libs
             .entry(lib_idx)
             .or_default()
             .selection
@@ -181,7 +183,8 @@ impl App {
             Self::log_stale_library_item("podcastSelect", target.episode_id());
             return;
         }
-        self.gui_podcast_libs
+        self.gui
+            .podcast_libs
             .entry(lib_idx)
             .or_default()
             .picked_episode = Some(target.clone());
@@ -353,7 +356,7 @@ impl App {
     /// list, so the Hero's default is never blank.
     #[must_use]
     pub fn gui_podcast_picked_episode(&self, lib_idx: usize) -> Option<&PodcastEpisodeTarget> {
-        self.gui_podcast_libs.get(&lib_idx)?.picked_episode.as_ref()
+        self.gui.podcast_libs.get(&lib_idx)?.picked_episode.as_ref()
     }
 
     /// Commit the checked shows' scope to the browse state the bounded

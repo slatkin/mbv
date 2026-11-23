@@ -263,7 +263,8 @@ impl App {
                 let rows = self.gui_shows_new_rows(frame.active);
                 sort_frame = Some(frame);
                 let selected = self
-                    .gui_shows_flat_selection
+                    .gui
+                    .shows_flat_selection
                     .clone()
                     .filter(|id| rows.iter().any(|row| row.id == *id))
                     .or_else(|| rows.first().map(|row| row.id.clone()));
@@ -273,7 +274,8 @@ impl App {
                     .map(|item| self.gui_shows_flat_hero(&item));
                 let loading = self.libs.get(lib_idx).is_some_and(|lib| {
                     !self
-                        .gui_shows_new
+                        .gui
+                        .shows_new
                         .get(&lib.library.id)
                         .is_some_and(GuiSectionRequest::is_landed)
                 });
@@ -322,7 +324,8 @@ impl App {
     /// episodes` section's.
     fn gui_shows_new_rows(&self, sort: GuiListSort) -> Vec<GuiShowsRow> {
         let mut items: Vec<EmbyItem> = self
-            .gui_shows_new
+            .gui
+            .shows_new
             .values()
             .flat_map(GuiSectionRequest::items)
             .cloned()
@@ -476,7 +479,8 @@ impl App {
                         .any(|item| item.id == series_id && item.item_type == "Series")
                 })
         };
-        self.gui_tv_shows
+        self.gui
+            .tv_shows
             .get(&lib_idx)
             .and_then(|selection| selection.series_id.clone())
             .filter(|stored| in_root(stored))
@@ -517,7 +521,7 @@ impl App {
 
     /// The Shows library's selection, as the TUI's empty selection reads.
     pub(super) fn gui_shows_selection(&self, lib_idx: usize) -> GuiTvShowsSelection {
-        self.gui_tv_shows.get(&lib_idx).cloned().unwrap_or_default()
+        self.gui.tv_shows.get(&lib_idx).cloned().unwrap_or_default()
     }
 
     /// The Emby item a Shows play command names (design D12, D9): a New row

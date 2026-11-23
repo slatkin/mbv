@@ -225,7 +225,7 @@ impl App {
                 album
             })
             .collect();
-        self.gui_music_albums.entry(lib_idx).or_default().insert(
+        self.gui.music_albums.entry(lib_idx).or_default().insert(
             group_id.to_string(),
             crate::app::gui_library::GuiGroupAlbums::Loaded(albums),
         );
@@ -251,7 +251,8 @@ impl App {
     #[must_use]
     pub fn gui_library_groups_for_test(&self, lib_idx: usize) -> Option<&str> {
         match self
-            .gui_library_groups
+            .gui
+            .library_groups
             .get(&lib_idx)
             .map(|stored| &stored.set)
         {
@@ -269,7 +270,7 @@ impl App {
     /// test's mock answers serve the test's commands alone.
     #[cfg(feature = "test")]
     pub fn seed_gui_library_groups_for_test(&mut self, lib_idx: usize, group_id: &str) {
-        self.gui_library_groups.insert(
+        self.gui.library_groups.insert(
             lib_idx,
             crate::app::gui_library::GuiCollectionSelection {
                 set: crate::app::gui_library::GuiCollectionSet::Checked(vec![group_id.to_string()]),
@@ -286,7 +287,8 @@ impl App {
         group_id: &str,
     ) -> Option<Vec<String>> {
         match self
-            .gui_music_albums
+            .gui
+            .music_albums
             .get(&lib_idx)
             .and_then(|groups| groups.get(group_id))
         {
@@ -304,7 +306,8 @@ impl App {
     /// The album a collection group's pill last showed (design D13).
     #[must_use]
     pub fn gui_library_pick_for_test(&self, lib_idx: usize, group_id: &str) -> Option<&str> {
-        self.gui_library_picks
+        self.gui
+            .library_picks
             .get(&(lib_idx, group_id.to_string()))
             .map(String::as_str)
     }
@@ -313,7 +316,8 @@ impl App {
     /// `lib_idx` (add-gui-library-panel row 8.1).
     #[must_use]
     pub fn gui_emby_picked_row_for_test(&self, lib_idx: usize) -> Option<&str> {
-        self.gui_emby_libs
+        self.gui
+            .emby_libs
             .get(&lib_idx)
             .and_then(|selection| selection.picked_row.as_deref())
     }
@@ -322,7 +326,7 @@ impl App {
     /// `None` while the list is loading or after its fetch failed (row 8.1).
     #[must_use]
     pub fn gui_emby_root_ids_for_test(&self, lib_idx: usize) -> Option<Vec<String>> {
-        match self.gui_emby_roots.get(&lib_idx) {
+        match self.gui.emby_roots.get(&lib_idx) {
             Some(crate::app::gui_library::GuiEmbyRootItems::Loaded(items)) => {
                 Some(items.iter().map(|item| item.id.clone()).collect())
             }
@@ -344,7 +348,7 @@ impl App {
         lib_idx: usize,
         items: Vec<mbv_emby_model::EmbyItem>,
     ) {
-        self.gui_emby_roots.insert(
+        self.gui.emby_roots.insert(
             lib_idx,
             crate::app::gui_library::GuiEmbyRootItems::Loaded(items),
         );

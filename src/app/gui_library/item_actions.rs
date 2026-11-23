@@ -50,15 +50,15 @@ impl App {
         };
         if let Some(group_id) = single_group {
             let key = (lib_idx, group_id);
-            if self.gui_library_picks.get(&key) == Some(&item.id) {
+            if self.gui.library_picks.get(&key) == Some(&item.id) {
                 return;
             }
-            self.gui_library_picks.insert(key, item.id);
+            self.gui.library_picks.insert(key, item.id);
         } else {
-            if self.gui_music_union_picks.get(&lib_idx) == Some(&item.id) {
+            if self.gui.music_union_picks.get(&lib_idx) == Some(&item.id) {
                 return;
             }
-            self.gui_music_union_picks.insert(lib_idx, item.id);
+            self.gui.music_union_picks.insert(lib_idx, item.id);
         }
         // A pick move is library navigation: it closes the image warm gate, so
         // fast arrow traffic warms no neighbour art (the TUI's own rule).
@@ -197,7 +197,8 @@ impl App {
             // A Shows New row names one of the library's latest episodes, and
             // only its own fetch's landed rows hold that list (design D9).
             let shows_new = || {
-                self.gui_shows_new
+                self.gui
+                    .shows_new
                     .get(&lib.library.id)
                     .into_iter()
                     .flat_map(GuiSectionRequest::items)
@@ -272,7 +273,8 @@ impl App {
 
     /// The albums the GUI store loaded for `lib_idx`'s selected groups.
     pub(super) fn gui_stored_albums(&self, lib_idx: usize) -> impl Iterator<Item = &EmbyItem> {
-        self.gui_music_albums
+        self.gui
+            .music_albums
             .get(&lib_idx)
             .into_iter()
             .flat_map(|groups| groups.values())

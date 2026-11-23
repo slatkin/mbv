@@ -27,7 +27,8 @@ impl App {
     /// The Shows view of one library (design D8): a library with no stored
     /// choice shows All, the default.
     pub(in crate::app) fn gui_shows_view(&self, lib_idx: usize) -> GuiShowsView {
-        self.gui_shows_views
+        self.gui
+            .shows_views
             .get(&lib_idx)
             .copied()
             .unwrap_or_default()
@@ -51,7 +52,7 @@ impl App {
         if self.gui_shows_view(lib_idx) == view {
             return;
         }
-        self.gui_shows_views.insert(lib_idx, view);
+        self.gui.shows_views.insert(lib_idx, view);
         match view {
             GuiShowsView::All | GuiShowsView::Upcoming => {
                 self.maybe_spawn_tv_upcoming_snapshot(lib_idx);
@@ -81,10 +82,10 @@ impl App {
 
     /// Start one TV library's New fetch (design D9): the same
     /// `get_latest_episodes(parent_id, 30)` call the TUI's Latest level makes,
-    /// on a worker thread, landing in `gui_shows_new` through its own event.
+    /// on a worker thread, landing in `shows_new` through its own event.
     /// It never touches `nav_stack`, so the TUI's levels are the TUI's.
     fn spawn_gui_shows_new(&mut self, library_id: String) {
-        if self.gui_shows_new.contains_key(&library_id) {
+        if self.gui.shows_new.contains_key(&library_id) {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
@@ -92,7 +93,8 @@ impl App {
         };
         // The requesting mark blocks a second fetch; the completion replaces
         // it with landed rows, empty when the fetch fails.
-        self.gui_shows_new
+        self.gui
+            .shows_new
             .insert(library_id.clone(), GuiSectionRequest::Requesting);
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
@@ -111,7 +113,8 @@ impl App {
         let GuiShowsNewEvent { library_id, result } = event;
         match result {
             Ok(items) => {
-                self.gui_shows_new
+                self.gui
+                    .shows_new
                     .insert(library_id, GuiSectionRequest::landed(items));
             }
             Err(error) => {
@@ -122,7 +125,8 @@ impl App {
                     error = %error,
                     "the library's latest episodes failed to load"
                 );
-                self.gui_shows_new
+                self.gui
+                    .shows_new
                     .insert(library_id, GuiSectionRequest::landed(Vec::new()));
             }
         }
@@ -143,7 +147,8 @@ impl App {
         match self.gui_shows_view(lib_idx) {
             GuiShowsView::All => {
                 let unchanged = self
-                    .gui_tv_shows
+                    .gui
+                    .tv_shows
                     .get(&lib_idx)
                     .and_then(|selection| selection.series_id.as_deref())
                     == Some(row);
@@ -157,7 +162,7 @@ impl App {
             GuiShowsView::New => {
                 if self.gui_shows_new_item(row).is_some() {
                     self.stamp_navigation();
-                    self.gui_shows_flat_selection = Some(row.to_owned());
+                    self.gui.shows_flat_selection = Some(row.to_owned());
                 } else {
                     Self::log_stale_library_item("showsSelect", row);
                 }
@@ -173,7 +178,8 @@ impl App {
         &self,
         item_id: &str,
     ) -> Option<EmbyItem> {
-        self.gui_shows_new
+        self.gui
+            .shows_new
             .values()
             .flat_map(GuiSectionRequest::items)
             .find(|item| item.id == item_id)

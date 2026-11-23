@@ -232,7 +232,7 @@ fn the_gui_row_menu_offers_shuffle_before_the_removals() {
 
     app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
 
-    let labels = match app.gui_overlay.take() {
+    let labels = match app.gui.overlay.take() {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()
@@ -265,7 +265,7 @@ fn the_gui_row_menu_hides_shuffle_without_the_capability() {
 
     app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
 
-    let labels = match app.gui_overlay.take() {
+    let labels = match app.gui.overlay.take() {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()

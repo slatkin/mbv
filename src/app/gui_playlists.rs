@@ -84,27 +84,27 @@ impl App {
     /// the dismissal read.
     #[must_use]
     pub fn gui_playlists_is_open(&self) -> bool {
-        self.gui_playlists_open
+        self.gui.playlists_screen_open
     }
 
     /// Open the screen and load the saved playlists. The Settings screen and
     /// the Playlists screen never show together, so the open closes Settings.
     pub fn open_gui_playlists(&mut self) {
         self.close_gui_settings();
-        self.gui_playlists_open = true;
+        self.gui.playlists_screen_open = true;
         self.spawn_load_playlists();
     }
 
     /// Close the screen and drop the open playlist.
     pub fn close_gui_playlists(&mut self) {
-        self.gui_playlists_open = false;
+        self.gui.playlists_screen_open = false;
         self.playlists_open = None;
         self.playlists_open_items.clear();
     }
 
     /// Open the screen when closed, close it when open.
     pub fn toggle_gui_playlists(&mut self) {
-        if self.gui_playlists_open {
+        if self.gui.playlists_screen_open {
             self.close_gui_playlists();
         } else {
             self.open_gui_playlists();
@@ -114,23 +114,25 @@ impl App {
     /// The screen's content, `None` while the screen is closed.
     #[must_use]
     pub fn gui_playlists(&self) -> Option<GuiPlaylistsProjection> {
-        self.gui_playlists_open.then(|| GuiPlaylistsProjection {
-            playlists: self.playlists.iter().map(playlist_row).collect(),
-            open: self
-                .playlists_open
-                .as_ref()
-                .map(|playlist| GuiOpenPlaylistProjection {
-                    id: playlist.id.clone(),
-                    name: playlist.name.clone(),
-                    items: self
-                        .playlists_open_items
-                        .iter()
-                        .map(playlist_item)
-                        .collect(),
-                }),
-            loading: self.playlists_loading,
-            open_loading: self.playlists_open_loading,
-        })
+        self.gui
+            .playlists_screen_open
+            .then(|| GuiPlaylistsProjection {
+                playlists: self.playlists.iter().map(playlist_row).collect(),
+                open: self
+                    .playlists_open
+                    .as_ref()
+                    .map(|playlist| GuiOpenPlaylistProjection {
+                        id: playlist.id.clone(),
+                        name: playlist.name.clone(),
+                        items: self
+                            .playlists_open_items
+                            .iter()
+                            .map(playlist_item)
+                            .collect(),
+                    }),
+                loading: self.playlists_loading,
+                open_loading: self.playlists_open_loading,
+            })
     }
 
     /// Log the Playlists request whose frame is stale: it changes nothing.

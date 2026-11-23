@@ -92,7 +92,7 @@ impl App {
             Self::log_stale_library_item("tvSelectSeries", series_id);
             return;
         }
-        let entry = self.gui_tv_shows.entry(lib_idx).or_default();
+        let entry = self.gui.tv_shows.entry(lib_idx).or_default();
         if entry.series_id.as_deref() != Some(series_id) {
             entry.season_id = None;
         }
@@ -114,7 +114,7 @@ impl App {
             );
             return;
         }
-        let entry = self.gui_tv_shows.entry(lib_idx).or_default();
+        let entry = self.gui.tv_shows.entry(lib_idx).or_default();
         let Some(series_id) = entry.series_id.clone() else {
             Self::log_ignored_library_command(
                 "tvSelectSeason",
