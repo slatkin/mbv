@@ -107,7 +107,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     // 4. The library tab's nav_stack cursor must be untouched — Feeds
     //    did not dispatch into library browsing.
     assert_eq!(
-        app.emby_library_level_cursor(0, 0),
+        app.emby_library_level_cursor_for_test(0, 0),
         Some(0),
         "library cursor must remain unchanged by feed-tab key handling"
     );

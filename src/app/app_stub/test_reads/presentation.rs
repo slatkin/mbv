@@ -1,13 +1,12 @@
 //! The presentation fixtures a TUI-staying test drives (`split-tui-gui-clients`
 //! design D4b rule 5): the pinned view's width and the request it left in
-//! flight, the visual slot the GUI Client's capability gate keeps, the Home
-//! Latest launch window the markers are read against, a queued owner's
-//! transfers, and the music grouping's terminal states.
+//! flight, the Home Latest launch window the markers are read against, a
+//! queued owner's transfers, and the music grouping's terminal states.
 //!
 //! The tests drove those shapes by writing the fields directly; each seam
 //! here names the fixture instead — a pinned view in one width, a launch
 //! window opened an interval before the launch, a level whose fill already
-//! failed — so those tests keep their claims and reach no field.
+//! landed — so those tests keep their claims and reach no field.
 
 use std::time::{Duration, Instant};
 
@@ -43,20 +42,6 @@ impl App {
     #[cfg(any(test, feature = "test"))]
     pub fn set_gui_client_capabilities_for_test(&mut self) {
         self.set_client_capabilities(super::super::gui_client_capabilities());
-    }
-
-    /// Hold `hidden` as the persisted visual-slot hide: the setting the TUI
-    /// writes and reads back, which the GUI Client never paints a control for.
-    #[cfg(any(test, feature = "test"))]
-    pub fn seed_visual_slot_hidden_for_test(&mut self, hidden: bool) {
-        self.visual_slot_hidden = hidden;
-    }
-
-    /// Whether the persisted visual-slot hide is set.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn visual_slot_hidden_for_test(&self) -> bool {
-        self.visual_slot_hidden
     }
 
     /// Whether an event the answer pump deferred is still waiting: the pump
@@ -213,16 +198,6 @@ impl App {
         album_level.items = albums;
     }
 
-    /// Note that `level_id`'s artist fill already failed, as a browse-triggered
-    /// upgrade that got no answer leaves it.
-    #[cfg(any(test, feature = "test"))]
-    pub fn mark_album_artist_level_failed_for_test(&mut self, level_id: &str) {
-        self.album_artist_levels.insert(
-            level_id.to_string(),
-            crate::app::state::app_struct::LevelFillState::Failed,
-        );
-    }
-
     /// Note that `level_id`'s artist fill already landed with
     /// `orphan_risk` left as the warm-up reported it.
     #[cfg(any(test, feature = "test"))]
@@ -282,25 +257,6 @@ impl App {
         self.album_artist_cache.is_empty()
     }
 
-    /// The terminal state of `level_id`'s artist fill, as a browse-triggered
-    /// upgrade and its answer leave it: whether any fill is recorded, and the
-    /// orphan risk a landed one carries.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn album_artist_level_state_for_test(&self, level_id: &str) -> Option<(bool, bool)> {
-        self.album_artist_levels
-            .get(level_id)
-            .map(|fill| match fill {
-                crate::app::state::app_struct::LevelFillState::Loading { orphan_risk } => {
-                    (true, *orphan_risk)
-                }
-                crate::app::state::app_struct::LevelFillState::Filled { orphan_risk } => {
-                    (false, *orphan_risk)
-                }
-                crate::app::state::app_struct::LevelFillState::Failed => (false, false),
-            })
-    }
-
     /// Whether `level_id`'s artist fill landed at all: the fill a later
     /// candidate never repeats.
     #[cfg(any(test, feature = "test"))]
@@ -309,16 +265,6 @@ impl App {
         matches!(
             self.album_artist_levels.get(level_id),
             Some(crate::app::state::app_struct::LevelFillState::Filled { .. })
-        )
-    }
-
-    /// Whether `level_id`'s artist fill failed.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn album_artist_level_failed_for_test(&self, level_id: &str) -> bool {
-        matches!(
-            self.album_artist_levels.get(level_id),
-            Some(crate::app::state::app_struct::LevelFillState::Failed)
         )
     }
 
@@ -407,23 +353,6 @@ impl App {
         self.album_artist_levels.get(level_id).copied()
     }
 
-    /// The music grouping state of `level`'s browse level in the Emby library
-    /// at `index`: the catalogue a start or an advance of the grouping pass
-    /// leaves.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn music_grouping_state_for_test(
-        &self,
-        index: usize,
-        level: usize,
-    ) -> Option<&mbv_ui_model::music_grouping::MusicGroupingState> {
-        self.libs
-            .get(index)?
-            .nav_stack
-            .get(level)?
-            .music_grouping
-            .as_ref()
-    }
     /// Rebuild the Emby library tabs from `all_views` through the production
     /// path, as a catalog arrival does.
     #[cfg(any(test, feature = "test"))]

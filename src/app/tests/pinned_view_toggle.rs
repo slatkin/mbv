@@ -31,8 +31,14 @@ fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
     app.apply_pinned_view_for_test(PinnedWidth::Expanded, Ok(()));
 
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
-    assert_eq!(app.stored_panel_mode(), PanelMode::LibraryOnly);
-    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Library);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::LibraryOnly
+    );
+    assert_eq!(
+        app.presentation_facts_for_test().mini_view_focus,
+        PanelFocus::Library
+    );
     assert_eq!(
         app.stored_panel_focus(),
         PanelFocus::Library,
@@ -57,8 +63,14 @@ fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
     app.apply_pinned_view_for_test(PinnedWidth::Collapsed, Ok(()));
 
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
-    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
-    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Queue);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::QueueOnly
+    );
+    assert_eq!(
+        app.presentation_facts_for_test().mini_view_focus,
+        PanelFocus::Queue
+    );
     assert_eq!(
         app.stored_panel_focus(),
         PanelFocus::Queue,
@@ -85,8 +97,14 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     );
 
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
-    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
-    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Queue);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::QueueOnly
+    );
+    assert_eq!(
+        app.presentation_facts_for_test().mini_view_focus,
+        PanelFocus::Queue
+    );
     assert_eq!(app.stored_panel_focus(), PanelFocus::Queue);
     assert_eq!(
         app.newest_toast_text(),
@@ -139,7 +157,10 @@ fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request()
     );
     assert!(app.drain_pinned_requests_for_test());
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
-    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::QueueOnly
+    );
     assert_eq!(app.stored_panel_focus(), PanelFocus::Queue);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
@@ -204,16 +225,28 @@ fn recording_the_toggled_width_leaves_the_panel_mode_alone() {
     app.note_pinned_width_applied_for_test(PinnedWidth::Expanded);
 
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
-    assert_eq!(app.stored_panel_mode(), PanelMode::LibraryOnly);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::LibraryOnly
+    );
     assert_eq!(app.stored_panel_focus(), PanelFocus::Library);
-    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Library);
+    assert_eq!(
+        app.presentation_facts_for_test().mini_view_focus,
+        PanelFocus::Library
+    );
 
     app.note_pinned_width_applied_for_test(PinnedWidth::Collapsed);
 
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
-    assert_eq!(app.stored_panel_mode(), PanelMode::LibraryOnly);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::LibraryOnly
+    );
     assert_eq!(app.stored_panel_focus(), PanelFocus::Library);
-    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Library);
+    assert_eq!(
+        app.presentation_facts_for_test().mini_view_focus,
+        PanelFocus::Library
+    );
 }
 
 /// Regression (2026-10-05 crash, pinned view toggle): the collapse race must

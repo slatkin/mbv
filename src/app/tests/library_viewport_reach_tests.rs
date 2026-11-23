@@ -63,7 +63,7 @@ fn viewport_reach_within_prefetch_ahead_arms_the_next_page_fetch() {
     assert_eq!(
         model
             .app
-            .emby_library_level_cursor(0, 0)
+            .emby_library_level_cursor_for_test(0, 0)
             .unwrap_or_default(),
         0,
         "a reach report must never move the selection"

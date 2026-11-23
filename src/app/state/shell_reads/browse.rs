@@ -293,19 +293,16 @@ impl App {
         &self.local_view
     }
 
-    /// The number of browse levels `index`'s Emby library has open: `0`
-    /// before it opens, `1` at its root.
-    #[must_use]
-    pub fn emby_library_level_count(&self, index: usize) -> usize {
-        self.libs.get(index).map_or(0, |tab| tab.nav_stack.len())
-    }
-
     /// The resting cursor of `level`'s browse level in `index`'s Emby
     /// library: the position the shell's own browse state holds, which the
     /// panel's owner selection is re-pointed from. `None` for a library or a
     /// level that is not open.
+    ///
+    /// A level-indexed read has no production caller, so it stays a test
+    /// seam (design D4b rule 5).
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn emby_library_level_cursor(&self, index: usize, level: usize) -> Option<usize> {
+    pub fn emby_library_level_cursor_for_test(&self, index: usize, level: usize) -> Option<usize> {
         Some(
             self.libs
                 .get(index)?

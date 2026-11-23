@@ -345,7 +345,7 @@ impl App {
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn cached_cover_box_is_for_test(&self, key: &str, box_size: (u16, u16)) -> bool {
-        self.cached_cover_box(key) == Some(box_size)
+        self.images.image(key).and_then(|entry| entry.cover_box) == Some(box_size)
     }
 
     /// Note that the card image fetch for `key` got no answer, as a dropped

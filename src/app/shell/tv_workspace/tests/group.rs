@@ -20,13 +20,21 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
     // advance the filter 0 -> 1 purely from `letter_filter`.
     model.app.set_library_level_cursor_for_test(0, 0, 7);
     model.app.cycle_letter_pill(0, 1);
-    let after_stale = model.app.emby_library_letter_filter(0).cloned();
+    let after_stale = model
+        .app
+        .emby_library_level(0)
+        .and_then(|level| level.letter_filter.clone());
     assert_eq!(after_stale.as_ref().map(|f| f.index), Some(1));
-    assert!(model.app.emby_library_level_loading(0));
+    assert!(
+        model
+            .app
+            .emby_library_level(0)
+            .is_some_and(|level| level.loading)
+    );
     // select_letter_pill intentionally resets the level cursor to 0,
     // regardless of its prior (stale) value.
     assert_eq!(
-        model.app.emby_library_level_cursor(0, 0),
+        model.app.emby_library_level_cursor_for_test(0, 0),
         Some(0),
         "select_letter_pill resets the level cursor regardless of its prior value"
     );
@@ -41,7 +49,10 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
     fresh.app.set_library_level_cursor_for_test(0, 0, 0);
     fresh.app.cycle_letter_pill(0, 1);
     assert_eq!(
-        fresh.app.emby_library_letter_filter(0),
+        fresh
+            .app
+            .emby_library_level(0)
+            .and_then(|level| level.letter_filter.as_ref()),
         after_stale.as_ref(),
         "cycle_letter_pill result must not depend on level.cursor"
     );

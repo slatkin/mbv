@@ -21,7 +21,7 @@ fn eligibility_model() -> Model {
     // The rung ladder is defined for the two-panel layout: with the
     // empty-queue column hidden (change `hide-empty-queue-column`, D1) an
     // empty displayed queue would render library-only instead.
-    model.app.seed_local_queue_for_test(
+    model.app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",

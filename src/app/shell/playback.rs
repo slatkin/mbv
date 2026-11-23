@@ -121,7 +121,7 @@ mod tests {
         let mut app = crate::app::tests::make_app_stub();
         let mut loaded = make_item("Loaded Slot", "Movie");
         loaded.id = "loaded-slot".into();
-        app.seed_local_queue_for_test(vec![loaded], 0);
+        app.seed_local_queue_emby_items_for_test(vec![loaded], 0);
         app.seed_playing_status_for_test(0, 1);
         app.seed_playback_output_for_test(Some(mbv_ctrl::OutputState::EmbySession {
             device_id: "device-1".to_string(),

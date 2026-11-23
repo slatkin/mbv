@@ -11,7 +11,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_emby_items_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_tv_content();
     model.sync_active_destination();
 
@@ -21,7 +21,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     model.app.set_library_level_cursor_for_test(0, 0, 1);
     let component_cursor = model.test_tv_owner().browse_cursor();
     assert_eq!(component_cursor, 0);
-    assert_eq!(model.app.emby_library_level_cursor(0, 0), Some(1));
+    assert_eq!(model.app.emby_library_level_cursor_for_test(0, 0), Some(1));
 
     assert_eq!(
         model.test_tv_owner().selected_item_id(),
@@ -37,7 +37,13 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     // Series (asserted by the resolved target, not merely the bool).
     let wide_target = model
         .app
-        .selected_series_item(0, model.app.emby_library_level_cursor(0, 0).unwrap_or(0))
+        .selected_series_item(
+            0,
+            model
+                .app
+                .emby_library_level_cursor_for_test(0, 0)
+                .unwrap_or(0),
+        )
         .expect("series");
     assert_eq!(wide_target.id, "movie-focused");
     assert!(model.app.activate_selected_series(0));
@@ -117,12 +123,18 @@ fn wide_emby_library_activate_enters_the_workspace_not_a_flat_drill_in() {
         .and_then(|level| level.items.first())
         .cloned()
         .expect("the TV library's first Series row");
-    let depth_before = model.app.emby_library_level_count(0);
+    let depth_before = model
+        .app
+        .emby_library_level_facts(0)
+        .map_or(0, |facts| facts.depth);
 
     model.handle_emby_library_request(mbv_ui_msg::ShellRequest::EmbyLibraryActivate { item });
 
     assert_eq!(
-        model.app.emby_library_level_count(0),
+        model
+            .app
+            .emby_library_level_facts(0)
+            .map_or(0, |facts| facts.depth),
         depth_before,
         "wide Series activation keeps the persistent Workspace, never a drill-in"
     );
@@ -140,7 +152,7 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_emby_items_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.push_tv_workspace_content();
     model.sync_library_panel();
 

@@ -276,7 +276,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
         .model_mut()
         .dispatch_router_command(&PanelIntent::CyclePanelMode.into());
     assert_ne!(
-        harness.model().app.stored_panel_mode(),
+        harness.model().app.presentation_facts_for_test().panel_mode,
         mbv_ui_model::settings::PanelMode::default(),
         "the mapped prefix action executed through the shell"
     );

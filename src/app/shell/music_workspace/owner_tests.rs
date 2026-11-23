@@ -82,7 +82,7 @@ fn narrow_enter_requests_album_activation() {
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_emby_items_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
     assert!(!crate::app::shell::tv_wide::is_right_panel_wide(
         &model.app,
@@ -169,7 +169,7 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_emby_items_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
     assert!(!crate::app::shell::tv_wide::is_right_panel_wide(
         &model.app,
@@ -333,7 +333,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
     let key = music_key();
     assert!(model.library_panel_has_owner(&key));
 
-    assert_eq!(model.app.emby_library_level_cursor(0, 1), Some(0));
+    assert_eq!(model.app.emby_library_level_cursor_for_test(0, 1), Some(0));
     assert_eq!(model.test_music_owner().album_cursor(), 0);
 
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
@@ -353,7 +353,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         "owner cursor must diverge"
     );
     assert_eq!(
-        model.app.emby_library_level_cursor(0, 1),
+        model.app.emby_library_level_cursor_for_test(0, 1),
         Some(0),
         "App cursor must stay put"
     );
@@ -405,7 +405,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         "the divergent owner-local album cursor must survive the drill-and-return round trip"
     );
     assert_eq!(
-        model.app.emby_library_level_cursor(0, 1),
+        model.app.emby_library_level_cursor_for_test(0, 1),
         Some(0),
         "App cursor stays at its own value throughout"
     );

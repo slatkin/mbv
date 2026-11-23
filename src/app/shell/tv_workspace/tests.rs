@@ -363,7 +363,8 @@ fn the_failed_upcoming_fetch_projects_into_the_panel_placeholder() {
     let mut model = mounted_tv_model_with_mock_emby(&http);
     let library_id = model
         .app
-        .emby_library_id(0)
+        .emby_library(0)
+        .map(|tab| tab.library.id.as_str())
         .expect("the TV library tab")
         .to_string();
     model
@@ -386,7 +387,7 @@ fn the_failed_upcoming_fetch_projects_into_the_panel_placeholder() {
         other => panic!("a failed Upcoming fetch must show the placeholder slot, got {other:?}"),
     }
     assert!(
-        model.app.tv_upcoming_fetch_marked_failed(&library_id),
+        model.app.tv_upcoming_fetch_failed(&library_id),
         "the failed state stays marked for the shell's retry paths",
     );
 }

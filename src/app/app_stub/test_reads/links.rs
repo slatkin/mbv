@@ -48,11 +48,7 @@ impl App {
     /// Put a stub Player on the active connection, and keep what it receives.
     #[cfg(any(test, feature = "test"))]
     pub fn set_player_for_test(&mut self) {
-        let (remote, player_rx, cmd_rx) =
-            mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
-        remote.update_status(|status| status.volume_max = 100);
-        self.player = mbv_player::PlayerProxy::from_remote(remote, false);
-        self.player_rx = player_rx;
+        let cmd_rx = self.set_player_with_command_rx_for_test();
         ACTIVE_COMMANDS.with(|slot| *slot.borrow_mut() = Some(cmd_rx));
     }
 

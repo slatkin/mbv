@@ -103,30 +103,6 @@ impl App {
         &self.pending_series_season_expansions
     }
 
-    /// The letter filter the Emby library at `index`'s open level carries, if
-    /// it holds one.
-    #[must_use]
-    pub fn emby_library_letter_filter(
-        &self,
-        index: usize,
-    ) -> Option<&mbv_ui_model::sort_filter::LetterFilter> {
-        self.libs
-            .get(index)?
-            .nav_stack
-            .last()?
-            .letter_filter
-            .as_ref()
-    }
-
-    /// Whether the Emby library at `index`'s open level paints as loading.
-    #[must_use]
-    pub fn emby_library_level_loading(&self, index: usize) -> bool {
-        self.libs
-            .get(index)
-            .and_then(|tab| tab.nav_stack.last())
-            .is_some_and(|level| level.loading)
-    }
-
     /// Whether a Client painted `index`'s Wide TV series Workspace wide in its
     /// last pass: the write-back fact the shared Series-activation branch
     /// reads.
@@ -134,20 +110,6 @@ impl App {
     #[must_use]
     pub fn tv_workspace_painted_wide_for_test(&self, index: usize) -> bool {
         self.tv_workspace_wide.contains(&index)
-    }
-
-    /// The id of the Emby library at `index`, or `None` when no tab sits
-    /// there.
-    #[must_use]
-    pub fn emby_library_id(&self, index: usize) -> Option<&str> {
-        self.libs.get(index).map(|tab| tab.library.id.as_str())
-    }
-
-    /// Whether the library's last TV Upcoming fetch is marked failed, as the
-    /// shell's retry paths read it.
-    #[must_use]
-    pub fn tv_upcoming_fetch_marked_failed(&self, library_id: &str) -> bool {
-        self.tv_upcoming_fetch_failed(library_id)
     }
 
     /// Whether the albums' track lists cache holds `album_id`.
@@ -435,22 +397,6 @@ impl App {
         self.images.record_card_size(height, width);
     }
 
-    /// The artwork cache, for a Client's own test to write the entry a fetch
-    /// or a paint would have shared. The production read stays
-    /// [`App::image_cache`], which hands out no `&mut`; a test uses this one to
-    /// stand in for the store the core already writes.
-    #[cfg(any(test, feature = "test"))]
-    pub fn image_cache_mut(&mut self) -> &mut mbv_images::cache::ImageCache {
-        &mut self.images
-    }
-
-    /// The cover box the artwork entry stored under `key` was last encoded
-    /// for, as the store kept it.
-    #[must_use]
-    pub fn cached_cover_box(&self, key: &str) -> Option<(u16, u16)> {
-        self.images.image(key).and_then(|entry| entry.cover_box)
-    }
-
     /// The decoded pixels the artwork entry stored under `key` holds, cloned.
     /// `None` for an absent entry and for one that resolved without artwork.
     #[must_use]
@@ -585,20 +531,6 @@ impl App {
     #[must_use]
     pub fn stored_panel_focus(&self) -> mbv_ui_model::settings::PanelFocus {
         self.panel_focus
-    }
-
-    /// The stored Panel mode, before the mini-view and hidden-column rules
-    /// override it.
-    #[must_use]
-    pub fn stored_panel_mode(&self) -> mbv_ui_model::settings::PanelMode {
-        self.panel_mode
-    }
-
-    /// The mini view's own focus target, before the wide focus it shadows:
-    /// what a narrow terminal's layout composes from.
-    #[must_use]
-    pub fn stored_mini_view_focus(&self) -> mbv_ui_model::settings::PanelFocus {
-        self.mini_view_focus
     }
 
     /// Whether the prefix key is armed.

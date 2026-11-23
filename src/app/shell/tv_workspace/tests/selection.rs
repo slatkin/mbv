@@ -40,7 +40,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         .app
         .handle_mouse_single_click_tv(0, TvHit::SeriesRow("movie-second".into()));
     model.push_tv_workspace_content();
-    assert_eq!(model.app.emby_library_level_cursor(0, 0), Some(1));
+    assert_eq!(model.app.emby_library_level_cursor_for_test(0, 0), Some(1));
     assert_eq!(
         model
             .test_tv_owner()
@@ -81,7 +81,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     ));
     model.handle_tv_request(request);
     assert_eq!(
-        model.app.emby_library_level_cursor(0, 0),
+        model.app.emby_library_level_cursor_for_test(0, 0),
         Some(0),
         "TvCycleLetterPill must not write the component cursor into App's browse level"
     );
@@ -100,7 +100,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand {
            target: mbv_ui_msg::TvTreeTarget::Show(_)
        })));
-    assert_eq!(model.app.emby_library_level_cursor(0, 0), Some(0));
+    assert_eq!(model.app.emby_library_level_cursor_for_test(0, 0), Some(0));
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     third.id = "movie-third".into();
     model.app.push_library_row_for_test(0, 0, third);
     assert_eq!(
-        model.app.emby_library_level_cursor(0, 0),
+        model.app.emby_library_level_cursor_for_test(0, 0),
         Some(1),
         "the stale App cursor must still diverge before TvBack"
     );
@@ -191,12 +191,15 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     );
     model.handle_tv_request(ShellRequest::TvBack);
     assert_eq!(
-        model.app.emby_library_level_count(0),
+        model
+            .app
+            .emby_library_level_facts(0)
+            .map_or(0, |facts| facts.depth),
         1,
         "TvBack must pop the seasons child level"
     );
     assert_eq!(
-        model.app.emby_library_level_cursor(0, 0),
+        model.app.emby_library_level_cursor_for_test(0, 0),
         Some(2),
         "TvBack restores the series cursor by parent_id (row of movie-third), not a reset 0, the popped child cursor 99, or the stale 1"
     );

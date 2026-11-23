@@ -369,7 +369,7 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
     // The gap row sits inside the queue column: with the empty-queue column
     // hidden (change `hide-empty-queue-column`, D1) an empty displayed queue
     // would not place the queue panel at all.
-    app.seed_local_queue_for_test(
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -522,7 +522,7 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     // The collapsed queue playback panel is part of the queue column: with
     // the empty-queue column hidden (change `hide-empty-queue-column`, D1)
     // an empty displayed queue would not mount it at all.
-    app.seed_local_queue_for_test(
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",

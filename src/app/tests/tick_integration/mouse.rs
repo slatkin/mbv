@@ -198,7 +198,7 @@ fn drawn_tab_harness() -> TickHarness {
     // The tab-bar geometry under test is the two-panel layout: with the
     // empty-queue column hidden (change `hide-empty-queue-column`, D1) an
     // empty displayed queue would render library-only and move the tab bar.
-    app.seed_local_queue_for_test(
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",

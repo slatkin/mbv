@@ -339,7 +339,10 @@ fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
     let app = &model.app;
 
     assert_eq!(app.effective_panel_mode(), PanelMode::LibraryOnly);
-    assert_eq!(app.stored_panel_mode(), PanelMode::Both);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::Both
+    );
 }
 
 /// Contract: "Cycle continues from both". With the queue column hidden because
@@ -355,7 +358,10 @@ fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
 
     app.dispatch(&AppCommand::Panel(PanelIntent::CyclePanelMode));
 
-    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::QueueOnly
+    );
 }
 
 /// Contract: "Hidden empty queue moves focus to the library" and "Focus

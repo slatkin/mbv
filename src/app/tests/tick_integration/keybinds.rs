@@ -182,7 +182,7 @@ fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
     while cmd_rx.try_recv().is_ok() {}
     // A non-empty viewed queue makes the removed Queue-refresh branch
     // observable: that branch would have sent UnifiedQueueRefresh here.
-    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();

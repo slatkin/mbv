@@ -159,7 +159,8 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
 
     assert_eq!(app.active_tab(), TabSelection::EmbyLibrary(1));
     assert_eq!(
-        app.emby_library_level_count(1),
+        app.emby_library_level_facts(1)
+            .map_or(0, |facts| facts.depth),
         1,
         "the restored tab must load its root level"
     );

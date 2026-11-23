@@ -12,7 +12,7 @@ use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
 
 fn emby_playing_app(position_ticks: i64) -> App {
     let mut app = make_app_stub();
-    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     app.seed_playing_position_for_test(0, position_ticks, Some(10_000));
     app
 }
@@ -143,7 +143,7 @@ fn pending_book_app() -> App {
 
 fn inactive_player_app() -> App {
     let mut app = make_app_stub();
-    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     app.seed_idle_player_for_test();
     app
 }

@@ -65,7 +65,7 @@ impl App {
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn gui_settings_save_armed_for_test(&self) -> bool {
-        self.settings_save_armed()
+        self.settings_save_at.is_some()
     }
 
     /// The open setup form's server URL (row 5.2), whichever form holds it.

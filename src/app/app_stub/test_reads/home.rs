@@ -322,15 +322,6 @@ impl App {
         self.audiobookshelf_libraries = libraries;
     }
 
-    /// Rewrite every stored Audiobookshelf browse state through `edit`.
-    #[cfg(any(test, feature = "test"))]
-    pub fn edit_audiobookshelf_browse_for_test(
-        &mut self,
-        edit: impl FnMut(&mut mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState),
-    ) {
-        self.audiobookshelf_browse.iter_mut().for_each(edit);
-    }
-
     /// Hold `request` as the overlay the core raised and has not handed to its
     /// Client yet.
     #[cfg(any(test, feature = "test"))]
@@ -483,13 +474,6 @@ impl App {
     #[must_use]
     pub fn mouse_capture_pending_for_test(&self) -> Option<bool> {
         self.mouse_capture_pending
-    }
-
-    /// Whether a deferred Settings save is armed.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn image_cached_for_test(&self, key: &str) -> bool {
-        self.images.is_cached(key)
     }
 
     /// Hold the Audiobookshelf Service state and its stored credential user,
@@ -724,35 +708,6 @@ impl App {
         &self,
     ) -> mbv_core::service_runtime::SetupGeneration {
         self.audiobookshelf_runtime.generation()
-    }
-
-    /// Hold `items` as the local queue view, cursor at `cursor`, as an owner
-    /// snapshot would.
-    #[cfg(any(test, feature = "test"))]
-    pub fn seed_local_queue_for_test(&mut self, items: Vec<EmbyItem>, cursor: usize) {
-        let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = items
-            .into_iter()
-            .enumerate()
-            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
-                slot_id: u64::try_from(index).unwrap_or(u64::MAX) + 1,
-                item: mbv_queue::QueueItem::Emby(Box::new(item)),
-            })
-            .collect();
-        let state = mbv_ctrl::UnifiedQueueStateData {
-            queue: None,
-            start_slot: None,
-            status: mbv_ctrl::player::PlayerStatus::default(),
-            active_slot: None,
-            slots,
-            revision: 1,
-            source: mbv_queue::QueueSource::Unknown,
-            lineage: mbv_queue::QueueLineage::default(),
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        };
-        let mut view = crate::app::QueueView::from_snapshot(&state);
-        view.set_cursor(cursor);
-        self.local_view = view;
     }
 
     /// Hold the local player's status as playing `queue_len` slots with

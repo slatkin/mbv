@@ -15,7 +15,7 @@ fn tick_visual_slot_right_click_opens_the_menu_and_hide_hides_the_slot() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.seed_active_tab_for_test(TabSelection::Home);
     // The two-panel layout needs a non-empty queue (hide-empty-queue-column D1).
-    app.seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
+    app.seed_local_queue_emby_items_for_test(vec![make_item("Queue Item", "Movie")], 0);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();

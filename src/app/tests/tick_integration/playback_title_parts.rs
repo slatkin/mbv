@@ -35,7 +35,7 @@ fn title_parts_app(active_idx: usize) -> App {
     track.artist = "Artist B".into();
     let mut movie = make_item("Movie One", "Movie");
     movie.id = "movie-one".into();
-    app.seed_local_queue_for_test(vec![track, movie], 0);
+    app.seed_local_queue_emby_items_for_test(vec![track, movie], 0);
     app.seed_playing_position_for_test(active_idx, 0, None);
     app.set_player_queue_len_for_test(2);
     app

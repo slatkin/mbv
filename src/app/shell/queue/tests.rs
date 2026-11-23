@@ -168,7 +168,7 @@ fn deleting_playing_row_after_ordinal_shift_still_asks_now_playing_confirm() {
 #[test]
 fn unchanged_queue_revision_skips_projection_rebuild() {
     let mut app = make_app_stub();
-    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     let mut model = Model::new(app);
     model.sync_queue();
 
@@ -183,7 +183,7 @@ fn progress_only_change_patches_one_row_without_rebuilding_slots_review_u17_1() 
     // progress move always satisfies, so every progress tick rebuilt the row
     // set instead of re-projecting the active row.
     let mut app = make_app_stub();
-    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     app.seed_playing_position_for_test(0, 100, Some(1_000));
     let mut model = Model::new(app);
     model.sync_queue();
@@ -268,7 +268,7 @@ fn queue_projection_fetches_now_playing_image_once_and_none_on_repaint() {
 #[test]
 fn hidden_visual_slot_skips_artwork_fetch_until_shown() {
     let mut app = make_app_stub();
-    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     app.enable_image_protocol_for_test();
     app.set_visual_slot_hidden_for_test(true);
     app.seed_playing_status_for_test(0, 2);
