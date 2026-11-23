@@ -411,6 +411,8 @@ fn apply_terminal_observer(
             model.pending_terminal_resize = true;
             model.app.terminal_width = *width;
             model.app.terminal_height = *height;
+            let single_panel = App::derive_single_panel(*width);
+            model.app.set_single_panel(single_panel);
             // Invariant 17: a resize neither blanks the terminal nor wipes
             // the image cache. A `force_clear` here blanked the panel in the
             // middle of pinwin's width tween, and wiping the cache made every

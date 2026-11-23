@@ -226,8 +226,7 @@ fn tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide
         let mut app = crate::app::tests::render_fixtures::make_music_group_app();
         app.panel_mode = PanelMode::LibraryOnly;
         app.panel_focus = PanelFocus::Library;
-        app.terminal_width = terminal_width;
-        app.terminal_height = terminal_height;
+        crate::app::tests::set_terminal_size(&mut app, terminal_width, terminal_height);
         let mut harness = TickHarness::new(app);
         harness.model_mut().sync_mounted_surfaces();
 
@@ -464,7 +463,8 @@ fn tab_panel_status_regions(harness: &TickHarness) -> mbv_render::StatusBarRegio
 fn tick_chrome_panels_mount_only_where_the_root_places_them() {
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::QueueOnly;
-    app.terminal_width = 120; // >= MINI_VIEW_THRESHOLD, so the mode applies
+    // Wide, so the mode applies.
+    crate::app::tests::set_terminal_width(&mut app, 120);
     let mut harness = TickHarness::new(app);
     // One draw publishes the queue-only placements; the sync it gates must
     // keep both chrome panels unmounted.
@@ -505,8 +505,7 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::Both;
     app.panel_focus = PanelFocus::Library;
-    app.terminal_width = 60;
-    app.terminal_height = 24;
+    crate::app::tests::set_terminal_size(&mut app, 60, 24);
     let mut harness = TickHarness::new(app);
     let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
     // A mini-view draw settles the narrow placements (which place no chrome
@@ -526,7 +525,8 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
     // Cross the threshold upward without drawing: the very next sync must
     // see the wide placements and mount both panels, before any draw
     // publishes `root_frame`.
-    harness.model_mut().app.terminal_width = 120;
+    let app = &mut harness.model_mut().app;
+    crate::app::tests::set_terminal_width(app, 120);
     harness.model_mut().sync_mounted_surfaces();
     assert!(
         harness.model().application.mounted(&ComponentId::TabPanel),

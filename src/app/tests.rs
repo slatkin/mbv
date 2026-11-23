@@ -1,5 +1,22 @@
 use super::*;
 
+/// Record a terminal size the way the TUI shell records one: the width also
+/// pushes the single-panel fact (`App::set_single_panel`), which `is_mini_view`
+/// reads.
+pub(in crate::app) fn set_terminal_size(app: &mut App, width: u16, height: u16) {
+    app.terminal_width = width;
+    app.terminal_height = height;
+    let single_panel = App::derive_single_panel(width);
+    app.set_single_panel(single_panel);
+}
+
+/// Record only a terminal width, pushing the matching single-panel fact.
+pub(in crate::app) fn set_terminal_width(app: &mut App, width: u16) {
+    app.terminal_width = width;
+    let single_panel = App::derive_single_panel(width);
+    app.set_single_panel(single_panel);
+}
+
 mod audiobookshelf_book_activation_tests;
 mod audiobookshelf_browse_actions_sibling_tests;
 mod audiobookshelf_context_menu;

@@ -11,6 +11,16 @@ use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_msg::{MusicTreeAction, ShellRequest};
 use std::sync::{Arc, Mutex};
 
+/// Record a terminal size on a test `App` the way the shell records one, so
+/// its single-panel fact matches the width (row 4.7 moves these call sites
+/// to `set_single_panel`).
+fn set_test_terminal_size(app: &mut crate::app::App, width: u16, height: u16) {
+    app.terminal_width = width;
+    app.terminal_height = height;
+    let single_panel = crate::app::App::derive_single_panel(width);
+    app.set_single_panel(single_panel);
+}
+
 #[test]
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
@@ -72,8 +82,7 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
 #[test]
 fn terminal_resize_observer_applies_new_size_before_paint() {
     let mut model = Model::new(make_app_stub());
-    model.app.terminal_width = 60;
-    model.app.terminal_height = 24;
+    set_test_terminal_size(&mut model.app, 60, 24);
     assert!(!crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
     let mut music_resize = false;
     let mut tv_resize = false;
@@ -101,8 +110,7 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
 #[test]
 fn the_default_pinned_expanded_width_is_wide() {
     let mut model = Model::new(make_app_stub());
-    model.app.terminal_width = 120;
-    model.app.terminal_height = 40;
+    set_test_terminal_size(&mut model.app, 120, 40);
     assert!(crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
 }
 

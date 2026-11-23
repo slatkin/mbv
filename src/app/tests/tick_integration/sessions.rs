@@ -157,8 +157,8 @@ fn sessions_component_mut(harness: &mut TickHarness) -> &mut SessionsComponent {
 }
 
 fn draw(harness: &mut TickHarness, width: u16, height: u16) {
-    harness.model_mut().app.terminal_width = width;
-    harness.model_mut().app.terminal_height = height;
+    let app = &mut harness.model_mut().app;
+    crate::app::tests::set_terminal_size(app, width, height);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal

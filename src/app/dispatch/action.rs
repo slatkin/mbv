@@ -513,9 +513,9 @@ impl App {
             self.pinned_view_toggle();
             return;
         }
-        // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view toggles
+        // Mini view (a narrow terminal, pushed by the TUI): it toggles
         // exactly two states, library-only ⇄ queue-only.
-        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
+        if self.is_mini_view() {
             self.mini_view_focus = match self.mini_view_focus {
                 mbv_ui_model::settings::PanelFocus::Library => {
                     mbv_ui_model::settings::PanelFocus::Queue

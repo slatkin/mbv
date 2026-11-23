@@ -21,6 +21,8 @@ pub(in crate::app) fn compute_frame_layout(
     }
     app.terminal_width = area.width;
     app.terminal_height = area.height;
+    let single_panel = App::derive_single_panel(area.width);
+    app.set_single_panel(single_panel);
     Some(compute_chrome_geometry(app, area))
 }
 

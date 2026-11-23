@@ -47,7 +47,7 @@ fn panel_appearance_focus_for_library(
 #[test]
 fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
     let mut mini = make_app_stub();
-    mini.terminal_width = 60;
+    crate::app::tests::set_terminal_width(&mut mini, 60);
     mini.mini_view_focus = PanelFocus::Library;
     let harness = TickHarness::new(mini);
     assert_eq!(
@@ -58,7 +58,7 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
     );
 
     let mut wide = make_app_stub();
-    wide.terminal_width = 100;
+    crate::app::tests::set_terminal_width(&mut wide, 100);
     wide.panel_focus = PanelFocus::Library;
     let wide_harness = TickHarness::new(wide);
     assert_eq!(
@@ -78,7 +78,7 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
 #[test]
 fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     let mut app = make_app_stub();
-    app.terminal_width = 60;
+    crate::app::tests::set_terminal_width(&mut app, 60);
     app.mini_view_focus = PanelFocus::Queue;
     app.local_view.adopt_items(make_items(3), 0);
     let mut harness = TickHarness::new(app);

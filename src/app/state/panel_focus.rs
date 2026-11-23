@@ -28,15 +28,31 @@ pub(in crate::app) fn panel_appearance_focus_decision(
 }
 
 impl App {
-    /// Whether the terminal is below `MINI_VIEW_THRESHOLD` columns, i.e. the
-    /// Power View is in mini view: a single displayed panel, no sibling to
-    /// contrast a focused palette against. A Client that does not follow the
-    /// terminal-panel rules arranges its own panels from its measured size,
-    /// so its capability keeps this false.
+    /// Whether the Power View is in mini view: a single displayed panel, no
+    /// sibling to contrast a focused palette against. The TUI pushes this
+    /// fact from its terminal size (design D6a/D6b), so the core reads no
+    /// terminal width. A Client that does not follow the terminal-panel rules
+    /// arranges its own panels from its measured size, so its capability
+    /// keeps this false.
     pub(in crate::app) fn is_mini_view(&self) -> bool {
         self.client_capabilities
             .has(ClientCapability::TerminalPanelRules)
-            && self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
+            && self.single_panel
+    }
+
+    /// The single-panel fact as the TUI would derive it today, for the shell
+    /// call sites that record a terminal size into `App` without pushing it
+    /// (the draw path's per-frame size, and test harnesses that set a width).
+    /// Row 4.7 replaces the remaining call sites with `set_single_panel`.
+    pub(in crate::app) fn derive_single_panel(width: u16) -> bool {
+        width < mbv_render::layout::MINI_VIEW_THRESHOLD
+    }
+
+    /// Record the single-panel fact the TUI derives from its terminal width.
+    /// The TUI sets it at every point where it records the terminal size, on
+    /// resize and in the per-frame size on the draw path.
+    pub(in crate::app) fn set_single_panel(&mut self, single_panel: bool) {
+        self.single_panel = single_panel;
     }
 
     /// Whether the two-panel layout's queue column is hidden this frame
@@ -56,10 +72,10 @@ impl App {
     }
 
     /// The panel mode actually in effect for rendering/input this frame.
-    /// Below `MINI_VIEW_THRESHOLD` columns the Power View ignores the stored
-    /// three-state `panel_mode` and derives a two-state mini view from the
-    /// ephemeral `mini_view_focus`; at 80+ columns the stored mode is used,
-    /// except that an empty displayed queue renders library-only.
+    /// In mini view the Power View ignores the stored three-state
+    /// `panel_mode` and derives a two-state mini view from the ephemeral
+    /// `mini_view_focus`; in wide view the stored mode is used, except that
+    /// an empty displayed queue renders library-only.
     pub(in crate::app) fn effective_panel_mode(&self) -> PanelMode {
         if self.is_mini_view() {
             match self.mini_view_focus {
@@ -73,10 +89,10 @@ impl App {
         }
     }
 
-    /// The panel focus actually in effect for input routing this frame. Below
-    /// `MINI_VIEW_THRESHOLD` columns this is `mini_view_focus`; at 80+ columns
-    /// the stored `panel_focus` is returned, except that a hidden empty queue
-    /// column never holds focus.
+    /// The panel focus actually in effect for input routing this frame. In
+    /// mini view this is `mini_view_focus`; in wide view the stored
+    /// `panel_focus` is returned, except that a hidden empty queue column
+    /// never holds focus.
     pub(in crate::app) fn effective_panel_focus(&self) -> PanelFocus {
         if self.is_mini_view() {
             self.mini_view_focus
@@ -121,7 +137,7 @@ impl App {
     }
 
     pub(in crate::app) fn set_panel_focus(&mut self, focus: PanelFocus) {
-        // Below MINI_VIEW_THRESHOLD, focus-follow call sites (mouse clicks,
+        // In mini view, focus-follow call sites (mouse clicks,
         // Alt+Left/Right, context actions) must move the ephemeral mini-view
         // focus, never the real persisted panel_focus -- that state has to
         // survive narrowing/widening untouched.

@@ -113,8 +113,8 @@ fn wheel() -> Event<UserEvent> {
 }
 
 fn draw(harness: &mut TickHarness, width: u16, height: u16) {
-    harness.model_mut().app.terminal_width = width;
-    harness.model_mut().app.terminal_height = height;
+    let app = &mut harness.model_mut().app;
+    crate::app::tests::set_terminal_size(app, width, height);
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
         .expect("test terminal");
     terminal

@@ -189,6 +189,9 @@ pub struct App {
     pub(in crate::app) layout: layout::AppLayout,
     pub(in crate::app) terminal_width: u16,
     pub(in crate::app) terminal_height: u16,
+    /// The single-panel fact the TUI pushes from its terminal width
+    /// (`App::set_single_panel`). `is_mini_view` reads it.
+    pub(in crate::app) single_panel: bool,
     /// Shell handoff for a modal raised by App-owned effects. The mounted
     /// component owns the modal after the next Model tick.
     pub(in crate::app) pending_overlay: Option<mbv_ui_model::overlay::OverlayRequest>,
