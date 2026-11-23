@@ -290,10 +290,11 @@ impl Model {
             panel_focus: self.app.effective_panel_focus(),
             prefix_armed: self.app.prefix_armed,
             visual_selection_active: self.visual_selection.is_some(),
-            // The Client-kind fact keeps the GUI-only key context's layers
-            // (add-tauri-gui-client row 6.2) inert here, so the TUI's
-            // default bindings on the canvas chords keep their own actions.
-            gui_client: self.app.gui_client,
+            // The TUI Client holds no `TransportChipKeys`, so the transport
+            // chips' key layers (add-tauri-gui-client row 6.2) stay inert
+            // here and the TUI's default bindings on the canvas chords keep
+            // their own actions.
+            client_capabilities: self.app.client_capabilities,
         };
 
         let outcome = resolve_router_outcome_with_focused(

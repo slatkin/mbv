@@ -118,12 +118,12 @@ fn playback_label(action_id: &str) -> Cow<'static, str> {
         "seek_back" => "Seek back 5 seconds".into(),
         "seek_forward" => "Seek forward 5 seconds".into(),
         // The canvas transport's deep steps (add-tauri-gui-client row 6.4):
-        // gated `GuiClient`, so the TUI help's Playback filter never paints
-        // them — the labels stand for a future gate change.
+        // gated `TransportChipKeys`, so the TUI help's Playback filter never
+        // paints them — the labels stand for a future gate change.
         "seek_back_10" => "Seek back 10 seconds".into(),
         "seek_forward_30" => "Seek forward 30 seconds".into(),
         // The track chips' popover openers (add-tauri-gui-client row 6.4):
-        // gated `GuiClient`, as the deep seeks are.
+        // gated `TransportChipKeys`, as the deep seeks are.
         "open_audio_popover" => "Open audio track popover".into(),
         "open_subtitle_popover" => "Open subtitle track popover".into(),
         "next_track" => "Next track".into(),

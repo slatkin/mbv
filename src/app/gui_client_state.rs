@@ -30,28 +30,9 @@ pub use self::projection::{
 };
 
 use crate::app::App;
-use crate::app::state::client_capabilities::ClientCapability;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 impl App {
-    /// Mark this `App` as the GUI Client's (design D6a). The GUI Client calls
-    /// it before its first step; nothing else sets the flag. A test's stub
-    /// starts with the TUI Client's capabilities, so this drops the two the
-    /// GUI does not present (`TerminalPanelRules`, `VisualSlotControls`) and
-    /// adds the one it does (`ShownQueueEntries`); a real GUI Client records
-    /// its own set through `App::set_client_capabilities` at attach. It
-    /// decides no launch rule of its own: the GUI adopts its launch location
-    /// through `App::skip_launch_restore`.
-    #[doc(hidden)]
-    pub fn mark_gui_client(&mut self) {
-        self.gui_client = true;
-        self.client_capabilities = self
-            .client_capabilities
-            .without(ClientCapability::TerminalPanelRules)
-            .without(ClientCapability::VisualSlotControls)
-            .with(ClientCapability::ShownQueueEntries);
-    }
-
     /// Whether the player panel hides its transport controls until the
     /// pointer enters the stage (gui-art-player-overlay design D5): the
     /// preference the GUI Client's panel frame carries. The core owns it, so

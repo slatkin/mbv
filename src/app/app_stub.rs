@@ -26,6 +26,17 @@ pub fn make_app_stub() -> App {
     app
 }
 
+/// The capabilities a GUI Client presents (design D6a of
+/// `decouple-client-core`). It is the headless stand-in for the set
+/// `attach_owner` records at a real GUI attach, so a GUI test gives its stub
+/// this value instead of setting capability flags by hand.
+#[must_use]
+pub fn gui_client_capabilities() -> crate::ClientCapabilities {
+    crate::ClientCapabilities::empty()
+        .with(crate::ClientCapability::ShownQueueEntries)
+        .with(crate::ClientCapability::TransportChipKeys)
+}
+
 fn apply_app_stub_defaults(app: &mut App) {
     // `build` doubles the configured image cache size; the stub keeps its
     // original (undoubled) budget so eviction behaviour is unchanged.

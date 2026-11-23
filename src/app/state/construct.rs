@@ -203,7 +203,6 @@ impl App {
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the terminal-cell panel rules and the visual-slot
             // controls.
-            gui_client: false,
             client_capabilities:
                 crate::app::state::client_capabilities::ClientCapabilities::default(),
             // The GUI Library panel's Client-core state starts empty:

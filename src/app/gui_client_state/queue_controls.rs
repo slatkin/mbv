@@ -12,6 +12,7 @@ use mbv_ui_model::confirm::ConfirmAction;
 
 use super::overlay::{GuiOverlay, QueueChooserState, QueueRenameDraft};
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::client_capabilities::ClientCapability;
 use crate::app::state::playback::ShownEntry;
 use crate::app::{App, ConfirmModal};
 
@@ -27,7 +28,11 @@ impl App {
     /// in flight at a time, so a press while the Owner has not answered — a
     /// double click on the control — makes no second queue.
     pub(in crate::app) fn request_new_gui_queue(&mut self) {
-        if !self.gui_client || self.pending_new_queue.is_some() {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::TransportChipKeys)
+            || self.pending_new_queue.is_some()
+        {
             return;
         }
         let Some(op) = self.send_named_queue_cmd(
@@ -121,7 +126,10 @@ impl App {
     /// draft a new queue's name opens in. The peer entry has no name to edit,
     /// so it does nothing there, as the disabled control does.
     pub(in crate::app) fn request_rename_shown_queue(&mut self) {
-        if !self.gui_client {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::TransportChipKeys)
+        {
             return;
         }
         if let Some(ShownEntry::Local(queue)) = self.shown_entry {
@@ -135,7 +143,10 @@ impl App {
     /// queue closes. The GUI-only `Ctrl+W` chord and the header's close press
     /// both run this one path.
     pub(in crate::app) fn request_close_shown_queue(&mut self) {
-        if !self.gui_client {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::TransportChipKeys)
+        {
             return;
         }
         match self.shown_entry {

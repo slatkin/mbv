@@ -5,6 +5,7 @@ use crate::app::dispatch::action::{PlaybackIntent, VisualIntent};
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
+use crate::app::tests::gui_client_capabilities;
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest, TrackChipKind};
 
@@ -276,7 +277,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
 #[test]
 fn gui_context_seek_brackets_command_only_in_the_gui_client() {
     let gui = RouterSnapshot {
-        gui_client: true,
+        client_capabilities: gui_client_capabilities(),
         ..active_snapshot()
     };
     assert_eq!(
@@ -316,7 +317,7 @@ fn gui_context_seek_brackets_command_only_in_the_gui_client() {
 #[test]
 fn gui_context_popover_chords_command_only_in_the_gui_client() {
     let gui = RouterSnapshot {
-        gui_client: true,
+        client_capabilities: gui_client_capabilities(),
         ..active_snapshot()
     };
     assert_eq!(

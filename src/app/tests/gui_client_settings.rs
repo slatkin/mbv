@@ -11,7 +11,7 @@ use crate::app::state::app_struct::LaunchRestore;
 #[test]
 fn the_gui_setting_disables_the_tui_panel_rules() {
     let mut app = make_app_stub();
-    app.mark_gui_client();
+    app.set_client_capabilities(gui_client_capabilities());
     // A narrow terminal plus an empty queue arms both of the TUI's rules.
     app.terminal_width = 60;
     app.panel_focus = PanelFocus::Queue;
@@ -27,8 +27,8 @@ fn the_gui_setting_disables_the_tui_panel_rules() {
 /// The GUI setting drops the TUI launch restore (add-gui-library-panel design
 /// D9): the GUI keeps its own launch location, so a saved TUI launch state
 /// never moves the GUI's tab or Panel focus. The GUI calls
-/// `skip_launch_restore` for that, and `mark_gui_client` sets the Client-kind
-/// flag alone (design D6a).
+/// `skip_launch_restore` for that; the capabilities a GUI test sets decide
+/// nothing here (design D6a).
 #[test]
 fn the_gui_setting_starts_with_the_launch_restore_done() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -82,7 +82,7 @@ fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
     let mut gui = playing_movie_app();
     gui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     gui.visual_slot_hidden = true;
-    gui.mark_gui_client();
+    gui.set_client_capabilities(gui_client_capabilities());
     let mut tui = playing_movie_app();
     tui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     tui.visual_slot_hidden = true;
@@ -115,7 +115,7 @@ fn the_gui_client_leaves_the_tuis_visual_slot_controls_alone() {
     tui.set_visual_slot_hidden(true);
     let mut gui = playing_movie_app();
     gui.visual_slot_hidden = true;
-    gui.mark_gui_client();
+    gui.set_client_capabilities(gui_client_capabilities());
 
     gui.set_visual_slot_hidden(false);
     gui.set_visualizer(true);

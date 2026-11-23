@@ -6,6 +6,7 @@
 
 use super::resolver::KeyChord;
 use crate::app::dispatch::action::{IdleFeedLinkContext, idle_feed_command_for_key};
+use crate::app::state::client_capabilities::ClientCapability;
 use mbv_keybinds::{Keybinds, action_by_id};
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_msg::{Key, KeyModifiers};
@@ -113,20 +114,20 @@ pub(in crate::app) enum KeyPolicyBinding {
     GuiOpenTargetChooser,
     /// The canvas queue's row-move actions (add-tauri-gui-client row 6.5,
     /// the "a row is moved by key" spec): declared actions — rebindable —
-    /// whose `GuiClient` gate keeps even a rebound chord out of the TUI,
+    /// whose `TransportChipKeys` gate keeps even a rebound chord out of the TUI,
     /// which moves a row with the Queue surface's `Shift+Up`/`Shift+Down`.
     QueueMoveDown,
     QueueMoveUp,
     /// The canvas transport's seek-back-10 action (add-tauri-gui-client
     /// row 6.4, the "back 10 s" spec): a registry action — rebindable —
-    /// whose `GuiClient` gate keeps its chords out of the TUI.
+    /// whose `TransportChipKeys` gate keeps its chords out of the TUI.
     SeekBack10,
     /// The canvas transport's seek-forward-30 action (the "forward 30 s"
     /// spec), gated as `SeekBack10` is.
     SeekForward30,
     /// The audio chip's popover action (add-tauri-gui-client row 6.4, the
     /// "every action is reachable from the keyboard" spec): a registry
-    /// action — rebindable — whose `GuiClient` gate keeps its chords out
+    /// action — rebindable — whose `TransportChipKeys` gate keeps its chords out
     /// of the TUI, which paints no track chip.
     OpenAudioPopover,
     /// The subtitle chip's popover action, gated as `OpenAudioPopover` is.
@@ -198,17 +199,21 @@ pub(in crate::app) enum KeyPolicyGate {
     /// while a text-entry surface owns focus or a blocking overlay is open;
     /// in those states it routes as it does without the change.
     PrefixArming,
-    /// The GUI-only key context (add-tauri-gui-client row 6.2): the canvas's
-    /// chords route only in the GUI Client, and only with no blocking
-    /// overlay open and no text entry focused, so the open row menu or the
-    /// filter's text entry keeps the chords it owns.
-    GuiClient,
-    /// The GUI-only Queue controls (design D8 of `gui-named-queues`): the
-    /// Queue chooser's `t`, the new-queue `Ctrl+T`, and the close `Ctrl+W`
-    /// act on the Queue panel, so they route only while the pointer target is
-    /// the Queue list box — the GUI core sets its Panel focus from the key's
-    /// pointer target before every key.
-    GuiQueueTarget,
+    /// The transport chips' key context (add-tauri-gui-client row 6.2): the
+    /// canvas's chords route only in a Client that paints the transport
+    /// chips and their controls — the capability
+    /// `ClientCapability::TransportChipKeys` (design D6a of
+    /// `decouple-client-core`) — and only with no blocking overlay open and
+    /// no text entry focused, so the open row menu or the filter's text entry
+    /// keeps the chords it owns.
+    TransportChipKeys,
+    /// The transport chips' Queue controls (design D8 of `gui-named-queues`):
+    /// the Queue chooser's `t`, the new-queue `Ctrl+T`, and the close
+    /// `Ctrl+W` act on the Queue panel, so they route only in a Client that
+    /// paints the chips and only while the pointer target is the Queue list
+    /// box — that Client's core sets its Panel focus from the key's pointer
+    /// target before every key.
+    TransportChipQueueTarget,
 }
 
 impl KeyPolicyGate {
@@ -236,13 +241,17 @@ impl KeyPolicyGate {
                 !snapshot.overlays.focus.blocking() && !snapshot.overlays.text_entry_focused
             }
             Self::IdleFeedLink => idle_feed_link_allowed(chord, snapshot),
-            Self::GuiClient => {
-                snapshot.gui_client
+            Self::TransportChipKeys => {
+                snapshot
+                    .client_capabilities
+                    .has(ClientCapability::TransportChipKeys)
                     && !snapshot.overlays.focus.blocking()
                     && !snapshot.overlays.text_entry_focused
             }
-            Self::GuiQueueTarget => {
-                snapshot.gui_client
+            Self::TransportChipQueueTarget => {
+                snapshot
+                    .client_capabilities
+                    .has(ClientCapability::TransportChipKeys)
                     && snapshot.panel_focus == PanelFocus::Queue
                     && !snapshot.overlays.focus.blocking()
                     && !snapshot.overlays.text_entry_focused
@@ -356,110 +365,110 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "gui_collapse_panel",
         global: true,
         binding: KeyPolicyBinding::GuiCollapsePanel,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "gui_fold_queue",
         global: true,
         binding: KeyPolicyBinding::GuiFoldQueue,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "gui_cycle_subtitle",
         global: true,
         binding: KeyPolicyBinding::GuiCycleSubtitle,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "gui_queue_chooser_toggle",
         global: true,
         binding: KeyPolicyBinding::GuiQueueChooserToggle,
-        gate: KeyPolicyGate::GuiQueueTarget,
+        gate: KeyPolicyGate::TransportChipQueueTarget,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "gui_new_queue",
         global: true,
         binding: KeyPolicyBinding::GuiNewQueue,
-        gate: KeyPolicyGate::GuiQueueTarget,
+        gate: KeyPolicyGate::TransportChipQueueTarget,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "gui_close_queue",
         global: true,
         binding: KeyPolicyBinding::GuiCloseQueue,
-        gate: KeyPolicyGate::GuiQueueTarget,
+        gate: KeyPolicyGate::TransportChipQueueTarget,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "gui_queue_filter_open",
         global: true,
         binding: KeyPolicyBinding::GuiQueueFilterOpen,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "gui_open_target_chooser",
         global: true,
         binding: KeyPolicyBinding::GuiOpenTargetChooser,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     // The canvas queue's row moves (add-tauri-gui-client row 6.5): declared
     // actions like the deep seeks below — a user may rebind them — whose
-    // `GuiClient` gate keeps even a rebound chord out of the TUI.
+    // `TransportChipKeys` gate keeps even a rebound chord out of the TUI.
     KeyPolicyEntry {
         name: "queue_move_down",
         global: true,
         binding: KeyPolicyBinding::QueueMoveDown,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "queue_move_up",
         global: true,
         binding: KeyPolicyBinding::QueueMoveUp,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     // The canvas transport's registry actions (add-tauri-gui-client row
     // 6.4): unlike the canvas-fixed literals above, these are declared
     // actions — a user may rebind them — so `entry_matches` resolves their
-    // chords from `&Keybinds`. The `GuiClient` gate keeps even a rebound
+    // chords from `&Keybinds`. The `TransportChipKeys` gate keeps even a rebound
     // chord out of the TUI, where `<`/`>` at ±5 s stay the only seeks.
     KeyPolicyEntry {
         name: "seek_back_10",
         global: true,
         binding: KeyPolicyBinding::SeekBack10,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "seek_forward_30",
         global: true,
         binding: KeyPolicyBinding::SeekForward30,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     // The track chips' popover openers (the "every action is reachable
     // from the keyboard" spec): declared actions like the deep seeks
-    // above — a user may rebind them — whose `GuiClient` gate keeps even
+    // above — a user may rebind them — whose `TransportChipKeys` gate keeps even
     // a rebound chord out of the TUI, which paints no track chip to open.
     KeyPolicyEntry {
         name: "open_audio_popover",
         global: true,
         binding: KeyPolicyBinding::OpenAudioPopover,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "open_subtitle_popover",
         global: true,
         binding: KeyPolicyBinding::OpenSubtitlePopover,
-        gate: KeyPolicyGate::GuiClient,
+        gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {

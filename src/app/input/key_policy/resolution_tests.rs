@@ -3,6 +3,7 @@ use super::test_support::*;
 use super::*;
 use crate::app::dispatch::action::{PanelIntent, PlaybackIntent, VisualIntent};
 use crate::app::test_seams::crossterm_key_to_neutral;
+use crate::app::tests::gui_client_capabilities;
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{Chord, KEYBIND_ACTIONS};
 use mbv_ui_model::playback::VOLUME_STEP;
@@ -345,14 +346,17 @@ fn defaults_reproduce_todays_resolution() {
                 }
                 "open_idle_feed_link" => snap.playback.idle_feed_link_available = true,
                 // The canvas transport's registry actions are gated on the
-                // GUI Client context (add-tauri-gui-client row 6.4): their
-                // default chords resolve only once `gui_client` opens.
+                // transport chips (add-tauri-gui-client row 6.4): their
+                // default chords resolve only once the Client holds
+                // `TransportChipKeys`.
                 "seek_back_10"
                 | "seek_forward_30"
                 | "open_audio_popover"
                 | "open_subtitle_popover"
                 | "queue_move_down"
-                | "queue_move_up" => snap.gui_client = true,
+                | "queue_move_up" => {
+                    snap.client_capabilities = gui_client_capabilities();
+                }
                 _ => {}
             }
             assert_eq!(
@@ -372,7 +376,7 @@ fn defaults_reproduce_todays_resolution() {
 #[test]
 fn gui_queue_controls_need_the_gui_queue_target() {
     let gui = RouterSnapshot {
-        gui_client: true,
+        client_capabilities: gui_client_capabilities(),
         panel_focus: PanelFocus::Queue,
         ..snapshot()
     };

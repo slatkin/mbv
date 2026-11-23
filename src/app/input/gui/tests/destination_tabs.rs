@@ -12,7 +12,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::app::input::gui::GuiInput;
-use crate::app::tests::make_app_stub;
+use crate::app::tests::{gui_client_capabilities, make_app_stub};
 
 /// A catalog with a Grouped Music library at position 1 and a Shows library
 /// at position 2, Music active: the shortest catalog in which a tab step has
@@ -49,7 +49,7 @@ fn press(app: &mut App, key: Key) {
 #[test]
 fn tab_from_music_opens_shows_and_starts_its_root_load() {
     let mut app = music_and_shows_app();
-    app.mark_gui_client();
+    app.set_client_capabilities(gui_client_capabilities());
 
     press(&mut app, Key::Tab);
 
@@ -77,7 +77,7 @@ fn tab_from_music_opens_shows_and_starts_its_root_load() {
 #[test]
 fn a_router_step_opens_no_destination_the_gui_does_not_present() {
     let mut app = music_and_shows_app();
-    app.mark_gui_client();
+    app.set_client_capabilities(gui_client_capabilities());
 
     // Position 3 names no tab: Home is 0 and the two libraries take 1 and 2.
     press(&mut app, Key::Char('4'));

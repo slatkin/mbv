@@ -2,6 +2,7 @@
 //! and Client facts the policy's gates read, split out of `key_policy.rs`
 //! along the type seam (the policy itself stays beside its ordered table).
 
+use crate::app::state::client_capabilities::ClientCapabilities;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 
 /// Which remote-control target currently owns transport shortcuts.
@@ -105,11 +106,13 @@ pub struct RouterSnapshot {
     /// suppressed while a text entry owns focus or a blocking overlay is
     /// open (the `prefix_arm` layer's gate).
     pub prefix_armed: bool,
-    /// Whether the resolving Client is the GUI Client (add-tauri-gui-client
-    /// row 6.2): the GUI-only key context's gate reads it, so the canvas's
-    /// `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) chords
-    /// route in the GUI Client and never in the TUI Client — a configured
-    /// TUI binding on those chords does not follow into the GUI, and the
-    /// TUI's default bindings stay unchanged.
-    pub gui_client: bool,
+    /// The capabilities of the resolving Client (design D6a of
+    /// `decouple-client-core`): the transport chips' key context
+    /// (add-tauri-gui-client row 6.2) reads
+    /// `ClientCapability::TransportChipKeys`, so the canvas's `z` (collapse),
+    /// `q` (queue fold), and `c` (cycle subtitle) chords route in a Client
+    /// that paints the chips and never in the TUI Client — a configured TUI
+    /// binding on those chords does not follow into the GUI, and the TUI's
+    /// default bindings stay unchanged.
+    pub client_capabilities: ClientCapabilities,
 }

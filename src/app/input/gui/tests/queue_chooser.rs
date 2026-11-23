@@ -11,7 +11,9 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 use crate::app::App;
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
-use crate::app::tests::{emby_unified_state, make_items, make_local_daemon_app_stub_with_cmd_rx};
+use crate::app::tests::{
+    emby_unified_state, gui_client_capabilities, make_items, make_local_daemon_app_stub_with_cmd_rx,
+};
 use mbv_ctrl::player::PlayerEvent;
 
 /// The stub Owner's current queue.
@@ -30,7 +32,7 @@ fn resting() -> mbv_queue::NamedQueueId {
 fn app_with_queues() -> (App, Receiver<CtrlCmd>) {
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
     while cmd_rx.try_recv().is_ok() {}
-    app.mark_gui_client();
+    app.set_client_capabilities(gui_client_capabilities());
     app.set_panel_focus(PanelFocus::Queue);
     app.adopt_named_queue_list(
         vec![

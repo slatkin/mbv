@@ -59,7 +59,7 @@ use ratatui::Terminal;
 
 // The App stub construction moved to `app_stub` so the Clients' own tests
 // can build it too; the `crate::app::tests::*` paths stay working.
-pub(crate) use super::app_stub::{make_app_stub, make_built_app};
+pub(crate) use super::app_stub::{gui_client_capabilities, make_app_stub, make_built_app};
 
 // ── test helpers ─────────────────────────────────────────────────────────
 

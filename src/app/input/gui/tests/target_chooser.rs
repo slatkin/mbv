@@ -11,7 +11,9 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, ShellRequest};
 use crate::app::App;
 use crate::app::gui_client_state::GuiOverlay;
 use crate::app::input::gui::GuiInput;
-use crate::app::tests::make_local_daemon_app_stub_with_cmd_rx_and_compat;
+use crate::app::tests::{
+    gui_client_capabilities, make_local_daemon_app_stub_with_cmd_rx_and_compat,
+};
 
 /// An `App` stub whose Owner advertises the `playback-output` capability
 /// and offers one cast receiver (`receiver-1`) as a playback target: the
@@ -113,7 +115,7 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
 #[test]
 fn gui_context_r_opens_the_target_chooser() {
     let (mut app, _cmd_rx) = cast_target_app();
-    app.mark_gui_client();
+    app.set_client_capabilities(gui_client_capabilities());
 
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Char('r'), KeyModifiers::NONE)),

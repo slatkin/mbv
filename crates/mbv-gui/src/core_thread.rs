@@ -245,10 +245,9 @@ impl CoreThread {
         // D4, D9): the GUI arranges its own panels from its measured size and
         // keeps its own launch location, so the TUI's Mini check, its hidden
         // empty queue column, and its launch state never apply here. The GUI's
-        // own launch location replaces the TUI's (design D6a), and the
-        // Client-kind flag stays set until rows 3.3 and 3.4 delete it.
+        // own launch location replaces the TUI's (design D6a), on top of the
+        // capabilities `attach_owner` recorded for this Client.
         app.skip_launch_restore();
-        app.mark_gui_client();
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
         // and the Status bar (design D4). The Library panel mounts beside the

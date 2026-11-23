@@ -254,14 +254,6 @@ pub struct App {
     /// auto-hide control and never reads it.
     pub(in crate::app) gui_player_auto_hide: bool,
     pub(in crate::app) panel_mode: PanelMode,
-    /// The one Client-kind fact (add-gui-library-panel design D4, D9):
-    /// `true` for a GUI Client, `false` for a TUI Client. The GUI Client
-    /// sets it before its first step (`App::mark_gui_client`); the TUI
-    /// Client never does. The panel-shape and visual-slot differences the
-    /// Clients have moved to `client_capabilities` (design D6a), as have the
-    /// shown-queue gates (row 3.4); what remains on this flag is the
-    /// keyboard-reader axis that row 3.5 deletes.
-    pub(in crate::app) gui_client: bool,
     /// The neutral facts this Client differs on (design D6a): each capability
     /// stands for one thing a Client presents, so the core reads a fact and
     /// never names a Client. Each Client builds its own value: `App::build`
