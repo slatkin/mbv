@@ -17,7 +17,9 @@ impl Model {
         // focus away from the library the user is browsing. Assign the field
         // directly: `set_panel_focus` would run the queue initial-item path
         // for a queue that is about to be left.
-        if self.app.queue_column_hidden_empty() && self.app.panel_focus == PanelFocus::Queue {
+        if self.app.queue_column_hidden_empty()
+            && self.app.stored_panel_focus() == PanelFocus::Queue
+        {
             self.app.panel_focus = PanelFocus::Library;
         }
         self.mount_queue_panel();
@@ -67,7 +69,7 @@ impl Model {
         if resizing {
             return;
         }
-        let (height, width) = self.app.images.last_card_size();
+        let (height, width) = self.app.last_card_size();
         let variant = self.ensure_title_overlay_protocol(
             &record.base_key,
             (width, height),
@@ -195,7 +197,7 @@ impl Model {
             }
             QueueIntent::PlayNow => {
                 let (active, current_idx) = {
-                    let status = self.app.player.status_snapshot();
+                    let status = self.app.player_status_snapshot();
                     (status.active, status.current_idx)
                 };
                 if active {
@@ -208,7 +210,7 @@ impl Model {
                 }
             }
             QueueIntent::SavePlaylist => {
-                if self.app.local_view.total_queue_len() > 0 {
+                if self.app.local_queue_len() > 0 {
                     self.app
                         .open_save_playlist_dialog(super::SavePlaylistDialog {
                             input: self.app.queue_playlist_name().to_string(),

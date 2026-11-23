@@ -49,7 +49,7 @@ impl Model {
     }
 
     fn inline_search_needs_full_load(&self, index: usize) -> bool {
-        self.app.libs[index].nav_stack.last().is_some_and(|level| {
+        self.app.emby_library_level(index).is_some_and(|level| {
             level.all_items.is_none()
                 && (level.letter_filter.is_some() || !level.rows.is_fully_loaded())
         })
@@ -60,7 +60,9 @@ impl Model {
     fn inline_search_corpus_loading(&self, index: usize) -> bool {
         if self.app.recursive_album_search_enabled(index) {
             matches!(
-                self.app.album_indexes.get(&self.app.libs[index].library.id),
+                self.app
+                    .emby_library(index)
+                    .and_then(|lib| self.app.album_index(&lib.library.id)),
                 Some(AlbumIndexState::Loading { .. })
             )
         } else {
@@ -73,7 +75,7 @@ impl Model {
     }
 
     pub(in crate::app) fn push_inline_search_content(&mut self) {
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return;
         };
         let has_session = self
@@ -102,15 +104,19 @@ impl Model {
         let loading = query_started && self.inline_search_corpus_loading(index);
         let recursive = self.app.recursive_album_search_enabled(index);
         let pool = if recursive {
-            let library_id = self.app.libs[index].library.id.clone();
-            match self.app.album_indexes.get(&library_id) {
+            let library_id = self
+                .app
+                .emby_library(index)
+                .map(|lib| lib.library.id.clone())
+                .unwrap_or_default();
+            match self.app.album_index(&library_id) {
                 Some(AlbumIndexState::Ready(index)) => SearchPool::Albums(index.entries.clone()),
                 _ => SearchPool::Albums(Vec::new()),
             }
         } else {
-            let items = self.app.libs[index]
-                .nav_stack
-                .last()
+            let items = self
+                .app
+                .emby_library_level(index)
                 .map(|level| {
                     level
                         .all_items
@@ -141,7 +147,7 @@ impl Model {
     /// the active destination, then re-push so the loading indicator and any
     /// partial pool reflect the started query.
     pub(in crate::app) fn inline_search_query_started(&mut self) {
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return;
         };
         if self
@@ -175,15 +181,19 @@ impl Model {
     }
 
     pub(in crate::app) fn activate_inline_search_item(&mut self, id: &str, item_type: &str) {
-        let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
+        let TabSelection::EmbyLibrary(lib_idx) = self.app.active_tab() else {
             return;
         };
         let selected = self
             .active_inline_search_session_ref()
             .and_then(mbv_components::inline_search::InlineSearchHost::selected_inline_search_item);
         if self.app.recursive_album_search_enabled(lib_idx) {
-            let library_id = self.app.libs[lib_idx].library.id.clone();
-            let entry = match self.app.album_indexes.get(&library_id) {
+            let library_id = self
+                .app
+                .emby_library(lib_idx)
+                .map(|lib| lib.library.id.clone())
+                .unwrap_or_default();
+            let entry = match self.app.album_index(&library_id) {
                 Some(AlbumIndexState::Ready(index)) => index
                     .get(id)
                     .filter(|entry| entry.album.item_type == item_type)

@@ -24,9 +24,9 @@ use super::Model;
 pub(in crate::app) fn build_status_indicator_spans(app: &App) -> Option<Vec<Span<'static>>> {
     let data = crate::app::LocalPlaybackTarget::indicator_data(app)?;
     Some(indicator_paint::indicator_spans(
-        app.indicator_style,
+        app.indicator_style(),
         &data,
-        app.use_nerd_fonts,
+        app.use_nerd_fonts(),
     ))
 }
 
@@ -120,8 +120,9 @@ pub(in crate::app) fn volume_status_spans(app: &App) -> Vec<Span<'static>> {
 pub(in crate::app) fn status_bar_right_spans(model: &Model) -> Vec<Span<'static>> {
     let app = &model.app;
     let (username, stay_alive) = {
-        let config = app.config.lock().unwrap();
-        (config.username.clone(), config.stay_alive)
+        let username = app.configured_username();
+        let stay_alive = app.stay_alive_configured();
+        (username, stay_alive)
     };
     // Stay-alive indicator: red whenever this process runs in stay-alive
     // mode (the daemon persists after quit), yellow when that daemon is
@@ -130,7 +131,7 @@ pub(in crate::app) fn status_bar_right_spans(model: &Model) -> Vec<Span<'static>
     // another daemon is still in stay-alive mode.
     let alive_color = if !stay_alive {
         mbv_theme::Role::TextMuted.color().to_ratatui()
-    } else if app.player.is_remote_disconnected() {
+    } else if app.player_remote_disconnected() {
         mbv_theme::Role::TextFocusAccent.color().to_ratatui()
     } else {
         mbv_theme::Role::StatusError.color().to_ratatui()
@@ -196,31 +197,31 @@ pub(in crate::app) fn status_bar_right_spans(model: &Model) -> Vec<Span<'static>
     right_spans.extend([
         Span::raw(" "),
         Span::styled(
-            if app.use_nerd_fonts {
+            if app.use_nerd_fonts() {
                 "\u{F06B4}"
             } else {
                 "EMBY"
             },
             Style::default().fg(service_state_color(
-                app.emby_runtime.state,
+                app.emby_service_state(),
                 mbv_theme::Role::Accent.color().to_ratatui(),
             )),
         ),
         Span::raw(" "),
         Span::styled(
-            if app.use_nerd_fonts {
+            if app.use_nerd_fonts() {
                 "\u{EDE2}"
             } else {
                 "ABS"
             },
             Style::default().fg(service_state_color(
-                app.audiobookshelf_runtime.state,
+                app.audiobookshelf_service_state(),
                 mbv_theme::Role::AccentAudiobookshelf.color().to_ratatui(),
             )),
         ),
         Span::raw(" "),
         Span::styled(
-            if app.use_nerd_fonts {
+            if app.use_nerd_fonts() {
                 "\u{f004}"
             } else {
                 "\u{2665}"
@@ -270,7 +271,7 @@ mod tests {
     fn service_indicators_fall_back_to_text_without_nerd_fonts() {
         let model = super::Model::new(make_app_stub());
         assert!(
-            !model.app.use_nerd_fonts,
+            !model.app.use_nerd_fonts(),
             "the stub defaults to no Nerd Fonts"
         );
 

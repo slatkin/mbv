@@ -187,7 +187,7 @@ impl Model {
     fn handle_library_viewport_reach(&mut self, index: usize) {
         self.app
             .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+        if let Some(lib_idx) = self.app.active_emby_library_index() {
             self.app.maybe_fetch_next_page(lib_idx, index);
         }
     }
@@ -304,7 +304,7 @@ impl Model {
                 self.handle_emby_library_request(request);
             }
             ShellRequest::EmbyLibraryPillClick { target } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                if let Some(lib_idx) = self.app.active_emby_library_index() {
                     self.app.handle_mouse_selector_click_emby(lib_idx, target);
                 }
                 // A music-group pill switch replaces the album level; re-point
@@ -322,7 +322,7 @@ impl Model {
                 self.handle_emby_library_latest_exit(target);
             }
             ShellRequest::EmbyLibraryRowClick { target } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index()
+                if let Some(lib_idx) = self.app.active_emby_library_index()
                     && let Some(target) = target
                 {
                     self.app.handle_mouse_single_click_emby(lib_idx, &target);
@@ -330,7 +330,7 @@ impl Model {
                 self.push_active_emby_library_owner_content();
             }
             ShellRequest::EmbyLibraryRowActivate { target } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index()
+                if let Some(lib_idx) = self.app.active_emby_library_index()
                     && let Some(target) = target
                 {
                     self.app.handle_mouse_double_click_emby(lib_idx, &target);
@@ -359,7 +359,7 @@ impl Model {
             }
             ShellRequest::TvHitClick { hit } => self.handle_tv_hit_click(&hit),
             ShellRequest::TvHitDoubleClick { hit } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                if let Some(lib_idx) = self.app.active_emby_library_index() {
                     self.app.handle_mouse_double_click_tv(lib_idx, hit);
                 }
                 self.push_tv_workspace_content();
@@ -417,7 +417,7 @@ impl Model {
         // The component owns the painted cursor; persist the
         // active tab's slot once after the movement lands so
         // the saved position tracks the moved cursor (B3).
-        if let Some(index) = self.app.tab.audiobookshelf_index() {
+        if let Some(index) = self.app.active_audiobookshelf_library_index() {
             self.app.save_audiobookshelf_position(index);
         }
         // `select_audiobookshelf_show` rewrote the active browse
@@ -441,23 +441,20 @@ impl Model {
         if active_key.as_ref() != Some(key) {
             return Some(());
         }
-        let lib_idx = self
-            .app
-            .libs
-            .iter()
-            .position(|lib| {
-                matches!(key, mbv_ui_model::library::LibraryKey::Service { library_id, .. } if lib.library.id == *library_id)
-            })?;
-        if self.app.tab.emby_library_index() != Some(lib_idx) {
+        let lib_idx = self.app.emby_library_index_of(match key {
+            mbv_ui_model::library::LibraryKey::Service { library_id, .. } => library_id,
+            _ => return Some(()),
+        })?;
+        if self.app.active_emby_library_index() != Some(lib_idx) {
             return None;
         }
         self.app.persist_library_scroll(lib_idx, scroll);
         // The owner already applied the movement; retain
         // the resolved cursor for App-side effects only.
         if index
-            < self.app.libs[lib_idx]
-                .nav_stack
-                .last()
+            < self
+                .app
+                .emby_library_level(lib_idx)
                 .map_or(0, |level| level.items.len())
         {
             self.app.libs[lib_idx]
@@ -591,13 +588,13 @@ impl Model {
     /// The `EmbyLibraryLatestSelected` arm: snapshot the destination Latest
     /// shelf, record the acknowledgement on the music owner, re-project.
     fn handle_emby_library_latest_selected(&mut self) {
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+        if let Some(lib_idx) = self.app.active_emby_library_index() {
             self.app.spawn_destination_latest_snapshot(lib_idx);
         }
         if let (Some(_), Some(lib_idx)) =
-            (self.music_owner_key(), self.app.tab.emby_library_index())
+            (self.music_owner_key(), self.app.active_emby_library_index())
         {
-            if let Some(library) = self.app.libs.get(lib_idx) {
+            if let Some(library) = self.app.emby_library(lib_idx) {
                 self.record_home_latest_acknowledgement(DestinationLatestSource::Emby(
                     library.library.id.clone(),
                 ));
@@ -611,7 +608,7 @@ impl Model {
     /// The `EmbyLibraryLatestExit` arm: leave the Latest shelf, restoring the
     /// letter filter or the home-video group selection.
     fn handle_emby_library_latest_exit(&mut self, target: usize) {
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+        if let Some(lib_idx) = self.app.active_emby_library_index() {
             if target == usize::MAX {
                 self.clear_emby_letter_filter(lib_idx);
             } else {
@@ -630,7 +627,7 @@ impl Model {
     /// marker for letter pills, and always repaint the TV owner.
     fn handle_tv_hit_click(&mut self, hit: &mbv_ui_msg::TvHit) {
         let acknowledge_latest = matches!(hit, mbv_ui_msg::TvHit::LetterPill(0));
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+        if let Some(lib_idx) = self.app.active_emby_library_index() {
             self.app.handle_mouse_single_click_tv(lib_idx, hit.clone());
         }
         // A season-pill click selects the season in the owner (its cursor
@@ -664,7 +661,7 @@ impl Model {
     fn focus_emby_context_item(&mut self, item: &mbv_emby_model::EmbyItem) {
         self.app
             .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-        let Some(lib_idx) = self.app.tab.emby_library_index() else {
+        let Some(lib_idx) = self.app.active_emby_library_index() else {
             return;
         };
         let Some(level) = self

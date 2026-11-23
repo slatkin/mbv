@@ -14,7 +14,7 @@ impl Model {
     /// `EmbyLibrary` tab, same derivation as the `EmbyLibraryRow*`/`EmbyLibraryPillClick` mouse arms).
     /// A missing library index is a defensive no-op.
     pub(in crate::app) fn handle_emby_library_request(&mut self, request: ShellRequest) {
-        let Some(lib_idx) = self.app.tab.emby_library_index() else {
+        let Some(lib_idx) = self.app.active_emby_library_index() else {
             return;
         };
         match request {
@@ -61,7 +61,11 @@ impl Model {
             // `handle_lib_key` CONTROL arm, derived from the shell's own tab
             // state (the library name comes from the active library).
             ShellRequest::EmbyLibraryRescan => {
-                let name = self.app.libs[lib_idx].library.name.clone();
+                let name = self
+                    .app
+                    .emby_library_name(lib_idx)
+                    .unwrap_or_default()
+                    .to_owned();
                 self.app.ask_confirm(ConfirmModal::two_button(
                     format!("Rescan '{name}'?"),
                     "Confirm",
@@ -105,7 +109,7 @@ impl Model {
         if self.active_emby_library_owner_is_latest() {
             return;
         }
-        if lib_idx >= self.app.libs.len() {
+        if !self.app.emby_library_exists(lib_idx) {
             return;
         }
         let idle = self.app.navigation_idle();
@@ -113,17 +117,7 @@ impl Model {
         // Keep only the persistence-facing resting value, using the index
         // already resolved by the active control. This is not a live mirror:
         // ordinary content pushes never read it back.
-        let valid_index = if self.app.is_feed_home_video_group_view(lib_idx) {
-            self.app.libs[lib_idx]
-                .feed_home_video
-                .as_ref()
-                .is_some_and(|state| index < state.selected_len())
-        } else {
-            self.app.libs[lib_idx]
-                .nav_stack
-                .last()
-                .is_some_and(|level| index < level.items.len())
-        };
+        let valid_index = self.app.emby_library_row_in_range(lib_idx, index);
         if valid_index {
             if self.app.is_feed_home_video_group_view(lib_idx) {
                 if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {

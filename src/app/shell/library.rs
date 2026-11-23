@@ -137,7 +137,7 @@ impl Model {
                 area,
                 self.layout.left_area.x,
                 self.terminal_width,
-                self.app.queue_column_width,
+                self.app.queue_column_width(),
                 enabled,
             );
         }

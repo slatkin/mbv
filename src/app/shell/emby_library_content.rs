@@ -34,10 +34,10 @@ impl Model {
     pub(in crate::app) fn active_emby_library_owner(
         &self,
     ) -> Option<(usize, LibraryKey, LibraryKind)> {
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return None;
         };
-        let library = self.app.libs.get(index)?;
+        let library = self.app.emby_library(index)?;
         let kind = LibraryKind::from_collection_type(&library.library.collection_type);
         if !matches!(
             kind,
@@ -69,7 +69,7 @@ impl Model {
     /// `shell/emby_library.rs::browse_identity`, reused verbatim as the shared
     /// `EmbyLibraryIdentity` shape).
     fn emby_library_owner_identity(&self, index: usize) -> EmbyLibraryIdentity {
-        let lib = &self.app.libs[index];
+        let lib = &self.app.emby_libraries()[index];
         let level = lib.nav_stack.last();
         EmbyLibraryIdentity {
             depth: lib.nav_stack.len(),
@@ -91,18 +91,18 @@ impl Model {
     /// group state is still unseeded).
     fn feed_home_video_owner_snapshot(&self, index: usize) -> (Vec<EmbyItem>, usize, usize, bool) {
         let items = self.app.feed_home_video_selected_items(index);
-        let (cursor, scroll) = self.app.libs[index]
-            .feed_home_video
-            .as_ref()
+        let (cursor, scroll) = self
+            .app
+            .emby_library_feed_home_video(index)
             .map_or((0, 0), |state| (state.video_cursor, state.video_scroll));
-        let loading = self.app.libs[index]
-            .feed_home_video
-            .as_ref()
+        let loading = self
+            .app
+            .emby_library_feed_home_video(index)
             .map(|state| state.loading)
             .or_else(|| {
-                self.app.libs[index]
-                    .nav_stack
-                    .first()
+                self.app
+                    .emby_library(index)
+                    .and_then(|tab| tab.nav_stack.first())
                     .map(|root| root.loading)
             })
             .unwrap_or(false);
@@ -155,13 +155,13 @@ impl Model {
                 let total_count = items.len();
                 (items, total_count, None, None, loading, cursor, scroll)
             } else {
-                let cursor = self.app.libs[index]
-                    .nav_stack
-                    .last()
+                let cursor = self
+                    .app
+                    .emby_library_level(index)
                     .map_or(0, |l| l.resting().cursor());
-                let scroll = self.app.libs[index]
-                    .nav_stack
-                    .last()
+                let scroll = self
+                    .app
+                    .emby_library_level(index)
                     .map_or(0, |l| l.resting().scroll());
                 let ctx = self.app.library_list_render_ctx(index, cursor);
                 (
@@ -187,7 +187,7 @@ impl Model {
             .map(|folder| (folder.name.clone(), folder.id.clone()))
             .unzip();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
-        let library_id = self.app.libs[index].library.id.clone();
+        let library_id = self.app.emby_libraries()[index].library.id.clone();
         let latest_items = self
             .tv_latest_snapshots
             .get(&library_id)

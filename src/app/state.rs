@@ -26,6 +26,7 @@ pub(in crate::app) mod remote_slot;
 pub(in crate::app) mod runtime_channels;
 pub(in crate::app) mod service_runtime;
 pub(in crate::app) mod service_setup;
+pub(in crate::app) mod shell_reads;
 pub(in crate::app) mod toasts;
 
 pub mod events;

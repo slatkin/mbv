@@ -134,7 +134,7 @@ fn build_title_overlay_variant(
     };
     let source_dimensions = (source.width(), source.height());
     let logo = ready_logo_key
-        .and_then(|key| model.app.images.image(key))
+        .and_then(|key| model.app.cached_image(key))
         .and_then(|entry| entry.img.as_ref());
     let composed = compose_title_overlay_bitmap(
         source,
@@ -155,7 +155,7 @@ fn build_title_overlay_variant(
     if let Some(protocol) = built.protocol {
         model
             .image_protocols
-            .insert_protocol(&model.app.images, key, suffix, protocol);
+            .insert_protocol(model.app.image_cache(), key, suffix, protocol);
     }
     tracing::debug!(
         name: "queue.title_overlay.built",
@@ -172,7 +172,7 @@ fn build_title_overlay_variant(
 
 impl Model {
     pub(in crate::app) fn ensure_placeholder_card_image(&mut self) {
-        if self.app.images.is_cached(QUEUE_CARD_PLACEHOLDER_KEY) {
+        if self.app.image_cached(QUEUE_CARD_PLACEHOLDER_KEY) {
             return;
         }
         let Some(suffix) = current_protocol_suffix_opt(self) else {
@@ -189,7 +189,7 @@ impl Model {
             .insert_image(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), built.entry);
         if let Some(protocol) = built.protocol {
             self.image_protocols.insert_protocol(
-                &self.app.images,
+                self.app.image_cache(),
                 QUEUE_CARD_PLACEHOLDER_KEY,
                 suffix,
                 protocol,
@@ -229,11 +229,11 @@ impl Model {
         suffix: &'static str,
     ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
         let picker = self.image_protocols.picker_for_suffix(suffix).cloned()?;
-        let reencode = self.app.images.image(bare_key).is_some_and(|e| {
+        let reencode = self.app.cached_image(bare_key).is_some_and(|e| {
             e.img.is_some()
                 && !self
                     .image_protocols
-                    .contains(&self.app.images, bare_key, suffix)
+                    .contains(self.app.image_cache(), bare_key, suffix)
         });
         if reencode {
             let (img, cover_box, stored_logo_key) = self
@@ -248,7 +248,7 @@ impl Model {
                 .expect("img present, just checked");
             let logo_key = self
                 .image_protocols
-                .ready_logo_key(&self.app.images, stored_logo_key.as_deref());
+                .ready_logo_key(self.app.image_cache(), stored_logo_key.as_deref());
             // A hero entry's protocols carry the cover-fit crop (task 5.10,
             // design D5): rebuild from the source through the same cover step
             // so a suffix switch keeps the cropped aspect.
@@ -259,20 +259,22 @@ impl Model {
                 }
                 None => img,
             };
-            let img =
-                self.image_protocols
-                    .decorate_with_logo(&self.app.images, img, logo_key.as_deref());
+            let img = self.image_protocols.decorate_with_logo(
+                self.app.image_cache(),
+                img,
+                logo_key.as_deref(),
+            );
             let proto = self
                 .image_protocols
                 .build_protocol(bare_key, suffix, &picker, img);
             self.image_protocols
-                .insert_protocol(&self.app.images, bare_key, suffix, proto);
+                .insert_protocol(self.app.image_cache(), bare_key, suffix, proto);
             if let Some(entry) = self.app.images.image_mut(bare_key) {
                 entry.applied_logo_key = logo_key;
             }
         }
         self.image_protocols
-            .protocol_mut(&self.app.images, bare_key, suffix)
+            .protocol_mut(self.app.image_cache(), bare_key, suffix)
     }
 
     /// One hero artwork box's pixel size from its cell size (task 5.10,
@@ -296,7 +298,7 @@ impl Model {
         logo_cache_key: Option<&str>,
         item_kind: &str,
     ) -> Option<String> {
-        let Some(entry) = self.app.images.image(cache_key) else {
+        let Some(entry) = self.app.cached_image(cache_key) else {
             self.app
                 .title_log_gate
                 .log_decision(cache_key, item_kind, "NoBaseEntry", None);
@@ -323,7 +325,7 @@ impl Model {
         // text variant valid.
         let ready_logo_key = self
             .image_protocols
-            .ready_logo_key(&self.app.images, logo_cache_key);
+            .ready_logo_key(self.app.image_cache(), logo_cache_key);
         let key = mbv_images::title_overlay::title_overlay_cache_key(
             cache_key,
             cols,
@@ -331,7 +333,7 @@ impl Model {
             overlay_text,
             ready_logo_key.as_deref(),
         );
-        if !self.app.images.is_cached(&key)
+        if !self.app.image_cached(&key)
             && !build_title_overlay_variant(
                 self,
                 cache_key,
@@ -375,7 +377,7 @@ impl Model {
         logo_cache_key: Option<&str>,
         resizing: bool,
     ) -> bool {
-        let Some(entry) = self.app.images.image(cache_key) else {
+        let Some(entry) = self.app.cached_image(cache_key) else {
             return false;
         };
         let Some(source) = entry.img.clone() else {
@@ -383,10 +385,12 @@ impl Model {
         };
         let desired_logo_key = self
             .image_protocols
-            .ready_logo_key(&self.app.images, logo_cache_key);
+            .ready_logo_key(self.app.image_cache(), logo_cache_key);
         if entry.cover_box == Some(box_cells)
             && entry.applied_logo_key == desired_logo_key
-            && self.image_protocols.has_any(&self.app.images, cache_key)
+            && self
+                .image_protocols
+                .has_any(self.app.image_cache(), cache_key)
         {
             return true;
         }
@@ -402,7 +406,7 @@ impl Model {
         };
         let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
         let cropped = self.image_protocols.decorate_with_logo(
-            &self.app.images,
+            self.app.image_cache(),
             cover_fill_hero_box(&source, px_w, px_h),
             desired_logo_key.as_deref(),
         );
@@ -412,7 +416,7 @@ impl Model {
             .build_protocol(&bare_key, suffix, &picker, cropped);
         self.image_protocols.clear_key(cache_key);
         self.image_protocols
-            .insert_protocol(&self.app.images, cache_key, suffix, proto);
+            .insert_protocol(self.app.image_cache(), cache_key, suffix, proto);
         if let Some(entry) = self.app.images.image_mut(cache_key) {
             entry.cover_box = Some(box_cells);
             entry.applied_logo_key = desired_logo_key;

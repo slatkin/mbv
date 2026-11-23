@@ -19,7 +19,7 @@ impl Model {
     /// during the tick is applied once, here, before the tick's paint and
     /// press resolution.
     pub(in crate::app) fn reveal_requested_tab(&mut self) {
-        if !std::mem::take(&mut self.app.tab_reveal_requested) {
+        if !self.app.take_tab_reveal_request() {
             return;
         }
         self.tab_scroll = reveal_scroll(&self.app, self.terminal_size(), self.tab_scroll);
@@ -34,8 +34,8 @@ fn reveal_scroll(app: &App, terminal_size: (u16, u16), anchor: usize) -> usize {
         return anchor;
     }
     let pos = app
-        .tab
-        .to_position_with_counts(app.libs.len(), app.feeds_tab_pos());
+        .active_tab()
+        .to_position_with_counts(app.emby_library_count(), app.feeds_tab_pos());
     if pos < anchor {
         return pos;
     }
@@ -75,12 +75,12 @@ fn tab_title_widths(app: &App) -> Vec<u16> {
             .saturating_add(pad)
     };
     let mut w = vec![title_width(mbv_ui_model::ui_util::continue_tab_title(
-        app.use_nerd_fonts,
+        app.use_nerd_fonts(),
     ))];
-    for l in &app.libs {
+    for l in app.emby_libraries() {
         w.push(title_width(&l.library.name));
     }
-    for l in &app.audiobookshelf_libraries {
+    for l in app.audiobookshelf_libraries() {
         w.push(title_width(&l.name));
     }
     if app.has_feeds_subscriptions() {

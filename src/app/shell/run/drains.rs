@@ -94,7 +94,7 @@ impl Model {
     pub(super) fn drain_lib_events(&mut self) -> bool {
         let mut had_events = false;
         let mut fetched_recently_added = false;
-        while let Ok(ev) = self.app.channels.lib_rx.try_recv() {
+        while let Some(ev) = self.app.try_recv_lib_event() {
             had_events = true;
             match ev {
                 // The App applies the write; this Client's half is the snapshot
@@ -108,7 +108,7 @@ impl Model {
                     level,
                 }) => {
                     let tv_snapshot = Self::capture_tv_root_completion(
-                        &self.app.libs,
+                        self.app.emby_libraries(),
                         lib_idx,
                         &parent_id,
                         &level,
@@ -278,7 +278,7 @@ impl Model {
                     };
                     if let Some(state) =
                         self.image_protocols
-                            .protocol_mut(&self.app.images, bare_key, suffix)
+                            .protocol_mut(self.app.image_cache(), bare_key, suffix)
                     {
                         state.update_resized_protocol(response);
                     }
@@ -299,7 +299,7 @@ impl Model {
     /// its entry under its key, so a sync point after a drain keeps the store
     /// from holding encodings of entries the cache no longer has.
     pub(super) fn prune_image_protocols(&mut self) {
-        self.image_protocols.prune(&self.app.images);
+        self.image_protocols.prune(self.app.image_cache());
     }
 
     /// Perform the protocol work the core queued (design D2 rule 3 of
@@ -333,7 +333,7 @@ impl Model {
             };
             let pixels = mbv_images::hash_image_bytes(&img);
             if self.image_protocols.has_pixels(
-                &self.app.images,
+                self.app.image_cache(),
                 &pending.cache_key,
                 pending.suffix,
                 pixels,
@@ -369,7 +369,7 @@ impl Model {
                 .build_protocol(&pending.cache_key, pending.suffix, &picker, img)
         };
         self.image_protocols.insert_protocol(
-            &self.app.images,
+            self.app.image_cache(),
             &pending.cache_key,
             pending.suffix,
             protocol,
@@ -489,7 +489,7 @@ impl Model {
         // (SIGHUP), the listener's failed poll/read surfaces as a tick
         // error; breaking here lets post-loop cleanup run (player.stop +
         // join) — same contract as the legacy direct poll/read path.
-        let poll_timeout = if self.app.visualizer.is_some() {
+        let poll_timeout = if self.app.visualizer_worker().is_some() {
             Duration::from_millis(8)
         } else {
             crate::app::CLIENT_IDLE_CADENCE
@@ -611,7 +611,7 @@ impl Model {
         {
             return Ok(());
         }
-        if self.app.force_clear {
+        if self.app.force_clear() {
             self.app.force_clear = false;
             if let Err(e) = terminal.clear() {
                 tracing::error!(
@@ -623,7 +623,7 @@ impl Model {
                 return Err(e.into());
             }
         }
-        if self.app.visualizer.is_some() {
+        if self.app.visualizer_worker().is_some() {
             self.app.sync_visualizer();
         }
         // Design D6b: never paint a tab strip that a pending reveal request

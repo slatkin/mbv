@@ -46,7 +46,7 @@ pub(in crate::app) fn wide_tv_show_area(
     lib_idx: usize,
     terminal_size: (u16, u16),
 ) -> Option<Rect> {
-    let lib = app.libs.get(lib_idx)?;
+    let lib = app.emby_library(lib_idx)?;
     if lib.library.collection_type != "tvshows" {
         return None;
     }

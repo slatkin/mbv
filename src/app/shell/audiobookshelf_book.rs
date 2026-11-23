@@ -8,7 +8,7 @@ use mbv_ui_msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest}
 
 impl Model {
     fn abs_book_key(&self) -> Option<LibraryKey> {
-        let TabSelection::AudiobookshelfLibrary(index) = self.app.tab else {
+        let TabSelection::AudiobookshelfLibrary(index) = self.app.active_tab() else {
             return None;
         };
         (matches!(
@@ -16,7 +16,7 @@ impl Model {
             Some(AudiobookshelfBrowseKind::Book)
         ))
         .then(|| {
-            let library = self.app.audiobookshelf_libraries.get(index)?;
+            let library = self.app.audiobookshelf_library(index)?;
             Some(LibraryKey::Service {
                 service: ServiceKind::Audiobookshelf,
                 library_id: library.id.clone(),
@@ -39,14 +39,14 @@ impl Model {
         if self.abs_book_key().is_none() {
             return;
         }
-        let TabSelection::AudiobookshelfLibrary(index) = self.app.tab else {
+        let TabSelection::AudiobookshelfLibrary(index) = self.app.active_tab() else {
             return;
         };
-        let Some(snapshot) = self.app.audiobookshelf_book_browse.get(index).cloned() else {
+        let Some(snapshot) = self.app.audiobookshelf_book_browse_state(index).cloned() else {
             return;
         };
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        let images_enabled = self.app.images.protocol_enabled();
+        let images_enabled = self.app.image_protocol_enabled();
         self.update_abs_book_owner(|owner| {
             owner.set_content(&snapshot, images_enabled);
             owner.set_focused(focused);
@@ -88,13 +88,13 @@ impl Model {
             },
             ShellRequest::AudiobookshelfBookIntent(intent) => match intent {
                 AudiobookshelfBookIntent::Play => {
-                    if let Some(index) = self.app.tab.audiobookshelf_index() {
+                    if let Some(index) = self.app.active_audiobookshelf_library_index() {
                         self.app.play_selected_audiobookshelf_book(index);
                     }
                 }
                 AudiobookshelfBookIntent::Activate => {
                     if super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size()) {
-                        if let Some(index) = self.app.tab.audiobookshelf_index() {
+                        if let Some(index) = self.app.active_audiobookshelf_library_index() {
                             self.app.play_selected_audiobookshelf_book(index);
                         }
                     } else {

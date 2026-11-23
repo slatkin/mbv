@@ -137,7 +137,7 @@ impl Model {
         if self.clamp_queue_column_width() {
             App::save_client_pref(
                 "queue_column_width",
-                serde_json::json!(self.app.queue_column_width),
+                serde_json::json!(self.app.queue_column_width()),
             );
         }
     }
@@ -147,7 +147,7 @@ impl Model {
     /// own grid, so the hero cover fit must derive its box from the grid that
     /// actually paints (#451).
     fn set_dim_backdrop(&mut self, active: bool) {
-        let changed = self.app.dim_backdrop_active != active;
+        let changed = self.app.dim_backdrop_active() != active;
         self.app.set_dim_backdrop_active(active);
         if changed {
             push_image_protocol_facts(&mut self.app, &self.image_protocols);
@@ -235,23 +235,7 @@ impl Model {
             _ => unreachable!("restore handler called with a different library event"),
         };
         self.app.handle_lib_event(ev, None);
-        let latest = self.app.libs.get(lib_idx).and_then(|lib| {
-            let level = lib.nav_stack.last()?;
-            (lib.library.collection_type == "tvshows"
-                && lib.nav_stack.len() == 1
-                && lib.tv_content_mode == Some(mbv_queue::TvContentMode::Latest))
-            .then(|| {
-                (
-                    lib.library.id.clone(),
-                    level
-                        .items
-                        .iter()
-                        .cloned()
-                        .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
-                        .collect(),
-                )
-            })
-        });
+        let latest = self.app.tv_latest_root_after_restore(lib_idx);
         if let Some((library_id, items)) = latest {
             let items = self
                 .tv_latest_snapshots
@@ -275,7 +259,7 @@ impl Model {
     /// screen (and on a `--pin` launch the error line goes to the log, so
     /// nothing is visible at all).
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mouse_support = self.app.config.lock().unwrap().mouse_support;
+        let mouse_support = self.app.mouse_support_configured();
         let mut terminal = init_terminal(mouse_support)?;
         let result = self.run_with_terminal(&mut terminal);
         if result.is_err() {
@@ -312,7 +296,7 @@ impl Model {
         terminal.draw(|f| self.draw_frame(f, false, false))?;
 
         install_signal_handlers();
-        let quit_timeout = Duration::from_secs(self.app.config.lock().unwrap().quit_timeout_secs);
+        let quit_timeout = self.app.quit_timeout();
         start_quit_watchdog();
 
         let mut last_render = Instant::now()
@@ -352,7 +336,7 @@ impl Model {
         // Printed only after the terminal is restored: anything
         // written while still in the alternate screen would never be
         // visible once it's left.
-        if let Some(msg) = self.app.pending_exit_message.take() {
+        if let Some(msg) = self.app.take_pending_exit_message() {
             println!("{msg}");
         }
         Ok(())
@@ -365,7 +349,7 @@ impl Model {
         last_render: &mut Instant,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         // Apply the Settings panel's live mouse-capture flip before the next draw.
-        if let Some(enabled) = self.app.mouse_capture_pending.take() {
+        if let Some(enabled) = self.app.take_mouse_capture_request() {
             let _ = crate::app::set_mouse_capture(terminal.backend_mut(), enabled);
         }
         // Drain deferred component intents after primary messages, including

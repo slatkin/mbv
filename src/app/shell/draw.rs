@@ -42,7 +42,7 @@ pub(in crate::app) fn compute_chrome_geometry(
         area,
         panel_mode: app.effective_panel_mode(),
         panel_focus: app.effective_panel_focus(),
-        queue_column_width: app.queue_column_width,
+        queue_column_width: app.queue_column_width(),
         terminal_width,
         card_height,
         playback_active: app.effective_playback_state().active,

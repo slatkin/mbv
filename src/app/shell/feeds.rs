@@ -9,7 +9,7 @@ impl Model {
     /// the shared list owner's cursor/scroll survive a refresh; a hidden tab
     /// leaves the retained owner untouched.
     pub(in crate::app) fn sync_feeds(&mut self) {
-        if !matches!(self.app.tab, super::TabSelection::Feeds) {
+        if !self.app.active_tab_is_feeds() {
             return;
         }
         let selected_latest = self
@@ -31,7 +31,7 @@ impl Model {
             self.record_home_latest_acknowledgement(super::DestinationLatestSource::Feeds);
         }
         let latest_marker = self.destination_latest_marker(&super::DestinationLatestSource::Feeds);
-        let state = &self.app.feed_tab;
+        let state = self.app.feeds_state();
         let push = FeedsOwnerPush {
             subscriptions: state.subscriptions.clone(),
             entries: state.entries.clone(),

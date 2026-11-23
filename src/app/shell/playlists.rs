@@ -14,11 +14,11 @@ impl Model {
             && let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>()
         {
             playlists.set_content(PlaylistsContent {
-                playlists: self.app.playlists.clone(),
-                loading: self.app.playlists_loading,
-                open: self.app.playlists_open.clone(),
-                open_items: self.app.playlists_open_items.clone(),
-                open_loading: self.app.playlists_open_loading,
+                playlists: self.app.playlists().to_vec(),
+                loading: self.app.playlists_loading(),
+                open: self.app.playlists_open().cloned(),
+                open_items: self.app.playlists_open_items().to_vec(),
+                open_loading: self.app.playlists_open_loading(),
                 loaded_id: match self.app.playback_queue().source() {
                     mbv_queue::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
                     _ => None,
@@ -50,29 +50,26 @@ impl Model {
                 self.app.playlists_open_items.clear();
             }
             ShellRequest::PlaylistsOpen(index) => {
-                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
+                if let Some(playlist) = self.app.playlist_at(*index).cloned() {
                     self.app.spawn_open_playlist(&playlist);
                 }
             }
             ShellRequest::PlaylistsAction { target, action } => match *target {
                 PlaylistsTarget::Playlist(index) => {
-                    if let Some(id) = self.app.playlists.get(index).map(|p| p.id.clone()) {
+                    if let Some(id) = self.app.playlist_at(index).map(|p| p.id.clone()) {
                         self.app.playlist_action(&id, *action);
                     }
                 }
                 PlaylistsTarget::Row(index) => {
-                    if let Some(item_id) = self
-                        .app
-                        .playlists_open_items
-                        .get(index)
-                        .map(|i| i.id.clone())
+                    if let Some(item_id) =
+                        self.app.playlists_open_item_at(index).map(|i| i.id.clone())
                     {
                         self.app.playlist_row_action(&item_id, *action);
                     }
                 }
             },
             ShellRequest::PlaylistsRename(index) => {
-                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
+                if let Some(playlist) = self.app.playlist_at(*index).cloned() {
                     self.app
                         .open_save_playlist_dialog(crate::app::SavePlaylistDialog {
                             input: playlist.name,
@@ -83,7 +80,7 @@ impl Model {
                 }
             }
             ShellRequest::PlaylistsDelete(index) => {
-                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
+                if let Some(playlist) = self.app.playlist_at(*index).cloned() {
                     self.app.ask_confirm(crate::app::ConfirmModal::two_button(
                         format!(
                             "Delete playlist '{}'?",
@@ -99,7 +96,7 @@ impl Model {
                 }
             }
             ShellRequest::PlaylistsRefresh => {
-                if let Some(playlist) = self.app.playlists_open.clone() {
+                if let Some(playlist) = self.app.playlists_open().cloned() {
                     self.app.playlists_open = None;
                     self.app.playlists_open_items.clear();
                     self.app.spawn_open_playlist(&playlist);

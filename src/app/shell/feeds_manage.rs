@@ -20,7 +20,7 @@ impl super::Model {
     /// only the background add-feed channel, the pending-add marker and the
     /// add-attempt id counter.
     pub(in crate::app) fn open_feeds_manage(&mut self) {
-        if self.app.feeds_manage.is_none() {
+        if !self.app.feeds_manage_open() {
             self.app.feeds_manage = Some(mbv_ui_model::feeds_manage::FeedsManagePopup::new());
         }
         let id = ComponentId::Popup(PopupId::FeedManage);
@@ -46,8 +46,8 @@ impl super::Model {
     /// Push the shell-owned content the component paints (config feeds and
     /// the pending-add marker). Stage/cursor/form edits stay component-local.
     fn push_feeds_manage_content(&mut self) {
-        let feeds = self.app.config.lock().unwrap().feeds.clone();
-        let pending = self.app.feeds_manage.as_ref().and_then(|p| p.pending_add);
+        let feeds = self.app.configured_feeds();
+        let pending = self.app.feeds_manage_pending_add();
         if let Some(component) = self.feeds_manage_component_mut() {
             component.set_feeds(feeds);
             component.set_pending_add(pending);
@@ -98,7 +98,7 @@ impl super::Model {
     }
 
     fn config_feed_count(&self) -> usize {
-        self.app.config.lock().unwrap().feeds.len()
+        self.app.configured_feed_count()
     }
 
     pub(in crate::app) fn dismiss_feeds_manage(&mut self) {
@@ -115,7 +115,7 @@ impl super::Model {
 
     fn start_edit_feed(&mut self) {
         let index = self.feeds_manage_cursor();
-        let sub = self.app.config.lock().unwrap().feeds.get(index).cloned();
+        let sub = self.app.configured_feed_at(index);
         let Some(sub) = sub else {
             return;
         };
@@ -163,7 +163,7 @@ impl super::Model {
         match form.editing_index {
             Some(_) => {
                 if self.app.edit_feed(&form.url, &form.name, form.kind) {
-                    let feeds = self.app.config.lock().unwrap().feeds.clone();
+                    let feeds = self.app.configured_feeds();
                     if let Some(component) = self.feeds_manage_component_mut() {
                         component.set_stage(FeedsManageStage::List);
                         component.set_feeds(feeds);

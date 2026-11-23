@@ -168,7 +168,7 @@ impl Model {
             // at merge time, filtered to the same 14-day cutoff.
             DestinationLatestSource::Feeds => {
                 let now_secs = mbv_ui_model::feed_age::current_time_secs();
-                self.app.feed_tab.all_entries.iter().any(|entry| {
+                self.app.feeds_state().all_entries.iter().any(|entry| {
                     mbv_ui_model::home_latest::timestamp_in_launch_window(
                         entry.pub_date_secs,
                         window,

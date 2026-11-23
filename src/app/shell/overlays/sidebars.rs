@@ -61,7 +61,7 @@ impl Model {
             self.app.spawn_sessions_load();
             self.app.spawn_cast_discovery();
         }
-        if sidebar == SidebarId::Playlists && self.app.playlists.is_empty() {
+        if sidebar == SidebarId::Playlists && self.app.playlists().is_empty() {
             self.app.spawn_load_playlists();
         }
     }
@@ -103,7 +103,7 @@ impl Model {
             && let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>()
         {
             help.set_panel_area(panel_area);
-            help.set_destination(self.app.effective_panel_focus(), self.app.tab);
+            help.set_destination(self.app.effective_panel_focus(), self.app.active_tab());
             help.set_keybinds(&self.keybinds);
         }
 
@@ -128,7 +128,7 @@ impl Model {
         // report still names the target as the output, and an Emby Session
         // row is marked by its `device_id`.
         let emby_output_device_id = self.app.sessions_panel_connected_device_id();
-        let cast_attachment_id = match self.app.playback_output.as_ref() {
+        let cast_attachment_id = match self.app.playback_output() {
             Some(mbv_ctrl::OutputState::Cast { receiver_id, .. }) => Some(receiver_id.as_str()),
             Some(mbv_ctrl::OutputState::EmbySession { .. } | mbv_ctrl::OutputState::Local)
             | None => None,
@@ -137,9 +137,9 @@ impl Model {
             && let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>()
         {
             sessions.set_display_context(
-                self.app.use_nerd_fonts,
+                self.app.use_nerd_fonts(),
                 mbv_render::components::widgets::service_state_color(
-                    self.app.emby_runtime.state,
+                    self.app.emby_service_state(),
                     mbv_theme::Role::Accent.color().to_ratatui(),
                 ),
             );
@@ -162,7 +162,7 @@ impl Model {
                         target.row(has_direct_endpoint)
                     })
                     .collect::<Vec<_>>(),
-                self.app.sessions_loading,
+                self.app.sessions_loading(),
                 direct_remote_session_id,
                 emby_output_device_id,
                 cast_attachment_id,
@@ -234,7 +234,7 @@ impl Model {
     pub(in crate::app) fn drain_search_results(&mut self) -> bool {
         let id = Self::search_id();
         let mut received = 0;
-        while let Ok((query, result)) = self.app.channels.search_rx.try_recv() {
+        while let Some((query, result)) = self.app.try_recv_search_result() {
             received += 1;
             if let Some(comp) = self.application.get_component_mut(&id)
                 && let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()

@@ -34,8 +34,8 @@ impl Model {
     /// `normalize_queue_column_width` is applied here, not in the core.
     pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
         let normalized =
-            normalize_queue_column_width(self.app.queue_column_width, self.terminal_width);
-        if normalized == self.app.queue_column_width {
+            normalize_queue_column_width(self.app.queue_column_width(), self.terminal_width);
+        if normalized == self.app.queue_column_width() {
             return false;
         }
         self.app.queue_column_width = normalized;
@@ -96,7 +96,7 @@ impl Model {
     pub(in crate::app) fn save_client_list_pane_width(&self) {
         App::save_client_pref(
             "list_pane_width",
-            serde_json::json!(self.app.list_pane_width),
+            serde_json::json!(self.app.list_pane_width()),
         );
     }
 

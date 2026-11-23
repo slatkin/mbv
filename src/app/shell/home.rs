@@ -195,13 +195,13 @@ impl Model {
     pub(in crate::app) fn push_home_content(&mut self) {
         let continue_items = self
             .app
-            .home_content
+            .home_content()
             .continue_items
             .iter()
             .cloned()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let loading = self.app.home_content.loading;
+        let loading = self.app.home_content().loading;
         let now_secs = mbv_ui_model::feed_age::current_time_secs();
         let recent_rows = self.app.home_recent_rows(now_secs);
         self.update_home_owner(|home| {
@@ -296,7 +296,7 @@ mod tests {
         model.app.home_content.continue_items = vec![item.clone()];
         model.handle_home_request(HomeRequest::ContextMenu(vec![target(&item.id)]));
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
-            model.app.pending_overlay
+            model.app.pending_overlay()
         else {
             panic!("Home context-menu request must open a menu");
         };
@@ -335,7 +335,7 @@ mod tests {
             .app
             .store_home_recently_added(source.clone(), vec![QueueItem::Emby(Box::new(movie))]);
 
-        assert!(model.app.home_recently_added[&source].is_empty());
+        assert!(model.app.home_recently_added_for(&source).is_empty());
     }
 
     /// (`openspec/specs/home-latest-sections`) `push_home_content` sends the
@@ -359,7 +359,7 @@ mod tests {
         let episode = podcast_episode("episode", current - 2 * day);
         model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Emby("lib".into()),
-            model.app.emby_runtime.generation(),
+            model.app.emby_setup_generation(),
             vec![
                 QueueItem::Emby(Box::new(movie)),
                 QueueItem::Emby(Box::new(old_movie)),
@@ -367,7 +367,7 @@ mod tests {
         );
         model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
-            model.app.audiobookshelf_runtime.generation(),
+            model.app.audiobookshelf_setup_generation(),
             vec![QueueItem::Audiobookshelf(
                 mbv_queue::AudiobookshelfItem::Episode(episode),
             )],
@@ -466,7 +466,7 @@ mod tests {
 
         model.fetch_home_at_startup();
 
-        match model.app.channels.lib_rx.recv().expect("fetch event") {
+        match model.app.recv_lib_event().expect("fetch event") {
             LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {
                 source,
                 items,
@@ -494,7 +494,7 @@ mod tests {
         let episode = podcast_episode("episode", current - 24 * 60 * 60);
         model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
-            model.app.audiobookshelf_runtime.generation(),
+            model.app.audiobookshelf_setup_generation(),
             vec![QueueItem::Audiobookshelf(
                 mbv_queue::AudiobookshelfItem::Episode(episode.clone()),
             )],
@@ -505,7 +505,7 @@ mod tests {
         )]));
 
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
-            model.app.pending_overlay
+            model.app.pending_overlay()
         else {
             panic!("a single Recently added podcast row must open its destination menu");
         };
@@ -524,7 +524,7 @@ mod tests {
         let day = 24 * 60 * 60;
         model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Emby("lib".into()),
-            model.app.emby_runtime.generation(),
+            model.app.emby_setup_generation(),
             vec![QueueItem::Emby(Box::new(recent_movie(
                 "movie",
                 date_added_iso(i64::try_from(current - 3 * day).unwrap()),
@@ -538,7 +538,7 @@ mod tests {
         ]));
 
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
-            model.app.pending_overlay
+            model.app.pending_overlay()
         else {
             panic!("a mixed-Service selection must open its menu");
         };

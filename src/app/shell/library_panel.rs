@@ -33,11 +33,11 @@ impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner
     /// map's addressing key (design D2: `Home | Feeds | Service(LibraryKey)`).
     pub(in crate::app) fn active_library_key(&self) -> Option<LibraryKey> {
-        match self.app.tab {
+        match self.app.active_tab() {
             TabSelection::Home => Some(LibraryKey::Home),
             TabSelection::Feeds => Some(LibraryKey::Feeds),
             TabSelection::EmbyLibrary(index) => {
-                let library = self.app.libs.get(index)?;
+                let library = self.app.emby_library(index)?;
                 Some(LibraryKey::Service {
                     service: ServiceKind::Emby,
                     library_id: library.library.id.clone(),
@@ -45,7 +45,7 @@ impl Model {
                 })
             }
             TabSelection::AudiobookshelfLibrary(index) => {
-                let library = self.app.audiobookshelf_libraries.get(index)?;
+                let library = self.app.audiobookshelf_library(index)?;
                 let kind = match self.app.audiobookshelf_kind_at(index)? {
                     AudiobookshelfBrowseKind::Podcast => LibraryKind::AudiobookshelfPodcast,
                     AudiobookshelfBrowseKind::Book => LibraryKind::AudiobookshelfBook,
@@ -153,7 +153,7 @@ impl Model {
                 }
             }
             LaunchSelector::Emby { index } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                if let Some(lib_idx) = self.app.active_emby_library_index() {
                     if index == usize::MAX {
                         self.clear_emby_letter_filter(lib_idx);
                         self.set_emby_owner_latest_mode(key, false);
@@ -203,7 +203,7 @@ impl Model {
         if !self.app.should_show_letter_pills(lib_idx) {
             return;
         }
-        let Some(level) = self.app.libs[lib_idx].nav_stack.last() else {
+        let Some(level) = self.app.emby_library_level(lib_idx) else {
             return;
         };
         if level.letter_filter.is_none() {
@@ -227,15 +227,12 @@ impl Model {
     /// owner has received its current content. Resolution is deliberately
     /// pill-before-item and happens once; later refreshes only project content.
     pub(in crate::app) fn reanchor_pending_launch_destination(&mut self) {
-        // Borrow-match first so the Pending/Done sync passes never clone the snapshot.
-        let LaunchRestore::TabSettled { state, tab } = &self.app.launch_restore else {
+        // The core answers the settled-snapshot question and clears a snapshot
+        // that settled on another tab, so the Pending/Done sync passes never
+        // clone one.
+        let Some(state) = self.app.settled_launch_state_for(self.app.active_tab()) else {
             return;
         };
-        let (state, tab) = (state.clone(), *tab);
-        if self.app.tab != tab {
-            self.app.launch_restore = LaunchRestore::Done;
-            return;
-        }
         let Some(key) = self.active_library_key() else {
             return;
         };
@@ -274,12 +271,17 @@ impl Model {
     /// drops owners whose key is not here (design D2's retention rule).
     pub(in crate::app) fn live_library_keys(&self) -> Vec<LibraryKey> {
         let mut keys = vec![LibraryKey::Home, LibraryKey::Feeds];
-        keys.extend(self.app.libs.iter().map(|tab| LibraryKey::Service {
-            service: ServiceKind::Emby,
-            library_id: tab.library.id.clone(),
-            kind: LibraryKind::from_collection_type(&tab.library.collection_type),
-        }));
-        keys.extend(self.app.audiobookshelf_libraries.iter().map(|library| {
+        keys.extend(
+            self.app
+                .emby_libraries()
+                .iter()
+                .map(|tab| LibraryKey::Service {
+                    service: ServiceKind::Emby,
+                    library_id: tab.library.id.clone(),
+                    kind: LibraryKind::from_collection_type(&tab.library.collection_type),
+                }),
+        );
+        keys.extend(self.app.audiobookshelf_libraries().iter().map(|library| {
             // `from_media_type` maps every ABS media type to exactly one of
             // Book | Podcast (same rule the browse surfaces apply).
             let kind = match AudiobookshelfBrowseKind::from_media_type(&library.media_type) {
@@ -438,7 +440,7 @@ impl Model {
             self.push_audiobookshelf_podcast_content();
         }
         let live = self.live_library_keys();
-        let list_pane_width = self.app.list_pane_width;
+        let list_pane_width = self.app.list_pane_width();
         // The split gesture's eligibility-loss reset is decided before the
         // panel borrow (the panel owns the split gesture state, so the
         // panel's split drag moved in from): an overlay mount mid-drag must
@@ -591,7 +593,7 @@ impl Model {
         let Some(area) = self.library_panel_content_area() else {
             return;
         };
-        let list_pane_width = self.app.list_pane_width;
+        let list_pane_width = self.app.list_pane_width();
         let hero_data = {
             let panel = self
                 .application

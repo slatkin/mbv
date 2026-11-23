@@ -9,7 +9,7 @@ use mbv_ui_msg::PodcastEpisodeIntent;
 
 impl Model {
     fn abs_podcast_key(&self) -> Option<LibraryKey> {
-        let TabSelection::AudiobookshelfLibrary(index) = self.app.tab else {
+        let TabSelection::AudiobookshelfLibrary(index) = self.app.active_tab() else {
             return None;
         };
         (matches!(
@@ -17,7 +17,7 @@ impl Model {
             Some(AudiobookshelfBrowseKind::Podcast)
         ))
         .then(|| {
-            let library = self.app.audiobookshelf_libraries.get(index)?;
+            let library = self.app.audiobookshelf_library(index)?;
             Some(LibraryKey::Service {
                 service: ServiceKind::Audiobookshelf,
                 library_id: library.id.clone(),
@@ -59,15 +59,15 @@ impl Model {
     /// on Latest — never in the startup catalog loop.
     pub(in crate::app) fn spawn_audiobookshelf_latest_shelves(&self, library_id: &str) {
         crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
-            self.app.config.lock().unwrap().clone(),
-            self.app.audiobookshelf_runtime.generation(),
+            self.app.config_snapshot(),
+            self.app.audiobookshelf_setup_generation(),
             library_id.to_string(),
-            self.app.channels.lib_tx.clone(),
+            self.app.lib_event_sender(),
         );
     }
 
     pub(in crate::app) fn push_audiobookshelf_podcast_content(&mut self) {
-        let Some(index) = self.app.tab.audiobookshelf_index() else {
+        let Some(index) = self.app.active_audiobookshelf_library_index() else {
             return;
         };
         if !matches!(
@@ -76,11 +76,11 @@ impl Model {
         ) {
             return;
         }
-        let Some(snapshot) = self.app.audiobookshelf_browse.get(index).cloned() else {
+        let Some(snapshot) = self.app.audiobookshelf_browse_state(index).cloned() else {
             return;
         };
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        let images_enabled = self.app.images.protocol_enabled();
+        let images_enabled = self.app.image_protocol_enabled();
         let library_id = snapshot.library.id.clone();
         let latest = self
             .app
@@ -117,7 +117,7 @@ impl Model {
     ) {
         self.app
             .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-        let index = self.app.tab.audiobookshelf_index();
+        let index = self.app.active_audiobookshelf_library_index();
         match intent {
             PodcastEpisodeIntent::FocusOrPlay(Some(target))
             | PodcastEpisodeIntent::OpenOrPlay(Some(target)) => {

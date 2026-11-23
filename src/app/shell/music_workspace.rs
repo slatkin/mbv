@@ -16,10 +16,10 @@ use mbv_ui_model::targets::MusicArtistTarget;
 
 impl Model {
     pub(in crate::app) fn music_owner_key(&self) -> Option<LibraryKey> {
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return None;
         };
-        let library = self.app.libs.get(index)?;
+        let library = self.app.emby_library(index)?;
         (library.library.collection_type == "music" && self.app.is_music_group_view(index)).then(
             || LibraryKey::Service {
                 service: ServiceKind::Emby,
@@ -169,10 +169,10 @@ impl Model {
         };
         // Keep grouped album content loading in the shell projection seam;
         // rendering must remain effect-free.
-        if let TabSelection::EmbyLibrary(index) = self.app.tab {
+        if let TabSelection::EmbyLibrary(index) = self.app.active_tab() {
             self.app.ensure_music_group_album_level(index);
         }
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return;
         };
         let cursor = self.music_workspace_cursor(index);
@@ -223,8 +223,7 @@ impl Model {
                 Some(target)
             }
             PendingMusicReanchor::FirstAlbumOfLevel => {
-                let album_id = self.app.libs.get(index).and_then(|lib| {
-                    let level = lib.nav_stack.last()?;
+                let album_id = self.app.emby_library_level(index).and_then(|level| {
                     level
                         .items
                         .get(level.resting().cursor())
@@ -249,7 +248,7 @@ impl Model {
             .music_owner()
             .and_then(MusicContent::selected_item)
             .map(|item| item.id);
-        let level = self.app.libs[index].nav_stack.last()?;
+        let level = self.app.emby_library_level(index)?;
         selected_target
             .as_deref()
             .and_then(|target| level.items.iter().position(|item| item.id == target))
@@ -296,8 +295,8 @@ impl Model {
             .is_some_and(MusicContent::selected_is_artist);
         if !owner_selection_is_artist
             && let Some(album) = context.selected_album.as_ref()
-            && !self.app.album_tracks_cache.contains_key(&album.id)
-            && !self.app.album_tracks_loading.contains(&album.id)
+            && !self.app.album_tracks_cached(&album.id)
+            && !self.app.album_tracks_loading(&album.id)
             && self.app.navigation_idle()
         {
             self.app.fetch_album_tracks(album.id.clone());
@@ -448,7 +447,7 @@ mod tests {
             .apply(mbv_components::list::tree_browser::TreeOperation::First);
         assert!(model.test_music_owner().selected_is_artist());
         model.push_music_workspace_content();
-        let generation = model.app.emby_runtime.generation();
+        let generation = model.app.emby_setup_generation();
         (model, generation)
     }
 
@@ -467,11 +466,11 @@ mod tests {
             revision: 7,
         };
         assert!(
-            model.app.artist_detail_loading.contains(&key),
+            model.app.artist_detail_pending(&key),
             "the push dispatches the typed track request with the full identity"
         );
         assert!(
-            model.app.images.is_loading(
+            model.app.image_loading(
                 &crate::app::state::music_artist_detail::artist_artwork_cache_key(
                     &destination,
                     generation.value(),
@@ -495,7 +494,7 @@ mod tests {
             &mut music_resize,
             &mut tv_resize,
         );
-        assert!(model.app.artist_detail_loading.contains(&key));
+        assert!(model.app.artist_detail_pending(&key));
         model.app.artist_detail_loading.remove(&key);
         model.app.artist_detail_cache.insert(
             key,
@@ -513,7 +512,7 @@ mod tests {
             &mut tv_resize,
         );
         assert!(
-            model.app.artist_detail_loading.is_empty(),
+            !model.app.artist_detail_any_pending(),
             "a cached artist result never re-arms the fetch"
         );
     }
@@ -588,7 +587,7 @@ mod tests {
         // Idle navigation: the push starts the selected album's track fetch.
         model.push_music_workspace_content();
         assert!(
-            model.app.album_tracks_loading.contains("album-1"),
+            model.app.album_tracks_loading("album-1"),
             "an idle push starts the selected album's track fetch"
         );
 
@@ -610,7 +609,7 @@ mod tests {
         model.app.last_nav_at = Instant::now();
         model.push_music_workspace_content();
         assert!(
-            model.app.album_tracks_loading.is_empty(),
+            !model.app.album_tracks_any_loading(),
             "a push during recent navigation starts no album-track fetch"
         );
     }

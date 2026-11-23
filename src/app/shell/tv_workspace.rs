@@ -14,7 +14,6 @@
 
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
-use crate::app::state::app_struct::TvUpcomingFetchState;
 #[cfg(test)]
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::tv_content::TvContent;
@@ -30,7 +29,7 @@ use std::collections::HashMap;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {
-        let Some(lib_idx) = self.app.tab.emby_library_index() else {
+        let Some(lib_idx) = self.app.active_emby_library_index() else {
             return;
         };
         match request {
@@ -170,7 +169,7 @@ impl Model {
     /// 6.1, design D6) arms the deep-selection pending after the presentation
     /// opens; the selection itself resolves against the series detail.
     pub(in crate::app) fn drain_series_navigation_handoff(&mut self) {
-        let Some(handoff) = self.app.pending_series_handoff.take() else {
+        let Some(handoff) = self.app.take_pending_series_handoff() else {
             return;
         };
         self.open_series_workspace_handoff(handoff.lib_idx, &handoff.reveal);
@@ -209,11 +208,11 @@ impl Model {
         let Some(sel) = self.pending_episode_selection.clone() else {
             return;
         };
-        if self.app.tab != TabSelection::EmbyLibrary(sel.lib_idx) {
+        if self.app.active_tab() != TabSelection::EmbyLibrary(sel.lib_idx) {
             self.pending_episode_selection = None;
             return;
         }
-        let step = match self.app.series_detail_cache.get(&sel.series_id) {
+        let step = match self.app.series_detail(&sel.series_id) {
             None => Step::Wait,
             Some(detail) => detail
                 .seasons
@@ -270,10 +269,10 @@ impl Model {
     }
 
     pub(in crate::app) fn acknowledge_active_tv_latest(&mut self) {
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return;
         };
-        let Some(library) = self.app.libs.get(index) else {
+        let Some(library) = self.app.emby_library(index) else {
             return;
         };
         if library.library.collection_type == "tvshows"
@@ -290,10 +289,10 @@ impl Model {
     /// The active TV library's owner key (design D2's
     /// `LibraryKey::Service(LibraryKey)`), or `None` for every other tab.
     fn tv_owner_key(&self) -> Option<LibraryKey> {
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return None;
         };
-        let library = self.app.libs.get(index)?;
+        let library = self.app.emby_library(index)?;
         if library.library.collection_type != "tvshows" {
             return None;
         }
@@ -425,10 +424,10 @@ impl Model {
     /// Series rows open the Workspace at wide width.
     fn publish_wide_workspace(&mut self) {
         self.app.tv_workspace_wide.clear();
-        let Some(index) = self.app.tab.emby_library_index() else {
+        let Some(index) = self.app.active_emby_library_index() else {
             return;
         };
-        if self.app.libs.get(index).is_some()
+        if self.app.emby_library_exists(index)
             && super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size())
         {
             self.app.tv_workspace_wide.insert(index);
@@ -437,10 +436,10 @@ impl Model {
 
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {
         self.publish_wide_workspace();
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
             return;
         };
-        let Some(library) = self.app.libs.get(index) else {
+        let Some(library) = self.app.emby_library(index) else {
             return;
         };
         let library_id = library.library.id.clone();
@@ -450,16 +449,11 @@ impl Model {
         let is_wide = super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size());
         let list = self.app.library_list_render_ctx(
             index,
-            self.app.libs[index]
-                .nav_stack
-                .last()
+            self.app
+                .emby_library_level(index)
                 .map_or(0, |l| l.resting().cursor()),
         );
-        let tv_content_mode = self.app.libs[index]
-            .nav_stack
-            .last()
-            .and_then(|level| level.tv_content_mode.clone())
-            .or_else(|| self.app.libs[index].tv_content_mode.clone());
+        let tv_content_mode = self.app.emby_library_tv_content_mode(index).cloned();
         // The TV owner owns the selection cursor. Derive the pushed Series
         // snapshot from the owner's authoritative selection (its own cursor
         // over its cached list), not the App browse cursor. Only on first
@@ -497,7 +491,7 @@ impl Model {
         }
         let series_detail = selected_series
             .as_ref()
-            .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
+            .and_then(|item| self.app.series_detail(&item.id).cloned());
         let series_details = self.loaded_series_details(&list.items);
         // The hero image is NOT projected here: task 5.10's central projection
         // (`sync_library_hero_images`, design D9) is the one projector for
@@ -517,14 +511,10 @@ impl Model {
         if tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming) {
             context.upcoming = self
                 .app
-                .tv_upcoming_snapshots
-                .get(&library_id)
-                .cloned()
+                .tv_upcoming_rows(&library_id)
+                .map(<[mbv_emby_model::UpcomingPremiere]>::to_vec)
                 .unwrap_or_default();
-            context.upcoming_failed = matches!(
-                self.app.tv_upcoming_fetches.get(&library_id),
-                Some(TvUpcomingFetchState::Failed)
-            );
+            context.upcoming_failed = self.app.tv_upcoming_fetch_failed(&library_id);
         }
         let latest_source =
             crate::app::state::playback::DestinationLatestSource::Emby(library_id.clone());
@@ -538,7 +528,7 @@ impl Model {
             self.record_home_latest_acknowledgement(latest_source.clone());
         }
         let latest_marker = self.destination_latest_marker(&latest_source);
-        let list_pane_width = self.app.list_pane_width;
+        let list_pane_width = self.app.list_pane_width();
         let now_playing = self.workspace_now_playing.clone();
         // Panel focus is the library area's focus bit; the owner paints its
         // focused pane and claims local chords from it (task 8.4).

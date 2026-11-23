@@ -27,12 +27,12 @@ pub(in crate::app) fn render_visualizer(app: &App, f: &mut Frame, area: Rect, bg
         width: area.width.saturating_sub(4),
         height: area.height.saturating_sub(2),
     };
-    if inner.width == 0 || inner.height == 0 || is_silent(&app.visualizer_window.samples) {
+    if inner.width == 0 || inner.height == 0 || is_silent(&app.visualizer_window().samples) {
         return;
     }
 
     let mut seen = HashSet::new();
-    for sample in &app.visualizer_window.samples {
+    for sample in &app.visualizer_window().samples {
         let Some((x, y)) = sample_to_cell(*sample, inner.width, inner.height) else {
             continue;
         };
@@ -40,7 +40,7 @@ pub(in crate::app) fn render_visualizer(app: &App, f: &mut Frame, area: Rect, bg
             continue;
         }
         if let Some(cell) = f.buffer_mut().cell_mut((inner.x + x, inner.y + y)) {
-            cell.set_symbol(&app.visualizer_glyph);
+            cell.set_symbol(app.visualizer_glyph());
             cell.set_style(Style::default().fg(point_color(*sample)).bg(bg));
         }
     }

@@ -10,7 +10,7 @@ impl RouterNow for Model {
     /// shell keeps the owner too, because arming also holds focus off and
     /// disarming releases it (`self::prefix_mode`).
     fn prefix_armed(&self) -> bool {
-        self.app.prefix_armed
+        self.app.prefix_armed()
     }
 }
 
@@ -321,7 +321,7 @@ impl Model {
             // chips' key layers (add-tauri-gui-client row 6.2) stay inert
             // here and the TUI's default bindings on the canvas chords keep
             // their own actions.
-            client_capabilities: self.app.client_capabilities,
+            client_capabilities: *self.app.client_capabilities(),
         };
 
         let outcome = super::neutral_edge::resolve_tui_key(
@@ -357,7 +357,7 @@ impl Model {
     /// unavoidable, and the prefix chord performs no other action at the
     /// router.
     pub(in crate::app) fn arm_prefix_mode(&mut self) {
-        if self.app.prefix_armed {
+        if self.app.prefix_armed() {
             return;
         }
         self.app.prefix_armed = true;
@@ -370,7 +370,7 @@ impl Model {
     /// arm displaced. A mouse-event disarm restores it too, so the event is
     /// handled exactly as if prefix mode had never been armed.
     pub(in crate::app) fn disarm_prefix_mode(&mut self) {
-        if !self.app.prefix_armed {
+        if !self.app.prefix_armed() {
             return;
         }
         self.app.prefix_armed = false;

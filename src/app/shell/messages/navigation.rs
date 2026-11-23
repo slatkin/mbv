@@ -161,10 +161,7 @@ impl super::super::Model {
                 self.app.spawn_cast_discovery();
             }
             ShellRequest::SelectSession(key) => {
-                if let Some(target) = crate::app::state::panel_targets::resolve_session_target(
-                    &self.app.panel_targets,
-                    &key,
-                ) {
+                if let Some(target) = self.app.resolve_session_target(&key) {
                     self.app.select_panel_target(target);
                 }
             }
@@ -198,9 +195,7 @@ impl super::super::Model {
         direction: QueueTransferDirection,
         key: &mbv_ui_model::panel_targets::SessionTargetKey,
     ) {
-        if crate::app::state::panel_targets::resolve_session_target(&self.app.panel_targets, key)
-            .is_some()
-        {
+        if self.app.resolve_session_target(key).is_some() {
             self.app.begin_queue_transfer(direction, key);
         }
     }
@@ -259,9 +254,8 @@ impl super::super::Model {
             ShellRequest::AudiobookshelfPodcastLatestSelected => {
                 let library_id = self
                     .app
-                    .tab
-                    .audiobookshelf_index()
-                    .and_then(|index| self.app.audiobookshelf_libraries.get(index))
+                    .active_audiobookshelf_library_index()
+                    .and_then(|index| self.app.audiobookshelf_library(index))
                     .map(|library| library.id.clone());
                 if let Some(library_id) = library_id {
                     self.select_audiobookshelf_latest(&library_id);

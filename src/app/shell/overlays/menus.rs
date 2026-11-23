@@ -103,7 +103,7 @@ impl Model {
                 ContextMenuAnchor::Pointer => {
                     let panel = match self.app.effective_panel_focus() {
                         PanelFocus::Library
-                            if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
+                            if self.app.active_emby_library_index().is_some_and(|lib_idx| {
                                 wide_tv_show_area(&self.app, lib_idx, self.terminal_size())
                                     .is_some()
                             }) =>

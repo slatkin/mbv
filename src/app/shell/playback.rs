@@ -43,9 +43,9 @@ impl Model {
             panel_focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
             now_playing_title,
             title_parts,
-            title_site: self.app.queue_card_projection.title_site,
+            title_site: self.app.queue_card_projection().title_site,
             status_indicators: super::chrome_status::build_status_indicator_spans(&self.app),
-            idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
+            idle_feed_title: self.app.idle_feed().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {
                     (
                         item.title.clone(),
@@ -53,7 +53,7 @@ impl Model {
                     )
                 })
             }),
-            use_nerd_fonts: self.app.use_nerd_fonts,
+            use_nerd_fonts: self.app.use_nerd_fonts(),
             availability: self.app.transport_availability(state),
         }
     }

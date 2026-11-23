@@ -18,7 +18,7 @@ fn render_card_visualizer(
     left_align: bool,
 ) -> (u16, u16, bool) {
     let rect = queue_card_reserved_rect(
-        model.app.images.last_card_size(),
+        model.app.last_card_size(),
         terminal_height,
         area,
         left_align,
@@ -45,13 +45,13 @@ pub(in crate::app) fn render_queue_playback_slot(
     area: Rect,
     left_align: bool,
 ) -> (u16, u16, bool) {
-    let mut projection = model.app.queue_card_projection.clone();
+    let mut projection = model.app.queue_card_projection().clone();
     if projection.visualizer {
         return render_card_visualizer(model, terminal_height, f, area, left_align);
     }
     if !projection.images_enabled {
         let rect = queue_card_reserved_rect(
-            model.app.images.last_card_size(),
+            model.app.last_card_size(),
             terminal_height,
             area,
             left_align,
@@ -81,8 +81,8 @@ pub(in crate::app) fn render_queue_playback_slot(
     }
     let key = artwork_key.as_deref().unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
     let loading = !placeholder_slot
-        && (model.app.images.is_loading(key) || model.app.images.is_fetch_interrupted(key));
-    let last_card = model.app.images.last_card_size();
+        && (model.app.image_loading(key) || model.app.image_fetch_interrupted(key));
+    let last_card = model.app.last_card_size();
     let image = model.cached_image_protocol_mut(key);
     let (height, width, loading, painted) = render_card_painting(
         f,
@@ -104,7 +104,7 @@ pub(in crate::app) fn render_queue_playback_slot(
     let mut plain_fallback_painted = false;
     let mut out = (height, width, loading);
     if !painted && let Some(fallback_key) = fallback_key {
-        let fallback_loading = model.app.images.is_loading(fallback_key);
+        let fallback_loading = model.app.image_loading(fallback_key);
         let fallback_image = model.cached_image_protocol_mut(fallback_key);
         projection.cache_key = Some(fallback_key.to_owned());
         let (height, width, loading, fallback_painted) = render_card_painting(

@@ -59,7 +59,7 @@ impl super::super::Model {
                 self.handle_music_artist_track_activate(&target, &track_id);
             }
             ShellRequest::MusicGroupSwitch { delta } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                if let Some(lib_idx) = self.app.active_emby_library_index() {
                     self.app.switch_music_group(lib_idx, delta);
                 }
                 // A group switch replaces the album level; re-point the
@@ -80,7 +80,7 @@ impl super::super::Model {
                     .music_owner()
                     .and_then(mbv_components::music_content::MusicContent::selected_item)
                     .is_some_and(|selected| selected.id == item.id);
-                if self.app.tab.emby_library_index().is_some()
+                if self.app.active_emby_library_index().is_some()
                     && !super::super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size())
                     && owner_has_target
                 {
@@ -90,7 +90,7 @@ impl super::super::Model {
             ShellRequest::MusicArtistActivate { target } => {
                 // Right on an already expanded artist root (task 6.4):
                 // non-Wide geometry opens the artist's Library Hero overlay.
-                if self.app.tab.emby_library_index().is_some()
+                if self.app.active_emby_library_index().is_some()
                     && !super::super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size())
                     && self.music_owner().is_some_and(|owner| {
                         owner
@@ -114,7 +114,7 @@ impl super::super::Model {
     ) {
         self.app
             .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+        if let Some(lib_idx) = self.app.active_emby_library_index() {
             self.app
                 .maybe_fetch_next_page_for_music_artist(lib_idx, &target.album_targets);
         }
@@ -129,7 +129,7 @@ impl super::super::Model {
     fn handle_music_album_cursor(&mut self, target: usize, kind: mbv_ui_msg::AlbumCursorKind) {
         self.app
             .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+        if let Some(lib_idx) = self.app.active_emby_library_index() {
             match kind {
                 AlbumCursorKind::Move => {
                     let idle = self.app.navigation_idle();

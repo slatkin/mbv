@@ -302,7 +302,7 @@ pub fn init_image_protocols(app: &mut App) -> mbv_tui_support::ImageProtocols {
     // The store's own override view: the override is a plain config string the
     // store already holds, so the query reads it and the facts read it back
     // from the store, with no `app` borrow outliving the call.
-    image_protocols.init_image_pickers(app.images.protocol_override());
+    image_protocols.init_image_pickers(app.image_protocol_override());
     push_image_protocol_facts(app, &image_protocols);
     image_protocols
 }
@@ -318,7 +318,7 @@ pub(in crate::app) fn push_image_protocol_facts(
     app: &mut App,
     image_protocols: &mbv_tui_support::ImageProtocols,
 ) {
-    let protocol_override = app.images.protocol_override().map(str::to_owned);
+    let protocol_override = app.image_protocol_override().map(str::to_owned);
     let protocol_override = protocol_override.as_deref();
     let halfblock = image_protocols.is_halfblock_configured(protocol_override);
     let configured_font = image_protocols.image_picker().map_or((10, 20), cell_size);
@@ -465,7 +465,7 @@ impl Model {
         // The compiled `[keys]` configuration is read once, here, from the
         // config the App was built with; later config saves never rewrite it
         // for the running session.
-        let keybinds = app.config.lock().unwrap().keybinds.clone();
+        let keybinds = app.configured_keybinds();
         // The stack starts from the mounts this constructor performs below:
         // `UiRoot` and the whole-session Library panel. The Queue panel mounts
         // lazily at its first sync pass and routes its mount record to the

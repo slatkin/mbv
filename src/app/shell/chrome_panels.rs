@@ -67,7 +67,7 @@ impl Model {
         let slot_region = queue_playback_slot_region(placement);
         let wide = queue_playback_column_wide(chrome.left_area.width);
         let rect = queue_card_reserved_rect(
-            self.app.images.last_card_size(),
+            self.app.last_card_size(),
             self.terminal_height,
             slot_region,
             wide,
@@ -182,15 +182,15 @@ impl Model {
         self.mount_to_placement(ChromePanel::Tab, placement);
         let id = ChromePanel::Tab.id();
         let (titles, markers): (Vec<String>, Vec<bool>) = std::iter::once((
-            mbv_ui_model::ui_util::continue_tab_title(self.app.use_nerd_fonts).to_string(),
+            mbv_ui_model::ui_util::continue_tab_title(self.app.use_nerd_fonts()).to_string(),
             false,
         ))
-        .chain(self.app.libs.iter().map(|lib| {
+        .chain(self.app.emby_libraries().iter().map(|lib| {
             let marker = self
                 .destination_latest_marker(&DestinationLatestSource::Emby(lib.library.id.clone()));
             (lib.library.name.clone(), marker)
         }))
-        .chain(self.app.audiobookshelf_libraries.iter().map(|lib| {
+        .chain(self.app.audiobookshelf_libraries().iter().map(|lib| {
             let marker = self.destination_latest_marker(&DestinationLatestSource::Audiobookshelf(
                 lib.id.clone(),
             ));
@@ -204,7 +204,7 @@ impl Model {
         let selected = self
             .app
             .tab
-            .to_position_with_counts(self.app.libs.len(), self.app.feeds_tab_pos());
+            .to_position_with_counts(self.app.emby_library_count(), self.app.feeds_tab_pos());
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<TabPanel>()
         {
@@ -307,7 +307,7 @@ impl Model {
                     let slot_region = queue_playback_slot_region(placement);
                     let wide = queue_playback_column_wide(placement.width);
                     queue_card_reserved_rect(
-                        self.app.images.last_card_size(),
+                        self.app.last_card_size(),
                         self.terminal_height,
                         slot_region,
                         wide,

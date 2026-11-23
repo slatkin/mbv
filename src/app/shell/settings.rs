@@ -38,9 +38,9 @@ impl Model {
     }
 
     fn settings_snapshot(&self) -> SettingsSnapshot {
-        let cfg = self.app.config.lock().unwrap().clone();
+        let cfg = self.app.config_snapshot();
         let ui = self.app.ui_config_snapshot();
-        let rows = if self.app.settings_destination == SettingsDestination::Panel {
+        let rows = if self.app.settings_destination() == SettingsDestination::Panel {
             Self::panel_settings_rows(&cfg, &ui)
         } else {
             Self::main_settings_rows(&self.app, &cfg, &ui)
@@ -93,7 +93,7 @@ impl Model {
                     })
             });
         SettingsSnapshot {
-            destination: self.app.settings_destination,
+            destination: self.app.settings_destination(),
             rows,
             services,
             keys,
@@ -297,9 +297,9 @@ impl Model {
                 false
             }
             ServiceRequest::CancelSetup => {
-                if self.app.setup.emby_setup_form.is_some() {
+                if self.app.emby_setup_form_present() {
                     self.app.cancel_emby_setup();
-                } else if self.app.setup.audiobookshelf_setup_form.is_some() {
+                } else if self.app.audiobookshelf_setup_form_present() {
                     self.app.cancel_audiobookshelf_setup();
                 }
                 false
@@ -317,7 +317,7 @@ impl Model {
         match intent {
             SettingsIntent::Back => {
                 if matches!(
-                    self.app.settings_destination,
+                    self.app.settings_destination(),
                     SettingsDestination::Services
                         | SettingsDestination::Keys
                         | SettingsDestination::Panel
@@ -340,7 +340,7 @@ impl Model {
             }
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
-                if self.app.settings_destination == SettingsDestination::Panel {
+                if self.app.settings_destination() == SettingsDestination::Panel {
                     // An activate steps a Panel row up by its base step
                     // (`Side` cycles; a width row steps 10 pixels).
                     self.app.apply_panel_setting(
@@ -382,7 +382,7 @@ mod tests {
         app.open_services_settings();
         let mut model = Model::new(app);
         model.handle_service_request(ServiceRequest::ActivateService(0));
-        assert!(model.app.setup.emby_setup_form.is_some());
+        assert!(model.app.emby_setup_form_present());
 
         model.handle_service_request(ServiceRequest::SubmitEmbySetup {
             server_url: String::new(),
@@ -407,7 +407,7 @@ mod tests {
         use crate::app::SettingKey;
         use mbv_ui_model::settings;
         let app = crate::app::tests::make_app_stub();
-        let cfg = app.config.lock().unwrap().clone();
+        let cfg = app.config_snapshot();
         let ui = app.ui_config_snapshot();
         assert_eq!(
             settings::setting_label(SettingKey::Keys),
