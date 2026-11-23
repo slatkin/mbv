@@ -384,3 +384,16 @@ fn a_playing_track_change_with_no_input_sends_the_library_section() {
     };
     assert_eq!(music.playing_track_id.as_deref(), Some("trk-2"));
 }
+
+/// A landed Client-only fetch result marks the Library section (design D3
+/// rule 2, the `drain_client_events` row): the GUI Library's own stores are
+/// the Library section's source, so that drain's row names the Library, as
+/// the library drain's row does. Regression for the review finding that
+/// `drain_client_events` installed its results and marked nothing.
+#[test]
+fn a_landed_client_result_marks_the_library_section() {
+    assert!(
+        mbv_gui::sections::client_event_marks().contains(&Section::Library),
+        "the client-event drain's mark table names the Library section"
+    );
+}

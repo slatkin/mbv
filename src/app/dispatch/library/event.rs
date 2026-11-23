@@ -370,8 +370,9 @@ impl App {
     ///
     /// The Client's stores are its own state (`GuiClientState`, design D4a
     /// (c)), not the core's, so a caller that holds them applies the effects
-    /// as its own events (`ClientThread::drain_lib_events`). This entry serves
-    /// the core instructions that run outside a Client drain.
+    /// as its own events (`GuiCore::drain_lib_event`, which the GUI's
+    /// `ClientTickHost::drain_lib_events` loops). This entry serves the core
+    /// instructions that run outside a Client drain.
     pub(in crate::app) fn apply_library_effects(
         &mut self,
         stores: Option<&mut dyn ClientLibraryStores>,

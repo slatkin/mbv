@@ -175,6 +175,9 @@ impl ClientTickHost for CoreThread {
         while self.core.drain_client_event() {
             had_events = true;
         }
+        if had_events {
+            self.mark_hook(DrainHook::DrainClientEvents);
+        }
         had_events
     }
 

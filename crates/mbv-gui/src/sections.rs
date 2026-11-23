@@ -18,6 +18,7 @@ pub(crate) mod library;
 mod marks;
 mod playhead;
 
+pub use marks::client_event_marks;
 pub(crate) use marks::{DrainHook, marks_for_hook};
 
 use std::collections::HashSet;

@@ -388,15 +388,6 @@ impl CoreThread {
         self.mark_hook(crate::sections::DrainHook::DrainStartupWorkers);
     }
 
-    /// The GUI Client's own state, for a Client's test seeds (design D4 of
-    /// `decouple-client-core`, row 8.1): the state lives in `GuiCore` now, so a
-    /// seed writes it there rather than on an `App` that no longer holds it.
-    #[doc(hidden)]
-    #[must_use]
-    pub fn gui_state_for_test(&mut self) -> &mut mbv::GuiClientState {
-        self.core.gui_state()
-    }
-
     /// Mark the sections a library completion marks (design D3 rule 2), for a
     /// test whose seed stands in for completions the library drain applies. The
     /// drain marks these rows when it reports a completion
@@ -592,7 +583,12 @@ impl CoreThread {
             Err(RecvTimeoutError::Timeout) => {}
             // The channel itself ended: the same consequence as the window's
             // close, and unreachable while the App's waker holds its sender.
-            Err(RecvTimeoutError::Disconnected) => return false,
+            // The step hands its state back before it returns either way, so
+            // the sidecar slot never stands empty.
+            Err(RecvTimeoutError::Disconnected) => {
+                self.publish_seeded_gui_state();
+                return false;
+            }
         }
         let outcome = ClientCore::tick(self, Instant::now()); // The run-loop quit signal the TUI's `'outer` loop breaks on
         // (`shell/run.rs`): an announced Owner shutdown sets it from the
@@ -608,8 +604,11 @@ impl CoreThread {
                 "the GUI run ends through the quit edge"
             );
             // The routed quit closes the window through the same edge the
-            // mismatch state's Quit uses (design D9).
+            // mismatch state's Quit uses (design D9). The step hands its state
+            // back before it returns either way, so the sidecar slot never
+            // stands empty.
             (self.quit)();
+            self.publish_seeded_gui_state();
             return false;
         }
         // A restart re-reads the landed Owner snapshot next iteration; the

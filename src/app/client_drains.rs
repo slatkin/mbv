@@ -239,11 +239,6 @@ impl App {
         }
     }
 
-    /// Apply one library event that carries work in a Client's own store
-    /// (`decouple-client-core` design D4): the event's App-owned half first,
-    /// by the same [`Self::handle_lib_event`] tree every Client runs, then the
-    /// store work the seam hands back. The TUI never starts such an event, so
-    /// its drain changes nothing.
     /// Take one pending library event and apply its App-owned half
     /// ([`Self::handle_lib_event`]). This is the drain a Client that keeps no
     /// library content state runs.

@@ -4,15 +4,17 @@
 //! instead of the shared library event channel.
 //!
 //! The channel lives on the `App`, so a worker that starts before the GUI's
-//! core exists still has a sender to clone. The receiver travels in an `Arc`
-//! shared by every `GuiCore` built over that `App`, so a core parked beside a
-//! moved-out `App` (the GUI's one-call `GuiCore` steps) still drains the one
-//! channel the live core drains. A result wakes the Client through the same
-//! `ClientWaker` the library channel uses, so a landed fetch repaints without
-//! waiting out the idle cadence. The TUI Client never starts one of these
-//! fetches, so its channel never holds an event.
+//! core exists still has a sender to clone, and so does a worker that outlives
+//! the core that started it. The receiver lives there too, behind a `Mutex`
+//! because the drain takes `&self` and an `mpsc::Receiver` takes `&mut self`.
+//! One `App` owns the one receiver, so no `Arc` shares it: every `GuiCore`
+//! over that `App` drains the one channel every worker sends to. A result
+//! wakes the Client through the same `ClientWaker` the library channel uses,
+//! so a landed fetch repaints without waiting out the idle cadence. The TUI
+//! Client never starts one of these fetches, so its channel never holds an
+//! event.
 
-use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::sync::{Mutex, PoisonError, mpsc};
 
 use crate::app::ClientWaker;
 use crate::app::gui_library::client_events::GuiClientEvent;
@@ -46,13 +48,13 @@ impl Clone for GuiClientEventSender {
     }
 }
 
-/// The Client-only fetch channel: the worker senders, and the receiver every
-/// `GuiCore` over this `App` drains.
+/// The Client-only fetch channel: the worker senders, and the receiver the
+/// `App` that owns it drains.
 pub(in crate::app) struct GuiClientEvents {
     sender: GuiClientEventSender,
-    /// The shared receiver. Every `GuiCore` drains this one channel through
-    /// the `App`, including a core built for one call beside a parked `App`.
-    rx: Arc<Mutex<mpsc::Receiver<GuiClientEvent>>>,
+    /// The receiver. The `App` holds the one copy, and every `GuiCore` over
+    /// that `App` drains this channel through it.
+    rx: Mutex<mpsc::Receiver<GuiClientEvent>>,
 }
 
 impl GuiClientEvents {
@@ -62,7 +64,7 @@ impl GuiClientEvents {
         let (tx, rx) = mpsc::channel();
         Self {
             sender: GuiClientEventSender { tx, waker },
-            rx: Arc::new(Mutex::new(rx)),
+            rx: Mutex::new(rx),
         }
     }
 

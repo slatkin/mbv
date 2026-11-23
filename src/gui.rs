@@ -55,6 +55,7 @@ impl GuiCore {
     /// The GUI Client's own state, for the Client's test seeds (design D4):
     /// the seeds write the stores a landed fetch would, so a Client's own test
     /// drives the production `GuiCore` and never a second copy of its state.
+    #[cfg(any(test, feature = "test"))]
     #[doc(hidden)]
     #[must_use]
     pub fn gui_state(&mut self) -> &mut GuiClientState {
@@ -78,10 +79,10 @@ impl GuiCore {
     }
 
     /// Take one Client-only fetch result and install it in this Client's own
-    /// stores (design D5): the GUI's tick host drains one per call, after the
-    /// library drains, for the waker to have woken it for. The channel lives
-    /// on the owned `App`, so the result survives a `GuiCore` built for one
-    /// call.
+    /// stores (design D5): the GUI's tick host calls this once per queued
+    /// result, looping, after the library drain, for the waker to have woken
+    /// it for. The channel lives on the owned `App`, so a result a worker must
+    /// send outlives any one `GuiCore`.
     pub fn drain_client_event(&mut self) -> bool {
         let Some(event) = self.app.take_one_gui_client_event() else {
             return false;

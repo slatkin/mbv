@@ -15,6 +15,11 @@ pub(crate) enum DrainHook {
     DrainSuspendedHomeEvents,
     DrainPlayerEvents,
     DrainLibEvents,
+    /// The GUI Library's Client-only fetch results (design D5 of
+    /// `decouple-client-core`): the stores they install are the Library
+    /// section's source, so the row names the Library beside the sections a
+    /// library event marks.
+    DrainClientEvents,
     DrainSearchResults,
     TickSearchClock,
     HandleServiceRequest,
@@ -30,6 +35,15 @@ pub(crate) enum DrainHook {
     RunPeriodicMaintenance,
 }
 
+/// The sections the Client-only fetch drain marks when it reports a landed
+/// result (`decouple-client-core` design D5). The GUI Library's own stores are
+/// the Library section's source, so the drain's row names the sections such a
+/// result can change, read here by the drain's own test.
+#[must_use]
+pub fn client_event_marks() -> &'static [Section] {
+    marks_for_hook(DrainHook::DrainClientEvents)
+}
+
 /// The gated sections a hook marks when it reports work. An empty slice is a
 /// documented no-op: the hook changes no gated source.
 pub(crate) fn marks_for_hook(hook: DrainHook) -> &'static [Section] {
@@ -38,6 +52,7 @@ pub(crate) fn marks_for_hook(hook: DrainHook) -> &'static [Section] {
         DrainHook::ReprojectAudiobookshelfContent
         | DrainHook::DrainPlayerEvents
         | DrainHook::DrainLibEvents
+        | DrainHook::DrainClientEvents
         | DrainHook::ReprojectFeedContent
         | DrainHook::DrainFeedAddResults
         | DrainHook::DrainWsEvents
