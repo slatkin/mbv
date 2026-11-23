@@ -172,6 +172,24 @@ fn arbitration_diagnostic(
     }
 }
 
+/// Attach each message's position in its own list, so a later fold that keeps
+/// the order still names where a message arrived (design D6 scopes the
+/// context-menu pointer to the request the tick's right-click raised, which
+/// sits at or after the right-press report's position).
+pub(in crate::app) fn indexed(messages: Vec<Msg>) -> Vec<(usize, Msg)> {
+    messages.into_iter().enumerate().collect()
+}
+
+/// The cell of a `UiRoot` right-press report.
+pub(in crate::app) fn right_press_cell(msg: &Msg) -> Option<(u16, u16)> {
+    match msg {
+        Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { column, row }) => {
+            Some((*column, *row))
+        }
+        _ => None,
+    }
+}
+
 /// ADR 0024: the mouse fold, applied to a `tick()` message list beside the
 /// ADR 0023 keyboard router fold.
 ///
