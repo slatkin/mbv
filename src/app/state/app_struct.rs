@@ -183,11 +183,11 @@ pub struct App {
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,
     /// The left panel column of the last composed frame, as a neutral
-    /// rectangle (design D13 Rule B). The TUI shell owns the ratatui
-    /// `AppLayout`; the core keeps only this area, which the TUI pushes from
-    /// the frame it composed (`App::set_left_panel_area`). A Client that
-    /// composes no such frame leaves it zero, which is what the default
-    /// `AppLayout` gave the core readers before the move.
+    /// rectangle (design D13 Rule B). The TUI shell owns its layout record;
+    /// the core keeps only this area, which the TUI pushes from the frame it
+    /// composed (`App::set_left_panel_area`). A Client that composes no such
+    /// frame leaves it zero, which is what the shell's default layout gave
+    /// the core readers before the move.
     pub(in crate::app) left_panel_area: mbv_ui_model::geom::Rect,
     /// The single-panel fact the TUI pushes from its terminal width
     /// (`App::set_single_panel`). `is_mini_view` reads it.
