@@ -1,19 +1,48 @@
 BINARY     := mbv
-INSTALL_DIR := $(HOME)/.local/bin
-DATA_DIR    := $(HOME)/.local/share/mbv
-CONFIG_DIR  := $(HOME)/.config/mbv
+# The AUR layout: the binaries resolve /usr/share/mbv and /etc/mbv at runtime,
+# so PREFIX stays /usr. DESTDIR stages the tree, as makepkg's $pkgdir does.
+PREFIX     ?= /usr
 TAILWINDCSS ?= tailwindcss
 
-.PHONY: all build uninstall clean clean-dev gui-css check-code-file-lines test-check-code-file-lines dev dev-release
+.PHONY: all build install uninstall clean clean-dev gui-css check-code-file-lines test-check-code-file-lines dev dev-release
 
 all: build
 
 build:
 	cargo build --release
 
+# The file set the AUR packages ship (PKGBUILD-git's package()).
+install: build
+	cargo build --release -p mbv-gui
+	install -Dm755 target/release/$(BINARY) $(DESTDIR)$(PREFIX)/bin/$(BINARY)
+	install -Dm755 target/release/mbvd $(DESTDIR)$(PREFIX)/bin/mbvd
+	install -Dm755 target/release/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-gui
+	install -Dm644 contrib/mbv.desktop $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
+	install -Dm644 assets/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
+	install -d $(DESTDIR)$(PREFIX)/share/mbv/scripts
+	install -m644 scripts/mbv.lua scripts/mbv_*.lua $(DESTDIR)$(PREFIX)/share/mbv/scripts/
+	install -Dm644 fonts/Material-Design-Iconic-Font.ttf $(DESTDIR)$(PREFIX)/share/mbv/fonts/Material-Design-Iconic-Font.ttf
+	install -Dm644 dist/config.toml $(DESTDIR)$(PREFIX)/share/mbv/config.toml
+	install -Dm644 contrib/mbvd.service $(DESTDIR)$(PREFIX)/lib/systemd/system/mbvd.service
+	install -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSE
+	install -Dm644 LICENSES/MPL-2.0.txt $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSES/MPL-2.0.txt
+	install -m644 crates/mbv-gui/assets/fonts/*-OFL-1.1.txt crates/mbv-gui/assets/vendor/*.txt $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSES/
+	@if [ -f $(DESTDIR)/etc/mbv/config.toml ]; then \
+		echo "Kept existing $(DESTDIR)/etc/mbv/config.toml"; \
+	else \
+		install -Dm640 dist/mbvd.toml $(DESTDIR)/etc/mbv/config.toml; \
+	fi
+
 uninstall:
-	rm -f $(INSTALL_DIR)/$(BINARY)
-	rm -rf $(DATA_DIR)
+	rm -f $(DESTDIR)$(PREFIX)/bin/$(BINARY) $(DESTDIR)$(PREFIX)/bin/mbvd $(DESTDIR)$(PREFIX)/bin/mbv-gui
+	rm -rf $(DESTDIR)$(PREFIX)/share/mbv $(DESTDIR)$(PREFIX)/share/licenses/mbv
+	rm -f $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
+	rm -f $(DESTDIR)$(PREFIX)/lib/systemd/system/mbvd.service
+	@echo "Left $(DESTDIR)/etc/mbv/config.toml in place."
+	# Legacy copies from the user-local installer removed in June 2026.
+	rm -f $(HOME)/.local/bin/$(BINARY)
+	rm -rf $(HOME)/.local/share/mbv
 
 clean:
 	cargo clean
