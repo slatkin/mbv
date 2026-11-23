@@ -14,7 +14,7 @@ pub(in crate::app) struct QueueLinkResolution {
     /// of `gui-named-queues`). The TUI Client shows the current queue by its
     /// connection rule (ADR 0034); the GUI Client shows the entry the Queue
     /// chooser picked (ADR 0041).
-    pub gui_shown_entry: Option<ShownEntry>,
+    pub shown_entry: Option<ShownEntry>,
 }
 
 /// The entry the GUI Client's Queue panel shows (gui-named-queues design D7):
@@ -30,10 +30,10 @@ pub(in crate::app) enum ShownEntry {
 
 impl QueueLinkResolution {
     #[must_use]
-    pub fn new(has_direct_remote_queue: bool, gui_shown_entry: Option<ShownEntry>) -> Self {
+    pub fn new(has_direct_remote_queue: bool, shown_entry: Option<ShownEntry>) -> Self {
         Self {
             has_direct_remote_queue,
-            gui_shown_entry,
+            shown_entry,
         }
     }
 
@@ -50,7 +50,7 @@ impl QueueLinkResolution {
         if !self.has_direct_remote_queue {
             return QueueLink::Local;
         }
-        match self.gui_shown_entry {
+        match self.shown_entry {
             Some(ShownEntry::Local(_)) => QueueLink::Local,
             Some(ShownEntry::Peer) | None => QueueLink::Peer,
         }

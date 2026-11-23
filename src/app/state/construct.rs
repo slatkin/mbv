@@ -128,7 +128,7 @@ impl App {
             local_view: init.local_view,
             remote_view: init.remote_view,
             named_queues: crate::app::state::named_queues::NamedQueueList::default(),
-            gui_shown_entry: None,
+            shown_entry: None,
             shown_resting: None,
             pending_new_queue: None,
             pending_named_queue_ops: std::collections::HashSet::new(),

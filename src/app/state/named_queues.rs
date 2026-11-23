@@ -114,7 +114,7 @@ impl App {
         }
         // A shown local queue that closed leaves the shown entry on the queue
         // that holds the playhead.
-        if let Some(ShownEntry::Local(queue)) = self.gui_shown_entry
+        if let Some(ShownEntry::Local(queue)) = self.shown_entry
             && !self.named_queues.holds(queue)
         {
             self.show_local_current_entry();
@@ -132,7 +132,7 @@ impl App {
         queue: NamedQueueId,
         data: &mbv_ctrl::UnifiedQueueStateData,
     ) {
-        if self.gui_shown_entry != Some(ShownEntry::Local(queue)) {
+        if self.shown_entry != Some(ShownEntry::Local(queue)) {
             return;
         }
         let first_fill = match &mut self.shown_resting {
@@ -182,10 +182,10 @@ impl App {
     /// close each name the entry they land on, and the reset follows the
     /// change, not the event.
     fn show_entry(&mut self, entry: Option<ShownEntry>) {
-        if !self.gui_client || self.gui_shown_entry == entry {
+        if !self.gui_client || self.shown_entry == entry {
             return;
         }
-        self.gui_shown_entry = entry;
+        self.shown_entry = entry;
         self.reset_queue_presentation();
     }
 
@@ -317,7 +317,7 @@ impl App {
         if !self.gui_client {
             return None;
         }
-        match self.gui_shown_entry {
+        match self.shown_entry {
             Some(ShownEntry::Local(queue)) => Some(queue),
             Some(ShownEntry::Peer) | None => None,
         }

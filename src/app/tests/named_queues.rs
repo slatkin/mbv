@@ -385,7 +385,7 @@ fn a_closed_shown_queue_returns_to_the_current_queue() {
     );
 
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(current())),
         "the queue the panel shows is the one that holds the playhead"
     );

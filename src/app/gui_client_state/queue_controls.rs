@@ -124,7 +124,7 @@ impl App {
         if !self.gui_client {
             return;
         }
-        if let Some(ShownEntry::Local(queue)) = self.gui_shown_entry {
+        if let Some(ShownEntry::Local(queue)) = self.shown_entry {
             self.open_new_queue_rename(queue);
         }
     }
@@ -138,7 +138,7 @@ impl App {
         if !self.gui_client {
             return;
         }
-        match self.gui_shown_entry {
+        match self.shown_entry {
             Some(ShownEntry::Peer) => self.disconnect_remote(),
             Some(ShownEntry::Local(queue)) => self.request_close_local_queue(queue),
             // Before the Owner's first queue list no queue can be shown, so the

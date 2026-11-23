@@ -152,7 +152,7 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
     app.handle_player_event(op_answer(op.0, new_queue_snapshot()));
 
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(new_queue())),
         "the Queue panel shows the queue the Owner reported"
     );
@@ -212,7 +212,7 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         "the create's answer ends its request"
     );
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(new_queue())),
         "the Queue panel shows the queue the Owner made"
     );
@@ -375,7 +375,7 @@ fn cancelling_the_close_changes_nothing() {
 
     assert_eq!(sent_close(&cmd_rx), None, "no queue closes");
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(current())),
         "the Queue panel still shows the playing queue"
     );
@@ -387,7 +387,7 @@ fn cancelling_the_close_changes_nothing() {
 fn closing_a_peer_entry_disconnects_and_leaves_the_peer_playing() {
     let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
     assert!(
-        app.gui_shown_entry == Some(ShownEntry::Peer),
+        app.shown_entry == Some(ShownEntry::Peer),
         "the connect shows the peer entry"
     );
 
@@ -395,7 +395,7 @@ fn closing_a_peer_entry_disconnects_and_leaves_the_peer_playing() {
 
     assert!(!app.direct_remote_connected, "the Client disconnects");
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(current())),
         "the Queue panel falls back to the current local queue"
     );
@@ -489,7 +489,7 @@ fn a_chooser_entry_press_shows_the_painted_queue() {
     app.handle_playback_request(&PlaybackRequest::QueueChooserEntry(Some(resting())));
 
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(resting())),
         "the press shows the entry it painted"
     );
@@ -523,7 +523,7 @@ fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
     app.handle_playback_request(&PlaybackRequest::QueueChooserEntry(Some(resting())));
 
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(current())),
         "the panel falls back to the current local queue"
     );

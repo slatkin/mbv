@@ -126,7 +126,7 @@ pub struct App {
     /// peer whose queue the Queue panel, the player panel, and the edits follow
     /// (design D7, ADR 0041). `None` for the TUI Client, which keeps the
     /// connection rule (ADR 0034).
-    pub(in crate::app) gui_shown_entry: Option<crate::app::state::playback::ShownEntry>,
+    pub(in crate::app) shown_entry: Option<crate::app::state::playback::ShownEntry>,
     /// The shown resting queue's own view, beside the current queue's
     /// `local_view` (design D7): filled from `NamedQueueSnapshot` while the GUI
     /// Client shows a queue that rests.

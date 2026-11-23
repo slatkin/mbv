@@ -43,7 +43,7 @@ impl App {
                 QueueChooserEntryProjection {
                     label: entry.name.clone(),
                     queue: Some(entry.id),
-                    shown: self.gui_shown_entry == Some(ShownEntry::Local(entry.id)),
+                    shown: self.shown_entry == Some(ShownEntry::Local(entry.id)),
                     current: current == Some(entry.id),
                     playing: local_plays && current == Some(entry.id),
                     len,
@@ -58,7 +58,7 @@ impl App {
             entries.push(QueueChooserEntryProjection {
                 label: self.peer_owner_label(),
                 queue: None,
-                shown: self.gui_shown_entry == Some(ShownEntry::Peer),
+                shown: self.shown_entry == Some(ShownEntry::Peer),
                 current: false,
                 playing: false,
                 len: peer_len,
