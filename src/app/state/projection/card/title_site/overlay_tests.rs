@@ -27,10 +27,7 @@ fn app_with_card_image() -> Model {
     configured.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
     let mut model = Model::new(app);
-    model
-        .image_protocols
-        .set_image_pickers_for_test(configured, Picker::halfblocks());
-    model.push_image_protocol_facts();
+    crate::app::shell::install_image_pickers_for_test(&mut model, configured, Picker::halfblocks());
     model.app.images.insert_image(
         CARD_KEY.to_owned(),
         cached(Some(image::DynamicImage::ImageRgba8(

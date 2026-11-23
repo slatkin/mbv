@@ -669,14 +669,17 @@ fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
     );
 }
 
-/// Install the configured picker on a model the way `Model::init_image_pickers`
-/// does, so the slot's paint resolves a protocol (a bare `App` carries none).
+/// Install a configured kitty picker and the halfblock fallback on a model the
+/// way `init_image_protocols` does, so the slot's paint resolves a protocol (a
+/// bare `App` carries none).
 fn set_image_protocols(mut model: crate::app::Model) -> crate::app::Model {
-    model.image_protocols.set_image_pickers_for_test(
-        ratatui_image::picker::Picker::halfblocks(),
+    let mut configured = ratatui_image::picker::Picker::halfblocks();
+    configured.set_protocol_type(ratatui_image::picker::ProtocolType::Kitty);
+    crate::app::shell::install_image_pickers_for_test(
+        &mut model,
+        configured,
         ratatui_image::picker::Picker::halfblocks(),
     );
-    model.push_image_protocol_facts();
     model
 }
 

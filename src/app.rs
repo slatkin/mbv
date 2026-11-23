@@ -147,6 +147,9 @@ pub(in crate::app) use self::test_seams::{
 mod shell;
 use self::dispatch::notify::ToastSeverity;
 pub use self::shell::Model;
+/// The TUI's image pickers, built before the `TuiRealm` listener starts
+/// (#654); the `Model` constructor takes the store it returns.
+pub use self::shell::init_image_protocols;
 use self::state::app_init::AppInit;
 use self::state::bootstrap::bootstrap_unified_queue;
 use self::state::playback_target::LocalPlaybackTarget;

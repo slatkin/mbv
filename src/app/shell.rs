@@ -287,6 +287,69 @@ pub(in crate::app) fn single_panel_for_width(width: u16) -> bool {
     width < mbv_render::layout::MINI_VIEW_THRESHOLD
 }
 
+/// Build this Client's terminal image protocol store before the `TuiRealm`
+/// crossterm listener starts: the configured protocol override
+/// (`ImageCache::protocol_override`) replaces the detected one, and the picker
+/// facts the core reads are pushed onto `app` here.
+///
+/// MUST run before the `TuiRealm` crossterm listener starts (#654):
+/// `Picker::from_query_stdio` writes a `CSI 16 t` cell-size query and reads the
+/// reply with a raw stdin read, so a listener already draining stdin eats it.
+/// The `Model` constructor takes the store pre-built, so construction order
+/// makes the rule structural.
+pub fn init_image_protocols(app: &mut App) -> mbv_tui_support::ImageProtocols {
+    let mut image_protocols = mbv_tui_support::ImageProtocols::new();
+    // The store's own override view: the override is a plain config string the
+    // store already holds, so the query reads it and the facts read it back
+    // from the store, with no `app` borrow outliving the call.
+    image_protocols.init_image_pickers(app.images.protocol_override());
+    push_image_protocol_facts(app, &image_protocols);
+    image_protocols
+}
+
+/// Push the picker facts the core's projections read (design D2 rule 3):
+/// whether the configured picker paints halfblocks, whether the pickers are
+/// initialized, the active picker's terminal font size, and the suffix the
+/// artwork cache keys carry.
+pub(in crate::app) fn push_image_protocol_facts(
+    app: &mut App,
+    image_protocols: &mbv_tui_support::ImageProtocols,
+) {
+    let protocol_override = app.images.protocol_override().map(str::to_owned);
+    let protocol_override = protocol_override.as_deref();
+    let halfblock = image_protocols.is_halfblock_configured(protocol_override);
+    // The active picker's cell grid, as the paint path reads it: the
+    // halfblock fallback's while a dimming backdrop forces it (#451), else
+    // the configured picker's.
+    let fallback = app.dim_halfblock_forced();
+    let font = image_protocols
+        .picker_for_suffix(if fallback { "halfblock" } else { "" })
+        .or_else(|| image_protocols.image_picker())
+        .map_or((10, 20), |picker| {
+            let font = picker.font_size();
+            (font.width, font.height)
+        });
+    app.set_image_protocol_facts(halfblock, image_protocols.image_picker().is_some(), font);
+    app.set_configured_protocol_suffix(image_protocols.configured_protocol_name());
+}
+
+/// Install a test's pickers on a shell and push the facts the core's
+/// projections read, the way `init_image_protocols` does for the terminal's
+/// own pickers.
+#[cfg(test)]
+pub(in crate::app) fn install_image_pickers_for_test(
+    model: &mut Model,
+    image: ratatui_image::picker::Picker,
+    halfblock: ratatui_image::picker::Picker,
+) {
+    model
+        .image_protocols
+        .set_image_pickers_for_test(image, halfblock);
+    let mut app = std::mem::replace(&mut model.app, crate::app::handoff_app());
+    push_image_protocol_facts(&mut app, &model.image_protocols);
+    model.app = app;
+}
+
 /// The current launch instant in Unix seconds: the upper bound of the Home
 /// "new content" launch window (row 4.4 of design D2). The window is shell
 /// presentation state, so the clock read lives here too.
@@ -307,42 +370,6 @@ impl Model {
         (self.terminal_width, self.terminal_height)
     }
 
-    /// Initialize the terminal image pickers before the TUI listener starts:
-    /// the configured protocol override (`ImageCache::protocol_override`)
-    /// replaces the detected one, and the pickers live in this Client's
-    /// `ImageProtocols` store. The facts the core reads (whether halfblocks
-    /// paint, the configured suffix) are pushed onto `App` here.
-    ///
-    /// MUST run before the `TuiRealm` crossterm listener starts (#654).
-    pub(crate) fn init_image_pickers(&mut self) {
-        let protocol_override = self.app.images.protocol_override();
-        self.image_protocols.init_image_pickers(protocol_override);
-        self.push_image_protocol_facts();
-    }
-
-    /// Push the picker facts the core's projections read (design D2 rule 3):
-    /// whether the configured picker paints halfblocks, whether the pickers
-    /// are initialized, and the suffix the artwork cache keys carry.
-    pub(in crate::app) fn push_image_protocol_facts(&mut self) {
-        let halfblock = self
-            .image_protocols
-            .is_halfblock_configured(self.app.images.protocol_override());
-        let font = self
-            .image_protocols
-            .image_picker()
-            .map_or((10, 20), |picker| {
-                let font = picker.font_size();
-                (font.width, font.height)
-            });
-        self.app.set_image_protocol_facts(
-            halfblock,
-            self.image_protocols.image_picker().is_some(),
-            font,
-        );
-        self.app
-            .set_configured_protocol_suffix(self.image_protocols.configured_protocol_name());
-    }
-
     /// Construct the model, starting the ``TuiRealm`` crossterm listener and
     /// mounting the permanent root observer.
     #[cfg(test)]
@@ -353,12 +380,17 @@ impl Model {
                 previous: None,
                 current: current_launch_secs(),
             },
+            mbv_tui_support::ImageProtocols::new(),
         )
     }
 
+    /// Construct the launch shell over an already initialized protocol store
+    /// (`init_image_protocols`, which must run before the listener starts;
+    /// #654).
     pub(crate) fn new_with_launch_window(
         app: App,
         home_latest_launch_window: HomeLatestLaunchWindow,
+        image_protocols: mbv_tui_support::ImageProtocols,
     ) -> Self {
         let move_gate = input_port::MoveGate::default();
         let listener_cfg = EventListenerCfg::default().add_port(
@@ -369,7 +401,13 @@ impl Model {
             TERMINAL_LISTENER_INTERVAL,
             TERMINAL_LISTENER_MAX_POLL,
         );
-        Self::new_with_listener_and_window(app, listener_cfg, move_gate, home_latest_launch_window)
+        Self::new_with_listener_and_window(
+            app,
+            listener_cfg,
+            move_gate,
+            home_latest_launch_window,
+            image_protocols,
+        )
     }
 
     #[cfg(test)]
@@ -394,6 +432,7 @@ impl Model {
                 previous: None,
                 current: current_launch,
             },
+            mbv_tui_support::ImageProtocols::new(),
         )
     }
 
@@ -402,6 +441,7 @@ impl Model {
         listener_cfg: EventListenerCfg<UserEvent>,
         move_gate: input_port::MoveGate,
         home_latest_launch_window: HomeLatestLaunchWindow,
+        image_protocols: mbv_tui_support::ImageProtocols,
     ) -> Self {
         let application = Application::init(listener_cfg);
         // Legacy Home Latest selector snapshots are reanchored to Continue
@@ -450,7 +490,7 @@ impl Model {
             layout: mbv_render::layout::AppLayout::default(),
             home_latest_launch_window,
             resize_drag_activity: None,
-            image_protocols: mbv_tui_support::ImageProtocols::new(),
+            image_protocols,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other

@@ -106,17 +106,20 @@ extern "C" fn signal_handler(sig: libc::c_int) {
     }
 }
 
-/// Captures the launch window, builds the TUI shell — which initializes the
-/// image pickers, since they belong to this Client's `Model` — and runs it
-/// with the launch window available to the model. A pinned Client always
-/// starts with Panel focus on Queue.
+/// Captures the launch window, builds the TUI shell, and runs it with the
+/// launch window available to the model. A pinned Client always starts with
+/// Panel focus on Queue.
+///
+/// The image pickers belong to this Client's shell, and their terminal query
+/// must complete before the `TuiRealm` crossterm listener starts (#654), so
+/// they initialize here and the store goes into the `Model` constructor.
 fn run_tui(mut app: App) {
     let launch_window = capture_launch_window();
     if pin::is_pinned() {
         app.pin_launch_focus_to_queue();
     }
-    let mut model = Model::new_with_launch_window(app, launch_window);
-    model.init_image_pickers();
+    let image_protocols = crate::app::init_image_protocols(&mut app);
+    let mut model = Model::new_with_launch_window(app, launch_window, image_protocols);
     if let Err(e) = model.run() {
         pin::fatal(format!("mbv: {e}"));
     }

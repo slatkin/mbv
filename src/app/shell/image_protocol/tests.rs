@@ -44,10 +44,7 @@ fn app_with_picker(mut picker: Picker) -> Model {
     picker.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
     let mut model = Model::new(app);
-    model
-        .image_protocols
-        .set_image_pickers_for_test(picker, Picker::halfblocks());
-    model.push_image_protocol_facts();
+    crate::app::shell::install_image_pickers_for_test(&mut model, picker, Picker::halfblocks());
     // (height, width): the card box the overlay is composed for.
     model.app.images.record_card_size(4, 8);
     model

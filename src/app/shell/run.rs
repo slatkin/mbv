@@ -281,8 +281,9 @@ impl Model {
         // already blank (`EnterAlternateScreen` plus the ratatui-image
         // capability probe's `ESC c` reset both precede this), and the first
         // draw below fully repaints because the back buffer starts empty.
-        // Image pickers are initialised in `main` before `Model::new` starts
-        // the TuiRealm listener — see `App::init_image_pickers` (#654).
+        // Image pickers are initialised in `run_tui` before the `Model`
+        // constructor starts the TuiRealm listener — see
+        // `crate::app::init_image_protocols` (#654).
 
         self.app.home_content.loading = true;
         terminal.draw(|f| self.draw_frame(f, false, false))?;
