@@ -44,6 +44,22 @@ pub(in crate::app) struct StepOutcome {
 
 impl TickHarness {
     pub(in crate::app) fn new(app: App) -> Self {
+        let (tx, port) = Self::port();
+        let model = Model::new_with_listener(app, port);
+        Self { tx, model }
+    }
+
+    /// A harness over a shell the caller built itself (`Model::new_with_listener`
+    /// with [`TickHarness::port`]): state a test installs on the `Model` —
+    /// the image protocol store, say — survives into the harness.
+    pub(in crate::app) fn from_model(model: Model) -> Self {
+        let (tx, _) = Self::port();
+        Self { tx, model }
+    }
+
+    /// The listener configuration and its event sender: build a `Model` over
+    /// it, then hand the model to [`TickHarness::from_model`].
+    pub(in crate::app) fn port() -> (Sender<Event<UserEvent>>, EventListenerCfg<UserEvent>) {
         let (tx, rx) = mpsc::channel();
         let port = InjectPort { rx };
         let listener_cfg = EventListenerCfg::default().add_port(
@@ -51,8 +67,7 @@ impl TickHarness {
             INJECT_PORT_INTERVAL,
             INJECT_PORT_MAX_POLL,
         );
-        let model = Model::new_with_listener(app, listener_cfg);
-        Self { tx, model }
+        (tx, listener_cfg)
     }
 
     pub(in crate::app) fn model(&self) -> &Model {

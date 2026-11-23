@@ -685,12 +685,6 @@ fn set_image_protocols(mut model: crate::app::Model) -> crate::app::Model {
 /// produces, never drifting or stalling below it. The feedback loop behind
 /// this (the 2026-10-04 user report) is documented at
 /// `queue_card_reserved_rect`.
-///
-/// Ignored while the protocol store moves onto the shell `Model` (task 2.1):
-/// the slot's paint resolves the artwork's protocol through the store, and
-/// this fixture's cached artwork has no retained source, so the loop records
-/// nothing and the test needs re-basing against the store's re-encode path.
-#[ignore = "needs reconciliation with the shell protocol store (task 2.1)"]
 #[test]
 fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
     fn card_app() -> crate::app::App {
@@ -738,10 +732,13 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
     }
 
     // The slot paints through the configured picker the shell installs before
-    // the listener starts (`Model::init_image_pickers`); that picker also
-    // re-encodes the cached artwork the fixture plants without a source, so
-    // the slot's paint resolves a protocol.
-    let mut harness = TickHarness::new(set_image_protocols(crate::app::Model::new(card_app())).app);
+    // the listener starts (`Model::init_image_pickers`), which encodes the
+    // seeded artwork's protocol from its retained source. The picker lives on
+    // the shell, so the seeded model itself runs the loop.
+    let (_, listener) = TickHarness::port();
+    let mut harness = TickHarness::from_model(set_image_protocols(
+        crate::app::Model::new_with_listener(card_app(), listener),
+    ));
     let mut sizes = Vec::new();
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 120, 40);
     for _ in 0..6 {
