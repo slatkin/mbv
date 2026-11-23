@@ -483,11 +483,11 @@ impl GuiCore {
         if let Command::App(AppCommand::Navigation(intent)) = command {
             match intent {
                 NavigationIntent::NextLibraryTab => {
-                    self.app.step_gui_library_tab(1);
+                    crate::app::gui_library::tabs_step_library_tab(&mut self.app, 1);
                     return false;
                 }
                 NavigationIntent::PreviousLibraryTab => {
-                    self.app.step_gui_library_tab(-1);
+                    crate::app::gui_library::tabs_step_library_tab(&mut self.app, -1);
                     return false;
                 }
                 NavigationIntent::SetLibraryTab(position) => {

@@ -21,7 +21,7 @@ use super::GuiLibraryArtwork;
 use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
-use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source};
+use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source, row_art};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
@@ -33,7 +33,7 @@ use mbv_ui_model::meta::{MetaKind, MetaSegment};
 /// other destination, which presents no Audiobooks section.
 #[must_use]
 pub(in crate::app) fn audiobooks_destination(app: &App) -> Option<usize> {
-    match app.gui_active_destination() {
+    match super::tabs::active_destination(app) {
         Some(super::GuiDestinationKind::Audiobooks { lib_idx }) => Some(lib_idx),
         _ => None,
     }
@@ -338,7 +338,7 @@ fn book_row(
             .filter(|author| !author.is_empty()),
         duration: gutter(book.duration_seconds),
         sort_letter: book_row_letter(book, sort),
-        art: app.gui_row_art(catalog_book_row_source(book).as_ref()),
+        art: row_art(app, catalog_book_row_source(book).as_ref()),
         media: GuiRowMediaKind::Audio,
     }
 }

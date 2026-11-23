@@ -26,7 +26,7 @@ use mbv_ui_model::ui_util::row_date;
 
 use super::GuiListSort;
 use super::GuiSortTarget;
-use super::artwork::{feed_media_kind, feed_row_source};
+use super::artwork::{feed_media_kind, feed_row_source, row_art};
 use super::collection::{GuiCollectionTarget, GuiCollections};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
@@ -181,7 +181,7 @@ pub(in crate::app) fn feeds_projection(app: &App) -> GuiFeedsProjection {
     }
     let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Feeds);
     let sort = sort_frame.active;
-    let collections = app.gui_collections(GuiCollectionTarget::Feeds);
+    let collections = super::collection_command::collections(app, GuiCollectionTarget::Feeds);
     let mut entries = super::feeds::feeds_entries(app);
     if sort.is_name_sort() {
         // The entry title leads under Title, and the date newest follows it,
@@ -266,7 +266,7 @@ fn feeds_row(app: &App, entry: &FeedEntry, sort: GuiListSort) -> GuiFeedsRow {
         date: row_date(entry.pub_date_secs),
         state: MediaSemanticState::from_feed_entry(entry),
         sort_letter: sort.rail_letter(&entry.title),
-        art: app.gui_row_art(feed_row_source(entry).as_ref()),
+        art: row_art(app, feed_row_source(entry).as_ref()),
         media: feed_media_kind(entry),
     }
 }

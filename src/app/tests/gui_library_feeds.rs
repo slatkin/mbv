@@ -177,7 +177,7 @@ fn a_checked_subscription_lists_only_that_subscriptions_entries() {
 fn the_presented_tabs_include_the_feeds_destination() {
     let app = fetched_feeds_app();
 
-    let tabs = app.gui_library_tabs();
+    let tabs = gui_library_tabs(&app);
 
     assert_eq!(
         tabs.tabs
@@ -189,7 +189,7 @@ fn the_presented_tabs_include_the_feeds_destination() {
     );
     assert_eq!(tabs.current, Some(1), "the active feed tab is current");
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Feeds),
         "the active destination's kind is the Feeds one"
     );

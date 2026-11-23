@@ -400,7 +400,7 @@ fn the_presented_tabs_include_a_book_library_and_a_podcast_library() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
-    let tabs = app.gui_library_tabs();
+    let tabs = gui_library_tabs(&app);
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
@@ -408,20 +408,20 @@ fn the_presented_tabs_include_a_book_library_and_a_podcast_library() {
         "the book library presents Audiobooks and the podcast library Podcasts"
     );
     assert_eq!(
-        app.gui_active_destination()
+        gui_active_destination(&app)
             .and_then(crate::app::gui_library::GuiDestinationKind::library_index),
         Some(0),
         "the active book destination is the seeded one"
     );
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Audiobooks { lib_idx: 0 }),
         "the active book destination's kind is the Audiobooks one"
     );
 
     app.tab = TabSelection::AudiobookshelfLibrary(1);
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Podcasts { lib_idx: 1 }),
         "the podcast destination presents its own kind"
     );

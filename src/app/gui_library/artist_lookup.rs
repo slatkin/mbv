@@ -7,20 +7,8 @@
 //! found either way feeds the row's image source only: it never becomes an
 //! `ArtistKey`, so artist keys, artist-track queries, and the Hero stay on
 //! `ArtistItems` identity.
-
-use crate::app::App;
-use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
-
-impl App {
-    /// The Service artist item id known for an artist name, if any.
-    pub(in crate::app) fn gui_artist_item_id(&self, name: &str) -> Option<&str> {
-        ArtistNameLookup::item_id(self, name)
-    }
-
-    /// Start the artist search for `name` once (design D4a (b)): the core's
-    /// `ArtistNameLookup` keeps the record, and this GUI half owns the search
-    /// the record's map is keyed for.
-    pub(in crate::app) fn request_gui_artist_name_lookup(&mut self, name: &str) {
-        ArtistNameLookup::request(self, name);
-    }
-}
+//!
+//! The GUI half that owned the search has no caller that holds a `GuiCore`
+//! (`decouple-client-core` design D4, task 7.7): the row art lookups and the
+//! in-view fetch queue read the `App` they hold, so they enter the core's
+//! `ArtistNameLookup` directly and this module holds no GUI entry.

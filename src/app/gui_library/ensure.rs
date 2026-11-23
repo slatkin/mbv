@@ -11,7 +11,7 @@
 //! idempotent guard, so a repaint never repeats a request.
 //!
 //! Two callers reach the pass: the `mbv-gui` crate's frame path, through
-//! [`App::ensure_gui_active_destination`], and the destination's open step,
+//! [`GuiCore::ensure_gui_active_destination`], and the destination's open step,
 //! after its user-action work (design D2, D4). A collection command can name
 //! an Audiobooks or Podcasts library the tab is not on, so the driver itself
 //! holds the active-tab guard for those two kinds.
@@ -104,7 +104,7 @@ impl GuiCore {
     /// destination only, whose steps then hold their own idempotent guards.
     /// It returns that destination, so the caller does not resolve it again.
     pub fn ensure_gui_active_destination(&mut self) -> Option<GuiDestinationKind> {
-        let kind = self.app.gui_active_destination()?;
+        let kind = super::tabs::active_destination(&self.app)?;
         self.ensure_gui_destination(kind);
         Some(kind)
     }

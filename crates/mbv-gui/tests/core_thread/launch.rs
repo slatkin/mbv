@@ -94,8 +94,7 @@ fn seed_music_and_podcasts(app: &mut mbv::App, http: &MockHttp) {
 /// The tab position the presented Podcasts destination carries.
 fn podcasts_position(test: &mut TestCore) -> usize {
     test.core
-        .app_mut()
-        .gui_library_tabs()
+        .gui_library_tabs_for_test()
         .tabs
         .iter()
         .find(|tab| tab.label == "Podcasts")

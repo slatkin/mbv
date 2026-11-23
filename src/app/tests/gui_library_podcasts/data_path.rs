@@ -380,7 +380,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
-    let tabs = app.gui_library_tabs();
+    let tabs = gui_library_tabs(&app);
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
@@ -394,7 +394,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
     );
     assert_eq!(tabs.current, Some(2), "the active podcast tab is current");
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Podcasts { lib_idx: 1 }),
         "the active podcast destination's kind is the Podcasts one"
     );

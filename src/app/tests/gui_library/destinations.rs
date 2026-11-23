@@ -37,7 +37,7 @@ fn app_with_two_music_libraries() -> App {
 fn the_tabs_present_every_emby_library_in_catalog_order() {
     let app = app_with_two_music_libraries();
 
-    let tabs = app.gui_library_tabs().tabs;
+    let tabs = gui_library_tabs(&app).tabs;
 
     assert_eq!(
         tabs,
@@ -66,7 +66,7 @@ fn the_current_tab_names_the_active_presented_destination() {
     let mut app = app_with_two_music_libraries();
     app.tab = TabSelection::EmbyLibrary(2);
 
-    assert_eq!(app.gui_library_tabs().current, Some(3));
+    assert_eq!(gui_library_tabs(&app).current, Some(3));
 }
 
 /// The current tab names the plain Emby-library destination the row 8.1
@@ -77,7 +77,7 @@ fn the_current_tab_names_the_movies_destination() {
     let mut app = app_with_two_music_libraries();
     app.tab = TabSelection::EmbyLibrary(1);
 
-    assert_eq!(app.gui_library_tabs().current, Some(2));
+    assert_eq!(gui_library_tabs(&app).current, Some(2));
 }
 
 /// A Music item's right-click item menu offers the played-state entries no

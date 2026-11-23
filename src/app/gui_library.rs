@@ -112,7 +112,12 @@ use self::store::GuiMusicCollectionSite;
 pub(in crate::app) use self::store::install_library_collection;
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent, handle_group_albums};
 pub use self::stores::GuiLibraryStores;
+pub(in crate::app) use self::tabs::step_library_tab as tabs_step_library_tab;
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
+#[cfg(test)]
+pub(in crate::app) use self::tabs::{
+    active_destination as gui_active_destination, library_tabs as gui_library_tabs,
+};
 pub use self::tv::GuiTvShowsSelection;
 
 use mbv_ui_model::settings::PanelFocus;
@@ -356,11 +361,10 @@ impl GuiCore {
                 self.open_gui_library_position(position);
             }
             GuiLibraryCommand::CollectionToggle { target, key } => {
-                self.app
-                    .apply_collection(&target, CollectionOp::Toggle { key });
+                self.apply_collection(&target, CollectionOp::Toggle { key });
             }
             GuiLibraryCommand::CollectionAll { target } => {
-                self.app.apply_collection(&target, CollectionOp::All);
+                self.apply_collection(&target, CollectionOp::All);
             }
             GuiLibraryCommand::ListSort { target, sort } => {
                 self.apply_gui_list_sort(target, sort);
@@ -535,7 +539,7 @@ impl GuiCore {
     /// every destination kind and every absent case, so a new kind does not
     /// compile until it states its open step.
     fn open_gui_active_destination(&mut self) {
-        match self.app.gui_active_destination() {
+        match tabs::active_destination(&self.app) {
             // No presented destination: the open names nothing to open.
             None => {}
             // Home's rows ride the shared Home data and Music's loads are all

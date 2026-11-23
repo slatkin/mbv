@@ -105,9 +105,9 @@ fn commanded_book_id(cmd_rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> String {
 /// reads the same set.
 #[test]
 fn the_presented_tabs_carry_the_book_library_and_the_podcast_library() {
-    let mut test = audiobooks_core();
+    let test = audiobooks_core();
 
-    let tabs = test.core.app_mut().gui_library_tabs();
+    let tabs = test.core.gui_library_tabs_for_test();
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
@@ -125,8 +125,7 @@ fn the_open_destination_command_opens_the_audiobooks_tab() {
 
     let position = test
         .core
-        .app_mut()
-        .gui_library_tabs()
+        .gui_library_tabs_for_test()
         .tabs
         .iter()
         .find(|tab| tab.label == "Audiobooks")
@@ -144,7 +143,8 @@ fn the_open_destination_command_opens_the_audiobooks_tab() {
         "the Audiobooks destination is active"
     );
     assert_eq!(
-        app.gui_active_destination()
+        test.core
+            .gui_active_destination_for_test()
             .and_then(mbv::GuiDestinationKind::library_index),
         Some(0),
         "the active destination's kind is the Audiobooks one"
@@ -161,8 +161,7 @@ fn the_frame_carries_the_book_list_after_the_open() {
 
     let position = test
         .core
-        .app_mut()
-        .gui_library_tabs()
+        .gui_library_tabs_for_test()
         .tabs
         .iter()
         .find(|tab| tab.label == "Audiobooks")

@@ -41,7 +41,7 @@ pub(crate) fn build(core: &mut GuiCore) -> LibraryPass {
     let Some((list, detail)) = destination_parts(core, destination) else {
         return LibraryPass::default();
     };
-    let GuiLibraryTabs { tabs, current } = core.app().gui_library_tabs();
+    let GuiLibraryTabs { tabs, current } = core.gui_library_tabs();
     // The right-click item menu is the Library's, not one destination's (design
     // D8, D15): a row of any destination opens it.
     let row_menu = core.gui_library_row_menu();

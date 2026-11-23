@@ -21,7 +21,9 @@ use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_model::ui_util::row_date;
 
 use super::GuiLibraryArtwork;
-use super::artwork::{GuiRowArt, GuiRowMediaKind, queue_item_media_kind};
+use super::artwork::{
+    GuiRowArt, GuiRowMediaKind, queue_item_media_kind, queue_item_row_source, row_art,
+};
 use crate::app::App;
 use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
@@ -361,7 +363,7 @@ fn home_item(
     let kind = home_item_kind(item);
     let state = MediaSemanticState::from_queue_item(item);
     let media = queue_item_media_kind(item);
-    let art = app.gui_row_art(app.queue_item_row_source(item).as_ref());
+    let art = row_art(app, queue_item_row_source(app, item).as_ref());
     GuiHomeItem {
         item: item.clone(),
         row: GuiHomeItemRow {

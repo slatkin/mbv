@@ -237,7 +237,7 @@ fn menu_target(app: &App, row: &GuiLibraryMenuRow) -> Option<GuiLibraryMenuTarge
 /// The destination menu target for a Library row's Service id, active
 /// destination first.
 fn item_target(app: &App, item_id: &str) -> Option<GuiLibraryMenuTarget> {
-    match app.gui_active_destination() {
+    match super::tabs::active_destination(app) {
         Some(GuiDestinationKind::Audiobooks { .. } | GuiDestinationKind::Podcasts { .. }) => {
             if let Some(target) = super::item_actions::audiobookshelf_target(app, item_id) {
                 return Some(GuiLibraryMenuTarget::Audiobookshelf(target));

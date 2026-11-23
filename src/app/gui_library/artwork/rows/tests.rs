@@ -68,7 +68,7 @@ fn a_feed_row_has_no_source_and_makes_no_request() {
 
     assert_eq!(source, None, "the feed artwork policy declares no source");
     assert_eq!(
-        app.gui_row_art(source.as_ref()),
+        row_art(&app, source.as_ref()),
         GuiRowArt::NoSource,
         "a row with no source paints the no-source state"
     );
@@ -97,7 +97,7 @@ fn a_cached_square_cover_paints_whole() {
     );
 
     assert_eq!(
-        app.gui_row_art(Some(&source)),
+        row_art(&app, Some(&source)),
         GuiRowArt::Image { key, square: true },
         "a square cover's pixels show the whole image"
     );
@@ -114,7 +114,7 @@ fn an_empty_fetch_paints_missing() {
     app.images.insert_image(key, CachedImage::empty());
 
     assert_eq!(
-        app.gui_row_art(Some(&source)),
+        row_art(&app, Some(&source)),
         GuiRowArt::Missing,
         "an entry with no art is the missing state"
     );
@@ -129,7 +129,7 @@ fn an_emby_row_without_declared_images_has_no_source() {
     item.id = "m-1".to_owned();
 
     assert_eq!(emby_row_source(&item), None);
-    assert_eq!(app.gui_row_art(None), GuiRowArt::NoSource);
+    assert_eq!(row_art(&app, None), GuiRowArt::NoSource);
 }
 
 /// A row that is not cached yet is loading, whatever the fetch's state: the
@@ -140,5 +140,5 @@ fn an_uncached_row_paints_loading() {
     let app = app_with_audiobookshelf(server);
     let source = episode_row_source(&episode("show-1"), 7).expect("a podcast cover source");
 
-    assert_eq!(app.gui_row_art(Some(&source)), GuiRowArt::Loading);
+    assert_eq!(row_art(&app, Some(&source)), GuiRowArt::Loading);
 }

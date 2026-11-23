@@ -20,13 +20,14 @@ use mbv_queue::QueueItem;
 use super::GuiRowArtScope;
 use super::artwork::{
     ARTIST_NAME_ROW_ID_PREFIX, GuiRowSource, artist_id_row_source, artist_row_source,
-    catalog_book_row_source, emby_row_source, episode_row_source, feed_row_source,
-    upcoming_row_source as upcoming_source,
+    audiobookshelf_updated_at_ms, catalog_book_row_source, emby_row_source, episode_row_source,
+    feed_row_source, queue_item_row_source, row_fetch_req, upcoming_row_source as upcoming_source,
 };
 use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
 use super::home::GuiHomeRowId;
 use super::podcasts_projection::GuiPodcastEpisodeId;
 use crate::app::App;
+use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use crate::gui::GuiCore;
 
 impl GuiCore {
@@ -73,13 +74,13 @@ pub(in crate::app) fn queue_in_view_row_fetches(app: &mut App) {
             .iter()
             .filter_map(|id| id.strip_prefix(ARTIST_NAME_ROW_ID_PREFIX))
         {
-            app.request_gui_artist_name_lookup(name);
+            ArtistNameLookup::request(app, name);
         }
     }
     let requests: Vec<ImageFetchReq> = ids
         .iter()
         .filter_map(|id| row_source(app, scope, id))
-        .filter_map(|source| app.gui_row_fetch_req(&source))
+        .filter_map(|source| row_fetch_req(app, &source))
         .collect();
     app.fetch_row_images(requests);
 }
@@ -92,7 +93,7 @@ fn touch_in_view_row_images(app: &mut App, scope: GuiRowArtScope, ids: &[String]
     let keys: Vec<String> = ids
         .iter()
         .filter_map(|id| row_source(app, scope, id))
-        .filter_map(|source| app.gui_row_fetch_req(&source))
+        .filter_map(|source| row_fetch_req(app, &source))
         .map(|req| req.cache_key)
         .collect();
     for key in keys {
@@ -104,7 +105,7 @@ fn touch_in_view_row_images(app: &mut App, scope: GuiRowArtScope, ids: &[String]
 /// list that reports rows in view, so a stored set of another list queues
 /// nothing.
 fn row_art_scope(app: &App) -> Option<GuiRowArtScope> {
-    match app.gui_active_destination()? {
+    match super::tabs::active_destination(app)? {
         super::GuiDestinationKind::Home => Some(GuiRowArtScope::Home),
         super::GuiDestinationKind::Music { .. } => Some(GuiRowArtScope::Music),
         super::GuiDestinationKind::Shows { lib_idx } => {
@@ -161,7 +162,7 @@ fn row_source(app: &App, scope: GuiRowArtScope, id: &str) -> Option<GuiRowSource
 fn music_row_source(app: &App, id: &str) -> Option<GuiRowSource> {
     artist_id_row_source(id).or_else(|| {
         let name = id.strip_prefix(ARTIST_NAME_ROW_ID_PREFIX)?;
-        app.gui_artist_item_id(name).map(artist_row_source)
+        ArtistNameLookup::item_id(app, name).map(artist_row_source)
     })
 }
 
@@ -181,7 +182,7 @@ fn podcast_row_source(app: &App, id: &str) -> Option<GuiRowSource> {
     let lib_idx = active_podcast_library_index(app)?;
     let episode = GuiPodcastEpisodeId::decode(id)?;
     let item = super::podcasts_projection::podcast_hero_item(app, lib_idx, &episode)?;
-    let updated_at = app.audiobookshelf_updated_at_ms(&item.library_item_id);
+    let updated_at = audiobookshelf_updated_at_ms(app, &item.library_item_id);
     episode_row_source(&item, updated_at)
 }
 
@@ -190,7 +191,7 @@ fn podcast_row_source(app: &App, id: &str) -> Option<GuiRowSource> {
 /// ids, so a stale set resolves nothing.
 fn home_row_source(app: &App, id: &str) -> Option<GuiRowSource> {
     let item = home_row_item(app, id)?;
-    app.queue_item_row_source(&item)
+    queue_item_row_source(app, &item)
 }
 
 /// The Home row's item, as the projection builds it (design D12).
@@ -227,7 +228,7 @@ pub(in crate::app::gui_library) fn shows_series_item(
 
 /// The active plain Emby library's index (design D7).
 fn active_library_index(app: &App) -> Option<usize> {
-    match app.gui_active_destination() {
+    match super::tabs::active_destination(app) {
         Some(super::GuiDestinationKind::Library { lib_idx }) => Some(lib_idx),
         _ => None,
     }
@@ -235,7 +236,7 @@ fn active_library_index(app: &App) -> Option<usize> {
 
 /// The active Shows library's index (design D7).
 fn active_shows_library_index(app: &App) -> Option<usize> {
-    match app.gui_active_destination() {
+    match super::tabs::active_destination(app) {
         Some(super::GuiDestinationKind::Shows { lib_idx }) => Some(lib_idx),
         _ => None,
     }
@@ -243,7 +244,7 @@ fn active_shows_library_index(app: &App) -> Option<usize> {
 
 /// The active Podcasts library's index (design D7).
 fn active_podcast_library_index(app: &App) -> Option<usize> {
-    match app.gui_active_destination() {
+    match super::tabs::active_destination(app) {
         Some(super::GuiDestinationKind::Podcasts { lib_idx }) => Some(lib_idx),
         _ => None,
     }

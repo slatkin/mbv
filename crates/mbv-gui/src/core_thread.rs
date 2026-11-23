@@ -414,6 +414,23 @@ impl CoreThread {
         self.core.gui_list_sort(target)
     }
 
+    /// The Library panel's destination tabs, for a Client's test that asserts
+    /// which destinations a launch or a catalog change presented and which
+    /// one is current.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_library_tabs_for_test(&self) -> mbv::GuiLibraryTabs {
+        self.core.gui_library_tabs()
+    }
+
+    /// The active destination's kind, for a Client's test that asserts the
+    /// destination a command or a drain opened.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_active_destination_for_test(&self) -> Option<mbv::GuiDestinationKind> {
+        self.core.gui_active_destination()
+    }
+
     /// Whether the Playlists screen is open, for a Client's test that asserts
     /// a key or a drained request opened or closed it.
     #[doc(hidden)]

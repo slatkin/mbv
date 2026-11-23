@@ -29,8 +29,7 @@ fn seeded_podcasts_core() -> (crate::TestCore, std::sync::mpsc::Receiver<CtrlCmd
 fn open_podcasts(test: &mut crate::TestCore) -> usize {
     let position = test
         .core
-        .app_mut()
-        .gui_library_tabs()
+        .gui_library_tabs_for_test()
         .tabs
         .iter()
         .find(|tab| tab.label == "Podcasts")

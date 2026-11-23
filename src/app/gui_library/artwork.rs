@@ -22,6 +22,9 @@ pub(in crate::app::gui_library) use self::rows::{
     feed_row_source, queue_item_media_kind, upcoming_row_source,
 };
 pub use self::rows::{GuiRowArt, GuiRowMediaKind, GuiRowSource, artist_rows_in_view_id};
+pub(in crate::app) use self::rows::{
+    audiobookshelf_updated_at_ms, queue_item_row_source, row_art, row_fetch_req,
+};
 
 /// The neighbour warm window's bounds (the TUI's grouped-Music rule,
 /// `openspec/specs/music-library-hero/spec.md`): one entry behind the picked

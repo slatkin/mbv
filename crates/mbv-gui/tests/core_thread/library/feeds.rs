@@ -95,8 +95,7 @@ fn land_fetches(test: &mut crate::TestCore) {
 fn open_feeds(test: &mut crate::TestCore) -> usize {
     let position = test
         .core
-        .app_mut()
-        .gui_library_tabs()
+        .gui_library_tabs_for_test()
         .tabs
         .iter()
         .find(|tab| tab.label == "Feeds")

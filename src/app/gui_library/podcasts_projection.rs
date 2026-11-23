@@ -29,7 +29,7 @@ use std::collections::HashSet;
 use super::GuiLibraryArtwork;
 use super::GuiListSort;
 use super::GuiSortTarget;
-use super::artwork::{GuiRowMediaKind, catalog_show_row_source};
+use super::artwork::{GuiRowMediaKind, catalog_show_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
@@ -192,7 +192,8 @@ fn podcasts_projection(app: &mut App, lib_idx: usize) -> GuiPodcastsProjection {
     let set = super::podcasts::podcast_effective_set(app, lib_idx);
     let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Podcasts(lib_idx));
     let sort = sort_frame.active;
-    let collections = app.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
+    let collections =
+        super::collection_command::collections(app, GuiCollectionTarget::Podcasts(lib_idx));
     let (rows, loading, failed) = podcast_rows(app, lib_idx, set.as_ref(), sort);
     let selected = podcast_selected(app, lib_idx, &rows);
     let hero = selected
@@ -418,7 +419,7 @@ fn podcast_row(
     let progress = state
         .progress
         .get(&(episode.library_item_id.clone(), episode.episode_id.clone()));
-    let art = app.gui_row_art(show.and_then(catalog_show_row_source).as_ref());
+    let art = row_art(app, show.and_then(catalog_show_row_source).as_ref());
     GuiPodcastsRow {
         id: GuiPodcastEpisodeId::new(episode.library_item_id.clone(), episode.episode_id.clone())
             .encode(),

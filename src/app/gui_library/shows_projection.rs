@@ -18,7 +18,7 @@ use super::GuiLibraryArtwork;
 use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
-use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_row_source, upcoming_row_source};
+use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_row_source, row_art, upcoming_row_source};
 use super::home::GuiArtShape;
 use super::list_sort::gui_title_sort_key;
 use super::projection::sort_letter;
@@ -217,7 +217,7 @@ impl GuiCore {
     /// for every other destination, which presents no Shows section.
     #[must_use]
     pub fn gui_shows_destination(&self) -> Option<usize> {
-        match self.app.gui_active_destination() {
+        match super::tabs::active_destination(&self.app) {
             Some(GuiDestinationKind::Shows { lib_idx }) => Some(lib_idx),
             _ => None,
         }
@@ -364,7 +364,7 @@ impl GuiCore {
                     Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
                     None => (parts.title.text.clone(), None),
                 };
-                let art = self.app.gui_row_art(emby_row_source(&episode).as_ref());
+                let art = row_art(&self.app, emby_row_source(&episode).as_ref());
                 GuiShowsRow {
                     sort_letter: sort.rail_letter(&title),
                     id: episode.id,
@@ -399,9 +399,10 @@ impl GuiCore {
                 let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
                 let series =
                     super::rows_in_view::shows_series_item(&self.app, premiere.series_id.as_str());
-                let art = self
-                    .app
-                    .gui_row_art(Some(&upcoming_row_source(premiere, series.as_ref())));
+                let art = row_art(
+                    &self.app,
+                    Some(&upcoming_row_source(premiere, series.as_ref())),
+                );
                 GuiShowsRow {
                     id: premiere.stable_key(),
                     title: premiere.series_name.clone(),
@@ -465,7 +466,7 @@ impl GuiCore {
                     sort_letter: sort_letter(effective_sort_str(item)),
                     expandable: detail.is_none_or(|detail| !detail.seasons.is_empty()),
                     seasons,
-                    art: self.app.gui_row_art(emby_row_source(item).as_ref()),
+                    art: row_art(&self.app, emby_row_source(item).as_ref()),
                     media: GuiRowMediaKind::Video,
                 }
             })

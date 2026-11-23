@@ -138,7 +138,7 @@ impl GuiCore {
     /// choice when there is one, else the first presented Shows library's, so
     /// a session that changed a resting destination still saves its view.
     fn gui_launch_shows_view(&self) -> GuiLaunchShowsView {
-        let active = match self.app.gui_active_destination() {
+        let active = match super::tabs::active_destination(&self.app) {
             Some(GuiDestinationKind::Shows { lib_idx }) => Some(lib_idx),
             _ => None,
         };
@@ -378,8 +378,11 @@ impl GuiCore {
             return;
         }
         site.install_picks(&mut self.app, &picks);
-        self.app
-            .apply_collection_at(site, CollectionOp::Restore { set });
+        super::collection_command::apply_collection_at(
+            &mut self.app,
+            site,
+            CollectionOp::Restore { set },
+        );
     }
 
     /// The presented destination a saved collection entry names (design D9),
@@ -563,7 +566,7 @@ pub(in crate::app) fn presents_open_position(app: &App, position: usize) -> bool
     position == 0
         || presented_destinations(app)
             .iter()
-            .any(|kind| app.gui_destination_position(*kind) == Some(position))
+            .any(|kind| super::tabs::destination_position(app, *kind) == Some(position))
 }
 
 /// What the launch location's first phase found (add-gui-library-panel

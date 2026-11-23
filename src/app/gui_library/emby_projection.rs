@@ -24,7 +24,7 @@ use super::GuiLibraryArtwork;
 use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
-use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source};
+use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
@@ -261,9 +261,10 @@ impl GuiCore {
     fn emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
         let set = super::emby::emby_feed_effective_set(&self.app, lib_idx);
         let folders = root_folder_names(&self.app, lib_idx);
-        let collections = self
-            .app
-            .gui_collections(GuiCollectionTarget::EmbyFeed(lib_idx));
+        let collections = super::collection_command::collections(
+            &self.app,
+            GuiCollectionTarget::EmbyFeed(lib_idx),
+        );
         let collection_names = feed_collection_names(set.as_ref(), &folders);
         let programmes: HashMap<&str, &str> =
             folders.iter().map(|(id, name)| (*id, *name)).collect();
@@ -549,7 +550,7 @@ fn plain_row(app: &App, item: &EmbyItem, sort_letter: Option<char>) -> GuiEmbyRo
         date: None,
         sort_letter,
         kind: row_kind(item),
-        art: app.gui_row_art(emby_row_source(item).as_ref()),
+        art: row_art(app, emby_row_source(item).as_ref()),
         media: emby_media_kind(item),
     }
 }
@@ -575,7 +576,7 @@ fn feed_row(
         date,
         sort_letter,
         kind: row_kind(item),
-        art: app.gui_row_art(emby_row_source(item).as_ref()),
+        art: row_art(app, emby_row_source(item).as_ref()),
         media: emby_media_kind(item),
     }
 }

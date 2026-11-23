@@ -14,11 +14,12 @@ use mbv_ui_model::music_grouping::{ArtistKey, group_album_plan, sorted_group_alb
 use mbv_ui_model::sort_filter::strip_article;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
-use super::artwork::{GuiRowArt, GuiRowMediaKind, artist_row_source};
+use super::artwork::{GuiRowArt, GuiRowMediaKind, artist_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::collection_command::GuiCollectionSite;
 use super::{GuiGroupAlbums, GuiMusicCollectionSite};
 use crate::app::App;
+use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use crate::gui::GuiCore;
 
 /// One artist row of the Music list (design D5, D7): the union's artist with
@@ -179,7 +180,8 @@ pub(in crate::app::gui_library) fn music_projection(
     // The one effective-set read the frame takes: the helpers read the set it
     // borrows, so the frame never recomputes the retention.
     let set = effective_music_set(app, lib_idx);
-    let collections = app.gui_collections(GuiCollectionTarget::Music(lib_idx));
+    let collections =
+        super::collection_command::collections(app, GuiCollectionTarget::Music(lib_idx));
     let selected_groups = selected_groups(app, lib_idx, set.as_ref());
     let union = music_union(app, lib_idx, &selected_groups);
     let artists = music_artists(app, &union);
@@ -395,11 +397,10 @@ fn music_album(app: &App, album: &EmbyItem, year: &str, name: &str) -> GuiMusicA
 /// the fallback identity — a name the Service never named — has no source.
 pub(in crate::app) fn music_artist_row_art(app: &App, key: &ArtistKey) -> GuiRowArt {
     match key {
-        ArtistKey::Service(id) => app.gui_row_art(Some(&artist_row_source(id))),
-        ArtistKey::Fallback(name) => app
-            .gui_artist_item_id(name)
+        ArtistKey::Service(id) => row_art(app, Some(&artist_row_source(id))),
+        ArtistKey::Fallback(name) => ArtistNameLookup::item_id(app, name)
             .map_or(GuiRowArt::NoSource, |id| {
-                app.gui_row_art(Some(&artist_row_source(id)))
+                row_art(app, Some(&artist_row_source(id)))
             }),
     }
 }

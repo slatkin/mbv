@@ -465,7 +465,7 @@ fn the_presented_tabs_include_the_plain_emby_libraries() {
     app.libs.push(LibraryTab::new(youtube));
     app.tab = TabSelection::EmbyLibrary(1);
 
-    let tabs = app.gui_library_tabs();
+    let tabs = gui_library_tabs(&app);
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
@@ -478,7 +478,7 @@ fn the_presented_tabs_include_the_plain_emby_libraries() {
         "the active Movies destination's tab is current"
     );
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Library { lib_idx: 1 }),
         "the Movies destination's kind is the plain Emby-library one"
     );

@@ -72,6 +72,8 @@ pub use self::gui_library::{
     GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
     artist_rows_in_view_id, playing_track_id_for_shell,
 };
+#[cfg(test)]
+pub(in crate::app) use self::gui_library::{gui_active_destination, gui_library_tabs};
 pub use self::gui_playlists::{
     GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,
     GuiPlaylistsCommand, GuiPlaylistsProjection,
