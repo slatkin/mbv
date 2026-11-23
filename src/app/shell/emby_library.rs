@@ -120,11 +120,9 @@ impl Model {
         let valid_index = self.app.emby_library_row_in_range(lib_idx, index);
         if valid_index {
             if self.app.is_feed_home_video_group_view(lib_idx) {
-                if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
-                    state.video_cursor = index;
-                }
-            } else if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                level.set_resting_cursor(index);
+                self.app.rest_feed_home_video_cursor(lib_idx, index);
+            } else {
+                self.app.rest_level_cursor(lib_idx, index);
             }
             self.app.save_default_library_position(lib_idx);
         }

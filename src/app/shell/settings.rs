@@ -239,19 +239,19 @@ impl Model {
         match request {
             ServiceRequest::RemoveEmby => {
                 self.mount_sidebar(super::SidebarId::Settings);
-                self.app.settings_destination = SettingsDestination::Services;
+                self.app.show_services_settings();
                 self.app.request_emby_removal();
                 false
             }
             ServiceRequest::TestAudiobookshelfConnection => {
                 self.mount_sidebar(super::SidebarId::Settings);
-                self.app.settings_destination = SettingsDestination::Services;
+                self.app.show_services_settings();
                 self.app.test_audiobookshelf_connection();
                 false
             }
             ServiceRequest::ReplaceAudiobookshelf => {
                 self.mount_sidebar(super::SidebarId::Settings);
-                self.app.settings_destination = SettingsDestination::Services;
+                self.app.show_services_settings();
                 self.app.route_service_action(
                     mbv_ui_model::settings::ServiceActionIntent::ReplaceAudiobookshelf,
                 );
@@ -259,7 +259,7 @@ impl Model {
             }
             ServiceRequest::RemoveAudiobookshelf => {
                 self.mount_sidebar(super::SidebarId::Settings);
-                self.app.settings_destination = SettingsDestination::Services;
+                self.app.show_services_settings();
                 self.app.route_service_action(
                     mbv_ui_model::settings::ServiceActionIntent::RemoveAudiobookshelf,
                 );
@@ -267,7 +267,7 @@ impl Model {
             }
             ServiceRequest::ActivateService(cursor) => {
                 self.mount_sidebar(super::SidebarId::Settings);
-                self.app.settings_destination = SettingsDestination::Services;
+                self.app.show_services_settings();
                 if let Some(&entry) = SERVICE_ENTRIES.get(cursor) {
                     self.app.activate_service_entry(entry);
                 }
@@ -278,10 +278,8 @@ impl Model {
                 username,
                 password,
             } => {
-                if let Some(form) = self.app.setup.emby_setup_form.as_mut() {
-                    form.fields = [server_url, username, password];
-                    form.focus = 2;
-                }
+                self.app
+                    .set_emby_setup_form_fields([server_url, username, password]);
                 self.app.submit_emby_setup();
                 false
             }
@@ -289,10 +287,8 @@ impl Model {
                 server_url,
                 api_key,
             } => {
-                if let Some(form) = self.app.setup.audiobookshelf_setup_form.as_mut() {
-                    form.fields = [server_url, api_key];
-                    form.focus = 1;
-                }
+                self.app
+                    .set_audiobookshelf_setup_form_fields([server_url, api_key]);
                 self.app.submit_audiobookshelf_setup();
                 false
             }
@@ -316,14 +312,7 @@ impl Model {
     pub(in crate::app) fn handle_settings_intent(&mut self, intent: SettingsIntent) -> bool {
         match intent {
             SettingsIntent::Back => {
-                if matches!(
-                    self.app.settings_destination(),
-                    SettingsDestination::Services
-                        | SettingsDestination::Keys
-                        | SettingsDestination::Panel
-                ) {
-                    self.app.settings_destination = SettingsDestination::Main;
-                } else {
+                if !self.app.show_main_settings_pane() {
                     self.app.close_settings();
                 }
                 false
@@ -466,7 +455,7 @@ mod tests {
     #[test]
     fn keys_destination_lists_registry_groups_rows_and_overrides() {
         let mut app = crate::app::tests::make_app_stub();
-        app.settings_destination = SettingsDestination::Keys;
+        app.seed_settings_destination_for_test(SettingsDestination::Keys);
         let mut model = Model::new(app);
         model.keybinds = mbv_keybinds::Keybinds {
             prefix: Some(Chord::parse("Ctrl+k").unwrap()),

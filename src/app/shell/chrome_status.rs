@@ -300,7 +300,7 @@ mod tests {
         #[case] state: mbv_core::service_runtime::ServiceState,
     ) {
         let mut app = make_app_stub();
-        app.audiobookshelf_runtime.state = state;
+        app.seed_audiobookshelf_service_state_for_test(state);
         let model = super::Model::new(app);
 
         let expected = service_state_color(

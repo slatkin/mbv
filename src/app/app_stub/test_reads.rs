@@ -14,6 +14,14 @@ use crate::app::gui_client_state::GuiClientState;
 /// within its line ceiling.
 mod audiobookshelf;
 
+/// The music Workspace's artist-catalogue fixture (`split-tui-gui-clients`
+/// design D4b rule 5) lives in its own child module for the same reason.
+mod artists;
+
+/// The TUI shell's Home, Feeds, and status-row fixtures (`split-tui-gui-clients`
+/// design D4b rule 5) live in their own child module for the same reason.
+mod home;
+
 /// The Feeds destination's test seeds and pushes (row 11.1) live in their own
 /// child module so this file stays within its line ceiling.
 mod gui_feeds;

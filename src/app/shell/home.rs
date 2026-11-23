@@ -269,7 +269,7 @@ mod tests {
         // observed on the wire rather than in an optimistic Client write.
         let cmd_rx = crate::app::tests::live_owner_channel(&mut app);
         let mut model = Model::new(app);
-        model.app.home_content.continue_items = make_items(3);
+        model.app.seed_home_continue_items_for_test(make_items(3));
 
         model.handle_home_request(HomeRequest::Enqueue(vec![target("id2")]));
         let appended: Vec<String> = cmd_rx
@@ -284,7 +284,7 @@ mod tests {
             .collect();
         assert_eq!(appended, vec!["id2"], "the CW enqueue resolves id2");
 
-        model.app.toasts.clear();
+        model.app.clear_toasts_for_test();
         model.handle_home_request(HomeRequest::Play(target("id0")));
         assert_eq!(model.app.newest_toast_text(), "Emby is unavailable");
     }
@@ -293,7 +293,9 @@ mod tests {
     fn continue_watching_context_menu_uses_explicit_target() {
         let mut model = Model::new(make_app_stub());
         let item = make_item("cw-target", "Movie");
-        model.app.home_content.continue_items = vec![item.clone()];
+        model
+            .app
+            .seed_home_continue_items_for_test(vec![item.clone()]);
         model.handle_home_request(HomeRequest::ContextMenu(vec![target(&item.id)]));
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay()
@@ -373,24 +375,26 @@ mod tests {
             )],
         );
         let url = "https://feeds.test/latest.xml".to_string();
-        model.app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
-            name: "Feedly".into(),
-            url: url.clone(),
-            kind: mbv_queue::FeedKind::Video,
-        }];
-        model.app.feed_tab.all_entries = vec![mbv_queue::FeedEntry {
-            guid: "entry".into(),
-            title: "Entry".into(),
-            enclosure_url: None,
-            link: None,
-            mime_type: None,
-            duration_ticks: None,
-            pub_date_secs: Some(current - day),
-            feed_kind: Some(mbv_queue::FeedKind::Video),
-            feed_id: Some(url),
-            position_ticks: 0,
-            played: false,
-        }];
+        model.app.seed_feeds_tab_for_test(
+            vec![mbv_config::FeedSubscription {
+                name: "Feedly".into(),
+                url: url.clone(),
+                kind: mbv_queue::FeedKind::Video,
+            }],
+            vec![mbv_queue::FeedEntry {
+                guid: "entry".into(),
+                title: "Entry".into(),
+                enclosure_url: None,
+                link: None,
+                mime_type: None,
+                duration_ticks: None,
+                pub_date_secs: Some(current - day),
+                feed_kind: Some(mbv_queue::FeedKind::Video),
+                feed_id: Some(url),
+                position_ticks: 0,
+                played: false,
+            }],
+        );
 
         model.push_home_content();
 
@@ -448,10 +452,7 @@ mod tests {
         let client = mbv_emby::EmbyClient::new(config.clone()).with_test_agent(http.agent());
         config.emby_setup = Some(mbv_config::EmbySetup::new("http://127.0.0.1:1", "user"));
         let mut app = make_app_stub();
-        app.config = std::sync::Arc::new(std::sync::Mutex::new(config));
-        app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
-            std::sync::Arc::new(std::sync::Mutex::new(client)),
-        );
+        app.seed_configured_emby_client_for_test(config, client);
         let mut model = Model::new(app);
 
         // `fetch_home`'s own requests, then the armed fetch's one Latest
@@ -530,7 +531,9 @@ mod tests {
                 date_added_iso(i64::try_from(current - 3 * day).unwrap()),
             )))],
         );
-        model.app.feed_tab.all_entries = vec![feed_entry("entry", current - day)];
+        model
+            .app
+            .seed_feeds_tab_for_test(Vec::new(), vec![feed_entry("entry", current - day)]);
 
         model.handle_home_request(HomeRequest::ContextMenu(vec![
             HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Emby("movie".into())),

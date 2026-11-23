@@ -129,6 +129,17 @@ impl App {
             .collect();
     }
 
+    /// Seed the Settings screen's destination, so a test opens the Keys, Panel,
+    /// or Services pane without raising the sidebar-open request the Settings
+    /// entry points raise.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_settings_destination_for_test(
+        &mut self,
+        destination: mbv_ui_model::settings::SettingsDestination,
+    ) {
+        self.settings_destination = destination;
+    }
+
     /// Seed the saved playlist list with `(id, name)` rows (row 5.5), as the
     /// Playlists section lists them.
     #[cfg(feature = "test")]

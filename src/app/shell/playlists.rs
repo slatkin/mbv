@@ -46,8 +46,7 @@ impl Model {
     pub(in crate::app) fn handle_playlists_request(&mut self, request: &ShellRequest) {
         match request {
             ShellRequest::PlaylistsBack => {
-                self.app.playlists_open = None;
-                self.app.playlists_open_items.clear();
+                self.app.close_open_playlist();
             }
             ShellRequest::PlaylistsOpen(index) => {
                 if let Some(playlist) = self.app.playlist_at(*index).cloned() {
@@ -97,8 +96,7 @@ impl Model {
             }
             ShellRequest::PlaylistsRefresh => {
                 if let Some(playlist) = self.app.playlists_open().cloned() {
-                    self.app.playlists_open = None;
-                    self.app.playlists_open_items.clear();
+                    self.app.close_open_playlist();
                     self.app.spawn_open_playlist(&playlist);
                 } else {
                     self.app.spawn_load_playlists();
@@ -128,9 +126,7 @@ mod tests {
     #[test]
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
-            mbv_ui_model::overlay::SidebarId::Playlists,
-        ));
+        app.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Playlists);
         let mut model = Model::new(app);
         model.sync_modal_requests();
         let id = ComponentId::Overlay(OverlayId::Playlists);
@@ -154,8 +150,7 @@ mod tests {
         let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(Vec::new());
         let mut playlist = make_item("Playlist", "Playlist");
         playlist.id = "pl".into();
-        app.playlists_open = Some(playlist);
-        app.playlists_open_items = ["a", "b", "c"]
+        let rows = ["a", "b", "c"]
             .into_iter()
             .map(|id| {
                 let mut item = make_item(id, "Audio");
@@ -164,6 +159,7 @@ mod tests {
                 item
             })
             .collect();
+        app.adopt_open_playlist(playlist, rows);
         (Model::new(app), cmd_rx)
     }
 

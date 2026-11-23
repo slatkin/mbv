@@ -14,7 +14,6 @@ use ratatui::layout::Rect;
 
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
-use crate::app::state::app_struct::LaunchRestore;
 use mbv_components::book_content::BookContent;
 use mbv_components::library_panel::owner::LaunchSelector;
 use mbv_components::library_panel::{LibraryContentOwner, LibraryPanel};
@@ -211,13 +210,8 @@ impl Model {
         }
         let mut key = mbv_ui_model::browse::LevelFetchKey::from_level(level);
         key.letter_filter = None;
-        if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-            level.letter_filter = None;
-            level.set_resting_cursor(0);
-            level.set_resting_scroll(0);
-            level.loading = true;
-            level.items.clear();
-            level.all_items = None;
+        if !self.app.clear_library_letter_filter(lib_idx) {
+            return;
         }
         self.app.spawn_refresh(lib_idx, 0, key);
         self.app.save_default_library_position(lib_idx);
@@ -261,7 +255,7 @@ impl Model {
             // the same path as an ordinary panel-focus change; no Queue
             // target is carried by the launch snapshot.
             self.sync_queue();
-            self.app.launch_restore = LaunchRestore::Done;
+            self.app.finish_launch_restore();
         }
     }
 

@@ -423,15 +423,11 @@ impl Model {
     /// entry behind. A non-TvShows TV tab still publishes its breakpoint: its
     /// Series rows open the Workspace at wide width.
     fn publish_wide_workspace(&mut self) {
-        self.app.tv_workspace_wide.clear();
-        let Some(index) = self.app.active_emby_library_index() else {
-            return;
-        };
-        if self.app.emby_library_exists(index)
-            && super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size())
-        {
-            self.app.tv_workspace_wide.insert(index);
-        }
+        let wide = self.app.active_emby_library_index().filter(|&index| {
+            self.app.emby_library_exists(index)
+                && super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size())
+        });
+        self.app.publish_wide_tv_workspace(wide);
     }
 
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {

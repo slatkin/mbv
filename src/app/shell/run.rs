@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::{
-    App, Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
+    App, Model, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
     push_image_protocol_facts, restore_terminal, start_quit_watchdog,
 };
 
@@ -132,7 +132,7 @@ impl Model {
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
-            self.app.mini_view_focus = PanelFocus::Queue;
+            self.app.focus_queue_for_mini_view();
         }
         if self.clamp_queue_column_width() {
             App::save_client_pref(
@@ -285,7 +285,7 @@ impl Model {
         // constructor starts the TuiRealm listener — see
         // `crate::app::init_image_protocols` (#654).
 
-        self.app.home_content.loading = true;
+        self.app.begin_home_load();
         terminal.draw(|f| self.draw_frame(f, false, false))?;
 
         self.spawn_startup_services();

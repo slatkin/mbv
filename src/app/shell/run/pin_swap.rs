@@ -5,10 +5,9 @@
 //! player-event drains hand them here first.
 
 use crate::app::QUIT_REQUESTED;
+use crate::app::QueueLink;
 use crate::app::dispatch::run_loop::teardown::save_launch_state;
 use crate::app::shell::Model;
-use mbv_ctrl::CtrlCmd;
-use mbv_player::PlayerProxy;
 use std::sync::atomic::Ordering;
 
 /// Which connected daemon link delivered a pin-swap event. The `SwapPrepared`
@@ -21,6 +20,18 @@ pub(in crate::app) enum PinSwapLink {
     Home,
 }
 
+impl PinSwapLink {
+    /// The core queue link this connection is: the active connection is the
+    /// peer link, and the suspended home connection is the local link
+    /// (`App::queue_owner_player`'s pairing).
+    fn reply_link(&self) -> QueueLink {
+        match self {
+            PinSwapLink::Active => QueueLink::Peer,
+            PinSwapLink::Home => QueueLink::Local,
+        }
+    }
+}
+
 impl Model {
     /// Handle `SwapPrepare`: save the launch state, then answer on `link`.
     pub(in crate::app) fn prepare_pin_swap(&mut self, link: &PinSwapLink) {
@@ -30,10 +41,7 @@ impl Model {
         // the save failed (design D6).
         let launch_state = self.launch_state_snapshot();
         save_launch_state(&launch_state);
-        if !self
-            .pin_swap_reply(link)
-            .send_ctrl_cmd(CtrlCmd::SwapPrepared)
-        {
+        if !self.app.reply_pin_swap_prepared(link.reply_link()) {
             // The link died after the request; the Owner's swap
             // deadline abandons the swap and notifies, so a dropped
             // reply needs no recovery here.
@@ -49,21 +57,5 @@ impl Model {
         // daemon-lifecycle "Swapped-out TUI with Stay Alive off").
         self.swapped_out_exit = true;
         QUIT_REQUESTED.store(true, Ordering::Relaxed);
-    }
-
-    /// The connection a `SwapPrepared` reply travels on: the same link that
-    /// delivered the `SwapPrepare` request.
-    fn pin_swap_reply(&self, link: &PinSwapLink) -> &PlayerProxy {
-        match link {
-            PinSwapLink::Active => &self.app.player,
-            PinSwapLink::Home => {
-                &self
-                    .app
-                    .suspended_local
-                    .as_ref()
-                    .expect("the home link delivered the pin-swap event")
-                    .player
-            }
-        }
     }
 }

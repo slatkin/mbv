@@ -91,12 +91,20 @@ mod tests {
     #[test]
     fn hidden_tab_does_not_overwrite_retained_feeds_owner() {
         let mut model = Model::new(make_app_stub());
-        model.app.tab = super::super::TabSelection::Feeds;
-        model.app.feed_tab.subscriptions = vec![subscription("Visible Feed")];
+        model
+            .app
+            .seed_active_tab_for_test(super::super::TabSelection::Feeds);
+        model
+            .app
+            .seed_feeds_tab_for_test(vec![subscription("Visible Feed")], Vec::new());
         model.sync_feeds();
 
-        model.app.tab = super::super::TabSelection::Home;
-        model.app.feed_tab.subscriptions = vec![subscription("Hidden Feed")];
+        model
+            .app
+            .seed_active_tab_for_test(super::super::TabSelection::Home);
+        model
+            .app
+            .seed_feeds_tab_for_test(vec![subscription("Hidden Feed")], Vec::new());
         model.sync_feeds();
 
         assert_eq!(subscription_names(&mut model), ["Visible Feed"]);

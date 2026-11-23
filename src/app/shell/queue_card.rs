@@ -129,9 +129,9 @@ pub(in crate::app) fn render_queue_playback_slot(
     // context menu opens, and back when it closes. The checkpoint stays
     // on the configured protocol's last paint; closing the modal
     // repaints the warm configured protocol at that same size.
-    if !model.app.dim_halfblock_forced() {
-        model.app.images.record_card_size(height, width);
-    }
+    model
+        .app
+        .record_card_size(height, width, !model.app.dim_halfblock_forced());
     if painted
         && let Some(key) = artwork_key
             .as_deref()

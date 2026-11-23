@@ -5,6 +5,7 @@
 //! cancellation is owned by `tests/lifecycle/lifecycle_launch_restore.rs`.
 
 use super::*;
+use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::playback::DestinationLatestSource;
 use crate::app::tests::render_fixtures::{make_movie_app, make_queue_app};
 use crate::app::{BrowseEvent, BrowseLevel, LibEvent, LibraryTab, TabSelection};
@@ -16,7 +17,9 @@ use mbv_queue::ServiceKind;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::browse::ServerRows;
+use mbv_ui_model::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_model::settings::{PanelFocus, PanelMode, SettingsDestination};
 use mbv_ui_model::sort_filter::{LetterFilter, LetterFilterKind};
 
 fn movies_key(library_id: &str) -> LibraryKey {

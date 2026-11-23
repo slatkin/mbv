@@ -7,7 +7,6 @@ mod tests;
 use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
-use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 
 impl Model {
@@ -217,21 +216,23 @@ impl Model {
             // Wide hero split resize: live positions do not write preferences.
             ShellRequest::ResizeListPaneLive(width) => {
                 if let Some(content_area) = self.library_panel_content_area() {
-                    self.app.list_pane_width =
+                    self.app.set_list_pane_width(
                         mbv_render::arrangements::wide_hero::normalize_list_pane_width(
                             Some(width),
                             content_area.width,
-                        );
+                        ),
+                    );
                 }
             }
             // Persist only once at release, after a changed drag.
             ShellRequest::ResizeListPaneEnd(width) => {
                 if let Some(content_area) = self.library_panel_content_area() {
-                    self.app.list_pane_width =
+                    self.app.set_list_pane_width(
                         mbv_render::arrangements::wide_hero::normalize_list_pane_width(
                             Some(width),
                             content_area.width,
-                        );
+                        ),
+                    );
                 }
                 self.save_client_list_pane_width();
             }
@@ -457,11 +458,7 @@ impl Model {
                 .emby_library_level(lib_idx)
                 .map_or(0, |level| level.items.len())
         {
-            self.app.libs[lib_idx]
-                .nav_stack
-                .last_mut()
-                .expect("validated nav stack")
-                .set_resting_cursor(index);
+            self.app.rest_level_cursor(lib_idx, index);
         }
         Some(())
     }
@@ -483,7 +480,7 @@ impl Model {
                 if self.menu_pointer_current {
                     menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
                 }
-                self.app.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+                self.app.raise_context_menu(menu);
             }
         } else {
             let slot_id = slot_ids.into_iter().next();
@@ -519,10 +516,7 @@ impl Model {
         if !self.menu_pointer_current {
             return;
         }
-        let Some(OverlayRequest::ContextMenu(menu)) = self.app.pending_overlay.as_mut() else {
-            return;
-        };
-        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
+        self.app.anchor_context_menu_at_pointer();
     }
 
     fn handle_library_row_context_menu(

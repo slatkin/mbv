@@ -269,9 +269,7 @@ impl Model {
                 .build_protocol(bare_key, suffix, &picker, img);
             self.image_protocols
                 .insert_protocol(self.app.image_cache(), bare_key, suffix, proto);
-            if let Some(entry) = self.app.images.image_mut(bare_key) {
-                entry.applied_logo_key = logo_key;
-            }
+            self.app.record_image_logo(bare_key, logo_key);
         }
         self.image_protocols
             .protocol_mut(self.app.image_cache(), bare_key, suffix)
@@ -300,13 +298,12 @@ impl Model {
     ) -> Option<String> {
         let Some(entry) = self.app.cached_image(cache_key) else {
             self.app
-                .title_log_gate
-                .log_decision(cache_key, item_kind, "NoBaseEntry", None);
+                .log_queue_title_decision(cache_key, item_kind, "NoBaseEntry", None);
             return None;
         };
         let source_dimensions = entry.dimensions();
         let Some(size) = title_protocol_size(self, cache_key, available) else {
-            self.app.title_log_gate.log_decision(
+            self.app.log_queue_title_decision(
                 cache_key,
                 item_kind,
                 "NoBaseProtocolSize",
@@ -348,7 +345,7 @@ impl Model {
             return None;
         }
         if title_protocol_size(self, &key, available).is_none() {
-            self.app.title_log_gate.log_decision(
+            self.app.log_queue_title_decision(
                 cache_key,
                 item_kind,
                 "VariantNotReady",
@@ -417,10 +414,8 @@ impl Model {
         self.image_protocols.clear_key(cache_key);
         self.image_protocols
             .insert_protocol(self.app.image_cache(), cache_key, suffix, proto);
-        if let Some(entry) = self.app.images.image_mut(cache_key) {
-            entry.cover_box = Some(box_cells);
-            entry.applied_logo_key = desired_logo_key;
-        }
+        self.app
+            .record_image_cover_box(cache_key, box_cells, desired_logo_key);
         true
     }
 

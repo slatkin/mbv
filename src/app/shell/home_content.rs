@@ -95,7 +95,7 @@ impl Model {
 
     pub(in crate::app) fn fetch_home_at_startup(&mut self) {
         let fetched_home = self.app.load_home_at_startup();
-        self.app.home_content.loading = false;
+        self.app.finish_home_load();
         match fetched_home {
             Some(content) => self.assign_home_content(content),
             None => self.push_home_content(),

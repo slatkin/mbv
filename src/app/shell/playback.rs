@@ -66,7 +66,6 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::QueueViewTestExt;
     use mbv_ui_msg::Msg;
     use rstest::rstest;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -86,7 +85,7 @@ mod tests {
         #[case] expected_context: Option<&str>,
     ) {
         let mut app = crate::app::tests::make_app_stub();
-        app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+        app.seed_playback_output_for_test(Some(mbv_ctrl::OutputState::EmbySession {
             device_id: "device-1".to_string(),
             name: "Living Room TV".to_string(),
             connection: mbv_ctrl::OutputConnection::Connected,
@@ -99,7 +98,7 @@ mod tests {
                 series_name: series_name.map(str::to_string),
                 logo_tag: None,
             }),
-        });
+        }));
 
         let parts = app.slotless_playback_title_parts().expect("title present");
 
@@ -122,13 +121,9 @@ mod tests {
         let mut app = crate::app::tests::make_app_stub();
         let mut loaded = make_item("Loaded Slot", "Movie");
         loaded.id = "loaded-slot".into();
-        app.local_view.adopt_items(vec![loaded], 0);
-        app.player.update_status(|status| {
-            status.active = true;
-            status.current_idx = 0;
-            status.queue_len = 1;
-        });
-        app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+        app.seed_local_queue_for_test(vec![loaded], 0);
+        app.seed_playing_status_for_test(0, 1);
+        app.seed_playback_output_for_test(Some(mbv_ctrl::OutputState::EmbySession {
             device_id: "device-1".to_string(),
             name: "Living Room TV".to_string(),
             connection: mbv_ctrl::OutputConnection::Connected,
@@ -141,7 +136,7 @@ mod tests {
                 series_name: None,
                 logo_tag: None,
             }),
-        });
+        }));
 
         let mut model = Model::new(app);
         let projection = model.transport_projection();

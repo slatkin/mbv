@@ -82,7 +82,7 @@ impl Model {
         };
         if intent == SavePlaylistIntent::Dismiss {
             self.dismiss_modal(&id);
-            self.app.force_clear = true;
+            self.app.request_force_clear();
             return;
         }
         let name = input.trim().to_string();
@@ -91,7 +91,7 @@ impl Model {
         }
         if rename {
             self.dismiss_modal(&id);
-            self.app.force_clear = true;
+            self.app.request_force_clear();
             if let Some(playlist_id) = rename_id {
                 self.app.spawn_rename_playlist(playlist_id, name);
             }
@@ -123,7 +123,7 @@ impl Model {
             ));
         } else {
             self.dismiss_modal(&id);
-            self.app.force_clear = true;
+            self.app.request_force_clear();
             self.app.save_queue_as_playlist(name);
         }
     }

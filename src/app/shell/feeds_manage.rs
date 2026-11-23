@@ -21,7 +21,7 @@ impl super::Model {
     /// add-attempt id counter.
     pub(in crate::app) fn open_feeds_manage(&mut self) {
         if !self.app.feeds_manage_open() {
-            self.app.feeds_manage = Some(mbv_ui_model::feeds_manage::FeedsManagePopup::new());
+            self.app.open_feeds_manage_channel();
         }
         let id = ComponentId::Popup(PopupId::FeedManage);
         if !self.application.mounted(&id) {
@@ -104,7 +104,7 @@ impl super::Model {
     pub(in crate::app) fn dismiss_feeds_manage(&mut self) {
         let id = ComponentId::Popup(PopupId::FeedManage);
         self.dismiss_focus_overlay(&id);
-        self.app.feeds_manage = None;
+        self.app.close_feeds_manage_channel();
     }
 
     fn start_add_feed(&mut self) {
@@ -144,9 +144,7 @@ impl super::Model {
     /// an in-flight add, invalidates its pending id so the eventual fetch
     /// result is dropped as stale by `drain_feed_add_results`.
     pub(in crate::app) fn cancel_feed_form(&mut self) {
-        if let Some(popup) = &mut self.app.feeds_manage {
-            popup.pending_add = None;
-        }
+        self.app.cancel_feed_add();
         if let Some(component) = self.feeds_manage_component_mut() {
             component.set_pending_add(None);
             component.set_stage(FeedsManageStage::List);

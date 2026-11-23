@@ -611,17 +611,16 @@ impl Model {
         {
             return Ok(());
         }
-        if self.app.force_clear() {
-            self.app.force_clear = false;
-            if let Err(e) = terminal.clear() {
-                tracing::error!(
-                    name: "run_loop.terminal_clear.failed",
-                    target: "run_loop",
-                    { error = %e, error.kind = ?e.kind() },
-                    "terminal clear failed"
-                );
-                return Err(e.into());
-            }
+        if self.app.take_force_clear()
+            && let Err(e) = terminal.clear()
+        {
+            tracing::error!(
+                name: "run_loop.terminal_clear.failed",
+                target: "run_loop",
+                { error = %e, error.kind = ?e.kind() },
+                "terminal clear failed"
+            );
+            return Err(e.into());
         }
         if self.app.visualizer_worker().is_some() {
             self.app.sync_visualizer();

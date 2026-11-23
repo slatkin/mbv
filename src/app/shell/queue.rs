@@ -14,13 +14,13 @@ impl Model {
         // D2 (`hide-empty-queue-column`): when the queue column is hidden
         // because the displayed queue emptied, the stored focus cannot stay
         // on Queue -- it would resurface when the queue refills and yank
-        // focus away from the library the user is browsing. Assign the field
-        // directly: `set_panel_focus` would run the queue initial-item path
-        // for a queue that is about to be left.
+        // focus away from the library the user is browsing. The write skips
+        // `set_panel_focus`'s queue initial-item path for a queue that is
+        // about to be left.
         if self.app.queue_column_hidden_empty()
             && self.app.stored_panel_focus() == PanelFocus::Queue
         {
-            self.app.panel_focus = PanelFocus::Library;
+            self.app.leave_emptied_queue_focus();
         }
         self.mount_queue_panel();
         // The projection lives once on the `App` (extract-client-core design
@@ -46,8 +46,7 @@ impl Model {
             // artwork can no longer carry the title, so the header is its
             // only home again — the carried-over site must not leave the
             // header on its brand row over a slot that paints nothing.
-            self.app.queue_card_projection.title_site =
-                mbv_ui_model::playback::NowPlayingTitleSite::Header;
+            self.app.move_queue_card_title_to_header();
         }
         self.push_queue_projection(update);
     }
@@ -65,7 +64,7 @@ impl Model {
         record: &crate::app::state::projection::card::QueueTitleRecord,
         resizing: bool,
     ) {
-        self.app.queue_card_projection.plain_cache_key = Some(record.base_key.clone());
+        self.app.set_queue_card_plain_key(record.base_key.clone());
         if resizing {
             return;
         }
@@ -77,8 +76,8 @@ impl Model {
             record.logo_cache_key.as_deref(),
             &record.item_kind,
         );
-        if variant.is_some() {
-            self.app.queue_card_projection.cache_key = variant;
+        if let Some(variant) = variant {
+            self.app.set_queue_card_variant_key(variant);
         }
     }
 
@@ -201,9 +200,9 @@ impl Model {
                     (status.active, status.current_idx)
                 };
                 if active {
-                    self.app.playback_queue_mut().set_cursor(current_idx);
+                    self.app.move_queue_cursor_to_playing_slot(current_idx);
                     // Jump-to-now-playing is an explicit, authoritative move.
-                    self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_link());
+                    self.app.reanchor_queue_cursor_to_playing();
                 } else {
                     self.app
                         .flash("Nothing is playing".into(), ToastSeverity::Error);

@@ -97,7 +97,7 @@ impl Model {
             .app
             .validate_grouped_music_landing(&library_id, &nav_stack)
         {
-            self.app.pending_track_selection = None;
+            self.app.abandon_track_selection();
             self.app
                 .handle_lib_event(super::LibEvent::Error(error.to_string()), None);
             return;
@@ -386,9 +386,8 @@ impl Model {
 mod tests {
     use crate::app::MusicEvent;
     use crate::app::shell::Model;
-    use crate::app::tests::render_fixtures::{make_music_group_app, ready_emby_runtime};
+    use crate::app::tests::render_fixtures::make_music_group_app;
     use mbv_components::library_panel::owner::LibraryContentOwner;
-    use std::time::Instant;
     use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
     /// Regression: `push_music_workspace_content` must not run its
@@ -398,35 +397,8 @@ mod tests {
     /// track fetch for whatever item was selected on ANY Emby library tab.
     /// Positive control for the guard above: a genuine Music album-folder
     /// selection still fetches the selected album's tracks.
-    /// A settled one-album catalog whose only album carries a Service
-    /// (`ArtistItems`) identity, with images enabled and a configured
-    /// (unroutable) client: the loading reservations the artist-detail
-    /// requests make are observable synchronously.
     fn settled_service_artist_app() -> crate::app::App {
-        let mut app = make_music_group_app();
-        app.images.configure_protocol(None, true);
-        app.emby_runtime = ready_emby_runtime();
-        {
-            let level = app.libs[0].nav_stack.last_mut().unwrap();
-            for item in &mut level.items {
-                item.artist_items = vec![mbv_emby_model::EmbyArtistRef {
-                    name: "Alpha".into(),
-                    id: "artist-alpha".into(),
-                }];
-            }
-            let mut catalog = mbv_ui_model::music_grouping::build_grouped_album_catalog(
-                &level.items,
-                &std::collections::HashMap::<String, String>::default(),
-            );
-            catalog.revision = 7;
-            catalog.parent_id = level.parent_id.clone();
-            level.music_grouping = Some(mbv_ui_model::music_grouping::MusicGroupingState {
-                revision: 7,
-                candidate: None,
-                settled: Some(catalog),
-            });
-        };
-        app
+        crate::app::App::settled_service_artist_app_for_test()
     }
 
     fn music_destination() -> mbv_ui_model::library::LibraryKey {
@@ -439,7 +411,9 @@ mod tests {
 
     fn artist_focused_model() -> (Model, mbv_core::service_runtime::SetupGeneration) {
         let mut model = Model::new(settled_service_artist_app());
-        model.app.panel_focus = mbv_ui_model::settings::PanelFocus::Library;
+        model
+            .app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         model.sync_mounted_surfaces();
         model
             .test_music_owner_mut()
@@ -495,8 +469,7 @@ mod tests {
             &mut tv_resize,
         );
         assert!(model.app.artist_detail_pending(&key));
-        model.app.artist_detail_loading.remove(&key);
-        model.app.artist_detail_cache.insert(
+        model.app.settle_artist_detail(
             key,
             mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry::default(),
         );
@@ -581,7 +554,7 @@ mod tests {
     #[test]
     fn music_push_defers_album_track_fetch_while_navigating() {
         let mut app = make_music_group_app();
-        app.emby_runtime = ready_emby_runtime();
+        app.adopt_ready_emby_runtime_for_test();
         let mut model = Model::new(app);
 
         // Idle navigation: the push starts the selected album's track fetch.
@@ -596,7 +569,7 @@ mod tests {
         // and an artist root arms the ungated fallback aggregation instead of
         // the gated selection fetch. With the album leaf selected and recent
         // navigation, the pushed re-fetch must stay deferred.
-        model.app.album_tracks_loading.clear();
+        model.app.abandon_album_tracks_fetch("album-1");
         let owner = model.test_music_owner_mut();
         owner.on_key(&KeyEvent {
             code: Key::Right,
@@ -606,7 +579,7 @@ mod tests {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
         });
-        model.app.last_nav_at = Instant::now();
+        model.app.stamp_navigation();
         model.push_music_workspace_content();
         assert!(
             !model.app.album_tracks_any_loading(),

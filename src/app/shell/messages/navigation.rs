@@ -117,8 +117,7 @@ impl super::super::Model {
                 self.push_active_emby_library_owner_content();
             }
             ShellRequest::ContextMenuDismiss => {
-                self.app.pending_overlay =
-                    Some(mbv_ui_model::overlay::OverlayRequest::DismissContextMenu);
+                self.app.dismiss_context_menu();
             }
             // Search sidebar: dismiss (Esc/Backspace-on-empty).
             // The component owns the state; the shell unmounts it.

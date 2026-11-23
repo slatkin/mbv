@@ -357,10 +357,9 @@ impl Model {
     /// unavoidable, and the prefix chord performs no other action at the
     /// router.
     pub(in crate::app) fn arm_prefix_mode(&mut self) {
-        if self.app.prefix_armed() {
+        if !self.app.arm_prefix_mode() {
             return;
         }
-        self.app.prefix_armed = true;
         self.focus_stack.hold_focus();
         self.apply_focus_stack();
     }
@@ -370,10 +369,9 @@ impl Model {
     /// arm displaced. A mouse-event disarm restores it too, so the event is
     /// handled exactly as if prefix mode had never been armed.
     pub(in crate::app) fn disarm_prefix_mode(&mut self) {
-        if !self.app.prefix_armed() {
+        if !self.app.disarm_prefix_mode() {
             return;
         }
-        self.app.prefix_armed = false;
         self.focus_stack.release_focus();
         self.apply_focus_stack();
     }

@@ -16,16 +16,13 @@
 //! saved-state clear runs last, after every live write, so a later sync
 //! cannot recreate what it cleared.
 
-use super::{Model, PanelFocus, PanelMode};
+use super::Model;
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::app_struct::LaunchRestore;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::queue::QueueComponent;
 use mbv_render::arrangements::queue::normalize_queue_column_width;
 
-use mbv_ui_model::layout::LEFT_WIDTH_DEFAULT;
-use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::{ComponentId, PopupId};
 
 impl Model {
@@ -38,7 +35,7 @@ impl Model {
         if normalized == self.app.queue_column_width() {
             return false;
         }
-        self.app.queue_column_width = normalized;
+        self.app.set_queue_column_width(normalized);
         true
     }
 
@@ -67,18 +64,10 @@ impl Model {
     /// default destination is selected. Launch restoration is abandoned
     /// first, so a catalog arrival racing the reset cannot re-settle it.
     fn abandon_pending_ui_intents(&mut self) {
-        self.app.launch_restore = LaunchRestore::Done;
-        self.app.pending_navigate_tab_switch = None;
-        self.app.pending_series_landing = None;
-        self.app.pending_series_handoff = None;
-        self.app.pending_track_selection = None;
-        self.app.pending_queue_cursor_reanchor = None;
-        self.app.pending_queue_surface_reset = false;
-        self.app.pending_overlay = None;
-        self.app.confirm_logout = false;
-        // Prefix capture: the armed bit and the core focus stack's hold lift
-        // together, and the next focus step re-derives the focus.
-        self.app.prefix_armed = false;
+        self.app.abandon_pending_ui_intents();
+        // Prefix capture: the core's armed bit lifted with the intents above,
+        // so the focus stack's hold lifts here, and the next focus step
+        // re-derives the focus.
         self.focus_stack.release_focus();
         // Shell-owned transient UI intent (selection summaries, context menu,
         // cross-surface selection hand-offs, inline-search/track focus).
@@ -104,18 +93,11 @@ impl Model {
     /// focus rule: ordinary two-panel geometry focuses the Library; the
     /// geometry-forced Mini keeps its startup Queue focus.
     fn restore_default_presentation_layout(&mut self) {
-        self.app.panel_mode = PanelMode::default();
-        self.app.panel_focus = PanelFocus::Library;
-        self.app.mini_view_focus = PanelFocus::Queue;
-        self.app.queue_column_width = LEFT_WIDTH_DEFAULT;
+        self.app.reset_presentation();
         self.clamp_queue_column_width();
-        self.app.list_pane_width = None;
         self.save_client_list_pane_width();
-        self.app.visual_slot_hidden = false;
-        self.app.visualizer_enabled = false;
         self.app.stop_visualizer_capture();
         self.tab_scroll = 0;
-        self.app.settings_destination = SettingsDestination::Main;
     }
 
     /// Dismiss every transient overlay through the existing `TuiRealm` lifecycle
