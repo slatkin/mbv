@@ -229,10 +229,10 @@ impl GuiCore {
     /// `lib_idx` that names no Shows library projects the empty projection.
     #[must_use]
     pub fn gui_shows_projection(&mut self, lib_idx: usize) -> GuiShowsProjection {
-        if !self.app.gui_tv_library(lib_idx) {
+        if !super::tv::tv_library(&self.app, lib_idx) {
             return GuiShowsProjection::default();
         }
-        let view = self.app.gui_shows_view(lib_idx);
+        let view = super::shows::shows_view(&self.app, lib_idx);
         let mut sort_frame = None;
         let (series, rows, selected, hero, workspace_loading, loading) = match view {
             GuiShowsView::All => {
@@ -274,8 +274,8 @@ impl GuiCore {
                     .or_else(|| rows.first().map(|row| row.id.clone()));
                 let hero = selected
                     .as_ref()
-                    .and_then(|id| self.app.gui_shows_new_item(id))
-                    .map(|item| self.app.gui_shows_flat_hero(&item));
+                    .and_then(|id| super::shows::shows_new_item(&self.app, id))
+                    .map(|item| super::shows::shows_flat_hero(&mut self.app, &item));
                 let loading = self.app.libs.get(lib_idx).is_some_and(|lib| {
                     !self
                         .app
@@ -525,7 +525,7 @@ pub(in crate::app) fn shows_default_series(app: &App, lib_idx: usize) -> Option<
 /// only the core's library state, so it is a core function the projection and
 /// the destination's load site share.
 pub(in crate::app) fn shows_root_needs_load(app: &App, lib_idx: usize) -> bool {
-    if !app.gui_tv_library(lib_idx) {
+    if !super::tv::tv_library(app, lib_idx) {
         return false;
     }
     if app.libs[lib_idx].nav_stack.is_empty() {
@@ -541,8 +541,8 @@ pub(in crate::app) fn shows_root_needs_load(app: &App, lib_idx: usize) -> bool {
 /// library state and the destination's cached episodes, so it is a core
 /// function the Hero, the row art, and the play paths share.
 pub(in crate::app) fn shows_item(app: &App, lib_idx: usize, item_id: &str) -> Option<EmbyItem> {
-    match app.gui_shows_view(lib_idx) {
-        GuiShowsView::New => return app.gui_shows_new_item(item_id),
+    match super::shows::shows_view(app, lib_idx) {
+        GuiShowsView::New => return super::shows::shows_new_item(app, item_id),
         GuiShowsView::Upcoming => return None,
         GuiShowsView::All => {}
     }

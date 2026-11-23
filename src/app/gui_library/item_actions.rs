@@ -217,10 +217,8 @@ pub(in crate::app::gui_library) fn library_item(
 ) -> Option<(usize, EmbyItem)> {
     for (lib_idx, lib) in app.libs.iter().enumerate() {
         let stored = stored_albums(app, lib_idx).find(|album| album.id == item_id);
-        let emby_root = || {
-            app.gui_stored_emby_root_items(lib_idx)
-                .find(|item| item.id == item_id)
-        };
+        let emby_root =
+            || super::emby::stored_emby_root_items(app, lib_idx).find(|item| item.id == item_id);
         let browsed = || {
             lib.nav_stack
                 .iter()

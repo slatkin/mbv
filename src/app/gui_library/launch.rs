@@ -65,7 +65,7 @@ impl GuiCore {
         // lists are requested now, once per launch (gui-collection-dropdown
         // design D9). Both requests are idempotent, so a later catalog landing
         // re-requests nothing.
-        self.app.spawn_gui_shows_sections();
+        super::shows::spawn_shows_sections(&mut self.app);
         self.restore_gui_shows_view(state.shows_view);
         GuiLaunchOpen::Opened(self.gui_launch_destination())
     }
@@ -129,7 +129,7 @@ impl GuiCore {
                 continue;
             };
             if !self.app.gui.shows_views.contains_key(&lib_idx) {
-                self.app.set_gui_shows_view(lib_idx, shows_view(view));
+                self.set_gui_shows_view(lib_idx, shows_view(view));
             }
         }
     }
@@ -153,7 +153,7 @@ impl GuiCore {
                 })
         });
         shows.map_or(GuiLaunchShowsView::All, |lib_idx| {
-            launch_shows_view(self.app.gui_shows_view(lib_idx))
+            launch_shows_view(super::shows::shows_view(&self.app, lib_idx))
         })
     }
 

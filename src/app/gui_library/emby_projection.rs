@@ -178,7 +178,7 @@ impl GuiCore {
     /// anyway.
     #[must_use]
     pub fn gui_emby_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
-        if !self.app.gui_emby_library(lib_idx) {
+        if !super::emby::emby_library(&self.app, lib_idx) {
             return GuiEmbyProjection::default();
         }
         let projection = if self.app.is_feed_home_video_library(lib_idx) {
@@ -260,7 +260,7 @@ impl GuiCore {
     /// read the set it borrows — and the programme lookup's id-to-name map is
     /// built once, so a row's programme is one hash probe.
     fn emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
-        let set = self.app.gui_emby_feed_effective_set(lib_idx);
+        let set = super::emby::emby_feed_effective_set(&self.app, lib_idx);
         let folders = root_folder_names(&self.app, lib_idx);
         let collections = self
             .app
@@ -377,11 +377,11 @@ impl GuiCore {
 /// the play and select paths reach through the App they already have.
 pub(in crate::app) fn emby_item(app: &App, lib_idx: usize, item_id: &str) -> Option<EmbyItem> {
     if app.is_feed_home_video_library(lib_idx) {
-        let set = app.gui_emby_feed_effective_set(lib_idx);
+        let set = super::emby::emby_feed_effective_set(app, lib_idx);
         let (items, _) = feed_gathered(app, lib_idx, set.as_ref());
         return items.into_iter().find(|item| item.id == item_id).cloned();
     }
-    app.gui_stored_emby_root_items(lib_idx)
+    super::emby::stored_emby_root_items(app, lib_idx)
         .find(|item| item.id == item_id)
         .cloned()
 }

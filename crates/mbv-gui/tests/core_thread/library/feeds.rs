@@ -9,7 +9,7 @@
 //! channel, so no request leaves the process and no worker outlives the
 //! assertion.
 
-use mbv::ClientTickHost;
+use mbv::{ClientTickHost, GuiCore};
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiFeedsDetail, GuiFeedsList, GuiLibraryDetail,
@@ -43,9 +43,7 @@ fn a_feed_fetch_result_lands_on_the_app_through_the_gui_tick() {
 
     assert!(test.core.step(), "the core thread never quits mid-drain");
 
-    let app = test.core.app_mut();
-    let guids: Vec<String> = app
-        .gui_feeds_entries()
+    let guids: Vec<String> = core_entries(test.core.app_mut())
         .iter()
         .map(|entry| entry.guid.clone())
         .collect();
@@ -54,6 +52,15 @@ fn a_feed_fetch_result_lands_on_the_app_through_the_gui_tick() {
         ["a-new", "b-mid", "a-old", "b-undated"],
         "the tick's drain landed both fetches, merged newest first with the undated entry last"
     );
+}
+
+/// The Feeds entries over the App the tick drained into: the GUI core's own
+/// read, run through a core over that App.
+fn core_entries(app: &mut mbv::App) -> Vec<mbv_queue::FeedEntry> {
+    let core = GuiCore::new(std::mem::replace(app, mbv_gui::test_support::handoff_app()));
+    let entries = core.gui_feeds_entries().into_iter().cloned().collect();
+    *app = core.into_app();
+    entries
 }
 
 /// A core over an App with no Service library and two configured

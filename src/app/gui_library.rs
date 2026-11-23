@@ -52,13 +52,20 @@ pub use self::collection::{
 use self::collection_command::CollectionOp;
 use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
-pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
+pub(in crate::app) use self::emby::{
+    GuiEmbyRootItems, GuiEmbyRootItemsEvent, handle_emby_root_items,
+    handle_feed_home_video_selection_failed,
+};
 pub use self::emby_projection::{
     GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
+#[cfg(test)]
+pub(in crate::app) use self::feeds::{feeds_effective_set, feeds_entries, feeds_picked_entry};
+#[cfg(test)]
+pub(in crate::app) use self::feeds_projection::feeds_projection;
 pub use self::feeds_projection::{
     GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, gui_feeds_platform,
 };
@@ -84,7 +91,9 @@ pub use self::projection::{
 pub(in crate::app) use self::request::GuiSectionRequest;
 pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
-pub(in crate::app) use self::shows::GuiShowsNewEvent;
+#[cfg(test)]
+pub(in crate::app) use self::shows::shows_view;
+pub(in crate::app) use self::shows::{GuiShowsNewEvent, handle_shows_new};
 pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
@@ -347,7 +356,7 @@ impl GuiCore {
                 self.app.apply_gui_list_sort(target, sort);
             }
             GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
-                self.app.set_gui_shows_view(lib_idx, view);
+                self.set_gui_shows_view(lib_idx, view);
             }
             GuiLibraryCommand::ShowDetail { item_id } => {
                 self.show_gui_library_detail(&item_id);
@@ -398,48 +407,48 @@ impl GuiCore {
             }
             GuiLibraryCommand::HomeQueue { row } => self.enqueue_gui_home_row(&row, "homeQueue"),
             GuiLibraryCommand::ShowsSelect { lib_idx, row } => {
-                self.app.select_gui_shows_row(lib_idx, &row);
+                self.select_gui_shows_row(lib_idx, &row);
             }
             GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
-                self.app.gui_tv_select_season(lib_idx, &season_id);
+                self.gui_tv_select_season(lib_idx, &season_id);
             }
             GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
-                self.app.play_gui_shows_item(lib_idx, &item_id);
+                self::shows::play_shows_item(&mut self.app, lib_idx, &item_id);
             }
             GuiLibraryCommand::ShowsPlayNext { lib_idx, item_id } => {
-                self.app.play_next_gui_shows_item(lib_idx, &item_id);
+                self::shows::play_next_shows_item(&mut self.app, lib_idx, &item_id);
             }
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
-                self.app.enqueue_gui_shows_item(lib_idx, &item_id);
+                self::shows::enqueue_shows_item(&mut self.app, lib_idx, &item_id);
             }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => {
-                self.app.gui_emby_select(lib_idx, &row);
+                self.gui_emby_select(lib_idx, &row);
             }
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => {
-                self.app.play_gui_emby_item(lib_idx, &item_id);
+                self.play_gui_emby_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::EmbyPlayNext { lib_idx, item_id } => {
-                self.app.play_next_gui_emby_item(lib_idx, &item_id);
+                self.play_next_gui_emby_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
-                self.app.enqueue_gui_emby_item(lib_idx, &item_id);
+                self.enqueue_gui_emby_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::AbsSelect { lib_idx, row } => {
-                self.app.gui_abs_select(lib_idx, &row);
+                self.gui_abs_select(lib_idx, &row);
             }
             // The Audiobookshelf destinations' commands (rows 9.1, 10.1): the
             // book list's play, chapter, and enqueue, and the podcast list's
             // select, play, and enqueue.
             GuiLibraryCommand::AbsPlay { lib_idx, item_id } => {
-                self.app.play_gui_abs_book(lib_idx, &item_id);
+                self.play_gui_abs_book(lib_idx, &item_id);
             }
             GuiLibraryCommand::AbsPlayChapter {
                 lib_idx,
                 book_id,
                 chapter,
-            } => self.app.play_gui_abs_chapter(lib_idx, &book_id, chapter),
+            } => self.play_gui_abs_chapter(lib_idx, &book_id, chapter),
             GuiLibraryCommand::AbsQueue { lib_idx, item_id } => {
-                self.app.enqueue_gui_abs_book(lib_idx, &item_id);
+                self.enqueue_gui_abs_book(lib_idx, &item_id);
             }
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
                 self.select_gui_podcast_row(lib_idx, &row);
@@ -452,9 +461,9 @@ impl GuiCore {
             }
             // The Feeds destination's own commands (row 11.1): the one feed
             // tab the Client holds, so no library index rides them.
-            GuiLibraryCommand::FeedsSelect { row } => self.app.gui_feeds_select(&row),
-            GuiLibraryCommand::FeedsPlay { item_id } => self.app.play_gui_feed_row(&item_id),
-            GuiLibraryCommand::FeedsQueue { item_id } => self.app.enqueue_gui_feed_row(&item_id),
+            GuiLibraryCommand::FeedsSelect { row } => self.gui_feeds_select(&row),
+            GuiLibraryCommand::FeedsPlay { item_id } => self.play_gui_feed_row(&item_id),
+            GuiLibraryCommand::FeedsQueue { item_id } => self.enqueue_gui_feed_row(&item_id),
             // The Search field's commands (design D12, row 12.1): the field
             // is cross-destination, so no library index rides them.
             GuiLibraryCommand::SearchQuery { query } => self.app.gui_search_query(query),
@@ -532,10 +541,10 @@ impl GuiCore {
             }
             // Feeds' entries ride the shared startup fetch, so its pass is a
             // no-op and its open only reports an absent tab.
-            Some(GuiDestinationKind::Feeds) => self.app.gui_feeds_open(),
-            Some(GuiDestinationKind::Shows { lib_idx }) => self.app.gui_tv_open(lib_idx),
-            Some(GuiDestinationKind::Library { lib_idx }) => self.app.gui_emby_open(lib_idx),
-            Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.app.gui_abs_open(lib_idx),
+            Some(GuiDestinationKind::Feeds) => self.gui_feeds_open(),
+            Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
+            Some(GuiDestinationKind::Library { lib_idx }) => self.gui_emby_open(lib_idx),
+            Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.gui_abs_open(lib_idx),
             Some(GuiDestinationKind::Podcasts { lib_idx }) => {
                 self.gui_podcast_open(lib_idx);
             }

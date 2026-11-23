@@ -20,7 +20,7 @@ impl ClientLibraryStores for GuiLibraryStores {
         lib_idx: usize,
         target: &FeedHomeVideoSelection,
     ) -> bool {
-        app.gui_emby_feed_wants_target(lib_idx, target)
+        super::emby::emby_feed_wants_target(app, lib_idx, target)
     }
 
     fn apply(&mut self, app: &mut App, effect: ClientLibraryEffect) {

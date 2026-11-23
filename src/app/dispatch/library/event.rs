@@ -73,11 +73,15 @@ impl App {
             LibEvent::GuiGroupAlbums(event) => self.handle_gui_group_albums(event),
             // The GUI Library's root-list store owns this event (add-gui-
             // library-panel design D12, row 8.1); the TUI never starts one.
-            LibEvent::GuiEmbyRootItems(event) => self.handle_gui_emby_root_items(event),
+            LibEvent::GuiEmbyRootItems(event) => {
+                crate::app::gui_library::handle_emby_root_items(self, event);
+            }
             // The GUI Shows New list's store owns this event
             // (gui-collection-dropdown design D9); only the GUI Client's launch
             // starts one, so the TUI never receives it.
-            LibEvent::GuiShowsNew(event) => self.handle_gui_shows_new(event),
+            LibEvent::GuiShowsNew(event) => {
+                crate::app::gui_library::handle_shows_new(self, event);
+            }
             // A feed-group target's failed fetch (gui-collection-dropdown
             // design D3): the GUI Library's store records the terminal failure
             // mark its shown pass honours, and the shared in-flight mark
@@ -86,7 +90,9 @@ impl App {
             // as the `LibEvent::Error` arm this fetch used to send did.
             LibEvent::FeedHomeVideoSelectionFailed(event) => {
                 self.handle_error(&event.error);
-                self.handle_feed_home_video_selection_failed(event, stores);
+                crate::app::gui_library::handle_feed_home_video_selection_failed(
+                    self, event, stores,
+                );
             }
             // A `ModelContent` event's App-side half is
             // `handle_model_content_event`: both Clients' drains run it, and

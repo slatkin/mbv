@@ -111,7 +111,7 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows() {
     );
     let mut app = tv_app(&http);
 
-    app.gui_tv_open(0);
+    gui_tv_open(&mut app, 0);
     land(&mut app);
 
     assert_eq!(
@@ -152,9 +152,9 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
     // The series list is already the library's mode, so the open asks for no
     // load and the scripted answers belong to the detail fetch alone.
     app.libs[0].tv_content_mode = Some(TvContentMode::All);
-    app.gui_tv_open(0);
+    gui_tv_open(&mut app, 0);
 
-    app.gui_tv_select_series(0, "series-a");
+    gui_tv_select_series(&mut app, 0, "series-a");
     // The detail completion, then its own first-season fetch: drained in
     // order, so the selected season's fetch alone answers the next response.
     land(&mut app);
@@ -177,7 +177,7 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
         "the season pills start on the first season"
     );
 
-    app.gui_tv_select_season(0, "season-2");
+    gui_tv_select_season(&mut app, 0, "season-2");
     land(&mut app);
 
     let detail = app

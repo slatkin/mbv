@@ -170,7 +170,7 @@ impl GuiCore {
     /// frame's gate excludes that destination anyway.
     #[must_use]
     pub fn gui_audiobooks_projection(&mut self, lib_idx: usize) -> GuiAudiobooksProjection {
-        if !self.app.gui_abs_book_library(lib_idx) {
+        if !super::audiobooks::abs_book_library(&self.app, lib_idx) {
             return GuiAudiobooksProjection::default();
         }
         let Some(state) = self.app.audiobookshelf_book_browse.get(lib_idx) else {
@@ -209,9 +209,7 @@ impl GuiCore {
             .into_iter()
             .map(|book| book_row(&self.app, book, sort))
             .collect();
-        let selected = self
-            .app
-            .gui_abs_effective_pick(lib_idx)
+        let selected = super::audiobooks::abs_effective_pick(&self.app, lib_idx)
             .filter(|pick| rows.iter().any(|row| &row.id == pick));
         let workspace_loading = selected
             .as_deref()

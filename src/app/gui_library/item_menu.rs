@@ -244,7 +244,7 @@ fn item_target(app: &App, item_id: &str) -> Option<GuiLibraryMenuTarget> {
             }
         }
         Some(GuiDestinationKind::Feeds) => {
-            if let Some(entry) = app.gui_feed_entry(item_id) {
+            if let Some(entry) = super::feeds::feed_entry(app, item_id) {
                 return Some(GuiLibraryMenuTarget::Feed(entry));
             }
         }
@@ -259,7 +259,7 @@ fn item_target(app: &App, item_id: &str) -> Option<GuiLibraryMenuTarget> {
             super::item_actions::audiobookshelf_target(app, item_id)
                 .map(GuiLibraryMenuTarget::Audiobookshelf)
         })
-        .or_else(|| app.gui_feed_entry(item_id).map(GuiLibraryMenuTarget::Feed))
+        .or_else(|| super::feeds::feed_entry(app, item_id).map(GuiLibraryMenuTarget::Feed))
 }
 
 /// An Emby Library row's menu target: the item's own library store.

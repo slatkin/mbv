@@ -391,7 +391,7 @@ fn the_shows_view_survives_a_restart() {
         crate::app::tests::open_launch_destination(&mut restored, &loaded),
         GuiLaunchOpen::Opened(_)
     ));
-    assert_eq!(restored.gui_shows_view(0), GuiShowsView::Upcoming);
+    assert_eq!(gui_shows_view(&restored, 0), GuiShowsView::Upcoming);
 
     let old = mbv_config::GuiLaunchState {
         version: mbv_config::GUI_LAUNCH_STATE_VERSION,
@@ -406,5 +406,5 @@ fn the_shows_view_survives_a_restart() {
     library.collection_type = "tvshows".into();
     fresh.libs.push(crate::app::LibraryTab::new(library));
     crate::app::tests::open_launch_destination(&mut fresh, &old);
-    assert_eq!(fresh.gui_shows_view(0), GuiShowsView::All);
+    assert_eq!(gui_shows_view(&fresh, 0), GuiShowsView::All);
 }

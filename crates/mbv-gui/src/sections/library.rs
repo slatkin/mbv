@@ -150,7 +150,7 @@ fn podcasts_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, Gu
 /// The Feeds destination's parts (design D12, row 11.1). The entries arrive
 /// from the shared startup fetch.
 fn feeds_parts(core: &mut GuiCore) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = core.app_mut().gui_feeds_projection();
+    let projection = core.gui_feeds_projection();
     (
         GuiDestinationList::Feeds(GuiFeedsList::from_projection(&projection)),
         GuiLibraryDetail::Feeds(GuiFeedsDetail::from_projection(&projection)),

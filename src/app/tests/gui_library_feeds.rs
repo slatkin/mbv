@@ -73,7 +73,7 @@ fn the_feeds_platform_follows_the_checked_subscriptions(
     }
 
     assert_eq!(
-        gui_feeds_platform(&app.gui_feeds_projection().collections),
+        gui_feeds_platform(&gui_feeds_projection(&app).collections),
         expected,
         "the checked subscriptions decide the Feed platform"
     );
@@ -88,7 +88,7 @@ fn all_over_youtube_only_subscriptions_shares_no_feeds_platform() {
     app.seed_gui_feeds_for_test(&[("YouTube A", YOUTUBE_FEED), ("YouTube B", YOUTUBE_FEED_B)]);
     app.tab = TabSelection::Feeds;
 
-    let collections = app.gui_feeds_projection().collections;
+    let collections = gui_feeds_projection(&app).collections;
 
     assert!(
         collections.all,
@@ -110,7 +110,7 @@ fn toggle_subscription(app: &mut App, subscription: &str) {
 
 /// The entry guids the App's selected pill lists, in order.
 fn listed_guids(app: &App) -> Vec<String> {
-    app.gui_feeds_entries()
+    gui_feeds_entries(app)
         .iter()
         .map(|entry| entry.guid.clone())
         .collect()
@@ -219,7 +219,7 @@ fn a_saved_feeds_location_applies_no_saved_selection() {
         "the Feeds destination needs no retry"
     );
     assert_eq!(
-        app.gui_feeds_effective_set().as_ref(),
+        gui_feeds_effective_set(&app).as_ref(),
         &GuiCollectionSet::All,
         "the launch file saves no collection, so the restored tab opens on All"
     );
@@ -233,14 +233,14 @@ fn a_checked_subscription_is_stored_and_a_stale_one_changes_nothing() {
 
     toggle_subscription(&mut app, FEED_B);
     assert_eq!(
-        app.gui_feeds_effective_set().as_ref(),
+        gui_feeds_effective_set(&app).as_ref(),
         &GuiCollectionSet::Checked(vec![FEED_B.into()]),
         "the checked subscription is stored"
     );
 
     toggle_subscription(&mut app, "https://example.test/gone");
     assert_eq!(
-        app.gui_feeds_effective_set().as_ref(),
+        gui_feeds_effective_set(&app).as_ref(),
         &GuiCollectionSet::Checked(vec![FEED_B.into()]),
         "a subscription the tab does not hold changes nothing"
     );
@@ -258,7 +258,7 @@ fn a_checked_subscription_the_tab_drops_never_paints() {
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
 
     assert_eq!(
-        app.gui_feeds_effective_set().as_ref(),
+        gui_feeds_effective_set(&app).as_ref(),
         &GuiCollectionSet::All,
         "a removed subscription's check never paints"
     );
@@ -271,16 +271,16 @@ fn an_entry_pick_is_stored_and_one_outside_the_selected_list_changes_nothing() {
     let mut app = fetched_feeds_app();
     toggle_subscription(&mut app, FEED_B);
 
-    app.gui_feeds_select(&entry_id(FEED_B, "b-mid"));
+    gui_feeds_select(&mut app, &entry_id(FEED_B, "b-mid"));
     assert_eq!(
-        app.gui_feeds_picked_entry(),
+        gui_feeds_picked_entry(&app),
         Some(entry_id(FEED_B, "b-mid").as_str()),
         "the picked entry is the select command's"
     );
 
-    app.gui_feeds_select(&entry_id(FEED_A, "a-old"));
+    gui_feeds_select(&mut app, &entry_id(FEED_A, "a-old"));
     assert_eq!(
-        app.gui_feeds_picked_entry(),
+        gui_feeds_picked_entry(&app),
         Some(entry_id(FEED_B, "b-mid").as_str()),
         "an entry the selected pill's list does not carry changes nothing"
     );
@@ -325,7 +325,7 @@ fn the_entry_row_id_round_trips_through_its_encoding() {
 fn all_merges_two_subscriptions_in_date_order_with_the_default_hero() {
     let app = fetched_feeds_app();
 
-    let projection = app.gui_feeds_projection();
+    let projection = gui_feeds_projection(&app);
 
     assert_eq!(
         projection
@@ -395,7 +395,7 @@ fn a_checked_subscription_scopes_the_rows_to_that_subscription() {
     let mut app = fetched_feeds_app();
 
     toggle_subscription(&mut app, FEED_B);
-    let projection = app.gui_feeds_projection();
+    let projection = gui_feeds_projection(&app);
 
     assert_eq!(
         projection
@@ -436,7 +436,7 @@ fn a_vanished_checked_subscription_falls_back_to_all() {
     );
     assert!(app.drain_feed_tab_results(), "the refetch drained");
 
-    let projection = app.gui_feeds_projection();
+    let projection = gui_feeds_projection(&app);
 
     assert_eq!(
         projection
@@ -463,7 +463,7 @@ fn two_checked_subscriptions_merge_their_entries_in_date_order() {
 
     toggle_subscription(&mut app, FEED_A);
     toggle_subscription(&mut app, FEED_B);
-    let projection = app.gui_feeds_projection();
+    let projection = gui_feeds_projection(&app);
 
     assert_eq!(
         projection
@@ -500,7 +500,7 @@ fn the_oldest_sort_sets_the_oldest_order() {
         GuiListSort::Oldest,
         "the command stores the destination's sort"
     );
-    let projection = app.gui_feeds_projection();
+    let projection = gui_feeds_projection(&app);
 
     assert_eq!(
         projection
@@ -526,7 +526,7 @@ fn two_subscriptions_publishing_the_same_guid_name_different_entries() {
     app.send_gui_feed_fetch_result_for_test(1, &[("dup", Some(200))]);
     assert!(app.drain_feed_tab_results(), "both results drained");
 
-    let rows = app.gui_feeds_projection().rows;
+    let rows = gui_feeds_projection(&app).rows;
     assert_eq!(rows.len(), 2, "both subscriptions' entries are rows");
     assert_eq!(rows[0].subtitle.as_deref(), Some("Feed B"));
     assert_eq!(rows[0].id, entry_id(FEED_B, "dup"));
@@ -536,8 +536,8 @@ fn two_subscriptions_publishing_the_same_guid_name_different_entries() {
         "the same guid in another subscription is another entry"
     );
 
-    app.gui_feeds_select(&rows[1].id);
-    let projection = app.gui_feeds_projection();
+    gui_feeds_select(&mut app, &rows[1].id);
+    let projection = gui_feeds_projection(&app);
     assert_eq!(
         projection.selected.as_deref(),
         Some(rows[1].id.as_str()),
@@ -571,7 +571,7 @@ fn a_resume_position_without_a_duration_stays_active_with_no_percent() {
     app.send_gui_feed_entries_for_test(0, &[entry]);
     assert!(app.drain_feed_tab_results(), "the result drained");
 
-    let rows = app.gui_feeds_projection().rows;
+    let rows = gui_feeds_projection(&app).rows;
 
     assert_eq!(
         rows[0].state,
@@ -617,7 +617,7 @@ fn a_feed_row_paints_no_art_and_its_declared_media_kind() {
     ];
     app.tab = TabSelection::Feeds;
 
-    let projection = app.gui_feeds_projection();
+    let projection = gui_feeds_projection(&app);
 
     assert_eq!(
         projection.rows[0].art,

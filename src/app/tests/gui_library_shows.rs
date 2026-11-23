@@ -331,13 +331,13 @@ fn one_shows_view_is_active_at_a_time() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
 
-    assert_eq!(app.gui_shows_view(0), GuiShowsView::All);
+    assert_eq!(gui_shows_view(&app, 0), GuiShowsView::All);
     for view in [GuiShowsView::New, GuiShowsView::Upcoming, GuiShowsView::All] {
         apply_gui_library_command(
             &mut app,
             GuiLibraryCommand::ShowsSetView { lib_idx: 0, view },
         );
-        assert_eq!(app.gui_shows_view(0), view);
+        assert_eq!(gui_shows_view(&app, 0), view);
     }
     assert!(app.gui.shows_views.contains_key(&0));
 }
@@ -462,10 +462,13 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
             view: GuiShowsView::New,
         },
     );
-    app.handle_gui_shows_new(GuiShowsNewEvent {
-        library_id: "lib-tv".into(),
-        result,
-    });
+    handle_gui_shows_new(
+        &mut app,
+        GuiShowsNewEvent {
+            library_id: "lib-tv".into(),
+            result,
+        },
+    );
 
     let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 

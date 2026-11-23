@@ -87,7 +87,7 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
     // The open's load ran: its worker reported one completion. The no-setup
     // stub's worker reports the failure class; the event is dropped raw, so
     // the failure mark never applies and the page below carries the catalog.
@@ -122,7 +122,7 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
 
     // A loaded catalog's open starts no second load: no replacement batch
     // arms, so no worker runs and the chain stays single-flight.
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
     assert!(
         book_state(&app).replacement.is_none(),
         "the loaded catalog's open started no refresh batch"
@@ -143,7 +143,7 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
     let mut app = abs_app();
     app.audiobookshelf_book_browse[0].books = vec![book("book-a", "A Book")];
 
-    app.gui_abs_select(0, "book-a");
+    gui_abs_select(&mut app, 0, "book-a");
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
         Some("book-a"),
@@ -184,7 +184,7 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
         "the chapters landed in the detail cache"
     );
 
-    app.gui_abs_select(0, "gone");
+    gui_abs_select(&mut app, 0, "gone");
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
         Some("book-a"),
@@ -257,7 +257,7 @@ fn the_open_entry_on_another_book_library_starts_no_load() {
     let mut app = abs_app();
     add_second_book_library(&mut app);
 
-    app.gui_abs_open(2);
+    gui_abs_open(&mut app, 2);
 
     let stale = &app.audiobookshelf_book_browse[2];
     assert_eq!(
@@ -356,7 +356,7 @@ fn a_failed_catalog_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
         "the repaint honoured the failed mark"
     );
 
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
     assert_eq!(
         book_state(&app).catalog_request,
         1,
@@ -377,7 +377,7 @@ fn opening_a_catalog_with_a_page_in_flight_starts_no_second_chain() {
     let mut app = abs_app();
     app.audiobookshelf_book_browse[0].loading_pages.insert(0);
 
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
 
     let state = book_state(&app);
     assert!(

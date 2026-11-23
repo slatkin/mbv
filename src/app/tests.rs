@@ -103,6 +103,110 @@ pub(in crate::app) fn gui_podcasts_projection(
     projection
 }
 
+/// Select one Feeds entry over a stub `App` a test holds.
+pub(in crate::app) fn gui_feeds_select(app: &mut crate::app::App, entry: &str) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_feeds_select(entry);
+    *app = core.into_app();
+}
+
+/// The Feeds projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_feeds_projection(
+    app: &crate::app::App,
+) -> crate::app::GuiFeedsProjection {
+    crate::app::gui_library::feeds_projection(app)
+}
+
+/// The entry the Feeds Hero shows over a stub `App` a test holds.
+pub(in crate::app) fn gui_feeds_picked_entry(app: &crate::app::App) -> Option<&str> {
+    crate::app::gui_library::feeds_picked_entry(app)
+}
+
+/// The entries the Feeds selection lists over a stub `App` a test holds.
+pub(in crate::app) fn gui_feeds_entries(app: &crate::app::App) -> Vec<&mbv_queue::FeedEntry> {
+    crate::app::gui_library::feeds_entries(app)
+}
+
+/// The Feeds effective set over a stub `App` a test holds.
+pub(in crate::app) fn gui_feeds_effective_set(
+    app: &crate::app::App,
+) -> std::borrow::Cow<'_, crate::app::GuiCollectionSet> {
+    crate::app::gui_library::feeds_effective_set(app)
+}
+
+/// Open one Shows library over a stub `App` a test holds.
+pub(in crate::app) fn gui_tv_open(app: &mut crate::app::App, lib_idx: usize) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_tv_open(lib_idx);
+    *app = core.into_app();
+}
+
+/// Select one Shows series over a stub `App` a test holds.
+pub(in crate::app) fn gui_tv_select_series(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_tv_select_series(lib_idx, id);
+    *app = core.into_app();
+}
+
+/// Select one Shows season over a stub `App` a test holds.
+pub(in crate::app) fn gui_tv_select_season(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_tv_select_season(lib_idx, id);
+    *app = core.into_app();
+}
+
+/// One library's Shows view over a stub `App` a test holds.
+pub(in crate::app) fn gui_shows_view(
+    app: &crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiShowsView {
+    crate::app::gui_library::shows_view(app, lib_idx)
+}
+
+/// Land one Shows New fetch over a stub `App` a test holds.
+pub(in crate::app) fn handle_gui_shows_new(
+    app: &mut crate::app::App,
+    event: crate::app::gui_library::GuiShowsNewEvent,
+) {
+    crate::app::gui_library::handle_shows_new(app, event);
+}
+
+/// Open one plain Emby library over a stub `App` a test holds.
+pub(in crate::app) fn gui_emby_open(app: &mut crate::app::App, lib_idx: usize) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_emby_open(lib_idx);
+    *app = core.into_app();
+}
+
+/// Select one plain Emby library row over a stub `App` a test holds.
+pub(in crate::app) fn gui_emby_select(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_emby_select(lib_idx, id);
+    *app = core.into_app();
+}
+
+/// Open one Audiobooks library over a stub `App` a test holds.
+pub(in crate::app) fn gui_abs_open(app: &mut crate::app::App, lib_idx: usize) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_abs_open(lib_idx);
+    *app = core.into_app();
+}
+
+/// Select one Audiobooks book over a stub `App` a test holds.
+pub(in crate::app) fn gui_abs_select(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_abs_select(lib_idx, id);
+    *app = core.into_app();
+}
+
 /// Open one Podcasts destination over a stub `App` a test holds.
 pub(in crate::app) fn gui_podcast_open(app: &mut crate::app::App, lib_idx: usize) {
     let mut core =

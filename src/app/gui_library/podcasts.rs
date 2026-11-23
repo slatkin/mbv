@@ -323,7 +323,7 @@ pub(in crate::app::gui_library) fn enqueue_podcast_episode(
         return;
     };
     if !app.player.can_admit_audiobookshelf() {
-        app.flash_abs_owner_unavailable();
+        super::audiobooks::flash_abs_owner_unavailable(app);
         return;
     }
     let _ = app.submit_queue_item(item, false);

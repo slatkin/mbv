@@ -13,6 +13,10 @@
 //! The per-subscription lists are the App's own
 //! (`FeedTabState::rebuild_all_entries`), so the two Clients cannot drift; the
 //! projection reads `App` data only.
+//!
+//! The projection is a free function over the `App` the GUI core owns, with the
+//! `GuiCore` entry as a one-line call (design D4), so the steps other GUI
+//! modules read stay reachable through the `App` they hold.
 
 use mbv_feed::FeedPlatform;
 use mbv_queue::FeedEntry;
@@ -28,6 +32,7 @@ use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
+use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One entry's stable identity across every list view and every
@@ -152,162 +157,161 @@ pub fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform> 
 /// Workspace and no state filter ride here.
 pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedsHero>;
 
-impl App {
+impl GuiCore {
     /// The Feeds projection the GUI Library panel paints (row 11.1): the
     /// collection selector, the selection's entry rows in the list's sort
-    /// order, the selected entry, and its Hero. A Client with no configured
-    /// subscription projects the empty projection, as the frame's gate
-    /// excludes that destination anyway. The selection's entries are built
-    /// once and sorted once; the rows and the Hero lookup read the sorted
-    /// list, so the frame never rebuilds it.
+    /// order, the selected entry, and its Hero.
     #[must_use]
     pub fn gui_feeds_projection(&self) -> GuiFeedsProjection {
-        if !self.gui_feeds_present() {
-            return GuiFeedsProjection::default();
-        }
-        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Feeds);
-        let sort = sort_frame.active;
-        let collections = self.gui_collections(GuiCollectionTarget::Feeds);
-        let mut entries = self.gui_feeds_entries();
-        if sort.is_name_sort() {
-            // The entry title leads under Title, and the date newest follows
-            // it, so two entries of one title keep the newest first (design
-            // D6).
-            entries.sort_by_cached_key(|entry| {
-                (
-                    gui_title_sort_key(&entry.title),
-                    entry.pub_date_secs.is_none(),
-                    std::cmp::Reverse(entry.pub_date_secs.unwrap_or_default()),
-                    entry.feed_id.clone().unwrap_or_default(),
-                    entry.guid.clone(),
-                )
-            });
-        } else {
-            entries.sort_by(|left, right| {
-                sort.compare_date(left.pub_date_secs, right.pub_date_secs)
-                    .then_with(|| {
-                        (
-                            left.feed_id.as_deref().unwrap_or_default(),
-                            left.guid.as_str(),
-                        )
-                            .cmp(&(
-                                right.feed_id.as_deref().unwrap_or_default(),
-                                right.guid.as_str(),
-                            ))
-                    })
-            });
-        }
-        let rows = self.gui_feeds_rows(&entries, sort);
-        let selected = self.gui_feeds_selected(&rows);
-        let hero = selected
-            .as_deref()
-            .and_then(GuiFeedEntryId::decode)
-            .and_then(|entry| self.gui_feeds_hero(&entry, &entries));
-        GuiFeedsProjection {
-            collections,
-            loading: self.feed_tab.loading,
-            failed: false,
-            rows,
-            sort: Some(sort_frame),
-            selected,
-            hero,
-        }
+        feeds_projection(&self.app)
     }
+}
 
-    /// The Feeds collection selector's catalog (row 11.1): each configured
-    /// subscription by its name in the tab's order, keyed by its URL.
-    pub(in crate::app::gui_library) fn gui_feeds_subscriptions(&self) -> Vec<(String, String)> {
-        self.feed_tab
-            .subscriptions
-            .iter()
-            .map(|subscription| (subscription.url.clone(), subscription.name.clone()))
-            .collect()
+/// The Feeds projection the GUI Library panel paints (row 11.1): the
+/// collection selector, the selection's entry rows in the list's sort order,
+/// the selected entry, and its Hero. A Client with no configured subscription
+/// projects the empty projection, as the frame's gate excludes that
+/// destination anyway. The selection's entries are built once and sorted
+/// once; the rows and the Hero lookup read the sorted list, so the frame never
+/// rebuilds it.
+#[must_use]
+pub(in crate::app) fn feeds_projection(app: &App) -> GuiFeedsProjection {
+    if !super::feeds::feeds_present(app) {
+        return GuiFeedsProjection::default();
     }
-
-    /// The selection's entry rows (row 11.1; gui-collection-dropdown design
-    /// D2, D4): the projection has already ordered the entries by the list's
-    /// sort, and these rows carry that order as it is, with the rail letter a
-    /// name sort gives each row (design D6).
-    fn gui_feeds_rows(&self, entries: &[&FeedEntry], sort: GuiListSort) -> Vec<GuiFeedsRow> {
-        entries
-            .iter()
-            .map(|entry| self.gui_feeds_row(entry, sort))
-            .collect()
-    }
-
-    /// One row of the active list (row 11.1): the TUI feed row's facts — the
-    /// entry title, its subscription's name, and the publish date in the
-    /// right-aligned gutter — with the row's played state, the rail letter a
-    /// name sort gives it (design D6), the art its artwork policy declares
-    /// (gui-delineated-rows design D5: none, so the row is the no-source
-    /// state), and the media kind that state shows.
-    fn gui_feeds_row(&self, entry: &FeedEntry, sort: GuiListSort) -> GuiFeedsRow {
-        GuiFeedsRow {
-            id: GuiFeedEntryId::new(
+    let sort_frame = app.gui_list_sort_frame(GuiSortTarget::Feeds);
+    let sort = sort_frame.active;
+    let collections = app.gui_collections(GuiCollectionTarget::Feeds);
+    let mut entries = super::feeds::feeds_entries(app);
+    if sort.is_name_sort() {
+        // The entry title leads under Title, and the date newest follows it,
+        // so two entries of one title keep the newest first (design D6).
+        entries.sort_by_cached_key(|entry| {
+            (
+                gui_title_sort_key(&entry.title),
+                entry.pub_date_secs.is_none(),
+                std::cmp::Reverse(entry.pub_date_secs.unwrap_or_default()),
                 entry.feed_id.clone().unwrap_or_default(),
                 entry.guid.clone(),
             )
-            .encode(),
-            title: entry.title.clone(),
-            subtitle: self
-                .gui_feeds_subscription_name(entry.feed_id.as_deref())
-                .map(str::to_string),
-            date: row_date(entry.pub_date_secs),
-            state: MediaSemanticState::from_feed_entry(entry),
-            sort_letter: sort.rail_letter(&entry.title),
-            art: self.gui_row_art(feed_row_source(entry).as_ref()),
-            media: feed_media_kind(entry),
-        }
+        });
+    } else {
+        entries.sort_by(|left, right| {
+            sort.compare_date(left.pub_date_secs, right.pub_date_secs)
+                .then_with(|| {
+                    (
+                        left.feed_id.as_deref().unwrap_or_default(),
+                        left.guid.as_str(),
+                    )
+                        .cmp(&(
+                            right.feed_id.as_deref().unwrap_or_default(),
+                            right.guid.as_str(),
+                        ))
+                })
+        });
     }
+    let rows = feeds_rows(app, &entries, sort);
+    let selected = feeds_selected(app, &rows);
+    let hero = selected
+        .as_deref()
+        .and_then(GuiFeedEntryId::decode)
+        .and_then(|entry| feeds_hero(app, &entry, &entries));
+    GuiFeedsProjection {
+        collections,
+        loading: app.feed_tab.loading,
+        failed: false,
+        rows,
+        sort: Some(sort_frame),
+        selected,
+        hero,
+    }
+}
 
-    /// The entry the Hero shows (row 11.1): the core's pick while the active
-    /// list still carries it, else that list's first row — the Hero default.
-    fn gui_feeds_selected(&self, rows: &[GuiFeedsRow]) -> Option<String> {
-        picked_or_first(
-            self.gui_feeds_picked_entry().map(str::to_string),
-            |picked| rows.iter().any(|row| row.id == picked),
-            || rows.first().map(|row| row.id.clone()),
+/// The Feeds collection selector's catalog (row 11.1): each configured
+/// subscription by its name in the tab's order, keyed by its URL.
+pub(in crate::app::gui_library) fn feeds_subscriptions(app: &App) -> Vec<(String, String)> {
+    app.feed_tab
+        .subscriptions
+        .iter()
+        .map(|subscription| (subscription.url.clone(), subscription.name.clone()))
+        .collect()
+}
+
+/// The selection's entry rows (row 11.1; gui-collection-dropdown design D2,
+/// D4): the projection has already ordered the entries by the list's sort,
+/// and these rows carry that order as it is, with the rail letter a name sort
+/// gives each row (design D6).
+fn feeds_rows(app: &App, entries: &[&FeedEntry], sort: GuiListSort) -> Vec<GuiFeedsRow> {
+    entries
+        .iter()
+        .map(|entry| feeds_row(app, entry, sort))
+        .collect()
+}
+
+/// One row of the active list (row 11.1): the TUI feed row's facts — the
+/// entry title, its subscription's name, and the publish date in the
+/// right-aligned gutter — with the row's played state, the rail letter a name
+/// sort gives it (design D6), the art its artwork policy declares
+/// (gui-delineated-rows design D5: none, so the row is the no-source state),
+/// and the media kind that state shows.
+fn feeds_row(app: &App, entry: &FeedEntry, sort: GuiListSort) -> GuiFeedsRow {
+    GuiFeedsRow {
+        id: GuiFeedEntryId::new(
+            entry.feed_id.clone().unwrap_or_default(),
+            entry.guid.clone(),
         )
+        .encode(),
+        title: entry.title.clone(),
+        subtitle: feeds_subscription_name(app, entry.feed_id.as_deref()).map(str::to_string),
+        date: row_date(entry.pub_date_secs),
+        state: MediaSemanticState::from_feed_entry(entry),
+        sort_letter: sort.rail_letter(&entry.title),
+        art: app.gui_row_art(feed_row_source(entry).as_ref()),
+        media: feed_media_kind(entry),
     }
+}
 
-    /// The selected entry's Hero (row 11.1): the shared `hero_content_feed`
-    /// producer's title and duration behind the subscription name, and the
-    /// feed artwork policy's shape. The entry has no artwork source, so no
-    /// image rides here and the Hero paints its placeholder. `listed` is the
-    /// projection's sorted selection list — the list the Hero's row came
-    /// from — so the lookup re-reads it instead of rebuilding it.
-    fn gui_feeds_hero(
-        &self,
-        entry: &GuiFeedEntryId,
-        listed: &[&FeedEntry],
-    ) -> Option<GuiFeedsHero> {
-        let entry = listed
-            .iter()
-            .find(|known| feed_entry_matches(known, entry))?;
-        let content = hero_content_feed(entry);
-        let parent = self
-            .gui_feeds_subscription_name(entry.feed_id.as_deref())
-            .map(str::to_string);
-        Some(GuiFeedsHero {
-            title: content.facts.title.clone(),
-            parent,
-            meta_rows: content.facts.meta_rows.clone(),
-            duration_row: content.facts.duration_row,
-            progress_row: content.facts.progress_row,
-            art_shape: artwork_shape(content.facts.artwork.shape),
-        })
-    }
+/// The entry the Hero shows (row 11.1): the core's pick while the active
+/// list still carries it, else that list's first row — the Hero default.
+fn feeds_selected(app: &App, rows: &[GuiFeedsRow]) -> Option<String> {
+    picked_or_first(
+        super::feeds::feeds_picked_entry(app).map(str::to_string),
+        |picked| rows.iter().any(|row| row.id == picked),
+        || rows.first().map(|row| row.id.clone()),
+    )
+}
 
-    /// The name of the subscription `feed_id` names (row 11.1), or `None`
-    /// when the tab no longer holds it.
-    fn gui_feeds_subscription_name(&self, feed_id: Option<&str>) -> Option<&str> {
-        let feed_id = feed_id?;
-        self.feed_tab
-            .subscriptions
-            .iter()
-            .find(|subscription| subscription.url == feed_id)
-            .map(|subscription| subscription.name.as_str())
-    }
+/// The selected entry's Hero (row 11.1): the shared `hero_content_feed`
+/// producer's title and duration behind the subscription name, and the feed
+/// artwork policy's shape. The entry has no artwork source, so no image rides
+/// here and the Hero paints its placeholder. `listed` is the projection's
+/// sorted selection list — the list the Hero's row came from — so the lookup
+/// re-reads it instead of rebuilding it.
+fn feeds_hero(app: &App, entry: &GuiFeedEntryId, listed: &[&FeedEntry]) -> Option<GuiFeedsHero> {
+    let entry = listed
+        .iter()
+        .find(|known| feed_entry_matches(known, entry))?;
+    let content = hero_content_feed(entry);
+    let parent = feeds_subscription_name(app, entry.feed_id.as_deref()).map(str::to_string);
+    Some(GuiFeedsHero {
+        title: content.facts.title.clone(),
+        parent,
+        meta_rows: content.facts.meta_rows.clone(),
+        duration_row: content.facts.duration_row,
+        progress_row: content.facts.progress_row,
+        art_shape: artwork_shape(content.facts.artwork.shape),
+    })
+}
+
+/// The name of the subscription `feed_id` names (row 11.1), or `None` when
+/// the tab no longer holds it.
+fn feeds_subscription_name<'a>(app: &'a App, feed_id: Option<&str>) -> Option<&'a str> {
+    let feed_id = feed_id?;
+    app.feed_tab
+        .subscriptions
+        .iter()
+        .find(|subscription| subscription.url == feed_id)
+        .map(|subscription| subscription.name.as_str())
 }
 
 /// Whether `entry` is the one `id` names (row 11.1): the subscription's URL

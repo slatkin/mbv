@@ -81,7 +81,7 @@ impl GuiCore {
             }
             GuiDestinationKind::Audiobooks { lib_idx } => {
                 if self.app.tab.audiobookshelf_index() == Some(lib_idx)
-                    && self.app.gui_abs_book_library(lib_idx)
+                    && super::audiobooks::abs_book_library(&self.app, lib_idx)
                 {
                     run_gui_destination_loads(&mut self.app, &AudiobooksLoads { lib_idx });
                 }
@@ -217,7 +217,7 @@ struct ShowsLoads {
 impl GuiDestinationLoads for ShowsLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
         if super::shows_projection::shows_root_needs_load(app, self.lib_idx) {
-            app.load_gui_shows_root(self.lib_idx);
+            super::tv::load_shows_root(app, self.lib_idx);
             return GuiStepOutcome::LoadStarted;
         }
         GuiStepOutcome::Continue
@@ -260,18 +260,22 @@ struct EmbyLoads {
 
 impl GuiDestinationLoads for EmbyLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
-        if !app.gui_emby_library(self.lib_idx) || app.is_feed_home_video_library(self.lib_idx) {
+        if !super::emby::emby_library(app, self.lib_idx)
+            || app.is_feed_home_video_library(self.lib_idx)
+        {
             return GuiStepOutcome::Continue;
         }
-        app.fetch_gui_emby_root_items(self.lib_idx);
+        super::emby::fetch_emby_root_items(app, self.lib_idx);
         GuiStepOutcome::LoadStarted
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        if !app.gui_emby_library(self.lib_idx) || !app.is_feed_home_video_library(self.lib_idx) {
+        if !super::emby::emby_library(app, self.lib_idx)
+            || !app.is_feed_home_video_library(self.lib_idx)
+        {
             return GuiStepOutcome::Continue;
         }
-        app.ensure_gui_emby_feed_fetch(self.lib_idx);
+        super::emby::ensure_emby_feed_fetch(app, self.lib_idx);
         GuiStepOutcome::LoadStarted
     }
 }
@@ -287,7 +291,7 @@ struct AudiobooksLoads {
 
 impl GuiDestinationLoads for AudiobooksLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
-        if !app.gui_abs_catalog_needs_load(self.lib_idx) {
+        if !super::audiobooks::abs_catalog_needs_load(app, self.lib_idx) {
             return GuiStepOutcome::Continue;
         }
         app.audiobookshelf_book_refresh();
@@ -295,7 +299,7 @@ impl GuiDestinationLoads for AudiobooksLoads {
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        if let Some(book_id) = app.gui_abs_effective_pick(self.lib_idx) {
+        if let Some(book_id) = super::audiobooks::abs_effective_pick(app, self.lib_idx) {
             app.start_audiobookshelf_book_detail(book_id);
         }
         GuiStepOutcome::Continue

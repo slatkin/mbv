@@ -209,7 +209,7 @@ fn opening_a_movies_library_lands_its_root_rows_on_the_app() {
     http.respond_when("ParentId=lib-movies", 200, MOVIES_BODY);
     let mut app = emby_app(&http, "movies", MOVIES_ID, "Movies");
 
-    app.gui_emby_open(0);
+    gui_emby_open(&mut app, 0);
     land(&mut app);
     land(&mut app);
     while drain_one(&mut app) {}
@@ -250,7 +250,7 @@ fn opening_a_feed_view_library_loads_its_default_selection() {
         .feed_view_libraries
         .push("youtube".into());
 
-    app.gui_emby_open(0);
+    gui_emby_open(&mut app, 0);
     land_root_listing(&mut app);
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     land_shown_selection(&mut app);
@@ -423,14 +423,14 @@ fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
         crate::app::gui_library::GuiEmbyRootItems::Loaded(vec![first]),
     );
 
-    app.gui_emby_select(0, "m-1");
+    gui_emby_select(&mut app, 0, "m-1");
     assert_eq!(
         app.gui_emby_picked_row_for_test(0),
         Some("m-1"),
         "the picked row is the select command's"
     );
 
-    app.gui_emby_select(0, "gone");
+    gui_emby_select(&mut app, 0, "gone");
     assert_eq!(
         app.gui_emby_picked_row_for_test(0),
         Some("m-1"),

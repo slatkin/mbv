@@ -107,11 +107,13 @@ fn row_art_scope(app: &App) -> Option<GuiRowArtScope> {
     match app.gui_active_destination()? {
         super::GuiDestinationKind::Home => Some(GuiRowArtScope::Home),
         super::GuiDestinationKind::Music { .. } => Some(GuiRowArtScope::Music),
-        super::GuiDestinationKind::Shows { lib_idx } => Some(match app.gui_shows_view(lib_idx) {
-            super::GuiShowsView::All => GuiRowArtScope::ShowsSeries,
-            super::GuiShowsView::New => GuiRowArtScope::ShowsNew,
-            super::GuiShowsView::Upcoming => GuiRowArtScope::ShowsUpcoming,
-        }),
+        super::GuiDestinationKind::Shows { lib_idx } => {
+            Some(match super::shows::shows_view(app, lib_idx) {
+                super::GuiShowsView::All => GuiRowArtScope::ShowsSeries,
+                super::GuiShowsView::New => GuiRowArtScope::ShowsNew,
+                super::GuiShowsView::Upcoming => GuiRowArtScope::ShowsUpcoming,
+            })
+        }
         super::GuiDestinationKind::Library { .. } => Some(GuiRowArtScope::Emby),
         super::GuiDestinationKind::Audiobooks { .. } => Some(GuiRowArtScope::Audiobooks),
         super::GuiDestinationKind::Podcasts { .. } => Some(GuiRowArtScope::Podcasts),
