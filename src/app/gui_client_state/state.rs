@@ -28,7 +28,7 @@ use mbv_config::TabIdentity;
 /// The canvas panel's two toggles: `z` collapses the panel to its rail, and
 /// `q` folds the expanded panel's queue to its one-line summary. The Client
 /// core holds them, so a window-content reload keeps them.
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(in crate::app) struct PanelToggles {
     /// The `z` toggle: the panel collapsed to the rail.
     pub(in crate::app) collapsed: bool,
@@ -39,6 +39,12 @@ pub(in crate::app) struct PanelToggles {
 /// The GUI Client's Client-core presentation state: the library stores, the
 /// open overlay, the Settings and Playlists screens, and the panel toggles.
 /// The TUI Client never reads it.
+///
+/// It is `Clone` so the core can mirror it beside an `App` a dependent
+/// Client's test drives (row 8.1 of `decouple-client-core`): the tick host
+/// adopts the sidecar's state at a step's start and publishes its own back at
+/// the step's end, which needs a copy and not the one value.
+#[derive(Clone)]
 pub struct GuiClientState {
     /// Whether the GUI player's controls auto-hide while an item plays and
     /// the pointer is not over the artwork. Persisted as

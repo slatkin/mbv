@@ -96,6 +96,10 @@ fn built(app: &mut App, queue: &QueueSurface, playback: &QueuePlaybackSurface) -
     let mut ledger = SectionLedger::default();
     ledger.mark_all_gated();
     let mut core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
+    // The wrapper owns its own Client state, and the test seeded and reads the
+    // state beside the `App` (row 8.1 of `decouple-client-core`), so the
+    // collect runs over the seeded one and publishes back what it left.
+    core.take_seeded_gui_state_for_test();
     let batch = ledger.collect(SectionSources {
         core: &mut core,
         queue,
@@ -103,6 +107,7 @@ fn built(app: &mut App, queue: &QueueSurface, playback: &QueuePlaybackSurface) -
         viewport_rows: VIEWPORT_ROWS,
         now: std::time::Instant::now(),
     });
+    core.publish_seeded_gui_state_for_test();
     *app = core.into_app();
     Built(batch.expect("the first collect builds every section"))
 }
@@ -128,7 +133,9 @@ fn frame_after_keys(app: &mut App, keys: &[mbv_ui_msg::Key]) -> Built {
     for code in keys {
         let key = mbv_ui_msg::KeyEvent::new(*code, mbv_ui_msg::KeyModifiers::NONE);
         let mut core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
+        core.take_seeded_gui_state_for_test();
         let _ = core.route_gui_input(mbv::GuiInput::Key(key), None);
+        core.publish_seeded_gui_state_for_test();
         *app = core.into_app();
     }
     frame_after_tick(app)

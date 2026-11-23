@@ -13,7 +13,12 @@ use super::frame_after_tick;
 /// the core thread's drain does.
 fn open_settings_at(app: &mut mbv::App, section: mbv::GuiSettingsSection) {
     let mut core = mbv::GuiCore::new(std::mem::replace(app, mbv::stub_app_with_queue(0)));
+    core.take_seeded_gui_state_for_test();
     core.open_gui_settings_at(section);
+    // The open screen is the wrapper's own Client state, and the test reads the
+    // state beside the `App` (row 8.1 of `decouple-client-core`), so it goes
+    // back out.
+    core.publish_seeded_gui_state_for_test();
     *app = core.into_app();
 }
 

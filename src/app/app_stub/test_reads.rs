@@ -49,26 +49,41 @@ pub(super) fn gui<R>(_app: &App, read: impl FnOnce(&mut GuiClientState) -> R) ->
 
 // The sidecar state thread: every `App`-seam read and seed of a dependent
 // Client's `test` build answers from it, and so does the client-event drain
-// that `CoreThread::step` runs.
+// that `CoreThread::step` runs. `None` until the first read or seed takes
+// the default state, so the empty `GuiClientState::new(false)` is built once
+// and only when a test needs it.
 #[cfg(feature = "test")]
 thread_local! {
-    static CLIENT_GUI_STATE: std::cell::RefCell<GuiClientState> =
-        std::cell::RefCell::new(GuiClientState::new(false));
+    static CLIENT_GUI_STATE: std::cell::RefCell<Option<GuiClientState>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// Read or seed the GUI Client's own state beside the `App` a dependent
 /// Client's test drives (`decouple-client-core` row 8.1). The state belongs to
 /// `GuiCore`, and these `App` seams answer from this one copy, so a seed, the
 /// frame it asserts on, and the `CoreThread::step` that adopts it all read and
-/// write the same state.
+/// write the same state: the step takes the slot's state at its start and
+/// publishes its own back at its end, so the slot always holds the live state
+/// between steps and the first call's default is what an unseeded test reads.
 pub fn gui_state_for_test<R>(read: impl FnOnce(&mut GuiClientState) -> R) -> R {
     #[cfg(feature = "test")]
-    return CLIENT_GUI_STATE.with(|slot| read(&mut slot.borrow_mut()));
+    return seeded_gui_state_for_test(|slot| {
+        read(slot.get_or_insert_with(|| GuiClientState::new(false)))
+    });
     #[cfg(not(feature = "test"))]
     {
         let mut gui = GuiClientState::new(false);
         read(&mut gui)
     }
+}
+
+/// Reach the sidecar slot itself (`decouple-client-core` row 8.1): the core
+/// takes the seeded state out at a step's start and puts its own back at the
+/// step's end, so it needs the slot and not the state a read gets. Empty
+/// until a test seeds one or a core call publishes one.
+#[cfg(feature = "test")]
+pub fn seeded_gui_state_for_test<R>(read: impl FnOnce(&mut Option<GuiClientState>) -> R) -> R {
+    CLIENT_GUI_STATE.with(|slot| read(&mut slot.borrow_mut()))
 }
 
 /// Take one pending library event through the GUI Client's own stores

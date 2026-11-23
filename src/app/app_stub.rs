@@ -303,6 +303,10 @@ pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
         .expect("the stub queue has a first slot");
     let mut core = crate::gui::GuiCore::new(app);
     core.open_gui_row_menu(&[row]);
+    // The overlay is the wrapper's own Client state, and the test reads the
+    // state beside the `App` (row 8.1 of `decouple-client-core`), so what the
+    // chord opened goes back out.
+    core.publish_seeded_gui_state_for_test();
     core.into_app()
 }
 
@@ -327,6 +331,10 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     // the core. An inactive player lists no choice, so it opens nothing.
     let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
     core.toggle_gui_track_popover(chip);
+    // The overlay is the wrapper's own Client state, and the test reads the
+    // state beside the `App` (row 8.1 of `decouple-client-core`), so what the
+    // press opened goes back out.
+    core.publish_seeded_gui_state_for_test();
     core.into_app()
 }
 /// The `App` a GUI Client's test drives with the cast receivers replaced by
@@ -453,6 +461,10 @@ pub fn stub_app_with_failed_emby_setup() -> App {
     core.apply_gui_settings_overlay(&mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
         mbv_ui_model::overlay::SidebarId::Settings,
     ));
+    // The open screen is the wrapper's own Client state, and the test reads
+    // the state beside the `App` (row 8.1 of `decouple-client-core`), so it
+    // goes back out.
+    core.publish_seeded_gui_state_for_test();
     let mut app = core.into_app();
     app.setup.emby_setup_form = Some(EmbySetupForm {
         fields: [
@@ -614,6 +626,8 @@ pub(in crate::app) mod test_reads;
 pub use self::test_reads::drain_lib_event_with_stores_for_test;
 #[cfg(any(test, feature = "test"))]
 pub use self::test_reads::gui_state_for_test;
+#[cfg(feature = "test")]
+pub use self::test_reads::seeded_gui_state_for_test;
 
 /// The `App` a GUI Client's Owner-exit test drives (`daemon-disconnect-`
 /// `handling` "Clients exit cleanly on an announced shutdown"): the stub

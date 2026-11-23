@@ -315,6 +315,11 @@ impl CoreThread {
         // launch whose catalog lands through the startup worker restores on
         // that drain.
         thread.restore_launch_location();
+        // A Client's test seeds and reads the state beside the `App` (row 8.1
+        // of `decouple-client-core`), and the restore above wrote this core's
+        // own, so the state it left goes back out at construction: the test
+        // reads the restored sets with no step needing to run.
+        thread.publish_seeded_gui_state();
         thread
     }
 
@@ -546,18 +551,32 @@ impl CoreThread {
         self.core.app_mut().client_exit_teardown();
     }
 
-    /// Adopt the GUI Client's own state a Client's test seeded beside its
-    /// `App` (row 8.1 of `decouple-client-core`): the `App` seams write a state
-    /// that is not this core's, so the core takes that one before the step
-    /// reads it. Production builds no sidecar, so the call does nothing there.
-    fn adopt_seeded_gui_state(&mut self) {
-        self.core.adopt_seeded_gui_state_for_test();
+    /// Take the GUI Client's own state a Client's test seeded beside its
+    /// `App`, at the start of one step (row 8.1 of `decouple-client-core`):
+    /// the `App` seams write a state that is not this core's, so the step takes
+    /// that one before it reads anything. Production builds no sidecar, so the
+    /// call does nothing there.
+    fn take_seeded_gui_state(&mut self) {
+        self.core.take_seeded_gui_state_for_test();
+    }
+
+    /// Publish this core's own state back beside the `App` a Client's test
+    /// holds, at the end of one step (row 8.1 of `decouple-client-core`), so
+    /// the test's `*_for_test` reads answer with the state the step left.
+    /// Production builds no sidecar, so the call does nothing there.
+    fn publish_seeded_gui_state(&self) {
+        self.core.publish_seeded_gui_state_for_test();
     }
 
     /// One step: wait for the next input, run one tick, and send the batch of
     /// the sections the tick changed (design D2). Returns whether the loop
     /// continues.
     pub fn step(&mut self) -> bool {
+        // A Client's test seeds through the `App` seams, which write the state
+        // beside the `App` (row 8.1 of `decouple-client-core`), so the step
+        // takes it before it reads anything: the sections it builds and the
+        // batch it sends already carry the seed.
+        self.take_seeded_gui_state();
         match self.rx.recv_timeout(self.idle_cadence) {
             Ok(input) => self.pending.push(input),
             // The idle cadence keeps the maintenance phases running with no
@@ -567,8 +586,7 @@ impl CoreThread {
             // close, and unreachable while the App's waker holds its sender.
             Err(RecvTimeoutError::Disconnected) => return false,
         }
-        let outcome = ClientCore::tick(self, Instant::now());
-        // The run-loop quit signal the TUI's `'outer` loop breaks on
+        let outcome = ClientCore::tick(self, Instant::now()); // The run-loop quit signal the TUI's `'outer` loop breaks on
         // (`shell/run.rs`): an announced Owner shutdown sets it from the
         // App's drain half, and the GUI Client takes the same orderly exit
         // — the quit edge closes the window, and the run's exit boundary in
@@ -591,11 +609,9 @@ impl CoreThread {
         if !outcome.restart_requested {
             self.send_sections();
         }
-        // A Client's test seeds through the `App` seams, which write the state
-        // beside the `App` (row 8.1 of `decouple-client-core`). The adoption
-        // runs after this step's sections: it changes that state, so it
-        // belongs to the next step, which then marks what it changed.
-        self.adopt_seeded_gui_state();
+        // The step done, its state goes back beside the `App` (row 8.1 of
+        // `decouple-client-core`), so a Client's test reads what the step left.
+        self.publish_seeded_gui_state();
         true
     }
 

@@ -94,6 +94,8 @@ pub use self::app::handoff_app;
 #[cfg(any(test, feature = "test"))]
 pub use self::app::gui_state_for_test;
 #[cfg(feature = "test")]
+pub use self::app::seeded_gui_state_for_test;
+#[cfg(feature = "test")]
 pub use self::app::{
     drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,
     set_subtitle_tracks_for_test, stub_app_for_gui_client, stub_app_with_cached_emby_client,

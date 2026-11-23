@@ -15,6 +15,8 @@ mod gui_settings;
 #[cfg(any(test, feature = "test"))]
 pub use self::app_stub::gui_state_for_test;
 #[cfg(feature = "test")]
+pub use self::app_stub::seeded_gui_state_for_test;
+#[cfg(feature = "test")]
 pub use self::app_stub::{
     drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,
     set_subtitle_tracks_for_test, stub_app_for_gui_client, stub_app_with_cached_emby_client,

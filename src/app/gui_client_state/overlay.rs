@@ -18,6 +18,7 @@ use crate::gui::GuiCore;
 /// entries carry the resolved queue index (split-queue-cursor-ownership D2),
 /// so a follow update to the queue cursor cannot redirect an execution, and
 /// each entry's key hint.
+#[derive(Clone, Debug)]
 pub(in crate::app) struct GuiRowMenu {
     /// The row the menu opened on: the pointer's actions button, or the row
     /// the context-menu chord resolved.
@@ -33,6 +34,7 @@ pub(in crate::app) struct GuiRowMenu {
 /// choices. The choice list is the chip's live projection — the state
 /// carries no copy, so a track-list change is visible on the next frame and
 /// the cursor clamps at use time.
+#[derive(Clone, Debug)]
 pub(in crate::app) struct TrackPopoverState {
     pub(in crate::app) chip: TrackChipKind,
     pub(in crate::app) cursor: usize,
@@ -42,6 +44,7 @@ pub(in crate::app) struct TrackPopoverState {
 /// cursor over its choices. The choice list is the projection's live
 /// `target_choices` — the state carries no copy, so a target arriving or
 /// leaving is visible on the next frame and the cursor clamps at use time.
+#[derive(Clone, Debug)]
 pub(in crate::app) struct TargetChooserState {
     pub(in crate::app) cursor: usize,
 }
@@ -51,6 +54,7 @@ pub(in crate::app) struct TargetChooserState {
 /// live projection — the local Owner's Named queues in queue order, then the
 /// connected peer — so the state carries no copy, and the cursor clamps
 /// against the list it reads.
+#[derive(Clone, Debug)]
 pub(in crate::app) struct QueueChooserState {
     pub(in crate::app) cursor: usize,
     /// The rename draft the chooser holds while a name is open for edit.
@@ -62,6 +66,7 @@ pub(in crate::app) struct QueueChooserState {
 /// carried, in window CSS pixels. The menu's single entry toggles the
 /// core-owned auto-hide preference, so the state carries no entry list —
 /// the frame's playback section carries the checked fact the entry paints.
+#[derive(Clone, Debug)]
 pub(in crate::app) struct GuiPlayerMenu {
     pub(in crate::app) cursor: usize,
     /// The right-click's window anchor, in CSS pixels.
@@ -74,6 +79,7 @@ pub(in crate::app) struct GuiPlayerMenu {
 /// while the name is open cannot redirect the rename. A draft opens with its
 /// whole text selected, so the first typed character replaces the name and
 /// Enter keeps it.
+#[derive(Clone, Debug)]
 pub(in crate::app) struct QueueRenameDraft {
     pub(in crate::app) queue: NamedQueueId,
     pub(in crate::app) text: String,
@@ -97,6 +103,7 @@ impl QueueRenameDraft {
 /// popover, the playback-target chooser, the Queue chooser, the shared
 /// confirmation modal, or the daemon-lost recovery dialog. `App::overlay`
 /// holds the open one.
+#[derive(Clone, Debug)]
 pub(in crate::app) enum GuiOverlay {
     RowMenu(GuiRowMenu),
     /// The player panel's context menu (the panel's right-click): the

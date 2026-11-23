@@ -76,21 +76,36 @@ impl GuiCore {
         crate::app::drain_lib_event_through(&mut self.app, &mut self.gui)
     }
 
-    /// Adopt the GUI Client's own state a dependent Client's test seeds beside
-    /// its `App` (`decouple-client-core` row 8.1): the `App`-seam seeds write
-    /// a state that is not this core's, so the core takes that one before the
-    /// step reads it, and leaves its own in the same place for the next seed.
-    /// A build without the `test` feature keeps no sidecar, so there it
-    /// leaves this state alone: the call compiles in every build because the
-    /// tick host's step makes it in every build, and the swap itself is the
-    /// gated half.
-    pub fn adopt_seeded_gui_state_for_test(&mut self) {
-        #[cfg(any(test, feature = "test"))]
+    /// Take the GUI Client's own state a dependent Client's test seeds beside
+    /// its `App` (`decouple-client-core` row 8.1), and publish this core's
+    /// back for that test's reads.
+    ///
+    /// The tick host makes both calls at one step's edges: `take` at the
+    /// start, so the step reads the state a test seeded between steps, and
+    /// [`Self::publish_seeded_gui_state_for_test`] at the end, so the test's
+    /// own `*_for_test` reads see what the step left. Only a dependent
+    /// Client's `test` build keeps the sidecar: this crate's own tests hold
+    /// their state in `crate::app::tests`, and a build without the `test`
+    /// feature holds none, so there the pair is empty and the calls compile
+    /// out. The tick host's step makes them in every build.
+    pub fn take_seeded_gui_state_for_test(&mut self) {
+        #[cfg(all(not(test), feature = "test"))]
         {
-            let live = std::mem::take(&mut self.gui);
-            let seeded = crate::app::gui_state_for_test(|slot| std::mem::replace(slot, live));
-            self.gui = seeded;
+            let seeded = crate::app::seeded_gui_state_for_test(std::option::Option::take);
+            if let Some(seeded) = seeded {
+                self.gui = seeded;
+            }
         }
+    }
+
+    /// Publish this core's own state back to the sidecar a dependent Client's
+    /// test reads beside its `App` (`decouple-client-core` row 8.1), so the
+    /// state a step left is the one the test's `*_for_test` reads answer with.
+    /// Pairs with [`Self::take_seeded_gui_state_for_test`], and compiles out
+    /// with it everywhere else.
+    pub fn publish_seeded_gui_state_for_test(&self) {
+        #[cfg(all(not(test), feature = "test"))]
+        crate::app::seeded_gui_state_for_test(|slot| *slot = Some(self.gui.clone()));
     }
 
     /// The shared `App` back out of the wrapper, for a caller that wraps the

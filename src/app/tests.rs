@@ -7,13 +7,21 @@ pub(in crate::app) use crate::app::GuiClientState;
 /// the state a test seeds is held here beside it and never inside the `App`.
 /// Every test runs on its own thread with a stub `App` of its own, so one
 /// thread's state reaches no other test.
+///
+/// The slot starts empty: the core call a helper makes ([`core_holding_stub_gui`],
+/// [`with_stub_gui`]) takes the seeded state out and hands the state it leaves
+/// back, so the slot holds a state only while a test seeds one or after a core
+/// call published one. A read of an empty slot sees a fresh state.
 pub(crate) fn stub_gui_state<R>(run: impl FnOnce(&mut crate::app::GuiClientState) -> R) -> R {
-    STUB_GUI_STATE.with(|slot| run(&mut slot.borrow_mut()))
+    STUB_GUI_STATE.with(|slot| {
+        let default = crate::app::GuiClientState::new(false);
+        run(slot.borrow_mut().get_or_insert_with(|| default))
+    })
 }
 
 thread_local! {
-    static STUB_GUI_STATE: std::cell::RefCell<crate::app::GuiClientState> =
-        std::cell::RefCell::new(crate::app::GuiClientState::new(false));
+    static STUB_GUI_STATE: std::cell::RefCell<Option<crate::app::GuiClientState>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// Run one GUI core call over a stub `App`, with the state a test seeded
@@ -39,7 +47,6 @@ pub(in crate::app) fn core_holding_stub_gui(app: &mut crate::app::App) -> crate:
     *core.gui_state_mut() = stub_gui_state(std::mem::take);
     core
 }
-
 /// Apply one GUI Library command to a stub `App` a test holds: the test
 /// helper for the command tests, which run the command through the GUI core
 /// over the `App`, as a client does.
