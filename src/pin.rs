@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 use mbv_config::PanelConfig;
 use mbv_ctrl::SWAP_TOKEN_ENV;
 use mbv_desktop::launch::{
-    PANEL_NAME, PinSpawnError, launch_exe, notify, run_request, terminal_prefix,
+    PANEL_NAME, PinSpawnError, launch_exe, notify, run_request, terminal_prefix, toggle_argv,
 };
 use mbv_ui_model::settings::PinnedWidth;
 /// Why a pinned launch did not reach `pinwin run`.
@@ -420,12 +420,6 @@ fn set_reserve_argv(panel: &str, reserve: PanelReserveMode) -> Vec<String> {
         panel.to_string(),
         reserve.as_str().to_string(),
     ]
-}
-
-/// `toggle <panel>`.
-#[must_use]
-fn toggle_argv(panel: &str) -> Vec<String> {
-    vec!["toggle".to_string(), panel.to_string()]
 }
 
 /// What a finished `pinwin run` reports: a success exits with
