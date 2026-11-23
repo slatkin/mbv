@@ -179,9 +179,6 @@ pub enum QueueTargetId {
     Slot(u64),
     /// The playlist pill in the queue footer.
     PlaylistPill,
-    /// The row's drag grip, which the window paints on the hovered row. A
-    /// press starts the row drag; the number is the row's `QueueSlotId::raw`.
-    RowGrip(u64),
     /// One entry of the open row menu: the entry's index in the section's
     /// overlay `entries` list. A press executes the entry.
     RowMenuEntry(usize),

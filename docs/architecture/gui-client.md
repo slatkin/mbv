@@ -840,9 +840,10 @@ title. The looks need no focus fact, because the window holds none (ADR
 reserves one only while the list is focused and overflows.
 
 The row hover and the drag paint from the frame, and the window holds
-neither. `GuiQueue.hover` names the row the pointer rests on: that row shows
-the grip in its ordinal's slot. The `rowMenu` overlay opens on a right-click
-over the row (user request 2026-11-23 retired the hover actions button) and
+neither. `GuiQueue.hover` names the row the pointer rests on: that row paints
+the hover fill and nothing else (user request 2026-11-23 retired the hover
+chrome — the six-dot grip and the actions button). The `rowMenu` overlay
+opens on a right-click over the row and
 on the context-menu chord, and its
 entries — Play now, Play next, Mark watched, Go to episode, Remove
 from queue, and Clear queue — carry their key hints; the menu paints the
@@ -866,7 +867,10 @@ raise of the TUI's `pending_overlay`. Its `Remove` names every marked slot
 and the core applies it as one Owner `UnifiedQueueRemoveSlots` edit; a
 selection that holds the now-playing slot defers to the confirmation modal,
 whose answer carries the removal. The menu anchors on the first marked
-slot. `GuiQueue.drag` carries the
+slot. The drag begins on the first pointer motion after a press on a row —
+anywhere in the row, with no grip (user request 2026-11-23) — and a press
+with no motion arms none, so a plain click paints no drag chrome.
+`GuiQueue.drag` carries the
 dragged row's content as the ghost, the final index the drop leaves it at,
 and the insertion line's stable-slot anchor; the ghost floats at that line
 — with no ordinal and no right column, painted with the dragged row's ring

@@ -230,7 +230,9 @@ fn only_a_marked_row_paints_the_raised_fill() {
 
 /// Contract (`gui-queue-panel-redesign` design D9): a hovered row paints the
 /// hover fill, while a marked row keeps its raised fill under the pointer
-/// resting on its neighbour.
+/// resting on its neighbour. The hover paints no chrome of its own (user
+/// request 2026-11-23): the hovered row keeps its ordinal, its cells, and its
+/// own insets, and the row's drag starts on motion after a press.
 #[test]
 fn the_hovered_row_paints_the_hover_fill() {
     let mut rows_frame = queue(vec![item(1), item(2)]);
@@ -249,43 +251,8 @@ fn the_hovered_row_paints_the_hover_fill() {
             .contains(&format!("background: {}", ef_var(EfToken::Bg3))),
         "the marked row keeps its fill"
     );
-}
-
-/// Contract (`QueuePanel.test.ts`, the Menus artboard B.3): the hovered row
-/// alone paints the grip — its six dots in the leading slot, the row filled
-/// with the hover colour, and its title ellipsised in the hover text. The
-/// window paints no actions button: the row's context menu opens on a
-/// right-click (user request 2026-11-23).
-#[test]
-fn the_hovered_row_alone_paints_the_grip() {
-    let rows = vec![item(1), item(2), item(3)];
-    let mut rows_frame = queue(rows);
-    rows_frame.hover = Some(2);
-    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
-
-    assert_eq!(fixture.all("[data-grip]").len(), 1);
-    assert_eq!(fixture.all("[data-row=\"2\"] [data-grip] circle").len(), 6);
-    assert!(!fixture.presents("[data-row=\"2\"] [data-ordinal]"));
-    assert!(fixture.presents("[data-row=\"1\"] [data-ordinal]"));
-
-    // The hovered row narrows its leading inset to the grip's slot and
-    // paints the hover fill (design D9); its trailing inset stays the row's
-    // own (user request 2026-11-23).
-    let row_style = fixture.style_of("[data-slot=\"2\"]");
-    assert!(
-        row_style.contains("padding-inline: 4px 10px"),
-        "{row_style}"
-    );
-    assert!(
-        row_style.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
-        "{row_style}"
-    );
-    assert!(row_style.contains("border-radius: 0px"), "{row_style}");
-    let title = fixture.style_of("[data-slot=\"2\"] .truncate");
-    assert!(
-        title.contains(&format!("color: {}", ef_var(EfToken::Fg))),
-        "{title}"
-    );
+    assert!(fixture.presents("[data-row=\"2\"] [data-ordinal]"));
+    assert!(hovered.contains("padding-inline: 10px"), "{hovered}");
 }
 
 /// Contract (user request 2026-11-17): a list longer than its viewport paints

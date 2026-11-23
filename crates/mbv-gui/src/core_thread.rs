@@ -205,8 +205,8 @@ pub struct CoreThread {
     regions: HitMap<RegionTarget>,
     /// Where the pointer last rested, from the last non-cancel pointer event;
     /// `None` after a cancel or before any event. A layout report re-resolves
-    /// the queue row hover against the rebuilt regions at this point, so the
-    /// report the hover chrome's own regions cause does not clear the hover.
+    /// the queue row hover against the rebuilt regions at this point, so a
+    /// report the hover itself causes does not clear the hover.
     pointer_at: Option<Position>,
     /// The whole Queue rows the viewport fits. Row 2.4 sets it from the
     /// `LayoutReport`; until then the queue section carries every row.
@@ -486,10 +486,9 @@ impl CoreThread {
         // over a painted bar re-arms it.
         self.playback.set_scrubber_hover(None);
         // The queue row's hover re-resolves at the pointer's last place
-        // instead of clearing: the hovered row paints its grip and actions
-        // button as regions of their own, so the hover itself causes a report,
-        // and a clear here would drop the chrome the report just measured and
-        // flicker it on every move (add-tauri-gui-client row 6.5).
+        // instead of clearing: the hover fill's repaint re-reports the rows,
+        // so the hover itself causes a report, and a clear here would flicker
+        // it on every move (add-tauri-gui-client row 6.5).
         let row_hover = self.pointer_at.and_then(|at| self.queue_row_at(at));
         self.queue.set_hover(row_hover);
     }

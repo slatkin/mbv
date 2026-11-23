@@ -2,11 +2,9 @@
 //! padded queue ordinal, the one title line, the progress ring after it, and
 //! the right column's duration. The row carries no second line, and the ring
 //! adds no height: it sits in the row's own line, after the title (design D3 of
-//! `gui-delineated-rows`). The hovered row reserves the leading slot its
-//! sibling grip covers and the trailing space its sibling actions button paints
-//! over, and the drag ghost paints the title, the ring, and the percent only.
-//! The row's colours come through the queue column's `--ef-*` tokens (design D1
-//! of `gui-queue-panel-redesign`).
+//! `gui-delineated-rows`). The drag ghost paints the title, the ring, and the
+//! percent only. The row's colours come through the queue column's `--ef-*`
+//! tokens (design D1 of `gui-queue-panel-redesign`).
 
 use dioxus_native::prelude::*;
 
@@ -32,13 +30,11 @@ const RING_CIRCUMFERENCE_PX: f32 = 37.7;
 /// The ghost's percent in logical pixels of type.
 const GHOST_PERCENT_PX: f32 = 12.0;
 
-/// Which cells a row paints: the list row, the hovered row (the chrome
-/// replaces the ordinal), or the drag ghost (the title, the ring, and the
-/// percent only).
+/// Which cells a row paints: the list row, or the drag ghost (the title, the
+/// ring, and the percent only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RowChrome {
     Row,
-    Hover,
     Ghost,
 }
 
@@ -232,8 +228,7 @@ pub(super) struct RowCellsProps {
 
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
 /// ordinal, the one title line with its progress ring, and the right column's
-/// duration. The hovered row reserves the leading slot its sibling grip covers,
-/// and the drag ghost paints the title, the ring, and the percent only.
+/// duration. The drag ghost paints the title, the ring, and the percent only.
 #[component]
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
@@ -255,13 +250,6 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 ),
                 "data-ordinal": "",
                 {ordinal_text}
-            }
-        } else if chrome == RowChrome::Hover {
-            // The grip's slot: the six-dot grip replaces the ordinal.
-            span {
-                class: "shrink-0",
-                style: "width: 14px;",
-                "aria-hidden": "true",
             }
         }
         span {

@@ -1,7 +1,8 @@
 //! The canvas queue's row contracts (add-tauri-gui-client row 6.5, design
-//! D5): the hover that paints the row chrome, the grip's drag (the drop index
-//! from a pointer move, the ghost and insertion line, one move request on
-//! release, none on a cancel), and the row menu (a right-click opener, and
+//! D5): the hover that paints the hover fill, the row drag (a drag begins on
+//! motion after a press on a row; the drop index from a pointer move, the
+//! ghost and insertion line, one move request on release, none on a cancel),
+//! and the row menu (a right-click opener, and
 //! an entry press executing through the Client core).
 
 use mbv::{gui_client_capabilities, stub_app_for_gui_client, stub_app_with_queue_and_cmd_rx};
@@ -49,9 +50,8 @@ fn release_at(x: f32, y: f32) -> CoreInput {
     ))
 }
 
-/// A layout report with four queue rows, the first row's grip painted over
-/// it: the canvas's hovered row reports its chrome as its own regions.
-fn rows_with_first_grip() -> CoreInput {
+/// A layout report with four queue rows.
+fn four_rows() -> CoreInput {
     measured_layout(
         4,
         vec![
@@ -59,7 +59,6 @@ fn rows_with_first_grip() -> CoreInput {
             region_at(0.0, 24.0, RegionTarget::Queue(QueueTargetId::Slot(2))),
             region_at(0.0, 48.0, RegionTarget::Queue(QueueTargetId::Slot(3))),
             region_at(0.0, 72.0, RegionTarget::Queue(QueueTargetId::Slot(4))),
-            region_at(0.0, 0.0, RegionTarget::Queue(QueueTargetId::RowGrip(1))),
         ],
     )
 }
@@ -77,14 +76,13 @@ fn slot_moves(cmd_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) -> Vec<(u64
         .collect()
 }
 
-/// The row hover the frame carries: the row under the pointer, its chrome
-/// region included, and `None` when the pointer leaves the rows (add-tauri-
-/// gui-client row 6.5: the frame paints the hovered row's grip and actions
-/// button).
+/// The row hover the frame carries: the row under the pointer, and `None`
+/// when the pointer leaves the rows (add-tauri-gui-client row 6.5: the frame
+/// paints the hovered row's hover fill).
 #[test]
 fn the_frame_carries_the_hovered_row() {
     let mut test = test_core(3);
-    test.tx.send(rows_with_first_grip()).unwrap();
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     test.held();
 
@@ -93,14 +91,13 @@ fn the_frame_carries_the_hovered_row() {
     assert!(test.core.step());
     assert_eq!(test.held().queue().hover, Some(2));
 
-    // The report the hovered row's own chrome regions cause keeps the hover:
-    // clearing it dropped the chrome the report measured, so it flickered on
-    // every move.
-    test.tx.send(rows_with_first_grip()).unwrap();
+    // The report the hover fill's repaint causes keeps the hover: clearing
+    // it dropped the fill the report measured, so it flickered on every move.
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     assert_eq!(test.held().queue().hover, Some(2));
 
-    // A move onto the first row's grip keeps that row hovered.
+    // A move back onto the first row re-arms it there.
     test.tx.send(move_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
     assert_eq!(test.held().queue().hover, Some(1));
@@ -112,35 +109,34 @@ fn the_frame_carries_the_hovered_row() {
 }
 
 /// A drag's motion previews the drop index and the frame's ghost and
-/// insertion line: the grip's press starts the drag at the row's own place,
-/// and a move over the third row's lower half inserts the row after it, so
-/// the slot's final index is the row it would become (the list with the
-/// dragged row removed).
+/// insertion line: the first motion after a press on a row starts the drag at
+/// the row's own place, and a move over the third row's lower half inserts
+/// the row after it, so the slot's final index is the row it would become
+/// (the list with the dragged row removed).
 #[test]
 fn a_drag_move_previews_the_drop_index_and_the_ghost() {
     let mut test = test_core(4);
-    test.tx.send(rows_with_first_grip()).unwrap();
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     test.held();
 
     test.tx.send(press_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    let started = test.held();
-    let drag = started
-        .queue()
-        .drag
-        .clone()
-        .expect("the grip's press starts the drag");
-    assert_eq!(drag.slot, 1);
-    assert_eq!(drag.drop_index, 0);
-    assert_eq!(drag.ghost_primary(), "Item 0");
+    assert!(
+        test.held().queue().drag.is_none(),
+        "a press with no motion arms no drag"
+    );
 
     // The third row runs from y=48 to y=72; its lower half is the "after"
-    // side.
+    // side. The motion both starts the drag and previews the drop.
     test.tx.send(drag_to(10.0, 66.0)).unwrap();
     assert!(test.core.step());
     let frame = test.held();
-    let drag = frame.queue().drag.clone().expect("the drag keeps running");
+    let drag = frame
+        .queue()
+        .drag
+        .clone()
+        .expect("the motion starts the drag");
     assert_eq!(drag.slot, 1);
     assert_eq!(drag.drop_index, 2);
     assert_eq!(drag.insertion, GuiQueueInsertion::After { slot: 3 });
@@ -154,7 +150,7 @@ fn a_drag_move_previews_the_drop_index_and_the_ghost() {
 fn a_drag_release_sends_one_move_request() {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
     let mut test = test_core_with(app);
-    test.tx.send(rows_with_first_grip()).unwrap();
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     test.held();
 
@@ -180,7 +176,7 @@ fn a_drag_release_sends_one_move_request() {
 fn a_cancelled_drag_sends_no_move_request() {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
     let mut test = test_core_with(app);
-    test.tx.send(rows_with_first_grip()).unwrap();
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     test.held();
 
@@ -388,7 +384,7 @@ fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
 fn a_cancelled_drag_then_click_sends_no_move_review_u65_p1_2() {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
     let mut test = test_core_with(app);
-    test.tx.send(rows_with_first_grip()).unwrap();
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     test.held();
 
@@ -431,7 +427,7 @@ fn a_cancelled_drag_then_click_sends_no_move_review_u65_p1_2() {
 fn a_pointer_cancel_sends_no_move_review_u65_p1_2() {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
     let mut test = test_core_with(app);
-    test.tx.send(rows_with_first_grip()).unwrap();
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     test.held();
 
@@ -458,7 +454,7 @@ fn a_pointer_cancel_sends_no_move_review_u65_p1_2() {
 fn a_new_press_discards_the_stale_drag_review_u65_p1_2() {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
     let mut test = test_core_with(app);
-    test.tx.send(rows_with_first_grip()).unwrap();
+    test.tx.send(four_rows()).unwrap();
     assert!(test.core.step());
     test.held();
 

@@ -9,9 +9,9 @@
 //! The adapters are constructed per routing call over the core thread's own
 //! fields; they hold no state of their own. The seekbar's scrub throttle
 //! lives in the [`QueuePlaybackSurface`] (shared Surface state), and the
-//! queue's row drag lives in the [`QueueSurface`]: a grip's press starts it,
-//! motion previews the drop, and the release emits the one move request
-//! (add-tauri-gui-client row 6.5). The chooser and popover presses resolve
+//! queue's row drag lives in the [`QueueSurface`]: motion after a press on a
+//! row starts it, further motion previews the drop, and the release emits the
+//! one move request (add-tauri-gui-client row 6.5). The chooser and popover presses resolve
 //! their painted row indexes against [`PaintedChoices`], the lists the last
 //! window painted, so a change between paint and press selects the
 //! painted choice or nothing.
@@ -49,13 +49,10 @@ pub(crate) fn gesture_point(gesture: &PointerGesture<Position>) -> Option<Positi
     }
 }
 
-/// The queue row a region names, if it names a row: the row's own region or
-/// the grip painted over it, so moving onto the grip keeps the row hovered.
+/// The queue row a region names, if it names a row: the row's own region.
 pub(crate) fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
     match target {
-        RegionTarget::Queue(QueueTargetId::Slot(raw) | QueueTargetId::RowGrip(raw)) => {
-            Some(QueueSlotId::from_raw(*raw))
-        }
+        RegionTarget::Queue(QueueTargetId::Slot(raw)) => Some(QueueSlotId::from_raw(*raw)),
         RegionTarget::Queue(_)
         | RegionTarget::QueuePlayback(_)
         | RegionTarget::StatusBar(_)
@@ -66,7 +63,7 @@ pub(crate) fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
 }
 
 /// The queue row the point lands on, resolved against the reported regions:
-/// the row's own region or the chrome painted over it.
+/// the row's own region.
 pub(crate) fn row_slot_at(regions: &HitMap<RegionTarget>, at: Position) -> Option<QueueSlotId> {
     regions.resolve(at).and_then(row_region_target)
 }
@@ -92,9 +89,9 @@ pub(crate) fn seekbar_region(regions: &HitMap<RegionTarget>, at: Position) -> Op
 /// The click, double-click, right-click, wheel, and drag arms mirror the
 /// TUI Queue component's pointer path (`mbv-components` `queue/pointer.rs`)
 /// with the reported regions in place of its retained paint geometry, plus
-/// the canvas queue's row chrome (add-tauri-gui-client row 6.5): the hovered
-/// row's grip starts the drag, a right-click opens the row menu, and an
-/// open menu's entry executes. The playlist pill's click opens the TUI's
+/// the canvas queue's row gestures (add-tauri-gui-client row 6.5): a press on
+/// a row arms its drag and selects it, a right-click opens the row menu, and
+/// an open menu's entry executes. The playlist pill's click opens the TUI's
 /// playlists overlay, which the first slice does not present, so it resolves
 /// to nothing here — the same documented absence the GUI dispatch records for
 /// the surfaces it has not ported.
@@ -162,14 +159,6 @@ impl<'a> QueueLeaf<'a> {
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(index)) => Some(Msg::Shell(Box::new(
                 ShellRequest::ContextMenuSelect(*index),
             ))),
-            // The hovered row's grip starts the drag and selects the row, as
-            // a press on the row does; motion previews the drop and the
-            // release sends the one move request.
-            RegionTarget::Queue(QueueTargetId::RowGrip(raw)) => {
-                let target = QueueSlotId::from_raw(*raw);
-                self.surface.begin_row_drag(target);
-                Some(self.select_row(target, selection))
-            }
             // The queue header's filter control (row 6.5): the press emits the
             // request whose App-side effect the `/` chord dispatches, so the
             // control and the chord run one path.
@@ -229,9 +218,7 @@ impl<'a> QueueLeaf<'a> {
     fn double_click(&mut self, at: Position) -> Option<Msg> {
         // The TUI's double click re-selects the row (the first press already
         // did) and lets the dispatched activation play it. Only the row's own
-        // region plays: the hover chrome's grip swallows a
-        // double click (review of row 6.5, finding P2-2), so a fast second
-        // press on the grip never opens playback.
+        // region plays: a point in no queue row region resolves to nothing.
         let Some(RegionTarget::Queue(QueueTargetId::Slot(raw))) = self.regions.resolve(at) else {
             return None;
         };
@@ -281,8 +268,8 @@ impl<'a> QueueLeaf<'a> {
 
     fn drag(&mut self, to: Position) -> Option<Msg> {
         // Motion only previews the drop: the row drag's request is the
-        // release's, and a motion the drag does not own (a press that did not
-        // start on a grip) changes nothing.
+        // release's, and a motion the drag does not own (the press anchor
+        // landed off the rows) changes nothing.
         self.surface.row_drag()?;
         let Some((region, anchor)) = self.row_region_at(to) else {
             // Off the rows: the drag keeps its last preview.
@@ -634,54 +621,12 @@ impl GuiSurfaceLeaf for StatusBarLeaf<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        PaintedChoices, PlaybackLeaf, QueueLeaf, QueuePlaybackSurface, QueueSlotId, QueueSurface,
-        QueueTargetId, RegionTarget, TransportAvailability,
-    };
-    use crate::bridge::layout::QueuePlaybackTargetId;
+    use super::{PaintedChoices, PlaybackLeaf, QueuePlaybackSurface, TransportAvailability};
+    use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
     use mbv::GuiSurfaceLeaf;
     use mbv_surfaces::gesture::PointerGesture;
     use mbv_surfaces::{HitMap, HitRegion};
-    use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use mbv_ui_msg::{Msg, PlaybackRequest, Position};
-    use rstest::rstest;
-
-    /// A queue holding one item row for slot 1.
-    fn one_row_queue() -> QueueSurface {
-        let mut queue = QueueSurface::new();
-        queue.list_mut().set_content(vec![MediaListRow::Item {
-            target: QueueSlotId::from_raw(1),
-            primary: "Item 1".to_string(),
-            secondary: None,
-            trailing: None,
-            duration: None,
-            kind: MediaKind::Media,
-            semantic_state: MediaSemanticState::Ordinary,
-        }]);
-        queue
-    }
-
-    /// A double click on the row chrome — the grip — plays nothing (review of
-    /// add-tauri-gui-client row 6.5, finding P2-2): the chrome region swallows
-    /// the gesture, so a fast second press on the grip never activates the row
-    /// beneath it.
-    #[rstest]
-    #[case(QueueTargetId::RowGrip(1))]
-    fn a_double_click_on_the_row_chrome_plays_nothing_review_u65_p2_2(
-        #[case] target: QueueTargetId,
-    ) {
-        let mut queue = one_row_queue();
-        let mut regions = HitMap::new();
-        regions.push(
-            HitRegion::new(0.0, 0.0, 100.0, 30.0),
-            RegionTarget::Queue(target),
-        );
-        let mut leaf = QueueLeaf::new(&mut queue, &regions);
-        assert_eq!(
-            leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
-            None
-        );
-    }
 
     /// A right-click anywhere on the panel opens the player menu at the
     /// pointer's whole-pixel anchor (gui-player-overlay-menu).

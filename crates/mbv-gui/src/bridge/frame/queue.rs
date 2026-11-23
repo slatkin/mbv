@@ -25,8 +25,8 @@ pub struct GuiQueue {
     /// viewport, so it is read from every row, not from `rows`.
     pub active: Option<u64>,
     /// The row the pointer rests on (the canvas row hover,
-    /// add-tauri-gui-client row 6.5): the window paints that row's grip.
-    /// `None` while the pointer rests on no row.
+    /// add-tauri-gui-client row 6.5): the window paints that row's hover
+    /// fill. `None` while the pointer rests on no row.
     pub hover: Option<u64>,
     /// The row drag in progress, if any: the drag ghost and insertion line.
     pub drag: Option<GuiQueueDrag>,

@@ -575,7 +575,7 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 #### Scenario: A row is hovered
 
 - **WHEN** the pointer is over a queue row
-- **THEN** the row paints the canvas's hovered row: the grip replaces the row's ordinal
+- **THEN** the row paints the canvas's hovered row: the hover fill, with the row's ordinal and cells unchanged
 
 #### Scenario: The row menu opens
 
@@ -594,7 +594,7 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 
 #### Scenario: A row is dragged
 
-- **WHEN** the user drags a row to a new position and releases
+- **WHEN** the user presses a row and drags it to a new position and releases
 - **THEN** the queue shows an insertion line and a drag ghost during the drag
 - **AND** the Player owner of the shown queue moves the slot to the new position
 
