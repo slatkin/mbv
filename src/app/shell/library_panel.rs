@@ -616,7 +616,7 @@ impl Model {
             .get_component(&ComponentId::Library)
             .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
             .and_then(LibraryPanel::active_hero_image_box);
-        let state = self.app.project_hero_image(
+        let state = self.project_hero_image(
             &hero_data.facts,
             false,
             area,

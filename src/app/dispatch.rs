@@ -13,6 +13,7 @@ pub(in crate::app) mod mouse_gestures;
 pub(in crate::app) mod music;
 pub(in crate::app) mod navigation;
 pub(in crate::app) mod notify;
+pub(in crate::app) mod playback_request;
 pub(in crate::app) mod playlists;
 pub(in crate::app) mod queue;
 pub(in crate::app) mod run_loop;

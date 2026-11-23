@@ -1,5 +1,6 @@
 mod loading;
 mod navigation;
+mod reset;
 mod search;
 mod tv;
 

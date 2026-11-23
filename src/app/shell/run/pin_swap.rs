@@ -5,6 +5,7 @@
 //! player-event drains hand them here first.
 
 use crate::app::QUIT_REQUESTED;
+use crate::app::dispatch::run_loop::teardown::save_launch_state;
 use crate::app::shell::Model;
 use mbv_ctrl::CtrlCmd;
 use mbv_player::PlayerProxy;
@@ -28,7 +29,7 @@ impl Model {
         // The swap is worth more than the snapshot: answer even when
         // the save failed (design D6).
         let launch_state = self.launch_state_snapshot();
-        super::super::teardown::save_launch_state(&launch_state);
+        save_launch_state(&launch_state);
         if !self
             .pin_swap_reply(link)
             .send_ctrl_cmd(CtrlCmd::SwapPrepared)

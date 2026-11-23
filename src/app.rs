@@ -30,10 +30,12 @@ pub use self::app_stub::{
     stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
     stub_app_with_track_choices, stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
+mod image_cache;
 mod infra;
 mod input;
 pub mod owner_link;
 pub mod pin;
+mod projection;
 mod queue_card_artwork;
 mod queue_footer_projection;
 mod queue_playback_projection;

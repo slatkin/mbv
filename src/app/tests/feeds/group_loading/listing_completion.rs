@@ -1,8 +1,7 @@
 //! The pill row's completion over a refreshed root listing: a partial root
-//! refresh, the full refresh that invalidates the folder counts, the count
-//! fan-out the listing completion commits, and the UI-state reset's root
-//! restoration. Split from `group_loading` to keep its contract tests beside
-//! this file's own.
+//! refresh, the full refresh that invalidates the folder counts, and the count
+//! fan-out the listing completion commits. Split from `group_loading` to keep
+//! these contract tests beside this file's own.
 
 use super::make_home_video_app;
 use super::make_root_folder;
@@ -277,33 +276,4 @@ fn listing_completion_keeps_loading_while_the_selection_fetch_is_in_flight(
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(!state.loading, "the fetch's own result clears the flag");
-}
-
-/// Contract (review P2 on task 5.1, commit 46b0ac739): the UI-state reset
-/// restores a feed-view library's root to a plain folder listing — no
-/// `item_types`, no unplayed-only flag — so a later refresh builds its fetch
-/// from folder-listing fields instead of fetching videos onto the root and
-/// destroying the pill source.
-#[rstest]
-fn ui_state_reset_restores_the_feed_view_root_to_a_folder_listing(make_home_video_app: App) {
-    let mut app = make_home_video_app;
-    seed_home_video_root_loaded(&mut app);
-    if let Some(root) = app.libs[0].nav_stack.first_mut() {
-        root.item_types = Some("Video".into());
-        root.unplayed_only = true;
-        root.sort_by = "DateCreated".into();
-        root.sort_order = "Ascending".into();
-    }
-
-    app.reset_browse_root_defaults();
-
-    let root = &app.libs[0].nav_stack[0];
-    assert_eq!(root.item_types, None, "the reset drops the Video filter");
-    assert!(
-        !root.unplayed_only,
-        "the reset drops the unplayed-only flag"
-    );
-    assert_eq!(root.sort_by, "SortName");
-    assert_eq!(root.sort_order, "Ascending");
-    assert_eq!(root.items.len(), 2, "the root keeps its folder items");
 }

@@ -7,10 +7,7 @@ fn teardown_flushes_pending_settings_save() {
     app.config.lock().unwrap().consume_audio = true;
     app.settings_save_at = Some(Instant::now());
 
-    app.teardown(
-        Duration::from_secs(1),
-        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
-    );
+    app.teardown(Duration::from_secs(1), false);
 
     assert!(crate::app::config::load_config().unwrap().consume_audio);
 }
@@ -22,10 +19,7 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
     app.config.lock().unwrap().auto_reconnect = true;
     app.active_route = Some("music".to_string());
 
-    app.teardown(
-        Duration::from_secs(1),
-        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
-    );
+    app.teardown(Duration::from_secs(1), false);
 
     assert_eq!(
         crate::app::config::load_last_remote_connection().unwrap(),
@@ -47,10 +41,7 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     assert!(!app.config.lock().unwrap().auto_reconnect);
     app.active_route = None;
 
-    app.teardown(
-        Duration::from_secs(1),
-        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
-    );
+    app.teardown(Duration::from_secs(1), false);
 
     // Feature is off: the file from before this test's own `app` even
     // existed must be left exactly as it was, not cleared just because
@@ -79,10 +70,7 @@ fn teardown_without_a_remote_keeps_the_saved_target() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().auto_reconnect = true;
 
-    app.teardown(
-        Duration::from_secs(1),
-        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
-    );
+    app.teardown(Duration::from_secs(1), false);
 
     assert_eq!(
         crate::app::config::load_last_remote_connection().unwrap(),
@@ -112,10 +100,7 @@ fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
 
     app.disconnect_remote();
 
-    app.teardown(
-        Duration::from_secs(1),
-        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
-    );
+    app.teardown(Duration::from_secs(1), false);
 
     assert_eq!(
         crate::app::config::load_last_remote_connection().unwrap(),

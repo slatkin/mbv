@@ -7,23 +7,6 @@ use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-/// How this TUI exits, decided at the shell's discrete exit boundaries
-/// (tray-pin-swap design D6). The shell's launch snapshot travels with the
-/// kind, so an orderly exit always carries one and a swapped-out exit never
-/// pretends to have one.
-pub(in crate::app) enum ExitKind {
-    /// Orderly exit: save `launch_state`, then apply the daemon lifetime
-    /// policy (coordinated shutdown when Stay Alive is off).
-    Quit {
-        launch_state: mbv_config::TuiLaunchState,
-    },
-    /// A Pin swap replaced this TUI: skip the launch-state save and the
-    /// coordinated shutdown request, so the daemon and playback keep running
-    /// with the replacement Client (spec daemon-lifecycle "Swapped-out TUI
-    /// with Stay Alive off").
-    SwappedOut,
-}
-
 /// Save the launch snapshot the shell supplied — at teardown or for a
 /// `SwapPrepare` (tray-pin-swap design D6). The failure is logged and never
 /// blocks the swap: the shell answers `SwapPrepared` either way.
@@ -72,15 +55,30 @@ impl App {
     /// lifetime policy applies — a coordinated shutdown request to this
     /// machine's local daemon when Stay Alive is off, read at this boundary.
     ///
-    /// The quit timeout is this `App`'s configured `quit_timeout_secs`. The
-    /// TUI shell reaches the same teardown through `App::teardown`, which
-    /// adds the launch snapshot the shell owns and the swapped-out exit kind,
-    /// and restores the terminal itself; a Client with no shell and no
-    /// terminal — the GUI Client — calls this directly and saves no launch
-    /// snapshot. A failed shutdown request sets the post-terminal message the
-    /// TUI prints after its terminal is restored; a terminal-less Client
-    /// drops it with the `App`, and the `daemon_shutdown` warnings carry the
-    /// failure.
+    /// The quit timeout is this `App`'s configured `quit_timeout_secs`.
+    /// `swapped_out` is the caller's exit kind: the TUI shell decides it at
+    /// its exit boundary (a Pin swap replaced the TUI) and saves the launch
+    /// snapshot the snapshot itself owns (tray-pin-swap design D6); a Client
+    /// with no shell and no terminal — the GUI Client — passes `false` and
+    /// saves no launch snapshot. A failed shutdown request sets the
+    /// post-terminal message the TUI prints after its terminal is restored; a
+    /// terminal-less Client drops it with the `App`, and the
+    /// `daemon_shutdown` warnings carry the failure.
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the quit timeout when the configuration lock is
+    /// poisoned: a writer panicked holding it, and the cached configuration
+    /// cannot be trusted.
+    pub fn teardown(&mut self, quit_timeout: Duration, swapped_out: bool) {
+        self.teardown_inner(quit_timeout, swapped_out);
+    }
+
+    /// The exit teardown of a Client with no shell and no terminal — the GUI
+    /// Client — at its own exit boundary: this `App`'s configured quit
+    /// timeout applies and no exit kind is its own (it never swaps out and
+    /// saves no launch snapshot). The TUI shell passes its own kind to
+    /// [`App::teardown`] instead.
     ///
     /// # Panics
     ///
@@ -309,29 +307,6 @@ impl App {
     }
 }
 
-/// An orderly exit kind for `App::teardown` callers in test families that
-/// assert nothing about launch-state persistence and have no shell `Model`
-/// to take a real snapshot from.
-#[cfg(test)]
-pub(in crate::app) fn test_quit_exit_kind() -> ExitKind {
-    ExitKind::Quit {
-        launch_state: test_quit_launch_state(),
-    }
-}
-
-/// A launch snapshot for exit kinds that save one; the value itself is
-/// irrelevant to the assertions of the test families that use it.
-#[cfg(test)]
-fn test_quit_launch_state() -> mbv_config::TuiLaunchState {
-    mbv_config::TuiLaunchState {
-        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_config::TabIdentity::Home,
-        panel_focus: mbv_config::LaunchPanelFocus::Library,
-        selector: None,
-        item: None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,12 +334,7 @@ mod tests {
         ));
         app.active_route = Some("music".to_string());
 
-        app.teardown(
-            Duration::ZERO,
-            ExitKind::Quit {
-                launch_state: test_quit_launch_state(),
-            },
-        );
+        app.teardown(Duration::ZERO, false);
 
         assert!(
             app.pending_exit_message
