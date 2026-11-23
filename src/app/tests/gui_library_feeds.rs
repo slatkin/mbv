@@ -99,10 +99,13 @@ fn all_over_youtube_only_subscriptions_shares_no_feeds_platform() {
 
 /// Press one subscription in the Feeds destination's collection dropdown.
 fn toggle_subscription(app: &mut App, subscription: &str) {
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
-        target: GuiCollectionTarget::Feeds,
-        key: subscription.to_string(),
-    });
+    apply_gui_library_command(
+        app,
+        GuiLibraryCommand::CollectionToggle {
+            target: GuiCollectionTarget::Feeds,
+            key: subscription.to_string(),
+        },
+    );
 }
 
 /// The entry guids the App's selected pill lists, in order.
@@ -482,10 +485,13 @@ fn two_checked_subscriptions_merge_their_entries_in_date_order() {
 #[test]
 fn the_oldest_sort_sets_the_oldest_order() {
     let mut app = fetched_feeds_app();
-    app.apply_gui_library_command(GuiLibraryCommand::ListSort {
-        target: GuiSortTarget::Feeds,
-        sort: GuiListSort::Oldest,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ListSort {
+            target: GuiSortTarget::Feeds,
+            sort: GuiListSort::Oldest,
+        },
+    );
 
     assert_eq!(
         app.gui_list_sort(GuiSortTarget::Feeds),

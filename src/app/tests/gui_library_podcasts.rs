@@ -18,17 +18,23 @@ mod data_path;
 
 /// Press one show in the Podcasts destination's collection dropdown.
 fn toggle_show(app: &mut App, lib_idx: usize, show_id: &str) {
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
-        target: GuiCollectionTarget::Podcasts(lib_idx),
-        key: show_id.to_string(),
-    });
+    apply_gui_library_command(
+        app,
+        GuiLibraryCommand::CollectionToggle {
+            target: GuiCollectionTarget::Podcasts(lib_idx),
+            key: show_id.to_string(),
+        },
+    );
 }
 
 /// Press the All row of the Podcasts destination's collection dropdown.
 fn select_all_shows(app: &mut App, lib_idx: usize) {
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
-        target: GuiCollectionTarget::Podcasts(lib_idx),
-    });
+    apply_gui_library_command(
+        app,
+        GuiLibraryCommand::CollectionAll {
+            target: GuiCollectionTarget::Podcasts(lib_idx),
+        },
+    );
 }
 
 /// The names of the Podcasts dropdown's checked shows.
@@ -401,10 +407,13 @@ fn the_play_and_queue_commands_replace_and_append_under_the_admission() {
     let cmd_rx = super::live_owner_channel(&mut app);
     let row = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
-        lib_idx: 1,
-        item_id: row.clone(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
+            lib_idx: 1,
+            item_id: row.clone(),
+        },
+    );
     let replaced = cmd_rx
         .try_iter()
         .find_map(|command| match command {
@@ -421,10 +430,13 @@ fn the_play_and_queue_commands_replace_and_append_under_the_admission() {
         .expect("the Owner received a queue replacement");
     assert_eq!(replaced, ("show-a".to_string(), "a-old".to_string()));
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
-        lib_idx: 1,
-        item_id: row,
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
+            lib_idx: 1,
+            item_id: row,
+        },
+    );
     let appended: Vec<String> = cmd_rx
         .try_iter()
         .filter_map(|command| match command {
@@ -453,19 +465,25 @@ fn a_denied_podcast_owner_flashes_the_owner_unavailable_toast() {
     app.set_abs_admission_for_test(false);
     let row = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
-        lib_idx: 1,
-        item_id: row.clone(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
+            lib_idx: 1,
+            item_id: row.clone(),
+        },
+    );
     assert_eq!(
         app.newest_toast_text(),
         "Audiobookshelf playback owner is unavailable",
         "the play's refusal flashes the owner-unavailable toast"
     );
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
-        lib_idx: 1,
-        item_id: row,
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
+            lib_idx: 1,
+            item_id: row,
+        },
+    );
     assert!(
         cmd_rx.try_recv().is_err(),
         "a denied Owner receives no queue change"
@@ -482,24 +500,36 @@ fn stale_podcast_ids_change_nothing() {
     let mut app = projection_app();
     let cmd_rx = super::live_owner_channel(&mut app);
     let picked = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsSelect {
-        lib_idx: 1,
-        row: picked.clone(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsSelect {
+            lib_idx: 1,
+            row: picked.clone(),
+        },
+    );
     let gone = GuiPodcastEpisodeId::new("show-a".into(), "gone".into()).encode();
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsSelect {
-        lib_idx: 1,
-        row: "not-an-id".into(),
-    });
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
-        lib_idx: 1,
-        item_id: gone.clone(),
-    });
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
-        lib_idx: 1,
-        item_id: gone,
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsSelect {
+            lib_idx: 1,
+            row: "not-an-id".into(),
+        },
+    );
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
+            lib_idx: 1,
+            item_id: gone.clone(),
+        },
+    );
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
+            lib_idx: 1,
+            item_id: gone,
+        },
+    );
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
     assert!(

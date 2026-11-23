@@ -43,7 +43,7 @@ impl App {
         view: GuiShowsView,
     ) {
         if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "showsSetView",
                 format_args!("the destination is no Shows library"),
             );
@@ -138,7 +138,7 @@ impl App {
     /// changes nothing.
     pub(in crate::app::gui_library) fn select_gui_shows_row(&mut self, lib_idx: usize, row: &str) {
         if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "showsSelect",
                 format_args!("the destination is no Shows library"),
             );
@@ -164,7 +164,7 @@ impl App {
                     self.stamp_navigation();
                     self.gui.shows_flat_selection = Some(row.to_owned());
                 } else {
-                    Self::log_stale_library_item("showsSelect", row);
+                    super::log_stale_library_item("showsSelect", row);
                 }
             }
             GuiShowsView::Upcoming => {}
@@ -222,7 +222,7 @@ impl App {
     ) {
         match self.gui_shows_item(lib_idx, item_id) {
             Some(item) => self.play_or_activate_lib_item(lib_idx, item),
-            None => Self::log_stale_library_item("showsPlay", item_id),
+            None => super::log_stale_library_item("showsPlay", item_id),
         }
     }
 
@@ -235,7 +235,7 @@ impl App {
     ) {
         match self.gui_shows_item(lib_idx, item_id) {
             Some(item) => self.play_lib_item_next(lib_idx, item),
-            None => Self::log_stale_library_item("showsPlayNext", item_id),
+            None => super::log_stale_library_item("showsPlayNext", item_id),
         }
     }
 
@@ -247,7 +247,7 @@ impl App {
     ) {
         match self.gui_shows_item(lib_idx, item_id) {
             Some(item) => self.enqueue_lib_item(lib_idx, item),
-            None => Self::log_stale_library_item("showsQueue", item_id),
+            None => super::log_stale_library_item("showsQueue", item_id),
         }
     }
 }

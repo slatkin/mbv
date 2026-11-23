@@ -406,7 +406,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
     let (app, cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
     send_playlists(&mut test, mbv::GuiPlaylistsCommand::Toggle);
-    assert!(test.core.app_mut().gui_playlists_is_open());
+    assert!(test.core.gui_playlists_open_for_test());
     let http = mbv_net::mock_http::MockHttp::new();
     http.respond_when(
         "/Playlists/pl/Items",
@@ -442,7 +442,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
         replaces[0].1
     );
     assert!(
-        !test.core.app_mut().gui_playlists_is_open(),
+        !test.core.gui_playlists_open_for_test(),
         "the drained dismissal closed the screen"
     );
 }

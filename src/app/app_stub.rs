@@ -8,28 +8,33 @@
 //! under `cfg(test)`, so a dependent crate's dev-dependency can enable it;
 //! the shipped builds never compile it.
 
+#[cfg(any(test, feature = "test"))]
 use std::sync::{Arc, Mutex};
 
-use super::{App, AppInit, QueueView};
+use super::App;
+#[cfg(any(test, feature = "test"))]
+use super::QueueView;
+
+/// The stub constructions over `App::build`, in their own child module so this
+/// one stays within its line ceiling. Their first half is the construction a
+/// caller outside the `test` builds uses too (the parked `App` a Client wrapper
+/// moves out, `app::gui_library`, `app::gui_settings`, `app::input::gui`).
+pub(in crate::app) mod built;
+
+pub use self::built::handoff_app;
+#[cfg(any(test, feature = "test"))]
+pub use self::built::make_app_stub;
 
 /// The GUI `sections` bench's bench-scale seeds (design D12 of
 /// `gui-change-driven-sections`), in their own child module.
 #[cfg(feature = "test")]
 mod gui_scale;
 
-/// Minimal `App` stub for logic-only tests: the ordinary `App::build`
-/// construction ([`make_built_app`]) plus the stub-friendly defaults below.
-#[must_use]
-pub fn make_app_stub() -> App {
-    let mut app = make_built_app();
-    apply_app_stub_defaults(&mut app);
-    app
-}
-
 /// The capabilities a GUI Client presents (design D6a of
 /// `decouple-client-core`). It is the headless stand-in for the set
 /// `attach_owner` records at a real GUI attach, so a GUI test gives its stub
 /// this value instead of setting capability flags by hand.
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn gui_client_capabilities() -> crate::ClientCapabilities {
     crate::ClientCapabilities::empty()
@@ -39,7 +44,9 @@ pub fn gui_client_capabilities() -> crate::ClientCapabilities {
 
 fn apply_app_stub_defaults(app: &mut App) {
     // `build` doubles the configured image cache size; the stub keeps its
-    // original (undoubled) budget so eviction behaviour is unchanged.
+    // original (undoubled) budget so eviction behaviour is unchanged, under
+    // the `test` support build it was set from.
+    #[cfg(any(test, feature = "test"))]
     app.images.set_cache_capacity_for_test(50);
     // The stub stands in for a TUI Client without an Owner attach (design
     // D6a of `decouple-client-core`): it holds the capabilities the TUI
@@ -150,7 +157,7 @@ fn app_with_cmd_rx() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     compatibility.supports_answered_queue_ops = false;
     remote.set_ctrl_compatibility_for_test(compatibility);
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
-    let mut app = built_app(player, player_rx);
+    let mut app = built::built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
     while cmd_rx.try_recv().is_ok() {}
     (app, cmd_rx)
@@ -417,7 +424,7 @@ pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::
         status.runtime_ticks = 10 * 60 * mbv_emby_model::TICKS_PER_SECOND;
     });
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
-    let mut app = built_app(player, player_rx);
+    let mut app = built::built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
     app.cast_receivers = vec![mbv_cast::discovery::CastReceiver {
         id: "receiver-1".to_string(),
@@ -443,7 +450,9 @@ pub fn stub_app_with_failed_emby_setup() -> App {
     use mbv_core::service_runtime::ServiceState;
 
     let mut core = crate::gui::GuiCore::new(make_app_stub());
-    core.open_gui_settings_at(super::GuiSettingsSection::Services);
+    core.apply_gui_settings_overlay(&mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
+        mbv_ui_model::overlay::SidebarId::Settings,
+    ));
     let mut app = core.into_app();
     app.setup.emby_setup_form = Some(EmbySetupForm {
         fields: [
@@ -479,7 +488,7 @@ pub fn stub_app_with_track_choices() -> (App, std::sync::mpsc::Receiver<mbv_ctrl
         status.sub_id = 0;
     });
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
-    let mut app = built_app(player, player_rx);
+    let mut app = built::built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
     // The construction's preference sync lands on the channel before the
     // test starts; drain it so the test sees only commands its actions send.
@@ -619,67 +628,4 @@ pub fn stub_app_with_local_daemon_events(
     let (tx, rx) = std::sync::mpsc::channel();
     app.player_rx = rx;
     (app, tx)
-}
-
-/// The ordinary `App::build` construction over stub channels: no live
-/// Owner, no live Service, and the stub player whose command channel is
-/// already dropped.
-#[must_use]
-pub fn make_built_app() -> App {
-    use mbv_player::PlayerProxy;
-
-    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-    remote.update_status(|status| status.volume_max = 100);
-    built_app(PlayerProxy::from_remote(remote, false), player_rx)
-}
-
-/// The `App::build` construction over `player` and its event channel, the
-/// shared half of every stub that needs its own player wiring (a command
-/// channel of its own, say).
-fn built_app(
-    player: mbv_player::PlayerProxy,
-    player_rx: std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
-) -> App {
-    let (_, ws_rx) = std::sync::mpsc::channel();
-    let (_, transport_rx) = std::sync::mpsc::channel();
-    let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
-    let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
-
-    let config = crate::config::Config::default();
-
-    App::build(AppInit {
-        config: Arc::new(Mutex::new(config)),
-        emby_runtime: crate::app::state::service_runtime::EmbyRuntime::default(),
-        audiobookshelf_runtime: crate::app::state::service_runtime::AudiobookshelfRuntime::new(
-            false,
-        ),
-        player,
-        player_rx,
-        ws_rx,
-        transport_rx,
-        ws_send_tx: None,
-        audiobookshelf_socket_rx: {
-            let (_, rx) = std::sync::mpsc::channel();
-            rx
-        },
-        audiobookshelf_socket_tx: None,
-        audiobookshelf_socket_generation: None,
-        local_view: QueueView::default(),
-        remote_view: None,
-        system_notifications: false,
-        image_protocol: None,
-        image_protocol_enabled: false,
-        hidden_libraries: Vec::new(),
-        library_routes: std::collections::BTreeMap::new(),
-        music_levels: Vec::new(),
-        use_nerd_fonts: false,
-        indicator_style: mbv_ui_model::indicators::IndicatorStyle::default(),
-        image_cache_size: 50,
-        image_decode: mbv_images::ImageDecode::Pixels,
-        visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
-        card_image_tx,
-        card_image_rx,
-        channels,
-        idle_feed: None,
-    })
 }

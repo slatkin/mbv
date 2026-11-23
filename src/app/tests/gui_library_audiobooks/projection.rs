@@ -345,10 +345,13 @@ fn the_play_command_replaces_the_queue_with_the_book_at_its_saved_position() {
     app.seed_gui_abs_book_progress_for_test(0, "book-a", 300.0, false);
     let cmd_rx = super::live_owner_channel(&mut app);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlay {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlay {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
 
     let replaced = cmd_rx.try_iter().find_map(|command| match command {
         mbv_ctrl::CtrlCmd::UnifiedQueueReplace { items, .. } => match &*items {
@@ -384,10 +387,13 @@ fn the_queue_command_appends_the_book() {
     );
     let cmd_rx = super::live_owner_channel(&mut app);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsQueue {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsQueue {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
 
     let appended: Vec<String> = cmd_rx
         .try_iter()
@@ -453,11 +459,14 @@ fn the_chapter_command_seeks_on_the_active_book() {
     });
     while cmd_rx.try_recv().is_ok() {}
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
-        lib_idx: 0,
-        book_id: "book-a".into(),
-        chapter: 2,
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
+            lib_idx: 0,
+            book_id: "book-a".into(),
+            chapter: 2,
+        },
+    );
 
     assert!(
         matches!(
@@ -493,19 +502,25 @@ fn a_denied_owner_flashes_the_owner_unavailable_toast_and_submits_nothing() {
     let cmd_rx = super::live_owner_channel(&mut app);
     app.set_abs_admission_for_test(false);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlay {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlay {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
     assert_eq!(
         app.newest_toast_text(),
         "Audiobookshelf playback owner is unavailable",
         "the play's refusal flashes the owner-unavailable toast"
     );
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsQueue {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsQueue {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
     assert!(
         cmd_rx.try_recv().is_err(),
         "a denied owner receives no queue change"
@@ -533,25 +548,34 @@ fn stale_book_and_chapter_ids_change_nothing() {
     app.seed_gui_abs_book_detail_for_test(0, "book-a", &[(1, 0.0, 100.0, "One")], &[]);
     let cmd_rx = super::live_owner_channel(&mut app);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlay {
-        lib_idx: 0,
-        item_id: "gone".into(),
-    });
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsQueue {
-        lib_idx: 0,
-        item_id: "gone".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlay {
+            lib_idx: 0,
+            item_id: "gone".into(),
+        },
+    );
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsQueue {
+            lib_idx: 0,
+            item_id: "gone".into(),
+        },
+    );
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
     assert!(
         app.newest_toast_text().is_empty(),
         "a stale id flashes no toast"
     );
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
-        lib_idx: 0,
-        book_id: "book-a".into(),
-        chapter: 9,
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
+            lib_idx: 0,
+            book_id: "book-a".into(),
+            chapter: 9,
+        },
+    );
     assert_eq!(
         app.newest_toast_text(),
         "That chapter is no longer available",
@@ -581,10 +605,13 @@ fn the_select_command_stores_the_pick() {
         )],
     );
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsSelect {
-        lib_idx: 0,
-        row: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsSelect {
+            lib_idx: 0,
+            row: "book-a".into(),
+        },
+    );
 
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),

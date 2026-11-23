@@ -1,10 +1,12 @@
 //! The Playlists screen's section: the saved playlists with their item
 //! counts, the open playlist and its items, and the two loading flags.
 
-use mbv::{App, GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection};
+use mbv::{
+    GuiCore, GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,
+};
 
-/// The Playlists section value the App's open screen projects, `None` while
-/// the screen is closed.
+/// The Playlists section value the Client core's open screen projects, `None`
+/// while the screen is closed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPlaylistsFrame {
     pub playlists: Vec<GuiPlaylistRow>,
@@ -15,8 +17,8 @@ pub struct GuiPlaylistsFrame {
 
 impl GuiPlaylistsFrame {
     #[must_use]
-    pub fn build(app: &App) -> Option<Self> {
-        let projection = app.gui_playlists()?;
+    pub fn build(core: &GuiCore) -> Option<Self> {
+        let projection = core.gui_playlists()?;
         Some(Self {
             playlists: projection
                 .playlists

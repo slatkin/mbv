@@ -90,7 +90,7 @@ fn music_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibrary
     let menu = picked
         .map(|album_id| app.gui_library_menu(&album_id))
         .unwrap_or_default();
-    let playing_track_id = app.gui_playing_track_id();
+    let playing_track_id = mbv::playing_track_id_for_shell(app);
     (
         GuiDestinationList::Music(GuiMusicList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Music(GuiMusicDetail::from_projection(

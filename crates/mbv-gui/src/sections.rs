@@ -446,7 +446,7 @@ impl SectionLedger {
             audit_clean(Section::Settings, &self.settings, &settings);
         }
         if !marked.contains(&Section::Playlists) {
-            let playlists = GuiPlaylistsFrame::build(core.app());
+            let playlists = GuiPlaylistsFrame::build(core);
             audit_clean(Section::Playlists, &self.playlists, &playlists);
         }
     }
@@ -489,7 +489,7 @@ impl SectionLedger {
             self.settings.adopt(GuiSettingsFrame::build(core, playback));
         }
         if marked.contains(&Section::Playlists) {
-            self.playlists.adopt(GuiPlaylistsFrame::build(core.app()));
+            self.playlists.adopt(GuiPlaylistsFrame::build(core));
         }
     }
 

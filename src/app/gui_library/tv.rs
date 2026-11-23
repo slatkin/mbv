@@ -11,8 +11,8 @@
 
 use mbv_queue::TvContentMode;
 
-use super::App;
 use super::tabs::GuiDestinationKind;
+use crate::app::App;
 
 /// The GUI Library's Shows selection (design D12, D8): per Shows library, the
 /// selected series and the selected season. The season is never kept across a
@@ -45,7 +45,7 @@ impl App {
     /// `lib_idx` that names no Shows library is an ignored command.
     pub fn gui_tv_open(&mut self, lib_idx: usize) {
         if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "tvOpen",
                 format_args!("the destination is no Shows library"),
             );
@@ -76,7 +76,7 @@ impl App {
     /// an ignored command.
     pub fn gui_tv_select_series(&mut self, lib_idx: usize, series_id: &str) {
         if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "tvSelectSeries",
                 format_args!("the destination is no Shows library"),
             );
@@ -89,7 +89,7 @@ impl App {
                 .any(|item| item.id == series_id && item.item_type == "Series")
         });
         if !in_root {
-            Self::log_stale_library_item("tvSelectSeries", series_id);
+            super::log_stale_library_item("tvSelectSeries", series_id);
             return;
         }
         let entry = self.gui.tv_shows.entry(lib_idx).or_default();
@@ -108,7 +108,7 @@ impl App {
     /// command, as is a `lib_idx` that names no Shows library.
     pub fn gui_tv_select_season(&mut self, lib_idx: usize, season_id: &str) {
         if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "tvSelectSeason",
                 format_args!("the destination is no Shows library"),
             );
@@ -116,7 +116,7 @@ impl App {
         }
         let entry = self.gui.tv_shows.entry(lib_idx).or_default();
         let Some(series_id) = entry.series_id.clone() else {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "tvSelectSeason",
                 format_args!("no series is selected"),
             );

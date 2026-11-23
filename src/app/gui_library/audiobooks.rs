@@ -50,7 +50,7 @@ impl App {
     /// an ignored command.
     pub fn gui_abs_open(&mut self, lib_idx: usize) {
         if !self.gui_abs_book_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "absOpen",
                 format_args!("the destination is no Audiobooks library"),
             );
@@ -68,14 +68,14 @@ impl App {
     /// the pick, because the list is what would name it stale.
     pub fn gui_abs_select(&mut self, lib_idx: usize, book_id: &str) {
         if !self.gui_abs_book_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "absSelect",
                 format_args!("the destination is no Audiobooks library"),
             );
             return;
         }
         if !self.gui_abs_book_known(lib_idx, book_id) {
-            Self::log_stale_library_item("absSelect", book_id);
+            super::log_stale_library_item("absSelect", book_id);
             return;
         }
         self.gui.abs_libs.entry(lib_idx).or_default().picked_book = Some(book_id.to_string());
@@ -165,7 +165,7 @@ impl App {
     /// toast; a stale id plays nothing.
     pub(in crate::app::gui_library) fn play_gui_abs_book(&mut self, lib_idx: usize, book_id: &str) {
         let Some(item) = self.gui_abs_book_queue_item(lib_idx, book_id) else {
-            Self::log_stale_library_item("absPlay", book_id);
+            super::log_stale_library_item("absPlay", book_id);
             return;
         };
         if !self.player.can_admit_audiobookshelf() {
@@ -186,7 +186,7 @@ impl App {
         chapter_id: usize,
     ) {
         if self.gui_abs_book_queue_item(lib_idx, book_id).is_none() {
-            Self::log_stale_library_item("absPlayChapter", book_id);
+            super::log_stale_library_item("absPlayChapter", book_id);
             return;
         }
         self.activate_audiobookshelf_book_chapter(lib_idx, book_id, chapter_id);
@@ -202,7 +202,7 @@ impl App {
         book_id: &str,
     ) {
         let Some(item) = self.gui_abs_book_queue_item(lib_idx, book_id) else {
-            Self::log_stale_library_item("absQueue", book_id);
+            super::log_stale_library_item("absQueue", book_id);
             return;
         };
         if !self.player.can_admit_audiobookshelf() {

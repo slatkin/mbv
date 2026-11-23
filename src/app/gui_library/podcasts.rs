@@ -141,7 +141,7 @@ impl App {
     /// podcast library is an ignored command.
     pub fn gui_podcast_open(&mut self, lib_idx: usize) {
         if !self.gui_podcast_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "podcastOpen",
                 format_args!("the destination is no Podcasts library"),
             );
@@ -173,14 +173,14 @@ impl App {
     /// stale.
     pub fn gui_podcast_select(&mut self, lib_idx: usize, target: &PodcastEpisodeTarget) {
         if !self.gui_podcast_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "podcastSelect",
                 format_args!("the destination is no Podcasts library"),
             );
             return;
         }
         if !self.gui_podcast_episode_known(lib_idx, target) {
-            Self::log_stale_library_item("podcastSelect", target.episode_id());
+            super::log_stale_library_item("podcastSelect", target.episode_id());
             return;
         }
         self.gui
@@ -264,7 +264,7 @@ impl App {
             .selected_audiobookshelf_queue_item_target(lib_idx, target)
             .is_none()
         {
-            Self::log_stale_library_item("podcastPlay", target.episode_id());
+            super::log_stale_library_item("podcastPlay", target.episode_id());
             return;
         }
         self.play_selected_audiobookshelf_episode_target(lib_idx, target);
@@ -280,7 +280,7 @@ impl App {
         target: &PodcastEpisodeTarget,
     ) {
         let Some(item) = self.selected_audiobookshelf_queue_item_target(lib_idx, target) else {
-            Self::log_stale_library_item("podcastQueue", target.episode_id());
+            super::log_stale_library_item("podcastQueue", target.episode_id());
             return;
         };
         if !self.player.can_admit_audiobookshelf() {
@@ -299,7 +299,7 @@ impl App {
         row: &str,
     ) {
         let Some(episode) = GuiPodcastEpisodeId::decode(row) else {
-            Self::log_stale_library_item("podcastSelect", row);
+            super::log_stale_library_item("podcastSelect", row);
             return;
         };
         self.gui_podcast_select(lib_idx, &episode.target());
@@ -315,7 +315,7 @@ impl App {
         item_id: &str,
     ) {
         let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
-            Self::log_stale_library_item("podcastPlay", item_id);
+            super::log_stale_library_item("podcastPlay", item_id);
             return;
         };
         self.play_gui_podcast_episode(lib_idx, &episode.target());
@@ -330,7 +330,7 @@ impl App {
         item_id: &str,
     ) {
         let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
-            Self::log_stale_library_item("podcastQueue", item_id);
+            super::log_stale_library_item("podcastQueue", item_id);
             return;
         };
         self.enqueue_gui_podcast_episode(lib_idx, &episode.target());

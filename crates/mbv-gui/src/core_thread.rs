@@ -70,7 +70,7 @@ pub enum CoreInput {
     Layout(LayoutReport),
     /// One Library panel request (add-gui-library-panel design D2): the
     /// window content's `library` command. The core applies it through
-    /// [`App::apply_gui_library_command`], after the Panel-focus adapter sets
+    /// [`GuiCore::apply_gui_library_command`], after the Panel-focus adapter sets
     /// Library focus (design D3 of `gui-pointer-target-interaction`).
     Library(mbv::GuiLibraryCommand),
     /// One Settings screen request (`add-gui-settings-screen` design D5): the
@@ -78,7 +78,7 @@ pub enum CoreInput {
     /// [`GuiCore::apply_gui_settings_command`].
     Settings(mbv::GuiSettingsCommand),
     /// One Playlists screen request: the window content's `playlists`
-    /// command, applied through [`App::apply_gui_playlists_command`].
+    /// command, applied through [`GuiCore::apply_gui_playlists_command`].
     Playlists(mbv::GuiPlaylistsCommand),
     /// The window asks for a full snapshot (design D4): the core releases
     /// every section the window holds, so the next batch carries every present
@@ -322,7 +322,7 @@ impl CoreThread {
     /// design D4): the App's stored Panel focus, which its key gates read,
     /// through its public GUI entry, then the core's `FocusStack`.
     fn take_panel_focus(&mut self, focus: PanelFocus) {
-        self.core.app_mut().set_gui_panel_focus(focus);
+        self.core.set_gui_panel_focus(focus);
         self.focus.set_panel_focus(focus);
     }
 
@@ -331,7 +331,7 @@ impl CoreThread {
     /// Panel focus, so the core sets it per key from the key's [`KeyTarget`],
     /// and before each Library command the window asked for.
     fn apply_panel_focus(&mut self, focus: PanelFocus) {
-        if self.focus.panel_focus() == focus && self.core.app().gui_panel_focus() == focus {
+        if self.focus.panel_focus() == focus && self.core.gui_panel_focus() == focus {
             return;
         }
         self.take_panel_focus(focus);
@@ -404,6 +404,14 @@ impl CoreThread {
 
     pub fn gui_settings_section_for_test(&self) -> Option<mbv::GuiSettingsSection> {
         self.core.gui_settings().map(|state| state.section)
+    }
+
+    /// Whether the Playlists screen is open, for a Client's test that asserts
+    /// a key or a drained request opened or closed it.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_playlists_open_for_test(&self) -> bool {
+        self.core.gui_playlists_open_for_test()
     }
 
     /// The Feeds section's content the GUI's core projects: the secrets-free

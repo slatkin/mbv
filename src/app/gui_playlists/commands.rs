@@ -5,11 +5,12 @@
 use mbv_ui_msg::MusicTreeAction;
 
 use super::GuiPlaylistsCommand;
-use crate::app::App;
+use crate::gui::GuiCore;
 
-impl App {
-    /// Apply one Playlists command. A command built from a stale frame logs its
-    /// receipt at debug level and changes nothing.
+impl GuiCore {
+    /// Apply one Playlists command: each arm calls the shared `App` action the
+    /// TUI's sidebar calls. A command built from a stale frame logs its receipt
+    /// at debug level and changes nothing.
     pub fn apply_gui_playlists_command(&mut self, command: GuiPlaylistsCommand) {
         tracing::debug!(
             name: "gui_playlists.command",
@@ -20,7 +21,7 @@ impl App {
         if !matches!(
             command,
             GuiPlaylistsCommand::Toggle | GuiPlaylistsCommand::Close
-        ) && !self.gui.playlists_screen_open
+        ) && !self.app.gui.playlists_screen_open
         {
             Self::log_ignored_gui_playlists_command("stale", "the Playlists screen is closed");
             return;
@@ -30,11 +31,11 @@ impl App {
             GuiPlaylistsCommand::Close => self.close_gui_playlists(),
             GuiPlaylistsCommand::Open { id } => self.open_gui_playlist(&id),
             GuiPlaylistsCommand::Collapse => {
-                self.playlists_open = None;
-                self.playlists_open_items.clear();
+                self.app.playlists_open = None;
+                self.app.playlists_open_items.clear();
             }
             GuiPlaylistsCommand::Refresh { id } => self.refresh_gui_playlists(id.as_deref()),
-            GuiPlaylistsCommand::Action { id, action } => self.playlist_action(&id, action),
+            GuiPlaylistsCommand::Action { id, action } => self.app.playlist_action(&id, action),
             GuiPlaylistsCommand::ItemAction {
                 id,
                 item_id,
@@ -52,13 +53,13 @@ impl App {
             self.open_gui_playlist(id);
             return;
         }
-        match self.playlists_open.clone() {
+        match self.app.playlists_open.clone() {
             Some(playlist) => {
-                self.playlists_open = None;
-                self.playlists_open_items.clear();
-                self.spawn_open_playlist(&playlist);
+                self.app.playlists_open = None;
+                self.app.playlists_open_items.clear();
+                self.app.spawn_open_playlist(&playlist);
             }
-            None => self.spawn_load_playlists(),
+            None => self.app.spawn_load_playlists(),
         }
     }
 
@@ -66,6 +67,7 @@ impl App {
     /// naming another playlist than the open one is stale and changes nothing.
     fn apply_gui_playlist_item_action(&mut self, id: &str, item_id: &str, action: MusicTreeAction) {
         if self
+            .app
             .playlists_open
             .as_ref()
             .is_none_or(|playlist| playlist.id != id)
@@ -76,7 +78,7 @@ impl App {
             );
             return;
         }
-        self.playlist_row_action(item_id, action);
+        self.app.playlist_row_action(item_id, action);
     }
 
     /// Rename the playlist on the server through the shared spawn; the landed
@@ -84,25 +86,26 @@ impl App {
     fn apply_gui_playlist_rename(&mut self, id: &str, name: &str) {
         let name = name.trim().to_string();
         if name.is_empty() {
-            self.flash(
+            self.app.flash(
                 "Playlist name can't be empty".into(),
                 crate::app::dispatch::notify::ToastSeverity::Error,
             );
             return;
         }
-        if !self.playlists.iter().any(|playlist| playlist.id == id) {
+        if !self.app.playlists.iter().any(|playlist| playlist.id == id) {
             Self::log_ignored_gui_playlists_command(
                 "rename",
                 "the playlist is not in the saved list",
             );
             return;
         }
-        self.spawn_rename_playlist(id.to_string(), name);
+        self.app.spawn_rename_playlist(id.to_string(), name);
     }
 
     /// Raise the same delete confirmation the TUI's sidebar raises.
     fn apply_gui_playlist_delete(&mut self, id: &str) {
         let Some(playlist) = self
+            .app
             .playlists
             .iter()
             .find(|playlist| playlist.id == id)
@@ -114,7 +117,7 @@ impl App {
             );
             return;
         };
-        self.ask_confirm(crate::app::ConfirmModal::two_button(
+        self.app.ask_confirm(crate::app::ConfirmModal::two_button(
             format!(
                 "Delete playlist '{}'?",
                 mbv_ui_model::ui_util::trunc_str(&playlist.name, 40)
@@ -132,6 +135,7 @@ impl App {
     /// list no longer holds it.
     fn open_gui_playlist(&mut self, id: &str) {
         let Some(playlist) = self
+            .app
             .playlists
             .iter()
             .find(|playlist| playlist.id == id)
@@ -143,6 +147,6 @@ impl App {
             );
             return;
         };
-        self.spawn_open_playlist(&playlist);
+        self.app.spawn_open_playlist(&playlist);
     }
 }

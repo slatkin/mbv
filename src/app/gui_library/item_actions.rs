@@ -41,7 +41,7 @@ impl App {
     /// Hero's item as it was, because the frame that carried the id is stale.
     pub(super) fn show_gui_library_detail(&mut self, item_id: &str) {
         let Some((lib_idx, item)) = self.gui_library_item(item_id) else {
-            Self::log_stale_library_item("showDetail", item_id);
+            super::log_stale_library_item("showDetail", item_id);
             return;
         };
         let single_group = match self.gui_effective_music_set(lib_idx).as_ref() {
@@ -86,7 +86,7 @@ impl App {
             .map(|(_lib_idx, album)| album)
             .collect();
         if albums.is_empty() {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "shuffleArtist",
                 format_args!("the album ids name no album the Service data holds"),
             );
@@ -136,7 +136,7 @@ impl App {
     /// appends; only the GUI Library's add applies the rule.
     pub(super) fn add_gui_library_item_to_queue(&mut self, item_id: &str) {
         let Some((lib_idx, item)) = self.gui_library_item(item_id) else {
-            Self::log_stale_library_item("addToQueue", item_id);
+            super::log_stale_library_item("addToQueue", item_id);
             return;
         };
         let autoload = self.config.lock().unwrap().autoload;

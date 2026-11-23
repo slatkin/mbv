@@ -44,9 +44,9 @@ impl App {
     /// 4). Both change only with the active slot, so the core compares them on
     /// each tick and marks on a change.
     #[must_use]
-    pub fn gui_playhead_marks(&self) -> GuiPlayheadMarks {
+    pub fn gui_playhead_marks(&mut self) -> GuiPlayheadMarks {
         GuiPlayheadMarks {
-            music_track: self.gui_playing_track_id(),
+            music_track: super::playing_track_id_for_shell(self),
             audiobook: self.gui_playing_book_id(),
         }
     }

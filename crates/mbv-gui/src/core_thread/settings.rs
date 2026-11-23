@@ -8,9 +8,8 @@
 //! The Settings screen's UI reset lives here too (design D10): its steps span
 //! the App and this thread's own state, so the command runs them in one place.
 
-use mbv::{GuiSettingsGroup, GuiSettingsSection, TickOutcome};
+use mbv::TickOutcome;
 use mbv_ui_model::overlay::{OverlayRequest, SidebarId};
-use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::{ComponentId, OverlayId};
 
 use super::CoreThread;
@@ -81,15 +80,14 @@ impl CoreThread {
             match &request {
                 OverlayRequest::ToggleSidebar(sidebar) => match sidebar {
                     // F2 toggles the F2 group — every section except the two
-                    // sidebars' own (design D2, the spec's open-action rule).
-                    SidebarId::Settings => {
-                        self.core.toggle_gui_settings(GuiSettingsGroup::F2);
+                    // sidebars' own (design D2, the spec's open-action rule) —
+                    // and F3 toggles the Sessions group: the Settings screen's
+                    // own entry owns both rules.
+                    SidebarId::Settings | SidebarId::Sessions => {
+                        self.core.apply_gui_settings_overlay(&request);
                     }
-                    // F3 and F4 toggle their own sections.
-                    SidebarId::Sessions => {
-                        self.core.toggle_gui_settings(GuiSettingsGroup::Sessions);
-                    }
-                    SidebarId::Playlists => self.core.app_mut().toggle_gui_playlists(),
+                    // F4 toggles the Playlists screen.
+                    SidebarId::Playlists => self.core.toggle_gui_playlists(),
                     // Search has no toggle request path: its open raises
                     // `OpenSidebar(Search)` below, which the GUI drops too.
                     SidebarId::Search => log_undelivered(&request),
@@ -99,16 +97,7 @@ impl CoreThread {
                     // reach the GUI here: the section the App's
                     // `settings_destination` names opens (design D2).
                     SidebarId::Settings => {
-                        let section = match self.core.gui_settings_destination() {
-                            SettingsDestination::Services | SettingsDestination::Main => {
-                                GuiSettingsSection::Services
-                            }
-                            SettingsDestination::Keys => GuiSettingsSection::Keys,
-                            // The Panel page is TUI state (design D4); the
-                            // GUI maps it to Services.
-                            SettingsDestination::Panel => GuiSettingsSection::Services,
-                        };
-                        self.core.open_gui_settings_at(section);
+                        self.core.apply_gui_settings_overlay(&request);
                     }
                     // The GUI presents no Search sidebar, and the two other
                     // ids never raise an open request.
@@ -120,7 +109,7 @@ impl CoreThread {
                     // The playlist play's `ReplacementExecutor` raises this
                     // after the queue replaces (design D2): the screen closes,
                     // so the replaced queue shows.
-                    SidebarId::Playlists => self.core.app_mut().close_gui_playlists(),
+                    SidebarId::Playlists => self.core.close_gui_playlists(),
                     // The GUI's Sessions and Settings close through the
                     // screen's own commands, and no Search dismissal exists.
                     SidebarId::Settings | SidebarId::Sessions | SidebarId::Search => {

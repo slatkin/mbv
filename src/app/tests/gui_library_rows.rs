@@ -78,10 +78,13 @@ fn a_set_sent_during_navigation_fetches_only_its_rows_once_idle() {
     let hidden = tagged_movie("m-2", "t2");
     let mut app = app_with_rows(vec![shown.clone(), hidden.clone()]);
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![shown.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![shown.id.clone()],
+        },
+    );
     assert!(
         !app.images.is_loading(&row_key(&shown)),
         "a set sent during navigation queues nothing"
@@ -108,10 +111,13 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
     let mut app = app_with_rows(vec![row.clone()]);
     let key = row_key(&row);
     app.last_nav_at = idle_at();
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![row.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![row.id.clone()],
+        },
+    );
     app.images.fetch_interrupted(key.clone());
     let checked = Instant::now();
 
@@ -134,10 +140,13 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
         "the passed retry queues the in-view key again"
     );
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: Vec::new(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: Vec::new(),
+        },
+    );
     app.images.fetch_interrupted(key.clone());
     app.images.pass_interrupted_fetch_retries_for_test();
     app.last_nav_at = idle_at();
@@ -157,10 +166,13 @@ fn an_in_view_row_without_a_source_queues_nothing() {
     let mut app = app_with_rows(vec![row.clone()]);
     app.last_nav_at = idle_at();
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![row.id.clone(), "absent".to_owned()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![row.id.clone(), "absent".to_owned()],
+        },
+    );
 
     assert_eq!(
         app.images.card_image_fetch_calls(),
@@ -177,10 +189,13 @@ fn a_set_of_another_list_queues_nothing() {
     let mut app = app_with_rows(vec![row.clone()]);
     app.last_nav_at = idle_at();
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Feeds,
-        ids: vec![row.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Feeds,
+            ids: vec![row.id.clone()],
+        },
+    );
     app.last_nav_at = idle_at();
     app.gui_queue_in_view_row_fetches();
 
@@ -216,10 +231,13 @@ fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
             .complete_fetch(format!("row:filler:{index}"), cached_pixel());
     }
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![painted.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![painted.id.clone()],
+        },
+    );
     app.images
         .complete_fetch("row:filler:overflow".to_owned(), cached_pixel());
 
@@ -239,10 +257,13 @@ fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
 fn an_artist_search_answer_queues_the_row_art_it_unblocks() {
     let mut app = app_with_grouped_music();
     let name = "The Smiths";
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Music,
-        ids: vec![format!("artist-name:{name}")],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Music,
+            ids: vec![format!("artist-name:{name}")],
+        },
+    );
     app.last_nav_at = idle_at();
     let key = mbv_images::row::emby_row_primary_request("artist-9").cache_key;
     assert!(

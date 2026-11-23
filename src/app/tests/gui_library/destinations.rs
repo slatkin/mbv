@@ -100,9 +100,12 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
     );
     let mut app = app;
     app.set_panel_focus(PanelFocus::Library);
-    app.apply_gui_library_command(GuiLibraryCommand::RowMenu {
-        row: GuiLibraryMenuRow::Item("alb-ill".into()),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowMenu {
+            row: GuiLibraryMenuRow::Item("alb-ill".into()),
+        },
+    );
 
     let menu = app.gui_library_row_menu().expect("the album has a menu");
     let labels: Vec<&str> = menu
@@ -130,12 +133,18 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
     let _guard = crate::app::OPEN_URL_TEST_LOCK.lock().unwrap();
     *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = Some(record_open);
     let mut app = make_app_stub();
-    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
-        url: "https://www.imdb.com/title/tt0088763/".to_string(),
-    });
-    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
-        url: "javascript:alert(1)".to_string(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::OpenUrl {
+            url: "https://www.imdb.com/title/tt0088763/".to_string(),
+        },
+    );
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::OpenUrl {
+            url: "javascript:alert(1)".to_string(),
+        },
+    );
     *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = None;
 
     assert_eq!(

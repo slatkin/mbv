@@ -99,7 +99,7 @@ impl App {
         self.gui.search.failed = false;
         self.gui.search.rows.clear();
         let Some(client) = self.emby_snapshot() else {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "searchQuery",
                 format_args!("no Emby Service is attached"),
             );
@@ -133,7 +133,7 @@ impl App {
             .iter()
             .any(|row| row.id == item_id && row.item_type == item_type);
         if !known {
-            Self::log_stale_library_item("searchActivate", &item_id);
+            super::log_stale_library_item("searchActivate", &item_id);
             return;
         }
         let libs = self.library_tabs_for_nav();

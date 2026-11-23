@@ -333,7 +333,10 @@ fn one_shows_view_is_active_at_a_time() {
 
     assert_eq!(app.gui_shows_view(0), GuiShowsView::All);
     for view in [GuiShowsView::New, GuiShowsView::Upcoming, GuiShowsView::All] {
-        app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView { lib_idx: 0, view });
+        apply_gui_library_command(
+            &mut app,
+            GuiLibraryCommand::ShowsSetView { lib_idx: 0, view },
+        );
         assert_eq!(app.gui_shows_view(0), view);
     }
     assert!(app.gui.shows_views.contains_key(&0));
@@ -359,10 +362,13 @@ fn the_new_view_paints_the_merged_latest_episodes() {
             new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
         ]),
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::New,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::New,
+        },
+    );
 
     let projection = app.gui_shows_projection(0);
 
@@ -387,10 +393,13 @@ fn the_upcoming_view_paints_display_only_premieres() {
         .insert("lib-a".into(), vec![later.clone()]);
     app.tv_upcoming_snapshots
         .insert("lib-b".into(), vec![sooner.clone()]);
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::Upcoming,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::Upcoming,
+        },
+    );
 
     let projection = app.gui_shows_projection(0);
 
@@ -418,10 +427,13 @@ fn an_upcoming_row_resolves_no_playable_item() {
             "2026-11-20T00:00:00.0000000Z",
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::Upcoming,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::Upcoming,
+        },
+    );
     let id = app.gui_shows_projection(0).rows[0].id.clone();
 
     assert_eq!(app.gui_shows_item(0, &id), None);
@@ -438,10 +450,13 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
 ) {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::New,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::New,
+        },
+    );
     app.handle_gui_shows_new(GuiShowsNewEvent {
         library_id: "lib-tv".into(),
         result,
@@ -472,10 +487,13 @@ fn an_upcoming_row_shows_its_series_image() {
             "2026-12-01T00:00:00.0000000Z",
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::Upcoming,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::Upcoming,
+        },
+    );
     let still = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
         128,
         72,

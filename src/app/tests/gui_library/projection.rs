@@ -54,9 +54,12 @@ fn each_pill_reopens_on_its_own_last_pick() {
             1989,
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-paul".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-paul".into(),
+        },
+    );
 
     select_group(&mut app, SOUL);
     assert_eq!(hero_album_id(&mut app), Some("alb-3ft".to_string()));
@@ -99,9 +102,12 @@ fn six_warm_albums() -> Vec<mbv_emby_model::EmbyItem> {
 fn the_picked_albums_neighbours_are_warmed() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_warm_albums(six_warm_albums());
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-3".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-3".into(),
+        },
+    );
     // The pick's own move closed the warm gate; the next idle pass opens it.
     app.last_nav_at = std::time::Instant::now()
         .checked_sub(std::time::Duration::from_secs(1))
@@ -139,9 +145,12 @@ fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
         .checked_sub(std::time::Duration::from_secs(1))
         .unwrap();
 
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-3".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-3".into(),
+        },
+    );
     let projection = app.gui_music_projection(0);
 
     assert!(projection.hero.is_some(), "the pick still heroes its album");
@@ -178,9 +187,12 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
         "alb-paul".to_string(),
         vec![cached_track("trk-3", "Shake Your Rump", 1, 195)],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-ill".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-ill".into(),
+        },
+    );
 
     let hero = app
         .gui_music_projection(0)
@@ -239,9 +251,12 @@ fn the_artist_total_waits_for_every_albums_tracklist() {
         "alb-ill".to_string(),
         vec![cached_track("trk-1", "Rhymin & Stealin", 1, 248)],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-ill".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-ill".into(),
+        },
+    );
 
     let hero = app
         .gui_music_projection(0)
@@ -279,9 +294,12 @@ fn a_second_group_keeps_the_hero() {
             1989,
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-paul".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-paul".into(),
+        },
+    );
 
     app.install_gui_library_collection(
         0,
@@ -325,9 +343,12 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
         },
     );
 
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-paul".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-paul".into(),
+        },
+    );
 
     assert_eq!(
         app.gui_library_pick_for_test(0, HIPHOP),

@@ -115,7 +115,7 @@ impl App {
     /// paths. The GUI never arms the TUI's `pending_overlay`.
     pub(super) fn run_gui_library_menu_entry(&mut self, row: &GuiLibraryMenuRow, index: usize) {
         let Some(target) = self.gui_library_menu_target(row) else {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "menuEntry",
                 format_args!("the row names nothing the Service data holds"),
             );

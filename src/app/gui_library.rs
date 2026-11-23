@@ -97,6 +97,7 @@ pub use self::tv::GuiTvShowsSelection;
 use mbv_ui_model::settings::PanelFocus;
 
 use crate::app::App;
+use crate::gui::GuiCore;
 
 /// The Library list whose rows a `RowsInView` set names (gui-delineated-rows
 /// design D7): the destination list the ids belong to, so the core resolves
@@ -127,7 +128,7 @@ pub enum GuiRowArtScope {
 
 /// One request from the GUI Library panel's window content (design D2): the
 /// `library` command carries it into the Client core, and
-/// [`App::apply_gui_library_command`] applies it. Item identities are stable
+/// [`GuiCore::apply_gui_library_command`] applies it. Item identities are stable
 /// Service ids, never row positions, so a command built from a stale frame
 /// addresses the item that frame painted or nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -315,7 +316,7 @@ fn home_row_command_id(command: &str, row: &GuiHomeRowId) -> String {
     format!("{command} {row:?}")
 }
 
-impl App {
+impl GuiCore {
     /// Apply one GUI Library command (design D2): each arm calls the existing
     /// `App` action for the intent, so the TUI's own paths do not change.
     /// Every command logs its receipt (`gui_library.command`), and one that
@@ -323,46 +324,67 @@ impl App {
     /// session's Library path is visible in the GUI log.
     pub fn apply_gui_library_command(&mut self, command: GuiLibraryCommand) {
         Self::log_library_command(&command);
+        self.dispatch_gui_library_command(command);
+    }
+
+    /// The Library command's arms (design D2): the one dispatch the core's own
+    /// call runs, so every variant has its own handling site here.
+    fn dispatch_gui_library_command(&mut self, command: GuiLibraryCommand) {
         match command {
             GuiLibraryCommand::OpenDestination { position } => {
                 self.open_gui_library_position(position);
             }
             GuiLibraryCommand::CollectionToggle { target, key } => {
-                self.apply_collection(&target, CollectionOp::Toggle { key });
+                self.app
+                    .apply_collection(&target, CollectionOp::Toggle { key });
             }
             GuiLibraryCommand::CollectionAll { target } => {
-                self.apply_collection(&target, CollectionOp::All);
+                self.app.apply_collection(&target, CollectionOp::All);
             }
             GuiLibraryCommand::ListSort { target, sort } => {
-                self.apply_gui_list_sort(target, sort);
+                self.app.apply_gui_list_sort(target, sort);
             }
             GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
-                self.set_gui_shows_view(lib_idx, view);
+                self.app.set_gui_shows_view(lib_idx, view);
             }
-            GuiLibraryCommand::ShowDetail { item_id } => self.show_gui_library_detail(&item_id),
-            GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),
-            GuiLibraryCommand::Play { item_id } => match self.gui_library_item(&item_id) {
-                Some((lib_idx, item)) => self.play_gui_library_item(lib_idx, item),
-                None => Self::log_stale_library_item("play", &item_id),
+            GuiLibraryCommand::ShowDetail { item_id } => {
+                self.app.show_gui_library_detail(&item_id);
+            }
+            GuiLibraryCommand::OpenAlbum { album_id } => {
+                self.app.open_gui_library_album(album_id);
+            }
+            GuiLibraryCommand::Play { item_id } => match self.app.gui_library_item(&item_id) {
+                Some((lib_idx, item)) => self.app.play_gui_library_item(lib_idx, item),
+                None => log_stale_library_item("play", &item_id),
             },
-            GuiLibraryCommand::PlayNext { item_id } => match self.gui_library_item(&item_id) {
-                Some((lib_idx, item)) => self.play_lib_item_next(lib_idx, item),
-                None => Self::log_stale_library_item("playNext", &item_id),
+            GuiLibraryCommand::PlayNext { item_id } => match self.app.gui_library_item(&item_id) {
+                Some((lib_idx, item)) => self.app.play_lib_item_next(lib_idx, item),
+                None => log_stale_library_item("playNext", &item_id),
             },
             GuiLibraryCommand::AddToQueue { item_id } => {
-                self.add_gui_library_item_to_queue(&item_id);
+                self.app.add_gui_library_item_to_queue(&item_id);
             }
             GuiLibraryCommand::ShuffleArtist { album_ids } => {
-                self.shuffle_gui_artist(&album_ids);
+                self.app.shuffle_gui_artist(&album_ids);
             }
             // Row 3.6 runs the menu entry the frame carried through the shared
             // context-action executor.
             GuiLibraryCommand::MenuEntry { row, index } => {
-                self.run_gui_library_menu_entry(&row, index);
+                self.app.run_gui_library_menu_entry(&row, index);
             }
             GuiLibraryCommand::RowMenu { row } => {
-                self.gui.library_row_menu_target = Some(row);
+                self.app.gui.library_row_menu_target = Some(row);
             }
+            // The Home rows and every command after them are the second
+            // pass's arms.
+            _ => self.dispatch_gui_library_destination_command(command),
+        }
+    }
+
+    /// The Library command's destination arms (design D2), from the Home rows
+    /// down: the dispatch's second pass, so one function stays readable.
+    fn dispatch_gui_library_destination_command(&mut self, command: GuiLibraryCommand) {
+        match command {
             GuiLibraryCommand::HomeSelect { row } => self.select_gui_home_row(&row),
             GuiLibraryCommand::HomePlay { row } => self.play_gui_home_row(&row),
             GuiLibraryCommand::HomePlayNext { row } => {
@@ -370,59 +392,81 @@ impl App {
             }
             GuiLibraryCommand::HomeQueue { row } => self.enqueue_gui_home_row(&row, "homeQueue"),
             GuiLibraryCommand::ShowsSelect { lib_idx, row } => {
-                self.select_gui_shows_row(lib_idx, &row);
+                self.app.select_gui_shows_row(lib_idx, &row);
             }
             GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
-                self.gui_tv_select_season(lib_idx, &season_id);
+                self.app.gui_tv_select_season(lib_idx, &season_id);
             }
             GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
-                self.play_gui_shows_item(lib_idx, &item_id);
+                self.app.play_gui_shows_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::ShowsPlayNext { lib_idx, item_id } => {
-                self.play_next_gui_shows_item(lib_idx, &item_id);
+                self.app.play_next_gui_shows_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
-                self.enqueue_gui_shows_item(lib_idx, &item_id);
+                self.app.enqueue_gui_shows_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => {
-                self.gui_emby_select(lib_idx, &row);
+                self.app.gui_emby_select(lib_idx, &row);
             }
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => {
-                self.play_gui_emby_item(lib_idx, &item_id);
+                self.app.play_gui_emby_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::EmbyPlayNext { lib_idx, item_id } => {
-                self.play_next_gui_emby_item(lib_idx, &item_id);
+                self.app.play_next_gui_emby_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
-                self.enqueue_gui_emby_item(lib_idx, &item_id);
+                self.app.enqueue_gui_emby_item(lib_idx, &item_id);
             }
-            GuiLibraryCommand::AbsSelect { lib_idx, row } => self.gui_abs_select(lib_idx, &row),
-            // The Audiobookshelf destinations' groups (rows 9.1, 10.1): the
-            // book list and the podcast list each send their own commands.
-            command @ (GuiLibraryCommand::AbsPlay { .. }
-            | GuiLibraryCommand::AbsPlayChapter { .. }
-            | GuiLibraryCommand::AbsQueue { .. }
-            | GuiLibraryCommand::PodcastsSelect { .. }
-            | GuiLibraryCommand::PodcastsPlay { .. }
-            | GuiLibraryCommand::PodcastsQueue { .. }) => {
-                self.apply_gui_audiobookshelf_command(command);
+            GuiLibraryCommand::AbsSelect { lib_idx, row } => {
+                self.app.gui_abs_select(lib_idx, &row);
+            }
+            // The Audiobookshelf destinations' commands (rows 9.1, 10.1): the
+            // book list's play, chapter, and enqueue, and the podcast list's
+            // select, play, and enqueue.
+            GuiLibraryCommand::AbsPlay { lib_idx, item_id } => {
+                self.app.play_gui_abs_book(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::AbsPlayChapter {
+                lib_idx,
+                book_id,
+                chapter,
+            } => self.app.play_gui_abs_chapter(lib_idx, &book_id, chapter),
+            GuiLibraryCommand::AbsQueue { lib_idx, item_id } => {
+                self.app.enqueue_gui_abs_book(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
+                self.app.select_gui_podcast_row(lib_idx, &row);
+            }
+            GuiLibraryCommand::PodcastsPlay { lib_idx, item_id } => {
+                self.app.play_gui_podcast_row(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
+                self.app.enqueue_gui_podcast_row(lib_idx, &item_id);
             }
             // The Feeds destination's own commands (row 11.1): the one feed
             // tab the Client holds, so no library index rides them.
-            command @ (GuiLibraryCommand::FeedsSelect { .. }
-            | GuiLibraryCommand::FeedsPlay { .. }
-            | GuiLibraryCommand::FeedsQueue { .. }) => {
-                self.apply_gui_feeds_command(command);
-            }
+            GuiLibraryCommand::FeedsSelect { row } => self.app.gui_feeds_select(&row),
+            GuiLibraryCommand::FeedsPlay { item_id } => self.app.play_gui_feed_row(&item_id),
+            GuiLibraryCommand::FeedsQueue { item_id } => self.app.enqueue_gui_feed_row(&item_id),
             // The Search field's commands (design D12, row 12.1): the field
             // is cross-destination, so no library index rides them.
-            command @ (GuiLibraryCommand::SearchQuery { .. }
-            | GuiLibraryCommand::SearchActivate { .. }
-            | GuiLibraryCommand::SearchClose) => self.apply_gui_search_command(command),
+            GuiLibraryCommand::SearchQuery { query } => self.app.gui_search_query(query),
+            GuiLibraryCommand::SearchActivate { id, item_type } => {
+                self.app.gui_search_activate(id, item_type);
+            }
+            GuiLibraryCommand::SearchClose => self.app.gui_search_close(),
             GuiLibraryCommand::RowsInView { scope, ids } => {
-                self.apply_gui_rows_in_view(scope, ids);
+                self.app.apply_gui_rows_in_view(scope, ids);
             }
             GuiLibraryCommand::OpenUrl { url } => Self::open_gui_library_url(&url),
+            // The first pass's arms, which this pass never receives: the
+            // dispatch routes them before it hands the command over, so this
+            // trailing arm is the routing mistake's own no-op.
+            other => log_ignored_library_command(
+                "dispatch",
+                format_args!("{other:?} is no destination command of the second pass"),
+            ),
         }
     }
 
@@ -438,79 +482,6 @@ impl App {
         );
     }
 
-    /// Apply one of the Audiobookshelf destinations' commands (rows 9.1,
-    /// 10.1): the book list's play, chapter, and enqueue, and the podcast
-    /// list's pill, select, play, and enqueue. The caller routes only these
-    /// variants here, so the trailing arm is the group's own no-op for a
-    /// routing mistake — it logs and changes nothing rather than dropping the
-    /// request silently.
-    fn apply_gui_audiobookshelf_command(&mut self, command: GuiLibraryCommand) {
-        match command {
-            GuiLibraryCommand::AbsPlay { lib_idx, item_id } => {
-                self.play_gui_abs_book(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::AbsPlayChapter {
-                lib_idx,
-                book_id,
-                chapter,
-            } => {
-                self.play_gui_abs_chapter(lib_idx, &book_id, chapter);
-            }
-            GuiLibraryCommand::AbsQueue { lib_idx, item_id } => {
-                self.enqueue_gui_abs_book(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
-                self.select_gui_podcast_row(lib_idx, &row);
-            }
-            GuiLibraryCommand::PodcastsPlay { lib_idx, item_id } => {
-                self.play_gui_podcast_row(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
-                self.enqueue_gui_podcast_row(lib_idx, &item_id);
-            }
-            other => Self::log_ignored_library_command(
-                "audiobookshelf",
-                format_args!("{other:?} is no Audiobookshelf destination command"),
-            ),
-        }
-    }
-
-    /// Apply one of the Feeds destination's commands (row 11.1): the pill, the
-    /// select, the play, and the enqueue. The caller routes only these
-    /// variants here, so the trailing arm is the group's own no-op for a
-    /// routing mistake — it logs and changes nothing rather than dropping the
-    /// request silently.
-    fn apply_gui_feeds_command(&mut self, command: GuiLibraryCommand) {
-        match command {
-            GuiLibraryCommand::FeedsSelect { row } => self.gui_feeds_select(&row),
-            GuiLibraryCommand::FeedsPlay { item_id } => self.play_gui_feed_row(&item_id),
-            GuiLibraryCommand::FeedsQueue { item_id } => self.enqueue_gui_feed_row(&item_id),
-            other => Self::log_ignored_library_command(
-                "feeds",
-                format_args!("{other:?} is no Feeds destination command"),
-            ),
-        }
-    }
-
-    /// Apply one of the Search field's commands (design D12, row 12.1): the
-    /// query the typing sends, the row an Enter or a press activates, and the
-    /// close. The caller routes only these variants here, so the trailing arm
-    /// is the group's own no-op for a routing mistake — it logs and changes
-    /// nothing rather than dropping the request silently.
-    fn apply_gui_search_command(&mut self, command: GuiLibraryCommand) {
-        match command {
-            GuiLibraryCommand::SearchQuery { query } => self.gui_search_query(query),
-            GuiLibraryCommand::SearchActivate { id, item_type } => {
-                self.gui_search_activate(id, item_type);
-            }
-            GuiLibraryCommand::SearchClose => self.gui_search_close(),
-            other => Self::log_ignored_library_command(
-                "search",
-                format_args!("{other:?} is no Search command"),
-            ),
-        }
-    }
-
     /// Open the destination a tab position names (design D2): the GUI's one
     /// open step. The window's open-destination command and the keyboard
     /// router's destination steps (the tab keys and a digit) all take it, so a
@@ -518,11 +489,11 @@ impl App {
     /// position that names no presented destination opens nothing — the top
     /// bar paints no tab for it, so it is the absent digit key.
     pub(in crate::app) fn open_gui_library_position(&mut self, position: usize) {
-        if self.presents_open_position(position) {
-            self.set_library_tab(position);
+        if self.app.presents_open_position(position) {
+            self.app.set_library_tab(position);
             self.open_gui_active_destination();
         } else {
-            Self::log_ignored_library_command(
+            log_ignored_library_command(
                 "openDestination",
                 format_args!("the position {position} names no presented destination"),
             );
@@ -539,22 +510,24 @@ impl App {
     /// every destination kind and every absent case, so a new kind does not
     /// compile until it states its open step.
     fn open_gui_active_destination(&mut self) {
-        match self.gui_active_destination() {
+        match self.app.gui_active_destination() {
             // No presented destination: the open names nothing to open.
             None => {}
             // Home's rows ride the shared Home data and Music's loads are all
             // the pass's selection step (design D3), so neither has user-action
             // work and the pass alone is their open step.
             Some(GuiDestinationKind::Home | GuiDestinationKind::Music { .. }) => {
-                self.ensure_gui_active_destination();
+                self.app.ensure_gui_active_destination();
             }
             // Feeds' entries ride the shared startup fetch, so its pass is a
             // no-op and its open only reports an absent tab.
-            Some(GuiDestinationKind::Feeds) => self.gui_feeds_open(),
-            Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
-            Some(GuiDestinationKind::Library { lib_idx }) => self.gui_emby_open(lib_idx),
-            Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.gui_abs_open(lib_idx),
-            Some(GuiDestinationKind::Podcasts { lib_idx }) => self.gui_podcast_open(lib_idx),
+            Some(GuiDestinationKind::Feeds) => self.app.gui_feeds_open(),
+            Some(GuiDestinationKind::Shows { lib_idx }) => self.app.gui_tv_open(lib_idx),
+            Some(GuiDestinationKind::Library { lib_idx }) => self.app.gui_emby_open(lib_idx),
+            Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.app.gui_abs_open(lib_idx),
+            Some(GuiDestinationKind::Podcasts { lib_idx }) => {
+                self.app.gui_podcast_open(lib_idx);
+            }
         }
     }
 
@@ -562,7 +535,7 @@ impl App {
     /// selection is the core's, so the frame carries it back and the launch
     /// of a window-content reload keeps it.
     fn select_gui_home_row(&mut self, row: &GuiHomeRowId) {
-        self.gui.home_selection = Some(row.clone());
+        self.app.gui.home_selection = Some(row.clone());
     }
 
     /// Play a Home row (design D12): the Home flat list's play path, whose
@@ -572,10 +545,10 @@ impl App {
     fn play_gui_home_row(&mut self, row: &GuiHomeRowId) {
         let target = row.clone().into_home_item_target();
         let from_cw = row.is_continue();
-        if let Some(item) = self.home_stable_target(&target) {
-            self.home_play_target(item, from_cw);
+        if let Some(item) = self.app.home_stable_target(&target) {
+            self.app.home_play_target(item, from_cw);
         } else {
-            Self::log_stale_library_item("homePlay", &home_row_command_id("homePlay", row));
+            log_stale_library_item("homePlay", &home_row_command_id("homePlay", row));
         }
     }
 
@@ -588,10 +561,10 @@ impl App {
         let target = row.clone().into_home_item_target();
         let logged = home_row_command_id(name, row);
         let from_cw = row.is_continue();
-        if let Some(item) = self.home_stable_target(&target) {
-            self.home_enqueue_target(item, from_cw);
+        if let Some(item) = self.app.home_stable_target(&target) {
+            self.app.home_enqueue_target(item, from_cw);
         } else {
-            Self::log_stale_library_item(name, &logged);
+            log_stale_library_item(name, &logged);
         }
     }
 
@@ -601,7 +574,7 @@ impl App {
     /// dropped. A failed spawn logs and changes nothing else.
     fn open_gui_library_url(url: &str) {
         if mbv_ui_model::ui_util::sanitize_url(url).is_none() {
-            Self::log_ignored_library_command(
+            log_ignored_library_command(
                 "openUrl",
                 format_args!("the url's scheme is not http or https"),
             );
@@ -617,38 +590,12 @@ impl App {
         }
     }
 
-    /// Log the Library command the active destination cannot serve: the
-    /// command's intent arrives, the frame it rode is stale, or the position
-    /// names no destination the GUI presents.
-    fn log_ignored_library_command(command: &str, reason: impl std::fmt::Display) {
-        tracing::info!(
-            name: "gui_library.command.ignored",
-            target: "gui_library",
-            command,
-            reason = %reason,
-            "the Library command changed nothing"
-        );
-    }
-
-    /// The command's row identity for a stale-frame log: a select, play, or
-    /// enqueue command names a Home row, so the ignored log carries the same
-    /// identity the frame painted.
-    /// Log the item-named Library command whose item the App's Service data
-    /// no longer holds (design D2: a stale frame addresses the item it
-    /// painted or nothing).
-    fn log_stale_library_item(command: &str, item_id: &str) {
-        Self::log_ignored_library_command(
-            command,
-            format_args!("the item {item_id} is not in the Service data"),
-        );
-    }
-
     /// Set Panel focus for the GUI Library panel (design D4): the core
     /// thread's per-key Panel-focus adapter sets the App's stored focus
     /// through this entry, so the gates the App's key paths read agree with
     /// the core's `FocusStack`.
     pub fn set_gui_panel_focus(&mut self, focus: PanelFocus) {
-        self.set_panel_focus(focus);
+        self.app.set_panel_focus(focus);
     }
 
     /// The Panel that holds focus (design D4, D9): the value the GUI Client's
@@ -656,7 +603,7 @@ impl App {
     /// location saves.
     #[must_use]
     pub fn gui_panel_focus(&self) -> PanelFocus {
-        self.effective_panel_focus()
+        self.app.effective_panel_focus()
     }
 
     /// The id of the Emby item playing at the playhead (add-gui-library-panel,
@@ -667,15 +614,62 @@ impl App {
     /// active slot holds no Emby item.
     #[must_use]
     pub fn gui_playing_track_id(&self) -> Option<String> {
-        let state = self.displayed_playback_state();
-        if !state.active {
-            return None;
-        }
-        match self.queue_item_at_playhead(state) {
-            Some(mbv_queue::QueueItem::Emby(item)) => Some(item.id.clone()),
-            Some(_) | None => None,
-        }
+        playing_track_id(&self.app)
     }
+}
+
+/// The id of the Emby item playing at the playhead: the Owner status and the
+/// queue's item at the active index, or `None` while idle or while the active
+/// slot holds no Emby item.
+fn playing_track_id(app: &App) -> Option<String> {
+    let state = app.displayed_playback_state();
+    if !state.active {
+        return None;
+    }
+    match app.queue_item_at_playhead(state) {
+        Some(mbv_queue::QueueItem::Emby(item)) => Some(item.id.clone()),
+        Some(_) | None => None,
+    }
+}
+
+/// Log one Library command's ignored receipt: the command's intent arrives,
+/// the frame it rode is stale, or the position names no destination the GUI
+/// presents.
+fn log_ignored_library_command(command: &str, reason: impl std::fmt::Display) {
+    tracing::info!(
+        name: "gui_library.command.ignored",
+        target: "gui_library",
+        command,
+        reason = %reason,
+        "the Library command changed nothing"
+    );
+}
+
+/// Log the item-named Library command whose item the App's Service data no
+/// longer holds (design D2: a stale frame addresses the item it painted or
+/// nothing).
+fn log_stale_library_item(command: &str, item_id: &str) {
+    log_ignored_library_command(
+        command,
+        format_args!("the item {item_id} is not in the Service data"),
+    );
+}
+
+/// The Emby item id playing at the playhead, read from the `App` a projection
+/// holds rather than a GUI core (`app::gui_library::marks` builds its playhead
+/// marks from it), and from the GUI Client's Library section: the same read
+/// the core's `GuiCore::gui_playing_track_id` makes.
+pub fn playing_track_id_for_shell(app: &App) -> Option<String> {
+    playing_track_id(app)
+}
+
+/// The GUI's one open step over an `App` the caller holds rather than a GUI
+/// core: the tab step and the router's numbered destinations hold the shell's
+/// `App`, so they enter through this wrapper, which runs the core's step.
+pub(in crate::app) fn open_gui_library_position_for_app(app: &mut App, position: usize) {
+    let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.open_gui_library_position(position);
+    *app = core.into_app();
 }
 
 /// The URL opener the `openUrl` command runs: the shared `open_url` spawn,

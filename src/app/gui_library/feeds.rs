@@ -133,7 +133,7 @@ impl App {
     /// read, and the destination's load pass is a no-op for every step.
     pub fn gui_feeds_open(&mut self) {
         if !self.gui_feeds_present() {
-            Self::log_ignored_library_command("feedsOpen", format_args!("the feed tab is absent"));
+            super::log_ignored_library_command("feedsOpen", format_args!("the feed tab is absent"));
         }
         self.ensure_gui_destination(GuiDestinationKind::Feeds);
     }
@@ -148,18 +148,18 @@ impl App {
     /// stale frame's pick and change nothing.
     pub fn gui_feeds_select(&mut self, entry: &str) {
         if !self.gui_feeds_present() {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "feedsSelect",
                 format_args!("the feed tab is absent"),
             );
             return;
         }
         let Some(entry) = GuiFeedEntryId::decode(entry) else {
-            Self::log_stale_library_item("feedsSelect", entry);
+            super::log_stale_library_item("feedsSelect", entry);
             return;
         };
         if !self.gui_feeds_entry_known(&entry) {
-            Self::log_stale_library_item("feedsSelect", &entry.encode());
+            super::log_stale_library_item("feedsSelect", &entry.encode());
             return;
         }
         self.gui.feeds_selection.picked_entry = Some(entry.encode());
@@ -173,7 +173,7 @@ impl App {
     /// are a stale frame's row and play nothing.
     pub(in crate::app::gui_library) fn play_gui_feed_row(&mut self, item_id: &str) {
         let Some(entry) = self.gui_feed_entry(item_id) else {
-            Self::log_stale_library_item("feedsPlay", item_id);
+            super::log_stale_library_item("feedsPlay", item_id);
             return;
         };
         self.play_feed_entry(entry);
@@ -184,7 +184,7 @@ impl App {
     /// flashes the TUI's toast. A stale row id queues nothing.
     pub(in crate::app::gui_library) fn enqueue_gui_feed_row(&mut self, item_id: &str) {
         let Some(entry) = self.gui_feed_entry(item_id) else {
-            Self::log_stale_library_item("feedsQueue", item_id);
+            super::log_stale_library_item("feedsQueue", item_id);
             return;
         };
         self.enqueue_feed_entry(entry);

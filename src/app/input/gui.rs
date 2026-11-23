@@ -491,7 +491,10 @@ impl GuiCore {
                     return false;
                 }
                 NavigationIntent::SetLibraryTab(position) => {
-                    self.app.open_gui_library_position(*position);
+                    crate::app::gui_library::open_gui_library_position_for_app(
+                        &mut self.app,
+                        *position,
+                    );
                     return false;
                 }
                 // Not destination steps: each of these keeps its own dispatch

@@ -175,14 +175,14 @@ impl App {
         sort: GuiListSort,
     ) {
         if !self.gui_sort_target_present(target) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "listSort",
                 "the target names no presented flat list",
             );
             return;
         }
         if !target.choices().contains(&sort) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "listSort",
                 "the sort is not one of the target's choices",
             );

@@ -254,7 +254,7 @@ impl GuiCore {
     /// The toggle rule of design D2: with the screen closed, open it at the
     /// group's section; with the screen showing a section of the same group,
     /// close it; otherwise show the group's section and stay open.
-    pub fn toggle_gui_settings(&mut self, group: GuiSettingsGroup) {
+    pub(in crate::app) fn toggle_gui_settings(&mut self, group: GuiSettingsGroup) {
         match self.app.gui.settings_screen.as_ref() {
             Some(state) if group.contains(state.section) => self.close_gui_settings(),
             Some(_) => self.show_gui_settings_section(group.section()),
@@ -268,7 +268,7 @@ impl GuiCore {
     pub fn open_gui_settings_at(&mut self, section: GuiSettingsSection) {
         // The Settings and Playlists screens never show together, so opening
         // Settings closes the Playlists screen.
-        self.app.close_gui_playlists();
+        self.close_gui_playlists();
         self.app.gui.settings_screen = Some(GuiSettingsState::at(section));
         self.load_gui_settings_section(section);
     }
@@ -278,6 +278,40 @@ impl GuiCore {
     /// `ComponentId::Overlay(OverlayId::Settings)` so the Panel focus returns.
     pub fn close_gui_settings(&mut self) {
         self.app.gui.settings_screen = None;
+    }
+
+    /// The Settings steps an overlay request names (design D2, D5): the TUI
+    /// Client and the GUI Client both apply their pending shell request here,
+    /// so one entry owns the F2 and F3 toggles and the open. The open maps the
+    /// `settings_destination` the App recorded to a section, because the
+    /// request names a sidebar and the screen names a section.
+    pub fn apply_gui_settings_overlay(&mut self, request: &mbv_ui_model::overlay::OverlayRequest) {
+        use mbv_ui_model::overlay::{OverlayRequest, SidebarId};
+
+        match request {
+            OverlayRequest::OpenSidebar(SidebarId::Settings) => {
+                // The captured destination is right for a TUI key and its
+                // section rows; this entry is the GUI's, and the Panel page is
+                // TUI state (design D4), so every destination opens Services
+                // except Keys.
+                let section = match self.gui_settings_destination() {
+                    mbv_ui_model::settings::SettingsDestination::Keys => GuiSettingsSection::Keys,
+                    mbv_ui_model::settings::SettingsDestination::Services
+                    | mbv_ui_model::settings::SettingsDestination::Main
+                    | mbv_ui_model::settings::SettingsDestination::Panel => {
+                        GuiSettingsSection::Services
+                    }
+                };
+                self.open_gui_settings_at(section);
+            }
+            OverlayRequest::ToggleSidebar(SidebarId::Settings) => {
+                self.toggle_gui_settings(GuiSettingsGroup::F2);
+            }
+            OverlayRequest::ToggleSidebar(SidebarId::Sessions) => {
+                self.toggle_gui_settings(GuiSettingsGroup::Sessions);
+            }
+            _ => {}
+        }
     }
 
     /// Show a section of the open screen and start its load (design D5's

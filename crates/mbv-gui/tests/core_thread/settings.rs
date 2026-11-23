@@ -59,14 +59,14 @@ fn f4_toggles_the_playlists_screen() {
         .send(press(Key::Function(4), KeyModifiers::NONE))
         .unwrap();
     assert!(test.core.step());
-    assert!(test.core.app_mut().gui_playlists_is_open());
+    assert!(test.core.gui_playlists_open_for_test());
     assert_eq!(test.core.gui_settings_section_for_test(), None);
 
     test.tx
         .send(press(Key::Function(4), KeyModifiers::NONE))
         .unwrap();
     assert!(test.core.step());
-    assert!(!test.core.app_mut().gui_playlists_is_open());
+    assert!(!test.core.gui_playlists_open_for_test());
 }
 
 /// A rebound `settings_open` chord opens the screen (the spec's *A rebound

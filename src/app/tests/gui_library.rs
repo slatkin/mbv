@@ -256,9 +256,12 @@ fn pressing_all_refetches_a_failed_group() {
     );
 
     http.respond(200, ALBUMS);
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
-        target: GuiCollectionTarget::Music(0),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::CollectionAll {
+            target: GuiCollectionTarget::Music(0),
+        },
+    );
     land_one_group(&mut app);
 
     assert_eq!(
@@ -318,9 +321,12 @@ fn checking_one_group_then_pressing_all_unions_every_group() {
     land_one_group(&mut app);
 
     http.respond(200, SOUL_ALBUMS);
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
-        target: GuiCollectionTarget::Music(0),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::CollectionAll {
+            target: GuiCollectionTarget::Music(0),
+        },
+    );
     land_one_group(&mut app);
 
     assert_eq!(
@@ -413,14 +419,20 @@ fn a_collection_toggle_checks_two_groups() {
     );
     app.gui.library_groups.remove(&0);
 
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
-        target: GuiCollectionTarget::Music(0),
-        key: HIPHOP.to_string(),
-    });
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
-        target: GuiCollectionTarget::Music(0),
-        key: SOUL.to_string(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::CollectionToggle {
+            target: GuiCollectionTarget::Music(0),
+            key: HIPHOP.to_string(),
+        },
+    );
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::CollectionToggle {
+            target: GuiCollectionTarget::Music(0),
+            key: SOUL.to_string(),
+        },
+    );
 
     assert_eq!(
         app.gui.library_groups.get(&0).map(|stored| &stored.set),

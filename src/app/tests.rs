@@ -2,6 +2,19 @@ use super::*;
 
 use crate::app::gui_library::GuiLibraryStores;
 
+/// Apply one GUI Library command to a stub `App` a test holds: the test
+/// helper for the command tests, which run the command through the GUI core
+/// over the `App`, as a client does.
+pub(in crate::app) fn apply_gui_library_command(
+    app: &mut crate::app::App,
+    command: crate::app::GuiLibraryCommand,
+) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.apply_gui_library_command(command);
+    *app = core.into_app();
+}
+
 // The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
 // to `crate::app::shell::test_support` (task 4.7): they write the shell
 // `Model`'s size and push the single-panel fact the core reads.
@@ -64,7 +77,8 @@ use mbv_emby_model::test_support::make_item;
 
 // The App stub construction moved to `app_stub` so the Clients' own tests
 // can build it too; the `crate::app::tests::*` paths stay working.
-pub(crate) use super::app_stub::{gui_client_capabilities, make_app_stub, make_built_app};
+pub(crate) use super::app_stub::built::make_built_app;
+pub(crate) use super::app_stub::{gui_client_capabilities, make_app_stub};
 
 // ── test helpers ─────────────────────────────────────────────────────────
 

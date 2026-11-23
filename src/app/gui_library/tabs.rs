@@ -183,7 +183,7 @@ impl App {
         let len = isize::try_from(positions.len()).unwrap_or(1);
         let index = isize::try_from(index).unwrap_or(0);
         let next = usize::try_from((index + step).rem_euclid(len)).unwrap_or(0);
-        self.open_gui_library_position(positions[next]);
+        super::open_gui_library_position_for_app(self, positions[next]);
     }
 
     /// One presented destination's tab label (design D2): the library's

@@ -10,6 +10,10 @@ mod leaves;
 mod painted_choices;
 pub mod sections;
 
+/// Test support for the GUI Client's own tests: the `App` a wrapper parks while
+/// it moves the live one into a `GuiCore` for a single call.
+pub mod test_support;
+
 /// The window half (D3 of `replace-tauri-with-blitz`): the Dioxus tree, the
 /// launch copy, and the window channel. The `blitz` feature and its gate went
 /// at the switch (D18).

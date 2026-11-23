@@ -161,10 +161,10 @@ impl App {
         if let Some(rejection) = rejection {
             match rejection {
                 CollectionRejection::Ignored(reason) => {
-                    Self::log_ignored_library_command(log_name, format_args!("{reason}"));
+                    super::log_ignored_library_command(log_name, format_args!("{reason}"));
                 }
                 CollectionRejection::Stale(key) => {
-                    Self::log_stale_library_item(log_name, &key);
+                    super::log_stale_library_item(log_name, &key);
                 }
             }
             return;

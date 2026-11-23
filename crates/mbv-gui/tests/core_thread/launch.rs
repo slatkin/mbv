@@ -78,7 +78,9 @@ fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
         SHOWS_LIBRARY.1.into(),
         "tvshows".into(),
     ));
-    app.apply_gui_library_command(GuiLibraryCommand::OpenDestination { position: 0 }.into());
+    let mut core = mbv::GuiCore::new(std::mem::replace(app, mbv_gui::test_support::handoff_app()));
+    core.apply_gui_library_command(GuiLibraryCommand::OpenDestination { position: 0 }.into());
+    *app = core.into_app();
 }
 
 /// Seed the grouped Music library and the Audiobookshelf catalog, whose

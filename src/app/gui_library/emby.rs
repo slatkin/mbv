@@ -179,7 +179,7 @@ impl App {
     /// library is an ignored command.
     pub fn gui_emby_open(&mut self, lib_idx: usize) {
         if !self.gui_emby_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "embyOpen",
                 format_args!("the destination is no plain Emby library"),
             );
@@ -210,14 +210,14 @@ impl App {
     /// nothing, as every item-named command's stale arm does.
     pub fn gui_emby_select(&mut self, lib_idx: usize, item_id: &str) {
         if !self.gui_emby_library(lib_idx) {
-            Self::log_ignored_library_command(
+            super::log_ignored_library_command(
                 "embySelect",
                 format_args!("the destination is no plain Emby library"),
             );
             return;
         }
         if !self.gui_emby_row_known(lib_idx, item_id) {
-            Self::log_stale_library_item("embySelect", item_id);
+            super::log_stale_library_item("embySelect", item_id);
             return;
         }
         let unchanged = self
@@ -539,7 +539,7 @@ impl App {
     ) {
         match self.gui_emby_item(lib_idx, item_id) {
             Some(item) => self.play_or_activate_lib_item(lib_idx, item),
-            None => Self::log_stale_library_item("embyPlay", item_id),
+            None => super::log_stale_library_item("embyPlay", item_id),
         }
     }
 
@@ -553,7 +553,7 @@ impl App {
     ) {
         match self.gui_emby_item(lib_idx, item_id) {
             Some(item) => self.play_lib_item_next(lib_idx, item),
-            None => Self::log_stale_library_item("embyPlayNext", item_id),
+            None => super::log_stale_library_item("embyPlayNext", item_id),
         }
     }
 
@@ -566,7 +566,7 @@ impl App {
     ) {
         match self.gui_emby_item(lib_idx, item_id) {
             Some(item) => self.enqueue_lib_item(lib_idx, item),
-            None => Self::log_stale_library_item("embyQueue", item_id),
+            None => super::log_stale_library_item("embyQueue", item_id),
         }
     }
 

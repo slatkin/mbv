@@ -1,4 +1,3 @@
-#[cfg(any(test, feature = "test"))]
 mod app_stub;
 mod client_core;
 mod client_drains;
@@ -71,7 +70,7 @@ pub use self::gui_library::{
 };
 pub use self::gui_library::{
     GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
-    artist_rows_in_view_id,
+    artist_rows_in_view_id, playing_track_id_for_shell,
 };
 pub use self::gui_playlists::{
     GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,

@@ -42,10 +42,13 @@ const SECOND_FOLDER_BODY: &str = r#"{"Items":[{"Id":"vid-shared","Name":"Shared 
 
 /// Press one folder in the Emby feed-view destination's collection dropdown.
 fn toggle_folder(app: &mut App, folder_id: &str) {
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
-        target: GuiCollectionTarget::EmbyFeed(0),
-        key: folder_id.to_string(),
-    });
+    apply_gui_library_command(
+        app,
+        GuiLibraryCommand::CollectionToggle {
+            target: GuiCollectionTarget::EmbyFeed(0),
+            key: folder_id.to_string(),
+        },
+    );
 }
 
 /// A browse level over `items`, hanging off `parent_id`.

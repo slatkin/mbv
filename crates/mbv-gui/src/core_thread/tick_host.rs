@@ -347,7 +347,7 @@ impl ClientTickHost for CoreThread {
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
                     self.apply_panel_focus(PanelFocus::Library);
-                    self.core.app_mut().apply_gui_library_command(command);
+                    self.core.apply_gui_library_command(command);
                 }
                 CoreInput::Settings(command) => {
                     // The Settings screen's request (`add-gui-settings-screen`
@@ -368,7 +368,7 @@ impl ClientTickHost for CoreThread {
                     // semantic intent, and the sections it marks rebuild.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
-                    self.core.app_mut().apply_gui_playlists_command(command);
+                    self.core.apply_gui_playlists_command(command);
                 }
                 CoreInput::Layout(report) => {
                     // A `report_layout` applies the layout and marks no

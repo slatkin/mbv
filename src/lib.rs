@@ -55,6 +55,7 @@ pub use self::app::{
     compare_gui_date_order, gui_feeds_platform,
 };
 
+pub use self::app::playing_track_id_for_shell;
 /// The GUI Client's transitional library stores (`decouple-client-core` design
 /// D4a (c)): the GUI's library event drain hands them to every event, so each
 /// event's collected effects apply through the same implementor as production.
