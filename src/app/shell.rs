@@ -56,6 +56,7 @@ pub(in crate::app) mod queue_card;
 mod root;
 mod run;
 mod settings;
+mod tab_strip;
 pub(in crate::app) mod teardown;
 mod terminal;
 pub(in crate::app) mod tv_wide;
@@ -236,6 +237,10 @@ pub struct Model {
     /// Shared with the terminal input port (issue #940). The run loop releases
     /// it after each terminal tick so the port forwards the next mouse move.
     move_gate: input_port::MoveGate,
+    /// The tab bar's scroll anchor (design D6b): TUI presentation, driven by
+    /// [`Model::reveal_requested_tab`] from the core's `tab_reveal_requested`
+    /// request and painted by `sync_tab_panel`.
+    pub(in crate::app) tab_scroll: usize,
 }
 
 impl Model {
@@ -340,6 +345,7 @@ impl Model {
             swapped_out_exit: false,
             workspace_now_playing: None,
             move_gate,
+            tab_scroll: 0,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other

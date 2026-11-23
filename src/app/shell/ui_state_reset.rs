@@ -93,7 +93,7 @@ impl Model {
         self.app.visual_slot_hidden = false;
         self.app.visualizer_enabled = false;
         self.app.stop_visualizer_capture();
-        self.app.tab_scroll = 0;
+        self.tab_scroll = 0;
         self.app.settings_destination = SettingsDestination::Main;
     }
 

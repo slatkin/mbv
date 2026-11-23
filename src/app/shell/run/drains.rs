@@ -409,6 +409,11 @@ impl Model {
         // drained, so a menu request the focused panel raises is anchored at
         // the pointer whatever order the tick delivered the messages in.
         self.record_right_press(&messages);
+        // Design D6b: a tab change raised by this tick requests the reveal, and
+        // the tab strip is shell-presentation state, so the request is taken
+        // before a pointer press among these messages resolves against the
+        // painted tabs.
+        self.reveal_requested_tab();
         // ADR 0024: fold the mouse-derived messages (one per eligible
         // subscribed component) down to at most one before the keyboard
         // router fold and `handle_terminal_message` dispatch. A keyboard
@@ -508,6 +513,9 @@ impl Model {
         if self.app.visualizer.is_some() {
             self.app.sync_visualizer();
         }
+        // Design D6b: never paint a tab strip that a pending reveal request
+        // would move on the next pass.
+        self.reveal_requested_tab();
         let draw_started = Instant::now();
         if let Err(e) = terminal.draw(|f| self.draw_frame(f, music_resize, tv_resize)) {
             tracing::error!(

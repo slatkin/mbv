@@ -202,7 +202,7 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<TabPanel>()
         {
-            panel.set_content(titles, markers, selected, self.app.tab_scroll);
+            panel.set_content(titles, markers, selected, self.tab_scroll);
         }
     }
 

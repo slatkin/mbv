@@ -40,6 +40,10 @@ impl Model {
         self.sync_terminal_resize();
         self.app.resolve_launch_tab_on_sync();
         self.app.normalize_stale_browse_destination();
+        // Design D6b: a launch tab or overlay change raised this pass can
+        // request a reveal, and the tab panel projection below paints the
+        // anchor, so the request is taken before it.
+        self.reveal_requested_tab();
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted:
         // Home content/focus is projected event-driven by
@@ -146,6 +150,9 @@ impl Model {
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
+        // Design D6b: a direct draw (startup, or a test fixture) takes any
+        // pending reveal request first, so the painted strip matches state.
+        self.reveal_requested_tab();
         super::draw::compose_root_frame(&mut self.app, f);
         // Root composition is data-driven: this is the sole panel paint loop.
         // The queue playback placement is deliberately handled by its panel

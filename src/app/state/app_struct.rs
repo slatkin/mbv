@@ -583,7 +583,11 @@ pub struct App {
     /// changes. Row 5.6 raises it. The TUI Client never reads it.
     pub(in crate::app) gui_ui_reset_epoch: u64,
     pub(in crate::app) force_clear: bool,
-    pub(in crate::app) tab_scroll: usize,
+    /// Set by the core where the tab strip must reveal the current tab
+    /// (design D6b): the tab-strip scroll is TUI presentation, so the TUI
+    /// shell runs its reveal rule after every update step and tick drain and
+    /// clears this. The GUI ignores it, since it has its own tab strip.
+    pub(in crate::app) tab_reveal_requested: bool,
     /// Emby libraries whose Wide TV series Workspace the Client last painted
     /// wide. The breakpoint is terminal geometry, so only a Client computes
     /// it; this set is the Client's write-back, and the core reads it for the

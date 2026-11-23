@@ -289,7 +289,7 @@ impl App {
             queue_filter: String::new(),
             queue_filter_active: false,
             gui_overlay: None,
-            tab_scroll: 0,
+            tab_reveal_requested: false,
             tv_workspace_wide: std::collections::HashSet::new(),
             last_nav_at: Instant::now()
                 .checked_sub(Duration::from_secs(1))
