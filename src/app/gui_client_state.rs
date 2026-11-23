@@ -99,9 +99,4 @@ impl App {
     pub(in crate::app) fn toggle_queue_fold(&mut self) {
         self.queue_folded = !self.queue_folded;
     }
-
-    /// Focus the queue header's filter text entry (the GUI-only `/`).
-    pub(in crate::app) fn activate_queue_filter(&mut self) {
-        self.queue_filter_active = true;
-    }
 }

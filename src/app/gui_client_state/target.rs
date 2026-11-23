@@ -1,8 +1,9 @@
 //! The playback-target chooser's App-side state (add-tauri-gui-client row
 //! 6.4): the open toggle and the stable-key target resolution a chooser's
-//! Enter and a chooser row's press share.
+//! Enter and a chooser row's press share. The resolution itself is core
+//! target behaviour and lives in `state::playback_target`.
 
-use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
+use mbv_ui_model::panel_targets::SessionTargetKey;
 
 use super::overlay::{GuiOverlay, TargetChooserState};
 use crate::app::App;
@@ -27,22 +28,6 @@ impl App {
                 .unwrap_or(0);
             Some(GuiOverlay::TargetChooser(TargetChooserState { cursor }))
         };
-    }
-
-    /// Select a chooser row's target. The local row returns the playback to this
-    /// machine, and does nothing while it already plays here, so a press on the
-    /// local output raises no toast. A remote row resolves as `select_target_for_key`
-    /// does.
-    pub(in crate::app) fn select_chooser_target(&mut self, key: &ChooserTargetKey) -> bool {
-        match key {
-            ChooserTargetKey::Local => {
-                if self.remote_playback_attached() {
-                    self.detach_to_local();
-                }
-                true
-            }
-            ChooserTargetKey::Target(key) => self.select_target_for_key(key),
-        }
     }
 
     /// Select the playback target a stable `SessionTargetKey` names,
