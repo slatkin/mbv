@@ -37,7 +37,7 @@ pub(in crate::app) fn fetch_emby_image(
     server_url: &str,
     token: &str,
 ) -> FetchedBytes {
-    if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
+    if let Some(cached) = mbv_config::read_image_disk_cache(cache_key) {
         // Local-only cache hits power dim-then-undim cycles for warm-cache modals.
         tracing::debug!(name: "images.disk_cache.hit", target: "images", item = %item_id, "image disk cache hit");
         return FetchedBytes::Bytes(cached);
@@ -69,7 +69,7 @@ pub(in crate::app) fn fetch_emby_image(
     // Cache original server bytes as-is; Emby already resized these to
     // `IMAGE_FETCH_MAX_SIDE`.
     if let FetchedBytes::Bytes(ref bytes) = fetched {
-        crate::config::write_image_disk_cache(cache_key, bytes);
+        mbv_config::write_image_disk_cache(cache_key, bytes);
     }
     fetched
 }

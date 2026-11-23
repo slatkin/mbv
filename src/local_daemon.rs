@@ -197,7 +197,7 @@ fn owner_player_ready_hook(
         mbv_desktop::mpris::start_owner(
             std::sync::Arc::clone(&handle.status),
             handle.transport_tx.clone(),
-            crate::config::image_disk_cache_path,
+            mbv_config::image_disk_cache_path,
         );
         *player_handle.lock().unwrap() = Some(handle);
     })
@@ -206,7 +206,7 @@ fn owner_player_ready_hook(
 /// Entered via the hidden `mbv --__local-daemon` self-spawn. Never returns.
 pub fn run_local_daemon_main() -> ! {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let log_spec = match crate::startup::parse_log_level_arg(&args) {
+    let log_spec = match mbv_core::applog::parse_log_level_arg(&args) {
         Ok(spec) => spec.unwrap_or_default(),
         Err(error) => {
             crate::startup::print_usage();

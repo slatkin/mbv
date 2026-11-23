@@ -120,29 +120,6 @@ fn run_tui(mut app: App) {
     }
 }
 
-pub(crate) fn parse_log_level_arg(
-    args: &[String],
-) -> Result<Option<applog::LogSpec>, mbv_ui_model::UiModelError> {
-    let mut spec = None;
-    let mut i = 0;
-    while i < args.len() {
-        if args[i] == "--log-level" {
-            i += 1;
-            let Some(value) = args.get(i) else {
-                return Err(mbv_ui_model::UiModelError::operation(
-                    "mbv: --log-level requires a level or level[,target=level...] list",
-                ));
-            };
-            spec =
-                Some(applog::LogSpec::parse(value).map_err(|error| {
-                    mbv_ui_model::UiModelError::operation(format!("mbv: {error}"))
-                })?);
-        }
-        i += 1;
-    }
-    Ok(spec)
-}
-
 fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
@@ -204,7 +181,7 @@ fn pre_config_startup(args: &[String]) -> Option<StartupArgs> {
         return None;
     }
 
-    let log_level = match parse_log_level_arg(args) {
+    let log_level = match applog::parse_log_level_arg(args) {
         Ok(level) => level,
         Err(error) => {
             print_usage();
@@ -458,37 +435,6 @@ fn find_owner_or_fatal() -> OwnerState {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[rstest::rstest]
-    #[case("error", "error")]
-    #[case("warn", "warn")]
-    #[case("info", "info")]
-    #[case("debug", "debug")]
-    #[case("trace", "trace")]
-    #[case("info,player=debug", "info,player=debug")]
-    fn log_level_arg_accepts_supported_values(#[case] value: &str, #[case] expected: &str) {
-        assert_eq!(
-            parse_log_level_arg(&["--log-level".into(), value.into()])
-                .unwrap()
-                .as_ref()
-                .map(applog::LogSpec::to_string)
-                .as_deref(),
-            Some(expected)
-        );
-    }
-
-    #[rstest::rstest]
-    #[case(vec!["--log-level".into(), "info,player=".into()])]
-    #[case(vec!["--log-level".into(), "loud".into()])]
-    #[case(vec!["--log-level".into()])]
-    fn log_level_arg_rejects_invalid_values(#[case] args: Vec<String>) {
-        parse_log_level_arg(&args).unwrap_err();
-    }
-
-    #[test]
-    fn log_level_arg_is_absent_without_flag() {
-        assert_eq!(parse_log_level_arg(&[]).unwrap(), None);
-    }
 
     #[test]
     fn connect_daemon_flag_is_detected_in_both_forms() {

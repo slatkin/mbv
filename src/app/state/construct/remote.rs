@@ -46,7 +46,7 @@ fn start_mpris(
         move |transport| send_remote.send_transport(transport),
         Some(move || disconnect_remote.is_disconnected()),
         move || mbv_desktop::mpris::client_publishes(endpoint_is_local, None),
-        crate::config::image_disk_cache_path,
+        mbv_config::image_disk_cache_path,
     )
 }
 
@@ -222,7 +222,7 @@ impl App {
         // shutdown path -- leaked into every test process that constructs a
         // remote App, where process teardown races it.
         #[cfg(not(test))]
-        crate::config::evict_old_image_cache();
+        mbv_config::evict_old_image_cache();
         // EmbyClient retains this snapshot only for constructing Emby API
         // requests. App general state owns the independent application copy;
         // it is never synchronized back into this concrete API boundary.

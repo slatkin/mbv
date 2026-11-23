@@ -73,7 +73,7 @@ fn fetch_audiobookshelf_image(
     item_id: &str,
     rendition: &ImageRendition,
 ) -> FetchedBytes {
-    if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
+    if let Some(cached) = mbv_config::read_image_disk_cache(cache_key) {
         return FetchedBytes::Bytes(cached);
     }
     let Ok(client) = mbv_audiobookshelf::AudiobookshelfClient::new(server_url) else {
@@ -99,7 +99,7 @@ fn fetch_audiobookshelf_image(
     };
     match result {
         Ok(bytes) => {
-            crate::config::write_image_disk_cache(cache_key, &bytes);
+            mbv_config::write_image_disk_cache(cache_key, &bytes);
             FetchedBytes::Bytes(bytes)
         }
         Err(error)
