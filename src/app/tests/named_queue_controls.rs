@@ -16,7 +16,7 @@ use crate::app::state::playback::ShownEntry;
 use mbv_ctrl::{CtrlCmd, NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
 use mbv_ui_model::overlay::OverlayRequest;
-use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PlaybackRequest};
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 use rstest::rstest;
 
 /// The queue the Owner mints for the first new queue beside `Default`.
@@ -486,7 +486,11 @@ fn a_chooser_entry_press_shows_the_painted_queue() {
     app.toggle_gui_queue_chooser();
     while cmd_rx.try_recv().is_ok() {}
 
-    app.handle_playback_request(&PlaybackRequest::QueueChooserEntry(Some(resting())));
+    // The GUI Client's playback entry, which runs the shared effect and then
+    // its own half of the chooser's entry press (design D4a (a)).
+    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::QueueChooserEntry(Some(
+        resting(),
+    ))));
 
     assert_eq!(
         app.shown_entry,
@@ -520,7 +524,9 @@ fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
     app.adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
     while cmd_rx.try_recv().is_ok() {}
 
-    app.handle_playback_request(&PlaybackRequest::QueueChooserEntry(Some(resting())));
+    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::QueueChooserEntry(Some(
+        resting(),
+    ))));
 
     assert_eq!(
         app.shown_entry,

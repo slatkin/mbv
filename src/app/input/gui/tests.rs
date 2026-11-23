@@ -376,13 +376,18 @@ fn open_overlay_owns_the_keyboard() {
 fn track_popover_choose_sends_the_track_switch() {
     let _state_dir = crate::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+    app.set_client_capabilities(gui_client_capabilities());
     app.player.update_status(|status| {
         status.active = true;
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
         status.sub_id = 0;
     });
 
-    app.handle_playback_request(&PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles));
+    // The GUI Client's playback entry runs the shared effect and then its own
+    // half of the chip press (design D4a (a)).
+    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::OpenTrackPopover(
+        TrackChipKind::Subtitles,
+    )));
     let Some(GuiOverlay::TrackPopover(popover)) = &app.gui_overlay else {
         panic!("the popover opened over the chip's choices");
     };
@@ -422,7 +427,9 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
         status.sub_id = 0;
     });
-    app.handle_playback_request(&PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles));
+    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::OpenTrackPopover(
+        TrackChipKind::Subtitles,
+    )));
     assert!(app.gui_overlay.is_some());
 
     // Playback ends while the popover is up (the queue exhausts, or the

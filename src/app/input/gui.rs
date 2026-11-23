@@ -20,14 +20,16 @@
 
 use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_msg::{
-    ComponentId, KeyEvent, LeafKeyResult, Msg, OverlayId, PointerEvent, Position, QueueIntent,
-    QueueMove, ShellRequest,
+    ComponentId, KeyEvent, LeafKeyResult, Msg, OverlayId, PlaybackRequest, PointerEvent, Position,
+    QueueIntent, QueueMove, ShellRequest,
 };
 
 use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
 use super::resolver::KeyChord;
 use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused};
-use crate::app::dispatch::action::{AppCommand, Command, NavigationIntent, PanelIntent};
+use crate::app::dispatch::action::{
+    AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent,
+};
 use crate::app::{App, RemoteControlTarget};
 
 /// One translated GUI Client input event: the neutral shape the shared
@@ -270,8 +272,50 @@ impl App {
         match msg {
             Msg::Queue(request) => self.handle_queue_request(request),
             Msg::Shell(request) => self.handle_gui_queue_shell_request(*request),
-            Msg::Playback(request) => self.handle_playback_request(&request),
+            Msg::Playback(request) => self.handle_gui_playback_request(&request),
             Msg::Service(_) | Msg::TerminalEvent(_) => {}
+        }
+    }
+
+    /// The GUI Client's playback request: the shared App-side effect first
+    /// (`App::handle_playback_request`), then the Client's own half of the
+    /// requests whose effect is GUI presentation. Those requests are the
+    /// documented core no-ops of design D4a (a) — the track chip's popover
+    /// open, the track popover's row press, the header's collapse and
+    /// queue-fold controls, the player menu's open and entry press, and the
+    /// Queue chooser's entry press — so each pair runs the core and then the
+    /// GUI method here, in the order the core ran them before the split.
+    fn handle_gui_playback_request(&mut self, request: &PlaybackRequest) {
+        self.handle_playback_request(request);
+        match request {
+            PlaybackRequest::TrackPopoverSelect(track_id) => {
+                self.select_gui_track_popover_track(*track_id);
+            }
+            PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
+            PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
+            PlaybackRequest::OpenPlayerMenu { x, y } => self.open_gui_player_menu(*x, *y),
+            PlaybackRequest::PlayerMenuSelect => self.select_gui_player_menu_entry(),
+            PlaybackRequest::QueueChooserEntry(queue) => {
+                self.show_gui_queue_chooser_entry(*queue);
+            }
+            PlaybackRequest::OpenTrackPopover(chip) => self.toggle_gui_track_popover(*chip),
+            // The transport controls run their whole effect in the core, and
+            // the request's own arm already applied it above.
+            PlaybackRequest::TogglePlayPause
+            | PlaybackRequest::Stop
+            | PlaybackRequest::Previous
+            | PlaybackRequest::Next
+            | PlaybackRequest::SeekTo(_)
+            | PlaybackRequest::SeekRelative(_)
+            | PlaybackRequest::ToggleMute
+            | PlaybackRequest::VolumeDelta(_)
+            | PlaybackRequest::CycleAudio
+            | PlaybackRequest::CycleSubtitle
+            | PlaybackRequest::ActivateQueueFilter
+            | PlaybackRequest::QueueChooserToggle
+            | PlaybackRequest::NewQueue
+            | PlaybackRequest::RenameQueue
+            | PlaybackRequest::CloseQueue => {}
         }
     }
 
@@ -395,6 +439,14 @@ impl App {
     /// the same `QueueRequest::Move` the `Shift+Up`/`Shift+Down` key rule
     /// emits, and that request's dispatch resolves the slot's index. Without
     /// a focused leaf the chord moves nothing.
+    ///
+    /// The `App` arm calls the core first and then applies the Client's own
+    /// half of the panel actions whose effect is GUI presentation (design D4a
+    /// (a)): the collapse and queue-fold toggles, the queue chooser, the
+    /// playback-target chooser, and the track popover's toggle. Each is a
+    /// documented core no-op, so the pair runs the core and then the GUI
+    /// method, as the core ran it before the split. The `Shell` arm stays the
+    /// documented no-op [`route_gui_input`](Self::route_gui_input) describes.
     fn apply_gui_router_command(
         &mut self,
         command: &Command,
@@ -452,7 +504,35 @@ impl App {
         ) {
             return false;
         }
-        self.apply_router_command(command)
+        let quit = self.apply_router_command(command);
+        if let Command::App(app_command) = command {
+            self.apply_gui_command(app_command);
+        }
+        quit
+    }
+
+    /// The GUI Client's own half of one `AppCommand`, applied after the core
+    /// (design D4a (a)): the panel actions whose effect is GUI presentation,
+    /// and the track popover's toggle. Each of their core arms is a documented
+    /// no-op, so this runs the GUI method the core called before the split.
+    fn apply_gui_command(&mut self, command: &AppCommand) {
+        match command {
+            AppCommand::Panel(PanelIntent::TogglePanelCollapse) => self.toggle_panel_collapse(),
+            AppCommand::Panel(PanelIntent::ToggleQueueFold) => self.toggle_queue_fold(),
+            AppCommand::Panel(PanelIntent::ToggleQueueChooser) => self.toggle_gui_queue_chooser(),
+            AppCommand::Panel(PanelIntent::ToggleTargetChooser) => {
+                self.toggle_gui_target_chooser();
+            }
+            AppCommand::Playback(PlaybackIntent::ToggleTrackPopover(chip)) => {
+                self.toggle_gui_track_popover(*chip);
+            }
+            AppCommand::Panel(_)
+            | AppCommand::Playback(_)
+            | AppCommand::Navigation(_)
+            | AppCommand::Visual(_)
+            | AppCommand::QueuePlayCursor(_)
+            | AppCommand::Quit => {}
+        }
     }
 
     /// Apply one router `Command` to this `App`. The `App` arm is the App's

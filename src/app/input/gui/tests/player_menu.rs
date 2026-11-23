@@ -3,11 +3,17 @@
 //! toggle, and Enter and the entry press run the same auto-hide toggle and
 //! close the menu with the choice.
 
-use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PlaybackRequest};
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
 use crate::app::tests::make_app_stub;
+
+/// A playback request delivered through the GUI Client's entry, which runs the
+/// shared App-side effect and then the Client's own half (design D4a (a)).
+fn gui_request(app: &mut crate::app::App, request: PlaybackRequest) {
+    app.handle_gui_surface_msg(Msg::Playback(request));
+}
 
 // The player panel's right-click opens the menu at the pointer anchor the
 // request carried: the frame projects the anchor, and the cursor rests on
@@ -16,7 +22,10 @@ use crate::app::tests::make_app_stub;
 fn player_menu_right_click_opens_at_the_pointer() {
     let mut app = make_app_stub();
 
-    app.handle_playback_request(&PlaybackRequest::OpenPlayerMenu { x: 30.0, y: 40.0 });
+    gui_request(
+        &mut app,
+        PlaybackRequest::OpenPlayerMenu { x: 30.0, y: 40.0 },
+    );
 
     assert!(matches!(app.gui_overlay, Some(GuiOverlay::PlayerMenu(_))));
     let playback = app.queue_playback_projection();
@@ -32,7 +41,10 @@ fn player_menu_right_click_opens_at_the_pointer() {
 #[test]
 fn player_menu_esc_closes_with_no_toggle() {
     let mut app = make_app_stub();
-    app.handle_playback_request(&PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 });
+    gui_request(
+        &mut app,
+        PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 },
+    );
     let before = app.gui_player_auto_hide;
 
     app.route_gui_input(
@@ -49,7 +61,10 @@ fn player_menu_esc_closes_with_no_toggle() {
 #[test]
 fn player_menu_enter_toggles_and_closes() {
     let mut app = make_app_stub();
-    app.handle_playback_request(&PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 });
+    gui_request(
+        &mut app,
+        PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 },
+    );
     let before = app.gui_player_auto_hide;
 
     app.route_gui_input(
@@ -66,13 +81,16 @@ fn player_menu_enter_toggles_and_closes() {
 #[test]
 fn player_menu_entry_press_toggles_and_a_stale_press_changes_nothing() {
     let mut app = make_app_stub();
-    app.handle_playback_request(&PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 });
+    gui_request(
+        &mut app,
+        PlaybackRequest::OpenPlayerMenu { x: 10.0, y: 10.0 },
+    );
     let before = app.gui_player_auto_hide;
 
-    app.handle_playback_request(&PlaybackRequest::PlayerMenuSelect);
+    gui_request(&mut app, PlaybackRequest::PlayerMenuSelect);
     assert!(app.gui_overlay.is_none());
     assert_eq!(app.gui_player_auto_hide, !before);
 
-    app.handle_playback_request(&PlaybackRequest::PlayerMenuSelect);
+    gui_request(&mut app, PlaybackRequest::PlayerMenuSelect);
     assert_eq!(app.gui_player_auto_hide, !before);
 }

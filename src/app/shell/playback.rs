@@ -86,29 +86,19 @@ impl crate::app::App {
                 )));
             }
             // A track popover row's press (add-tauri-gui-client rows 6.4 and
-            // 6.5): the GUI Client's popover rows emit it with the track id
-            // the frame painted, and the App runs the same track switch the
-            // popover's Enter execution applies. No TUI leaf produces it
-            // either.
-            PlaybackRequest::TrackPopoverSelect(track_id) => {
-                self.select_gui_track_popover_track(*track_id);
-            }
-            // The canvas header's collapse and queue-fold controls: the GUI
-            // Client's header emits them (add-tauri-gui-client row 6.4) and
-            // they run the `z`/`q` toggles' own effects. The TUI paints no
-            // such control; the arms are here for the shared dispatch's
-            // exhaustiveness.
-            PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
-            PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
-            // The player panel's right-click opens the Client-core player
-            // menu at the pointer (gui-player-overlay-menu). The TUI paints
-            // no such menu; the arm is here for the shared dispatch's
-            // exhaustiveness.
-            PlaybackRequest::OpenPlayerMenu { x, y } => self.open_gui_player_menu(*x, *y),
-            // The player menu's auto-hide entry press (gui-player-overlay-menu):
-            // the same execution the menu's Enter applies, and the menu
-            // closes with it.
-            PlaybackRequest::PlayerMenuSelect => self.select_gui_player_menu_entry(),
+            // 6.5), the canvas header's collapse and queue-fold controls (row
+            // 6.4), the player panel's right-click menu open and its entry
+            // press (gui-player-overlay-menu), and one Queue chooser entry's
+            // press (task 8.3 of `gui-named-queues`). Each is GUI presentation,
+            // so its core half is the documented no-op of design D4a (a): the
+            // GUI Client applies it after the core at its own entry
+            // (`input/gui.rs`). No TUI leaf produces any of them.
+            PlaybackRequest::TrackPopoverSelect(_)
+            | PlaybackRequest::TogglePanelCollapse
+            | PlaybackRequest::ToggleQueueFold
+            | PlaybackRequest::OpenPlayerMenu { .. }
+            | PlaybackRequest::PlayerMenuSelect
+            | PlaybackRequest::QueueChooserEntry(_) => {}
             // The canvas queue header's filter control (row 6.5): the same
             // effect the `/` chord dispatches, so the header control and the
             // chord run one path.
@@ -124,13 +114,6 @@ impl crate::app::App {
             PlaybackRequest::NewQueue => self.dispatch_panel(PanelIntent::RequestNewQueue),
             PlaybackRequest::RenameQueue => self.dispatch_panel(PanelIntent::RequestRenameQueue),
             PlaybackRequest::CloseQueue => self.dispatch_panel(PanelIntent::RequestCloseQueue),
-            // One Queue chooser entry's press (task 8.3 of `gui-named-queues`):
-            // the entry the window painted, shown through the same path the
-            // chooser's Enter runs. The TUI Client paints no Queue chooser, so
-            // no TUI leaf produces it.
-            PlaybackRequest::QueueChooserEntry(queue) => {
-                self.show_gui_queue_chooser_entry(*queue);
-            }
         }
     }
 

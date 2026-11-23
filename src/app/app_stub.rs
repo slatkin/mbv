@@ -259,8 +259,6 @@ pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
 #[cfg(feature = "test")]
 #[must_use]
 pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
-    use mbv_ui_msg::PlaybackRequest;
-
     let mut app = stub_app_with_playing_queue(1);
     app.player.update_status(|status| {
         status.active = true;
@@ -269,7 +267,11 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
         status.sub_id = 0;
     });
-    app.handle_playback_request(&PlaybackRequest::OpenTrackPopover(chip));
+    // The popover opens through the GUI Client's own half of the chip press:
+    // the shared playback dispatch's arm for it is a documented core no-op
+    // (design D4a (a)), and the GUI entry (`input/gui.rs`) applies it after
+    // the core.
+    app.toggle_gui_track_popover(chip);
     app
 }
 /// The `App` a GUI Client's test drives with the cast receivers replaced by
