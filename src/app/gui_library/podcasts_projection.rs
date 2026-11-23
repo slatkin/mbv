@@ -36,6 +36,7 @@ use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
+use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One episode's stable identity across every list view (row 10.1): the
@@ -169,7 +170,7 @@ pub struct GuiPodcastsHero {
 /// here.
 pub type GuiPodcastsProjection = GuiEntryListProjection<GuiPodcastsHero>;
 
-impl App {
+impl GuiCore {
     /// The Podcasts projection the GUI Library panel paints (row 10.1): the
     /// collection selector, the selection's episode rows in the list's sort
     /// order, the selected episode, and its Hero. A `lib_idx` that names no
@@ -177,226 +178,224 @@ impl App {
     /// excludes that destination anyway.
     #[must_use]
     pub fn gui_podcasts_projection(&mut self, lib_idx: usize) -> GuiPodcastsProjection {
-        if !self.gui_podcast_library(lib_idx) {
-            return GuiPodcastsProjection::default();
-        }
-        // The one effective-set read the frame takes: the rows read the set
-        // it borrows, so the frame never recomputes the retention.
-        let set = self.gui_podcast_effective_set(lib_idx);
-        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Podcasts(lib_idx));
-        let sort = sort_frame.active;
-        let collections = self.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
-        let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, set.as_ref(), sort);
-        let selected = self.gui_podcast_selected(lib_idx, &rows);
-        let hero = selected
-            .as_deref()
-            .and_then(GuiPodcastEpisodeId::decode)
-            .and_then(|episode| self.gui_podcast_hero(lib_idx, &episode));
-        GuiPodcastsProjection {
-            collections,
-            loading,
-            failed,
-            rows,
-            sort: Some(sort_frame),
-            selected,
-            hero,
-        }
+        podcasts_projection(&mut self.app, lib_idx)
     }
+}
 
-    /// The Podcasts collection selector's catalog (row 10.1): each listed show
-    /// by title — the order the show list already holds — as its
-    /// `library_item_id` key and title. The catalog streams borrowed shows and
-    /// clones each pair as the selector keeps it, with no freshly cloned
-    /// vector between the two.
-    pub(in crate::app::gui_library) fn gui_podcast_shows(
-        &self,
-        lib_idx: usize,
-    ) -> impl Iterator<Item = (String, String)> {
-        self.audiobookshelf_browse
-            .get(lib_idx)
-            .into_iter()
-            .flat_map(|state| state.shows.iter())
-            .map(|show| (show.library_item_id.clone(), show.title.clone()))
+/// The Podcasts projection the GUI Library panel paints (row 10.1).
+fn podcasts_projection(app: &mut App, lib_idx: usize) -> GuiPodcastsProjection {
+    if !super::podcasts::podcast_library(app, lib_idx) {
+        return GuiPodcastsProjection::default();
     }
+    // The one effective-set read the frame takes: the rows read the set
+    // it borrows, so the frame never recomputes the retention.
+    let set = super::podcasts::podcast_effective_set(app, lib_idx);
+    let sort_frame = app.gui_list_sort_frame(GuiSortTarget::Podcasts(lib_idx));
+    let sort = sort_frame.active;
+    let collections = app.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
+    let (rows, loading, failed) = podcast_rows(app, lib_idx, set.as_ref(), sort);
+    let selected = podcast_selected(app, lib_idx, &rows);
+    let hero = selected
+        .as_deref()
+        .and_then(GuiPodcastEpisodeId::decode)
+        .and_then(|episode| podcast_hero(app, lib_idx, &episode));
+    GuiPodcastsProjection {
+        collections,
+        loading,
+        failed,
+        rows,
+        sort: Some(sort_frame),
+        selected,
+        hero,
+    }
+}
 
-    /// The selection's episode rows with the view's loading and failure
-    /// states (row 10.1; gui-collection-dropdown design D2, D4): All merges
-    /// every listed show's cached episodes, and a checked set merges the
-    /// checked shows' — both ordered by `sort` (design D6): the episode title
-    /// under Title, with the date newest as its second key, else the publish
-    /// date through the shared date order, undated rows last while Newest.
-    /// Every order's last tie-break is the episode identity. The loading
-    /// state is the catalog's pages in flight, plus the active view's own
-    /// episode fetches, the TUI's `pill_fetch_in_flight` rule.
-    fn gui_podcast_rows(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-        sort: GuiListSort,
-    ) -> (Vec<GuiPodcastsRow>, bool, bool) {
-        let Some(state) = self.audiobookshelf_browse.get(lib_idx) else {
-            return (Vec::new(), true, false);
-        };
-        let mut episodes = match set {
-            GuiCollectionSet::All => state.visible_episodes(AudiobookshelfEpisodeFilter::All),
-            GuiCollectionSet::Checked(keys) => {
-                // The merge walks the shows, not the keys: the final stable
-                // date sort keeps equal dates in merge order, so the
-                // show-order walk alone yields the identical order. The key
-                // set is borrowed and hashed once, so the walk is one
-                // hash probe per show instead of a linear scan per show.
-                let keys: HashSet<&str> = keys.iter().map(String::as_str).collect();
-                let mut visible = Vec::with_capacity(
-                    state
-                        .shows
-                        .iter()
-                        .filter(|show| keys.contains(show.library_item_id.as_str()))
-                        .filter_map(|show| state.detail_cache.get(show.library_item_id.as_str()))
-                        .map(Vec::len)
-                        .sum(),
-                );
-                for show in &state.shows {
-                    if !keys.contains(show.library_item_id.as_str()) {
-                        continue;
-                    }
-                    if let Some(cached) = state.detail_cache.get(show.library_item_id.as_str()) {
-                        visible.extend(
-                            state.visible_episodes_from(cached, AudiobookshelfEpisodeFilter::All),
-                        );
-                    }
+/// The Podcasts collection selector's catalog (row 10.1): each listed show
+/// by title — the order the show list already holds — as its
+/// `library_item_id` key and title. The catalog streams borrowed shows and
+/// clones each pair as the selector keeps it, with no freshly cloned
+/// vector between the two.
+pub(in crate::app::gui_library) fn podcast_shows(
+    app: &App,
+    lib_idx: usize,
+) -> impl Iterator<Item = (String, String)> {
+    app.audiobookshelf_browse
+        .get(lib_idx)
+        .into_iter()
+        .flat_map(|state| state.shows.iter())
+        .map(|show| (show.library_item_id.clone(), show.title.clone()))
+}
+
+/// The selection's episode rows with the view's loading and failure states
+/// (row 10.1; gui-collection-dropdown design D2, D4): All merges every listed
+/// show's cached episodes, and a checked set merges the checked shows' — both
+/// ordered by `sort` (design D6).
+fn podcast_rows(
+    app: &App,
+    lib_idx: usize,
+    set: &GuiCollectionSet,
+    sort: GuiListSort,
+) -> (Vec<GuiPodcastsRow>, bool, bool) {
+    let Some(state) = app.audiobookshelf_browse.get(lib_idx) else {
+        return (Vec::new(), true, false);
+    };
+    let mut episodes = match set {
+        GuiCollectionSet::All => state.visible_episodes(AudiobookshelfEpisodeFilter::All),
+        GuiCollectionSet::Checked(keys) => {
+            // The merge walks the shows, not the keys: the final stable
+            // date sort keeps equal dates in merge order, so the
+            // show-order walk alone yields the identical order. The key
+            // set is borrowed and hashed once, so the walk is one
+            // hash probe per show instead of a linear scan per show.
+            let keys: HashSet<&str> = keys.iter().map(String::as_str).collect();
+            let mut visible = Vec::with_capacity(
+                state
+                    .shows
+                    .iter()
+                    .filter(|show| keys.contains(show.library_item_id.as_str()))
+                    .filter_map(|show| state.detail_cache.get(show.library_item_id.as_str()))
+                    .map(Vec::len)
+                    .sum(),
+            );
+            for show in &state.shows {
+                if !keys.contains(show.library_item_id.as_str()) {
+                    continue;
                 }
-                visible
+                if let Some(cached) = state.detail_cache.get(show.library_item_id.as_str()) {
+                    visible.extend(
+                        state.visible_episodes_from(cached, AudiobookshelfEpisodeFilter::All),
+                    );
+                }
             }
-        };
-        if sort.is_name_sort() {
-            episodes.sort_by_cached_key(|episode| {
-                (
-                    gui_title_sort_key(&episode.title),
-                    episode.published_at.is_none(),
-                    std::cmp::Reverse(episode.published_at.unwrap_or_default()),
-                    episode.library_item_id.clone(),
-                    episode.episode_id.clone(),
-                )
-            });
-        } else {
-            episodes.sort_by(|left, right| {
-                sort.compare_date(left.published_at, right.published_at)
-                    .then_with(|| {
-                        (left.library_item_id.as_str(), left.episode_id.as_str())
-                            .cmp(&(right.library_item_id.as_str(), right.episode_id.as_str()))
-                    })
-            });
+            visible
         }
-        let fetching = match set {
-            GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
-                let show_id = keys.first().map(String::as_str).unwrap_or_default();
-                state.detail_loading_ids.contains_key(show_id)
-            }
-            _ => !state.detail_loading_ids.is_empty(),
-        };
-        let rows = episodes
-            .iter()
-            .map(|episode| podcast_row(self, state, episode, sort))
-            .collect();
-        (
-            rows,
-            fetching || !state.loading_pages.is_empty(),
-            state.error.is_some(),
-        )
+    };
+    if sort.is_name_sort() {
+        episodes.sort_by_cached_key(|episode| {
+            (
+                gui_title_sort_key(&episode.title),
+                episode.published_at.is_none(),
+                std::cmp::Reverse(episode.published_at.unwrap_or_default()),
+                episode.library_item_id.clone(),
+                episode.episode_id.clone(),
+            )
+        });
+    } else {
+        episodes.sort_by(|left, right| {
+            sort.compare_date(left.published_at, right.published_at)
+                .then_with(|| {
+                    (left.library_item_id.as_str(), left.episode_id.as_str())
+                        .cmp(&(right.library_item_id.as_str(), right.episode_id.as_str()))
+                })
+        });
     }
+    let fetching = match set {
+        GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
+            let show_id = keys.first().map(String::as_str).unwrap_or_default();
+            state.detail_loading_ids.contains_key(show_id)
+        }
+        _ => !state.detail_loading_ids.is_empty(),
+    };
+    let rows = episodes
+        .iter()
+        .map(|episode| podcast_row(app, state, episode, sort))
+        .collect();
+    (
+        rows,
+        fetching || !state.loading_pages.is_empty(),
+        state.error.is_some(),
+    )
+}
 
-    /// The episode the Hero shows (row 10.1): the core's pick while the active
-    /// list still carries it, else that list's first row — the Hero default.
-    fn gui_podcast_selected(&self, lib_idx: usize, rows: &[GuiPodcastsRow]) -> Option<String> {
-        picked_or_first(
-            self.gui_podcast_picked_episode(lib_idx)
-                .map(GuiPodcastEpisodeId::from)
-                .map(|episode| episode.encode()),
-            |picked| rows.iter().any(|row| row.id == picked),
-            || rows.first().map(|row| row.id.clone()),
-        )
-    }
+/// The episode the Hero shows (row 10.1): the core's pick while the active
+/// list still carries it, else that list's first row — the Hero default.
+fn podcast_selected(app: &App, lib_idx: usize, rows: &[GuiPodcastsRow]) -> Option<String> {
+    picked_or_first(
+        super::podcasts::podcast_picked_episode(app, lib_idx)
+            .map(GuiPodcastEpisodeId::from)
+            .map(|episode| episode.encode()),
+        |picked| rows.iter().any(|row| row.id == picked),
+        || rows.first().map(|row| row.id.clone()),
+    )
+}
 
-    /// The selected episode's Hero (row 10.1): the shared
-    /// `hero_content_abs_episode` producer's facts and description, and the
-    /// parent show's cover fetched through the Service-scoped cover chain —
-    /// the same fetch the TUI's hero projection issues.
-    fn gui_podcast_hero(
-        &mut self,
-        lib_idx: usize,
-        episode: &GuiPodcastEpisodeId,
-    ) -> Option<GuiPodcastsHero> {
-        let item = self.gui_podcast_hero_item(lib_idx, episode)?;
-        let content = hero_content_abs_episode(&item);
-        let art = match &content.facts.artwork.source {
-            Some(ArtworkSource::AudiobookshelfCover {
-                library_item_id,
-                book: false,
-            }) => self.gui_podcast_episode_artwork(library_item_id),
-            Some(_) | None => None,
-        };
-        // The show is the largest unit and rides as the parent: the producer puts
-        // it first, so the rows drop it and the duration index follows.
-        let parent = item.show_title.clone().filter(|show| !show.is_empty());
-        let skip = usize::from(parent.is_some());
-        let duration_row = content
-            .facts
-            .duration_row
-            .and_then(|row| row.checked_sub(skip));
-        Some(GuiPodcastsHero {
-            title: content.facts.title.clone(),
-            parent,
-            meta_rows: content.facts.meta_rows.iter().skip(skip).cloned().collect(),
-            duration_row,
-            progress_row: content.facts.progress_row,
-            overview: content.overview.clone(),
-            art_shape: artwork_shape(
-                self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
-            ),
-            art,
-        })
-    }
+/// The selected episode's Hero (row 10.1): the shared
+/// `hero_content_abs_episode` producer's facts and description, and the
+/// parent show's cover fetched through the Service-scoped cover chain —
+/// the same fetch the TUI's hero projection issues.
+fn podcast_hero(
+    app: &mut App,
+    lib_idx: usize,
+    episode: &GuiPodcastEpisodeId,
+) -> Option<GuiPodcastsHero> {
+    let item = podcast_hero_item(app, lib_idx, episode)?;
+    let content = hero_content_abs_episode(&item);
+    let art = match &content.facts.artwork.source {
+        Some(ArtworkSource::AudiobookshelfCover {
+            library_item_id,
+            book: false,
+        }) => podcast_episode_artwork(app, library_item_id),
+        Some(_) | None => None,
+    };
+    // The show is the largest unit and rides as the parent: the producer puts
+    // it first, so the rows drop it and the duration index follows.
+    let parent = item.show_title.clone().filter(|show| !show.is_empty());
+    let skip = usize::from(parent.is_some());
+    let duration_row = content
+        .facts
+        .duration_row
+        .and_then(|row| row.checked_sub(skip));
+    Some(GuiPodcastsHero {
+        title: content.facts.title.clone(),
+        parent,
+        meta_rows: content.facts.meta_rows.iter().skip(skip).cloned().collect(),
+        duration_row,
+        progress_row: content.facts.progress_row,
+        overview: content.overview.clone(),
+        art_shape: artwork_shape(app.gui_hero_shape(content.facts.artwork.shape, art.as_ref())),
+        art,
+    })
+}
 
-    /// The episode as the shared hero producer's input (row 10.1): the cached
-    /// episode over its parent show's identity, title, and cover — the same
-    /// catalog the TUI's podcast owner builds for its own hero
-    /// (`PodcastContent::selected_episode_item`), the description included.
-    /// `None` when the per-show cache no longer carries the episode.
-    pub(in crate::app::gui_library) fn gui_podcast_hero_item(
-        &self,
-        lib_idx: usize,
-        episode: &GuiPodcastEpisodeId,
-    ) -> Option<AudiobookshelfQueueItem> {
-        let state = self.audiobookshelf_browse.get(lib_idx)?;
-        let episode = state.episode_by_identity(episode.library_item_id(), episode.episode_id())?;
-        let show = state
-            .shows
-            .iter()
-            .find(|show| show.library_item_id == episode.library_item_id);
-        let catalog = AudiobookshelfEpisodeCatalog {
-            library_item_id: episode.library_item_id.clone(),
-            episode_id: episode.episode_id.clone(),
-            title: episode.title.clone(),
-            show_title: show.map(|show| show.title.clone()),
-            author: show.and_then(|show| show.author.clone()),
-            description: episode.description.clone(),
-            duration_ticks: episode.duration_seconds.and_then(seconds_to_ticks_u64),
-            pub_date_secs: episode.published_at,
-            cover_path: show.and_then(|show| show.cover_path.clone()),
-        };
-        let resume = state.episode_resume(&catalog.library_item_id, &catalog.episode_id);
-        Some(AudiobookshelfQueueItem::from_catalog(catalog, resume))
-    }
+/// The episode as the shared hero producer's input (row 10.1): the cached
+/// episode over its parent show's identity, title, and cover — the same
+/// catalog the TUI's podcast owner builds for its own hero
+/// (`PodcastContent::selected_episode_item`), the description included.
+/// `None` when the per-show cache no longer carries the episode.
+pub(in crate::app::gui_library) fn podcast_hero_item(
+    app: &App,
+    lib_idx: usize,
+    episode: &GuiPodcastEpisodeId,
+) -> Option<AudiobookshelfQueueItem> {
+    let state = app.audiobookshelf_browse.get(lib_idx)?;
+    let episode = state.episode_by_identity(episode.library_item_id(), episode.episode_id())?;
+    let show = state
+        .shows
+        .iter()
+        .find(|show| show.library_item_id == episode.library_item_id);
+    let catalog = AudiobookshelfEpisodeCatalog {
+        library_item_id: episode.library_item_id.clone(),
+        episode_id: episode.episode_id.clone(),
+        title: episode.title.clone(),
+        show_title: show.map(|show| show.title.clone()),
+        author: show.and_then(|show| show.author.clone()),
+        description: episode.description.clone(),
+        duration_ticks: episode.duration_seconds.and_then(seconds_to_ticks_u64),
+        pub_date_secs: episode.published_at,
+        cover_path: show.and_then(|show| show.cover_path.clone()),
+    };
+    let resume = state.episode_resume(&catalog.library_item_id, &catalog.episode_id);
+    Some(AudiobookshelfQueueItem::from_catalog(catalog, resume))
+}
 
-    /// The Hero's cover artwork (row 10.1): the Service-scoped show-cover
-    /// cache key the episode's artwork policy names, fetched here and encoded
-    /// from the image cache once per key — the same resolution the other
-    /// projections' hero art runs. `None` when no Audiobookshelf server is
-    /// configured.
-    fn gui_podcast_episode_artwork(&mut self, show_id: &str) -> Option<GuiLibraryArtwork> {
-        let cache_key = self.audiobookshelf_cover_key(show_id)?;
-        Some(self.resolve_gui_art(&cache_key))
-    }
+/// The Hero's cover artwork (row 10.1): the Service-scoped show-cover
+/// cache key the episode's artwork policy names, fetched here and encoded
+/// from the image cache once per key — the same resolution the other
+/// projections' hero art runs. `None` when no Audiobookshelf server is
+/// configured.
+fn podcast_episode_artwork(app: &mut App, show_id: &str) -> Option<GuiLibraryArtwork> {
+    let cache_key = app.audiobookshelf_cover_key(show_id)?;
+    Some(app.resolve_gui_art(&cache_key))
 }
 
 /// One row of the active list (row 10.1): the TUI podcast row's facts —

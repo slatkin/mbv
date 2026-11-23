@@ -91,7 +91,7 @@ fn a_set_sent_during_navigation_fetches_only_its_rows_once_idle() {
     );
 
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
 
     assert!(
         app.images.is_loading(&row_key(&shown)),
@@ -122,9 +122,9 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
     let checked = Instant::now();
 
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
     assert!(
-        app.gui_art_retry_due(checked, checked + Duration::from_secs(3600)),
+        gui_art_retry_due(&app, checked, checked + Duration::from_secs(3600)),
         "the interrupted key holds a retry time"
     );
     assert!(
@@ -134,7 +134,7 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
 
     app.images.pass_interrupted_fetch_retries_for_test();
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
     assert!(
         app.images.is_loading(&key),
         "the passed retry queues the in-view key again"
@@ -150,7 +150,7 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
     app.images.fetch_interrupted(key.clone());
     app.images.pass_interrupted_fetch_retries_for_test();
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
     assert!(
         !app.images.is_loading(&key),
         "a key whose row left the set is not queued again"
@@ -197,7 +197,7 @@ fn a_set_of_another_list_queues_nothing() {
         },
     );
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
 
     assert!(
         !app.images.is_loading(&row_key(&row)),

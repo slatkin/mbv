@@ -348,8 +348,7 @@ impl SectionLedger {
         // the hover's tick, the settings build, and the target-choice compare,
         // so they cannot disagree.
         let playback = core.app().queue_playback_projection();
-        self.deadlines
-            .sample(core.app_mut(), &playback, now, &mut marked);
+        self.deadlines.sample(core, &playback, now, &mut marked);
         // The frame's reset counter is read before the core's longer read
         // borrow, so both borrows stay sequential.
         let reset_epoch = core.gui_ui_reset_epoch();

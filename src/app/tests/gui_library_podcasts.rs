@@ -116,7 +116,7 @@ fn all_merges_two_shows_in_date_order_with_the_default_hero() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
-    let projection = app.gui_podcasts_projection(1);
+    let projection = gui_podcasts_projection(&mut app, 1);
 
     let titles: Vec<&str> = projection
         .rows
@@ -196,7 +196,7 @@ fn a_checked_show_scopes_the_rows_to_that_show() {
     let mut app = projection_app();
 
     toggle_show(&mut app, 1, "show-a");
-    let projection = app.gui_podcasts_projection(1);
+    let projection = gui_podcasts_projection(&mut app, 1);
 
     let titles: Vec<&str> = projection
         .rows
@@ -225,7 +225,7 @@ fn two_checked_shows_merge_their_episodes_in_date_order() {
 
     toggle_show(&mut app, 1, "show-a");
     toggle_show(&mut app, 1, "show-b");
-    let projection = app.gui_podcasts_projection(1);
+    let projection = gui_podcasts_projection(&mut app, 1);
 
     let titles: Vec<&str> = projection
         .rows
@@ -304,7 +304,7 @@ fn the_oldest_sort_puts_the_earliest_episode_first_with_undated_last() {
     let mut app = projection_app();
     app.set_gui_list_sort(GuiSortTarget::Podcasts(1), GuiListSort::Oldest);
 
-    let projection = app.gui_podcasts_projection(1);
+    let projection = gui_podcasts_projection(&mut app, 1);
 
     let titles: Vec<&str> = projection
         .rows
@@ -330,7 +330,7 @@ fn a_vanished_checked_show_falls_back_to_all() {
         .shows
         .retain(|show| show.library_item_id != "show-a");
 
-    let projection = app.gui_podcasts_projection(1);
+    let projection = gui_podcasts_projection(&mut app, 1);
 
     let titles: Vec<&str> = projection
         .rows
@@ -360,7 +360,7 @@ fn the_rows_carry_the_played_and_resume_state() {
     app.seed_gui_podcast_progress_for_test(1, "show-a", "a-old", 300.0, false);
     app.seed_gui_podcast_progress_for_test(1, "show-a", "a-undated", 600.0, true);
 
-    let projection = app.gui_podcasts_projection(1);
+    let projection = gui_podcasts_projection(&mut app, 1);
 
     let states: Vec<MediaSemanticState> = projection
         .rows
@@ -537,7 +537,7 @@ fn stale_podcast_ids_change_nothing() {
         "a stale id flashes no toast"
     );
     assert_eq!(
-        app.gui_podcast_picked_episode(1)
+        crate::app::gui_library::podcasts::podcast_picked_episode(&app, 1)
             .map(GuiPodcastEpisodeId::from)
             .map(|episode| episode.encode())
             .as_deref(),
@@ -565,7 +565,7 @@ fn a_podcast_row_shows_its_show_cover() {
     ));
     app.seed_card_image_for_test(key.clone(), cover);
 
-    let projection = app.gui_podcasts_projection(1);
+    let projection = gui_podcasts_projection(&mut app, 1);
 
     assert_eq!(
         projection.rows[0].subtitle.as_deref(),

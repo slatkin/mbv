@@ -91,6 +91,67 @@ pub(in crate::app) fn gui_shows_projection(
     projection
 }
 
+/// One destination's Podcasts projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_podcasts_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiPodcastsProjection {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let projection = core.gui_podcasts_projection(lib_idx);
+    *app = core.into_app();
+    projection
+}
+
+/// Open one Podcasts destination over a stub `App` a test holds.
+pub(in crate::app) fn gui_podcast_open(app: &mut crate::app::App, lib_idx: usize) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_podcast_open(lib_idx);
+    *app = core.into_app();
+}
+
+/// Select one Podcasts episode over a stub `App` a test holds.
+pub(in crate::app) fn gui_podcast_select(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+    target: &mbv_ui_msg::PodcastEpisodeTarget,
+) {
+    let row = crate::app::gui_library::GuiPodcastEpisodeId::from(target).encode();
+    apply_gui_library_command(
+        app,
+        crate::app::GuiLibraryCommand::PodcastsSelect { lib_idx, row },
+    );
+}
+
+/// The right-click row menu over a stub `App` a test holds.
+pub(in crate::app) fn gui_library_row_menu(
+    app: &mut crate::app::App,
+) -> Option<crate::app::GuiLibraryRowMenu> {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let menu = core.gui_library_row_menu();
+    *app = core.into_app();
+    menu
+}
+
+/// Queue the in-view row fetches over a stub `App` a test holds.
+pub(in crate::app) fn gui_queue_in_view_row_fetches(app: &mut crate::app::App) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.gui_queue_in_view_row_fetches();
+    *app = core.into_app();
+}
+
+/// Whether an interrupted art retry came due, over a stub `App` a test holds.
+pub(in crate::app) fn gui_art_retry_due(
+    app: &crate::app::App,
+    after: std::time::Instant,
+    until: std::time::Instant,
+) -> bool {
+    crate::app::gui_library::marks::art_retry_due(app, after, until)
+}
+
 // The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
 // to `crate::app::shell::test_support` (task 4.7): they write the shell
 // `Model`'s size and push the single-panel fact the core reads.

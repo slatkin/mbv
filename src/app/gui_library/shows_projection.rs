@@ -398,7 +398,8 @@ impl GuiCore {
             .into_iter()
             .map(|premiere| {
                 let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
-                let series = self.app.gui_shows_series_item(premiere.series_id.as_str());
+                let series =
+                    super::rows_in_view::shows_series_item(&self.app, premiere.series_id.as_str());
                 let art = self
                     .app
                     .gui_row_art(Some(&upcoming_row_source(premiere, series.as_ref())));

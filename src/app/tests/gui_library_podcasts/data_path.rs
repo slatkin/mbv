@@ -99,7 +99,7 @@ fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
-    app.gui_podcast_open(1);
+    gui_podcast_open(&mut app, 1);
     let request = podcast_state(&app).catalog_request;
     assert_eq!(request, 1, "the open began one catalog chain");
     assert!(
@@ -136,7 +136,7 @@ fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
     assert!(state.replacement.is_none(), "the completed batch published");
 
     let loaded_request = podcast_state(&app).catalog_request;
-    app.gui_podcast_open(1);
+    gui_podcast_open(&mut app, 1);
     assert_eq!(
         podcast_state(&app).catalog_request,
         loaded_request,
@@ -221,7 +221,7 @@ fn a_failed_show_list_load_is_not_retried_by_a_repaint_but_an_open_retries_it() 
         "the repaint honoured the failed mark"
     );
 
-    app.gui_podcast_open(1);
+    gui_podcast_open(&mut app, 1);
     assert_eq!(
         podcast_state(&app).catalog_request,
         1,
@@ -244,7 +244,7 @@ fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
     select_all_shows(&mut app, 1);
 
     assert_eq!(
-        app.gui_podcast_effective_set(1).as_ref(),
+        crate::app::gui_library::podcasts::podcast_effective_set(&app, 1).as_ref(),
         &GuiCollectionSet::All
     );
     assert_eq!(
@@ -303,7 +303,7 @@ fn a_checked_show_lands_only_that_shows_episodes() {
     toggle_show(&mut app, 1, "show-b");
 
     assert_eq!(
-        app.gui_podcast_effective_set(1).as_ref(),
+        crate::app::gui_library::podcasts::podcast_effective_set(&app, 1).as_ref(),
         &GuiCollectionSet::Checked(vec!["show-b".into()])
     );
     assert_eq!(
@@ -350,19 +350,20 @@ fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
         .cache_detail("show-a".into(), vec![episode("show-a", "ep-1", None)]);
 
     let target = PodcastEpisodeTarget::new("show-a".into(), "ep-1".into());
-    app.gui_podcast_select(1, &target);
+    gui_podcast_select(&mut app, 1, &target);
     assert_eq!(
-        app.gui_podcast_picked_episode(1),
+        crate::app::gui_library::podcasts::podcast_picked_episode(&app, 1),
         Some(&target),
         "the picked episode is the select command's"
     );
 
-    app.gui_podcast_select(
+    gui_podcast_select(
+        &mut app,
         1,
         &PodcastEpisodeTarget::new("show-a".into(), "gone".into()),
     );
     assert_eq!(
-        app.gui_podcast_picked_episode(1),
+        crate::app::gui_library::podcasts::podcast_picked_episode(&app, 1),
         Some(&target),
         "a stale episode id changes nothing"
     );
@@ -419,7 +420,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
         "the Podcasts destination applies no saved pill and needs no retry"
     );
     assert_eq!(
-        app.gui_podcast_effective_set(1).as_ref(),
+        crate::app::gui_library::podcasts::podcast_effective_set(&app, 1).as_ref(),
         &GuiCollectionSet::All,
         "the restored destination keeps the default All selection"
     );

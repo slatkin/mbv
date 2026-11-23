@@ -227,7 +227,7 @@ impl GuiCore {
             selected,
             hero,
             workspace_loading,
-            playing_book_id: self.app.gui_playing_book_id(),
+            playing_book_id: crate::app::gui_library::marks::playing_book_id(&self.app),
         }
     }
 

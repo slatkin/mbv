@@ -107,7 +107,7 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
         },
     );
 
-    let menu = app.gui_library_row_menu().expect("the album has a menu");
+    let menu = gui_library_row_menu(&mut app).expect("the album has a menu");
     let labels: Vec<&str> = menu
         .entries
         .iter()
@@ -167,11 +167,11 @@ fn an_interrupted_art_retry_comes_due_in_the_window_that_holds_it() {
     let later = start + hour;
 
     assert!(
-        app.gui_art_retry_due(start, later),
+        gui_art_retry_due(&app, start, later),
         "the window holds the retry time"
     );
     assert!(
-        !app.gui_art_retry_due(later, later + hour),
+        !gui_art_retry_due(&app, later, later + hour),
         "the next window starts after the retry time"
     );
 }

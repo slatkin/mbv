@@ -199,7 +199,7 @@ impl App {
         match target {
             GuiSortTarget::Library(lib_idx) => self.gui_emby_library(lib_idx),
             GuiSortTarget::Audiobooks(lib_idx) => self.gui_abs_book_library(lib_idx),
-            GuiSortTarget::Podcasts(lib_idx) => self.gui_podcast_library(lib_idx),
+            GuiSortTarget::Podcasts(lib_idx) => super::podcasts::podcast_library(self, lib_idx),
             GuiSortTarget::Feeds => self.gui_feeds_present(),
             GuiSortTarget::ShowsNew(lib_idx) => self.gui_tv_library(lib_idx),
         }

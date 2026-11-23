@@ -44,7 +44,7 @@ pub(crate) fn build(core: &mut GuiCore) -> LibraryPass {
     let GuiLibraryTabs { tabs, current } = core.app().gui_library_tabs();
     // The right-click item menu is the Library's, not one destination's (design
     // D8, D15): a row of any destination opens it.
-    let row_menu = core.app_mut().gui_library_row_menu();
+    let row_menu = core.gui_library_row_menu();
     LibraryPass {
         list: Some(GuiLibraryList {
             tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
@@ -88,7 +88,7 @@ fn music_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLi
         .as_deref()
         .map(|album_id| GuiArtRef::from(&core.app_mut().gui_library_artwork(album_id)));
     let menu = picked
-        .map(|album_id| core.app_mut().gui_library_menu(&album_id))
+        .map(|album_id| core.gui_library_menu(&album_id))
         .unwrap_or_default();
     let playing_track_id = mbv::playing_track_id_for_shell(core.app());
     (
@@ -140,7 +140,7 @@ fn audiobooks_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, 
 
 /// The Podcasts destination's parts (design D12, row 10.1).
 fn podcasts_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = core.app_mut().gui_podcasts_projection(lib_idx);
+    let projection = core.gui_podcasts_projection(lib_idx);
     (
         GuiDestinationList::Podcasts(GuiPodcastsList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Podcasts(GuiPodcastsDetail::from_projection(&projection)),

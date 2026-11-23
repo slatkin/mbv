@@ -50,7 +50,7 @@ fn make_built_app_ungated() -> App {
 #[cfg(not(any(test, feature = "test")))]
 fn make_built_app_ungated() -> App {
     let empty: Vec<mbv_emby_model::EmbyItem> = Vec::new();
-    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub_for_parked_app(empty, 0);
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub_for_parked_app(&empty, 0);
     built_app(
         mbv_player::PlayerProxy::from_remote(remote, false),
         player_rx,

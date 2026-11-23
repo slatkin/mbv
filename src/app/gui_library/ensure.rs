@@ -88,7 +88,7 @@ impl GuiCore {
             }
             GuiDestinationKind::Podcasts { lib_idx } => {
                 if self.app.tab.audiobookshelf_index() == Some(lib_idx)
-                    && self.app.gui_podcast_library(lib_idx)
+                    && super::podcasts::podcast_library(&self.app, lib_idx)
                 {
                     run_gui_destination_loads(&mut self.app, &PodcastsLoads { lib_idx });
                 }
@@ -313,7 +313,7 @@ struct PodcastsLoads {
 
 impl GuiDestinationLoads for PodcastsLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
-        if !app.gui_podcast_catalog_needs_load(self.lib_idx) {
+        if !super::podcasts::podcast_catalog_needs_load(app, self.lib_idx) {
             return GuiStepOutcome::Continue;
         }
         app.audiobookshelf_refresh(false);
@@ -321,12 +321,12 @@ impl GuiDestinationLoads for PodcastsLoads {
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        app.commit_gui_podcast_effective_scope(self.lib_idx);
+        super::podcasts::commit_podcast_effective_scope(app, self.lib_idx);
         GuiStepOutcome::Continue
     }
 
     fn ensure_dependents(&self, app: &mut App) {
-        app.ensure_gui_podcast_dependents(self.lib_idx);
+        super::podcasts::ensure_podcast_dependents(app, self.lib_idx);
     }
 }
 

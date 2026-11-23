@@ -27,13 +27,12 @@ impl RemotePlayer {
     /// every build (a Client wrapper moves its live `App` out of position while
     /// it runs a core method), so this constructor carries no test gate. It
     /// answers no event and reaches no daemon.
-    #[cfg(not(any(test, feature = "test")))]
     #[must_use]
     pub fn stub_for_parked_app(
-        items: Vec<EmbyItem>,
+        items: &[EmbyItem],
         current_idx: usize,
     ) -> (Self, mpsc::Receiver<PlayerEvent>) {
-        let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx_inner(&items, current_idx);
+        let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx_inner(items, current_idx);
         (remote, event_rx)
     }
 

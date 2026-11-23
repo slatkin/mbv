@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
-use mbv::{App, GuiPlayheadMarks, PlaybackTargetChoice, QueuePlaybackProjection};
+use mbv::{GuiCore, GuiPlayheadMarks, PlaybackTargetChoice, QueuePlaybackProjection};
 
 use super::Section;
 
@@ -45,23 +45,23 @@ impl DeadlineMarks {
     /// choices mark the Settings section.
     pub(super) fn sample(
         &mut self,
-        app: &mut App,
+        core: &mut GuiCore,
         playback: &QueuePlaybackProjection,
         now: Instant,
         marked: &mut HashSet<Section>,
     ) {
-        let idle = app.gui_navigation_idle();
+        let idle = core.gui_navigation_idle();
         if idle && !self.navigation_idle {
             marked.insert(Section::Library);
-            app.gui_queue_in_view_row_fetches();
+            core.gui_queue_in_view_row_fetches();
         }
         self.navigation_idle = idle;
-        if app.gui_art_retry_due(self.art_retry_checked, now) {
+        if core.gui_art_retry_due(self.art_retry_checked, now) {
             marked.insert(Section::Library);
-            app.gui_queue_in_view_row_fetches();
+            core.gui_queue_in_view_row_fetches();
         }
         self.art_retry_checked = self.art_retry_checked.max(now);
-        let playhead = app.gui_playhead_marks();
+        let playhead = core.gui_playhead_marks();
         if playhead != self.playhead {
             marked.insert(Section::Library);
             self.playhead = playhead;

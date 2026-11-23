@@ -22,8 +22,8 @@ mod item_actions;
 mod item_menu;
 mod launch;
 mod list_sort;
-mod marks;
-mod podcasts;
+pub(in crate::app) mod marks;
+pub(in crate::app) mod podcasts;
 mod podcasts_projection;
 mod projection;
 mod request;
@@ -70,7 +70,9 @@ pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMe
 pub use self::launch::GuiLaunchOpen;
 pub use self::list_sort::{GuiListSort, GuiListSortFrame, GuiSortTarget};
 pub use self::marks::GuiPlayheadMarks;
+
 use self::podcasts::GuiPodcastsCollectionSite;
+
 pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
@@ -348,29 +350,33 @@ impl GuiCore {
                 self.app.set_gui_shows_view(lib_idx, view);
             }
             GuiLibraryCommand::ShowDetail { item_id } => {
-                self.app.show_gui_library_detail(&item_id);
+                self.show_gui_library_detail(&item_id);
             }
             GuiLibraryCommand::OpenAlbum { album_id } => {
-                self.app.open_gui_library_album(album_id);
+                self.open_gui_library_album(album_id);
             }
-            GuiLibraryCommand::Play { item_id } => match self.app.gui_library_item(&item_id) {
-                Some((lib_idx, item)) => self.app.play_gui_library_item(lib_idx, item),
-                None => log_stale_library_item("play", &item_id),
-            },
-            GuiLibraryCommand::PlayNext { item_id } => match self.app.gui_library_item(&item_id) {
-                Some((lib_idx, item)) => self.app.play_lib_item_next(lib_idx, item),
-                None => log_stale_library_item("playNext", &item_id),
-            },
+            GuiLibraryCommand::Play { item_id } => {
+                match item_actions::library_item(&self.app, &item_id) {
+                    Some((lib_idx, item)) => self.play_gui_library_item(lib_idx, item),
+                    None => log_stale_library_item("play", &item_id),
+                }
+            }
+            GuiLibraryCommand::PlayNext { item_id } => {
+                match item_actions::library_item(&self.app, &item_id) {
+                    Some((lib_idx, item)) => self.app.play_lib_item_next(lib_idx, item),
+                    None => log_stale_library_item("playNext", &item_id),
+                }
+            }
             GuiLibraryCommand::AddToQueue { item_id } => {
-                self.app.add_gui_library_item_to_queue(&item_id);
+                self.add_gui_library_item_to_queue(&item_id);
             }
             GuiLibraryCommand::ShuffleArtist { album_ids } => {
-                self.app.shuffle_gui_artist(&album_ids);
+                self.shuffle_gui_artist(&album_ids);
             }
             // Row 3.6 runs the menu entry the frame carried through the shared
             // context-action executor.
             GuiLibraryCommand::MenuEntry { row, index } => {
-                self.app.run_gui_library_menu_entry(&row, index);
+                self.run_gui_library_menu_entry(&row, index);
             }
             GuiLibraryCommand::RowMenu { row } => {
                 self.app.gui.library_row_menu_target = Some(row);
@@ -436,13 +442,13 @@ impl GuiCore {
                 self.app.enqueue_gui_abs_book(lib_idx, &item_id);
             }
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
-                self.app.select_gui_podcast_row(lib_idx, &row);
+                self.select_gui_podcast_row(lib_idx, &row);
             }
             GuiLibraryCommand::PodcastsPlay { lib_idx, item_id } => {
-                self.app.play_gui_podcast_row(lib_idx, &item_id);
+                self.play_gui_podcast_row(lib_idx, &item_id);
             }
             GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
-                self.app.enqueue_gui_podcast_row(lib_idx, &item_id);
+                self.enqueue_gui_podcast_row(lib_idx, &item_id);
             }
             // The Feeds destination's own commands (row 11.1): the one feed
             // tab the Client holds, so no library index rides them.
@@ -457,7 +463,7 @@ impl GuiCore {
             }
             GuiLibraryCommand::SearchClose => self.app.gui_search_close(),
             GuiLibraryCommand::RowsInView { scope, ids } => {
-                self.app.apply_gui_rows_in_view(scope, ids);
+                self.apply_gui_rows_in_view(scope, ids);
             }
             GuiLibraryCommand::OpenUrl { url } => Self::open_gui_library_url(&url),
             // The first pass's arms, which this pass never receives: the
@@ -531,7 +537,7 @@ impl GuiCore {
             Some(GuiDestinationKind::Library { lib_idx }) => self.app.gui_emby_open(lib_idx),
             Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.app.gui_abs_open(lib_idx),
             Some(GuiDestinationKind::Podcasts { lib_idx }) => {
-                self.app.gui_podcast_open(lib_idx);
+                self.gui_podcast_open(lib_idx);
             }
         }
     }

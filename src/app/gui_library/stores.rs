@@ -29,7 +29,7 @@ impl ClientLibraryStores for GuiLibraryStores {
             // the GUI re-queues the artwork the in-view rows lack (the call
             // this effect replaced, design D4a's table).
             ClientLibraryEffect::RowArtSourcesChanged => {
-                app.gui_queue_in_view_row_fetches();
+                super::rows_in_view::queue_in_view_row_fetches(app);
             }
             // A landed target retires its terminal failure mark, so a later
             // cache miss can fetch it again.
