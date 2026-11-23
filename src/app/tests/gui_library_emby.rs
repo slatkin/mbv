@@ -104,8 +104,9 @@ fn emby_app(http: &MockHttp, collection_type: &str, library_id: &str, name: &str
 }
 
 /// The GUI's library stores as the core's library event seam takes them: the
-/// same answers the GUI's own store reader gives, so a simulated GUI tick
-/// applies the App half and the GUI half together.
+/// same answers the GUI's own store reader gives, and the same claim writes the
+/// GUI's own effect implementor makes, so a simulated GUI tick applies the App
+/// half and the GUI half together.
 #[derive(Debug)]
 pub(super) struct TestGuiLibraryStores;
 
@@ -119,7 +120,34 @@ impl ClientLibraryStores for TestGuiLibraryStores {
         app.gui_emby_feed_wants_target(lib_idx, target)
     }
 
-    fn apply(&mut self, _app: &mut App, _effect: ClientLibraryEffect) {}
+    fn apply(&mut self, app: &mut App, effect: ClientLibraryEffect) {
+        match effect {
+            // The rows in view are the GUI's own window state, which a
+            // simulated tick has already settled; nothing to drain here.
+            ClientLibraryEffect::RowArtSourcesChanged => {}
+            // A landed target retires its terminal failure mark.
+            ClientLibraryEffect::FeedTargetLanded { lib_idx, selection } => {
+                if let Some(claim) = app
+                    .gui_emby_libs
+                    .get_mut(&lib_idx)
+                    .and_then(|stored| stored.feed_claim.as_mut())
+                {
+                    claim.failed.remove(&selection);
+                }
+            }
+            // A failed target records it, so the shown pass skips it until a
+            // user press clears it.
+            ClientLibraryEffect::FeedTargetFailed { lib_idx, selection } => {
+                if let Some(claim) = app
+                    .gui_emby_libs
+                    .get_mut(&lib_idx)
+                    .and_then(|stored| stored.feed_claim.as_mut())
+                {
+                    claim.failed.insert(selection);
+                }
+            }
+        }
+    }
 }
 
 /// Land one fetch completion the way the GUI core tick's drain applies it:

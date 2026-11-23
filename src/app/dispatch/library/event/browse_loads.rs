@@ -47,7 +47,8 @@ impl App {
             } => match stores {
                 // The landed target's store work passes straight down: the
                 // handler reads the Client's wanted-selection answer and
-                // raises `FeedTargetLanded` on the same `stores`.
+                // collects `FeedTargetLanded` and `RowArtSourcesChanged` on
+                // the same `stores`, which it applies before the next event.
                 Some(stores) => {
                     self.handle_feed_home_video_selection_loaded(
                         lib_idx,

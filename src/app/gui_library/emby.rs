@@ -417,11 +417,13 @@ impl App {
 
     /// Land one feed-group target's failed fetch (gui-collection-dropdown
     /// design D3): the fetch has returned, so retire the shared
-    /// outstanding-fetch mark when it names this target, and record the
-    /// terminal failure beside the GUI's claim. The shown pass then skips the
-    /// target, so an automatic repaint never retries it; a user press clears
-    /// the mark. A library the GUI has not claimed keeps no mark, so the
-    /// TUI's own rules alone govern its fetches.
+    /// outstanding-fetch mark when it names this target. Retiring the mark and
+    /// the log stay here, in the core. Recording the terminal failure beside
+    /// the Client's claim is the last thing the event asks of its Client, so
+    /// it is collected as `FeedTargetFailed` and applied through `stores`: the
+    /// shown pass then skips the target, so an automatic repaint never retries
+    /// it; a user press clears the mark. A library the Client has not claimed
+    /// keeps no mark, so the TUI's own rules alone govern its fetches.
     pub(in crate::app) fn handle_feed_home_video_selection_failed(
         &mut self,
         event: FeedHomeVideoSelectionFailed,
@@ -449,7 +451,8 @@ impl App {
         );
         self.log_feed_home_video_state(lib_idx, "selection_fetch_failed");
         // The Client's terminal failure mark is the last thing this arm does,
-        // exactly as the direct claim write that used to sit above was.
+        // exactly as the direct claim write that used to sit above was, so it
+        // is the event's one collected effect.
         self.apply_library_effects(
             stores,
             &[ClientLibraryEffect::FeedTargetFailed { lib_idx, selection }],
