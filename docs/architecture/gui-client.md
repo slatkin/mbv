@@ -820,7 +820,9 @@ fixed 40 logical pixel height with no gap between rows, 10 px padding, and
 a 1 px `--canvas-border` divider under each row. The rows are square, the
 now-playing row included (user request 2026-11-20). A row with
 progress — a partial row, and the now-playing row, whose ring follows the
-playhead — carries the progress ring after its title: a 14 px svg in the
+playhead — carries the progress ring in its right column, directly before
+the duration, so the ring and the duration read as one cluster (user
+request 2026-11-23): a 14 px svg in the
 collapsed rail's two-circle form, the track in `--ef-bg2` and the played arc
 in `--ef-orange`, or `--ef-green` on the now-playing row, each circle
 naming `currentColor` with its token in its own computed `color`, because

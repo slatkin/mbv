@@ -1,9 +1,11 @@
 //! One queue row's canvas cells (the `rowCells` snippet of `QueuePanel`): the
-//! padded queue ordinal, the one title line, the progress ring after it, and
-//! the right column's duration. The row carries no second line, and the ring
-//! adds no height: it sits in the row's own line, after the title (design D3 of
-//! `gui-delineated-rows`). The drag ghost paints the title, the ring, and the
-//! percent only. The row's colours come through the queue column's `--ef-*`
+//! padded queue ordinal, the one title line, and the right column's duration
+//! with the progress ring beside it. The row carries no second line, and the
+//! ring adds no height: it sits in the right column (design D3 of
+//! `gui-delineated-rows`; the ring and the duration are one cluster, user
+//! request 2026-11-23). The drag ghost paints the title, the ring after the
+//! title, and the percent only. The row's colours come through the queue
+//! column's `--ef-*`
 //! tokens (design D1 of `gui-queue-panel-redesign`).
 
 use dioxus_native::prelude::*;
@@ -227,8 +229,10 @@ pub(super) struct RowCellsProps {
 }
 
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
-/// ordinal, the one title line with its progress ring, and the right column's
-/// duration. The drag ghost paints the title, the ring, and the percent only.
+/// ordinal, the one title line, and the right column's duration with the
+/// progress ring beside it (user request 2026-11-23: the ring and the
+/// duration are one information set, so they paint as one cluster). The drag
+/// ghost paints the title, the ring, and the percent only.
 #[component]
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
@@ -282,25 +286,37 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                     }
                 }
             }
-            if let Some(percent) = progress {
-                // The row's only progress mark: the ring after the title, on
-                // the row's own line (design D3).
+            if chrome == RowChrome::Ghost
+                && let Some(percent) = progress
+            {
+                // The ghost's ring: after the title, on the ghost's own line.
                 {progress_ring(look, percent)}
             }
         }
         if chrome != RowChrome::Ghost
-            && let Some(duration) = duration
+            && (duration.is_some() || progress.is_some())
         {
             // The right column: the item's duration in every row state
-            // (design D3).
+            // (design D3), with the progress ring beside it — the ring and
+            // the duration are one information set, so they paint as one
+            // cluster right-aligned in the column (user request 2026-11-23).
             span {
-                class: "shrink-0 text-right font-mono tabular-nums",
+                class: "shrink-0 flex items-center justify-end",
                 style: format!(
-                    "width: {RIGHT_COL_PX}px; font-size: 12px; color: {};",
+                    "width: {RIGHT_COL_PX}px; gap: 6px; font-size: 12px; color: {};",
                     ef_var(EfToken::Grey1)
                 ),
-                "data-duration": "",
-                {duration}
+                if let Some(percent) = progress {
+                    // The row's only progress mark (design D3).
+                    {progress_ring(look, percent)}
+                }
+                if let Some(duration) = duration {
+                    span {
+                        class: "text-right font-mono tabular-nums",
+                        "data-duration": "",
+                        {duration}
+                    }
+                }
             }
         }
         if chrome == RowChrome::Ghost

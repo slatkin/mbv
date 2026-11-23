@@ -88,7 +88,8 @@ fn durations(fixture: &Fixture) -> Vec<Option<String>> {
 }
 
 /// Contract (spec `gui-client` "Rows show their state", design D3): the row's
-/// progress ring paints after the title — on a partial row and on the
+/// progress ring paints in the right column, directly before the duration —
+/// on a partial row and on the
 /// now-playing row, which follows the playhead — and a new or watched row
 /// carries none. The `data-progress` value is the percent the ring fills to.
 #[test]
@@ -112,6 +113,45 @@ fn only_a_row_with_progress_paints_the_ring() {
     assert_eq!(
         ring_percents(&fixture),
         vec![None, Some("42".to_owned()), None, Some("30".to_owned())]
+    );
+
+    // The ring and the duration paint as one cluster in the right column
+    // (user request 2026-11-23): the ring's parent carries the column's fixed
+    // width, and the ring paints before the duration in it.
+    let dom = fixture.doc.inner.borrow();
+    let ring_id = *fixture
+        .all("[data-slot=\"2\"] [data-progress]")
+        .first()
+        .expect("the partial row paints its ring");
+    let duration_id = *fixture
+        .all("[data-slot=\"2\"] [data-duration]")
+        .first()
+        .expect("the partial row paints its duration");
+    let ring = dom.get_node(ring_id).expect("the ring node paints");
+    let column = dom
+        .get_node(ring.parent.expect("the ring paints in the column"))
+        .expect("the column paints");
+    assert!(
+        column
+            .attr(local_name!("style"))
+            .unwrap_or_default()
+            .contains("width: 96px"),
+        "{}",
+        column.attr(local_name!("style")).unwrap_or_default()
+    );
+    let ring_position = column
+        .children
+        .iter()
+        .position(|id| *id == ring_id)
+        .expect("the ring paints in the column");
+    let duration_position = column
+        .children
+        .iter()
+        .position(|id| *id == duration_id)
+        .expect("the duration paints in the column");
+    assert!(
+        ring_position < duration_position,
+        "the ring leads the duration"
     );
 }
 
