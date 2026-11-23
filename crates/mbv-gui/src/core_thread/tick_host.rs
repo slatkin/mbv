@@ -60,7 +60,8 @@ impl CoreThread {
                 bytes: QUEUE_CARD_PLACEHOLDER_BYTES.to_vec(),
             },
             Some(ArtPath::Card(key)) => {
-                self.app
+                self.core
+                    .app()
                     .gui_art_source(&key)
                     .map_or(ArtResponse::Missing, |source| ArtResponse::Found {
                         mime: source.mime,
@@ -75,7 +76,7 @@ impl CoreThread {
 
 impl ClientTickHost for CoreThread {
     fn app_mut(&mut self) -> &mut App {
-        &mut self.app
+        self.core.app_mut()
     }
 
     fn drain_startup_workers(&mut self) -> bool {
@@ -85,9 +86,9 @@ impl ClientTickHost for CoreThread {
         // the playback-target discovery the
         // full Emby startup itself never starts (add-gui-library-panel design
         // D11), exactly as the deleted client fill did on its completion.
-        let drain = self.app.drain_startup_workers();
+        let drain = self.core.app_mut().drain_startup_workers();
         if drain.emby_started {
-            self.app.start_playback_target_discovery();
+            self.core.app_mut().start_playback_target_discovery();
         }
         // A landed catalog can complete the saved launch location's first
         // phase (add-gui-library-panel design D9).
@@ -108,7 +109,7 @@ impl ClientTickHost for CoreThread {
     fn drain_suspended_home_events(&mut self) -> bool {
         let mut had_events = false;
         loop {
-            match self.app.drain_home_event() {
+            match self.core.app_mut().drain_home_event() {
                 HomeEventDrain::Empty => break,
                 // The GUI Client never joins the Pin swap — its attach
                 // claims a GUI Client and so sends a plain Hello — so the
@@ -126,7 +127,7 @@ impl ClientTickHost for CoreThread {
     }
 
     fn drain_player_events(&mut self, input_received: &mut bool) -> bool {
-        match self.app.drain_player_event() {
+        match self.core.app_mut().drain_player_event() {
             PlayerEventDrain::Empty => false,
             // The GUI Client never joins the Pin swap (see the home drain).
             PlayerEventDrain::Client(ClientLifecycle::SwapPrepare | ClientLifecycle::SwapQuit) => {
@@ -158,7 +159,11 @@ impl ClientTickHost for CoreThread {
         // before the next one.
         let mut stores = GuiLibraryStores;
         let mut had_events = false;
-        while self.app.drain_lib_event_with_stores(Some(&mut stores)) {
+        while self
+            .core
+            .app_mut()
+            .drain_lib_event_with_stores(Some(&mut stores))
+        {
             had_events = true;
         }
         if had_events {
@@ -176,7 +181,7 @@ impl ClientTickHost for CoreThread {
         // The Library Status bar's own field reads the App store this
         // App-side drain fills, and the bar's section carries it; a landed
         // result reports changed so the next batch sends it.
-        let landed = self.app.drain_gui_search_results();
+        let landed = self.core.app_mut().drain_gui_search_results();
         if landed {
             self.mark_hook(DrainHook::DrainSearchResults);
         }
@@ -214,7 +219,7 @@ impl ClientTickHost for CoreThread {
         // list from the App. The GUI mounts no feed-manage component, so no
         // stage follows the outcome.
         let landed = !matches!(
-            self.app.drain_feed_add_results(),
+            self.core.app_mut().drain_feed_add_results(),
             mbv_ui_model::feeds_manage::FeedAddDrain::Idle
         );
         if landed {
@@ -228,7 +233,7 @@ impl ClientTickHost for CoreThread {
         // fetches resolve through this drain, so a completion's decoded
         // image lands in the cache and the next batch carries it. The GUI
         // paints no TV workspace, so a Series key's re-push is the TUI's.
-        let drained = self.app.drain_card_image_completions().drained;
+        let drained = self.core.app_mut().drain_card_image_completions().drained;
         if drained {
             self.mark_hook(DrainHook::DrainCardImageCompletions);
         }
@@ -246,12 +251,12 @@ impl ClientTickHost for CoreThread {
         // The ctrl transport commands change no gated source (design D3 rule
         // 2): the App-side drain feeds the compared sections only.
         self.mark_hook(DrainHook::DrainTransportEvents);
-        self.app.drain_transport_events()
+        self.core.app_mut().drain_transport_events()
     }
 
     fn drain_ws_events(&mut self) -> bool {
         let mut had_events = false;
-        while self.app.drain_ws_event() {
+        while self.core.app_mut().drain_ws_event() {
             had_events = true;
         }
         if had_events {
@@ -262,7 +267,7 @@ impl ClientTickHost for CoreThread {
 
     fn drain_audiobookshelf_socket_events(&mut self) -> bool {
         let mut had_events = false;
-        while self.app.drain_audiobookshelf_socket_event() {
+        while self.core.app_mut().drain_audiobookshelf_socket_event() {
             had_events = true;
         }
         if had_events {
@@ -274,7 +279,7 @@ impl ClientTickHost for CoreThread {
     fn drain_idle_feed(&mut self) -> bool {
         // The GUI never initializes the idle feed; the App-side drain is a
         // no-op without one.
-        let drained = self.app.drain_idle_feed();
+        let drained = self.core.app_mut().drain_idle_feed();
         if drained {
             self.mark_hook(DrainHook::DrainIdleFeed);
         }
@@ -286,7 +291,7 @@ impl ClientTickHost for CoreThread {
         // keepalive, and starts the capability refresh. No gated section reads
         // these (design D3 rule 2).
         self.mark_hook(DrainHook::RunPeriodicMaintenance);
-        self.app.run_periodic_maintenance();
+        self.core.app_mut().run_periodic_maintenance();
     }
 
     fn tick_input(&mut self, outcome: &mut TickOutcome) {
@@ -342,7 +347,7 @@ impl ClientTickHost for CoreThread {
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
                     self.apply_panel_focus(PanelFocus::Library);
-                    self.app.apply_gui_library_command(command);
+                    self.core.app_mut().apply_gui_library_command(command);
                 }
                 CoreInput::Settings(command) => {
                     // The Settings screen's request (`add-gui-settings-screen`
@@ -355,7 +360,7 @@ impl ClientTickHost for CoreThread {
                     if matches!(command, mbv::GuiSettingsCommand::ResetUiState) {
                         self.reset_gui_ui_state();
                     } else {
-                        self.app.apply_gui_settings_command(command);
+                        self.core.app_mut().apply_gui_settings_command(command);
                     }
                 }
                 CoreInput::Playlists(command) => {
@@ -363,7 +368,7 @@ impl ClientTickHost for CoreThread {
                     // semantic intent, and the sections it marks rebuild.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
-                    self.app.apply_gui_playlists_command(command);
+                    self.core.app_mut().apply_gui_playlists_command(command);
                 }
                 CoreInput::Layout(report) => {
                     // A `report_layout` applies the layout and marks no

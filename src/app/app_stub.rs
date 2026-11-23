@@ -10,6 +10,10 @@
 
 use std::sync::{Arc, Mutex};
 
+// The popover stub's two names follow the stub's own gate (`feature =
+// "test"`): an `mbv` build compiled with `cfg(test)` and without the
+// feature must not carry the import.
+#[cfg(feature = "test")]
 use super::gui_client_state::{GuiOverlay, TrackPopoverState};
 use super::{App, AppInit, QueueView};
 

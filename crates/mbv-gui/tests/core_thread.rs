@@ -15,8 +15,8 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
 use mbv::{
-    App, load_config, stub_app_with_local_daemon_events, stub_app_with_pending_settings_save,
-    stub_app_with_playing_queue, stub_app_with_queue,
+    App, GuiCore, load_config, stub_app_with_local_daemon_events,
+    stub_app_with_pending_settings_save, stub_app_with_playing_queue, stub_app_with_queue,
 };
 use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
@@ -345,7 +345,7 @@ pub(crate) fn test_core_with(app: App) -> TestCore {
     // A test that pins its own guard keeps it: the guard installs only when
     // this thread has none, so an explicitly seeded launch state stands.
     let state_dir_ownership = TestStateDirGuard::new_if_unset();
-    let mut core = CoreThread::new(app, rx, sink, quit);
+    let mut core = CoreThread::new(GuiCore::new(app), rx, sink, quit);
     core.set_idle_cadence_for_test(Duration::ZERO);
     // Every core-thread test audits its section marks (design D3): a clean
     // gated section must match its fresh build, so a missed mark fails here.

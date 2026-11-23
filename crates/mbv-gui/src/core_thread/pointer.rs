@@ -47,7 +47,9 @@ impl CoreThread {
         // runs before the gesture and region resolution, so a hover move, a
         // drag end, or a press on no reported region still cancels an armed
         // prefix; the pointer arm itself delivers nothing else.
-        self.app.route_gui_input(GuiInput::Pointer(event), None);
+        self.core
+            .app_mut()
+            .route_gui_input(GuiInput::Pointer(event), None);
         // A cancelled gesture (the window lost the pointer, or the pointer
         // left the window; never an element's blur, which every press on a
         // row causes) drops the drag state and the double-click pair without
@@ -85,7 +87,7 @@ impl CoreThread {
         // painted beneath (the canvas's outside press; the TUI's blocking
         // context menu dismisses the same way).
         if self.press_outside_open_overlay(&event) {
-            self.app.dismiss_open_gui_overlay();
+            self.core.app_mut().dismiss_open_gui_overlay();
             return false;
         }
         let now = Instant::now();
@@ -134,13 +136,13 @@ impl CoreThread {
                 // target. The pill and the wheel take no focus, exactly as the
                 // TUI's matching gestures do not.
                 let Self {
-                    app,
+                    core,
                     queue,
                     regions,
                     ..
                 } = self;
                 let mut leaf = QueueLeaf::new(queue, regions);
-                app.route_gui_pointer(gesture, Some(&mut leaf));
+                core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
             }
             Some(RegionTarget::QueuePlayback(_)) => {
                 // The TUI's playback-panel click applies no focus change, so
@@ -149,10 +151,10 @@ impl CoreThread {
                 // availability gates the transport; the chooser and popover
                 // rows resolve their painted indexes against the last
                 // sent choice lists, not this read.
-                let projection = self.app.queue_playback_projection();
+                let projection = self.core.app_mut().queue_playback_projection();
                 let availability = projection.availability;
                 let Self {
-                    app,
+                    core,
                     playback,
                     regions,
                     painted,
@@ -168,13 +170,13 @@ impl CoreThread {
                     },
                     painted,
                 );
-                app.route_gui_pointer(gesture, Some(&mut leaf));
+                core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
             }
             Some(RegionTarget::StatusBar(_)) => {
                 // The TUI's status-row click applies no focus change either.
-                let Self { app, regions, .. } = self;
+                let Self { core, regions, .. } = self;
                 let mut leaf = StatusBarLeaf::new(regions);
-                app.route_gui_pointer(gesture, Some(&mut leaf));
+                core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
             }
             // A pre-attach button region is the attach campaign's target: the
             // attached slice resolves nothing for it, even when a stale
@@ -206,13 +208,13 @@ impl CoreThread {
             return false;
         }
         let Self {
-            app,
+            core,
             queue,
             regions,
             ..
         } = self;
         let mut leaf = QueueLeaf::new(queue, regions);
-        app.route_gui_pointer(gesture, Some(&mut leaf));
+        core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
         true
     }
 }

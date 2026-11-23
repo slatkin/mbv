@@ -27,7 +27,7 @@ pub(in crate::app) use self::overlay::GuiOverlay;
 pub(in crate::app) use self::state::GuiClientState;
 // The one `overlay` value the test stub builds by hand, so its re-export
 // follows the stub's own gate and a shipped build carries no unused import.
-#[cfg(any(test, feature = "test"))]
+#[cfg(feature = "test")]
 pub(in crate::app) use self::overlay::TrackPopoverState;
 pub use self::projection::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,

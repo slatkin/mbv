@@ -16,7 +16,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use mbv::{App, CLIENT_IDLE_CADENCE, ClientCore, GuiInput, load_config};
+use mbv::{CLIENT_IDLE_CADENCE, ClientCore, GuiCore, GuiInput, load_config};
 use mbv_config::ensure_runtime_dir;
 use mbv_surfaces::gesture::PointerGestureState;
 use mbv_surfaces::queue::QueueSurface;
@@ -163,7 +163,7 @@ pub fn spawn(sink: SectionSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandl
         };
         match outcome {
             (Ok(app), sent) => {
-                let mut core = CoreThread::new(app, rx, sink, quit);
+                let mut core = CoreThread::new(GuiCore::new(app), rx, sink, quit);
                 core.resume_after_attach(sent);
                 core.install_waker(waker_tx);
                 core.run();
@@ -179,10 +179,13 @@ pub fn spawn(sink: SectionSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandl
     (tx, handle)
 }
 
-/// The core thread's state (design D3): the attached `App`, the first
-/// slice's Surface state, and the channel every input and wake feeds.
+/// The core thread's state (design D3): the [`GuiCore`] wrapping the attached
+/// `App`, the first slice's Surface state, and the channel every input and
+/// wake feeds. The GUI Client owns its `App` by composition (design D4 of
+/// `decouple-client-core`), so every core read and write goes through the
+/// wrapper.
 pub struct CoreThread {
-    app: App,
+    core: GuiCore,
     focus: FocusStack,
     queue: QueueSurface,
     /// The Queue playback Surface state: the transport band's focus
@@ -240,14 +243,19 @@ impl CoreThread {
     /// A core over an attached `App` (design D3): it owns the first slice's
     /// Surface state and the channel every input and wake feeds.
     #[must_use]
-    pub fn new(mut app: App, rx: Receiver<CoreInput>, sink: SectionSink, quit: QuitSink) -> Self {
+    pub fn new(
+        mut core: GuiCore,
+        rx: Receiver<CoreInput>,
+        sink: SectionSink,
+        quit: QuitSink,
+    ) -> Self {
         // The GUI Client's App rules come first (add-gui-library-panel design
         // D4, D9): the GUI arranges its own panels from its measured size and
         // keeps its own launch location, so the TUI's Mini check, its hidden
         // empty queue column, and its launch state never apply here. The GUI's
         // own launch location replaces the TUI's (design D6a), on top of the
         // capabilities `attach_owner` recorded for this Client.
-        app.skip_launch_restore();
+        core.app_mut().skip_launch_restore();
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
         // and the Status bar (design D4). The Library panel mounts beside the
@@ -268,11 +276,11 @@ impl CoreThread {
         // `cached_emby_client`) starts neither startup worker, so the GUI
         // starts the playback-target discovery it feeds here; a startup the
         // drain reports starts it in the drain host instead.
-        let cached_emby_client = app.has_emby_client();
-        app.start_client_services();
-        let _home = app.load_home_at_startup();
+        let cached_emby_client = core.app().has_emby_client();
+        core.app_mut().start_client_services();
+        let _home = core.app_mut().load_home_at_startup();
         if cached_emby_client {
-            app.start_playback_target_discovery();
+            core.app_mut().start_playback_target_discovery();
         }
         // The GUI's own launch location (design D9), read once before the
         // first step: the TUI's launch state never moves this Client's tab,
@@ -282,8 +290,8 @@ impl CoreThread {
         let launch_restore = GuiLaunchRestore::Destination(
             mbv_config::load_gui_launch_state().unwrap_or_else(mbv_config::first_launch),
         );
-        let mut core = Self {
-            app,
+        let mut thread = Self {
+            core,
             focus,
             queue: QueueSurface::new(),
             playback: QueuePlaybackSurface::new(),
@@ -306,15 +314,15 @@ impl CoreThread {
         // D9): a launch the attach brought a catalog for restores here, and a
         // launch whose catalog lands through the startup worker restores on
         // that drain.
-        core.restore_launch_location();
-        core
+        thread.restore_launch_location();
+        thread
     }
 
     /// Move Panel focus on both authorities together (add-gui-library-panel
     /// design D4): the App's stored Panel focus, which its key gates read,
     /// through its public GUI entry, then the core's `FocusStack`.
     fn take_panel_focus(&mut self, focus: PanelFocus) {
-        self.app.set_gui_panel_focus(focus);
+        self.core.app_mut().set_gui_panel_focus(focus);
         self.focus.set_panel_focus(focus);
     }
 
@@ -323,7 +331,7 @@ impl CoreThread {
     /// Panel focus, so the core sets it per key from the key's [`KeyTarget`],
     /// and before each Library command the window asked for.
     fn apply_panel_focus(&mut self, focus: PanelFocus) {
-        if self.focus.panel_focus() == focus && self.app.gui_panel_focus() == focus {
+        if self.focus.panel_focus() == focus && self.core.app().gui_panel_focus() == focus {
             return;
         }
         self.take_panel_focus(focus);
@@ -333,7 +341,7 @@ impl CoreThread {
     /// a [`CoreInput::Wake`] into the core's own channel, so Owner events and
     /// timers wake the core as they wake the TUI.
     pub fn install_waker(&self, tx: Sender<CoreInput>) {
-        ClientCore::from_app(&self.app).install_waker(move || {
+        ClientCore::from_app(self.core.app()).install_waker(move || {
             let _ = tx.send(CoreInput::Wake);
         });
     }
@@ -391,7 +399,7 @@ impl CoreThread {
     #[doc(hidden)]
     #[must_use]
     pub fn gui_settings_section_for_test(&self) -> Option<mbv::GuiSettingsSection> {
-        self.app.gui_settings().map(|state| state.section)
+        self.core.app().gui_settings().map(|state| state.section)
     }
 
     /// Apply one `LayoutReport` to the Surface state's capacity and the hit
@@ -446,16 +454,20 @@ impl CoreThread {
         };
         self.apply_panel_focus(focus);
         if self.focus.focused().as_ref() != Some(&ComponentId::Queue) {
-            return self.app.route_gui_input(GuiInput::Key(key), None);
+            return self
+                .core
+                .app_mut()
+                .route_gui_input(GuiInput::Key(key), None);
         }
         let Self {
-            app,
+            core,
             queue,
             regions,
             ..
         } = self;
         let mut leaf = QueueLeaf::new(queue, regions);
-        app.route_gui_input(GuiInput::Key(key), Some(&mut leaf))
+        core.app_mut()
+            .route_gui_input(GuiInput::Key(key), Some(&mut leaf))
     }
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
@@ -480,7 +492,7 @@ impl CoreThread {
     pub fn run(&mut self) {
         while self.step() {}
         self.save_launch_location();
-        self.app.client_exit_teardown();
+        self.core.app_mut().client_exit_teardown();
     }
 
     /// One step: wait for the next input, run one tick, and send the batch of
@@ -502,12 +514,12 @@ impl CoreThread {
         // App's drain half, and the GUI Client takes the same orderly exit
         // — the quit edge closes the window, and the run's exit boundary in
         // `run` saves the launch location and tears the shared state down.
-        if outcome.quit_requested || self.app.quit_requested() {
+        if outcome.quit_requested || self.core.app().quit_requested() {
             tracing::info!(
                 name: "gui_core.run_quit",
                 target: "gui_core",
                 input_quit = outcome.quit_requested,
-                reason = ?self.app.exit_message(),
+                reason = ?self.core.app().exit_message(),
                 "the GUI run ends through the quit edge"
             );
             // The routed quit closes the window through the same edge the
@@ -527,7 +539,7 @@ impl CoreThread {
     /// the consumption the TUI's sync pass runs once per pass, before the
     /// section that reads the Surface state builds.
     fn sync_queue_surface(&mut self) {
-        let update = self.app.queue_surface_projection();
+        let update = self.core.app_mut().queue_surface_projection();
         // The shown entry changed: drop the marks and the viewport before the
         // start-slot cursor lands (design D7 of `gui-named-queues`).
         if update.presentation_reset {
@@ -553,7 +565,7 @@ impl CoreThread {
     fn send_sections(&mut self) {
         self.sync_queue_surface();
         let batch = self.ledger.collect(SectionSources {
-            app: &mut self.app,
+            app: self.core.app_mut(),
             queue: &self.queue,
             playback_surface: &self.playback,
             viewport_rows: self.viewport_rows,
@@ -574,7 +586,7 @@ impl CoreThread {
 impl fmt::Debug for CoreThread {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoreThread")
-            .field("app", &self.app)
+            .field("core", &self.core)
             .field("focus", &self.focus)
             .field("queue", &self.queue)
             .field("playback", &self.playback)

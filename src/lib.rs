@@ -11,6 +11,7 @@
 
 mod app;
 mod config;
+mod gui;
 mod launch;
 mod local_daemon;
 mod owner_link;
@@ -60,6 +61,10 @@ pub use self::app::{
 /// The TUI keeps no library stores and passes `None`.
 pub use self::app::{ClientLibraryEffect, ClientLibraryStores, GuiLibraryStores};
 pub use self::config::{Config, load_config};
+/// The GUI Client's core state (design D4 of `decouple-client-core`): the
+/// shared `App` it owns, wrapped by composition. A Client outside `crate::app`
+/// names it here.
+pub use self::gui::GuiCore;
 pub use self::owner_link::{
     OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,
     refusal_text, start_owner,
