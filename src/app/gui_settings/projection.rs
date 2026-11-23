@@ -13,6 +13,7 @@ use mbv_ui_model::settings::{
 };
 use mbv_ui_model::ui_util::{SUBTITLE_MODES, lang_cycle};
 
+use crate::app::state::shell_reads::SetupFormDraft;
 use crate::gui::GuiCore;
 
 use super::{GuiSettingsState, GuiSetupService};
@@ -293,24 +294,36 @@ impl GuiCore {
 
     /// The open setup form's facts (design D9), whichever form holds it.
     fn gui_settings_setup(&self) -> Option<GuiSettingsSetupProjection> {
-        if let Some(form) = self.app.setup.emby_setup_form.as_ref() {
-            return Some(GuiSettingsSetupProjection {
+        match self.app.emby_setup_draft() {
+            Some(SetupFormDraft::Emby {
+                fields,
+                busy,
+                error,
+                ..
+            }) => Some(GuiSettingsSetupProjection {
                 service: GuiSetupService::Emby,
-                server_url: form.fields[0].clone(),
-                busy: form.busy,
-                error: form.error.clone(),
-            });
+                server_url: fields[0].clone(),
+                busy,
+                error,
+            }),
+            _ => self
+                .app
+                .audiobookshelf_setup_draft()
+                .and_then(|draft| match draft {
+                    SetupFormDraft::Audiobookshelf {
+                        fields,
+                        busy,
+                        error,
+                        ..
+                    } => Some(GuiSettingsSetupProjection {
+                        service: GuiSetupService::Audiobookshelf,
+                        server_url: fields[0].clone(),
+                        busy,
+                        error,
+                    }),
+                    SetupFormDraft::Emby { .. } => None,
+                }),
         }
-        self.app
-            .setup
-            .audiobookshelf_setup_form
-            .as_ref()
-            .map(|form| GuiSettingsSetupProjection {
-                service: GuiSetupService::Audiobookshelf,
-                server_url: form.fields[0].clone(),
-                busy: form.busy,
-                error: form.error.clone(),
-            })
     }
 
     /// The Feeds section's content (design D9): the subscriptions from the
@@ -327,11 +340,7 @@ impl GuiCore {
                 })
                 .collect()
         });
-        let adding = self
-            .app
-            .feeds_manage
-            .as_ref()
-            .is_some_and(|popup| popup.pending_add.is_some());
+        let adding = self.app.feeds_manage_pending_add().is_some();
         GuiSettingsFeedsProjection {
             subscriptions,
             adding,

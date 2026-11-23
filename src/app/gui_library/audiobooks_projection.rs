@@ -173,7 +173,7 @@ impl GuiCore {
         if !super::audiobooks::abs_book_library(&self.app, lib_idx) {
             return GuiAudiobooksProjection::default();
         }
-        let Some(state) = self.app.audiobookshelf_book_browse.get(lib_idx) else {
+        let Some(state) = self.app.audiobookshelf_book_browse_state(lib_idx) else {
             return GuiAudiobooksProjection {
                 loading: true,
                 ..GuiAudiobooksProjection::default()
@@ -239,7 +239,7 @@ impl GuiCore {
     /// through the Service-scoped book cover chain, and the Workspace the
     /// book's detail holds.
     fn abs_hero(&mut self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksHero> {
-        let state = self.app.audiobookshelf_book_browse.get(lib_idx)?;
+        let state = self.app.audiobookshelf_book_browse_state(lib_idx)?;
         let book = audiobookshelf_book_item(state, book_id)?;
         // The catalog's own record beside the queue item: the narrator, the
         // published year, and the description ride only there.
@@ -312,7 +312,7 @@ impl GuiCore {
     /// files when the book holds no chapters. `None` while the book's
     /// detail has not landed.
     fn abs_workspace(&self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksWorkspace> {
-        let state = self.app.audiobookshelf_book_browse.get(lib_idx)?;
+        let state = self.app.audiobookshelf_book_browse_state(lib_idx)?;
         let rows = state
             .visible_rows(book_id)
             .into_iter()

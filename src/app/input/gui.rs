@@ -102,7 +102,7 @@ impl GuiCore {
             // Any pointer event disarms prefix mode, exactly as every
             // terminal mouse event does in the TUI (design D6, task 6.1);
             // the gesture itself resolves below, against the focused leaf.
-            self.app.prefix_armed = false;
+            self.app.disarm_prefix_mode();
             return false;
         };
         // A track popover left open when the local player went inactive has
@@ -118,13 +118,7 @@ impl GuiCore {
         // pointer pass sets no hand-off; the GUI core thread takes it after
         // the pass's dispatch instead.
         self.present_pending_gui_overlay();
-        let keybinds = self
-            .app
-            .config
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .keybinds
-            .clone();
+        let keybinds = self.app.configured_keybinds();
         // `player.status` is a plain (non-reentrant) mutex; read it in its
         // own statement, exactly as the TUI's arbitration does, so no
         // temporary inside the snapshot literal can hold the lock while the
@@ -162,7 +156,7 @@ impl GuiCore {
                 // while it holds the keyboard the global bindings fall
                 // through, so its characters type instead of firing actions
                 // (add-tauri-gui-client row 6.2).
-                text_entry_focused: self.app.queue_filter_active,
+                text_entry_focused: self.app.queue_filter_active(),
                 ..RouterOverlayState::default()
             },
             panel_mode: self.app.effective_panel_mode(),
@@ -173,7 +167,7 @@ impl GuiCore {
             // The transport chips' key layers (add-tauri-gui-client row 6.2)
             // route the canvas's `z`, `q`, and `c` here — the GUI Client
             // holds `TransportChipKeys` — and never in the TUI Client.
-            client_capabilities: self.app.client_capabilities,
+            client_capabilities: *self.app.client_capabilities(),
         };
         // While the GUI's overlay is open it is the blocking overlay the
         // router arbitrates against: the chord's focused leaf is the overlay,
@@ -195,15 +189,15 @@ impl GuiCore {
         match resolve_router_outcome(chord, &snapshot, self, focused.as_ref(), &keybinds) {
             RouterOutcome::Command(command) => self.apply_gui_router_command(&command, leaf),
             RouterOutcome::PrefixArm => {
-                self.app.prefix_armed = true;
+                let _armed = self.app.arm_prefix_mode();
                 false
             }
             RouterOutcome::PrefixDispatch(command) => {
-                self.app.prefix_armed = false;
+                self.app.disarm_prefix_mode();
                 self.apply_gui_router_command(&command, leaf)
             }
             RouterOutcome::PrefixSwallow => {
-                self.app.prefix_armed = false;
+                self.app.disarm_prefix_mode();
                 false
             }
             RouterOutcome::Swallow => false,
@@ -262,7 +256,7 @@ impl GuiCore {
         gesture: PointerGesture<Position>,
         leaf: Option<&mut dyn GuiSurfaceLeaf>,
     ) {
-        self.app.prefix_armed = false;
+        self.app.disarm_prefix_mode();
         if let Some(surface) = leaf
             && let Some(msg) = surface.pointer(gesture)
         {

@@ -23,17 +23,16 @@ impl GuiCore {
     /// the Owner keeps that fresh — or the peer's own view.
     #[must_use]
     pub(in crate::app) fn queue_chooser_entries(&self) -> Vec<QueueChooserEntryProjection> {
-        let current = self.app.named_queues.current();
+        let current = self.app.current_named_queue();
         let local_plays = self.app.local_owner_plays();
         let shown_resting = self.app.shown_resting_live();
         let mut entries: Vec<QueueChooserEntryProjection> = self
             .app
-            .named_queues
-            .entries()
+            .named_queue_entries()
             .iter()
             .map(|entry| {
                 let len = if current == Some(entry.id) {
-                    self.app.local_view.total_queue_len()
+                    self.app.local_queue_len()
                 } else if let Some((shown, view)) = &shown_resting
                     && *shown == entry.id
                 {
@@ -44,7 +43,7 @@ impl GuiCore {
                 QueueChooserEntryProjection {
                     label: entry.name.clone(),
                     queue: Some(entry.id),
-                    shown: self.app.shown_entry == Some(ShownEntry::Local(entry.id)),
+                    shown: self.app.shown_entry() == Some(ShownEntry::Local(entry.id)),
                     current: current == Some(entry.id),
                     playing: local_plays && current == Some(entry.id),
                     len,
@@ -52,15 +51,11 @@ impl GuiCore {
             })
             .collect();
         if self.app.has_direct_remote_queue() {
-            let peer_len = self
-                .app
-                .remote_view
-                .as_ref()
-                .map_or(0, crate::app::QueueView::total_queue_len);
+            let peer_len = self.app.remote_queue_len();
             entries.push(QueueChooserEntryProjection {
                 label: self.app.peer_owner_label(),
                 queue: None,
-                shown: self.app.shown_entry == Some(ShownEntry::Peer),
+                shown: self.app.shown_entry() == Some(ShownEntry::Peer),
                 current: false,
                 playing: false,
                 len: peer_len,
@@ -105,7 +100,7 @@ impl GuiCore {
             self.gui.overlay = None;
         }
         match queue {
-            Some(queue) if !self.app.named_queues.holds(queue) => {
+            Some(queue) if !self.app.named_queue_holds(queue) => {
                 self.app.show_local_current_entry();
             }
             Some(queue) => self.app.show_named_queue(queue),

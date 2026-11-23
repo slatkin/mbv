@@ -42,7 +42,7 @@ impl GuiCore {
     /// key resolves too. Returns whether it presented one, so the tick that
     /// took the hand-off marks its input.
     pub fn present_pending_gui_overlay(&mut self) -> bool {
-        let Some((queue, text)) = self.app.pending_queue_rename.take() else {
+        let Some((queue, text)) = self.app.take_pending_queue_rename() else {
             return false;
         };
         self.present_gui_queue_rename(queue, text);
@@ -54,6 +54,6 @@ impl GuiCore {
     /// command; holding the op it returns is the GUI Client's bookkeeping, so
     /// it stays GUI-side.
     pub(in crate::app) fn note_named_queue_op(&mut self, op: QueueOpId) {
-        self.app.pending_named_queue_ops.insert(op);
+        self.app.note_named_queue_op(op);
     }
 }

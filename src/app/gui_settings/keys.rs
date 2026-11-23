@@ -72,7 +72,7 @@ impl GuiCore {
             );
             return;
         };
-        let keybinds = self.app.config.lock().unwrap().keybinds.clone();
+        let keybinds = self.app.configured_keybinds();
         let candidate = match target {
             GuiKeyTarget::Router(action) => keybinds.with_router(action, chord),
             GuiKeyTarget::PrefixAction(action) => {
@@ -90,13 +90,7 @@ impl GuiCore {
             Self::log_ignored_gui_settings_command("keysReset", "the action is not declared");
             return;
         };
-        let keybinds = self
-            .app
-            .config
-            .lock()
-            .unwrap()
-            .keybinds
-            .without_router(action);
+        let keybinds = self.app.configured_keybinds().without_router(action);
         self.commit_gui_settings_keybinds(&keybinds, Some(action.id));
     }
 
@@ -107,7 +101,7 @@ impl GuiCore {
             Self::log_ignored_gui_settings_command("keysClear", "the target is not declared");
             return;
         };
-        let keybinds = self.app.config.lock().unwrap().keybinds.clone();
+        let keybinds = self.app.configured_keybinds();
         let (candidate, action) = match target {
             GuiKeyTarget::PrefixAction(action) => (
                 keybinds.with_prefix_assignment(action, None),
@@ -138,11 +132,8 @@ impl GuiCore {
                 return;
             }
         };
-        let config = {
-            let mut config = self.app.config.lock().unwrap();
-            config.keybinds = loaded;
-            config.clone()
-        };
+        self.app.set_configured_keybinds(loaded);
+        let config = self.app.config_snapshot();
         if let Err(error) =
             crate::app::config::save_config_section(&config, mbv_config::ConfigSection::Keys)
         {

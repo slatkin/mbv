@@ -30,10 +30,7 @@ impl GuiCore {
             GuiPlaylistsCommand::Toggle => self.toggle_gui_playlists(),
             GuiPlaylistsCommand::Close => self.close_gui_playlists(),
             GuiPlaylistsCommand::Open { id } => self.open_gui_playlist(&id),
-            GuiPlaylistsCommand::Collapse => {
-                self.app.playlists_open = None;
-                self.app.playlists_open_items.clear();
-            }
+            GuiPlaylistsCommand::Collapse => self.app.close_open_playlist(),
             GuiPlaylistsCommand::Refresh { id } => self.refresh_gui_playlists(id.as_deref()),
             GuiPlaylistsCommand::Action { id, action } => self.app.playlist_action(&id, action),
             GuiPlaylistsCommand::ItemAction {
@@ -53,10 +50,9 @@ impl GuiCore {
             self.open_gui_playlist(id);
             return;
         }
-        match self.app.playlists_open.clone() {
+        match self.app.playlists_open().cloned() {
             Some(playlist) => {
-                self.app.playlists_open = None;
-                self.app.playlists_open_items.clear();
+                self.app.close_open_playlist();
                 self.app.spawn_open_playlist(&playlist);
             }
             None => self.app.spawn_load_playlists(),
@@ -68,8 +64,7 @@ impl GuiCore {
     fn apply_gui_playlist_item_action(&mut self, id: &str, item_id: &str, action: MusicTreeAction) {
         if self
             .app
-            .playlists_open
-            .as_ref()
+            .playlists_open()
             .is_none_or(|playlist| playlist.id != id)
         {
             Self::log_ignored_gui_playlists_command(
@@ -92,7 +87,12 @@ impl GuiCore {
             );
             return;
         }
-        if !self.app.playlists.iter().any(|playlist| playlist.id == id) {
+        if !self
+            .app
+            .playlists()
+            .iter()
+            .any(|playlist| playlist.id == id)
+        {
             Self::log_ignored_gui_playlists_command(
                 "rename",
                 "the playlist is not in the saved list",
@@ -106,7 +106,7 @@ impl GuiCore {
     fn apply_gui_playlist_delete(&mut self, id: &str) {
         let Some(playlist) = self
             .app
-            .playlists
+            .playlists()
             .iter()
             .find(|playlist| playlist.id == id)
             .cloned()
@@ -136,7 +136,7 @@ impl GuiCore {
     fn open_gui_playlist(&mut self, id: &str) {
         let Some(playlist) = self
             .app
-            .playlists
+            .playlists()
             .iter()
             .find(|playlist| playlist.id == id)
             .cloned()

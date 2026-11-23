@@ -56,6 +56,40 @@ impl App {
     pub fn series_detail(&self, series_id: &str) -> Option<&mbv_ui_model::browse::SeriesDetail> {
         self.series_detail_cache.get(series_id)
     }
+
+    /// Whether the series detail for `series_id` is being fetched.
+    #[must_use]
+    pub fn series_detail_loading(&self, series_id: &str) -> bool {
+        self.series_detail_loading.contains(series_id)
+    }
+
+    /// Whether the episode list of `series_id`'s season `season_id` is being
+    /// fetched.
+    #[must_use]
+    pub fn series_season_loading(&self, series_id: &str, season_id: &str) -> bool {
+        self.series_season_loading
+            .contains(&(series_id.to_string(), season_id.to_string()))
+    }
+
+    /// The cached series detail's season or episode with `item_id`: the item a
+    /// Shows tree row names, from whichever cached detail holds it.
+    #[must_use]
+    pub fn series_detail_item(&self, item_id: &str) -> Option<EmbyItem> {
+        self.series_detail_cache.values().find_map(|detail| {
+            detail
+                .seasons
+                .iter()
+                .chain(detail.episodes.values().flatten())
+                .find(|item| item.id == item_id)
+                .cloned()
+        })
+    }
+
+    /// Every TV library's Upcoming premieres, as last fetched: the merged rows
+    /// of the Upcoming list, in no particular library order.
+    pub fn tv_upcoming_premieres(&self) -> impl Iterator<Item = &mbv_emby_model::UpcomingPremiere> {
+        self.tv_upcoming_snapshots.values().flatten()
+    }
     /// The TV Upcoming rows the library with `library_id` last fetched.
     #[must_use]
     pub fn tv_upcoming_rows(
@@ -128,6 +162,41 @@ impl App {
     #[must_use]
     pub fn album_tracks_any_loading(&self) -> bool {
         !self.album_tracks_loading.is_empty()
+    }
+
+    /// The cached track list of `album_id`.
+    #[must_use]
+    pub fn album_tracks(&self, album_id: &str) -> Option<&[EmbyItem]> {
+        self.album_tracks_cache.get(album_id).map(Vec::as_slice)
+    }
+
+    /// The album whose cached track list holds the track `track_id`.
+    #[must_use]
+    pub fn album_of_cached_track(&self, track_id: &str) -> Option<String> {
+        self.album_tracks_cache
+            .iter()
+            .find_map(|(album_id, tracks)| {
+                tracks
+                    .iter()
+                    .any(|track| track.id == track_id)
+                    .then(|| album_id.clone())
+            })
+    }
+
+    /// The cached track `track_id`, from whichever track list holds it.
+    #[must_use]
+    pub fn cached_album_track(&self, track_id: &str) -> Option<&EmbyItem> {
+        self.album_tracks_cache
+            .values()
+            .flatten()
+            .find(|track| track.id == track_id)
+    }
+
+    /// Album id to album artist, as the level fills recorded it: the lookup the
+    /// grouped views label their album rows from.
+    #[must_use]
+    pub fn album_artists(&self) -> &std::collections::HashMap<String, String> {
+        &self.album_artist_cache
     }
 
     /// Whether the artist detail for `key` is in flight.
@@ -315,6 +384,13 @@ impl App {
     #[must_use]
     pub fn audiobookshelf_setup_generation(&self) -> mbv_core::service_runtime::SetupGeneration {
         self.audiobookshelf_runtime.generation()
+    }
+
+    /// Whether an Audiobookshelf catalog fetch is in flight: the libraries list
+    /// is not final until it lands.
+    #[must_use]
+    pub fn audiobookshelf_catalog_fetching(&self) -> bool {
+        self.setup.audiobookshelf_catalog_rx.is_some()
     }
 
     /// The queue card's visual-slot projection.

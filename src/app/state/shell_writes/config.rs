@@ -11,6 +11,15 @@ use mbv_ui_model::feeds_manage::FeedsManagePopup;
 use mbv_ui_model::settings::SettingsDestination;
 
 impl App {
+    /// Hold `keybinds` as the running bindings the configuration carries: a
+    /// Settings commit the configuration load already accepted.
+    pub fn set_configured_keybinds(&mut self, keybinds: mbv_keybinds::Keybinds) {
+        self.config
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .keybinds = keybinds;
+    }
+
     /// Show the Services pane of Settings: what a service action selected in
     /// the Services list shows before it runs.
     pub fn show_services_settings(&mut self) {

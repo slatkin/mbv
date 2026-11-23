@@ -128,7 +128,7 @@ fn hero_album_under(
 /// the library index names no tab, or the destination is not a Grouped Music
 /// library. The key-level rule is [`collection_reject_reason`]'s own.
 fn library_collection_target_reject_reason(app: &App, lib_idx: usize) -> Option<&'static str> {
-    if lib_idx >= app.libs.len() {
+    if lib_idx >= app.emby_library_count() {
         return Some("the library index names no tab");
     }
     if !app.is_grouped_music_library(lib_idx) {

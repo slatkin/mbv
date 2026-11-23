@@ -163,10 +163,10 @@ impl GuiCore {
 /// every other destination, which presents no Music section.
 #[must_use]
 pub(in crate::app::gui_library) fn music_destination(app: &App) -> Option<usize> {
-    let mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(lib_idx) = app.tab else {
+    let mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(lib_idx) = app.active_tab() else {
         return None;
     };
-    (lib_idx < app.libs.len() && app.is_grouped_music_library(lib_idx)).then_some(lib_idx)
+    (lib_idx < app.emby_library_count() && app.is_grouped_music_library(lib_idx)).then_some(lib_idx)
 }
 
 /// The Music projection over the `App` the GUI core owns (design D5): the
@@ -233,7 +233,7 @@ pub(in crate::app::gui_library) fn music_groups(
     app: &App,
     lib_idx: usize,
 ) -> Vec<(String, String)> {
-    if lib_idx >= app.libs.len() || !app.is_grouped_music_library(lib_idx) {
+    if lib_idx >= app.emby_library_count() || !app.is_grouped_music_library(lib_idx) {
         return Vec::new();
     }
     let Some(group_level) = super::launch::music_group_level(app, lib_idx) else {
@@ -342,7 +342,7 @@ fn extend_music_union<'a>(
     seen: &mut HashSet<&'a str>,
     albums: &'a [EmbyItem],
 ) {
-    let (facts, keys) = group_album_plan(&app.album_artist_cache, albums, None);
+    let (facts, keys) = group_album_plan(app.album_artists(), albums, None);
     for ((facts, key), album) in facts.into_iter().zip(keys).zip(albums) {
         if seen.insert(album.id.as_str()) {
             union.albums.push(album);
@@ -394,13 +394,13 @@ fn music_artists(app: &App, union: &GuiMusicUnion<'_>) -> Vec<GuiMusicArtist> {
 /// `album_tracks_cache` holds it (design D5). An opened album's fetch fills
 /// that cache, and its drain sorts it into disc and track order.
 fn music_album(app: &App, album: &EmbyItem, year: &str, name: &str) -> GuiMusicAlbum {
-    let tracks = app.album_tracks_cache.get(&album.id);
+    let tracks = app.album_tracks(&album.id);
     GuiMusicAlbum {
         album_id: album.id.clone(),
         name: name.to_string(),
         year: year.to_string(),
-        tracks: tracks.map(|tracks| gui_music_tracks(tracks)),
-        total: tracks.map(|tracks| track_total(tracks)),
+        tracks: tracks.map(gui_music_tracks),
+        total: tracks.map(track_total),
     }
 }
 
@@ -507,7 +507,7 @@ fn artist_tracks(app: &App, artist: &GuiMusicArtist) -> Option<GuiMusicTrackTota
     let mut count = 0;
     let mut ticks = 0;
     for album in &artist.albums {
-        let tracks = app.album_tracks_cache.get(&album.album_id)?;
+        let tracks = app.album_tracks(&album.album_id)?;
         count += tracks.len();
         ticks += tracks.iter().map(|track| track.runtime_ticks).sum::<i64>();
     }

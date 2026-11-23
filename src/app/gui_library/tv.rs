@@ -58,9 +58,7 @@ impl GuiCore {
 /// Whether `lib_idx` names an Emby TV (Shows) library: every GUI Shows
 /// step's destination guard.
 pub(in crate::app::gui_library) fn tv_library(app: &App, lib_idx: usize) -> bool {
-    app.libs
-        .get(lib_idx)
-        .is_some_and(|lib| lib.library.collection_type == "tvshows")
+    app.emby_library_collection_type(lib_idx) == Some("tvshows")
 }
 
 /// Open the Shows library `lib_idx` (design D12, D8; gui-one-destination-ensure
@@ -96,7 +94,7 @@ pub(in crate::app::gui_library) fn open_tv(
 /// another mode lands the series list. The pass's root step calls this, and so
 /// the GUI's frame keeps the one root load however the destination opened.
 pub(in crate::app::gui_library) fn load_shows_root(app: &mut App, lib_idx: usize) {
-    if app.libs[lib_idx].nav_stack.is_empty() {
+    if app.emby_library_level(lib_idx).is_none() {
         app.activate_library_position(lib_idx);
     }
     app.apply_tv_letter_mode(lib_idx, &TvContentMode::All);
@@ -121,7 +119,7 @@ pub(in crate::app::gui_library) fn select_tv_series(
         );
         return;
     }
-    let in_root = app.libs[lib_idx].nav_stack.last().is_some_and(|level| {
+    let in_root = app.emby_library_level(lib_idx).is_some_and(|level| {
         level
             .items
             .iter()

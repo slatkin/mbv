@@ -62,7 +62,7 @@ impl GuiCore {
 
 /// Queue a `Row` fetch for every in-view row of the active list (design D7).
 pub(in crate::app) fn queue_in_view_row_fetches(app: &mut App, gui: &mut GuiClientState) {
-    if !app.navigation_idle() || !app.images.protocol_enabled() {
+    if !app.navigation_idle() || !app.image_cache().protocol_enabled() {
         return;
     }
     let Some(scope) = row_art_scope(app, gui) else {
@@ -104,7 +104,7 @@ fn touch_in_view_row_images(
         .map(|req| req.cache_key)
         .collect();
     for key in keys {
-        app.images.touch_row_image(&key);
+        app.touch_row_image(&key);
     }
 }
 
@@ -153,14 +153,14 @@ fn row_source(
         GuiRowArtScope::Podcasts => podcast_row_source(app, id),
         GuiRowArtScope::Audiobooks => {
             let lib_idx = super::audiobooks_projection::audiobooks_destination(app)?;
-            let state = app.audiobookshelf_book_browse.get(lib_idx)?;
+            let state = app.audiobookshelf_book_browse_state(lib_idx)?;
             let book = state.books.iter().find(|book| book.library_item_id == id)?;
             catalog_book_row_source(book)
         }
         GuiRowArtScope::Feeds => {
             let entry = GuiFeedEntryId::decode(id)?;
             let entry = app
-                .feed_tab
+                .feeds_state()
                 .all_entries
                 .iter()
                 .find(|candidate| feed_entry_matches(candidate, &entry))?;
@@ -181,9 +181,7 @@ fn music_row_source(app: &App, id: &str) -> Option<GuiRowSource> {
 /// The row art source of a Shows Upcoming row: the premiere's series image.
 fn upcoming_row_source(app: &App, id: &str) -> Option<GuiRowSource> {
     let premiere = app
-        .tv_upcoming_snapshots
-        .values()
-        .flatten()
+        .tv_upcoming_premieres()
         .find(|premiere| premiere.stable_key() == id)?;
     let series = shows_series_item(app, premiere.series_id.as_str());
     Some(upcoming_source(premiere, series.as_ref()))
@@ -209,7 +207,7 @@ fn home_row_source(app: &App, id: &str) -> Option<GuiRowSource> {
 /// The Home row's item, as the projection builds it (design D12).
 fn home_row_item(app: &App, id: &str) -> Option<QueueItem> {
     let continued = app
-        .home_content
+        .home_content()
         .continue_items
         .iter()
         .find(|item| GuiHomeRowId::Continue(item.id.clone()).rows_in_view_id() == id);
@@ -230,7 +228,7 @@ pub(in crate::app::gui_library) fn shows_series_item(
     app: &App,
     series_id: &str,
 ) -> Option<EmbyItem> {
-    app.libs
+    app.emby_libraries()
         .iter()
         .filter_map(|lib| lib.nav_stack.last())
         .flat_map(|level| level.items.iter())

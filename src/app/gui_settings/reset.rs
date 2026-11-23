@@ -44,7 +44,7 @@ impl GuiCore {
         // daemon-lost dialog) and the Settings screen. A pending shell
         // request the GUI has not drained goes with them.
         self.gui.overlay = None;
-        self.app.pending_overlay = None;
+        self.app.clear_pending_overlay();
         self.close_gui_settings();
     }
 

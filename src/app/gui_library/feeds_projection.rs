@@ -219,7 +219,7 @@ pub(in crate::app) fn feeds_projection(app: &App, gui: &GuiClientState) -> GuiFe
         .and_then(|entry| feeds_hero(app, &entry, &entries));
     GuiFeedsProjection {
         collections,
-        loading: app.feed_tab.loading,
+        loading: app.feeds_state().loading,
         failed: false,
         rows,
         sort: Some(sort_frame),
@@ -231,7 +231,7 @@ pub(in crate::app) fn feeds_projection(app: &App, gui: &GuiClientState) -> GuiFe
 /// The Feeds collection selector's catalog (row 11.1): each configured
 /// subscription by its name in the tab's order, keyed by its URL.
 pub(in crate::app::gui_library) fn feeds_subscriptions(app: &App) -> Vec<(String, String)> {
-    app.feed_tab
+    app.feeds_state()
         .subscriptions
         .iter()
         .map(|subscription| (subscription.url.clone(), subscription.name.clone()))
@@ -308,7 +308,7 @@ fn feeds_hero(app: &App, entry: &GuiFeedEntryId, listed: &[&FeedEntry]) -> Optio
 /// the tab no longer holds it.
 fn feeds_subscription_name<'a>(app: &'a App, feed_id: Option<&str>) -> Option<&'a str> {
     let feed_id = feed_id?;
-    app.feed_tab
+    app.feeds_state()
         .subscriptions
         .iter()
         .find(|subscription| subscription.url == feed_id)

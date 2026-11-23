@@ -240,9 +240,7 @@ impl GuiCore {
                 let series = self.gui_shows_series_tree(lib_idx);
                 let loading = self
                     .app
-                    .libs
-                    .get(lib_idx)
-                    .and_then(|lib| lib.nav_stack.last())
+                    .emby_library_level(lib_idx)
                     .is_none_or(|level| level.loading);
                 let selected = shows_default_series(&self.app, &self.gui, lib_idx);
                 let hero = selected
@@ -278,11 +276,12 @@ impl GuiCore {
                     .as_ref()
                     .and_then(|id| super::shows::shows_new_item(&self.gui, id))
                     .map(|item| super::shows::shows_flat_hero(&mut self.app, &item));
-                let loading = self.app.libs.get(lib_idx).is_some_and(|lib| {
+                let library_id = self.app.emby_library_id(lib_idx);
+                let loading = library_id.is_some_and(|library_id| {
                     !self
                         .gui
                         .shows_new
-                        .get(&lib.library.id)
+                        .get(library_id)
                         .is_some_and(GuiSectionRequest::is_landed)
                 });
                 (Vec::new(), rows, selected, hero, false, loading)
@@ -385,7 +384,7 @@ impl GuiCore {
     /// carried. Every row is display-only.
     fn gui_shows_upcoming_rows(&self) -> Vec<GuiShowsRow> {
         let mut premieres: Vec<&mbv_emby_model::UpcomingPremiere> =
-            self.app.tv_upcoming_snapshots.values().flatten().collect();
+            self.app.tv_upcoming_premieres().collect();
         premieres.sort_by_cached_key(|premiere| {
             let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
             (
@@ -428,12 +427,7 @@ impl GuiCore {
     /// series with no cached detail paints closed and expandable, and its
     /// open asks the core to load it.
     fn gui_shows_series_tree(&self, lib_idx: usize) -> Vec<GuiShowsSeries> {
-        let Some(level) = self
-            .app
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.last())
-        else {
+        let Some(level) = self.app.emby_library_level(lib_idx) else {
             return Vec::new();
         };
         level
@@ -441,7 +435,7 @@ impl GuiCore {
             .iter()
             .filter(|item| item.item_type == "Series")
             .map(|item| {
-                let detail = self.app.series_detail_cache.get(&item.id);
+                let detail = self.app.series_detail(&item.id);
                 let seasons = detail
                     .map(|detail| {
                         detail
@@ -488,24 +482,19 @@ pub(in crate::app) fn shows_default_series(
     lib_idx: usize,
 ) -> Option<String> {
     let in_root = |series_id: &str| {
-        app.libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.last())
-            .is_some_and(|level| {
-                level
-                    .items
-                    .iter()
-                    .any(|item| item.id == series_id && item.item_type == "Series")
-            })
+        app.emby_library_level(lib_idx).is_some_and(|level| {
+            level
+                .items
+                .iter()
+                .any(|item| item.id == series_id && item.item_type == "Series")
+        })
     };
     gui.tv_shows
         .get(&lib_idx)
         .and_then(|selection| selection.series_id.clone())
         .filter(|stored| in_root(stored))
         .or_else(|| {
-            app.libs
-                .get(lib_idx)
-                .and_then(|lib| lib.nav_stack.last())
+            app.emby_library_level(lib_idx)
                 .and_then(|level| level.items.iter().find(|item| item.item_type == "Series"))
                 .map(|item| item.id.clone())
         })
@@ -532,10 +521,10 @@ pub(in crate::app) fn shows_root_needs_load(app: &App, lib_idx: usize) -> bool {
     if !super::tv::tv_library(app, lib_idx) {
         return false;
     }
-    if app.libs[lib_idx].nav_stack.is_empty() {
+    if app.emby_library_level(lib_idx).is_none() {
         return true;
     }
-    app.libs[lib_idx].tv_content_mode.as_ref() != Some(&TvContentMode::All)
+    app.emby_library_stored_tv_mode(lib_idx) != Some(&TvContentMode::All)
 }
 
 /// The Emby item a Shows play command names (design D12, D9): a New row
@@ -555,7 +544,7 @@ pub(in crate::app) fn shows_item(
         GuiShowsView::Upcoming => return None,
         GuiShowsView::All => {}
     }
-    let lib = app.libs.get(lib_idx)?;
+    let lib = app.emby_library(lib_idx)?;
     if let Some(item) = lib
         .nav_stack
         .iter()
@@ -566,18 +555,7 @@ pub(in crate::app) fn shows_item(
     }
     // A season is a folder item the Hero's season buttons name: the shared
     // folder play, play-next, and enqueue expand it, as they do a series.
-    let details = app.series_detail_cache.values();
-    let season = details
-        .clone()
-        .flat_map(|detail| detail.seasons.iter())
-        .find(|season| season.id == item_id)
-        .cloned();
-    season.or_else(|| {
-        details
-            .flat_map(|detail| detail.episodes.values().flatten())
-            .find(|episode| episode.id == item_id)
-            .cloned()
-    })
+    app.series_detail_item(item_id)
 }
 
 /// The series name a New row leads with, and the key its Title sort compares

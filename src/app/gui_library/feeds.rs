@@ -80,7 +80,7 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
         // The tab is present whenever the destination serves a command, so
         // the retention always applies (row 11.1).
         Some(move |key: &str| {
-            app.feed_tab
+            app.feeds_state()
                 .subscriptions
                 .iter()
                 .any(|subscription| subscription.url == key)
@@ -262,14 +262,14 @@ pub(in crate::app) fn feeds_entries<'a>(
     gui: &'a GuiClientState,
 ) -> Vec<&'a FeedEntry> {
     match feeds_effective_set(app, gui).as_ref() {
-        GuiCollectionSet::All => app.feed_tab.all_entries.iter().collect(),
+        GuiCollectionSet::All => app.feeds_state().all_entries.iter().collect(),
         GuiCollectionSet::Checked(keys) => {
             let mut merged = Vec::new();
-            for (index, subscription) in app.feed_tab.subscriptions.iter().enumerate() {
+            for (index, subscription) in app.feeds_state().subscriptions.iter().enumerate() {
                 if !keys.contains(&subscription.url) {
                     continue;
                 }
-                if let Some(entries) = app.feed_tab.entries.get(index) {
+                if let Some(entries) = app.feeds_state().entries.get(index) {
                     merged.extend(entries.iter());
                 }
             }
@@ -294,7 +294,7 @@ pub(in crate::app) fn feed_entry(
         .find(|entry| feed_entry_matches(entry, &id));
     listed
         .or_else(|| {
-            app.feed_tab
+            app.feeds_state()
                 .all_entries
                 .iter()
                 .find(|entry| feed_entry_matches(entry, &id))
@@ -312,7 +312,7 @@ fn feeds_subscription_known(app: &App, feed_id: &str) -> bool {
 /// The index of the subscription whose URL is `feed_id` (row 11.1): the
 /// index the per-subscription entry lists use.
 fn feeds_subscription_index(app: &App, feed_id: &str) -> Option<usize> {
-    app.feed_tab
+    app.feeds_state()
         .subscriptions
         .iter()
         .position(|subscription| subscription.url == feed_id)

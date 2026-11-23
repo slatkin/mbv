@@ -19,8 +19,11 @@ pub(in crate::app) struct QueueLinkResolution {
 
 /// The entry the GUI Client's Queue panel shows (gui-named-queues design D7):
 /// one of the local Owner's Named queues, or the connected peer Player owner.
+///
+/// A Client names the entry through `App::shown_entry`, so the type is `pub`
+/// (change `split-tui-gui-clients`, design D4b rule 4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) enum ShownEntry {
+pub enum ShownEntry {
     /// The local Owner's Named queue with this identity: the current queue, or
     /// one that rests.
     Local(NamedQueueId),

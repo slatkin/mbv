@@ -290,7 +290,7 @@ pub(in crate::app) fn row_art(app: &App, source: Option<&GuiRowSource>) -> GuiRo
     let Some(key) = row_cache_key(app, source) else {
         return GuiRowArt::Missing;
     };
-    let Some(entry) = app.images.image(&key) else {
+    let Some(entry) = app.image_cache().image(&key) else {
         return GuiRowArt::Loading;
     };
     if !entry.has_art() {
@@ -374,13 +374,13 @@ pub(in crate::app) fn queue_item_row_source(app: &App, item: &QueueItem) -> Opti
 /// The last update time the browse catalogs hold for a library item (design
 /// D6), or `0` when no catalog carries it — the row key's unknown arm.
 pub(in crate::app) fn audiobookshelf_updated_at_ms(app: &App, library_item_id: &str) -> u64 {
-    app.audiobookshelf_browse
+    app.audiobookshelf_browse_states()
         .iter()
         .flat_map(|state| state.shows.iter())
         .find(|show| show.library_item_id == library_item_id)
         .map(|show| show.updated_at_ms)
         .or_else(|| {
-            app.audiobookshelf_book_browse
+            app.audiobookshelf_book_states()
                 .iter()
                 .flat_map(|state| state.books.iter())
                 .find(|book| book.library_item_id == library_item_id)

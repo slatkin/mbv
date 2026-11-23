@@ -118,8 +118,8 @@ impl GuiCore {
         let positions = presented_tab_positions(&self.app);
         let current = self
             .app
-            .tab
-            .to_position_with_counts(self.app.libs.len(), self.app.feeds_tab_pos());
+            .active_tab()
+            .to_position_with_counts(self.app.emby_library_count(), self.app.feeds_tab_pos());
         let index = positions
             .iter()
             .position(|position| *position == current)
@@ -136,22 +136,22 @@ impl GuiCore {
 /// open step read. `None` for every destination the GUI does not present yet.
 #[must_use]
 pub(in crate::app) fn active_destination(app: &App) -> Option<GuiDestinationKind> {
-    match app.tab {
+    match app.active_tab() {
         TabSelection::Home => Some(GuiDestinationKind::Home),
         // The feed tab presents while subscriptions are configured, so a
         // subscription set the session emptied presents no destination.
         TabSelection::Feeds if app.has_feeds_subscriptions() => Some(GuiDestinationKind::Feeds),
-        TabSelection::EmbyLibrary(lib_idx) if lib_idx < app.libs.len() => {
+        TabSelection::EmbyLibrary(lib_idx) if lib_idx < app.emby_library_count() => {
             if app.is_grouped_music_library(lib_idx) {
                 Some(GuiDestinationKind::Music { lib_idx })
-            } else if app.libs[lib_idx].library.collection_type == "tvshows" {
+            } else if app.emby_library_collection_type(lib_idx) == Some("tvshows") {
                 Some(GuiDestinationKind::Shows { lib_idx })
             } else {
                 Some(GuiDestinationKind::Library { lib_idx })
             }
         }
         TabSelection::AudiobookshelfLibrary(index)
-            if index < app.audiobookshelf_libraries.len() =>
+            if index < app.audiobookshelf_libraries().len() =>
         {
             match app.audiobookshelf_kind_at(index) {
                 Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
@@ -176,7 +176,7 @@ pub(in crate::app) fn active_destination(app: &App) -> Option<GuiDestinationKind
 pub(in crate::app) fn destination_position(app: &App, kind: GuiDestinationKind) -> Option<usize> {
     let emby_position = |lib_idx: usize| {
         TabSelection::EmbyLibrary(lib_idx)
-            .to_position_with_counts(app.libs.len(), app.feeds_tab_pos())
+            .to_position_with_counts(app.emby_library_count(), app.feeds_tab_pos())
     };
     match kind {
         GuiDestinationKind::Home => None,
@@ -187,7 +187,7 @@ pub(in crate::app) fn destination_position(app: &App, kind: GuiDestinationKind) 
         GuiDestinationKind::Audiobooks { lib_idx } | GuiDestinationKind::Podcasts { lib_idx } => {
             Some(
                 TabSelection::AudiobookshelfLibrary(lib_idx)
-                    .to_position_with_counts(app.libs.len(), app.feeds_tab_pos()),
+                    .to_position_with_counts(app.emby_library_count(), app.feeds_tab_pos()),
             )
         }
     }
@@ -218,12 +218,12 @@ fn destination_label(app: &App, kind: GuiDestinationKind) -> Option<String> {
         GuiDestinationKind::Home => None,
         GuiDestinationKind::Feeds => Some("Feeds".to_string()),
         GuiDestinationKind::Audiobooks { lib_idx } | GuiDestinationKind::Podcasts { lib_idx } => {
-            Some(app.audiobookshelf_libraries.get(lib_idx)?.name.clone())
+            Some(app.audiobookshelf_library(lib_idx)?.name.clone())
         }
         GuiDestinationKind::Music { lib_idx }
         | GuiDestinationKind::Shows { lib_idx }
         | GuiDestinationKind::Library { lib_idx } => {
-            Some(app.libs.get(lib_idx)?.library.name.clone())
+            Some(app.emby_library_name(lib_idx)?.to_string())
         }
     }
 }

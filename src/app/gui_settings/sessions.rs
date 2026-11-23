@@ -18,7 +18,7 @@ impl GuiCore {
             }
             ChooserTargetKey::Target(key) => {
                 if let Some(target) = crate::app::state::panel_targets::resolve_session_target(
-                    &self.app.panel_targets,
+                    self.app.panel_targets(),
                     key,
                 ) {
                     self.app.select_panel_target(target);

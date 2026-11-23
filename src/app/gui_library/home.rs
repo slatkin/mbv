@@ -258,7 +258,7 @@ impl GuiCore {
 /// (design D2, D12).
 #[must_use]
 pub(in crate::app::gui_library) fn home_destination(app: &App) -> bool {
-    app.tab == TabSelection::Home
+    app.active_tab() == TabSelection::Home
 }
 
 /// The Home projection over the `App` the GUI core owns (design D12): the flat
@@ -273,7 +273,7 @@ pub(in crate::app::gui_library) fn home_projection(
     // The `Continue watching` rows keep the snapshot's order, with no gutter
     // date — the TUI's flat list's rule.
     let continue_items: Vec<QueueItem> = app
-        .home_content
+        .home_content()
         .continue_items
         .iter()
         .cloned()
@@ -340,7 +340,7 @@ pub(in crate::app::gui_library) fn home_projection(
         rows.extend(section_rows);
     }
     GuiHomeProjection {
-        loading: app.home_content.loading,
+        loading: app.home_content().loading,
         rows,
         selected,
         hero,

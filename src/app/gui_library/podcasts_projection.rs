@@ -225,8 +225,7 @@ pub(in crate::app::gui_library) fn podcast_shows(
     app: &App,
     lib_idx: usize,
 ) -> impl Iterator<Item = (String, String)> {
-    app.audiobookshelf_browse
-        .get(lib_idx)
+    app.audiobookshelf_browse_state(lib_idx)
         .into_iter()
         .flat_map(|state| state.shows.iter())
         .map(|show| (show.library_item_id.clone(), show.title.clone()))
@@ -242,7 +241,7 @@ fn podcast_rows(
     set: &GuiCollectionSet,
     sort: GuiListSort,
 ) -> (Vec<GuiPodcastsRow>, bool, bool) {
-    let Some(state) = app.audiobookshelf_browse.get(lib_idx) else {
+    let Some(state) = app.audiobookshelf_browse_state(lib_idx) else {
         return (Vec::new(), true, false);
     };
     let mut episodes = match set {
@@ -381,7 +380,7 @@ pub(in crate::app::gui_library) fn podcast_hero_item(
     lib_idx: usize,
     episode: &GuiPodcastEpisodeId,
 ) -> Option<AudiobookshelfQueueItem> {
-    let state = app.audiobookshelf_browse.get(lib_idx)?;
+    let state = app.audiobookshelf_browse_state(lib_idx)?;
     let episode = state.episode_by_identity(episode.library_item_id(), episode.episode_id())?;
     let show = state
         .shows

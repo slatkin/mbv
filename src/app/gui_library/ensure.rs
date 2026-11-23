@@ -83,14 +83,14 @@ impl GuiCore {
                 run_gui_destination_loads(app, gui, &EmbyLoads { lib_idx });
             }
             GuiDestinationKind::Audiobooks { lib_idx } => {
-                if app.tab.audiobookshelf_index() == Some(lib_idx)
+                if app.active_audiobookshelf_library_index() == Some(lib_idx)
                     && super::audiobooks::abs_book_library(app, lib_idx)
                 {
                     run_gui_destination_loads(app, gui, &AudiobooksLoads { lib_idx });
                 }
             }
             GuiDestinationKind::Podcasts { lib_idx } => {
-                if app.tab.audiobookshelf_index() == Some(lib_idx)
+                if app.active_audiobookshelf_library_index() == Some(lib_idx)
                     && super::podcasts::podcast_library(app, lib_idx)
                 {
                     run_gui_destination_loads(app, gui, &PodcastsLoads { lib_idx });
@@ -232,7 +232,7 @@ impl GuiDestinationLoads for ShowsLoads {
         else {
             return GuiStepOutcome::Continue;
         };
-        if app.series_detail_cache.contains_key(&series_id) {
+        if app.series_detail(&series_id).is_some() {
             return GuiStepOutcome::Continue;
         }
         app.fetch_series_detail(&series_id);

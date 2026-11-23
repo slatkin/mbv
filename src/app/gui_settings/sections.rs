@@ -118,7 +118,7 @@ impl GuiCore {
             );
             return;
         }
-        let my_languages = self.app.config.lock().unwrap().my_languages.clone();
+        let my_languages = self.app.with_config(|config| config.my_languages.clone());
         let listed = gui_settings_values(setting, &my_languages)
             .is_some_and(|values| values.iter().any(|listed| listed == value));
         if !listed {

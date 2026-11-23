@@ -67,7 +67,13 @@ pub(in crate::app::gui_library) fn set_shows_view(
             app.maybe_spawn_tv_upcoming_snapshot(lib_idx);
         }
         GuiShowsView::New => {
-            let library_id = app.libs[lib_idx].library.id.clone();
+            let Some(library_id) = app.emby_library_id(lib_idx).map(str::to_string) else {
+                super::log_ignored_library_command(
+                    "showsSetView",
+                    format_args!("the library index names no tab"),
+                );
+                return;
+            };
             spawn_shows_new(app, gui, library_id);
         }
     }
@@ -78,9 +84,11 @@ pub(in crate::app::gui_library) fn set_shows_view(
 /// snapshot through the once-per-session guard the TV tab already uses. Both
 /// requests are idempotent, so a repeated catalog landing re-requests nothing.
 pub(in crate::app) fn spawn_shows_sections(app: &mut App, gui: &mut GuiClientState) {
-    let tv_libraries: Vec<(usize, String)> = (0..app.libs.len())
-        .filter(|lib_idx| app.libs[*lib_idx].library.collection_type == "tvshows")
-        .map(|lib_idx| (lib_idx, app.libs[lib_idx].library.id.clone()))
+    let tv_libraries: Vec<(usize, String)> = app
+        .emby_library_identities()
+        .into_iter()
+        .filter(|(_, _, collection_type)| collection_type == "tvshows")
+        .map(|(lib_idx, library_id, _)| (lib_idx, library_id))
         .collect();
     for (lib_idx, library_id) in tv_libraries {
         spawn_shows_new(app, gui, library_id);

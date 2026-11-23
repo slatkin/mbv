@@ -221,7 +221,7 @@ impl GuiCore {
                 .unwrap_or_default(),
             shown_len: self.app.displayed_queue().total_queue_len(),
             close_disabled: self.gui_close_disabled(),
-            rename_disabled: !matches!(self.app.shown_entry, Some(ShownEntry::Local(_))),
+            rename_disabled: !matches!(self.app.shown_entry(), Some(ShownEntry::Local(_))),
         }
     }
 
@@ -234,9 +234,9 @@ impl GuiCore {
     /// connected peer never disables the only local queue's close.
     #[must_use]
     fn gui_close_disabled(&self) -> bool {
-        match self.app.shown_entry {
+        match self.app.shown_entry() {
             Some(ShownEntry::Peer) => false,
-            Some(ShownEntry::Local(_)) => self.app.named_queues.entries().len() < 2,
+            Some(ShownEntry::Local(_)) => self.app.named_queue_count() < 2,
             None => true,
         }
     }

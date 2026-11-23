@@ -238,18 +238,18 @@ impl GuiCore {
     /// The identity of the active destination (design D9), as the saved file
     /// carries it: a stable Service library id, never a tab position.
     fn gui_launch_destination(&self) -> TabIdentity {
-        match self.app.tab {
+        match self.app.active_tab() {
             TabSelection::Home => TabIdentity::Home,
             TabSelection::Feeds => TabIdentity::Feeds,
-            TabSelection::EmbyLibrary(lib_idx) => {
-                self.app.libs.get(lib_idx).map_or(TabIdentity::Home, |tab| {
+            TabSelection::EmbyLibrary(lib_idx) => self
+                .app
+                .emby_library(lib_idx)
+                .map_or(TabIdentity::Home, |tab| {
                     library_identity(ServiceKind::Emby, &tab.library.id)
-                })
-            }
+                }),
             TabSelection::AudiobookshelfLibrary(index) => self
                 .app
-                .audiobookshelf_libraries
-                .get(index)
+                .audiobookshelf_library(index)
                 .map_or(TabIdentity::Home, |library| {
                     library_identity(ServiceKind::Audiobookshelf, &library.id)
                 }),
@@ -329,7 +329,7 @@ impl GuiCore {
             }
             GuiDestinationKind::Feeds => Some(GuiCollectionTarget::Feeds),
             GuiDestinationKind::Library { lib_idx }
-                if lib_idx < self.app.libs.len()
+                if lib_idx < self.app.emby_library_count()
                     && self.app.is_feed_home_video_library(lib_idx) =>
             {
                 Some(GuiCollectionTarget::EmbyFeed(lib_idx))
@@ -441,7 +441,7 @@ impl GuiCore {
     fn launch_catalog_pending(&self, kind: ServiceKind) -> bool {
         match kind {
             ServiceKind::Emby => {
-                self.app.emby_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
+                self.app.emby_service_state() == mbv_core::service_runtime::ServiceState::Connecting
             }
             ServiceKind::Audiobookshelf => self.gui_abs_catalog_pending(),
         }
@@ -455,9 +455,9 @@ impl GuiCore {
     fn gui_destination_library_id(&self, kind: ServiceKind, lib_idx: usize) -> Option<String> {
         match kind {
             ServiceKind::Audiobookshelf => {
-                Some(self.app.audiobookshelf_libraries.get(lib_idx)?.id.clone())
+                Some(self.app.audiobookshelf_library(lib_idx)?.id.clone())
             }
-            ServiceKind::Emby => Some(self.app.libs.get(lib_idx)?.library.id.clone()),
+            ServiceKind::Emby => Some(self.app.emby_library_id(lib_idx)?.to_string()),
         }
     }
 
@@ -466,8 +466,9 @@ impl GuiCore {
     /// either way the libraries list is not final, and a saved
     /// Audiobookshelf destination's resolution must wait for it.
     fn gui_abs_catalog_pending(&self) -> bool {
-        self.app.audiobookshelf_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
-            || self.app.setup.audiobookshelf_catalog_rx.is_some()
+        self.app.audiobookshelf_service_state()
+            == mbv_core::service_runtime::ServiceState::Connecting
+            || self.app.audiobookshelf_catalog_fetching()
     }
 }
 
@@ -476,7 +477,7 @@ impl GuiCore {
 /// reads only the core's library state, so it is a core function the Music
 /// destination's collection site and projections share.
 pub(in crate::app) fn music_group_level(app: &App, lib_idx: usize) -> Option<&BrowseLevel> {
-    let lib = app.libs.get(lib_idx)?;
+    let lib = app.emby_library(lib_idx)?;
     lib.nav_stack
         .iter()
         .find(|level| level.parent_id == lib.library.id)
@@ -496,12 +497,10 @@ pub(in crate::app) fn destination_identity(
         GuiDestinationKind::Music { lib_idx }
         | GuiDestinationKind::Shows { lib_idx }
         | GuiDestinationKind::Library { lib_idx } => app
-            .libs
-            .get(lib_idx)
+            .emby_library(lib_idx)
             .map(|lib| library_identity(ServiceKind::Emby, &lib.library.id)),
         GuiDestinationKind::Audiobooks { lib_idx } | GuiDestinationKind::Podcasts { lib_idx } => {
-            app.audiobookshelf_libraries
-                .get(lib_idx)
+            app.audiobookshelf_library(lib_idx)
                 .map(|lib| library_identity(ServiceKind::Audiobookshelf, &lib.id))
         }
     }
@@ -518,11 +517,11 @@ pub(in crate::app) fn destination_identity(
 /// about the presented set. It reads only the core's catalog, so it is a core
 /// function.
 pub(in crate::app) fn presented_destinations(app: &App) -> Vec<GuiDestinationKind> {
-    let mut presented: Vec<GuiDestinationKind> = (0..app.libs.len())
+    let mut presented: Vec<GuiDestinationKind> = (0..app.emby_library_count())
         .map(|lib_idx| {
             if app.is_grouped_music_library(lib_idx) {
                 GuiDestinationKind::Music { lib_idx }
-            } else if app.libs[lib_idx].library.collection_type == "tvshows" {
+            } else if app.emby_library_collection_type(lib_idx) == Some("tvshows") {
                 GuiDestinationKind::Shows { lib_idx }
             } else {
                 GuiDestinationKind::Library { lib_idx }
@@ -534,7 +533,7 @@ pub(in crate::app) fn presented_destinations(app: &App) -> Vec<GuiDestinationKin
     // destination: a book library presents Audiobooks and a podcast library
     // presents Podcasts.
     presented.extend(
-        (0..app.audiobookshelf_libraries.len()).filter_map(|lib_idx| {
+        (0..app.audiobookshelf_libraries().len()).filter_map(|lib_idx| {
             match app.audiobookshelf_kind_at(lib_idx) {
                 Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                     Some(GuiDestinationKind::Audiobooks { lib_idx })

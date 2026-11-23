@@ -235,7 +235,7 @@ impl GuiCore {
     /// The TUI shell reads the same field for its own sidebar.
     #[must_use]
     pub fn gui_settings_destination(&self) -> SettingsDestination {
-        self.app.settings_destination
+        self.app.settings_destination()
     }
 
     /// The `open` command's rule (design D5, design D11 *Mouse-centric*):

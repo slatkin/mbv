@@ -102,7 +102,7 @@ impl GuiCore {
 /// (`gui-change-driven-sections` design D7), over the `App` the GUI core owns.
 #[must_use]
 pub(in crate::app::gui_library) fn art_source(app: &App, cache_key: &str) -> Option<SourceImage> {
-    app.images
+    app.image_cache()
         .image(cache_key)
         .and_then(|entry| entry.source.clone())
 }
@@ -123,7 +123,7 @@ pub(in crate::app::gui_library) fn warm_hero_neighbours(
     picked: usize,
     source_of: impl Fn(&App, &str) -> Option<ArtworkSource>,
 ) {
-    if !app.images.protocol_enabled() || picked >= ids.len() {
+    if !app.image_cache().protocol_enabled() || picked >= ids.len() {
         return;
     }
     let start = picked.saturating_sub(HERO_WARM_BEHIND);
@@ -152,7 +152,7 @@ pub(in crate::app::gui_library) fn library_artwork(
     app: &mut App,
     album_id: &str,
 ) -> GuiLibraryArtwork {
-    if album_id.is_empty() || !app.images.protocol_enabled() {
+    if album_id.is_empty() || !app.image_cache().protocol_enabled() {
         return GuiLibraryArtwork::Placeholder;
     }
     let Some((cache_key, item_id, series_id, image_types)) =
@@ -183,7 +183,7 @@ pub(in crate::app::gui_library) fn hero_shape(
         return declared;
     };
     let Some((width, height)) = app
-        .images
+        .image_cache()
         .image(key)
         .and_then(mbv_images::CachedImage::dimensions)
     else {
@@ -263,7 +263,7 @@ pub(in crate::app::gui_library) fn resolve_gui_art(
     cache_key: &str,
 ) -> GuiLibraryArtwork {
     let source = app
-        .images
+        .image_cache()
         .image(cache_key)
         .and_then(|entry| entry.source.clone());
     match source {
@@ -271,7 +271,9 @@ pub(in crate::app::gui_library) fn resolve_gui_art(
             key: cache_key.to_owned(),
             source,
         },
-        None if app.images.is_loading(cache_key) || app.images.is_fetch_interrupted(cache_key) => {
+        None if app.image_cache().is_loading(cache_key)
+            || app.image_cache().is_fetch_interrupted(cache_key) =>
+        {
             GuiLibraryArtwork::Loading
         }
         None => GuiLibraryArtwork::Placeholder,

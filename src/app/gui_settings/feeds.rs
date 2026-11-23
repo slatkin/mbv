@@ -6,7 +6,6 @@
 //! it.
 
 use mbv_queue::FeedKind;
-use mbv_ui_model::feeds_manage::FeedsManagePopup;
 
 use crate::gui::GuiCore;
 
@@ -15,9 +14,7 @@ impl GuiCore {
     /// `App::begin_feed_add`, whose result the Client tick host drains
     /// (`App::drain_feed_add_results`).
     pub(super) fn apply_gui_settings_feed_add(&mut self, name: &str, url: &str, kind: FeedKind) {
-        if self.app.feeds_manage.is_none() {
-            self.app.feeds_manage = Some(FeedsManagePopup::new());
-        }
+        self.app.open_feeds_manage_channel();
         self.app.begin_feed_add(name, url, kind);
     }
 

@@ -66,7 +66,7 @@ pub fn navigation_idle(app: &App) -> bool {
 /// once.
 #[must_use]
 pub fn art_retry_due(app: &App, after: Instant, until: Instant) -> bool {
-    app.images.retry_passed_between(after, until)
+    app.image_cache().retry_passed_between(after, until)
 }
 
 /// The playing Music track and the playing Audiobooks book (design D3 rule

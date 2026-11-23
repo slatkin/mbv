@@ -63,31 +63,27 @@ impl GuiCore {
     /// navigation keeps working while the filter is open. Returns whether
     /// the key was consumed.
     pub(in crate::app) fn apply_gui_filter_key(&mut self, key: KeyEvent) -> bool {
-        if !self.app.queue_filter_active {
+        if !self.app.queue_filter_active() {
             return false;
         }
         match key.code {
             Key::Esc if key.modifiers.is_empty() => {
-                self.app.queue_filter_active = false;
-                self.app.queue_filter.clear();
+                self.app.close_queue_filter();
                 true
             }
             Key::Enter if key.modifiers.is_empty() => {
-                self.app.queue_filter_active = false;
+                self.app.finish_queue_filter_edit();
                 true
             }
             Key::Backspace if key.modifiers.is_empty() => {
-                if self.app.queue_filter.pop().is_none() {
-                    self.app.queue_filter_active = false;
-                    self.app.queue_filter.clear();
-                }
+                self.app.pop_queue_filter_char();
                 true
             }
             Key::Char(c)
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                self.app.queue_filter.push(c);
+                self.app.push_queue_filter_char(c);
                 true
             }
             _ => false,

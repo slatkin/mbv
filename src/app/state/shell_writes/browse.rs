@@ -96,6 +96,23 @@ impl App {
         }
     }
 
+    /// Retire the feed/home-video group's outstanding-fetch mark at `index`
+    /// when it names `selection`: that target's fetch has returned.
+    pub fn retire_feed_home_video_fetch(
+        &mut self,
+        index: usize,
+        selection: &mbv_ui_model::feed::FeedHomeVideoSelection,
+    ) {
+        if let Some(state) = self
+            .libs
+            .get_mut(index)
+            .and_then(|tab| tab.feed_home_video.as_mut())
+            && state.fetching.as_ref() == Some(selection)
+        {
+            state.fetching = None;
+        }
+    }
+
     /// Close the playlist the Playlists overlay has open and drop its rows: the
     /// overlay stepped back to the playlist list.
     pub fn close_open_playlist(&mut self) {

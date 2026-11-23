@@ -82,7 +82,7 @@ impl GuiCore {
         // sends the ctrl command and the next queue snapshot reports the
         // new order. It lists before the removals so the menu's destructive
         // tone still opens at the remove entry.
-        if self.app.player.supports_queue_shuffle() {
+        if self.app.supports_queue_shuffle() {
             entries.push(ContextMenuEntry {
                 label: "Shuffle",
                 action: Some(ContextAction::ShuffleQueue),

@@ -77,12 +77,10 @@ impl GuiCore {
 /// `media_type` resolves to the book browse kind. A podcast library stays
 /// unpresented until row 10.1, so it is no Audiobooks destination.
 pub(in crate::app::gui_library) fn abs_book_library(app: &App, lib_idx: usize) -> bool {
-    app.audiobookshelf_libraries
-        .get(lib_idx)
-        .is_some_and(|library| {
-            AudiobookshelfBrowseKind::from_media_type(&library.media_type)
-                == AudiobookshelfBrowseKind::Book
-        })
+    app.audiobookshelf_library(lib_idx).is_some_and(|library| {
+        AudiobookshelfBrowseKind::from_media_type(&library.media_type)
+            == AudiobookshelfBrowseKind::Book
+    })
 }
 
 /// Open the Audiobooks library `lib_idx` (row 9.1; gui-one-destination-ensure
@@ -139,7 +137,7 @@ pub(in crate::app::gui_library) fn select_abs(
     // The loader reads the active tab's own browse state, so the load starts
     // for the destination that is open; the frame path's ensure covers the
     // pick a restore or a late select left unloaded.
-    if app.tab.audiobookshelf_index() == Some(lib_idx) {
+    if app.active_audiobookshelf_library_index() == Some(lib_idx) {
         app.start_audiobookshelf_book_detail(book_id.to_string());
     }
 }
@@ -147,8 +145,7 @@ pub(in crate::app::gui_library) fn select_abs(
 /// Whether `lib_idx`'s book catalog is unloaded in a shape a catalog load may
 /// start from ([`catalog_unloaded`]).
 pub(in crate::app::gui_library) fn abs_catalog_needs_load(app: &App, lib_idx: usize) -> bool {
-    app.audiobookshelf_book_browse
-        .get(lib_idx)
+    app.audiobookshelf_book_browse_state(lib_idx)
         .is_some_and(|state| {
             catalog_unloaded(
                 state.books.is_empty(),
@@ -164,9 +161,7 @@ pub(in crate::app::gui_library) fn abs_catalog_needs_load(app: &App, lib_idx: us
 /// loader's failure record is the browse state's `error`, which the frame
 /// path's root step honours and an open clears.
 pub(in crate::app::gui_library) fn clear_abs_catalog_failed(app: &mut App, lib_idx: usize) {
-    if let Some(state) = app.audiobookshelf_book_browse.get_mut(lib_idx) {
-        state.error = None;
-    }
+    app.clear_audiobookshelf_book_error(lib_idx);
 }
 
 /// The book the Hero shows (row 9.1): the stored pick while the published
@@ -179,7 +174,7 @@ pub(in crate::app) fn abs_effective_pick(
     gui: &GuiClientState,
     lib_idx: usize,
 ) -> Option<String> {
-    let state = app.audiobookshelf_book_browse.get(lib_idx)?;
+    let state = app.audiobookshelf_book_browse_state(lib_idx)?;
     picked_or_first(
         gui.abs_libs
             .get(&lib_idx)
@@ -199,7 +194,7 @@ pub(in crate::app) fn abs_effective_pick(
 /// list is what would name the pick stale — and a loaded catalog admits only a
 /// book it carries.
 fn abs_book_known(app: &App, lib_idx: usize, book_id: &str) -> bool {
-    let Some(state) = app.audiobookshelf_book_browse.get(lib_idx) else {
+    let Some(state) = app.audiobookshelf_book_browse_state(lib_idx) else {
         return false;
     };
     state.books.is_empty()
@@ -214,7 +209,7 @@ fn abs_book_known(app: &App, lib_idx: usize, book_id: &str) -> bool {
 /// state's progress holds. `None` when the published catalog carries no book
 /// of the id — a stale command plays nothing.
 fn abs_book_queue_item(app: &App, lib_idx: usize, book_id: &str) -> Option<QueueItem> {
-    let state = app.audiobookshelf_book_browse.get(lib_idx)?;
+    let state = app.audiobookshelf_book_browse_state(lib_idx)?;
     audiobookshelf_book_queue_item_for_id(state, book_id)
 }
 
@@ -228,7 +223,7 @@ pub(in crate::app::gui_library) fn play_abs_book(app: &mut App, lib_idx: usize, 
         super::log_stale_library_item("absPlay", book_id);
         return;
     };
-    if !app.player.can_admit_audiobookshelf() {
+    if !app.can_admit_audiobookshelf() {
         flash_abs_owner_unavailable(app);
         return;
     }
@@ -261,7 +256,7 @@ pub(in crate::app::gui_library) fn enqueue_abs_book(app: &mut App, lib_idx: usiz
         super::log_stale_library_item("absQueue", book_id);
         return;
     };
-    if !app.player.can_admit_audiobookshelf() {
+    if !app.can_admit_audiobookshelf() {
         flash_abs_owner_unavailable(app);
         return;
     }

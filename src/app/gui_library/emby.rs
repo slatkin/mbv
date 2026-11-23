@@ -107,7 +107,7 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
     }
 
     fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
-        let root = app.libs.get(self.0)?.nav_stack.first()?;
+        let root = app.emby_library_root_level(self.0)?;
         if root.loading {
             return None;
         }
@@ -199,9 +199,10 @@ impl GuiCore {
 /// GUI Emby-library step's destination guard — an Emby library that is neither
 /// a Grouped Music library nor a TV (Shows) library.
 pub(in crate::app::gui_library) fn emby_library(app: &App, lib_idx: usize) -> bool {
-    app.libs.get(lib_idx).is_some_and(|lib| {
-        !app.is_grouped_music_library(lib_idx) && lib.library.collection_type != "tvshows"
-    })
+    app.emby_library_collection_type(lib_idx)
+        .is_some_and(|collection_type| {
+            !app.is_grouped_music_library(lib_idx) && collection_type != "tvshows"
+        })
 }
 
 /// Open the Emby library `lib_idx` (row 8.1; gui-one-destination-ensure design
@@ -226,7 +227,7 @@ pub(in crate::app::gui_library) fn open_emby(
         );
         return;
     }
-    if app.libs[lib_idx].nav_stack.is_empty() {
+    if app.emby_library_level(lib_idx).is_none() {
         app.activate_library_position(lib_idx);
     }
     if !app.is_feed_home_video_library(lib_idx) {
@@ -363,11 +364,7 @@ pub(in crate::app::gui_library) fn ensure_emby_feed_fetch(
         .or_default()
         .feed_claim
         .get_or_insert_with(GuiEmbyFeedClaim::default);
-    let Some(state) = app
-        .libs
-        .get(lib_idx)
-        .and_then(|lib| lib.feed_home_video.as_ref())
-    else {
+    let Some(state) = app.emby_library_feed_home_video(lib_idx) else {
         return;
     };
     if state.fetching.is_some() {
@@ -413,7 +410,7 @@ fn emby_feed_claim(gui: &GuiClientState, lib_idx: usize) -> Option<&GuiEmbyFeedC
 /// landed — the set is then kept as it is, because the listing is what would
 /// name a folder gone.
 fn emby_folder_catalog(app: &App, lib_idx: usize) -> Option<Vec<String>> {
-    let root = app.libs.get(lib_idx)?.nav_stack.first()?;
+    let root = app.emby_library_root_level(lib_idx)?;
     if root.loading {
         return None;
     }
@@ -488,14 +485,7 @@ pub(in crate::app) fn handle_feed_home_video_selection_failed(
         selection,
         error,
     } = event;
-    if let Some(state) = app
-        .libs
-        .get_mut(lib_idx)
-        .and_then(|lib| lib.feed_home_video.as_mut())
-        && state.fetching.as_ref() == Some(&selection)
-    {
-        state.fetching = None;
-    }
+    app.retire_feed_home_video_fetch(lib_idx, &selection);
     // The Client's terminal failure mark is recorded where the direct claim
     // write used to sit — after the outstanding-fetch mark retires and before
     // the log — so it is applied through `stores` here and not collected to
@@ -541,8 +531,10 @@ pub(in crate::app) fn fetch_emby_root_items(
         "the root-list store reads the name sort"
     );
     debug_assert_eq!(sort_order.as_str(), "Ascending");
+    let Some(parent_id) = app.emby_library_id(lib_idx).map(str::to_string) else {
+        return;
+    };
     gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Loading);
-    let parent_id = app.libs[lib_idx].library.id.clone();
     let tx = app.gui_client_event_sender();
     std::thread::spawn(move || {
         let result = super::store::fetch_all_pages(&client, &parent_id, item_types.as_deref());

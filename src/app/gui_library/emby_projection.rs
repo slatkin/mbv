@@ -325,9 +325,8 @@ impl GuiCore {
     /// The library's display name (row 8.1): the list header's title.
     fn emby_library_name(&self, lib_idx: usize) -> String {
         self.app
-            .libs
-            .get(lib_idx)
-            .map(|lib| lib.library.name.clone())
+            .emby_library_name(lib_idx)
+            .map(str::to_string)
             .unwrap_or_default()
     }
 
@@ -408,10 +407,7 @@ fn hero_item(app: &App, lib_idx: usize, item: &EmbyItem) -> bool {
     if item.is_folder {
         return false;
     }
-    let movies = app
-        .libs
-        .get(lib_idx)
-        .is_some_and(|lib| lib.library.collection_type == "movies");
+    let movies = app.emby_library_collection_type(lib_idx) == Some("movies");
     !movies || item.item_type == "Movie"
 }
 
@@ -440,9 +436,7 @@ fn emby_hero_source(
 /// it is a core function the projection and the feed-group collection site
 /// share.
 pub(in crate::app) fn root_folder_names(app: &App, lib_idx: usize) -> Vec<(&str, &str)> {
-    app.libs
-        .get(lib_idx)
-        .and_then(|lib| lib.nav_stack.first())
+    app.emby_library_root_level(lib_idx)
         .map(|root| {
             root.items
                 .iter()
@@ -495,10 +489,7 @@ pub(in crate::app) fn feed_gathered<'a>(
     lib_idx: usize,
     set: &GuiCollectionSet,
 ) -> (Vec<&'a EmbyItem>, bool) {
-    let state = app
-        .libs
-        .get(lib_idx)
-        .and_then(|lib| lib.feed_home_video.as_ref());
+    let state = app.emby_library_feed_home_video(lib_idx);
     let mut items: Vec<&EmbyItem> = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
     let mut landing = state.is_none();
@@ -528,9 +519,7 @@ pub(in crate::app) fn feed_gathered<'a>(
 /// Whether the feed-view library's root listing has not landed yet: the folder
 /// catalog the checked set resolves against.
 fn emby_root_loading(app: &App, lib_idx: usize) -> bool {
-    app.libs
-        .get(lib_idx)
-        .and_then(|lib| lib.nav_stack.first())
+    app.emby_library_root_level(lib_idx)
         .is_none_or(|root| root.loading)
 }
 

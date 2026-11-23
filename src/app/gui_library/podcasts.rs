@@ -74,7 +74,7 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
         // A show list that holds no show keeps the stored set as it is: it is
         // still landing, and the list is what would name a show stale (row
         // 10.1).
-        let state = app.audiobookshelf_browse.get(self.0)?;
+        let state = app.audiobookshelf_browse_state(self.0)?;
         if state.shows.is_empty() {
             return None;
         }
@@ -123,12 +123,10 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
 /// browse kind. Every GUI Podcasts step's destination guard, and the
 /// mirror of the Audiobooks guard: a book library stays Audiobooks.
 pub(in crate::app::gui_library) fn podcast_library(app: &App, lib_idx: usize) -> bool {
-    app.audiobookshelf_libraries
-        .get(lib_idx)
-        .is_some_and(|library| {
-            AudiobookshelfBrowseKind::from_media_type(&library.media_type)
-                == AudiobookshelfBrowseKind::Podcast
-        })
+    app.audiobookshelf_library(lib_idx).is_some_and(|library| {
+        AudiobookshelfBrowseKind::from_media_type(&library.media_type)
+            == AudiobookshelfBrowseKind::Podcast
+    })
 }
 
 impl GuiCore {
@@ -254,23 +252,22 @@ fn select_podcast(
 /// Whether `lib_idx`'s show catalog is unloaded in a shape a show-list load
 /// may start from ([`catalog_unloaded`]).
 pub(in crate::app::gui_library) fn podcast_catalog_needs_load(app: &App, lib_idx: usize) -> bool {
-    app.audiobookshelf_browse.get(lib_idx).is_some_and(|state| {
-        catalog_unloaded(
-            state.shows.is_empty(),
-            state.total,
-            &state.loading_pages,
-            state.replacement.is_none(),
-            state.error.is_none(),
-        )
-    })
+    app.audiobookshelf_browse_state(lib_idx)
+        .is_some_and(|state| {
+            catalog_unloaded(
+                state.shows.is_empty(),
+                state.total,
+                &state.loading_pages,
+                state.replacement.is_none(),
+                state.error.is_none(),
+            )
+        })
 }
 
 /// Clear the failed mark a user open retries from (design D4, Risks): the
 /// loader's failure record is the browse state's `error`.
 pub(in crate::app::gui_library) fn clear_podcast_catalog_failed(app: &mut App, lib_idx: usize) {
-    if let Some(state) = app.audiobookshelf_browse.get_mut(lib_idx) {
-        state.error = None;
-    }
+    app.clear_audiobookshelf_browse_error(lib_idx);
 }
 
 /// Commit the checked shows' scope the bounded fan-out reads (gui-one-
@@ -298,8 +295,7 @@ pub(in crate::app) fn ensure_podcast_dependents(
 ) {
     if podcast_effective_set(app, gui, lib_idx).is_all()
         && let Some(library_id) = app
-            .audiobookshelf_libraries
-            .get(lib_idx)
+            .audiobookshelf_library(lib_idx)
             .map(|library| library.id.clone())
     {
         app.ensure_audiobookshelf_latest_shelf(&library_id);
@@ -333,7 +329,7 @@ pub(in crate::app::gui_library) fn enqueue_podcast_episode(
         super::log_stale_library_item("podcastQueue", target.episode_id());
         return;
     };
-    if !app.player.can_admit_audiobookshelf() {
+    if !app.can_admit_audiobookshelf() {
         super::audiobooks::flash_abs_owner_unavailable(app);
         return;
     }
@@ -362,18 +358,14 @@ pub fn podcast_picked_episode(
 /// Commit the checked shows' scope to the browse state the bounded fan-out
 /// reads (row 10.1; gui-collection-dropdown design D2).
 fn commit_podcast_show_scope(app: &mut App, lib_idx: usize, show: Option<&str>) {
-    if let Some(state) = app.audiobookshelf_browse.get_mut(lib_idx)
-        && state.committed_show_pill.as_deref() != show
-    {
-        state.committed_show_pill = show.map(str::to_owned);
-    }
+    app.set_audiobookshelf_show_pill(lib_idx, show.map(str::to_owned));
 }
 
 /// Whether the published show list can still name `show_id` (row 10.1): a
 /// list that holds no show admits the press, and a loaded list admits only a
 /// show it carries.
 fn podcast_show_known(app: &App, lib_idx: usize, show_id: &str) -> bool {
-    let Some(state) = app.audiobookshelf_browse.get(lib_idx) else {
+    let Some(state) = app.audiobookshelf_browse_state(lib_idx) else {
         return false;
     };
     state.shows.is_empty()
@@ -387,7 +379,7 @@ fn podcast_show_known(app: &App, lib_idx: usize, show_id: &str) -> bool {
 /// cache that holds no episode admits the pick, and a landed cache admits only
 /// an episode it carries.
 fn podcast_episode_known(app: &App, lib_idx: usize, target: &PodcastEpisodeTarget) -> bool {
-    let Some(state) = app.audiobookshelf_browse.get(lib_idx) else {
+    let Some(state) = app.audiobookshelf_browse_state(lib_idx) else {
         return false;
     };
     state.detail_cache.is_empty()

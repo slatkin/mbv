@@ -100,8 +100,7 @@ impl GuiCore {
     /// Close the screen and drop the open playlist.
     pub fn close_gui_playlists(&mut self) {
         self.gui.playlists_screen_open = false;
-        self.app.playlists_open = None;
-        self.app.playlists_open_items.clear();
+        self.app.close_open_playlist();
     }
 
     /// Whether the Playlists screen is open, for a Client's test that asserts a
@@ -127,23 +126,22 @@ impl GuiCore {
         self.gui
             .playlists_screen_open
             .then(|| GuiPlaylistsProjection {
-                playlists: self.app.playlists.iter().map(playlist_row).collect(),
+                playlists: self.app.playlists().iter().map(playlist_row).collect(),
                 open: self
                     .app
-                    .playlists_open
-                    .as_ref()
+                    .playlists_open()
                     .map(|playlist| GuiOpenPlaylistProjection {
                         id: playlist.id.clone(),
                         name: playlist.name.clone(),
                         items: self
                             .app
-                            .playlists_open_items
+                            .playlists_open_items()
                             .iter()
                             .map(playlist_item)
                             .collect(),
                     }),
-                loading: self.app.playlists_loading,
-                open_loading: self.app.playlists_open_loading,
+                loading: self.app.playlists_loading(),
+                open_loading: self.app.playlists_open_loading(),
             })
     }
 

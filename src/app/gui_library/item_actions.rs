@@ -150,14 +150,19 @@ pub(in crate::app::gui_library) fn play_library_item(
     item: EmbyItem,
 ) {
     if item.is_folder {
-        let ct = app.libs[lib_idx].library.collection_type.clone();
+        let Some(ct) = app
+            .emby_library_collection_type(lib_idx)
+            .map(str::to_string)
+        else {
+            return;
+        };
         app.play_folder_gated(&item.id, ct, false);
         return;
     }
     if !is_playable(&item) {
         return;
     }
-    let autoload = app.config.lock().unwrap().autoload;
+    let autoload = app.autoload_enabled();
     if autoload
         && let Some(album_id) = track_album_id(app, &item.id)
         && let Some((tracks, start_idx)) = app.resolve_playable_album_tracks(&album_id, &item.id)
@@ -178,7 +183,7 @@ pub(in crate::app::gui_library) fn add_library_item(
         super::log_stale_library_item("addToQueue", item_id);
         return;
     };
-    let autoload = app.config.lock().unwrap().autoload;
+    let autoload = app.autoload_enabled();
     if item.is_folder || !is_playable(&item) || !autoload {
         app.enqueue_lib_item(lib_idx, item);
         return;
@@ -202,14 +207,7 @@ pub(in crate::app::gui_library) fn add_library_item(
 /// album the open-album command fetched it for. `None` when no cached
 /// tracklist holds the id — the add falls back to the single item.
 pub(in crate::app::gui_library) fn track_album_id(app: &App, track_id: &str) -> Option<String> {
-    app.album_tracks_cache
-        .iter()
-        .find_map(|(album_id, tracks)| {
-            tracks
-                .iter()
-                .any(|track| track.id == track_id)
-                .then(|| album_id.clone())
-        })
+    app.album_of_cached_track(track_id)
 }
 
 /// The item a command names, with the library it belongs to: the album
@@ -222,7 +220,7 @@ pub(in crate::app::gui_library) fn library_item(
     gui: &GuiClientState,
     item_id: &str,
 ) -> Option<(usize, EmbyItem)> {
-    for (lib_idx, lib) in app.libs.iter().enumerate() {
+    for (lib_idx, lib) in app.emby_libraries().iter().enumerate() {
         let stored = stored_albums(gui, lib_idx).find(|album| album.id == item_id);
         let emby_root =
             || super::emby::stored_emby_root_items(gui, lib_idx).find(|item| item.id == item_id);
@@ -257,10 +255,7 @@ pub(in crate::app::gui_library) fn library_item(
     // A tracklist row names a track of the picked album, and only an
     // Emby library tab holds one.
     let track_lib = app.context_menu_lib_idx()?;
-    app.album_tracks_cache
-        .values()
-        .flatten()
-        .find(|track| track.id == item_id)
+    app.cached_album_track(item_id)
         .map(|track| (track_lib, track.clone()))
 }
 
@@ -272,7 +267,7 @@ pub(in crate::app::gui_library) fn audiobookshelf_target(
     app: &App,
     item_id: &str,
 ) -> Option<AudiobookshelfMenuTarget> {
-    let book = app.audiobookshelf_book_browse.iter().any(|state| {
+    let book = app.audiobookshelf_book_states().iter().any(|state| {
         state
             .books
             .iter()
@@ -284,7 +279,7 @@ pub(in crate::app::gui_library) fn audiobookshelf_target(
         });
     }
     let episode = GuiPodcastEpisodeId::decode(item_id)?;
-    let known = app.audiobookshelf_browse.iter().any(|state| {
+    let known = app.audiobookshelf_browse_states().iter().any(|state| {
         state
             .episode_by_identity(episode.library_item_id(), episode.episode_id())
             .is_some()
@@ -298,14 +293,7 @@ pub(in crate::app::gui_library) fn audiobookshelf_target(
 /// The season or episode a Shows tree row names (design D14): the cached
 /// series details hold both.
 pub(in crate::app::gui_library) fn shows_tree_item(app: &App, item_id: &str) -> Option<EmbyItem> {
-    app.series_detail_cache.values().find_map(|detail| {
-        detail
-            .seasons
-            .iter()
-            .chain(detail.episodes.values().flatten())
-            .find(|item| item.id == item_id)
-            .cloned()
-    })
+    app.series_detail_item(item_id)
 }
 
 /// The albums the GUI store loaded for `lib_idx`'s selected groups.

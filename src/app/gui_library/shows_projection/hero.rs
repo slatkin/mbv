@@ -27,7 +27,7 @@ pub(in crate::app) fn shows_selected_season(
     lib_idx: usize,
     series_id: &str,
 ) -> Option<String> {
-    let detail = app.series_detail_cache.get(series_id)?;
+    let detail = app.series_detail(series_id)?;
     let stored = gui
         .tv_shows
         .get(&lib_idx)
@@ -85,8 +85,7 @@ impl GuiCore {
         let series = super::shows_item(&self.app, &self.gui, lib_idx, selected)?;
         let seasons = self
             .app
-            .series_detail_cache
-            .get(selected)
+            .series_detail(selected)
             .map(|detail| detail.seasons.len());
         let workspace = self.gui_shows_workspace(lib_idx, selected);
         Some(self.gui_shows_series_hero_facts(&series, seasons, workspace))
@@ -142,7 +141,7 @@ impl GuiCore {
     /// the selected season's episodes. `None` while the series detail has
     /// not landed — the projection's `workspace_loading` names that load.
     fn gui_shows_workspace(&self, lib_idx: usize, series_id: &str) -> Option<GuiShowsWorkspace> {
-        let detail = self.app.series_detail_cache.get(series_id)?;
+        let detail = self.app.series_detail(series_id)?;
         let selected_season = shows_selected_season(&self.app, &self.gui, lib_idx, series_id)?;
         let rows = detail
             .episodes
@@ -175,14 +174,11 @@ impl GuiCore {
     /// selected series' detail fetch, or the selected season's episodes
     /// fetch — the in-flight marks the shared fetch helpers keep.
     pub(super) fn shows_workspace_loading(&self, lib_idx: usize, series_id: &str) -> bool {
-        if self.app.series_detail_loading.contains(series_id) {
+        if self.app.series_detail_loading(series_id) {
             return true;
         }
-        shows_selected_season(&self.app, &self.gui, lib_idx, series_id).is_some_and(|season_id| {
-            self.app
-                .series_season_loading
-                .contains(&(series_id.to_string(), season_id))
-        })
+        shows_selected_season(&self.app, &self.gui, lib_idx, series_id)
+            .is_some_and(|season_id| self.app.series_season_loading(series_id, &season_id))
     }
 
     /// Warm the Hero artwork of the entries neighbouring the picked one in the

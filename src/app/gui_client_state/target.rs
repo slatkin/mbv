@@ -73,7 +73,7 @@ impl GuiCore {
     /// chooser's Enter and a chooser row's press share. A target the
     /// snapshot no longer holds selects nothing. Returns whether one did.
     pub(in crate::app) fn select_target_for_key(&mut self, key: &SessionTargetKey) -> bool {
-        match resolve_session_target(&self.app.panel_targets, key) {
+        match resolve_session_target(self.app.panel_targets(), key) {
             Some(target) => {
                 self.app.select_panel_target(target);
                 true

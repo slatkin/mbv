@@ -146,7 +146,7 @@ impl App {
 
     /// Record a Named-queue command whose answer the Client does not pump for,
     /// so a rejection can find it (design D8).
-    pub(in crate::app) fn note_named_queue_op(&mut self, op: QueueOpId) {
+    pub fn note_named_queue_op(&mut self, op: QueueOpId) {
         self.pending_named_queue_ops.insert(op);
     }
 

@@ -192,7 +192,7 @@ pub(in crate::app) fn search_activate(
 /// whether one applied.
 pub(in crate::app) fn drain_search_results(app: &mut App, gui: &mut GuiClientState) -> bool {
     let mut applied = false;
-    while let Ok((query, result)) = app.channels.search_rx.try_recv() {
+    while let Some((query, result)) = app.try_recv_search_result() {
         applied |= apply_search_result(gui, &query, result);
     }
     applied
