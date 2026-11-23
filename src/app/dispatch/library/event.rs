@@ -18,7 +18,7 @@ mod browse_loads;
 /// `ModelContentEvent` variant that must reach the shell drain cannot
 /// silently fall through here.
 impl App {
-    pub(in crate::app) fn handle_model_content_event(&mut self, ev: ModelContentEvent) {
+    pub fn handle_model_content_event(&mut self, ev: ModelContentEvent) {
         match ev {
             // Fills the TV library's Latest root level (row 7.1). The shell
             // drain calls this, then stores the snapshot and projects.
@@ -51,11 +51,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_lib_event(
-        &mut self,
-        ev: LibEvent,
-        stores: Option<&mut dyn ClientLibraryStores>,
-    ) {
+    pub fn handle_lib_event(&mut self, ev: LibEvent, stores: Option<&mut dyn ClientLibraryStores>) {
         match ev {
             LibEvent::Browse(event) => match stores {
                 // The Browse tree hands the Client's stores straight down to
@@ -283,7 +279,7 @@ impl App {
     /// Caches a fetched album track list. A re-fetch replaces the list and
     /// restarts its eviction age; the cache's cap evicts the oldest entry
     /// (issue #917).
-    pub(in crate::app) fn cache_album_tracks(&mut self, album_id: String, tracks: Vec<EmbyItem>) {
+    pub fn cache_album_tracks(&mut self, album_id: String, tracks: Vec<EmbyItem>) {
         insert_capped(
             &mut self.album_tracks_cache,
             MAX_ALBUM_TRACKS_CACHE,
@@ -373,7 +369,7 @@ impl App {
     /// as its own events (`GuiCore::drain_lib_event`, which the GUI's
     /// `ClientTickHost::drain_lib_events` loops). This entry serves the core
     /// instructions that run outside a Client drain.
-    pub(in crate::app) fn apply_library_effects(
+    pub fn apply_library_effects(
         &mut self,
         stores: Option<&mut dyn ClientLibraryStores>,
         effects: &[ClientLibraryEffect],

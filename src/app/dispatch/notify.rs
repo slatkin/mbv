@@ -20,7 +20,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+    pub fn trigger_lib_rescan(&mut self, lib_idx: usize) {
         self.clear_saved_library_position(lib_idx);
         let Some(client) = self.emby_snapshot() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
@@ -39,7 +39,7 @@ impl App {
     /// bell. Desktop notification is attempted only when severity is not Neutral
     /// (preserving the existing `system_notifications` gating and the
     /// hide-on-success behavior in the render path).
-    pub(in crate::app) fn flash(&mut self, msg: String, severity: ToastSeverity) {
+    pub fn flash(&mut self, msg: String, severity: ToastSeverity) {
         if severity != ToastSeverity::Neutral {
             self.notify_system(&msg);
         }
@@ -47,7 +47,7 @@ impl App {
     }
 
     /// Shorthand for the common `flash(format!("Error: {e}"), ToastSeverity::Error)` case.
-    pub(in crate::app) fn flash_error(&mut self, e: impl std::fmt::Display) {
+    pub fn flash_error(&mut self, e: impl std::fmt::Display) {
         self.flash(format!("Error: {e}"), ToastSeverity::Error);
     }
 
@@ -55,7 +55,7 @@ impl App {
     /// projecting them (spec `toast-notification-semantics`: a toast expires
     /// on its severity-derived duration). The old draw path ran this check
     /// before every render; the sync pass calls it now.
-    pub(in crate::app) fn expire_status_toast(&mut self) {
+    pub fn expire_status_toast(&mut self) {
         self.toasts.expire(Instant::now());
     }
 
@@ -72,10 +72,7 @@ impl App {
     /// resolving to a configured `library_routes` entry would be wrongly
     /// rejected for a reason unrelated to library routing. Mirrors the same
     /// condition Task 9 uses to gate `apply_route_for_playback`.
-    pub(in crate::app) fn enqueue_route_conflict(
-        &mut self,
-        resolved_name: Option<&String>,
-    ) -> bool {
+    pub fn enqueue_route_conflict(&mut self, resolved_name: Option<&String>) -> bool {
         if self.in_non_library_thin_client_mode() {
             tracing::info!(name: "library_route.conflict_check.skipped", target: "library_route", reason = "non_library_thin_client_owns_playback", "route conflict check skipped");
             return false;

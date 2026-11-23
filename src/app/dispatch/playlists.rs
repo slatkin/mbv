@@ -13,7 +13,7 @@ use rand::seq::SliceRandom;
 impl App {
     /// Enter/`s`/`a` on a saved playlist in the list view (design D2): Play and
     /// Shuffle replace the queue with its playable items; Enqueue appends them.
-    pub(in crate::app) fn playlist_action(&mut self, id: &str, action: MusicTreeAction) {
+    pub fn playlist_action(&mut self, id: &str, action: MusicTreeAction) {
         let Some(playlist) = self.playlists.iter().find(|p| p.id == id) else {
             return;
         };
@@ -34,7 +34,7 @@ impl App {
     /// Enter/`s`/`a` on an item row of the open playlist (design D2): Play
     /// starts the playlist at that row, Shuffle replaces the queue with the
     /// whole playlist shuffled, and Enqueue appends just that row.
-    pub(in crate::app) fn playlist_row_action(&mut self, item_id: &str, action: MusicTreeAction) {
+    pub fn playlist_row_action(&mut self, item_id: &str, action: MusicTreeAction) {
         let Some(row) = self
             .playlists_open_items
             .iter()

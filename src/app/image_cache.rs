@@ -11,7 +11,7 @@ impl App {
     /// The caller supplies the projected item window and the owner's
     /// authoritative cursor; only a selected, non-folder Movie enables the
     /// surrounding prefetch.
-    pub(in crate::app) fn fetch_nearby_movie_posters(
+    pub fn fetch_nearby_movie_posters(
         &mut self,
         items: &[mbv_emby_model::EmbyItem],
         cursor: usize,

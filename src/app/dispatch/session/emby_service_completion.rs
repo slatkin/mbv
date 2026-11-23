@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::app::state::playback::HomeContent;
 
 impl App {
-    pub(in crate::app) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
+    pub fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
         self.emby_runtime.client.clone()
     }
 
@@ -18,12 +18,16 @@ impl App {
         self.emby_runtime.client.is_some()
     }
 
-    pub(in crate::app) fn emby_snapshot(&self) -> Option<EmbyClient> {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn emby_snapshot(&self) -> Option<EmbyClient> {
         self.emby_client()
             .map(|client| client.lock().unwrap().clone())
     }
 
-    pub(in crate::app) fn apply_emby_completion(
+    pub fn apply_emby_completion(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
     ) -> Option<HomeContent> {
@@ -125,13 +129,17 @@ impl App {
 
     /// Central boundary for an authenticated Emby request made after startup.
     /// Only classified failures reach this path; ordinary empty results do not.
-    pub(in crate::app) fn handle_emby_runtime_failure(&mut self, error: mbv_emby::EmbyFailure) {
+    pub fn handle_emby_runtime_failure(&mut self, error: mbv_emby::EmbyFailure) {
         self.transition_emby_failure(None, Err(error), |kind| {
             mbv_config::clear_service_secret_result(kind)
         });
     }
 
-    pub(in crate::app) fn handle_emby_startup_worker_disconnect(
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn handle_emby_startup_worker_disconnect(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
@@ -156,7 +164,7 @@ impl App {
         );
     }
 
-    pub(in crate::app) fn apply_emby_setup_completion(
+    pub fn apply_emby_setup_completion(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) -> Option<HomeContent> {
@@ -164,7 +172,7 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn apply_emby_setup_completion_without_network(
+    pub fn apply_emby_setup_completion_without_network(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) -> Option<HomeContent> {
@@ -273,10 +281,7 @@ impl App {
     /// also where Home re-arms its Recently added fetch (spec
     /// `home-latest-sections`, "Recently added loads at launch independent of
     /// destinations": "when that Service becomes ready").
-    pub(in crate::app) fn apply_emby_bootstrap(
-        &mut self,
-        bootstrap: mbv_emby::EmbyBootstrap,
-    ) -> HomeContent {
+    pub fn apply_emby_bootstrap(&mut self, bootstrap: mbv_emby::EmbyBootstrap) -> HomeContent {
         let continue_items = bootstrap.continue_items;
         self.rebuild_library_tabs_from_views(&bootstrap.views);
         for lib_idx in 0..self.libs.len() {

@@ -38,7 +38,11 @@ impl App {
     /// `open_library_routes` without the component calls. Returns `None`
     /// when there is no Emby client or the fetch failed (the failure toasts
     /// here).
-    pub(in crate::app) fn route_libraries(&mut self) -> Option<Vec<LibraryRouteRow>> {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn route_libraries(&mut self) -> Option<Vec<LibraryRouteRow>> {
         tracing::info!(
             name: "library_route.picker.opened",
             target: "library_route",
@@ -73,10 +77,11 @@ impl App {
     /// seed that points at the library's current route. Returns `None` when
     /// the session fetch failed (the failure toasts here) or there is no
     /// Emby client.
-    pub(in crate::app) fn route_devices(
-        &mut self,
-        library_lower: &str,
-    ) -> Option<(Vec<DeviceRouteRow>, usize)> {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn route_devices(&mut self, library_lower: &str) -> Option<(Vec<DeviceRouteRow>, usize)> {
         let sessions = match self.fetch_sessions_blocking() {
             Ok(sessions) => {
                 tracing::info!(name: "library_route.session_fetch.succeeded", target: "library_route", count = sessions.len(), "F2 session fetch succeeded");
@@ -141,7 +146,7 @@ impl App {
     /// entry) removes the override; the refusal for a device with no
     /// resolvable endpoint stays here. On success returns the refreshed
     /// library rows plus the restored cursor for the picked library.
-    pub(in crate::app) fn assign_library_route(
+    pub fn assign_library_route(
         &mut self,
         library_lower: &str,
         device: Option<&DeviceRouteRow>,

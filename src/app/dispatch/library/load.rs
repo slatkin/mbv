@@ -51,7 +51,7 @@ impl App {
                     == Some(mode))
     }
 
-    pub(in crate::app) fn refresh_lib(&mut self, lib_idx: usize) {
+    pub fn refresh_lib(&mut self, lib_idx: usize) {
         // Defensive bounds check: the dispatch front door normalizes a stale
         // destination first, but async Service removal can invalidate the
         // matched index between normalization and this call. No-op (never
@@ -112,7 +112,7 @@ impl App {
     /// podcast owner's pill answer: the destination Latest shelf is fetched
     /// only while that pill is selected (spec `destination-latest-modes`,
     /// "Destination Latest lists load lazily").
-    pub(in crate::app) fn refresh_current_view(&mut self, podcast_latest_selected: bool) {
+    pub fn refresh_current_view(&mut self, podcast_latest_selected: bool) {
         self.force_clear = true;
         if self.normalize_stale_browse_destination() {
             return;
@@ -155,7 +155,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn spawn_load_playlists(&mut self) {
+    pub fn spawn_load_playlists(&mut self) {
         if self.playlists_loading {
             return;
         }
@@ -177,7 +177,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn spawn_rename_playlist(&mut self, playlist_id: String, new_name: String) {
+    pub fn spawn_rename_playlist(&mut self, playlist_id: String, new_name: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -199,7 +199,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
+    pub fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -221,7 +221,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn spawn_open_playlist(&mut self, playlist: &EmbyItem) {
+    pub fn spawn_open_playlist(&mut self, playlist: &EmbyItem) {
         if self.playlists_open_loading {
             return;
         }
@@ -253,10 +253,7 @@ impl App {
     /// Fetches a playlist's items synchronously and returns the playable
     /// (non-folder) ones. Flashes and returns `None` when Emby is unavailable,
     /// the fetch fails, the playlist is empty, or nothing in it is playable.
-    pub(in crate::app) fn playlist_playable_items(
-        &mut self,
-        playlist_id: &str,
-    ) -> Option<Vec<EmbyItem>> {
+    pub fn playlist_playable_items(&mut self, playlist_id: &str) -> Option<Vec<EmbyItem>> {
         let Some(client) = self.emby_snapshot() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return None;
@@ -280,7 +277,7 @@ impl App {
         Some(playable)
     }
 
-    pub(in crate::app) fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {
+    pub fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {
         // Drain existing libs, preserving nav stacks and scroll pos so that a
         // UserDataChanged websocket refresh (fired when playback starts)
         // doesn't silently reset list scroll position.
@@ -362,7 +359,11 @@ impl App {
     /// shell stores it in `App.home_content` (directly for shell-side
     /// callers, via `LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed)` for App-internal ones)
     /// and preserves the Continue Watching column cursor at the assignment.
-    pub(in crate::app) fn fetch_home(&mut self) -> Result<HomeContent, mbv_emby::EmbyFailure> {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn fetch_home(&mut self) -> Result<HomeContent, mbv_emby::EmbyFailure> {
         let mut emby_fetched = false;
         let (continue_items, all_views) = match self.emby_client() {
             Some(client) => {
@@ -399,7 +400,8 @@ impl App {
 
     /// The `Newest Episodes` shelf's catalog entries, or an empty list when
     /// the shelf is absent (only that shelf feeds Home).
-    pub(in crate::app) fn newest_episodes_items(
+    #[must_use]
+    pub fn newest_episodes_items(
         shelves: Vec<mbv_audiobookshelf::AudiobookshelfShelf>,
     ) -> Vec<mbv_queue::AudiobookshelfEpisodeCatalog> {
         shelves
@@ -422,7 +424,7 @@ impl App {
     /// `home-latest-sections`). Triggered when a Service becomes ready,
     /// in the Emby bootstrap, in `start_audiobookshelf_catalog_fetches`, and
     /// on every Home refresh.
-    pub(in crate::app) fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {
+    pub fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {
         match service {
             mbv_queue::ServiceKind::Emby => self.spawn_home_emby_recently_added(),
             mbv_queue::ServiceKind::Audiobookshelf => {

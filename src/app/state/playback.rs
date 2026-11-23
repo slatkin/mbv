@@ -68,7 +68,7 @@ impl QueueLinkResolution {
 /// the wire and as the Client's `local_view` — and a GUI edit of the shown
 /// queue names the shown queue, whichever entry the panel shows.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct QueueTarget {
+pub struct QueueTarget {
     /// The Player-owner link the edit reaches: the suspended home link for
     /// `Local` while a peer holds the active one, else the active link.
     pub(in crate::app) link: QueueLink,
@@ -91,7 +91,7 @@ impl QueueTarget {
 /// slot back to `from`. `slot_id` is the runtime queue occurrence that was
 /// moved; the owner rejects the undo as stale when that slot is gone.
 #[derive(Debug)]
-pub(in crate::app) enum UndoEntry {
+pub enum UndoEntry {
     Remove {
         /// The queue the edit reached: the GUI Client's shown queue, or the
         /// current queue. The inverse edit and the view lookups name it,
@@ -120,14 +120,14 @@ impl UndoEntry {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum RemoteSlotState {
+pub enum RemoteSlotState {
     DirectRemote,
     LocalDaemon,
 }
 
 /// Identity of a destination Latest surface for its independent marker state.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(in crate::app) enum DestinationLatestSource {
+pub enum DestinationLatestSource {
     Emby(String),
     Audiobookshelf(String),
     Feeds,
@@ -190,7 +190,7 @@ pub(in crate::app) struct SuspendedLocalSession {
 }
 
 #[derive(Debug)]
-pub(in crate::app) enum PendingQueueAction {
+pub enum PendingQueueAction {
     PlayItems {
         items: Vec<EmbyItem>,
         start_idx: usize,
@@ -238,7 +238,7 @@ pub(in crate::app) enum RoutedReplacementPrep {
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::app) enum PlaylistMutation {
+pub enum PlaylistMutation {
     Save {
         mutation_id: u64,
         origin: QueueOrigin,

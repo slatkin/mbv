@@ -48,7 +48,7 @@ impl App {
     /// (extract-client-core row 4.6): the Severity's colour is the painters'
     /// choice, and the presented facts — the text and the severity — ride the
     /// Status bar's Surface state.
-    pub(in crate::app) fn toast_presentation(&self) -> Option<StatusToast> {
+    pub fn toast_presentation(&self) -> Option<StatusToast> {
         self.in_app_toasts().last().map(presented_toast)
     }
 
@@ -147,7 +147,7 @@ impl App {
     /// from one `remote_slot_state()` resolution for callers (the queue header
     /// sync) that need both every tick. Callers style the returned label and
     /// the header row shows it verbatim.
-    pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
+    pub fn playback_host_label_and_remote(&self) -> (String, bool) {
         let remote_state = self.remote_slot_state();
         let is_remote = self.remote_connected(remote_state);
         let label = self.remote_label(remote_state);
@@ -159,7 +159,7 @@ impl App {
     /// peer link, else this machine's device name (the local Owner). The peer
     /// resolution mirrors `remote_label`: route name,
     /// session device name, connected endpoint host.
-    pub(in crate::app) fn queue_owner_label(&self) -> String {
+    pub fn queue_owner_label(&self) -> String {
         if self.playing_queue_link() == QueueLink::Peer {
             self.peer_owner_label()
         } else {
@@ -173,7 +173,7 @@ impl App {
     /// machine's device name only as the last fallback. The resolution mirrors
     /// `remote_label`, and it does not depend on the shown entry, so the
     /// chooser names the peer while a local queue is shown.
-    pub(in crate::app) fn peer_owner_label(&self) -> String {
+    pub fn peer_owner_label(&self) -> String {
         self.active_route
             .as_ref()
             .map(|name| format!("route:{name}"))

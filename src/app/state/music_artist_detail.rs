@@ -36,7 +36,7 @@ use mbv_ui_model::ui_util::sort_audio_tracks;
 /// arms the bound and each arrival frees a slot for the next album.
 const MAX_ARTIST_FALLBACK_TRACK_FETCHES: usize = 6;
 
-pub(in crate::app) fn artist_artwork_cache_key(
+pub fn artist_artwork_cache_key(
     destination: &LibraryKey,
     generation: u64,
     artist_id: &str,
@@ -145,7 +145,7 @@ fn current_album_ids(
 }
 
 impl App {
-    pub(in crate::app) fn artist_detail_key(
+    pub fn artist_detail_key(
         &self,
         destination: &LibraryKey,
         target: &MusicArtistTarget,
@@ -163,11 +163,7 @@ impl App {
     /// deliberately starts no artist query and instead arms the already-
     /// supported per-album fetches the fallback aggregates from, through the
     /// bounded fallback queue rather than one request per in-scope album.
-    pub(in crate::app) fn request_artist_tracks(
-        &mut self,
-        destination: LibraryKey,
-        target: &MusicArtistTarget,
-    ) {
+    pub fn request_artist_tracks(&mut self, destination: LibraryKey, target: &MusicArtistTarget) {
         let Some(artist_id) = target.artist_id.clone() else {
             let album_ids = target
                 .album_targets
@@ -224,7 +220,7 @@ impl App {
     /// are skipped, repeats dedupe against the pending queue, and the drain
     /// runs at most `MAX_ARTIST_FALLBACK_TRACK_FETCHES` at a time; each
     /// arrival arms the next album, so rows appear progressively from cache.
-    pub(in crate::app) fn enqueue_artist_album_tracks(&mut self, album_ids: Vec<String>) {
+    pub fn enqueue_artist_album_tracks(&mut self, album_ids: Vec<String>) {
         for album_id in album_ids {
             if album_id.is_empty()
                 || self.album_tracks_cache.contains_key(&album_id)
@@ -245,7 +241,7 @@ impl App {
     /// `fetch_album_tracks` remains the sole gate for the actual request, so
     /// an album the selection path already armed is skipped without consuming
     /// a slot, and a request that could not start never occupies one.
-    pub(in crate::app) fn drain_artist_album_track_fetches(&mut self) {
+    pub fn drain_artist_album_track_fetches(&mut self) {
         while self.artist_album_track_fetches_in_flight.len() < MAX_ARTIST_FALLBACK_TRACK_FETCHES {
             let Some(album_id) = self.pending_artist_album_track_fetches.pop_front() else {
                 break;
@@ -268,11 +264,7 @@ impl App {
     /// the image worker about Music's source identity. A fallback artist has
     /// no provider ID: the explicit no-artwork arm records that final state
     /// and never borrows a root album image.
-    pub(in crate::app) fn request_artist_artwork(
-        &mut self,
-        destination: &LibraryKey,
-        target: &MusicArtistTarget,
-    ) {
+    pub fn request_artist_artwork(&mut self, destination: &LibraryKey, target: &MusicArtistTarget) {
         let Some(key) = self.artist_detail_key(destination, target) else {
             return;
         };
@@ -317,7 +309,7 @@ impl App {
         self.fetch_card_image(cache_key, artist_id, String::new(), &["Primary"]);
     }
 
-    pub(in crate::app) fn handle_artist_tracks_fetched(
+    pub fn handle_artist_tracks_fetched(
         &mut self,
         destination: &LibraryKey,
         generation: SetupGeneration,
@@ -371,7 +363,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_artist_artwork_fetched(
+    pub fn handle_artist_artwork_fetched(
         &mut self,
         destination: LibraryKey,
         generation: SetupGeneration,
@@ -407,7 +399,7 @@ impl App {
     /// artist detail is added, so the tree remains the sole browser owner and
     /// the task-6.4 content switch reads one field. Album artwork is resolved
     /// later by `MusicContent` from the selected artist album/track group.
-    pub(in crate::app) fn project_music_artist_detail(
+    pub fn project_music_artist_detail(
         &self,
         destination: &LibraryKey,
         mut context: MusicWideRenderCtx,

@@ -11,14 +11,11 @@ impl App {
     ///
     /// Panics when the config lock is poisoned: a thread panicked while it
     /// held the lock, which no projection path expects.
-    pub(in crate::app) fn with_config<R>(
-        &self,
-        read: impl FnOnce(&crate::app::config::Config) -> R,
-    ) -> R {
+    pub fn with_config<R>(&self, read: impl FnOnce(&crate::app::config::Config) -> R) -> R {
         read(&self.config.lock().unwrap())
     }
 
-    pub(in crate::app) fn ui_config_snapshot(&self) -> crate::app::config::UiConfig {
+    pub fn ui_config_snapshot(&self) -> crate::app::config::UiConfig {
         let indicator_style = match self.indicator_style {
             mbv_ui_model::indicators::IndicatorStyle::Brackets => "brackets",
             mbv_ui_model::indicators::IndicatorStyle::Chips => "chips",
@@ -38,7 +35,7 @@ impl App {
     }
 
     /// Whether the run loop should touch the terminal this tick.
-    pub(in crate::app) fn wants_terminal_render(
+    pub fn wants_terminal_render(
         &self,
         had_events: bool,
         last_render: Instant,
@@ -56,7 +53,7 @@ impl App {
     /// between "just started" and "just finished" with nothing in between.
     /// Falls back to a slow 1 s cadence when nothing is changing, to avoid
     /// spinning the terminal for no reason.
-    pub(in crate::app) fn render_interval(&self) -> Duration {
+    pub fn render_interval(&self) -> Duration {
         if self.visualizer.is_some() {
             return Duration::from_millis(16);
         }

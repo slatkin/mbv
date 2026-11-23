@@ -6,7 +6,7 @@ use mbv_queue::ServiceKind;
 
 impl App {
     /// Resolve Home/Feeds identities and Services unavailable at startup on the shell sync pass.
-    pub(in crate::app) fn resolve_launch_tab_on_sync(&mut self) {
+    pub fn resolve_launch_tab_on_sync(&mut self) {
         let LaunchRestore::Pending(state) = &self.launch_restore else {
             return;
         };
@@ -43,7 +43,7 @@ impl App {
     }
 
     /// Resolve a saved Service identity only after its catalog has been built.
-    pub(in crate::app) fn resolve_launch_service_tab(&mut self, kind: ServiceKind) {
+    pub fn resolve_launch_service_tab(&mut self, kind: ServiceKind) {
         let LaunchRestore::Pending(state) = &self.launch_restore else {
             return;
         };
@@ -74,17 +74,14 @@ impl App {
 
     /// The only writer of a failed Emby state: records `state` and expires a
     /// pending Emby launch destination, so the pairing cannot be forgotten.
-    pub(in crate::app) fn fail_emby_service(
-        &mut self,
-        state: mbv_core::service_runtime::ServiceState,
-    ) {
+    pub fn fail_emby_service(&mut self, state: mbv_core::service_runtime::ServiceState) {
         self.emby_runtime.state = state;
         self.expire_launch_service(ServiceKind::Emby);
     }
 
     /// The only writer of a failed Audiobookshelf state: records `state` for
     /// `generation` and expires a pending Audiobookshelf launch destination.
-    pub(in crate::app) fn fail_audiobookshelf_service(
+    pub fn fail_audiobookshelf_service(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
         state: mbv_core::service_runtime::ServiceState,
@@ -98,7 +95,7 @@ impl App {
     /// applies its focus. Reach it through `fail_*_service`; the one direct
     /// caller is the Audiobookshelf catalog failure that leaves the Service
     /// state untouched.
-    pub(in crate::app) fn expire_launch_service(&mut self, kind: ServiceKind) {
+    pub fn expire_launch_service(&mut self, kind: ServiceKind) {
         if matches!(
             &self.launch_restore,
             LaunchRestore::Pending(mbv_config::TuiLaunchState {
@@ -120,7 +117,7 @@ impl App {
     /// unchanged and returns `false`. This owns asynchronous Service
     /// removal/replacement invalidation; downstream Service helpers may
     /// still bounds-check defensively, but never choose another destination.
-    pub(in crate::app) fn normalize_stale_browse_destination(&mut self) -> bool {
+    pub fn normalize_stale_browse_destination(&mut self) -> bool {
         if let Some(index) = self.tab.emby_library_index()
             && index >= self.libs.len()
         {
@@ -211,7 +208,7 @@ impl App {
 
     /// Jump directly to left-panel tab `idx` (0 = Home, `1..=libs.len()` =
     /// library index `idx - 1`, or Feeds at the end when present).
-    pub(in crate::app) fn set_library_tab(&mut self, idx: usize) {
+    pub fn set_library_tab(&mut self, idx: usize) {
         if idx >= self.tab_count() {
             return;
         }
@@ -219,7 +216,7 @@ impl App {
     }
 
     /// Advance the left-panel tab (wrapping); load the library if needed.
-    pub(in crate::app) fn library_tab_next(&mut self) {
+    pub fn library_tab_next(&mut self) {
         let n = self.tab_count();
         let pos = self
             .tab
@@ -229,7 +226,7 @@ impl App {
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
-    pub(in crate::app) fn library_tab_prev(&mut self) {
+    pub fn library_tab_prev(&mut self) {
         let n = self.tab_count();
         let pos = self
             .tab
@@ -246,18 +243,18 @@ impl App {
     // effect helper, instead of the App re-reading a (now deleted)
     // `home.continue_items`/`continue_cursor`. `continue_cursor` stays the
     // sole, unchanged authoritative target.
-    pub(in crate::app) fn cw_play(&mut self, item: EmbyItem) {
+    pub fn cw_play(&mut self, item: EmbyItem) {
         if item.is_folder {
             return;
         }
         self.play_home_cw_item(item);
     }
 
-    pub(in crate::app) fn cw_enqueue(&mut self, item: EmbyItem) {
+    pub fn cw_enqueue(&mut self, item: EmbyItem) {
         self.enqueue_home_item(item);
     }
 
-    pub(in crate::app) fn cw_toggle_watched(&mut self, item: &EmbyItem) {
+    pub fn cw_toggle_watched(&mut self, item: &EmbyItem) {
         self.toggle_watched_home_item(item);
     }
 }

@@ -2,11 +2,7 @@ use crate::app::App;
 use mbv_ui_model::list_ctx::LibraryListRenderCtx;
 
 impl App {
-    pub(in crate::app) fn library_list_render_ctx(
-        &self,
-        lib_idx: usize,
-        cursor: usize,
-    ) -> LibraryListRenderCtx {
+    pub fn library_list_render_ctx(&self, lib_idx: usize, cursor: usize) -> LibraryListRenderCtx {
         let lib = &self.libs[lib_idx];
         let (items, cursor, total_count) = match lib.nav_stack.last() {
             Some(level) => (level.items.clone(), cursor, level.rows.total()),

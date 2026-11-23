@@ -139,7 +139,7 @@ impl App {
     /// suspended home link when a route or direct-remote peer is attached,
     /// not whichever peer is currently routed), and leaves the queue dirty
     /// until the owner's snapshot confirms it.
-    pub(in crate::app) fn apply_saved_playlist_source(
+    pub fn apply_saved_playlist_source(
         &mut self,
         source: mbv_queue::QueueSource,
         origin: QueueOrigin,
@@ -174,7 +174,7 @@ impl App {
     /// at section 0 and re-reading `current_home_item`. Folder/non-playable
     /// guards and the ancestor-route resolution match the legacy Home branch
     /// exactly.
-    pub(in crate::app) fn enqueue_home_item(&mut self, item: EmbyItem) {
+    pub fn enqueue_home_item(&mut self, item: EmbyItem) {
         if item.is_folder {
             self.do_enqueue_folder(&item);
             return;
@@ -195,7 +195,7 @@ impl App {
     /// task 4.3, R1), extracted so the shell can enqueue a focused album
     /// track whose item resolution lives at the shell/component boundary
     /// rather than in `current_lib_item`.
-    pub(in crate::app) fn enqueue_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub fn enqueue_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             self.do_enqueue_folder(&item);
             return;
@@ -212,7 +212,7 @@ impl App {
     /// block so every item enters as one append in the caller's order — the
     /// autoload rule's album block enters in disc/track order. An empty block
     /// adds nothing, not even the request log line.
-    pub(in crate::app) fn enqueue_lib_items(&mut self, lib_idx: usize, items: Vec<EmbyItem>) {
+    pub fn enqueue_lib_items(&mut self, lib_idx: usize, items: Vec<EmbyItem>) {
         let Some(first) = items.first() else {
             return;
         };
@@ -243,7 +243,7 @@ impl App {
     /// instead of at the tail. The edit is an Append, so no slot already in the
     /// queue moves: the new items sit between the active slot and the one that
     /// followed it. The TUI has no producer for it.
-    pub(in crate::app) fn play_lib_item_next(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub fn play_lib_item_next(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let before = self.play_next_anchor();
             self.do_enqueue_folder_before(&item, before);

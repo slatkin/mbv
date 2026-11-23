@@ -26,7 +26,7 @@ impl App {
     ///
     /// `None` when the index is stale (library removed/replaced); the caller
     /// must stop the triggering operation, matching `normalize_stale_*`.
-    pub(in crate::app) fn audiobookshelf_kind_at(
+    pub fn audiobookshelf_kind_at(
         &self,
         index: usize,
     ) -> Option<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind> {
@@ -42,7 +42,7 @@ impl App {
     /// after the Service setup and key resolve: an early return on missing
     /// setup must not leak the mark and blocklist the show for the session
     /// (reorganize-podcast-pill-navigation 3.3 carried obligation).
-    pub(in crate::app) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
+    pub fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
         self.start_audiobookshelf_detail_inner(library_item_id, false);
     }
 
@@ -54,7 +54,11 @@ impl App {
     /// shelf. The request set is the single-flight guard, so a repeated pass
     /// loads nothing and returns `false`; `true` means this call started the
     /// fetch.
-    pub(in crate::app) fn ensure_audiobookshelf_latest_shelf(&mut self, library_id: &str) -> bool {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn ensure_audiobookshelf_latest_shelf(&mut self, library_id: &str) -> bool {
         if !self
             .audiobookshelf_shelf_requested
             .insert(library_id.to_string())
@@ -125,7 +129,7 @@ impl App {
 
     /// Fetches the selected book's chapters/audio-files detail keyed by
     /// `library_item_id`.
-    pub(in crate::app) fn start_audiobookshelf_book_detail(&mut self, library_item_id: String) {
+    pub fn start_audiobookshelf_book_detail(&mut self, library_item_id: String) {
         self.start_audiobookshelf_book_detail_inner(library_item_id, false);
     }
 
@@ -193,7 +197,7 @@ impl App {
     /// re-arming after an arrival is idempotent; the in-flight cap bounds
     /// the batch. Only the active tab's library fans out: an inactive tab
     /// has no viewed pill to load for.
-    pub(in crate::app) fn start_audiobookshelf_podcast_fan_out(&mut self, index: usize) {
+    pub fn start_audiobookshelf_podcast_fan_out(&mut self, index: usize) {
         if self.tab.audiobookshelf_index() != Some(index) {
             return;
         }
@@ -230,7 +234,7 @@ impl App {
     /// A state-pill scope commit or a state-scoped list interaction (design
     /// D5): the required shows are every listed show; arm the bounded
     /// fan-out.
-    pub(in crate::app) fn commit_audiobookshelf_podcast_state_scope(&mut self) {
+    pub fn commit_audiobookshelf_podcast_state_scope(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -240,7 +244,11 @@ impl App {
         self.start_audiobookshelf_podcast_fan_out(index);
     }
 
-    pub(in crate::app) fn audiobookshelf_refresh(&mut self, podcast_latest_selected: bool) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn audiobookshelf_refresh(&mut self, podcast_latest_selected: bool) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -304,7 +312,7 @@ impl App {
         self.start_audiobookshelf_podcast_fan_out(index);
     }
 
-    pub(in crate::app) fn select_audiobookshelf_show(&mut self, cursor: usize) {
+    pub fn select_audiobookshelf_show(&mut self, cursor: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -323,7 +331,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn select_audiobookshelf_show_target(&mut self, target: &str) {
+    pub fn select_audiobookshelf_show_target(&mut self, target: &str) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -352,7 +360,7 @@ impl App {
     /// component-owned (split-browse-state-interaction-fields task 3.2), so
     /// this seam resolves against the unfiltered (`All`) view.
     #[cfg(test)]
-    pub(in crate::app) fn activate_audiobookshelf_episode(
+    pub fn activate_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
         episode_index: usize,
@@ -367,7 +375,7 @@ impl App {
     /// Resolve the episode at `episode_index` for enqueue without mutating any
     /// queue or opening a playback lifecycle (see `activate_audiobookshelf_episode`).
     #[cfg(test)]
-    pub(in crate::app) fn enqueue_audiobookshelf_episode(
+    pub fn enqueue_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
         episode_index: usize,
@@ -384,7 +392,7 @@ impl App {
     /// 5.3d.11 U5); the App only supplies the provider-native snapshot, while
     /// canonical queue ownership and the eligible Player boundary remain here
     /// with the other ordinary actions.
-    pub(in crate::app) fn play_selected_audiobookshelf_episode_target(
+    pub fn play_selected_audiobookshelf_episode_target(
         &mut self,
         index: usize,
         target: &mbv_ui_msg::PodcastEpisodeTarget,
@@ -432,7 +440,7 @@ impl App {
     /// resolve through `selected_audiobookshelf_queue_item_target`, books
     /// through the id-taking book resolver. A target that no longer resolves
     /// is skipped.
-    pub(in crate::app) fn audiobookshelf_menu_targets_queue_items(
+    pub fn audiobookshelf_menu_targets_queue_items(
         &self,
         targets: &[AudiobookshelfMenuTarget],
     ) -> Vec<QueueItem> {
@@ -474,7 +482,7 @@ impl App {
             })
     }
 
-    pub(in crate::app) fn selected_audiobookshelf_queue_item_target(
+    pub fn selected_audiobookshelf_queue_item_target(
         &self,
         audiobookshelf_library_index: usize,
         target: &mbv_ui_msg::PodcastEpisodeTarget,
@@ -535,12 +543,12 @@ impl App {
     }
 }
 
-pub(in crate::app) fn seconds_to_ticks(seconds: f64) -> i64 {
+pub fn seconds_to_ticks(seconds: f64) -> i64 {
     seconds_to_ticks_u64(seconds)
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)
 }
-pub(in crate::app) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
+pub fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
     (seconds.is_finite() && seconds >= 0.0).then(|| {
         let ticks = saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).round());
         u64::try_from(ticks).unwrap_or(0)

@@ -17,7 +17,8 @@ use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 /// What one projection pass decided about a Library panel hero (design D9):
 /// the image state the painter reads, and whether the shell's encoding must
 /// run before the wide cover-fit state can be `Ready`.
-pub(in crate::app) enum HeroImageProjection {
+#[derive(Debug)]
+pub enum HeroImageProjection {
     /// A final state the shell paints as it is.
     State(mbv_ui_model::playback::HeroImageState),
     /// A ready image the wide Landscape hero paints: the shell keys one
@@ -43,7 +44,7 @@ impl App {
     /// wide box on the next sync pass, so the placeholder shows for at most
     /// that one frame. Every other shape is decided here outright; the wide
     /// landscape hero hands its encoding box back to the shell.
-    pub(in crate::app) fn project_hero_image(
+    pub fn project_hero_image(
         &mut self,
         facts: &mbv_ui_model::library_hero::HeroFacts,
         panel_area: ratatui::layout::Rect,
@@ -158,7 +159,7 @@ impl App {
 
     /// The Wide header's optional Logo fetch for a Landscape hero: a Movie's
     /// Landscape artwork at Wide geometry only, returning its cache key.
-    pub(in crate::app) fn fetch_wide_hero_logo(
+    pub fn fetch_wide_hero_logo(
         &mut self,
         artwork: &mbv_ui_model::library_hero::HeroArtwork,
         panel_area: ratatui::layout::Rect,

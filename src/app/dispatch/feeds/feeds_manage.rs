@@ -26,12 +26,11 @@ impl App {
     /// the drain. Returns the pending id when the fetch started, `None` for
     /// an in-flight add (one at a time), a rejected form, a URL already
     /// subscribed, or no open feed state.
-    pub(in crate::app) fn begin_feed_add(
-        &mut self,
-        name: &str,
-        url: &str,
-        kind: FeedKind,
-    ) -> Option<u64> {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn begin_feed_add(&mut self, name: &str, url: &str, kind: FeedKind) -> Option<u64> {
         if self
             .feeds_manage
             .as_ref()
@@ -114,7 +113,11 @@ impl App {
     /// unlike add, since the URL (and therefore feed validity) never
     /// changes here. The subscription is addressed by its URL, the config
     /// list's only stable identity. Returns whether the edit applied.
-    pub(in crate::app) fn edit_feed(&mut self, url: &str, name: &str, kind: FeedKind) -> bool {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn edit_feed(&mut self, url: &str, name: &str, kind: FeedKind) -> bool {
         let name = name.trim().to_string();
         if name.is_empty() {
             self.flash("Feed name can't be empty".into(), ToastSeverity::Error);
@@ -151,7 +154,11 @@ impl App {
 
     /// Raise the remove confirmation for the subscription at `url` (§6.3),
     /// addressed by the config list's only stable identity.
-    pub(in crate::app) fn request_feed_removal(&mut self, url: &str) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn request_feed_removal(&mut self, url: &str) {
         let (index, name) = {
             let c = self.config.lock().unwrap();
             match c.feeds.iter().enumerate().find(|(_, s)| s.url == url) {
@@ -219,7 +226,11 @@ impl App {
 
     /// Effect for `ConfirmAction::RemoveFeedSubscription`'s accept answer
     /// (§6.3): rewrites `config.feeds` without the removed entry.
-    pub(in crate::app) fn remove_feed_confirmed(&mut self, index: usize) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while changing the configuration when its lock is poisoned.
+    pub fn remove_feed_confirmed(&mut self, index: usize) {
         let feeds: Vec<FeedSubscription> = {
             let c = self.config.lock().unwrap();
             if index >= c.feeds.len() {
@@ -238,7 +249,11 @@ impl App {
     /// Writes `feeds` into App's general config and persists it via the
     /// existing read-modify-write toml merge (§6.3), then runs the §6.4
     /// post-mutation resync.
-    pub(in crate::app) fn persist_feeds(&mut self, feeds: Vec<FeedSubscription>) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while changing the configuration when its lock is poisoned.
+    pub fn persist_feeds(&mut self, feeds: Vec<FeedSubscription>) {
         let cfg = {
             let mut c = self.config.lock().unwrap();
             c.feeds = feeds;
@@ -261,7 +276,7 @@ impl App {
     /// the last subscription was removed while Feeds is selected. The Feeds
     /// content owner resets its local selection when the subscription
     /// identity changes during the next shell sync.
-    pub(in crate::app) fn after_feeds_mutation(&mut self) {
+    pub fn after_feeds_mutation(&mut self) {
         self.sync_feed_subscriptions();
         let n = self.feed_tab.subscriptions.len();
         self.feed_tab.entries = vec![Vec::new(); n];

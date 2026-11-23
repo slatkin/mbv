@@ -17,7 +17,7 @@ impl App {
     /// library no longer exists (a rebuilt library set, or a removed or
     /// replaced setup). The presenting Client's shell re-projects after the
     /// write returns.
-    pub(in crate::app) fn apply_home_content(&mut self, content: Option<HomeContent>) {
+    pub fn apply_home_content(&mut self, content: Option<HomeContent>) {
         match content {
             Some(content) => self.home_content = content,
             None => self.home_content.continue_items.clear(),

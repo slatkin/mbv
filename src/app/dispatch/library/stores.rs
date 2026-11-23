@@ -21,7 +21,7 @@ pub fn drain_lib_event_through(app: &mut App, gui: &mut GuiClientState) -> bool 
 /// implementor (`GuiClientState`) reads and writes its own fields; `app` is
 /// the shared core state, which the effect may also touch (the in-view row
 /// artwork fetch reads the core's catalog).
-pub(in crate::app) trait ClientLibraryStores {
+pub trait ClientLibraryStores {
     /// Whether this Client's own selection still wants the landed feed
     /// target, beside the shared selection the core keeps.
     fn wants_feed_target(&self, app: &App, lib_idx: usize, target: &FeedHomeVideoSelection)
@@ -33,7 +33,7 @@ pub(in crate::app) trait ClientLibraryStores {
 
 /// One piece of store work that a library event asks of the Client.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::app) enum ClientLibraryEffect {
+pub enum ClientLibraryEffect {
     /// The set of rows in view changed, so its artwork sources may need a
     /// fetch.
     RowArtSourcesChanged,

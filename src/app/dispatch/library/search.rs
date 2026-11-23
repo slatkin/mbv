@@ -5,7 +5,7 @@ use mbv_emby::EmbyClient;
 use crate::app::App;
 
 impl App {
-    pub(in crate::app) fn spawn_search_sidebar_query(&self, client: EmbyClient, query: String) {
+    pub fn spawn_search_sidebar_query(&self, client: EmbyClient, query: String) {
         let tx = self.channels.search_tx.clone();
         std::thread::spawn(move || {
             let result = client.search_items(&query, 100);
@@ -25,17 +25,17 @@ use mbv_ui_model::browse::{BrowseResting, ServerRows};
 impl App {
     /// Open the global search sidebar. Sets the flag; the shell Model mounts
     /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).
-    pub(in crate::app) fn open_search_sidebar(&mut self) {
+    pub fn open_search_sidebar(&mut self) {
         self.request_sidebar_open(SidebarId::Search);
     }
 
-    pub(in crate::app) fn recursive_album_search_enabled(&self, lib_idx: usize) -> bool {
+    pub fn recursive_album_search_enabled(&self, lib_idx: usize) -> bool {
         self.libs.get(lib_idx).is_some_and(|lib| {
             recursive_album_search_eligible(&lib.library.collection_type, &self.music_levels)
         })
     }
 
-    pub(in crate::app) fn library_tabs_for_nav(&self) -> Vec<(usize, String, String)> {
+    pub fn library_tabs_for_nav(&self) -> Vec<(usize, String, String)> {
         self.libs
             .iter()
             .enumerate()
@@ -49,7 +49,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn start_album_index(&mut self, lib_idx: usize, refresh: bool) {
+    pub fn start_album_index(&mut self, lib_idx: usize, refresh: bool) {
         if !self.recursive_album_search_enabled(lib_idx) {
             return;
         }
@@ -84,7 +84,7 @@ impl App {
     // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_event`'s `AlbumIndexBuilt` rebuild-pending branch, which
     // stays behind in `actions.rs`.
-    pub(in crate::app) fn spawn_album_index_build(&self, library_id: String) {
+    pub fn spawn_album_index_build(&self, library_id: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -110,11 +110,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn activate_recursive_album(
-        &mut self,
-        lib_idx: usize,
-        entry: AlbumSearchEntry,
-    ) -> bool {
+    pub fn activate_recursive_album(&mut self, lib_idx: usize, entry: AlbumSearchEntry) -> bool {
         // A catalog change between resolve and drain can leave `lib_idx`
         // stale; a miss flashes (the caller's false branch) instead of
         // panicking on the raw index (U2 correction, matching the sibling
@@ -199,7 +195,7 @@ impl App {
     // `select_letter_pill` (moved to `music_actions.rs`) plus
     // `refresh_lib`/`maybe_capture_library_total_and_apply_default_pill`,
     // which stay behind in `actions.rs`.
-    pub(in crate::app) fn spawn_refresh(
+    pub fn spawn_refresh(
         &self,
         lib_idx: usize,
         loaded_count: usize,
@@ -251,7 +247,7 @@ impl App {
     /// child album near the loaded edge. The tree owns artist/album selection;
     /// the shell resolves these stable album targets back to its browse level
     /// here, so no component cursor or source-row index crosses the boundary.
-    pub(in crate::app) fn maybe_fetch_next_page_for_music_artist(
+    pub fn maybe_fetch_next_page_for_music_artist(
         &mut self,
         lib_idx: usize,
         album_targets: &[String],
@@ -275,7 +271,7 @@ impl App {
     /// position to threshold against (the caller's live/resting cursor) —
     /// never re-read from the level, so the prefetch decision no longer
     /// depends on `BrowseLevel.cursor` (task 4.3, R7).
-    pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize, cursor: usize) {
+    pub fn maybe_fetch_next_page(&mut self, lib_idx: usize, cursor: usize) {
         self.maybe_fetch_next_page_sized(lib_idx, cursor, PREFETCH_AHEAD, PAGE_SIZE);
     }
 
@@ -290,7 +286,7 @@ impl App {
     /// complete by construction (`ServerRows::complete`), and an unresolved
     /// mode (`None`) is the capture load that the size default may replace, so
     /// neither qualifies.
-    pub(in crate::app) fn is_tv_series_root_view(&self, lib_idx: usize) -> bool {
+    pub fn is_tv_series_root_view(&self, lib_idx: usize) -> bool {
         self.libs.get(lib_idx).is_some_and(|lib| {
             lib.nav_stack.len() == 1
                 && lib.library.collection_type == "tvshows"
@@ -308,7 +304,7 @@ impl App {
     /// caller's live/resting cursor) — never re-read from the level, so the
     /// prefetch decision no longer depends on `BrowseLevel.cursor` (task 4.3,
     /// R7).
-    pub(in crate::app) fn maybe_fetch_next_page_sized(
+    pub fn maybe_fetch_next_page_sized(
         &mut self,
         lib_idx: usize,
         cursor: usize,

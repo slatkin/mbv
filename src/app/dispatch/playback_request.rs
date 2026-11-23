@@ -8,9 +8,7 @@ use crate::app::dispatch::action::{AppCommand, PanelIntent};
 use mbv_ui_msg::PlaybackRequest;
 
 impl App {
-    pub(in crate::app) fn slotless_playback_title_parts(
-        &self,
-    ) -> Option<mbv_queue::PlaybackTitleParts> {
+    pub fn slotless_playback_title_parts(&self) -> Option<mbv_queue::PlaybackTitleParts> {
         let now_playing = self.emby_session_now_playing()?;
         let title = now_playing.name.clone();
         // An Emby Session's now-playing payload names the show for an episode;
@@ -37,7 +35,7 @@ impl App {
     /// The App-side effect of one playback request (`Msg::Playback`). The TUI
     /// shell and the GUI Client both apply it here, so each transport control
     /// does one thing in both Clients.
-    pub(in crate::app) fn handle_playback_request(&mut self, request: &PlaybackRequest) {
+    pub fn handle_playback_request(&mut self, request: &PlaybackRequest) {
         use crate::app::dispatch::action::PlaybackIntent;
         match request {
             PlaybackRequest::TogglePlayPause => {

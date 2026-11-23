@@ -53,7 +53,7 @@ use mbv_queue::QueueLineage;
 /// loads) against queue changes this Client itself made. It is never sent
 /// over ctrl and is unrelated to the owner-minted [`QueueLineage`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(in crate::app) struct QueueEpoch(pub u64);
+pub struct QueueEpoch(pub u64);
 
 impl QueueEpoch {
     pub fn advance(&mut self) {
@@ -66,7 +66,7 @@ impl QueueEpoch {
 /// shaped by. The owner lineage must be present: the owner is authoritative
 /// for the queue, and this Client only projects its snapshots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) struct QueueOrigin {
+pub struct QueueOrigin {
     pub(in crate::app) epoch: QueueEpoch,
     pub(in crate::app) lineage: QueueLineage,
 }

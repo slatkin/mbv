@@ -9,13 +9,13 @@ use std::collections::HashMap;
 impl App {
     /// Whether feed subscriptions are configured and the Feeds tab should
     /// be visible.
-    pub(in crate::app) fn has_feeds_subscriptions(&self) -> bool {
+    pub fn has_feeds_subscriptions(&self) -> bool {
         !self.feed_tab.subscriptions.is_empty()
     }
 
     /// The 1-based tab position of the Feeds tab, or `None` when no
     /// subscriptions exist.
-    pub(in crate::app) fn feeds_tab_pos(&self) -> Option<usize> {
+    pub fn feeds_tab_pos(&self) -> Option<usize> {
         self.has_feeds_subscriptions()
             .then(|| 1 + self.libs.len() + self.audiobookshelf_libraries.len())
     }
@@ -23,7 +23,11 @@ impl App {
     /// Copy configured subscriptions from the client config into the
     /// feed tab state. Called once at startup and when the config is
     /// reloaded.
-    pub(in crate::app) fn sync_feed_subscriptions(&mut self) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn sync_feed_subscriptions(&mut self) {
         let subs = self.config.lock().unwrap().feeds.clone();
         self.feed_tab.subscriptions = subs;
         // Ensure per-subscription entries vec is the right length.
@@ -38,7 +42,7 @@ impl App {
     }
 
     /// Drain completed background fetch results from the channel.
-    pub(in crate::app) fn drain_feed_tab_results(&mut self) -> bool {
+    pub fn drain_feed_tab_results(&mut self) -> bool {
         let mut had_events = false;
         // Take the receiver once; we'll put it back after draining.
         let Some(rx) = self.feed_tab.refresh_rx.take() else {
@@ -90,7 +94,7 @@ impl App {
 
     /// Start a manual refresh of all configured feed subscriptions.
     /// Does nothing if already loading.
-    pub(in crate::app) fn refresh_feeds(&mut self) {
+    pub fn refresh_feeds(&mut self) {
         if self.feed_tab.loading {
             self.flash(
                 "Feeds refresh already in progress".into(),
@@ -114,7 +118,7 @@ impl App {
     /// `refresh_feeds` (which adds a user-facing flash) and the async startup
     /// auto-fetch (which stays silent). Does nothing if already loading or if
     /// no subscriptions are configured.
-    pub(in crate::app) fn start_feed_fetch(&mut self) {
+    pub fn start_feed_fetch(&mut self) {
         if self.feed_tab.loading || self.feed_tab.subscriptions.is_empty() {
             return;
         }
@@ -138,7 +142,7 @@ impl App {
     }
 
     /// Play the exact entry selected by the Feeds Interactive Component.
-    pub(in crate::app) fn play_feed_entry(&mut self, entry: FeedEntry) {
+    pub fn play_feed_entry(&mut self, entry: FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -152,7 +156,7 @@ impl App {
     }
 
     /// Enqueue the exact entry selected by the Feeds Interactive Component.
-    pub(in crate::app) fn enqueue_feed_entry(&mut self, entry: FeedEntry) {
+    pub fn enqueue_feed_entry(&mut self, entry: FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -166,7 +170,7 @@ impl App {
     /// Play a feed selection in its supplied order. The first entry starts the
     /// playback run once; subsequent entries append instead of replacing the
     /// queue and moving playback to the last selected entry.
-    pub(in crate::app) fn play_feed_entries(&mut self, entries: Vec<FeedEntry>) {
+    pub fn play_feed_entries(&mut self, entries: Vec<FeedEntry>) {
         let mut playable = Vec::with_capacity(entries.len());
         for entry in entries {
             if entry.primary_source().is_none() {
@@ -189,7 +193,7 @@ impl App {
     }
 
     /// Enqueue a feed selection in its supplied order.
-    pub(in crate::app) fn enqueue_feed_entries(&mut self, entries: Vec<FeedEntry>) {
+    pub fn enqueue_feed_entries(&mut self, entries: Vec<FeedEntry>) {
         for entry in entries {
             self.enqueue_feed_entry(entry);
         }
@@ -211,7 +215,7 @@ impl App {
     /// Copy stored playback state into one entry before it is played or queued.
     /// A missing feed identity or a missing stored row leaves the entry exactly
     /// as fetched.
-    pub(in crate::app) fn hydrate_feed_entry_state(&mut self, mut entry: FeedEntry) -> FeedEntry {
+    pub fn hydrate_feed_entry_state(&mut self, mut entry: FeedEntry) -> FeedEntry {
         let Some(feed_id) = entry.feed_id.clone() else {
             return entry;
         };
@@ -227,7 +231,7 @@ impl App {
     /// Merge stored state into one subscription's freshly fetched entries with a
     /// single store read rather than one read per entry. Entries with no stored
     /// row stay as fetched (zero position, unplayed).
-    pub(in crate::app) fn hydrate_feed_entries_for_subscription(
+    pub fn hydrate_feed_entries_for_subscription(
         &mut self,
         feed_id: &str,
         entries: &mut [FeedEntry],
@@ -257,7 +261,7 @@ impl App {
     /// Store one entry's playback state and rewrite the state file. A failed
     /// write is logged and discarded: it never stops playback, and the
     /// previously written state stays intact.
-    pub(in crate::app) fn write_feed_entry_state(
+    pub fn write_feed_entry_state(
         &mut self,
         feed_id: &str,
         entry_guid: &str,
@@ -289,7 +293,7 @@ impl App {
     /// invoking Emby progress reporting. `completed` is true for known-runtime
     /// EOF or stop at/above 95% -- played entries store position zero.
     /// Unknown-runtime EOF keeps `played` false.
-    pub(in crate::app) fn persist_feed_slot_lifecycle(
+    pub fn persist_feed_slot_lifecycle(
         &mut self,
         slot_id: mbv_queue::QueueSlotId,
         position_ticks: i64,

@@ -3,7 +3,7 @@ use mbv_ui_model::music_grouping::{group_album_plan, sorted_group_album_order};
 use mbv_ui_model::music_wide::MusicWideRenderCtx;
 
 impl App {
-    pub(in crate::app) fn wide_music_render_ctx(
+    pub fn wide_music_render_ctx(
         &self,
         lib_idx: usize,
         cursor: Option<usize>,

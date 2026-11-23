@@ -14,7 +14,7 @@ pub(in crate::app) enum PanelPresentation {
 
 /// The appearance-focus decision, a pure function so tests can exercise the
 /// pinned-mini branch without the `PINWIN_PANEL` claim a pinned launch needs.
-pub(in crate::app) fn panel_appearance_focus_decision(
+pub fn panel_appearance_focus_decision(
     presentation: PanelPresentation,
     focus: PanelFocus,
     panel: PanelFocus,
@@ -34,7 +34,7 @@ impl App {
     /// terminal width. A Client that does not follow the terminal-panel rules
     /// arranges its own panels from its measured size, so its capability
     /// keeps this false.
-    pub(in crate::app) fn is_mini_view(&self) -> bool {
+    pub fn is_mini_view(&self) -> bool {
         self.client_capabilities
             .has(ClientCapability::TerminalPanelRules)
             && self.single_panel
@@ -43,7 +43,7 @@ impl App {
     /// Record the single-panel fact the TUI derives from its terminal width.
     /// The TUI sets it at every point where it records the terminal size, on
     /// resize and in the per-frame size on the draw path.
-    pub(in crate::app) fn set_single_panel(&mut self, single_panel: bool) {
+    pub fn set_single_panel(&mut self, single_panel: bool) {
         self.single_panel = single_panel;
     }
 
@@ -52,7 +52,7 @@ impl App {
     /// `Model`; the core reads only this neutral area, and the TUI pushes it
     /// from the value it writes to its own layout, so a core reader sees the
     /// last composed frame. A Client that composes no frame never sets it.
-    pub(in crate::app) fn set_left_panel_area(&mut self, area: mbv_ui_model::geom::Rect) {
+    pub fn set_left_panel_area(&mut self, area: mbv_ui_model::geom::Rect) {
         self.left_panel_area = area;
     }
 
@@ -64,7 +64,7 @@ impl App {
     /// panel, so its capability keeps this false too.
     /// The stored `panel_mode` is never written: the `x` cycle reads the
     /// stored mode and still advances `both -> queue-only` while hidden.
-    pub(in crate::app) fn queue_column_hidden_empty(&self) -> bool {
+    pub fn queue_column_hidden_empty(&self) -> bool {
         self.client_capabilities
             .has(ClientCapability::TerminalPanelRules)
             && !self.is_mini_view()
@@ -77,7 +77,7 @@ impl App {
     /// `panel_mode` and derives a two-state mini view from the ephemeral
     /// `mini_view_focus`; in wide view the stored mode is used, except that
     /// an empty displayed queue renders library-only.
-    pub(in crate::app) fn effective_panel_mode(&self) -> PanelMode {
+    pub fn effective_panel_mode(&self) -> PanelMode {
         if self.is_mini_view() {
             match self.mini_view_focus {
                 PanelFocus::Library => PanelMode::LibraryOnly,
@@ -94,7 +94,7 @@ impl App {
     /// mini view this is `mini_view_focus`; in wide view the stored
     /// `panel_focus` is returned, except that a hidden empty queue column
     /// never holds focus.
-    pub(in crate::app) fn effective_panel_focus(&self) -> PanelFocus {
+    pub fn effective_panel_focus(&self) -> PanelFocus {
         if self.is_mini_view() {
             self.mini_view_focus
         } else if self.queue_column_hidden_empty() {
@@ -113,7 +113,7 @@ impl App {
     /// [`panel_appearance_focus_decision`]). Input routing keeps
     /// `effective_panel_focus`; this bit is for appearance (surface palette
     /// selection) only.
-    pub(in crate::app) fn panel_appearance_focus(&self, panel: PanelFocus) -> bool {
+    pub fn panel_appearance_focus(&self, panel: PanelFocus) -> bool {
         let presentation = match (self.is_mini_view(), crate::app::pin::is_pinned()) {
             (false, _) => PanelPresentation::Wide,
             (true, false) => PanelPresentation::MiniUnpinned,
@@ -126,18 +126,18 @@ impl App {
 
     /// Record that the terminal just regained focus: stamp `refocus_at` and
     /// mark the window focused.
-    pub(in crate::app) fn note_focus_gained(&mut self) {
+    pub fn note_focus_gained(&mut self) {
         self.refocus_at = Some(Instant::now());
         self.window_focused = true;
     }
 
     /// Clear `refocus_at` and mark the window unfocused.
-    pub(in crate::app) fn note_focus_lost(&mut self) {
+    pub fn note_focus_lost(&mut self) {
         self.refocus_at = None;
         self.window_focused = false;
     }
 
-    pub(in crate::app) fn set_panel_focus(&mut self, focus: PanelFocus) {
+    pub fn set_panel_focus(&mut self, focus: PanelFocus) {
         // In mini view, focus-follow call sites (mouse clicks,
         // Alt+Left/Right, context actions) must move the ephemeral mini-view
         // focus, never the real persisted panel_focus -- that state has to

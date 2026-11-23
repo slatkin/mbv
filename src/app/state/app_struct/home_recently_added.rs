@@ -16,7 +16,7 @@ impl App {
     /// without a surviving podcast library (a teardown or replacement
     /// empties the catalog). Feeds is derived at merge time and never stored.
     /// Returns whether anything was evicted; the caller re-projects.
-    pub(in crate::app) fn evict_gone_home_recently_added(&mut self) -> bool {
+    pub fn evict_gone_home_recently_added(&mut self) -> bool {
         let before = self.home_recently_added.len();
         self.home_recently_added.retain(|source, _| match source {
             DestinationLatestSource::Emby(library_id) => self
@@ -39,7 +39,7 @@ impl App {
     /// filtered to the 14-day cutoff. Fetches never produce a Feeds source
     /// (Feeds rows are derived at merge time), so a Feeds event stores
     /// nothing.
-    pub(in crate::app) fn accept_home_recently_added(
+    pub fn accept_home_recently_added(
         &mut self,
         source: DestinationLatestSource,
         generation: mbv_core::service_runtime::SetupGeneration,
@@ -60,7 +60,7 @@ impl App {
     /// Stores one fetched library's Home Recently added items (`openspec/specs/home-latest-sections`):
     /// filtered to the 14-day cutoff on arrival, keyed by the source. An
     /// item without a valid date gets no age branch and is omitted.
-    pub(in crate::app) fn store_home_recently_added(
+    pub fn store_home_recently_added(
         &mut self,
         source: DestinationLatestSource,
         items: Vec<QueueItem>,
@@ -83,10 +83,7 @@ impl App {
     /// from `all_entries`, filtered to the same 14-day cutoff, with the
     /// subscription name resolved here. A merged row without a valid
     /// date has no age branch, so it can never appear.
-    pub(in crate::app) fn home_recent_rows(
-        &self,
-        now_secs: u64,
-    ) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
+    pub fn home_recent_rows(&self, now_secs: u64) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
         use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
         use std::cmp::Reverse;
         let mut rows: Vec<HomeRecentRow> = self
@@ -121,7 +118,7 @@ impl App {
         rows
     }
 
-    pub(in crate::app) fn home_stable_target(
+    pub fn home_stable_target(
         &self,
         target: &mbv_ui_model::targets::HomeItemTarget,
     ) -> Option<QueueItem> {

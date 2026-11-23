@@ -71,7 +71,7 @@ impl App {
     /// Whether halfblocks leave the artwork unable to carry the now-playing
     /// title: the queue title site's `HalfblockConfigured` gate.
     #[must_use]
-    pub(in crate::app) fn halfblock_configured(&self) -> bool {
+    pub fn halfblock_configured(&self) -> bool {
         self.halfblock_configured
     }
 
@@ -81,7 +81,7 @@ impl App {
     /// but not the font). The constructor's default until the pickers
     /// initialize.
     #[must_use]
-    pub(in crate::app) fn image_font_size(&self) -> (u16, u16) {
+    pub fn image_font_size(&self) -> (u16, u16) {
         self.image_font_size
     }
 
@@ -90,14 +90,14 @@ impl App {
     /// else the configured picker's. The hero cover fit's box pixels derive
     /// from it. The constructor's default until the pickers initialize.
     #[must_use]
-    pub(in crate::app) fn active_image_font_size(&self) -> (u16, u16) {
+    pub fn active_image_font_size(&self) -> (u16, u16) {
         self.active_image_font_size
     }
 
     /// Queue a completed fetch's cache key for the shell to encode, once the
     /// entry it stored is in place. Does nothing for a fetch that resolved
     /// empty or interrupted: it stored no pixels.
-    pub(in crate::app) fn queue_protocol_encode(&mut self, cache_key: &str) {
+    pub fn queue_protocol_encode(&mut self, cache_key: &str) {
         self.pending_protocol_encodes
             .push_back(cache_key.to_owned());
     }
@@ -115,7 +115,7 @@ impl App {
 
     /// Queue `cache_key` for the shell to drop its stored encoding, so the
     /// next paint re-encodes from the retained source.
-    pub(in crate::app) fn queue_protocol_clear(&mut self, cache_key: &str) {
+    pub fn queue_protocol_clear(&mut self, cache_key: &str) {
         self.pending_protocol_clears.push(cache_key.to_owned());
     }
 

@@ -9,10 +9,7 @@ const ALBUM_INDEX_PAGE_SIZE: usize = 200;
 // `actions_tests.rs` (a submodule of `actions.rs`, so it needs an explicit
 // `crate::app::dispatch::library::browse::...` import once this lives outside
 // `actions.rs`'s own namespace).
-pub(in crate::app) fn recursive_album_search_eligible(
-    collection_type: &str,
-    levels: &[String],
-) -> bool {
+pub fn recursive_album_search_eligible(collection_type: &str, levels: &[String]) -> bool {
     collection_type == "music"
         && levels.len() > 1
         && levels.last().is_some_and(|level| level == "album")
@@ -30,13 +27,13 @@ pub(in crate::app) fn recursive_album_search_eligible(
 // Visibility bump: private -> `pub(in crate::app)`. Same reason as
 // `recursive_album_search_eligible` above -- exercised directly by
 // `actions_tests.rs`.
-pub(in crate::app) fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> usize {
+pub fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> usize {
     lib.library_total
         .unwrap_or(lvl.rows.total())
         .max(lvl.rows.total())
 }
 
-pub(in crate::app) fn fetch_all_album_index_items(
+pub fn fetch_all_album_index_items(
     parent_id: &str,
     fetch: &mut AlbumIndexFetch<'_>,
 ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError> {
@@ -57,7 +54,7 @@ pub(in crate::app) fn fetch_all_album_index_items(
 // Visibility bump: private -> `pub(in crate::app)`. Same reason as
 // `recursive_album_search_eligible` above -- exercised directly by
 // `actions_tests.rs`.
-pub(in crate::app) fn build_album_index_with(
+pub fn build_album_index_with(
     library_id: &str,
     levels: &[String],
     fetch: &mut AlbumIndexFetch<'_>,
@@ -104,7 +101,7 @@ impl App {
     // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_loaded`/`handle_lib_page_appended`, which stay behind in
     // `actions.rs`.
-    pub(in crate::app) fn spawn_all_items_prefetch(&self, lib_idx: usize) {
+    pub fn spawn_all_items_prefetch(&self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
         let Some(lvl) = lib.nav_stack.last() else {
             return;
@@ -148,7 +145,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn spawn_search_items_load(&self, lib_idx: usize) {
+    pub fn spawn_search_items_load(&self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
         let Some(lvl) = lib.nav_stack.last() else {
             return;

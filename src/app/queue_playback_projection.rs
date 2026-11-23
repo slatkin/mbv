@@ -217,7 +217,7 @@ impl App {
 
     /// The now-playing title parts for `state`: the active queue item's parts,
     /// or the Emby Session's parts for slotless output. `None` while idle.
-    pub(in crate::app) fn now_playing_title_parts(
+    pub fn now_playing_title_parts(
         &self,
         state: PlaybackState,
     ) -> Option<mbv_queue::PlaybackTitleParts> {
@@ -231,7 +231,7 @@ impl App {
 
     /// The plain now-playing title for `state`: the active queue item's title,
     /// or the Emby Session's title for slotless output. `None` while idle.
-    pub(in crate::app) fn now_playing_title_text(&self, state: PlaybackState) -> Option<String> {
+    pub fn now_playing_title_text(&self, state: PlaybackState) -> Option<String> {
         self.now_playing_title_parts(state)
             .map(|parts| parts.title.text)
     }
@@ -240,7 +240,11 @@ impl App {
     /// and track lists. `None` while the local player is inactive, as the
     /// status-indicator cluster is — the chips' source is the local player's
     /// stream, so a band whose playback rides a remote output carries none.
-    pub(in crate::app) fn track_chips(&self) -> Option<TrackChips> {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the playback-status lock is unavailable.
+    pub fn track_chips(&self) -> Option<TrackChips> {
         let status = self.shown_playback_status();
         if !status.active {
             return None;
@@ -288,7 +292,7 @@ impl App {
     /// whether it is the Owner's attached output: a Cast receiver by its
     /// receiver id, an Emby Session by the output's device id. The local output
     /// is attached while no remote session or remote output holds the playback.
-    pub(in crate::app) fn playback_target_choices(&self) -> Vec<PlaybackTargetChoice> {
+    pub fn playback_target_choices(&self) -> Vec<PlaybackTargetChoice> {
         let attached = self.playback_output.as_ref();
         let local = PlaybackTargetChoice {
             key: ChooserTargetKey::Local,
@@ -333,10 +337,7 @@ impl App {
     /// Which transport controls are actionable for `state`: Stop while a
     /// transport is active, and Previous and Next from the owner's queue
     /// position.
-    pub(in crate::app) fn transport_availability(
-        &self,
-        state: PlaybackState,
-    ) -> TransportAvailability {
+    pub fn transport_availability(&self, state: PlaybackState) -> TransportAvailability {
         let (previous, next) = self.transport_prev_next_available();
         TransportAvailability {
             stop: state.active,

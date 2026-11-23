@@ -19,7 +19,7 @@ impl App {
     /// because the destination's default context is its root. Every retained
     /// Audiobookshelf podcast state also returns to the default state-pill
     /// fan-out scope (design D5).
-    pub(in crate::app) fn reset_browse_root_defaults(&mut self) {
+    pub fn reset_browse_root_defaults(&mut self) {
         for idx in 0..self.libs.len() {
             self.reset_library_browse_root(idx);
         }

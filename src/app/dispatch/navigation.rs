@@ -17,7 +17,7 @@ impl App {
     /// own selected item and routes it through the same tail) so the two
     /// paths share one body — the effect acts on the supplied item directly,
     /// never on a re-read App cursor.
-    pub(in crate::app) fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let ct = self.libs[lib_idx].library.collection_type.clone();
             self.play_folder(&item.id.clone(), ct);
@@ -26,7 +26,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             self.open_browse_folder(lib_idx, item);
         } else if is_playable(&item) {
@@ -118,7 +118,7 @@ impl App {
     /// from the episode's own containing item otherwise: a flat Latest or
     /// Upcoming row is outside every cached season, its payload still names
     /// the season it belongs to.
-    pub(in crate::app) fn play_tv_episode(&mut self, episode: EmbyItem) {
+    pub fn play_tv_episode(&mut self, episode: EmbyItem) {
         let season_id = self.season_id_for_episode(&episode);
         if let Some(season_id) = season_id
             && self.play_autoloaded_children(&season_id, &episode, mbv_queue::QueueSource::Series)
@@ -178,7 +178,7 @@ impl App {
     /// of dropping the setting. Returns false — leaving playback to the
     /// caller — when the item names no containing item, the policy is off, the
     /// fetch fails, or `fresh` is not in the resolved list.
-    pub(in crate::app) fn play_autoloaded_containing_folder(
+    pub fn play_autoloaded_containing_folder(
         &mut self,
         fresh: &EmbyItem,
         queue_source: mbv_queue::QueueSource,
@@ -191,7 +191,8 @@ impl App {
 
     /// The queue source a flat video activation claims: an episode's queue is
     /// its series; any other video is a one-container queue.
-    pub(in crate::app) fn flat_activation_queue_source(fresh: &EmbyItem) -> mbv_queue::QueueSource {
+    #[must_use]
+    pub fn flat_activation_queue_source(fresh: &EmbyItem) -> mbv_queue::QueueSource {
         if fresh.series_id.is_empty() {
             mbv_queue::QueueSource::Unknown
         } else {
@@ -269,11 +270,7 @@ impl App {
     /// false when no cached candidate holds the track: resolution failure
     /// flashes the existing library error and leaves queue and playback
     /// unchanged.
-    pub(in crate::app) fn play_grouped_track(
-        &mut self,
-        album_target: &str,
-        track_id: &str,
-    ) -> bool {
+    pub fn play_grouped_track(&mut self, album_target: &str, track_id: &str) -> bool {
         let Some(action) = self.grouped_track_play_action(album_target, track_id) else {
             self.flash(
                 "Library error: track is no longer available".into(),
@@ -293,7 +290,11 @@ impl App {
     /// The tree supplies only its stable album occurrence target and track ID;
     /// this shell-side resolver chooses the cached ordered queue according to
     /// the current autoload policy and returns the complete pending action.
-    pub(in crate::app) fn grouped_track_play_action(
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn grouped_track_play_action(
         &self,
         album_target: &str,
         track_id: &str,
@@ -336,7 +337,7 @@ impl App {
         true
     }
 
-    pub(in crate::app) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
+    pub fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
         let Some((tracks, start_idx)) = self.resolve_playable_album_tracks(album_id, &track.id)
         else {
             return false;
@@ -348,7 +349,7 @@ impl App {
     /// and `play_album_track`: find the cached candidate list containing
     /// `track_id`, keep only playable tracks, sort them, and locate `track_id`'s
     /// resulting position.
-    pub(in crate::app) fn resolve_playable_album_tracks(
+    pub fn resolve_playable_album_tracks(
         &self,
         album_id: &str,
         track_id: &str,
@@ -369,18 +370,14 @@ impl App {
     /// The caller has resolved this ordered sequence from the shell-owned
     /// artist-detail projection; this method deliberately reuses the existing
     /// Album queue source and routed playback executor.
-    pub(in crate::app) fn play_artist_tracks(
-        &mut self,
-        tracks: Vec<EmbyItem>,
-        start_idx: usize,
-    ) -> bool {
+    pub fn play_artist_tracks(&mut self, tracks: Vec<EmbyItem>, start_idx: usize) -> bool {
         if tracks.is_empty() || start_idx >= tracks.len() {
             return false;
         }
         self.replace_and_route_album_queue(tracks, start_idx)
     }
 
-    pub(in crate::app) fn go_back(&mut self, lib_idx: usize) {
+    pub fn go_back(&mut self, lib_idx: usize) {
         // Defensive bounds check; see `move_lib_cursor_rows` in
         // `lib_cursor_actions.rs` for the stale index contract. Never
         // substitute library zero on a miss.

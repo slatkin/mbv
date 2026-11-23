@@ -6,7 +6,7 @@ use mbv_queue::{QueueItem, QueueItemKind};
     reason = "four independently intersected backend capabilities (playable, queue-admissible, removable, played-state-capable); all four co-occur for all-Emby selections and unit tests assert each axis independently (design analysis, issue #804)"
 )]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(in crate::app) struct ItemCapabilities {
+pub struct ItemCapabilities {
     pub playable: bool,
     pub queue_admissible: bool,
     pub removable: bool,

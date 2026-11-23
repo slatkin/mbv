@@ -29,7 +29,7 @@ impl App {
     /// scenario "A different cast target is selected while one is
     /// attached"). The Client holds no receiver connection: the owner
     /// connects and broadcasts the resulting `CtrlEvent::PlaybackOutput`.
-    pub(in crate::app) fn select_panel_target(&mut self, target: PanelTarget) {
+    pub fn select_panel_target(&mut self, target: PanelTarget) {
         match target {
             PanelTarget::Emby(session) => self.activate_session_target(&session),
             PanelTarget::Cast(receiver) => {
@@ -51,7 +51,7 @@ impl App {
     /// active, or the receiver already is the output) and the confirmed
     /// continue-playback answer: sever, dismiss the panel, and send the
     /// selection — the owner performs the hand-off itself.
-    pub(in crate::app) fn select_cast_output(&mut self, receiver: CastReceiver) {
+    pub fn select_cast_output(&mut self, receiver: CastReceiver) {
         self.sever_connections_without_output_change();
         // Same panel-close-on-connect parity as the Emby path
         // (`connect_to_session` dismisses the Sessions sidebar).
@@ -70,7 +70,7 @@ impl App {
     /// invoke both, never wait on this one before showing Emby rows. A test
     /// build records that the browse started but runs no LAN browse: a test
     /// injects its receivers instead (`set_cast_receivers_for_test`).
-    pub(in crate::app) fn spawn_cast_discovery(&mut self) {
+    pub fn spawn_cast_discovery(&mut self) {
         self.record_cast_discovery_start();
         let browse = cast_browse();
         let tx = self.channels.cast_tx.clone();
@@ -94,7 +94,7 @@ impl App {
         let _ = self;
     }
 
-    pub(in crate::app) fn handle_cast_event(&mut self, event: CastEvent) {
+    pub fn handle_cast_event(&mut self, event: CastEvent) {
         match event {
             CastEvent::DiscoveryCompleted(receivers) => {
                 self.cast_receivers = receivers;
@@ -103,7 +103,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn drain_cast_events(&mut self) -> bool {
+    pub fn drain_cast_events(&mut self) -> bool {
         let mut produced = false;
         while let Ok(event) = self.channels.cast_rx.try_recv() {
             produced = true;

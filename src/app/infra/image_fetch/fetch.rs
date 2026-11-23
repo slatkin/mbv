@@ -24,7 +24,7 @@ impl App {
     /// drilling in first. A simple one-shot fetch (no throttle queue) —
     /// only one album is ever highlighted at a time, so there is no fan-out
     /// to bound.
-    pub(in crate::app) fn fetch_album_tracks(&mut self, album_id: String) {
+    pub fn fetch_album_tracks(&mut self, album_id: String) {
         if self.album_tracks_loading.contains(&album_id)
             || self.album_tracks_cache.contains_key(&album_id)
         {
@@ -59,7 +59,7 @@ impl App {
     /// Proactively fetches TV series detail (seasons + episodes) so the
     /// Inline series detail pane can render without the user
     /// drilling in first.
-    pub(in crate::app) fn fetch_series_detail(&mut self, series_id: &str) {
+    pub fn fetch_series_detail(&mut self, series_id: &str) {
         if series_id.is_empty() {
             return;
         }
@@ -93,11 +93,7 @@ impl App {
     /// in the cache. The detail event handler arms the first season and any
     /// pending expansions; a season-pill click or a keyboard season move
     /// arms the selected pill the same way.
-    pub(in crate::app) fn fetch_series_season_episodes(
-        &mut self,
-        series_id: String,
-        season_id: String,
-    ) {
+    pub fn fetch_series_season_episodes(&mut self, series_id: String, season_id: String) {
         let key = (series_id.clone(), season_id.clone());
         let Some(detail) = self.series_detail_cache.get(&series_id) else {
             if !series_id.is_empty() && !season_id.is_empty() {

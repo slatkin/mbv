@@ -12,7 +12,7 @@ use mbv_ui_model::ui_util::natural_sort_key;
 
 /// Classification for an explicit Emby play against the attached owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) enum PlaybackEligibility {
+pub enum PlaybackEligibility {
     Ineligible,
     WhollyUnplayable { unplayable_count: usize },
     Mixed { unplayable_count: usize },
@@ -60,7 +60,7 @@ fn classify_playback_eligibility(
 impl App {
     /// Return the audio-only fall-through decision for an explicit Emby play.
     /// Empty/unknown selections and Library routes remain on today's path.
-    pub(in crate::app) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
+    pub fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
         let attached = true;
         // The owner's Emby Session output carries its own playable-media
         // capability (design D12); every other owner uses the ctrl handshake.
@@ -117,7 +117,7 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn lib_page_size(&self) -> usize {
+    pub fn lib_page_size(&self) -> usize {
         // The library list is rendered into the right panel; use the panel
         // height directly (rows are single-line; subtract 1 for the
         // count/search header line).
@@ -130,11 +130,7 @@ impl App {
     /// resolved index the caller owns (component-resolved for the generic
     /// browser, or the App nav-level cursor on the legacy context-menu/mouse
     /// paths) — never re-read from `BrowseLevel` (task 4.3, R1).
-    pub(in crate::app) fn current_lib_item(
-        &self,
-        lib_idx: usize,
-        cursor: usize,
-    ) -> Option<EmbyItem> {
+    pub fn current_lib_item(&self, lib_idx: usize, cursor: usize) -> Option<EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
@@ -147,7 +143,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn play_items_routed(
+    pub fn play_items_routed(
         &mut self,
         items: Vec<EmbyItem>,
         start_idx: usize,
@@ -212,7 +208,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn play_item(&mut self, item: EmbyItem) {
+    pub fn play_item(&mut self, item: EmbyItem) {
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return;
@@ -332,7 +328,7 @@ impl App {
         self.defer_local_play(vec![item], 0, self.playback_queue().source().clone());
     }
 
-    pub(in crate::app) fn do_enqueue_folder(&mut self, item: &mbv_emby_model::EmbyItem) {
+    pub fn do_enqueue_folder(&mut self, item: &mbv_emby_model::EmbyItem) {
         self.do_enqueue_folder_before(item, None);
     }
 
@@ -340,7 +336,11 @@ impl App {
     /// playable items enter at: `before` is the owner slot they precede, and
     /// `None` admits them at the tail (add-gui-library-panel design D8's play
     /// next keeps a folder's items next).
-    pub(in crate::app) fn do_enqueue_folder_before(
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn do_enqueue_folder_before(
         &mut self,
         item: &mbv_emby_model::EmbyItem,
         before: Option<u64>,
@@ -400,11 +400,7 @@ impl App {
     /// the owner's answer.
     /// Callers resolve their own provider-specific selection/admission ahead
     /// of the call. Returns whether the submit succeeded.
-    pub(in crate::app) fn submit_queue_item(
-        &mut self,
-        item: QueueItem,
-        start_playback: bool,
-    ) -> bool {
+    pub fn submit_queue_item(&mut self, item: QueueItem, start_playback: bool) -> bool {
         // The shown queue is always the playback target's queue (ADR 0034),
         // so both submit shapes target one link.
         if !start_playback {
@@ -452,11 +448,7 @@ impl App {
     /// the owner slot the items enter ahead of, and `None` admits them at the
     /// tail (the play-next path carries the slot after the active one,
     /// add-gui-library-panel design D8).
-    pub(in crate::app) fn append_on_owner(
-        &mut self,
-        items: Vec<QueueItem>,
-        before: Option<u64>,
-    ) -> bool {
+    pub fn append_on_owner(&mut self, items: Vec<QueueItem>, before: Option<u64>) -> bool {
         // Entries appear only when the owner's answered Append is adopted. The
         // append names the shown queue, so an enqueue from the Library panel
         // reaches the queue the panel shows (design D7 of `gui-named-queues`).

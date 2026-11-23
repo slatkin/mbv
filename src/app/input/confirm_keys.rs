@@ -11,11 +11,7 @@ impl App {
     /// Only Enter (and `d`/Esc on the dirty-playlist prompt, Esc on the
     /// session-switch hand-off fork) answers; every other key is a no-op
     /// that leaves the modal mounted.
-    pub(in crate::app) fn apply_confirm_action(
-        &mut self,
-        action: ConfirmAction,
-        key: KeyEvent,
-    ) -> bool {
+    pub fn apply_confirm_action(&mut self, action: ConfirmAction, key: KeyEvent) -> bool {
         match action {
             ConfirmAction::ClearQueue => self.confirm_clear_queue(key),
             ConfirmAction::RemoveActiveQueueItem(pos) => {
@@ -271,7 +267,7 @@ impl App {
     }
 
     /// Show the clear-queue confirmation modal (called from `QueueIntent::Clear`).
-    pub(in crate::app) fn request_clear_queue(&mut self) {
+    pub fn request_clear_queue(&mut self) {
         let link = self.playing_queue_link();
         // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote
         // link outright, which also swallowed `c` for a socket-attached mbvd

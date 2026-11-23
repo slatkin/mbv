@@ -8,6 +8,7 @@ use mbv_cast::discovery::CastReceiver;
 /// A background cast discovery browse (`App::spawn_cast_discovery`)
 /// completed -- possibly empty, since `browse_cast_receivers` never errors
 /// (see `mbv_cast::discovery`). Drives `App::rebuild_panel_targets` (8.1).
-pub(in crate::app) enum CastEvent {
+#[derive(Debug)]
+pub enum CastEvent {
     DiscoveryCompleted(Vec<CastReceiver>),
 }

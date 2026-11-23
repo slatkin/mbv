@@ -51,7 +51,11 @@ fn resolve_chapter_activation(
 // ---- Book browsing actions -----------------------------------------
 
 impl App {
-    pub(in crate::app) fn audiobookshelf_book_refresh(&mut self) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn audiobookshelf_book_refresh(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -95,7 +99,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn select_audiobookshelf_book(&mut self, cursor: usize) {
+    pub fn select_audiobookshelf_book(&mut self, cursor: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -115,7 +119,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn select_audiobookshelf_book_target(&mut self, target: &str) {
+    pub fn select_audiobookshelf_book_target(&mut self, target: &str) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -139,7 +143,7 @@ impl App {
     /// it locally and carries the resolved row at activation time. This
     /// handler exists only so the `ChapterFocus` request stays claimed and
     /// routed (a redraw nudge); it stores nothing shell-side.
-    pub(in crate::app) fn set_audiobookshelf_book_chapter_focus(
+    pub fn set_audiobookshelf_book_chapter_focus(
         _selection: Option<mbv_ui_msg::BookChapterTarget>,
     ) {
     }
@@ -148,7 +152,7 @@ impl App {
     /// the pill's click target -- the established pattern from
     /// `select_music_group`), narrowing the right-pane list to it and
     /// re-anchoring the cursor into the new bucket when it falls outside.
-    pub(in crate::app) fn select_audiobookshelf_book_bucket(&mut self, bucket_pos: usize) {
+    pub fn select_audiobookshelf_book_bucket(&mut self, bucket_pos: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -184,7 +188,7 @@ impl App {
     /// offset through the same play path the book row uses. Unresolvable
     /// chapters or books flash a concise error instead of silently
     /// doing nothing.
-    pub(in crate::app) fn activate_audiobookshelf_book_row_target(
+    pub fn activate_audiobookshelf_book_row_target(
         &mut self,
         target: Option<mbv_ui_msg::BookChapterTarget>,
     ) {
@@ -210,7 +214,7 @@ impl App {
     /// offset through the same play path the book row uses. Unresolvable
     /// chapters or books flash a concise error instead of silently
     /// doing nothing.
-    pub(in crate::app) fn activate_audiobookshelf_book_chapter(
+    pub fn activate_audiobookshelf_book_chapter(
         &mut self,
         lib_idx: usize,
         book_id: &str,
@@ -266,7 +270,7 @@ impl App {
         audiobookshelf_book_queue_item(state)
     }
 
-    pub(in crate::app) fn play_selected_audiobookshelf_book(&mut self, index: usize) {
+    pub fn play_selected_audiobookshelf_book(&mut self, index: usize) {
         let Some(item) = self.selected_audiobookshelf_book_queue_item(index) else {
             return;
         };

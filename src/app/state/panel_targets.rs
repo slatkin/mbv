@@ -10,7 +10,7 @@ use mbv_ui_model::panel_targets::{SessionTargetKey, SessionTargetRow};
 
 /// Shell-owned target used for resolving an activation against live runtime data.
 #[derive(Clone, Debug)]
-pub(in crate::app) enum PanelTarget {
+pub enum PanelTarget {
     Emby(Box<SessionInfo>),
     Cast(CastReceiver),
 }

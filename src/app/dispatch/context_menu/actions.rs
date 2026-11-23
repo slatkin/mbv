@@ -31,7 +31,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn execute_context_action(
+    pub fn execute_context_action(
         &mut self,
         action: Option<ContextAction>,
         cw_item: Option<EmbyItem>,
@@ -536,7 +536,11 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn remove_from_continue_watching(&mut self, item: &EmbyItem) {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn remove_from_continue_watching(&mut self, item: &EmbyItem) {
         // The shell resolved the target Continue Watching item at the Model
         // boundary from the stored `home_content` (task 5.3d) -- the App no
         // longer holds `home.continue_items`/`continue_cursor` to re-read.
@@ -569,7 +573,11 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn toggle_watched_home_item(&mut self, item: &EmbyItem) {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn toggle_watched_home_item(&mut self, item: &EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }
@@ -611,7 +619,7 @@ impl App {
     /// section and Service identity"): for each Service, the one
     /// mark entry its destination menu builds from the item's cached state —
     /// mark played when unfinished, mark unplayed when finished.
-    pub(in crate::app) fn toggle_recent_item_played_state(&mut self, item: &QueueItem) {
+    pub fn toggle_recent_item_played_state(&mut self, item: &QueueItem) {
         match item {
             QueueItem::Emby(item) => self.toggle_watched_home_item(item),
             QueueItem::Feed(entry) => {
@@ -640,7 +648,11 @@ impl App {
     /// and correct when the component-selected item differs from a parked
     /// App cursor. Feed-view groups keep their rows when a video is marked
     /// played (task 4.1, design D4).
-    pub(in crate::app) fn toggle_watched_item(&mut self, lib_idx: usize, item: &EmbyItem) {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn toggle_watched_item(&mut self, lib_idx: usize, item: &EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }

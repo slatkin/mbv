@@ -9,7 +9,7 @@ pub(in crate::app) struct LocalPlaybackTarget;
 
 impl App {
     /// Returns the observed playback state for rendering.
-    pub(in crate::app) fn effective_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
+    pub fn effective_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         // The panel and its gates follow the shown entry's owner (design D7 of
         // `gui-named-queues`, ADR 0041), so a GUI Client showing a local queue
         // while a peer holds the connection paints and gates on the local
@@ -54,7 +54,7 @@ impl App {
     /// state: active-and-unpaused `Playing`, active-and-paused `Paused`,
     /// inactive `Idle` (a paused flag on an inactive transport is
     /// unreachable and collapses to `Idle`).
-    pub(in crate::app) fn now_playing_status(&self) -> NowPlayingStatus {
+    pub fn now_playing_status(&self) -> NowPlayingStatus {
         let state = self.effective_playback_state();
         match (state.active, state.paused) {
             (true, false) => NowPlayingStatus::Playing,
@@ -73,18 +73,18 @@ impl App {
     /// still slot, the compact strip, and the rail) painting none of the
     /// item's art with no way to show it again. Such a Client therefore
     /// neither acts on the hide nor writes it.
-    pub(in crate::app) fn visual_slot_hide_in_effect(&self) -> bool {
+    pub fn visual_slot_hide_in_effect(&self) -> bool {
         self.client_capabilities
             .has(ClientCapability::VisualSlotControls)
             && self.visual_slot_hidden
     }
 
     /// Whether the `QueueColumn`'s visual slot should be reserved and painted.
-    pub(in crate::app) fn visual_slot_shown(&self) -> bool {
+    pub fn visual_slot_shown(&self) -> bool {
         self.now_playing_status() != NowPlayingStatus::Idle && !self.visual_slot_hide_in_effect()
     }
 
-    pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
+    pub fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
         self.queue_for_link(self.playing_queue_link())
             .pending_playback_slot()
     }
@@ -93,7 +93,7 @@ impl App {
     /// while a selected slot awaits the playback owner's report -- that slot
     /// with no progress. Presentation only: authority consumers (transport
     /// gates, effects, reporting) keep `effective_playback_state`.
-    pub(in crate::app) fn displayed_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
+    pub fn displayed_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         let state = self.effective_playback_state();
         let Some(index) = self.pending_playback_index() else {
             return state;
@@ -123,9 +123,7 @@ impl App {
             .slot_index(target)
     }
 
-    pub(in crate::app) fn displayed_queue_playback_state(
-        &self,
-    ) -> mbv_ui_model::playback::PlaybackState {
+    pub fn displayed_queue_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         // A shown resting Named queue is not the run's queue: the local
         // Owner's playback names slots of the current queue, so reading its
         // index against the resting queue's rows would mark a row the run
@@ -146,7 +144,7 @@ impl App {
     /// control scenario keeps the target presented as disconnected and the
     /// output selection usable. `None` (no report yet, or the connection was
     /// replaced/lost) and `Local` both read as not-Cast.
-    pub(in crate::app) fn output_is_cast(&self) -> bool {
+    pub fn output_is_cast(&self) -> bool {
         matches!(
             self.playback_output,
             Some(mbv_ctrl::OutputState::Cast { .. })
@@ -158,7 +156,7 @@ impl App {
     /// counts, like a
     /// `Disconnected` Cast target. `None` and `Local` both read as not an
     /// Emby Session.
-    pub(in crate::app) fn output_is_emby_session(&self) -> bool {
+    pub fn output_is_emby_session(&self) -> bool {
         matches!(
             self.playback_output,
             Some(mbv_ctrl::OutputState::EmbySession { .. })

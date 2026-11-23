@@ -8,12 +8,14 @@ use mbv_queue::ServiceKind;
 use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use std::sync::mpsc;
 
+#[derive(Debug)]
 pub(in crate::app) enum AudiobookshelfCompletionKind {
     Startup,
     Test,
 }
 
-pub(in crate::app) struct AudiobookshelfCompletion {
+#[derive(Debug)]
+pub struct AudiobookshelfCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) kind: AudiobookshelfCompletionKind,
     pub(in crate::app) result:
@@ -368,18 +370,21 @@ pub(in crate::app) fn classify_audiobookshelf_failure(
     }
 }
 
-pub(in crate::app) struct Completion {
+#[derive(Debug)]
+pub struct Completion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) result: Result<Startup, EmbyFailure>,
 }
 
+#[derive(Debug)]
 pub(in crate::app) struct Startup {
     pub(in crate::app) client: EmbyClient,
     pub(in crate::app) bootstrap: mbv_emby::EmbyBootstrap,
     pub(in crate::app) setup: EmbySetup,
 }
 
-pub(in crate::app) struct SetupCompletion {
+#[derive(Debug)]
+pub struct SetupCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) previous_state: ServiceState,
     pub(in crate::app) result: Result<Startup, mbv_emby::EmbyError>,

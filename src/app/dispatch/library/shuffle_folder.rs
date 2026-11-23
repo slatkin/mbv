@@ -17,7 +17,7 @@ impl App {
     /// level's parent is shuffled (falling back to the library id exactly as
     /// the legacy shuffle path did). The folder target comes from the supplied item,
     /// never from re-reading `BrowseLevel.cursor`.
-    pub(in crate::app) fn shuffle_play_selected(&mut self, lib_idx: usize, item: &EmbyItem) {
+    pub fn shuffle_play_selected(&mut self, lib_idx: usize, item: &EmbyItem) {
         let explicit_folder = item.is_folder.then_some(item.id.clone());
         self.shuffle_play_target(lib_idx, explicit_folder);
     }
@@ -27,11 +27,7 @@ impl App {
     /// item is a folder (the typed browser path supplies it from the
     /// component-resolved item); when `None`, the current browse level's
     /// parent is shuffled, falling back to the library id.
-    pub(in crate::app) fn shuffle_play_target(
-        &mut self,
-        lib_idx: usize,
-        explicit_folder: Option<String>,
-    ) {
+    pub fn shuffle_play_target(&mut self, lib_idx: usize, explicit_folder: Option<String>) {
         // Defensive bounds check; the shell also
         // derives a fresh `lib_idx`, so a synchronous tab change can race in).
         if lib_idx >= self.libs.len() {
@@ -61,12 +57,11 @@ impl App {
     /// and natural track ordering as the existing folder effects; concatenating
     /// those results preserves album/tree order without replacing the queue per
     /// album.
-    pub(in crate::app) fn play_music_albums(
-        &mut self,
-        albums: Vec<EmbyItem>,
-        shuffle: bool,
-        confirm: bool,
-    ) {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn play_music_albums(&mut self, albums: Vec<EmbyItem>, shuffle: bool, confirm: bool) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
@@ -139,7 +134,7 @@ impl App {
     /// source is set inside the gated confirmed path (via the action), never
     /// here, so cancelling the prompt leaves the queue source unchanged
     /// (design D4).
-    pub(in crate::app) fn play_folder(&mut self, folder_id: &str, collection_type: String) {
+    pub fn play_folder(&mut self, folder_id: &str, collection_type: String) {
         self.play_folder_gated(folder_id, collection_type, true);
     }
 
@@ -151,12 +146,11 @@ impl App {
     /// swallowed. The local saved-playlist protection stays: the run still
     /// goes through `replace_queue_or_prompt`, which raises the save/discard
     /// prompt a dirty saved playlist owes.
-    pub(in crate::app) fn play_folder_gated(
-        &mut self,
-        folder_id: &str,
-        collection_type: String,
-        confirm: bool,
-    ) {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn play_folder_gated(&mut self, folder_id: &str, collection_type: String, confirm: bool) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
@@ -198,7 +192,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn is_tvshows_library(&self, lib_idx: usize) -> bool {
+    pub fn is_tvshows_library(&self, lib_idx: usize) -> bool {
         self.libs[lib_idx].library.collection_type == "tvshows"
     }
 
@@ -207,11 +201,15 @@ impl App {
     /// `execute_context_action` pass the library the folder was reached
     /// through), so this no longer reads the selected tab. Bounds-misses
     /// return false (defensive; never substitute library zero).
-    pub(in crate::app) fn active_lib_is_tvshows(&self, lib_idx: usize) -> bool {
+    pub fn active_lib_is_tvshows(&self, lib_idx: usize) -> bool {
         lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)
     }
 
-    pub(in crate::app) fn shuffle_folder(&mut self, lib_idx: usize, folder_id: &str) {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn shuffle_folder(&mut self, lib_idx: usize, folder_id: &str) {
         // TV libraries shuffle from a video-only fetch (Episode/Movie/Video)
         // so a season/series shuffle can't pull in stray Audio items (e.g.
         // theme songs); every other library type keeps the broader

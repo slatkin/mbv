@@ -58,7 +58,7 @@ impl App {
         self.build_context_menu_for(None, home_cw_selected, cw_item)
     }
 
-    pub(in crate::app) fn open_feeds_context_menu(&mut self, entries: &[mbv_queue::FeedEntry]) {
+    pub fn open_feeds_context_menu(&mut self, entries: &[mbv_queue::FeedEntry]) {
         if entries.is_empty() {
             return;
         }
@@ -76,9 +76,8 @@ impl App {
     /// context-menus design D3), shared by the TUI's opener and the GUI
     /// Library panel's carried row menu: the split is on entry count, never
     /// on presentation.
-    pub(in crate::app) fn build_feeds_menu_entries(
-        entries: &[mbv_queue::FeedEntry],
-    ) -> Vec<ContextMenuEntry> {
+    #[must_use]
+    pub fn build_feeds_menu_entries(entries: &[mbv_queue::FeedEntry]) -> Vec<ContextMenuEntry> {
         let entries = entries.to_vec();
         let mut menu_entries = Vec::new();
         // Standard action set split on entry count (context-menu spec,
@@ -138,10 +137,7 @@ impl App {
     /// one mark entry its cached progress state chooses (a missing entry
     /// counts as unfinished); a multi-selection adds Shuffle and offers both
     /// mark entries.
-    pub(in crate::app) fn open_audiobookshelf_context_menu(
-        &mut self,
-        targets: &[AudiobookshelfMenuTarget],
-    ) {
+    pub fn open_audiobookshelf_context_menu(&mut self, targets: &[AudiobookshelfMenuTarget]) {
         if targets.is_empty() {
             return;
         }
@@ -160,7 +156,7 @@ impl App {
     /// and the GUI Library panel's carried row menu: a leaf row offers the one
     /// mark entry its cached progress state chooses, and a multi-selection
     /// adds Shuffle and both mark entries.
-    pub(in crate::app) fn build_audiobookshelf_menu_entries(
+    pub fn build_audiobookshelf_menu_entries(
         &self,
         targets: &[AudiobookshelfMenuTarget],
     ) -> Vec<ContextMenuEntry> {
@@ -215,10 +211,7 @@ impl App {
     /// Cached finished state for one menu target across every Audiobookshelf
     /// browse state. A missing progress entry counts as unfinished (design
     /// D3), matching how the server reports items without listening progress.
-    pub(in crate::app) fn audiobookshelf_target_finished(
-        &self,
-        target: &AudiobookshelfMenuTarget,
-    ) -> bool {
+    pub fn audiobookshelf_target_finished(&self, target: &AudiobookshelfMenuTarget) -> bool {
         match target {
             AudiobookshelfMenuTarget::Episode {
                 library_item_id,
@@ -241,11 +234,7 @@ impl App {
     /// It is load-bearing under Queue panel focus while Home is
     /// the active Tab selection; the `self.tab.is_home()` guard short-circuits
     /// it on all other paths.
-    pub(in crate::app) fn open_context_menu(
-        &mut self,
-        home_cw_selected: bool,
-        cw_item: Option<EmbyItem>,
-    ) {
+    pub fn open_context_menu(&mut self, home_cw_selected: bool, cw_item: Option<EmbyItem>) {
         if let Some(menu) = self.build_context_menu(home_cw_selected, cw_item) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
@@ -256,7 +245,7 @@ impl App {
     /// is never a Home-tab menu, so `home_cw_selected` is a harmless `false`
     /// and `cw_item` a harmless `None` (the `self.tab.is_home()` guard
     /// short-circuits both).
-    pub(in crate::app) fn open_context_menu_for(&mut self, item: EmbyItem) {
+    pub fn open_context_menu_for(&mut self, item: EmbyItem) {
         if let Some(menu) = self.build_context_menu_for(Some(item), false, None) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
@@ -265,7 +254,7 @@ impl App {
     /// Build the common multi-selection menu. Capability derivation is an
     /// intersection: an action is present only when every selected item has
     /// the corresponding backend.
-    pub(in crate::app) fn open_context_menu_for_selection(
+    pub fn open_context_menu_for_selection(
         &mut self,
         items: &[EmbyItem],
         focus: PanelFocus,
@@ -286,7 +275,7 @@ impl App {
     /// anchors the menu on the first selected slot itself. The TUI's
     /// multi-selection right-click takes it too and sets the pointer anchor
     /// itself before the raise.
-    pub(in crate::app) fn build_queue_selection_menu(
+    pub fn build_queue_selection_menu(
         &mut self,
         slot_ids: &[mbv_queue::QueueSlotId],
     ) -> Option<ContextMenu> {
@@ -325,7 +314,8 @@ impl App {
     /// The common multi-selection menu's entries, without the shell raise:
     /// capability derivation is an intersection — an action is present only
     /// when every selected item has the corresponding backend.
-    pub(in crate::app) fn build_selection_menu(
+    #[must_use]
+    pub fn build_selection_menu(
         capabilities: Vec<ItemCapabilities>,
         items: &[EmbyItem],
         remove_targets: Vec<BulkRemoveTarget>,
@@ -390,7 +380,7 @@ impl App {
     /// pointer-opened menu (narrow grouped-Music album right-click). The menu
     /// is built with the keyboard anchor; the Client sets the pointer anchor
     /// it recorded before it places the menu (design D6).
-    pub(in crate::app) fn open_context_menu_for_at(&mut self, item: EmbyItem) {
+    pub fn open_context_menu_for_at(&mut self, item: EmbyItem) {
         self.open_context_menu_for(item);
     }
 
@@ -404,11 +394,7 @@ impl App {
     /// arm (task 5.3d); the Queue-focus right-click path (which renders the
     /// queue item, not the CW item) passes `None` — execution resolves it at
     /// the Model boundary instead.
-    pub(in crate::app) fn open_context_menu_at(
-        &mut self,
-        home_cw_selected: bool,
-        cw_item: Option<EmbyItem>,
-    ) {
+    pub fn open_context_menu_at(&mut self, home_cw_selected: bool, cw_item: Option<EmbyItem>) {
         self.open_context_menu_at_for_item(home_cw_selected, cw_item, None);
     }
 
@@ -416,7 +402,7 @@ impl App {
     /// tracked item. The menu is built with the keyboard anchor; the Client
     /// sets the pointer anchor it recorded before it places the menu (design
     /// D6).
-    pub(in crate::app) fn open_context_menu_at_for_item(
+    pub fn open_context_menu_at_for_item(
         &mut self,
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,
@@ -433,7 +419,7 @@ impl App {
     /// rather than the destination-derived panel. The Client sets the pointer
     /// anchor it recorded before it places the menu (design D6). The label
     /// names the other content, never a toggle.
-    pub(in crate::app) fn open_visual_slot_context_menu(&mut self) {
+    pub fn open_visual_slot_context_menu(&mut self) {
         if !self.visual_slot_shown() {
             return;
         }

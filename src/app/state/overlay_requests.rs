@@ -14,48 +14,39 @@ impl App {
         self.pending_overlay.take()
     }
 
-    pub(in crate::app) fn request_sidebar_open(
-        &mut self,
-        sidebar: mbv_ui_model::overlay::SidebarId,
-    ) {
+    pub fn request_sidebar_open(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(sidebar));
     }
 
-    pub(in crate::app) fn request_sidebar_dismiss(
-        &mut self,
-        sidebar: mbv_ui_model::overlay::SidebarId,
-    ) {
+    pub fn request_sidebar_dismiss(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSidebar(
             sidebar,
         ));
     }
 
-    pub(in crate::app) fn request_sidebar_toggle(
-        &mut self,
-        sidebar: mbv_ui_model::overlay::SidebarId,
-    ) {
+    pub fn request_sidebar_toggle(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ToggleSidebar(
             sidebar,
         ));
     }
 
-    pub(in crate::app) fn ask_confirm(&mut self, modal: ConfirmModal) {
+    pub fn ask_confirm(&mut self, modal: ConfirmModal) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal));
     }
 
-    pub(in crate::app) fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
+    pub fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::SavePlaylist(dialog));
     }
 
-    pub(in crate::app) fn dismiss_confirm(&mut self) {
+    pub fn dismiss_confirm(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm);
     }
 
-    pub(in crate::app) fn dismiss_daemon_lost(&mut self) {
+    pub fn dismiss_daemon_lost(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissDaemonLost);
     }
 
-    pub(in crate::app) fn dismiss_save_playlist(&mut self) {
+    pub fn dismiss_save_playlist(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSavePlaylist);
     }
 }

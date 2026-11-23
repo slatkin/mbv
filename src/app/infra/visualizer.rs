@@ -3,7 +3,7 @@ use crate::app::state::client_capabilities::ClientCapability;
 use mbv_visualizer::PipeWireWorker;
 
 impl App {
-    pub(in crate::app) fn sync_visualizer(&mut self) {
+    pub fn sync_visualizer(&mut self) {
         self.drain_visualizer_worker();
 
         let should_run = self.visualizer_should_run();
@@ -59,14 +59,14 @@ impl App {
             && !self.visual_slot_hide_in_effect()
     }
 
-    pub(in crate::app) fn stop_visualizer_capture(&mut self) {
+    pub fn stop_visualizer_capture(&mut self) {
         if let Some(mut worker) = self.visualizer.take() {
             worker.stop();
         }
         self.visualizer_window = mbv_visualizer::StereoSampleWindow::default();
     }
 
-    pub(in crate::app) fn toggle_visualizer(&mut self) {
+    pub fn toggle_visualizer(&mut self) {
         if self.visual_slot_hide_in_effect() {
             return;
         }
@@ -82,7 +82,7 @@ impl App {
     /// visualizer owns the slot), so enabling it there would blank the art with
     /// nothing in its place: a Client without `VisualSlotControls` makes this
     /// selection a no-op.
-    pub(in crate::app) fn set_visualizer(&mut self, enabled: bool) {
+    pub fn set_visualizer(&mut self, enabled: bool) {
         if !self
             .client_capabilities
             .has(ClientCapability::VisualSlotControls)
@@ -105,7 +105,7 @@ impl App {
     /// neither acts on the hide nor writes it
     /// (`App::visual_slot_hide_in_effect`), so the state and the stored
     /// preference stay the TUI's.
-    pub(in crate::app) fn set_visual_slot_hidden(&mut self, hidden: bool) {
+    pub fn set_visual_slot_hidden(&mut self, hidden: bool) {
         if !self
             .client_capabilities
             .has(ClientCapability::VisualSlotControls)

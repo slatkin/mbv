@@ -1,11 +1,7 @@
 use crate::app::App;
 
 impl App {
-    pub(in crate::app) fn move_music_group_display_cursor(
-        &mut self,
-        lib_idx: usize,
-        target: usize,
-    ) -> bool {
+    pub fn move_music_group_display_cursor(&mut self, lib_idx: usize, target: usize) -> bool {
         if !self.is_viewing_album_folders(lib_idx) {
             return false;
         }
@@ -24,11 +20,7 @@ impl App {
         true
     }
 
-    pub(in crate::app) fn jump_music_group_display_cursor(
-        &mut self,
-        lib_idx: usize,
-        target: usize,
-    ) -> bool {
+    pub fn jump_music_group_display_cursor(&mut self, lib_idx: usize, target: usize) -> bool {
         if !self.is_music_group_view(lib_idx) {
             return false;
         }
@@ -45,11 +37,7 @@ impl App {
         true
     }
 
-    pub(in crate::app) fn page_grouped_album_cursor(
-        &mut self,
-        lib_idx: usize,
-        target: usize,
-    ) -> bool {
+    pub fn page_grouped_album_cursor(&mut self, lib_idx: usize, target: usize) -> bool {
         if self.tab.emby_library_index() != Some(lib_idx)
             || !matches!(
                 self.effective_panel_focus(),

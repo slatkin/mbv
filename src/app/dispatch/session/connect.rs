@@ -7,7 +7,11 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 impl App {
-    pub(in crate::app) fn session_direct_endpoint(
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub fn session_direct_endpoint(
         &self,
         sess: &mbv_emby::SessionInfo,
     ) -> Option<mbv_remote_player::DaemonEndpoint> {
@@ -48,7 +52,7 @@ impl App {
     /// target, whatever it advertises -- `session_direct_endpoint` prefers
     /// the advertised TCP endpoint over the Local device-name match, so the
     /// endpoint alone cannot tell the own row from a peer.
-    pub(in crate::app) fn session_has_direct_endpoint(&self, sess: &mbv_emby::SessionInfo) -> bool {
+    pub fn session_has_direct_endpoint(&self, sess: &mbv_emby::SessionInfo) -> bool {
         !self.session_is_own_row(sess)
             && self
                 .session_direct_endpoint(sess)
@@ -61,7 +65,11 @@ impl App {
     /// `try_auto_reconnect`'s `DirectSession` case (#236) and the F2
     /// "Library Routes" device picker (`enter_device_stage`, #256) --
     /// library-route *resolution* itself no longer calls this (#256).
-    pub(in crate::app) fn fetch_sessions_blocking(
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock or the test override lock is poisoned.
+    pub fn fetch_sessions_blocking(
         &self,
     ) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError> {
         #[cfg(test)]
@@ -82,7 +90,11 @@ impl App {
         client.lock().unwrap().get_sessions_unfiltered()
     }
 
-    pub(in crate::app) fn connect_direct_endpoint(
+    ///
+    /// # Panics
+    ///
+    /// Panics when the direct-connect test override lock is poisoned.
+    pub fn connect_direct_endpoint(
         &self,
         endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> Result<
@@ -148,7 +160,7 @@ impl App {
     /// conflicting flash on top of that teardown path's own flash. The
     /// caller is expected to try again only on its own next natural trigger
     /// (e.g. the next play/enqueue into this route), never from a
-    pub(in crate::app) fn try_daemon_route_connect(
+    pub fn try_daemon_route_connect(
         &self,
         endpoint: &mbv_remote_player::DaemonEndpoint,
         route_label: &str,
@@ -174,7 +186,7 @@ impl App {
     /// Returns `true` when the player has been swapped to a live reattach and
     /// the caller must skip `restore_local_mode`. Local daemons are excluded:
     /// those already have the modal reconnect paths.
-    pub(in crate::app) fn try_reattach_remote_daemon(&mut self) -> bool {
+    pub fn try_reattach_remote_daemon(&mut self) -> bool {
         self.try_reattach_remote_daemon_with_sleep(std::thread::sleep)
     }
 
@@ -182,10 +194,11 @@ impl App {
     /// backoff sequence without paying wall-clock time. The loop, attempt
     /// count, and backoff constants are identical to the shipped path — only
     /// the clock differs.
-    pub(in crate::app) fn try_reattach_remote_daemon_with_sleep(
-        &mut self,
-        sleep: impl Fn(Duration),
-    ) -> bool {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn try_reattach_remote_daemon_with_sleep(&mut self, sleep: impl Fn(Duration)) -> bool {
         let Some(endpoint) = self.player_endpoint.clone() else {
             return false;
         };
@@ -265,7 +278,11 @@ impl App {
     /// all fall back to (stay on) local playback, exactly like #222's
     /// per-play lazy-connect fallback rule -- never a hard failure at
     /// startup.
-    pub(in crate::app) fn try_auto_reconnect(&mut self) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn try_auto_reconnect(&mut self) {
         if !self.config.lock().unwrap().auto_reconnect {
             tracing::info!(name: "auto_reconnect.reconnect.disabled", target: "auto_reconnect", "auto-reconnect disabled; staying local");
             return;

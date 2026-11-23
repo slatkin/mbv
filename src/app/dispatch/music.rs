@@ -29,7 +29,7 @@ impl App {
     /// a group-selector bar at top with the album list below.
     /// Activated when `music.levels` starts with `"group"` and the nav stack
     /// has a group level plus an album level above it.
-    pub(in crate::app) fn is_grouped_music_library(&self, lib_idx: usize) -> bool {
+    pub fn is_grouped_music_library(&self, lib_idx: usize) -> bool {
         self.libs[lib_idx].library.collection_type == "music"
             && self
                 .music_levels
@@ -37,7 +37,7 @@ impl App {
                 .is_some_and(|level| level == "group")
     }
 
-    pub(in crate::app) fn is_music_group_view(&self, lib_idx: usize) -> bool {
+    pub fn is_music_group_view(&self, lib_idx: usize) -> bool {
         if !self.is_grouped_music_library(lib_idx) {
             return false;
         }
@@ -53,7 +53,7 @@ impl App {
     /// miss is a rejected apply: the caller flashes the library error and
     /// leaves the active tab, nav stack, saved Library position, and
     /// retained-owner selection unchanged.
-    pub(in crate::app) fn validate_grouped_music_landing(
+    pub fn validate_grouped_music_landing(
         &self,
         library_id: &str,
         nav_stack: &[BrowseLevel],
@@ -104,7 +104,7 @@ impl App {
     /// while in the combined music group view. Pops the current album level,
     /// adjusts the group cursor (wraps around), then kicks off a fetch for
     /// the new group's albums.
-    pub(in crate::app) fn switch_music_group(&mut self, lib_idx: usize, delta: i64) {
+    pub fn switch_music_group(&mut self, lib_idx: usize, delta: i64) {
         let stack_len = self.libs[lib_idx].nav_stack.len();
         if stack_len < 2 {
             return;
@@ -170,7 +170,7 @@ impl App {
         );
     }
 
-    pub(in crate::app) fn select_music_group(&mut self, lib_idx: usize, group_cursor: usize) {
+    pub fn select_music_group(&mut self, lib_idx: usize, group_cursor: usize) {
         let stack_len = self.libs[lib_idx].nav_stack.len();
         if stack_len < 2 {
             return;
@@ -226,7 +226,7 @@ impl App {
     /// `render::LetterFilter` and
     /// `maybe_capture_library_total_and_apply_default_pill`, which populates
     /// `library_total` on a library's first load.
-    pub(in crate::app) fn should_show_letter_pills(&self, lib_idx: usize) -> bool {
+    pub fn should_show_letter_pills(&self, lib_idx: usize) -> bool {
         let Some(lib) = self.libs.get(lib_idx) else {
             return false;
         };
@@ -248,7 +248,7 @@ impl App {
     /// range from Emby (`get_items_sorted_ranged`) -- the existing in-list
     /// letter headers (`list.rs`) then bucket the smaller slice per-letter.
     /// Persists the choice so it survives a restart (`LibraryPositionLevel`).
-    pub(in crate::app) fn select_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
+    pub fn select_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
@@ -322,11 +322,7 @@ impl App {
         self.save_default_library_position(lib_idx);
     }
 
-    pub(in crate::app) fn apply_tv_letter_mode(
-        &mut self,
-        lib_idx: usize,
-        mode: &mbv_queue::TvContentMode,
-    ) {
+    pub fn apply_tv_letter_mode(&mut self, lib_idx: usize, mode: &mbv_queue::TvContentMode) {
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return;
         };
@@ -465,7 +461,11 @@ impl App {
     /// Cycles the letter-range pill row by `delta` (`[`/`]` keyboard
     /// bindings), wrapping around -- the established pattern from
     /// `switch_music_group`.
-    pub(in crate::app) fn cycle_letter_pill(&mut self, lib_idx: usize, delta: i64) {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the letter-pill count does not fit a `usize`.
+    pub fn cycle_letter_pill(&mut self, lib_idx: usize, delta: i64) {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
@@ -534,7 +534,7 @@ impl App {
     /// If the music-group library's `nav_stack` was truncated back to just the
     /// group level (e.g., by a stale breadcrumb click), immediately re-push the
     /// current group's album level so the combined view stays intact.
-    pub(in crate::app) fn ensure_music_group_album_level(&mut self, lib_idx: usize) {
+    pub fn ensure_music_group_album_level(&mut self, lib_idx: usize) {
         if lib_idx >= self.libs.len() {
             return;
         }
@@ -583,7 +583,7 @@ impl App {
 
     // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_loaded`, which stays behind in `actions.rs`.
-    pub(in crate::app) fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
+    pub fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
         // When the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.

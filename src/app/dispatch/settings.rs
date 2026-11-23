@@ -83,7 +83,7 @@ fn setting_row_kind(key: SettingKey) -> SettingRowKind {
 }
 
 impl App {
-    pub(in crate::app) fn close_settings(&mut self) {
+    pub fn close_settings(&mut self) {
         self.flush_settings_save();
         self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Main;
@@ -98,7 +98,7 @@ impl App {
     /// Panics while reading the configuration when its lock is poisoned: a
     /// writer panicked holding it, and the cached configuration cannot be
     /// trusted.
-    pub(in crate::app) fn handle_settings_activate(&mut self, key: SettingKey) {
+    pub fn handle_settings_activate(&mut self, key: SettingKey) {
         // A read-only row arms no save: it returns before the save below.
         if setting_row_kind(key) == SettingRowKind::ReadOnly {
             return;
@@ -119,7 +119,11 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn flush_settings_save(&mut self) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn flush_settings_save(&mut self) {
         if self.settings_save_at.take().is_some() {
             let cfg = self.config.lock().unwrap().clone();
             crate::app::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
@@ -138,7 +142,7 @@ impl App {
     /// Panics while writing the configuration when its lock is poisoned: a
     /// writer panicked holding it, and the cached configuration cannot be
     /// trusted.
-    pub(in crate::app) fn set_settings_value(&mut self, key: SettingKey, value: &str) {
+    pub fn set_settings_value(&mut self, key: SettingKey, value: &str) {
         match key {
             SettingKey::SubtitleMode => {
                 self.config.lock().unwrap().subtitle_mode = value.to_string();
@@ -187,18 +191,17 @@ impl App {
     /// one `set-reserve` from the collapsed width and, from the expanded width,
     /// no request at all — there a push would reserve the full expanded strip
     /// (change `panel-reserve-space`, design D4).
-    pub(in crate::app) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+    pub fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         self.apply_panel_setting_pinned(key, delta, crate::app::pin::is_pinned());
     }
 
     /// The Panel-row path with the pinned decision supplied, so a test can
     /// drive the pinned branch without claiming the process-wide identity.
-    pub(in crate::app) fn apply_panel_setting_pinned(
-        &mut self,
-        key: SettingKey,
-        delta: i32,
-        pinned: bool,
-    ) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn apply_panel_setting_pinned(&mut self, key: SettingKey, delta: i32, pinned: bool) {
         // One request in flight: an F2 step while pinwin is still working is
         // ignored, with no queue (design D4/D7).
         if pinned && self.pinned_request_pending.is_some() {
@@ -240,7 +243,11 @@ impl App {
     /// the panel. A width row records the width it switched the panel to (the
     /// request already derived it), and an accent row while pinned announces
     /// the next launch.
-    pub(in crate::app) fn apply_panel_setting_outcome(
+    ///
+    /// # Panics
+    ///
+    /// Panics while changing the configuration when its lock is poisoned.
+    pub fn apply_panel_setting_outcome(
         &mut self,
         pinned: bool,
         key: SettingKey,
@@ -290,7 +297,7 @@ impl App {
     /// arrives as a normal `Resize` observer event and leaves the image cache
     /// and `force_clear` alone (invariant 17). Both the width toggle and a
     /// Panel settings step record through here.
-    pub(in crate::app) fn note_pinned_width_applied(&mut self, width: PinnedWidth) {
+    pub fn note_pinned_width_applied(&mut self, width: PinnedWidth) {
         self.pinned_width = width;
     }
 
@@ -566,10 +573,11 @@ impl App {
     /// (add-gui-settings-screen design D7): the entries the TUI shell's
     /// `open_multiselect` built before the move. Returns `None` when the
     /// library-view kinds have no Emby client to enumerate.
-    pub(in crate::app) fn settings_choices(
-        &self,
-        kind: MultiSelectKind,
-    ) -> Option<Vec<(String, String, bool)>> {
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn settings_choices(&self, kind: MultiSelectKind) -> Option<Vec<(String, String, bool)>> {
         if matches!(kind, MultiSelectKind::MyLanguages) {
             const ALL_LANGS: &[&str] = &[
                 "English",
@@ -635,7 +643,7 @@ impl App {
     /// `commit_library_list_selection` ran. For a library kind, returns the
     /// refetched Home content the caller assigns to its Home store; the
     /// language kind returns `None` and refetches nothing.
-    pub(in crate::app) fn commit_settings_choices(
+    pub fn commit_settings_choices(
         &mut self,
         kind: MultiSelectKind,
         selected: &[(String, String, bool)],

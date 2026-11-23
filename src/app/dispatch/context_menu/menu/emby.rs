@@ -17,7 +17,7 @@ impl App {
     /// The GUI Library panel calls it for its picked item (add-gui-library-
     /// panel design D8) and never raises the result through `pending_overlay`:
     /// the frame carries the entries to the window content.
-    pub(in crate::app) fn build_context_menu_for(
+    pub fn build_context_menu_for(
         &mut self,
         tracked_item: Option<EmbyItem>,
         home_cw_selected: bool,
@@ -107,7 +107,7 @@ impl App {
     /// Watching removal. The bare `Play` and `Enqueue` actions execute
     /// through the shell's `home_context_item`, which the caller sets to
     /// this item.
-    pub(in crate::app) fn open_explicit_item_context_menu(&mut self, item: &EmbyItem) {
+    pub fn open_explicit_item_context_menu(&mut self, item: &EmbyItem) {
         let Some(mut menu) = self.build_explicit_item_context_menu(item) else {
             return;
         };
@@ -119,10 +119,7 @@ impl App {
     /// raising it: the TUI's Home `Recently added` opener and the GUI Library
     /// panel's carried row menu share these entries, so the two surfaces
     /// cannot drift.
-    pub(in crate::app) fn build_explicit_item_context_menu(
-        &self,
-        item: &EmbyItem,
-    ) -> Option<ContextMenu> {
+    pub fn build_explicit_item_context_menu(&self, item: &EmbyItem) -> Option<ContextMenu> {
         self.context_menu_from_resolved_target(Some(item), None, false, false)
     }
 
@@ -130,10 +127,7 @@ impl App {
     /// without raising it: the same entries the TUI's Home Continue row opens
     /// (Play, Add to Queue, the one mark entry, and Remove from Continue
     /// Watching), shared with the GUI Library panel's Home rows.
-    pub(in crate::app) fn build_continue_watching_context_menu(
-        &self,
-        item: &EmbyItem,
-    ) -> Option<ContextMenu> {
+    pub fn build_continue_watching_context_menu(&self, item: &EmbyItem) -> Option<ContextMenu> {
         self.context_menu_from_resolved_target(Some(item), None, true, false)
     }
 
@@ -142,7 +136,7 @@ impl App {
     /// Service identity"): a selection spanning Services offers Play and Add to Queue only,
     /// and both entries carry the shell-resolved queue items in display
     /// order. An empty resolution opens nothing.
-    pub(in crate::app) fn open_home_mixed_context_menu(&mut self, items: Vec<QueueItem>) {
+    pub fn open_home_mixed_context_menu(&mut self, items: Vec<QueueItem>) {
         if items.is_empty() {
             return;
         }
