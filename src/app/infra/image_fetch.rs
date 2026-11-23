@@ -55,10 +55,11 @@ impl App {
     /// configured. The book-browsing spec requires book artwork to remain
     /// isolated from podcast artwork (line 124), and the hero scope keeps it
     /// off the queue card's entry (see [`audiobookshelf_cover_key`]).
-    pub(in crate::app) fn audiobookshelf_book_cover_key(
-        &mut self,
-        library_item_id: &str,
-    ) -> Option<String> {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the configuration lock is unavailable.
+    pub fn audiobookshelf_book_cover_key(&mut self, library_item_id: &str) -> Option<String> {
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone()?;
         let cache_key = audiobookshelf_hero_book_cover_cache_key(
             &setup.server_url,

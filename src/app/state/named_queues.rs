@@ -123,7 +123,7 @@ impl App {
     /// The outcome of one Named-queue command send to the local Owner (design
     /// D3, D8): a failed send warns and flashes once here, and returns no
     /// `op`, so the caller's request ends with nothing to correlate.
-    pub(in crate::app) fn report_named_queue_send(
+    pub fn report_named_queue_send(
         &mut self,
         command: &'static str,
         sent: Result<QueueOpId, mbv_remote_player::RemotePlayerError>,
@@ -377,7 +377,7 @@ impl App {
     /// D7): a connect from the playback-target chooser shows the peer's entry.
     /// The TUI Client keeps the connection rule, so it records nothing and its
     /// resolution ignores a shown entry either way.
-    pub(in crate::app) fn show_peer_entry(&mut self) {
+    pub fn show_peer_entry(&mut self) {
         if !self.shows_queue_entries() {
             return;
         }
@@ -390,7 +390,7 @@ impl App {
     /// lands back on the current queue. Before the first queue list arrives
     /// there is no identity to name, so the shown entry is cleared and the
     /// resolution falls back to the same queue.
-    pub(in crate::app) fn show_local_current_entry(&mut self) {
+    pub fn show_local_current_entry(&mut self) {
         if !self.shows_queue_entries() {
             return;
         }
@@ -441,7 +441,7 @@ impl App {
     /// arrive as `UnifiedQueueState` on the same link. The Queue chooser
     /// dismisses itself on the entry it showed, so this setter is the one
     /// place the shown queue and its subscription change together.
-    pub(in crate::app) fn show_named_queue(&mut self, queue: NamedQueueId) {
+    pub fn show_named_queue(&mut self, queue: NamedQueueId) {
         if !self.shows_queue_entries() {
             return;
         }
@@ -465,7 +465,7 @@ impl App {
     /// decides it, and `shown_local_queue` and `shown_resting_queue_id` both
     /// read it. A stale entry — the Owner has since made the queue current —
     /// answers `None`, so the panel falls back to the current queue's view.
-    pub(in crate::app) fn shown_resting_live(&self) -> Option<(NamedQueueId, &QueueView)> {
+    pub fn shown_resting_live(&self) -> Option<(NamedQueueId, &QueueView)> {
         match &self.shown_resting {
             Some((queue, view)) if self.named_queues.rests(*queue) => Some((*queue, view)),
             _ => None,
