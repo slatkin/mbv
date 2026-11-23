@@ -72,7 +72,7 @@ In the conversion rows of groups 6 and 7, convert the `impl App` blocks of the n
 
 ## 7. `GuiCore`, settings, playlists, and the library
 
-- [ ] 7.1 Convert `gui_settings.rs` and `gui_settings/{command,projection,sections,keys,reset}.rs`.
+- [x] 7.1 Convert `gui_settings.rs` and `gui_settings/{command,projection,sections,keys,reset}.rs`.
 - [ ] 7.2 Convert `gui_settings/{services,sessions,feeds}.rs`, `gui_playlists.rs`, `gui_playlists/commands.rs`, and `gui_library.rs`.
 - [ ] 7.3 Convert `gui_library/{launch,ensure,shows_projection,audiobooks_projection,emby_projection}.rs` and `gui_library/shows_projection/hero.rs`.
 - [ ] 7.4 Convert `gui_library/{item_menu,rows_in_view,marks,podcasts_projection,podcasts,item_actions}.rs`.
