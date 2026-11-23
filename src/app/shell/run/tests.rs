@@ -576,10 +576,10 @@ fn drain_resize_responses_respawns_the_worker_after_it_exits() {
     let (register_tx, register_rx) = std::sync::mpsc::channel();
     let (_, response_rx) = std::sync::mpsc::channel();
     drop(register_rx);
-    model.app.image_protocols =
+    model.image_protocols =
         mbv_tui_support::ImageProtocols::with_resize_worker_for_test(register_tx, response_rx);
     assert!(matches!(
-        model.app.image_protocols.try_recv_resize_response(),
+        model.image_protocols.try_recv_resize_response(),
         Err(std::sync::mpsc::TryRecvError::Disconnected)
     ));
 
@@ -589,7 +589,7 @@ fn drain_resize_responses_respawns_the_worker_after_it_exits() {
     );
     assert!(
         matches!(
-            model.app.image_protocols.try_recv_resize_response(),
+            model.image_protocols.try_recv_resize_response(),
             Err(std::sync::mpsc::TryRecvError::Empty)
         ),
         "the drain must respawn a live worker after the old one exited"

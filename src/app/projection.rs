@@ -6,7 +6,8 @@
 //! The terminal-geometry half — the Wide pane fit and the `hero_artwork_box`
 //! the encoding is keyed by — and the ratatui-image encoding are the TUI
 //! Client's, so they stay in the shell (`shell::hero_image_projection`,
-//! `shell::image_protocol`). An inherent `impl App` is in the core (design D3
+//! `shell::image_protocol`), whose `Model` holds the protocol store. This
+//! module only queues the encoding drop the shell performs (design D2 rule 3
 //! of `split-tui-gui-clients`).
 
 use crate::app::App;
@@ -100,9 +101,11 @@ impl App {
         let landscape =
             artwork.painted_shape() == mbv_ui_model::library_hero::ArtworkShape::Landscape;
         if !landscape {
-            // Drop any stale cover crop so the plain fit protocol rebuilds.
+            // Drop any stale cover crop so the plain fit protocol rebuilds,
+            // and the stored encoding with it: the shell re-encodes from the
+            // retained source at its next drain (design D2 rule 3).
             if self.clear_stale_hero_cover_box(&cache_key) {
-                self.image_protocols.clear_key(&cache_key);
+                self.queue_protocol_clear(&cache_key);
             }
             return State(mbv_ui_model::playback::HeroImageState::Ready {
                 cache_key,

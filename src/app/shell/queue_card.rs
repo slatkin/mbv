@@ -3,7 +3,7 @@
 //! that feeds it builds no ratatui value and stays in the core
 //! (`state::projection::card`).
 
-use crate::app::App;
+use super::Model;
 use mbv_images::QUEUE_CARD_PLACEHOLDER_KEY;
 use mbv_render::components::card::{queue_card_reserved_rect, render_card_painting};
 use mbv_tui_support::ToRatatui;
@@ -11,14 +11,14 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 
 fn render_card_visualizer(
-    app: &mut App,
+    model: &mut Model,
     terminal_height: u16,
     f: &mut Frame,
     area: Rect,
     left_align: bool,
 ) -> (u16, u16, bool) {
     let rect = queue_card_reserved_rect(
-        app.images.last_card_size(),
+        model.app.images.last_card_size(),
         terminal_height,
         area,
         left_align,
@@ -28,7 +28,7 @@ fn render_card_visualizer(
     let bg = mbv_theme::surface_colors(mbv_theme::Surface::QueueCardVisualizer, false)
         .fill
         .to_ratatui();
-    super::visualizer::render_visualizer(app, f, rect, bg);
+    super::visualizer::render_visualizer(&model.app, f, rect, bg);
     (rect.height, rect.width, false)
 }
 
@@ -39,19 +39,19 @@ fn render_card_visualizer(
 /// handle — no fetch, no source resolution. The projection owns every fetch
 /// (task 3.4, D9)).
 pub(in crate::app) fn render_queue_playback_slot(
-    app: &mut App,
+    model: &mut Model,
     terminal_height: u16,
     f: &mut Frame,
     area: Rect,
     left_align: bool,
 ) -> (u16, u16, bool) {
-    let mut projection = app.queue_card_projection.clone();
+    let mut projection = model.app.queue_card_projection.clone();
     if projection.visualizer {
-        return render_card_visualizer(app, terminal_height, f, area, left_align);
+        return render_card_visualizer(model, terminal_height, f, area, left_align);
     }
     if !projection.images_enabled {
         let rect = queue_card_reserved_rect(
-            app.images.last_card_size(),
+            model.app.images.last_card_size(),
             terminal_height,
             area,
             left_align,
@@ -63,13 +63,15 @@ pub(in crate::app) fn render_queue_playback_slot(
     // placeholder itself. Resolved from the image cache's authority —
     // a read, never a fetch.
     let artwork_key = projection.cache_key.clone().filter(|key| {
-        app.images
+        model
+            .app
+            .images
             .image(key)
             .is_none_or(mbv_images::CachedImage::has_art)
     });
     let placeholder_slot = artwork_key.is_none();
     if placeholder_slot {
-        app.ensure_placeholder_card_image();
+        model.ensure_placeholder_card_image();
         // The painter derives `placeholder_slot` from
         // `projection.cache_key`; hand it the resolved-empty fact (a
         // `Some` key whose fetch resolved empty means the placeholder)
@@ -78,10 +80,10 @@ pub(in crate::app) fn render_queue_playback_slot(
         projection.cache_key = None;
     }
     let key = artwork_key.as_deref().unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
-    let loading =
-        !placeholder_slot && (app.images.is_loading(key) || app.images.is_fetch_interrupted(key));
-    let last_card = app.images.last_card_size();
-    let image = app.cached_image_protocol_mut(key);
+    let loading = !placeholder_slot
+        && (model.app.images.is_loading(key) || model.app.images.is_fetch_interrupted(key));
+    let last_card = model.app.images.last_card_size();
+    let image = model.cached_image_protocol_mut(key);
     let (height, width, loading, painted) = render_card_painting(
         f,
         area,
@@ -93,15 +95,17 @@ pub(in crate::app) fn render_queue_playback_slot(
         terminal_height,
     );
     let fallback_key = projection.plain_cache_key.as_deref().filter(|key| {
-        app.images
+        model
+            .app
+            .images
             .image(key)
             .is_some_and(mbv_images::CachedImage::has_art)
     });
     let mut plain_fallback_painted = false;
     let mut out = (height, width, loading);
     if !painted && let Some(fallback_key) = fallback_key {
-        let fallback_loading = app.images.is_loading(fallback_key);
-        let fallback_image = app.cached_image_protocol_mut(fallback_key);
+        let fallback_loading = model.app.images.is_loading(fallback_key);
+        let fallback_image = model.cached_image_protocol_mut(fallback_key);
         projection.cache_key = Some(fallback_key.to_owned());
         let (height, width, loading, fallback_painted) = render_card_painting(
             f,
@@ -125,20 +129,27 @@ pub(in crate::app) fn render_queue_playback_slot(
     // context menu opens, and back when it closes. The checkpoint stays
     // on the configured protocol's last paint; closing the modal
     // repaints the warm configured protocol at that same size.
-    if !app.dim_halfblock_forced() {
-        app.images.record_card_size(height, width);
+    if !model.app.dim_halfblock_forced() {
+        model.app.images.record_card_size(height, width);
     }
     if painted
         && let Some(key) = artwork_key
             .as_deref()
             .filter(|key| key.contains(mbv_images::title_overlay::DERIVED_SEP))
     {
-        app.title_log_gate()
+        model
+            .app
+            .title_log_gate()
             .log_paint(key, "overlay_recorded", "OverlayPainted");
     } else if plain_fallback_painted {
         let key = artwork_key.as_deref().unwrap_or("<none>");
-        let reason = app.title_log_decision_reason().unwrap_or("OverlayNotReady");
-        app.title_log_gate()
+        let reason = model
+            .app
+            .title_log_decision_reason()
+            .unwrap_or("OverlayNotReady");
+        model
+            .app
+            .title_log_gate()
             .log_paint(key, "plain_fallback", reason);
     }
     (height, width, loading)

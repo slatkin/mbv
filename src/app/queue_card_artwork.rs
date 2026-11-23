@@ -49,8 +49,12 @@ impl App {
     #[must_use]
     pub fn queue_card_artwork(&mut self) -> QueueCardArtwork {
         if self.visual_slot_shown() {
-            // The GUI has no resize drag: the hold is always off.
-            crate::app::state::projection::card::refresh_queue_card_image(self, false);
+            // The GUI has no resize drag: the hold is always off. It paints no
+            // terminal protocol, so it builds no title overlay variant and the
+            // site stays on the header row.
+            // A Client that paints no terminal protocol ignores the record.
+            let _record =
+                crate::app::state::projection::card::refresh_queue_card_image(self, false);
         } else if self.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing: the artwork can no longer
             // carry the title, so the header is its only home again — the

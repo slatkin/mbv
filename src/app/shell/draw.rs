@@ -2,8 +2,8 @@
 //!
 //! Root-frame placement builds ratatui values and publishes them on the
 //! shell-owned `AppLayout`, so it is shell free functions over `App` reads,
-//! moved out of `impl App`. The core keeps only the neutral left panel area
-//! that the TUI pushes (D13 Rule B).
+//! moved out of the shell's inherent `App` methods. The core keeps only the
+//! neutral left panel area that the TUI pushes (D13 Rule B).
 
 use super::Model;
 use crate::app::App;

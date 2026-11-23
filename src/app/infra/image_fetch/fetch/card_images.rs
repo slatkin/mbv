@@ -46,7 +46,7 @@ impl App {
         item_id: String,
     ) {
         let cache_key =
-            audiobookshelf_cover_cache_key(&server_url, &item_id, self.current_protocol_suffix());
+            audiobookshelf_cover_cache_key(&server_url, &item_id, self.image_protocol_suffix());
         self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
     }
 
@@ -60,7 +60,7 @@ impl App {
         let cache_key = audiobookshelf_book_cover_cache_key(
             &server_url,
             &item_id,
-            self.current_protocol_suffix(),
+            self.image_protocol_suffix(),
         );
         self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
     }

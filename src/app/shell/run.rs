@@ -149,7 +149,8 @@ impl Model {
         // backdrop and stay-alive indicator; that fact now lives in TuiRealm
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter).
-        self.app.dim_backdrop_active = self.blocking_overlay_active();
+        self.app
+            .set_dim_backdrop_active(self.blocking_overlay_active());
         // Design D6b: a direct draw (startup, or a test fixture) takes any
         // pending reveal request first, so the painted strip matches state.
         self.reveal_requested_tab();
@@ -197,7 +198,9 @@ impl Model {
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let drain = self.app.drain_card_image_completions();
         // Every completion stores its entry under its key, so the store's
-        // encodings are refreshed once the loop has run (invariant 38).
+        // encodings are refreshed once the loop has run (invariant 38): the
+        // entries the loop queued are encoded, and the keys it pruned drop.
+        self.drain_protocol_work();
         self.prune_image_protocols();
         if drain.series_key_changed {
             self.push_tv_workspace_content();

@@ -12,7 +12,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui_image::picker::{Picker, ProtocolType};
 
-use crate::app::App;
+use crate::app::Model;
 use crate::app::tests::make_app_stub;
 
 const CARD_KEY: &str = "card:P";
@@ -40,30 +40,35 @@ fn cached(img: Option<image::DynamicImage>) -> CachedImage {
 /// API bakes the terminal-detected font size in at query time), so the
 /// fallback's grid coincides with the configured one — the assertions pin
 /// the decision wiring, not the font mismatch itself.
-fn app_with_card_image() -> App {
+fn app_with_card_image() -> Model {
     let mut app = make_app_stub();
     let mut configured = Picker::halfblocks();
     configured.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
-    app.image_protocols
+    let mut model = Model::new(app);
+    model
+        .image_protocols
         .set_image_pickers_for_test(configured, Picker::halfblocks());
-    app.images
+    model.push_image_protocol_facts();
+    model
+        .app
+        .images
         .insert_image(CARD_KEY.to_owned(), cached(Some(card_image(4, 2))));
-    app.queue_card_projection = QueueCardProjection {
+    model.app.queue_card_projection = QueueCardProjection {
         cache_key: Some(CARD_KEY.to_owned()),
         plain_cache_key: None,
         images_enabled: true,
         visualizer: false,
         title_site: NowPlayingTitleSite::Header,
     };
-    app
+    model
 }
 
-fn paint_slot(app: &mut App) {
+fn paint_slot(app: &mut Model) {
     paint_slot_in(app, Rect::new(0, 0, 40, 24));
 }
 
-fn paint_slot_in(app: &mut App, area: Rect) {
+fn paint_slot_in(app: &mut Model, area: Rect) {
     let mut terminal = Terminal::new(TestBackend::new(48, 30)).unwrap();
     terminal
         .draw(|frame| {
@@ -77,19 +82,24 @@ fn paint_slot_in(app: &mut App, area: Rect) {
 #[test]
 fn an_interrupted_fetch_does_not_paint_the_no_image_placeholder() {
     let mut app = app_with_card_image();
-    app.images.remove_image(CARD_KEY);
-    app.images.fetch_interrupted(CARD_KEY.to_owned());
+    app.app.images.remove_image(CARD_KEY);
+    app.app.images.fetch_interrupted(CARD_KEY.to_owned());
 
     paint_slot(&mut app);
 
-    assert!(!app.images.is_cached(mbv_images::QUEUE_CARD_PLACEHOLDER_KEY));
+    assert!(
+        !app.app
+            .images
+            .is_cached(mbv_images::QUEUE_CARD_PLACEHOLDER_KEY)
+    );
 }
 
 /// Same slot, but square artwork: its fitted size is the tier cap bounded by
 /// half the slot width, so the arithmetic is easy to reason about.
-fn app_with_square_card_image() -> App {
+fn app_with_square_card_image() -> Model {
     let mut app = app_with_card_image();
-    app.images
+    app.app
+        .images
         .insert_image(CARD_KEY.to_owned(), cached(Some(card_image(100, 100))));
     app
 }
@@ -105,8 +115,8 @@ fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
     paint_slot_in(&mut tall, Rect::new(0, 0, 40, 24));
 
     assert_eq!(
-        short.images.last_card_size(),
-        tall.images.last_card_size(),
+        short.app.images.last_card_size(),
+        tall.app.images.last_card_size(),
         "the same artwork must record the same size whatever the slot region's height"
     );
 }
@@ -121,20 +131,20 @@ fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
 fn dimmed_backdrop_paint_does_not_move_the_queue_card_checkpoint() {
     let mut app = app_with_card_image();
     // The configured protocol's last paint before any modal opened.
-    app.images.record_card_size(16, 32);
+    app.app.images.record_card_size(16, 32);
 
-    app.dim_backdrop_active = true;
+    app.app.dim_backdrop_active = true;
     paint_slot(&mut app);
     assert_eq!(
-        app.images.last_card_size(),
+        app.app.images.last_card_size(),
         (16, 32),
         "the dimmed backdrop's fallback paint must not move the checkpoint"
     );
 
-    app.dim_backdrop_active = false;
+    app.app.dim_backdrop_active = false;
     paint_slot(&mut app);
     assert_ne!(
-        app.images.last_card_size(),
+        app.app.images.last_card_size(),
         (16, 32),
         "recording resumes for the configured protocol's paint"
     );

@@ -143,7 +143,12 @@ impl App {
                 init.card_image_tx,
                 init.card_image_rx,
             ),
-            image_protocols: mbv_tui_support::ImageProtocols::new(),
+            configured_protocol_suffix: "halfblock",
+            pending_protocol_encodes: std::collections::VecDeque::new(),
+            pending_protocol_clears: Vec::new(),
+            halfblock_configured: true,
+            image_pickers_ready: false,
+            image_font_size: (10, 20),
             image_decode: init.image_decode,
             library_position_state: load_position_state_without_pills(),
             hidden_libraries: init.hidden_libraries,
@@ -294,15 +299,6 @@ impl App {
         };
         app.sync_feed_subscriptions();
         app
-    }
-
-    /// Initialize terminal image pickers before the TUI listener starts: the
-    /// configured protocol override (`ImageCache::protocol_override`) replaces
-    /// the detected one, and the pickers live in this Client's
-    /// [`ImageProtocols`](mbv_tui_support::ImageProtocols) store.
-    pub(crate) fn init_image_pickers(&mut self) {
-        self.image_protocols
-            .init_image_pickers(self.images.protocol_override());
     }
 }
 

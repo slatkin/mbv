@@ -270,6 +270,13 @@ pub struct Model {
     /// The last sync pass that saw a live resize drag; starts the settle
     /// window (invariant 20). The live bit stays with the gesture components.
     pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
+    /// This Client's terminal image protocols: the pickers, the resize worker,
+    /// and the encoding of every cached key a TUI painter renders (design D7
+    /// of `extract-client-core`, and design D2 rule 3 of
+    /// `split-tui-gui-clients`: a store only one Client uses leaves `App`).
+    /// The core queues what to encode and to drop; the shell's drains
+    /// (`Model::drain_protocol_work`) act on it.
+    pub(in crate::app) image_protocols: mbv_tui_support::ImageProtocols,
 }
 
 /// The single-panel fact the TUI derives from its terminal width: the width
@@ -298,6 +305,42 @@ impl Model {
     /// never reaches the core.
     pub(in crate::app) fn terminal_size(&self) -> (u16, u16) {
         (self.terminal_width, self.terminal_height)
+    }
+
+    /// Initialize the terminal image pickers before the TUI listener starts:
+    /// the configured protocol override (`ImageCache::protocol_override`)
+    /// replaces the detected one, and the pickers live in this Client's
+    /// `ImageProtocols` store. The facts the core reads (whether halfblocks
+    /// paint, the configured suffix) are pushed onto `App` here.
+    ///
+    /// MUST run before the `TuiRealm` crossterm listener starts (#654).
+    pub(crate) fn init_image_pickers(&mut self) {
+        let protocol_override = self.app.images.protocol_override();
+        self.image_protocols.init_image_pickers(protocol_override);
+        self.push_image_protocol_facts();
+    }
+
+    /// Push the picker facts the core's projections read (design D2 rule 3):
+    /// whether the configured picker paints halfblocks, whether the pickers
+    /// are initialized, and the suffix the artwork cache keys carry.
+    pub(in crate::app) fn push_image_protocol_facts(&mut self) {
+        let halfblock = self
+            .image_protocols
+            .is_halfblock_configured(self.app.images.protocol_override());
+        let font = self
+            .image_protocols
+            .image_picker()
+            .map_or((10, 20), |picker| {
+                let font = picker.font_size();
+                (font.width, font.height)
+            });
+        self.app.set_image_protocol_facts(
+            halfblock,
+            self.image_protocols.image_picker().is_some(),
+            font,
+        );
+        self.app
+            .set_configured_protocol_suffix(self.image_protocols.configured_protocol_name());
     }
 
     /// Construct the model, starting the ``TuiRealm`` crossterm listener and
@@ -407,6 +450,7 @@ impl Model {
             layout: mbv_render::layout::AppLayout::default(),
             home_latest_launch_window,
             resize_drag_activity: None,
+            image_protocols: mbv_tui_support::ImageProtocols::new(),
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other

@@ -116,9 +116,9 @@ fn project_audiobookshelf_cover(
         app.fetch_audiobookshelf_cover(server_url.clone(), item_id.clone());
     }
     let cache_key = if is_book {
-        audiobookshelf_book_cover_cache_key(&server_url, &item_id, app.current_protocol_suffix())
+        audiobookshelf_book_cover_cache_key(&server_url, &item_id, app.image_protocol_suffix())
     } else {
-        audiobookshelf_cover_cache_key(&server_url, &item_id, app.current_protocol_suffix())
+        audiobookshelf_cover_cache_key(&server_url, &item_id, app.image_protocol_suffix())
     };
     projection.cache_key = Some(cache_key);
     true
@@ -152,27 +152,46 @@ fn prefetch_card_images(app: &mut App, cursor: usize) {
     }
 }
 
+/// The neutral record this sync's title-site decision leaves for the shell's
+/// overlay encoder: the base key, its item, and the parts the shell measures
+/// the overlay from. `None` when the site is not `Artwork`.
+pub(in crate::app) struct QueueTitleRecord {
+    pub base_key: String,
+    pub parts: mbv_queue::PlaybackTitleParts,
+    pub logo_cache_key: Option<String>,
+    pub item_kind: String,
+}
+
+/// The item the title site's decision and its parts read: the active slot,
+/// else the viewed selection, and nothing on the slotless path.
+fn title_site_item(
+    app: &App,
+    playback: mbv_ui_model::playback::PlaybackState,
+    slotless_active: bool,
+) -> Option<&QueueItem> {
+    if slotless_active {
+        return None;
+    }
+    playback
+        .active_idx
+        .and_then(|index| app.playback_queue().item_at(index))
+        .or_else(|| {
+            let queue = app.displayed_queue();
+            queue.item_at(queue.cursor())
+        })
+}
+
 fn queue_title_site(
     app: &mut App,
     projection: &mut QueueCardProjection,
     playback: mbv_ui_model::playback::PlaybackState,
     column_resizing: bool,
-) {
+) -> Option<QueueTitleRecord> {
     let (height, width) = app.images.last_card_size();
     let slotless_active = (app.emby_session_now_playing().is_some()
         || (playback.active && playback.active_idx.is_none()))
         && projection.cache_key.is_some();
-    let item = if slotless_active {
-        None
-    } else {
-        playback
-            .active_idx
-            .and_then(|index| app.playback_queue().item_at(index))
-            .or_else(|| {
-                let queue = app.displayed_queue();
-                queue.item_at(queue.cursor())
-            })
-    };
+    let item = title_site_item(app, playback, slotless_active);
     let parts = item.map(|item| app.playback_title_parts(item)).or_else(|| {
         slotless_active
             .then(|| app.slotless_playback_title_parts())
@@ -209,21 +228,21 @@ fn queue_title_site(
             app.title_log_gate
                 .log_decision(&identity, &item_kind, reason, base_dimensions);
             projection.title_site = NowPlayingTitleSite::Header;
-            return;
+            return None;
         }
         Some(TitleSiteGate::Transient(reason)) => {
             // Pipeline churn: the site carries over, the header does not
             // resurrect. The overlay rebuilds when the churn passes.
             app.title_log_gate
                 .log_decision(&identity, &item_kind, reason, base_dimensions);
-            return;
+            return None;
         }
         None => {}
     }
     let Some(parts) = parts else {
         app.title_log_gate
             .log_decision(&identity, &item_kind, "NoTitle", base_dimensions);
-        return;
+        return None;
     };
     // The logo owner is resolved before the overlay builds so its fetch
     // starts as early as the overlay path itself (design D7); a pending
@@ -262,6 +281,15 @@ fn queue_title_site(
         &item_kind,
         logo_cache_key.as_deref(),
     );
+    if projection.title_site != NowPlayingTitleSite::Artwork {
+        return None;
+    }
+    Some(QueueTitleRecord {
+        base_key: projection.cache_key.clone()?,
+        parts,
+        logo_cache_key,
+        item_kind,
+    })
 }
 
 /// The covers gate and the overlay composition: decides the artwork site and,
@@ -273,9 +301,8 @@ fn queue_title_overlay(
     projection: &mut QueueCardProjection,
     parts: &mbv_queue::PlaybackTitleParts,
     item_kind: &str,
-    logo_cache_key: Option<&str>,
+    _logo_cache_key: Option<&str>,
 ) {
-    let (height, width) = app.images.last_card_size();
     let Some(key) = projection.cache_key.clone() else {
         app.title_log_gate
             .log_decision("<none>", item_kind, "NoSlot", None);
@@ -313,19 +340,22 @@ fn queue_title_overlay(
     // paints plain art for those frames while the header already shows
     // the playing brand row.
     projection.title_site = NowPlayingTitleSite::Artwork;
-    if let Some(variant_key) =
-        app.ensure_title_overlay_protocol(&key, (width, height), parts, logo_cache_key, item_kind)
-    {
-        projection.plain_cache_key = Some(key.clone());
-        projection.cache_key = Some(variant_key);
-    }
     app.title_log_gate
         .log_decision(&key, item_kind, "Artwork", base_dimensions);
 }
 
 /// The queue projection issues every fetch for the now-playing item and
 /// projects the slot the painter consumes. Active-first, then viewed selection.
-pub(in crate::app) fn refresh_queue_card_image(app: &mut App, column_resizing: bool) {
+///
+/// It returns the title-site decision's record. Encoding the overlay variant
+/// is the TUI shell's terminal-protocol work, so the shell builds it from this
+/// record after the sync (`Model::ensure_queue_card_title_overlay`, design D2
+/// rule 3 of `split-tui-gui-clients`), and a Client that paints no protocol
+/// ignores it.
+pub(in crate::app) fn refresh_queue_card_image(
+    app: &mut App,
+    column_resizing: bool,
+) -> Option<QueueTitleRecord> {
     // The site carries over from the previous sync: transient pipeline
     // churn (a resize drag, an unmeasured protocol size, an encode in
     // flight) must not resurrect the header — only the mode gates below
@@ -338,14 +368,14 @@ pub(in crate::app) fn refresh_queue_card_image(app: &mut App, column_resizing: b
         title_site: app.queue_card_projection.title_site,
     };
     if projection.visualizer || !projection.images_enabled {
-        queue_title_site(
+        let record = queue_title_site(
             app,
             &mut projection,
             app.displayed_playback_state(),
             column_resizing,
         );
         app.queue_card_projection = projection;
-        return;
+        return record;
     }
 
     // Presentation follows a selected-but-unconfirmed slot, switching artwork with its highlight.
@@ -360,9 +390,9 @@ pub(in crate::app) fn refresh_queue_card_image(app: &mut App, column_resizing: b
         } else {
             project_audiobookshelf_cover(app, playback, &mut projection);
         }
-        queue_title_site(app, &mut projection, playback, column_resizing);
+        let record = queue_title_site(app, &mut projection, playback, column_resizing);
         app.queue_card_projection = projection;
-        return;
+        return record;
     };
 
     let img_types = card_image_types(&item);
@@ -371,6 +401,7 @@ pub(in crate::app) fn refresh_queue_card_image(app: &mut App, column_resizing: b
     app.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
     prefetch_card_images(app, cursor);
     projection.cache_key = Some(cache_key);
-    queue_title_site(app, &mut projection, playback, column_resizing);
+    let record = queue_title_site(app, &mut projection, playback, column_resizing);
     app.queue_card_projection = projection;
+    record
 }

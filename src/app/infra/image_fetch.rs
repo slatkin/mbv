@@ -38,7 +38,7 @@ impl App {
         let cache_key = audiobookshelf_hero_cover_cache_key(
             &setup.server_url,
             library_item_id,
-            self.current_protocol_suffix(),
+            self.image_protocol_suffix(),
         );
         if self.images.protocol_enabled() {
             self.fetch_audiobookshelf_image(
@@ -63,7 +63,7 @@ impl App {
         let cache_key = audiobookshelf_hero_book_cover_cache_key(
             &setup.server_url,
             library_item_id,
-            self.current_protocol_suffix(),
+            self.image_protocol_suffix(),
         );
         if self.images.protocol_enabled() {
             self.fetch_audiobookshelf_image(

@@ -309,6 +309,21 @@ pub struct App {
     pub(in crate::app) queue_card_projection: mbv_ui_model::playback::QueueCardProjection,
     pub(in crate::app) title_log_gate: crate::app::state::projection::card::artwork::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
+    /// Whether the terminal paints halfblocks rather than a pixel protocol:
+    /// a pushed fact (change `split-tui-gui-clients`, design D2 rule 3) that
+    /// the TUI shell derives from its image pickers (`App::set_halfblock_facts`).
+    /// The queue title site reads it, since a halfblock card cannot carry the
+    /// title in its artwork. A Client that paints no terminal protocol leaves
+    /// it true and keeps the title on the header row.
+    pub(in crate::app) halfblock_configured: bool,
+    /// Whether this Client's image pickers are initialized at all. The same
+    /// pushed fact record as `halfblock_configured`.
+    pub(in crate::app) image_pickers_ready: bool,
+    /// The configured picker's terminal font size — the cell-to-pixel ratio
+    /// the queue card's title overlay is composed at and the hero cover fit's
+    /// box pixels derive from. The same pushed fact record; the constructor's
+    /// default until the pickers initialize.
+    pub(in crate::app) image_font_size: (u16, u16),
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
     /// The Settings feeds-management popup's background add-feed channel,
@@ -540,11 +555,23 @@ pub struct App {
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
     pub(in crate::app) images: mbv_images::cache::ImageCache,
-    /// This Client's terminal image protocols: the pickers, the resize worker,
-    /// and the encoding of every cached key a TUI painter renders (design
-    /// D7). A Client that paints no terminal protocol (`mbv-gui`) never
-    /// initializes the pickers, so its store builds no encoding.
-    pub(in crate::app) image_protocols: mbv_tui_support::ImageProtocols,
+    /// The suffix of the protocol the shell paints artwork through: the
+    /// halfblocks fallback's while a dimming backdrop is up, else the
+    /// configured one. The shell sets the configured suffix once at start-up
+    /// (`App::set_configured_protocol_suffix`) because the cache keys carry
+    /// it; the core never detects a protocol itself.
+    pub(in crate::app) configured_protocol_suffix: &'static str,
+    /// Artwork entries a completed fetch built for a Client that paints
+    /// terminal protocols: the entry's decoded source, which the shell's
+    /// drain encodes and register under the entry's key (`ImageProtocols` lives
+    /// on the shell `Model`, design D2 rule 3).
+    pub(in crate::app) pending_protocol_encodes:
+        std::collections::VecDeque<(String, image::DynamicImage)>,
+    /// Cache keys whose stored protocol encoding must drop: the projection
+    /// found the entry's pixels or its cover fit changed, so the next paint
+    /// re-encodes from the retained source. The shell's drain clears them
+    /// (design D2 rule 3).
+    pub(in crate::app) pending_protocol_clears: Vec<String>,
     /// What this Client's image fetches keep (design D14), chosen at
     /// construction and passed to every fetch thread.
     pub(in crate::app) image_decode: mbv_images::ImageDecode,

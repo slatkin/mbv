@@ -1,15 +1,16 @@
 //! The card-image fetch's drain and completion (`extract-client-core` design
 //! D10): the one loop both Clients run — spawning queued requests inside the
 //! in-flight limit, then folding each completion into the image cache. The
-//! protocol encoding of a completed entry, and its painting, are the TUI
-//! Client's alone (`crate::app::shell::image_protocol`); this module reaches no
-//! shell type, so a Client with no terminal protocol keeps the same cache.
+//! protocol encoding of a completed entry is the TUI Client shell's alone
+//! (`crate::app::shell::image_protocol`); this module queues the entry's
+//! decoded source as a neutral record (`App::queue_protocol_encode`) and reaches
+//! no shell type, so a Client with no terminal protocol keeps the same cache.
 
 use super::super::super::super::App;
 use super::super::{CardImageDrain, MAX_IMAGE_FETCHES};
 use super::transport::{FetchedBytes, decode_fetched, fetch_image_bytes};
 use crate::app::MusicEvent;
-use mbv_images::{ImageFetchOutcome, ImageFetchReq, ImageSource};
+use mbv_images::{CachedImage, ImageFetchOutcome, ImageFetchReq, ImageSource};
 
 impl App {
     /// Spawn queued image fetches until the in-flight limit is reached. Called
@@ -22,13 +23,14 @@ impl App {
     }
 
     /// Drain card-image completions into the image cache (design D10): the
-    /// decoded source lands in the cache under its key — the pickers a Client
-    /// whose `App` never initializes build no protocol entry — an interrupted
-    /// fetch stays open to its retry, and a resolved artist-artwork request
-    /// emits its typed event into the lib channel. The one loop both Clients
-    /// run; the result reports whether a Series-family key completed, which
-    /// only the TUI Client answers by re-pushing its TV workspace content
-    /// (`Model::drain_card_image_completions`).
+    /// decoded source lands in the cache under its key, and — for a Client that
+    /// paints terminal protocols — the entry awaits the shell's encoding
+    /// (`Model`'s protocol store, design D2 rule 3 of
+    /// `split-tui-gui-clients`). An interrupted fetch stays open to its retry,
+    /// and a resolved artist-artwork request emits its typed event into the lib
+    /// channel. The one loop both Clients run; the result reports whether a
+    /// Series-family key completed, which only the TUI Client answers by
+    /// re-pushing its TV workspace content (`Model::drain_card_image_completions`).
     pub fn drain_card_image_completions(&mut self) -> CardImageDrain {
         let mut drained = CardImageDrain::default();
         while let Ok((cache_key, outcome)) = self.images.try_recv_card_image() {
@@ -43,15 +45,14 @@ impl App {
                 ImageFetchOutcome::Image { img, source } => (img, Some(source)),
                 ImageFetchOutcome::Empty | ImageFetchOutcome::Interrupted => (None, None),
             };
-            // Store the entry BEFORE its protocol: the store records a
-            // protocol only for a key the cache holds an entry for, and it
-            // tags the encoding with that entry's generation (invariant 38).
-            let suffix = self.current_protocol_suffix();
-            let built = self
-                .image_protocols
-                .build_entry(&cache_key, img_opt, source, suffix);
-            let entry = built.entry;
-            let protocol = built.protocol;
+            // The entry stores before its encoding: the shell registers an
+            // encoding only for a key the cache holds an entry for.
+            let entry = CachedImage {
+                img: img_opt,
+                source,
+                cover_box: None,
+                applied_logo_key: None,
+            };
             // Artist artwork: a fetch reserved through the typed artist
             // request identity completes as its own typed event; the generic
             // image cache stays provider/generic.
@@ -75,15 +76,8 @@ impl App {
             } else {
                 // Both stores have changed now: the cache holds the entry, so
                 // its encoding is recordable under the new generation.
+                self.queue_protocol_encode(&cache_key, entry.img.as_ref());
                 self.images.complete_fetch(cache_key.clone(), entry);
-                if let Some(protocol) = protocol {
-                    self.image_protocols.insert_protocol(
-                        &self.images,
-                        &cache_key,
-                        suffix,
-                        protocol,
-                    );
-                }
             }
             if let Some(event) = artist_completion {
                 let _ = self.channels.lib_tx.send(event);

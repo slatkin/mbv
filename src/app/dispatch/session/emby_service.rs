@@ -64,8 +64,10 @@ impl App {
         self.series_detail_loading.clear();
         self.series_season_loading.clear();
         self.pending_series_season_expansions.clear();
+        // The shell's protocol store drops what this cleared at its next
+        // drain (`Model::prune_image_protocols`): encodings never outlive
+        // their cache entry (invariant 38), so no record is needed here.
         self.images.clear_session_image_work();
-        self.image_protocols.prune(&self.images);
         self.library_position_state = mbv_queue::LibraryPositionState::default();
         self.active_route = None;
         self.direct_remote_connected = false;

@@ -2,7 +2,7 @@
 //! stays measured on the configured protocol's grid, so opening a dimming
 //! overlay neither re-encodes nor re-keys the variant.
 
-use crate::app::App;
+use crate::app::Model;
 use crate::app::tests::make_app_stub;
 use mbv_images::CachedImage;
 use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
@@ -21,27 +21,30 @@ fn cached(img: Option<image::DynamicImage>) -> CachedImage {
 
 /// An app with one decoded card image and a projected queue slot for it,
 /// composed as the queue slot's paint leaves it.
-fn app_with_card_image() -> App {
+fn app_with_card_image() -> Model {
     let mut app = make_app_stub();
     let mut configured = Picker::halfblocks();
     configured.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
-    app.image_protocols
+    let mut model = Model::new(app);
+    model
+        .image_protocols
         .set_image_pickers_for_test(configured, Picker::halfblocks());
-    app.images.insert_image(
+    model.push_image_protocol_facts();
+    model.app.images.insert_image(
         CARD_KEY.to_owned(),
         cached(Some(image::DynamicImage::ImageRgba8(
             image::RgbaImage::from_pixel(4, 2, image::Rgba([20, 40, 60, 255])),
         ))),
     );
-    app.queue_card_projection = QueueCardProjection {
+    model.app.queue_card_projection = QueueCardProjection {
         cache_key: Some(CARD_KEY.to_owned()),
         plain_cache_key: None,
         images_enabled: true,
         visualizer: false,
         title_site: NowPlayingTitleSite::Header,
     };
-    app
+    model
 }
 
 fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
@@ -64,7 +67,7 @@ fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
 #[test]
 fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
     let mut app = app_with_card_image();
-    let ensure = |app: &mut App| {
+    let ensure = |app: &mut Model| {
         app.ensure_title_overlay_protocol(
             CARD_KEY,
             (16, 32),
@@ -78,7 +81,7 @@ fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
         ensure(&mut app).expect("the variant builds while the configured protocol is active");
     let builds_after_open = app.image_protocols.protocol_builds();
 
-    app.dim_backdrop_active = true;
+    app.app.dim_backdrop_active = true;
     assert_eq!(
         ensure(&mut app),
         Some(variant.clone()),
@@ -90,7 +93,7 @@ fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
         "the sizing path must measure the configured protocol, not build fallback re-encodes"
     );
 
-    app.dim_backdrop_active = false;
+    app.app.dim_backdrop_active = false;
     assert_eq!(
         ensure(&mut app),
         Some(variant),

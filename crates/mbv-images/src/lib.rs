@@ -16,6 +16,28 @@ pub fn mem_key(cache_key: &str, suffix: &str) -> String {
     format!("{cache_key}@{suffix}")
 }
 
+/// A decoded image's pixel identity: an FNV-1a hash over its dimensions and
+/// bytes, so a caller can tell a re-encode of the same pixels from a new one
+/// without holding the pixels themselves.
+#[must_use]
+pub fn hash_image_bytes(img: &image::DynamicImage) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in img
+        .width()
+        .to_le_bytes()
+        .iter()
+        .chain(&img.height().to_le_bytes())
+    {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    for byte in img.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 /// Prefix shared by every Audiobookshelf-sourced cache key, used to filter
 /// or clear Audiobookshelf entries from the image caches.
 pub const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";

@@ -5,7 +5,7 @@
 //! stay in `crate::app::infra::image_fetch`, so a Client with no terminal
 //! protocol holds the same cache.
 
-use super::App;
+use super::Model;
 use mbv_images::{QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY, cover_fill_hero_box};
 use mbv_theme as palette;
 use mbv_tui_support::{RENDER_FILTER, ToCellSize, ToRatatui};
@@ -56,12 +56,126 @@ fn compose_title_overlay_bitmap(
     )
 }
 
-impl App {
+/// The picker that encodes the active protocol suffix, and that suffix:
+/// the halfblock picker's while a dimmed backdrop is up, else the
+/// configured picker's. `None` until the pickers are initialized.
+fn picker_and_suffix(model: &Model) -> Option<(&Picker, &'static str)> {
+    if model.app.dim_halfblock_forced() {
+        model
+            .image_protocols
+            .halfblock_picker()
+            .map(|p| (p, "halfblock"))
+    } else {
+        model
+            .image_protocols
+            .image_picker()
+            .map(|p| (p, model.image_protocols.configured_protocol_name()))
+    }
+}
+
+/// [`picker_and_suffix`] without the picker, for a caller that only
+/// needs the suffix: `None` until the pickers are initialized.
+fn current_protocol_suffix_opt(model: &Model) -> Option<&'static str> {
+    picker_and_suffix(model).map(|(_, suffix)| suffix)
+}
+
+/// The size `key`'s cached protocol paints within `available` (a card box in
+/// cells, `width` and `height`), if it is ready.
+fn title_protocol_size(
+    model: &mut Model,
+    key: &str,
+    available: (u16, u16),
+) -> Option<ratatui::layout::Size> {
+    // While the dimmed backdrop forces the halfblock fallback, measure on
+    // the configured protocol's grid: the overlay's cache key encodes the
+    // measured cols/rows, so a fallback-measured variant would be a new,
+    // never-painted key and flip the title site back to the header row
+    // until the fallback paint landed (user-reported: the now-playing
+    // title flashed to the header for a moment on every modal open).
+    let suffix = if model.app.dim_halfblock_forced() {
+        model.image_protocols.configured_protocol_name()
+    } else {
+        model.app.image_protocol_suffix()
+    };
+    let available = ratatui::layout::Size {
+        width: available.0,
+        height: available.1,
+    };
+    model
+        .cached_image_protocol_for_suffix_mut(key, suffix)?
+        .size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), available)
+}
+
+/// Compose the overlay variant from the base entry's source and the ready
+/// logo, then register it under `key` (design D3/D7). Returns whether the
+/// variant was composed; a missing base bitmap logs and leaves the text
+/// site to the caller.
+fn build_title_overlay_variant(
+    model: &mut Model,
+    cache_key: &str,
+    key: &str,
+    cols: u16,
+    rows: u16,
+    text: mbv_images::title_overlay::TitleOverlayText<'_>,
+    ready_logo_key: Option<&str>,
+    item_kind: &str,
+) -> bool {
+    let Some(source) = model
+        .app
+        .images
+        .image(cache_key)
+        .and_then(|entry| entry.img.as_ref())
+    else {
+        model
+            .app
+            .title_log_gate
+            .log_decision(cache_key, item_kind, "BaseImageMissing", None);
+        return false;
+    };
+    let source_dimensions = (source.width(), source.height());
+    let logo = ready_logo_key
+        .and_then(|key| model.app.images.image(key))
+        .and_then(|entry| entry.img.as_ref());
+    let composed = compose_title_overlay_bitmap(
+        source,
+        logo,
+        ratatui_image::FontSize::new(model.app.image_font_size().0, model.app.image_font_size().1),
+        cols,
+        rows,
+        text,
+    );
+    let suffix = model.app.image_protocol_suffix();
+    let built = model
+        .image_protocols
+        .build_entry(key, Some(composed), None, suffix);
+    model
+        .app
+        .images
+        .insert_derived_image(key.to_owned(), built.entry);
+    if let Some(protocol) = built.protocol {
+        model
+            .image_protocols
+            .insert_protocol(&model.app.images, key, suffix, protocol);
+    }
+    tracing::debug!(
+        name: "queue.title_overlay.built",
+        target: "queue_art",
+        key,
+        base_width = source_dimensions.0,
+        base_height = source_dimensions.1,
+        box_cols = cols,
+        box_rows = rows,
+        "built queue title overlay"
+    );
+    true
+}
+
+impl Model {
     pub(in crate::app) fn ensure_placeholder_card_image(&mut self) {
-        if self.images.is_cached(QUEUE_CARD_PLACEHOLDER_KEY) {
+        if self.app.images.is_cached(QUEUE_CARD_PLACEHOLDER_KEY) {
             return;
         }
-        let Some(suffix) = self.current_protocol_suffix_opt() else {
+        let Some(suffix) = current_protocol_suffix_opt(self) else {
             return;
         };
         let Ok(img) = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES) else {
@@ -70,11 +184,12 @@ impl App {
         let built =
             self.image_protocols
                 .build_entry(QUEUE_CARD_PLACEHOLDER_KEY, Some(img), None, suffix);
-        self.images
+        self.app
+            .images
             .insert_image(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), built.entry);
         if let Some(protocol) = built.protocol {
             self.image_protocols.insert_protocol(
-                &self.images,
+                &self.app.images,
                 QUEUE_CARD_PLACEHOLDER_KEY,
                 suffix,
                 protocol,
@@ -82,47 +197,10 @@ impl App {
         }
     }
 
-    /// The picker that encodes the active protocol suffix, and that suffix:
-    /// the halfblock picker's while a dimmed backdrop is up, else the
-    /// configured picker's. `None` until the pickers are initialized.
-    fn picker_and_suffix(&self) -> Option<(&Picker, &'static str)> {
-        if self.dim_halfblock_forced() {
-            self.image_protocols
-                .halfblock_picker()
-                .map(|p| (p, "halfblock"))
-        } else {
-            self.image_protocols
-                .image_picker()
-                .map(|p| (p, self.image_protocols.configured_protocol_name()))
-        }
-    }
-
-    /// [`App::picker_and_suffix`] without the picker, for a caller that only
-    /// needs the suffix: `None` until the pickers are initialized.
-    fn current_protocol_suffix_opt(&self) -> Option<&'static str> {
-        self.picker_and_suffix().map(|(_, suffix)| suffix)
-    }
-
-    /// Whether the dimmed backdrop has forced the halfblock fallback picker
-    /// over a differently-configured protocol (#451). The fallback picker
-    /// measures cells on its hardcoded font grid, not the terminal font size
-    /// the configured picker detected, so a paint made under the fallback is
-    /// not geometry-comparable with the configured protocol's. Consumers that
-    /// feed geometry feedback loops (the queue card's size checkpoint and its
-    /// title-overlay sizing) must hold the configured protocol's geometry
-    /// while this is up.
-    pub(in crate::app) fn dim_halfblock_forced(&self) -> bool {
-        self.dim_backdrop_active
-            && self.images.protocol_enabled()
-            && !self
-                .image_protocols
-                .is_halfblock_configured(self.images.protocol_override())
-    }
-
     /// The suffix of the protocol currently active: the halfblock picker's
     /// while a dimmed backdrop is up, else the configured picker's.
     pub(in crate::app) fn current_protocol_suffix(&self) -> &'static str {
-        self.picker_and_suffix().map_or("halfblock", |(_, s)| s)
+        picker_and_suffix(self).map_or("halfblock", |(_, s)| s)
     }
 
     /// Returns the protocol to render `bare_key` with under the currently
@@ -151,14 +229,15 @@ impl App {
         suffix: &'static str,
     ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
         let picker = self.image_protocols.picker_for_suffix(suffix).cloned()?;
-        let reencode = self.images.image(bare_key).is_some_and(|e| {
+        let reencode = self.app.images.image(bare_key).is_some_and(|e| {
             e.img.is_some()
                 && !self
                     .image_protocols
-                    .contains(&self.images, bare_key, suffix)
+                    .contains(&self.app.images, bare_key, suffix)
         });
         if reencode {
             let (img, cover_box, stored_logo_key) = self
+                .app
                 .images
                 .image(bare_key)
                 .and_then(|e| {
@@ -169,7 +248,7 @@ impl App {
                 .expect("img present, just checked");
             let logo_key = self
                 .image_protocols
-                .ready_logo_key(&self.images, stored_logo_key.as_deref());
+                .ready_logo_key(&self.app.images, stored_logo_key.as_deref());
             // A hero entry's protocols carry the cover-fit crop (task 5.10,
             // design D5): rebuild from the source through the same cover step
             // so a suffix switch keeps the cropped aspect.
@@ -182,78 +261,28 @@ impl App {
             };
             let img =
                 self.image_protocols
-                    .decorate_with_logo(&self.images, img, logo_key.as_deref());
+                    .decorate_with_logo(&self.app.images, img, logo_key.as_deref());
             let proto = self
                 .image_protocols
                 .build_protocol(bare_key, suffix, &picker, img);
             self.image_protocols
-                .insert_protocol(&self.images, bare_key, suffix, proto);
-            if let Some(entry) = self.images.image_mut(bare_key) {
+                .insert_protocol(&self.app.images, bare_key, suffix, proto);
+            if let Some(entry) = self.app.images.image_mut(bare_key) {
                 entry.applied_logo_key = logo_key;
             }
         }
         self.image_protocols
-            .protocol_mut(&self.images, bare_key, suffix)
-    }
-
-    /// The active picker's terminal font size — the cell-to-pixel ratio the
-    /// hero cover fit's box pixels derive from. Falls back to the picker
-    /// constructor's default when no picker is active.
-    pub(in crate::app) fn image_font_size(&self) -> ratatui_image::FontSize {
-        self.picker_and_suffix()
-            .map_or(ratatui_image::FontSize::new(10, 20), |(picker, _)| {
-                picker.font_size()
-            })
-    }
-
-    /// The font the queue card's title-overlay bitmap is composed at: always
-    /// the configured protocol's detected font size, never the dimmed
-    /// backdrop's halfblock fallback. `title_protocol_size` measures the
-    /// overlay on that same configured grid while the fallback is forced, and
-    /// the variant key encodes cols/rows but not the font — composing the
-    /// same key at the fallback's hardcoded grid would bake a stretched
-    /// bitmap into a key that outlives the modal.
-    fn title_overlay_font_size(&self) -> ratatui_image::FontSize {
-        self.image_protocols.image_picker().map_or(
-            ratatui_image::FontSize::new(10, 20),
-            ratatui_image::picker::Picker::font_size,
-        )
+            .protocol_mut(&self.app.images, bare_key, suffix)
     }
 
     /// One hero artwork box's pixel size from its cell size (task 5.10,
     /// design D5's cover-fit input).
     pub(in crate::app) fn hero_box_pixels(&self, box_w: u16, box_h: u16) -> (u32, u32) {
-        let font = self.image_font_size();
+        let (font_w, font_h) = self.app.image_font_size();
         (
-            u32::from(box_w) * u32::from(font.width.max(1)),
-            u32::from(box_h) * u32::from(font.height.max(1)),
+            u32::from(box_w) * u32::from(font_w.max(1)),
+            u32::from(box_h) * u32::from(font_h.max(1)),
         )
-    }
-
-    /// The size `key`'s cached protocol paints within `available` (a card box in
-    /// cells, `width` and `height`), if it is ready.
-    fn title_protocol_size(
-        &mut self,
-        key: &str,
-        available: (u16, u16),
-    ) -> Option<ratatui::layout::Size> {
-        // While the dimmed backdrop forces the halfblock fallback, measure on
-        // the configured protocol's grid: the overlay's cache key encodes the
-        // measured cols/rows, so a fallback-measured variant would be a new,
-        // never-painted key and flip the title site back to the header row
-        // until the fallback paint landed (user-reported: the now-playing
-        // title flashed to the header for a moment on every modal open).
-        let suffix = if self.dim_halfblock_forced() {
-            self.image_protocols.configured_protocol_name()
-        } else {
-            self.current_protocol_suffix()
-        };
-        let available = ratatui::layout::Size {
-            width: available.0,
-            height: available.1,
-        };
-        self.cached_image_protocol_for_suffix_mut(key, suffix)?
-            .size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), available)
     }
 
     /// Compose and encode the title artwork at the size the base card protocol
@@ -267,14 +296,15 @@ impl App {
         logo_cache_key: Option<&str>,
         item_kind: &str,
     ) -> Option<String> {
-        let Some(entry) = self.images.image(cache_key) else {
-            self.title_log_gate
+        let Some(entry) = self.app.images.image(cache_key) else {
+            self.app
+                .title_log_gate
                 .log_decision(cache_key, item_kind, "NoBaseEntry", None);
             return None;
         };
         let source_dimensions = entry.dimensions();
-        let Some(size) = self.title_protocol_size(cache_key, available) else {
-            self.title_log_gate.log_decision(
+        let Some(size) = title_protocol_size(self, cache_key, available) else {
+            self.app.title_log_gate.log_decision(
                 cache_key,
                 item_kind,
                 "NoBaseProtocolSize",
@@ -293,7 +323,7 @@ impl App {
         // text variant valid.
         let ready_logo_key = self
             .image_protocols
-            .ready_logo_key(&self.images, logo_cache_key);
+            .ready_logo_key(&self.app.images, logo_cache_key);
         let key = mbv_images::title_overlay::title_overlay_cache_key(
             cache_key,
             cols,
@@ -301,8 +331,9 @@ impl App {
             overlay_text,
             ready_logo_key.as_deref(),
         );
-        if !self.images.is_cached(&key)
-            && !self.build_title_overlay_variant(
+        if !self.app.images.is_cached(&key)
+            && !build_title_overlay_variant(
+                self,
                 cache_key,
                 &key,
                 cols,
@@ -314,8 +345,8 @@ impl App {
         {
             return None;
         }
-        if self.title_protocol_size(&key, available).is_none() {
-            self.title_log_gate.log_decision(
+        if title_protocol_size(self, &key, available).is_none() {
+            self.app.title_log_gate.log_decision(
                 cache_key,
                 item_kind,
                 "VariantNotReady",
@@ -324,64 +355,6 @@ impl App {
             return None;
         }
         Some(key)
-    }
-
-    /// Compose the overlay variant from the base entry's source and the ready
-    /// logo, then register it under `key` (design D3/D7). Returns whether the
-    /// variant was composed; a missing base bitmap logs and leaves the text
-    /// site to the caller.
-    fn build_title_overlay_variant(
-        &mut self,
-        cache_key: &str,
-        key: &str,
-        cols: u16,
-        rows: u16,
-        text: mbv_images::title_overlay::TitleOverlayText<'_>,
-        ready_logo_key: Option<&str>,
-        item_kind: &str,
-    ) -> bool {
-        let Some(source) = self
-            .images
-            .image(cache_key)
-            .and_then(|entry| entry.img.as_ref())
-        else {
-            self.title_log_gate
-                .log_decision(cache_key, item_kind, "BaseImageMissing", None);
-            return false;
-        };
-        let source_dimensions = (source.width(), source.height());
-        let logo = ready_logo_key
-            .and_then(|key| self.images.image(key))
-            .and_then(|entry| entry.img.as_ref());
-        let composed = compose_title_overlay_bitmap(
-            source,
-            logo,
-            self.title_overlay_font_size(),
-            cols,
-            rows,
-            text,
-        );
-        let suffix = self.current_protocol_suffix();
-        let built = self
-            .image_protocols
-            .build_entry(key, Some(composed), None, suffix);
-        self.images
-            .insert_derived_image(key.to_owned(), built.entry);
-        if let Some(protocol) = built.protocol {
-            self.image_protocols
-                .insert_protocol(&self.images, key, suffix, protocol);
-        }
-        tracing::debug!(
-            name: "queue.title_overlay.built",
-            target: "queue_art",
-            key,
-            base_width = source_dimensions.0,
-            base_height = source_dimensions.1,
-            box_cols = cols,
-            box_rows = rows,
-            "built queue title overlay"
-        );
-        true
     }
 
     /// Ensure the hero cover-fit protocol for `cache_key` matches
@@ -402,7 +375,7 @@ impl App {
         logo_cache_key: Option<&str>,
         resizing: bool,
     ) -> bool {
-        let Some(entry) = self.images.image(cache_key) else {
+        let Some(entry) = self.app.images.image(cache_key) else {
             return false;
         };
         let Some(source) = entry.img.clone() else {
@@ -410,10 +383,10 @@ impl App {
         };
         let desired_logo_key = self
             .image_protocols
-            .ready_logo_key(&self.images, logo_cache_key);
+            .ready_logo_key(&self.app.images, logo_cache_key);
         if entry.cover_box == Some(box_cells)
             && entry.applied_logo_key == desired_logo_key
-            && self.image_protocols.has_any(&self.images, cache_key)
+            && self.image_protocols.has_any(&self.app.images, cache_key)
         {
             return true;
         }
@@ -422,15 +395,14 @@ impl App {
             // lifts. A box that happens to match the encoding still paints.
             return false;
         }
-        let Some((picker, suffix)) = self
-            .picker_and_suffix()
-            .map(|(picker, suffix)| (picker.clone(), suffix))
+        let Some((picker, suffix)) =
+            picker_and_suffix(self).map(|(picker, suffix)| (picker.clone(), suffix))
         else {
             return false;
         };
         let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
         let cropped = self.image_protocols.decorate_with_logo(
-            &self.images,
+            &self.app.images,
             cover_fill_hero_box(&source, px_w, px_h),
             desired_logo_key.as_deref(),
         );
@@ -440,8 +412,8 @@ impl App {
             .build_protocol(&bare_key, suffix, &picker, cropped);
         self.image_protocols.clear_key(cache_key);
         self.image_protocols
-            .insert_protocol(&self.images, cache_key, suffix, proto);
-        if let Some(entry) = self.images.image_mut(cache_key) {
+            .insert_protocol(&self.app.images, cache_key, suffix, proto);
+        if let Some(entry) = self.app.images.image_mut(cache_key) {
             entry.cover_box = Some(box_cells);
             entry.applied_logo_key = desired_logo_key;
         }

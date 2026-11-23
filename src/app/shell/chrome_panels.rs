@@ -379,7 +379,7 @@ impl Model {
         );
         if self.app.visual_slot_shown() {
             super::queue_card::render_queue_playback_slot(
-                &mut self.app,
+                self,
                 self.terminal_height,
                 frame,
                 slot_region,

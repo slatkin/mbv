@@ -31,7 +31,14 @@ impl Model {
         // same gate the card's render used.
         if self.app.visual_slot_shown() {
             let resizing = self.refresh_resize_drag_hold();
-            crate::app::state::projection::card::refresh_queue_card_image(&mut self.app, resizing);
+
+            let record = crate::app::state::projection::card::refresh_queue_card_image(
+                &mut self.app,
+                resizing,
+            );
+            if let Some(record) = record {
+                self.ensure_queue_card_title_overlay(&record, resizing);
+            }
         } else if self.app.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing (the user's hide toggle): the
             // artwork can no longer carry the title, so the header is its
@@ -41,6 +48,36 @@ impl Model {
                 mbv_ui_model::playback::NowPlayingTitleSite::Header;
         }
         self.push_queue_projection(update);
+    }
+
+    /// Build the artwork's title-overlay variant from the sync pass's title-site
+    /// record (invariant 16): the overlay's encoding is a terminal protocol, so
+    /// it belongs to the shell. The core decides the site and keeps the plain
+    /// base key as the paint's fallback while the variant's encode completes;
+    /// a built variant replaces the projected key.
+    ///
+    /// Invariant 20: a resize drag builds nothing; the settled width composes
+    /// it once the hold lifts.
+    fn ensure_queue_card_title_overlay(
+        &mut self,
+        record: &crate::app::state::projection::card::QueueTitleRecord,
+        resizing: bool,
+    ) {
+        self.app.queue_card_projection.plain_cache_key = Some(record.base_key.clone());
+        if resizing {
+            return;
+        }
+        let (height, width) = self.app.images.last_card_size();
+        let variant = self.ensure_title_overlay_protocol(
+            &record.base_key,
+            (width, height),
+            &record.parts,
+            record.logo_cache_key.as_deref(),
+            &record.item_kind,
+        );
+        if variant.is_some() {
+            self.app.queue_card_projection.cache_key = variant;
+        }
     }
 
     fn mount_queue_panel(&mut self) {

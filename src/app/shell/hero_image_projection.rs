@@ -59,7 +59,7 @@ impl Model {
                     terminal_height,
                 );
                 let logo_cache_key = self.app.fetch_wide_hero_logo(&facts.artwork, panel_area);
-                if !self.app.ensure_hero_cover_protocol(
+                if !self.ensure_hero_cover_protocol(
                     &cache_key,
                     (box_cells.width, box_cells.height),
                     logo_cache_key.as_deref(),
@@ -78,9 +78,7 @@ impl Model {
             // Logo).
             HeroImageProjection::ReadyOverlay { cache_key, decoded } => {
                 if let Some(box_cells) = overlay_box
-                    && !self
-                        .app
-                        .ensure_hero_cover_protocol(&cache_key, box_cells, None, resizing)
+                    && !self.ensure_hero_cover_protocol(&cache_key, box_cells, None, resizing)
                 {
                     return State::Loading;
                 }

@@ -7,6 +7,7 @@ use super::super::{
 };
 use super::pin_swap::PinSwapLink;
 use super::{Duration, Instant, PollStrategy};
+use crate::app::state::projection::PendingProtocolEncode;
 use crate::app::{
     BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, MusicEvent, PlayerEventDrain,
     SeriesEvent,
@@ -266,7 +267,7 @@ impl Model {
     pub(super) fn drain_resize_responses(&mut self) -> bool {
         let mut had_events = false;
         loop {
-            match self.app.image_protocols.try_recv_resize_response() {
+            match self.image_protocols.try_recv_resize_response() {
                 Ok((key, response)) => {
                     had_events = true;
                     // Responses are tagged with the per-suffix mem-key
@@ -276,8 +277,7 @@ impl Model {
                         continue;
                     };
                     if let Some(state) =
-                        self.app
-                            .image_protocols
+                        self.image_protocols
                             .protocol_mut(&self.app.images, bare_key, suffix)
                     {
                         state.update_resized_protocol(response);
@@ -285,7 +285,7 @@ impl Model {
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    self.app.image_protocols.respawn_resize_worker();
+                    self.image_protocols.respawn_resize_worker();
                     had_events = true;
                     break;
                 }
@@ -299,7 +299,63 @@ impl Model {
     /// its entry under its key, so a sync point after a drain keeps the store
     /// from holding encodings of entries the cache no longer has.
     pub(super) fn prune_image_protocols(&mut self) {
-        self.app.image_protocols.prune(&self.app.images);
+        self.image_protocols.prune(&self.app.images);
+    }
+
+    /// Perform the protocol work the core queued this tick (design D2 rule 3
+    /// of `split-tui-gui-clients`): encode every completed fetch's entry, then
+    /// drop the encodings the projections re-keyed. The store needs a picker,
+    /// so a Client whose pickers never initialized drops the records without
+    /// encoding.
+    ///
+    /// A queued encoding whose entry the cache replaced or cleared in the same
+    /// tick is skipped, and one whose pixels the store already holds for that
+    /// key and suffix is not encoded again: a completion always records the
+    /// pixels it built the encoding from (invariant 38).
+    pub(super) fn drain_protocol_work(&mut self) {
+        if self.image_protocols.image_picker().is_none() {
+            while self.app.next_pending_protocol_encode().is_some() {}
+            self.app.take_pending_protocol_clears();
+            return;
+        }
+        while let Some(pending) = self.app.next_pending_protocol_encode() {
+            if self.app.source_image_hash(&pending.cache_key) != Some(pending.pixel_hash) {
+                continue;
+            }
+            if self.image_protocols.has_pixels(
+                &self.app.images,
+                &pending.cache_key,
+                pending.suffix,
+                pending.pixel_hash,
+            ) {
+                continue;
+            }
+            self.encode_completed_fetch(&pending);
+        }
+        for cache_key in self.app.take_pending_protocol_clears() {
+            self.image_protocols.clear_key(&cache_key);
+        }
+    }
+
+    /// Encode one completed fetch's decoded source under the suffix its cache
+    /// key carries and store it, tagged with the pixels it was built from.
+    fn encode_completed_fetch(&mut self, pending: &PendingProtocolEncode) {
+        let built = self.image_protocols.build_entry(
+            &pending.cache_key,
+            Some(pending.img.clone()),
+            None,
+            pending.suffix,
+        );
+        if let Some(protocol) = built.protocol {
+            self.image_protocols.insert_protocol(
+                &self.app.images,
+                &pending.cache_key,
+                pending.suffix,
+                protocol,
+            );
+            self.image_protocols
+                .set_pixels(&pending.cache_key, pending.suffix, pending.pixel_hash);
+        }
     }
 
     /// Drain ctrl transport commands through the Client core's drain.

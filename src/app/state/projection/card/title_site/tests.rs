@@ -3,7 +3,7 @@
 
 use super::super::artwork::{card_cache_key, card_cache_key_for_id, card_image_types};
 use super::super::refresh_queue_card_image;
-use crate::app::App;
+use crate::app::Model;
 use crate::app::tests::render_fixtures::make_queue_app;
 use mbv_images::CachedImage;
 use ratatui_image::picker::{Picker, ProtocolType};
@@ -59,8 +59,9 @@ fn cached_colour_image(width: u32, height: u32) -> CachedImage {
 }
 
 /// An active-playing queue app with the card protocol and one base bitmap, so
-/// the title-site decision can reach the overlay-variant build.
-fn overlay_app() -> App {
+/// the title-site decision can reach the overlay-variant build. The protocol
+/// store is the shell's (`Model`), so these tests drive the model.
+fn overlay_app() -> Model {
     let mut app = make_queue_app(1);
     {
         app.player.update_status(|status| {
@@ -72,25 +73,56 @@ fn overlay_app() -> App {
     let mut picker = Picker::halfblocks();
     picker.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
-    app.image_protocols
+    app.set_image_protocol_facts(false, true, (10, 20));
+    app.set_configured_protocol_suffix("kitty");
+    let mut model = Model::new(app);
+    model
+        .image_protocols
         .set_image_pickers_for_test(picker, Picker::halfblocks());
     // (height, width): the card box the overlay is composed for.
-    app.images.record_card_size(4, 8);
-    app
+    model.app.images.record_card_size(4, 8);
+    model
 }
 
 /// `overlay_app` with the base bitmap already inserted, so the overlay
 /// variant can compose this sync.
-fn overlay_app_with_base_image(app: App) -> (App, String) {
+fn overlay_app_with_base_image(model: Model) -> (Model, String) {
     let key = card_cache_key(
-        app.playback_queue()
+        model
+            .app
+            .playback_queue()
             .emby_item_at(0)
             .expect("the queue holds an Emby item"),
     );
-    let mut app = app;
-    app.images
+    let mut model = model;
+    model
+        .app
+        .images
         .insert_image(key.clone(), cached_colour_image(4, 2));
-    (app, key)
+    (model, key)
+}
+
+/// Run the card's sync pass and build the overlay variant from the record it
+/// leaves, the way `Model::sync_queue` does: the overlay's protocol is the
+/// shell's, the decision is the core's.
+fn sync_card(model: &mut Model, resizing: bool) {
+    let record = refresh_queue_card_image(&mut model.app, resizing);
+    if let Some(record) = record
+        && !resizing
+    {
+        let (height, width) = model.app.images.last_card_size();
+        let variant = model.ensure_title_overlay_protocol(
+            &record.base_key,
+            (width, height),
+            &record.parts,
+            record.logo_cache_key.as_deref(),
+            &record.item_kind,
+        );
+        model.app.queue_card_projection.plain_cache_key = Some(record.base_key.clone());
+        if let Some(variant) = variant {
+            model.app.queue_card_projection.cache_key = Some(variant);
+        }
+    }
 }
 
 /// User-reported regression: every distinct fitted width during a queue-column
@@ -105,44 +137,45 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
         .expect("the base card protocol is available");
 
     // Warm sync: eligibility passes and the site is decided before any paint.
-    refresh_queue_card_image(&mut app, false);
+    sync_card(&mut app, false);
     assert_eq!(
-        app.queue_card_projection.title_site,
+        app.app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork,
         "the warm sync decides the site before the panel first displays"
     );
     let baseline = app.image_protocols.protocol_builds();
 
-    refresh_queue_card_image(&mut app, true);
+    sync_card(&mut app, true);
     assert_eq!(
         app.image_protocols.protocol_builds(),
         baseline,
         "no overlay variant is composed while the column drag is active"
     );
     assert_eq!(
-        app.queue_card_projection.cache_key.as_deref(),
+        app.app.queue_card_projection.cache_key.as_deref(),
         Some(base_key.as_str()),
         "the card paints plain base art during the drag"
     );
     assert_eq!(
-        app.queue_card_projection.title_site,
+        app.app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork,
         "the resize drag must not resurrect the header: the site carries over"
     );
 
-    refresh_queue_card_image(&mut app, false);
+    sync_card(&mut app, false);
     assert_eq!(
         app.image_protocols.protocol_builds(),
         baseline,
         "the drag composes nothing and the warm sync's variant is reused at the unchanged size"
     );
     assert!(
-        app.queue_card_projection
+        app.app
+            .queue_card_projection
             .cache_key
             .as_deref()
             .is_some_and(|key| key.contains(":t:")),
         "the ended drag projects the overlay variant: {:?}",
-        app.queue_card_projection.cache_key
+        app.app.queue_card_projection.cache_key
     );
 }
 
@@ -154,16 +187,17 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
 fn the_site_is_decided_while_the_art_fetch_is_pending() {
     let mut app = overlay_app();
     assert!(
-        app.queue_card_projection
+        app.app
+            .queue_card_projection
             .cache_key
             .as_deref()
-            .and_then(|key| app.images.image(key))
+            .and_then(|key| app.app.images.image(key))
             .is_none(),
         "the test fixture starts with the art fetch pending"
     );
-    refresh_queue_card_image(&mut app, false);
+    sync_card(&mut app, false);
     assert_eq!(
-        app.queue_card_projection.title_site,
+        app.app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork,
         "a pending art fetch must not hold the header as the title's home"
     );
@@ -175,18 +209,18 @@ fn the_site_is_decided_while_the_art_fetch_is_pending() {
 #[test]
 fn a_mode_gate_forces_the_header_back_from_the_artwork_site() {
     let (mut app, _base_key) = overlay_app_with_base_image(overlay_app());
-    refresh_queue_card_image(&mut app, false);
+    sync_card(&mut app, false);
     assert_eq!(
-        app.queue_card_projection.title_site,
+        app.app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork
     );
 
     // The visualizer replaces the artwork: the artwork can no longer carry
     // the title, so the header is its home again.
-    app.visualizer_enabled = true;
-    refresh_queue_card_image(&mut app, false);
+    app.app.visualizer_enabled = true;
+    sync_card(&mut app, false);
     assert_eq!(
-        app.queue_card_projection.title_site,
+        app.app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Header,
         "a mode gate forces the header back from the artwork site"
     );
@@ -195,9 +229,9 @@ fn a_mode_gate_forces_the_header_back_from_the_artwork_site() {
 /// Content the owner's Emby Session output presents but did not load holds
 /// the slotless path: playback follows the `OutputState` `now_playing`
 /// payload and no queue slot addresses the item (design D12).
-fn slotless_session_app() -> App {
+fn slotless_session_app() -> Model {
     let mut app = overlay_app();
-    app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+    app.app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
         device_id: "device-1".to_string(),
         name: "Living Room TV".to_string(),
         connection: mbv_ctrl::OutputConnection::Connected,
@@ -221,16 +255,16 @@ fn slotless_session_app() -> App {
 #[test]
 fn slotless_session_episode_fetches_its_series_logo() {
     let mut app = slotless_session_app();
-    let fetches_before = app.images.card_image_fetch_calls();
+    let fetches_before = app.app.images.card_image_fetch_calls();
 
-    refresh_queue_card_image(&mut app, false);
+    sync_card(&mut app, false);
 
     assert!(
-        app.images.is_loading("remote-series:Logo"),
+        app.app.images.is_loading("remote-series:Logo"),
         "the slotless episode must start the series-logo fetch"
     );
     assert_eq!(
-        app.images.card_image_fetch_calls(),
+        app.app.images.card_image_fetch_calls(),
         fetches_before + 2,
         "the card fetch and the logo fetch are separate reservations"
     );
@@ -243,15 +277,17 @@ fn slotless_session_episode_fetches_its_series_logo() {
 fn slotless_session_episode_composes_the_logo_overlay_variant() {
     let mut app = slotless_session_app();
     let card_key = card_cache_key_for_id("remote-ep", Some("Episode"));
-    app.images
+    app.app
+        .images
         .insert_image(card_key.clone(), cached_colour_image(4, 2));
-    app.images
+    app.app
+        .images
         .insert_image("remote-series:Logo".to_string(), cached_colour_image(4, 2));
 
-    refresh_queue_card_image(&mut app, false);
+    sync_card(&mut app, false);
 
     assert_eq!(
-        app.queue_card_projection.title_site,
+        app.app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Artwork
     );
     let expected = mbv_images::title_overlay::title_overlay_cache_key(
@@ -265,7 +301,7 @@ fn slotless_session_episode_composes_the_logo_overlay_variant() {
         Some("remote-series:Logo"),
     );
     assert_eq!(
-        app.queue_card_projection.cache_key.as_deref(),
+        app.app.queue_card_projection.cache_key.as_deref(),
         Some(expected.as_str()),
         "the overlay variant must carry the ready series logo"
     );
@@ -279,19 +315,19 @@ fn slotless_session_episode_composes_the_logo_overlay_variant() {
 fn slotless_session_without_logo_reference_keeps_the_text_overlay() {
     let mut app = slotless_session_app();
     if let Some(mbv_ctrl::OutputState::EmbySession { now_playing, .. }) =
-        app.playback_output.as_mut()
+        app.app.playback_output.as_mut()
         && let Some(now_playing) = now_playing
     {
         now_playing.series_id = None;
         now_playing.series_name = None;
     }
-    let fetches_before = app.images.card_image_fetch_calls();
+    let fetches_before = app.app.images.card_image_fetch_calls();
 
-    refresh_queue_card_image(&mut app, false);
+    sync_card(&mut app, false);
 
-    assert!(!app.images.is_loading("remote-series:Logo"));
+    assert!(!app.app.images.is_loading("remote-series:Logo"));
     assert_eq!(
-        app.images.card_image_fetch_calls(),
+        app.app.images.card_image_fetch_calls(),
         fetches_before + 1,
         "only the card fetch is reserved; no logo fetch without a series id"
     );

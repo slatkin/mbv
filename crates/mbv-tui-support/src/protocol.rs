@@ -42,10 +42,11 @@ impl std::fmt::Debug for BuiltEntry {
 }
 
 /// One cache key's protocols, tagged with the cache entry generation they were
-/// encoded from.
+/// encoded from and, per suffix, the pixels their encoding was built from.
 struct EntryProtocols {
     generation: u64,
     by_suffix: HashMap<&'static str, ThreadProtocol>,
+    pixels: HashMap<&'static str, u64>,
 }
 
 /// One Client's terminal image protocols: the pickers, the resize worker
@@ -256,9 +257,38 @@ impl ImageProtocols {
             .or_insert_with(|| EntryProtocols {
                 generation,
                 by_suffix: HashMap::new(),
+                pixels: HashMap::new(),
             })
             .by_suffix
             .insert(suffix, protocol);
+    }
+
+    /// Record the pixels `bare_key`'s `suffix` encoding was built from, so
+    /// [`ImageProtocols::has_pixels`] can report a stale encoding. Entries are
+    /// tagged with the cache generation too, but a proof (a completed fetch) can
+    /// store a new entry with the same pixels under the same generation; the
+    /// pixel tag catches that case.
+    pub fn set_pixels(&mut self, bare_key: &str, suffix: &'static str, pixels: u64) {
+        if let Some(stored) = self.protocols.get_mut(bare_key) {
+            stored.pixels.insert(suffix, pixels);
+        }
+    }
+
+    /// Whether `bare_key`'s `suffix` encoding was built from `pixels`, for the
+    /// entry the cache still holds.
+    #[must_use]
+    pub fn has_pixels(
+        &mut self,
+        cache: &ImageCache,
+        bare_key: &str,
+        suffix: &str,
+        pixels: u64,
+    ) -> bool {
+        self.drop_key_if_stale(cache, bare_key);
+        self.protocols
+            .get(bare_key)
+            .and_then(|stored| stored.pixels.get(suffix))
+            .is_some_and(|stored| *stored == pixels)
     }
 
     /// `bare_key`'s protocol for `suffix`, when one is cached for the entry the

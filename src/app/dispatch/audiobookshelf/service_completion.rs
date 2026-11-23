@@ -28,8 +28,9 @@ impl App {
     }
 
     pub(in crate::app) fn clear_audiobookshelf_images(&mut self) {
+        // The shell's protocol store drops the encodings of what this cleared
+        // at its next drain (`Model::prune_image_protocols`, invariant 38).
         self.images.clear_audiobookshelf_images();
-        self.image_protocols.prune(&self.images);
         mbv_config::clear_image_disk_cache_prefix(mbv_images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX);
     }
     pub(in crate::app) fn apply_audiobookshelf_completion(

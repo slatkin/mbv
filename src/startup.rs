@@ -106,16 +106,18 @@ extern "C" fn signal_handler(sig: libc::c_int) {
     }
 }
 
-/// Captures the launch window, initializes image pickers, and runs the TUI
+/// Captures the launch window, builds the TUI shell — which initializes the
+/// image pickers, since they belong to this Client's `Model` — and runs it
 /// with the launch window available to the model. A pinned Client always
 /// starts with Panel focus on Queue.
 fn run_tui(mut app: App) {
     let launch_window = capture_launch_window();
-    app.init_image_pickers();
     if pin::is_pinned() {
         app.pin_launch_focus_to_queue();
     }
-    if let Err(e) = Model::new_with_launch_window(app, launch_window).run() {
+    let mut model = Model::new_with_launch_window(app, launch_window);
+    model.init_image_pickers();
+    if let Err(e) = model.run() {
         pin::fatal(format!("mbv: {e}"));
     }
 }

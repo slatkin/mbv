@@ -42,10 +42,7 @@ pub(in crate::app) fn title_site_skip_reason(
         // the overlay once the hold lifts. The header stays hidden across
         // the drag.
         Some(TitleSiteGate::Transient("ResizeDragHold"))
-    } else if app
-        .image_protocols
-        .is_halfblock_configured(app.images.protocol_override())
-    {
+    } else if app.halfblock_configured() {
         Some(TitleSiteGate::ForceHeader("HalfblockConfigured"))
     } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
         Some(TitleSiteGate::ForceHeader("NoSlot"))

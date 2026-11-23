@@ -1,6 +1,6 @@
-use super::App;
+use super::Model;
 use crate::app::tests::make_app_stub;
-use mbv_images::CachedImage;
+use mbv_images::{CachedImage, SourceImage};
 use ratatui_image::picker::{Picker, ProtocolType};
 
 const BASE_KEY: &str = "hero-base";
@@ -23,24 +23,46 @@ fn cached(img: Option<image::DynamicImage>) -> CachedImage {
     }
 }
 
-fn app_with_base() -> App {
-    let mut app = make_app_stub();
-    let mut picker = Picker::halfblocks();
-    picker.set_protocol_type(ProtocolType::Kitty);
-    app.images.configure_protocol(None, true);
-    app.image_protocols
-        .set_image_pickers_for_test(picker, Picker::halfblocks());
-    app.images
-        .insert_image(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
-    app
+/// A cache entry that keeps its source, as every fetched entry does: the
+/// store re-encodes a key's protocol from that source when it needs one, so a
+/// test that inserts a bitmap with `img` alone still paints (invariant 38).
+fn fetched(img: image::DynamicImage) -> CachedImage {
+    CachedImage {
+        source: SourceImage::sniff(mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES.to_vec()),
+        img: Some(img),
+        cover_box: None,
+        applied_logo_key: None,
+    }
 }
 
-fn build_count(app: &App) -> u32 {
+fn app_with_base() -> Model {
+    app_with_picker(Picker::halfblocks())
+}
+
+fn app_with_picker(mut picker: Picker) -> Model {
+    let mut app = make_app_stub();
+    picker.set_protocol_type(ProtocolType::Kitty);
+    app.images.configure_protocol(None, true);
+    let mut model = Model::new(app);
+    model
+        .image_protocols
+        .set_image_pickers_for_test(picker, Picker::halfblocks());
+    model.push_image_protocol_facts();
+    // (height, width): the card box the overlay is composed for.
+    model.app.images.record_card_size(4, 8);
+    model
+        .app
+        .images
+        .insert_image(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
+    model
+}
+
+fn build_count(app: &Model) -> u32 {
     app.image_protocols.protocol_builds()
 }
 
 fn ensure_title_overlay_protocol(
-    app: &mut App,
+    app: &mut Model,
     cache_key: &str,
     available: (u16, u16),
     parts: &mbv_queue::PlaybackTitleParts,
@@ -67,14 +89,14 @@ fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
 #[test]
 fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks() {
     let mut app = app_with_base();
-    app.dim_backdrop_active = true;
+    app.app.dim_backdrop_active = true;
     app.cached_image_protocol_mut(BASE_KEY)
         .expect("base protocol is available under the dimmed suffix");
-    app.dim_backdrop_active = false;
+    app.app.dim_backdrop_active = false;
     app.cached_image_protocol_mut(BASE_KEY)
         .expect("base protocol is available under the configured suffix");
     let baseline = build_count(&app);
-    let ensure = |app: &mut App, title: &str| {
+    let ensure = |app: &mut Model, title: &str| {
         ensure_title_overlay_protocol(app, BASE_KEY, (8, 4), &title_parts(title), Some(LOGO_KEY))
     };
 
@@ -88,7 +110,8 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
         "playback ticks reuse the text variant"
     );
 
-    app.images
+    app.app
+        .images
         .insert_image(LOGO_KEY.to_owned(), CachedImage::empty());
     assert_eq!(
         ensure(&mut app, "a title"),
@@ -97,7 +120,8 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
     );
     assert_eq!(build_count(&app), baseline + 1);
 
-    app.images
+    app.app
+        .images
         .insert_image(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
     let logo_variant = ensure(&mut app, "a title").expect("a ready logo builds the logo variant");
     assert_ne!(logo_variant, text_variant);
@@ -115,16 +139,16 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
 
     let changed = ensure(&mut app, "second").expect("a track change builds a distinct variant");
     assert_ne!(changed, logo_variant);
-    assert!(!app.images.is_cached(&logo_variant));
+    assert!(!app.app.images.is_cached(&logo_variant));
     assert_eq!(
         build_count(&app),
         baseline + 3,
         "a track change builds one protocol"
     );
 
-    let changed_composed = app.images.image(&changed).unwrap().img.clone();
-    app.images.image_mut(BASE_KEY).unwrap().img = None;
-    app.dim_backdrop_active = true;
+    let changed_composed = app.app.images.image(&changed).unwrap().img.clone();
+    app.app.images.image_mut(BASE_KEY).unwrap().img = None;
+    app.app.dim_backdrop_active = true;
     assert_eq!(ensure(&mut app, "second"), Some(changed.clone()));
     assert_eq!(
         build_count(&app),
@@ -142,7 +166,10 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
         baseline + 4,
         "suffix flip re-encodes without recomposing"
     );
-    assert_eq!(app.images.image(&changed).unwrap().img, changed_composed);
+    assert_eq!(
+        app.app.images.image(&changed).unwrap().img,
+        changed_composed
+    );
 }
 
 #[test]
@@ -151,9 +178,10 @@ fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
     // `audiobookshelf_hero_cover_cache_key`: the `{id}:P` bitmap stays plain.
     let mut app = app_with_base();
     let plain_key = "item:P";
-    app.images
-        .insert_image(plain_key.to_owned(), cached(Some(image(4, 2))));
-    let plain_before = app.images.image(plain_key).unwrap().img.clone();
+    app.app
+        .images
+        .insert_image(plain_key.to_owned(), fetched(image(4, 2)));
+    let plain_before = app.app.images.image(plain_key).unwrap().img.clone();
     let parts = mbv_queue::PlaybackTitleParts {
         title: mbv_queue::PlaybackTitlePart {
             role: mbv_queue::PlaybackTitlePartRole::Title,
@@ -162,11 +190,11 @@ fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
         context: None,
     };
 
-    let variant = ensure_title_overlay_protocol(&mut app, plain_key, (8, 4), &parts, None)
+    let variant = ensure_title_overlay_protocol(&mut app, plain_key, (32, 16), &parts, None)
         .expect("measurable plain art builds an overlay variant");
 
     assert_ne!(variant, plain_key);
-    assert_eq!(app.images.image(plain_key).unwrap().img, plain_before);
+    assert_eq!(app.app.images.image(plain_key).unwrap().img, plain_before);
 }
 
 /// Invariant 20 (user-reported 2026-10-09): a changed box under the resize
@@ -190,7 +218,10 @@ fn resize_drag_holds_the_placeholder_and_reencodes_once_after_it_settles() {
         baseline + 1,
         "the settled box re-encodes once"
     );
-    assert_eq!(app.images.image(BASE_KEY).unwrap().cover_box, Some((13, 6)));
+    assert_eq!(
+        app.app.images.image(BASE_KEY).unwrap().cover_box,
+        Some((13, 6))
+    );
 }
 
 /// Invariant 20: a box that matches the kept encoding still paints during
