@@ -137,22 +137,18 @@ fn connect_local_daemon(
 
 #[test]
 fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
+    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
+
     let (mut app, command_rx) =
         make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));
     let mut item = make_item("Movie", "Movie");
     item.id = "movie-1".into();
     app.play_item(item);
 
-    let _guard = crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_TEST_LOCK
-        .lock()
-        .unwrap();
-    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = Some(connect_local_daemon);
+    let _guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_local_daemon);
     confirm_local_fall_through(&mut app);
-    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = None;
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
 
     assert!(!app.queue_deferrals.has_local_play());
     assert!(app.is_local_daemon());

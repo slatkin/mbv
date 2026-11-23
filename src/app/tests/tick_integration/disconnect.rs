@@ -202,12 +202,10 @@ fn local_home_shutdown_announced_exits_cleanly() {
 
 #[test]
 fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
-    let _connect_guard = crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_TEST_LOCK
-        .lock()
-        .unwrap();
-    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = Some(reconnect_local_daemon);
+    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
+
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (remote, _) = RemotePlayer::stub(make_items(2), 0);
     app.switch_to_direct_remote(
@@ -244,19 +242,13 @@ fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
             .len(),
         2
     );
-    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = None;
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
 }
 
 #[test]
 fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
-    let _connect_guard = crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_TEST_LOCK
-        .lock()
-        .unwrap();
-    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = Some(reconnect_local_daemon);
+    let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
 
     let local_items = make_items(2);
     let mut app = make_local_daemon_app_stub(local_items.clone());
@@ -304,9 +296,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
         assert!(!matches!(cmd, mbv_ctrl::CtrlCmd::Stop));
     }
 
-    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = None;
+    *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
 }
 
 // Owns queue-handoff-and-take 5.2 (remote-queue-disconnect delta): a user

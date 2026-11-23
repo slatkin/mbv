@@ -112,7 +112,10 @@ pub(in crate::app) use self::waking_relay::spawn_waking_relay;
 #[cfg(test)]
 mod test_seams;
 #[cfg(test)]
-pub(in crate::app) use self::test_seams::{OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK};
+pub(in crate::app) use self::test_seams::{
+    DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
+    DIRECT_CONNECT_TEST_LOCK, OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
+};
 mod shell;
 use self::dispatch::notify::ToastSeverity;
 pub use self::shell::Model;

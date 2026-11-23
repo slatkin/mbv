@@ -62,9 +62,7 @@ mod settings;
 mod tab_strip;
 pub(in crate::app) mod teardown;
 mod terminal;
-#[cfg(test)]
-pub(in crate::app) mod test_seams;
-mod tv_wide;
+pub(in crate::app) mod tv_wide;
 pub(crate) use terminal::set_mouse_capture;
 pub(in crate::app) use terminal::{init_terminal, restore_terminal};
 mod tv_workspace;

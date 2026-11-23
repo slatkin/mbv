@@ -262,7 +262,7 @@ fn the_fork_enter_answer_selects_the_session_as_the_owner_output() {
 /// prior Session keeps playing.
 #[test]
 fn the_fork_esc_answer_switches_without_stopping_the_prior_playback() {
-    use crate::app::shell::test_seams::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+    use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
 
     let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(|_endpoint| {
@@ -303,7 +303,7 @@ fn the_fork_esc_answer_switches_without_stopping_the_prior_playback() {
 /// activation just switches the attachment.
 #[test]
 fn activating_a_session_with_no_active_slot_skips_the_fork() {
-    use crate::app::shell::test_seams::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+    use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
 
     let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(|_endpoint| {
@@ -345,7 +345,7 @@ fn activating_a_session_with_no_active_slot_skips_the_fork() {
 /// switch.
 #[test]
 fn activating_the_already_output_device_skips_the_fork() {
-    use crate::app::shell::test_seams::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+    use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
 
     let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(|_endpoint| {

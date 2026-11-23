@@ -189,9 +189,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
     // "Hand off connects the Client to the peer": the unconnected flow opens
     // the peer link to read its queue, asks, attaches on confirm, and stops
     // local only in the tick that observes the start slot playing.
-    let _guard = crate::app::shell::test_seams::DIRECT_CONNECT_TEST_LOCK
-        .lock()
-        .unwrap();
+    let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     let items = make_audio_items(3);
     let (mut app, local_cmd_rx) = hand_off_source_app(items.clone());
     let (mut probe, _stub_rx, peer_cmd_rx) =
@@ -204,9 +202,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
         .send(applied(1, peer_snapshot(&items, 0, true)))
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
-    *crate::app::shell::test_seams::DIRECT_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = Some(staged_probe_connect);
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
     app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
@@ -283,9 +279,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
         stop_sent_to(&local_cmd_rx),
         "local stops only after the peer observed the start slot"
     );
-    *crate::app::shell::test_seams::DIRECT_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = None;
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
 }
 
 #[test]
@@ -294,9 +288,7 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
     // scenario "Peer already holds a queue": cancel leaves both queues and
     // both playbacks unchanged, and the link opened to read the peer queue
     // is dropped — the Client stays unconnected.
-    let _guard = crate::app::shell::test_seams::DIRECT_CONNECT_TEST_LOCK
-        .lock()
-        .unwrap();
+    let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     let (mut app, local_cmd_rx) = hand_off_source_app(make_audio_items(2));
     let (mut probe, _stub_rx, peer_cmd_rx) =
         RemotePlayer::stub_with_command_rx(make_audio_items(1), 0);
@@ -306,9 +298,7 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
         .send(applied(1, peer_snapshot(&make_audio_items(1), 0, true)))
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
-    *crate::app::shell::test_seams::DIRECT_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = Some(staged_probe_connect);
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
     app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
@@ -335,9 +325,7 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
         "cancel sends nothing to the peer"
     );
     assert!(!stop_sent_to(&local_cmd_rx), "local keeps playing");
-    *crate::app::shell::test_seams::DIRECT_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = None;
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
 }
 
 #[test]
@@ -476,9 +464,7 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
     // the Owner-output hand-back — the local Owner may be the transfer source
     // playing through a Cast or Emby Session output, and its Stop must wait
     // for the settlement's observation, not ride the attach.
-    let _guard = crate::app::shell::test_seams::DIRECT_CONNECT_TEST_LOCK
-        .lock()
-        .unwrap();
+    let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     let items = make_audio_items(3);
     let (mut app, local_cmd_rx) = hand_off_source_app(items.clone());
     app.player
@@ -495,9 +481,7 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
         .send(applied(1, peer_snapshot(&items, 0, true)))
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
-    *crate::app::shell::test_seams::DIRECT_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = Some(staged_probe_connect);
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
     app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
@@ -527,9 +511,7 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
         1,
         "the only local stop is the settlement's source stop"
     );
-    *crate::app::shell::test_seams::DIRECT_CONNECT_OVERRIDE
-        .lock()
-        .unwrap() = None;
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
 }
 
 #[test]
