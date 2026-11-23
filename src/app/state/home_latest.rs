@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// from the saved launch state, which is replaced by the launch instant. The
 /// caller reads the clock; this function handles the saved copy.
 #[must_use]
-pub(crate) fn capture_launch_window() -> HomeLatestLaunchWindow {
+pub fn capture_launch_window() -> HomeLatestLaunchWindow {
     let current = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

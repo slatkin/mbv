@@ -254,7 +254,14 @@ impl App {
         self.log_feed_home_video_state(lib_idx, "root_reload");
     }
 
-    pub(crate) fn is_feed_home_video_library(&self, lib_idx: usize) -> bool {
+    /// Whether library `lib_idx` is the home-video library the Feeds tab
+    /// shows as a feed home.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `lib_idx` names no loaded library, and while reading the
+    /// configuration when its lock is poisoned.
+    pub fn is_feed_home_video_library(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.library.collection_type != "homevideos" {
             return false;

@@ -3,7 +3,7 @@ pub(in crate::app) mod app_init;
 pub(in crate::app) mod app_struct;
 pub(in crate::app) mod bootstrap;
 pub mod client_capabilities;
-pub(crate) mod construct;
+pub mod construct;
 pub(in crate::app) mod context_menu_capabilities;
 pub(in crate::app) mod gui_client_events;
 pub(in crate::app) mod library_position;
@@ -29,6 +29,6 @@ pub(in crate::app) mod service_setup;
 pub(in crate::app) mod toasts;
 
 pub(in crate::app) mod events;
-pub(crate) mod home_latest;
+pub mod home_latest;
 pub mod playback;
 pub mod types;

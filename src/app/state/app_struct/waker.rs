@@ -36,7 +36,7 @@ impl App {
     /// Take one queued Client-only fetch result (design D5 of
     /// `decouple-client-core`), for the GUI's `ClientTickHost::drain_client_events`
     /// and for a test that drains over the `App` it holds.
-    pub(crate) fn take_one_gui_client_event(
+    pub fn take_one_gui_client_event(
         &self,
     ) -> Option<crate::app::gui_library::client_events::GuiClientEvent> {
         self.gui_client_events.try_take()
@@ -59,7 +59,7 @@ impl App {
     /// of `decouple-client-core`), for a test drain that has no tick to wake
     /// it.
     #[cfg(test)]
-    pub(crate) fn wait_for_one_gui_client_event_for_test(
+    pub(in crate::app) fn wait_for_one_gui_client_event_for_test(
         &self,
         timeout: std::time::Duration,
     ) -> Option<crate::app::gui_library::client_events::GuiClientEvent> {
@@ -69,14 +69,14 @@ impl App {
     /// Record the `mbv` program this Client starts the Owner from (design
     /// D9 of `extract-client-core`). The Owner link sets it at attach time;
     /// `None` keeps this process's own executable.
-    pub(crate) fn set_owner_exe(&mut self, owner_exe: Option<std::path::PathBuf>) {
+    pub(in crate::app) fn set_owner_exe(&mut self, owner_exe: Option<std::path::PathBuf>) {
         self.owner_exe = owner_exe;
     }
 
     /// Record the capabilities of this process's Client (design D6a of
     /// `decouple-client-core`). The Owner link sets them at attach time,
     /// before `App` exists, so the core reads them before the first step.
-    pub(crate) fn set_client_capabilities(
+    pub(in crate::app) fn set_client_capabilities(
         &mut self,
         capabilities: crate::app::state::client_capabilities::ClientCapabilities,
     ) {

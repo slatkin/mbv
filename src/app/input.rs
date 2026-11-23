@@ -57,7 +57,10 @@ impl App {
             + usize::from(self.has_feeds_subscriptions())
     }
 
-    pub(crate) fn load_prefs() -> serde_json::Value {
+    /// The saved prefs document, or an empty one when none is saved or it
+    /// cannot be read.
+    #[must_use]
+    pub fn load_prefs() -> serde_json::Value {
         let path = crate::app::config::prefs_path();
         std::fs::read_to_string(path)
             .ok()

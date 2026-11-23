@@ -509,9 +509,9 @@ mod tv_latest_tests {
     use rstest::rstest;
     use std::cell::RefCell;
 
-    pub(crate) struct FakeLatestSource {
-        pub(crate) request: RefCell<Option<(String, usize)>>,
-        pub(crate) items: Vec<EmbyItem>,
+    pub(in crate::app) struct FakeLatestSource {
+        pub(in crate::app) request: RefCell<Option<(String, usize)>>,
+        pub(in crate::app) items: Vec<EmbyItem>,
     }
 
     impl TvLatestSource for FakeLatestSource {

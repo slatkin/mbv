@@ -193,7 +193,7 @@ impl App {
     /// The remote App a Client attaches with. `image_decode` is the Client's
     /// image setting (design D14): the TUI keeps pixels, the GUI keeps source.
     #[must_use]
-    pub(crate) fn new_remote_optional_with_config(
+    pub(in crate::app) fn new_remote_optional_with_config(
         client: Option<EmbyClient>,
         remote: mbv_remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,

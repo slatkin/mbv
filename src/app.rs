@@ -55,7 +55,7 @@ pub use self::client_drains::{
 pub use self::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
 };
-pub(crate) use self::dispatch::library::stores::drain_lib_event_through;
+pub use self::dispatch::library::stores::drain_lib_event_through;
 pub use self::gui_client_state::GuiClientState;
 pub use self::gui_client_state::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
@@ -68,7 +68,7 @@ pub use self::gui_client_state::{
 #[cfg(feature = "test")]
 #[doc(hidden)]
 pub use self::gui_library::client_events::GuiClientEvent;
-pub(crate) use self::gui_library::client_events::install_client_event;
+pub use self::gui_library::client_events::install_client_event;
 pub use self::gui_library::{
     GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
     GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,

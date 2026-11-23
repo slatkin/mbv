@@ -6,7 +6,7 @@ use mbv_queue::{QueueItem, QueueItemKind};
     reason = "four independently intersected backend capabilities (playable, queue-admissible, removable, played-state-capable); all four co-occur for all-Emby selections and unit tests assert each axis independently (design analysis, issue #804)"
 )]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct ItemCapabilities {
+pub(in crate::app) struct ItemCapabilities {
     pub playable: bool,
     pub queue_admissible: bool,
     pub removable: bool,
@@ -14,7 +14,7 @@ pub(crate) struct ItemCapabilities {
 }
 
 impl ItemCapabilities {
-    pub(crate) fn intersect(self, other: Self) -> Self {
+    pub(in crate::app) fn intersect(self, other: Self) -> Self {
         Self {
             playable: self.playable && other.playable,
             queue_admissible: self.queue_admissible && other.queue_admissible,
@@ -24,7 +24,7 @@ impl ItemCapabilities {
     }
 }
 
-pub(crate) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilities {
+pub(in crate::app) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilities {
     ItemCapabilities {
         playable: item.is_audio() || item.is_video(),
         queue_admissible: true,
@@ -33,7 +33,7 @@ pub(crate) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilities {
     }
 }
 
-pub(crate) fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCapabilities {
+pub(in crate::app) fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCapabilities {
     let playable = mbv_ui_model::ui_util::is_playable(item) && !item.is_folder;
     // Music is fire-and-forget in mbv (no resume, played state ignored), so a
     // mixed selection containing any music item loses the played-state entry.
@@ -46,7 +46,7 @@ pub(crate) fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCap
     }
 }
 
-pub(crate) fn intersect<I>(items: I) -> Option<ItemCapabilities>
+pub(in crate::app) fn intersect<I>(items: I) -> Option<ItemCapabilities>
 where
     I: IntoIterator<Item = ItemCapabilities>,
 {

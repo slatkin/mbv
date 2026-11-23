@@ -645,7 +645,7 @@ impl App {
         self.launch_restore = LaunchRestore::Done;
     }
 
-    pub(crate) fn pin_launch_focus_to_queue(&mut self) {
+    pub fn pin_launch_focus_to_queue(&mut self) {
         // Written directly, not through `set_panel_focus`: at construct time
         // the shell has not recorded a terminal size yet, and this rule must
         // not depend on which branch a size-dependent setter would take.

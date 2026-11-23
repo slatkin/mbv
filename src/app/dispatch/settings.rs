@@ -83,13 +83,22 @@ fn setting_row_kind(key: SettingKey) -> SettingRowKind {
 }
 
 impl App {
-    pub(crate) fn close_settings(&mut self) {
+    pub(in crate::app) fn close_settings(&mut self) {
         self.flush_settings_save();
         self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Main;
     }
 
-    pub(crate) fn handle_settings_activate(&mut self, key: SettingKey) {
+    /// Activate settings row `key` (`add-gui-settings-screen` design D13):
+    /// a read-only row does nothing, a row that opens a destination opens
+    /// it, and every other row applies its value and arms the deferred save.
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned: a
+    /// writer panicked holding it, and the cached configuration cannot be
+    /// trusted.
+    pub fn handle_settings_activate(&mut self, key: SettingKey) {
         // A read-only row arms no save: it returns before the save below.
         if setting_row_kind(key) == SettingRowKind::ReadOnly {
             return;
@@ -110,7 +119,7 @@ impl App {
         }
     }
 
-    pub(crate) fn flush_settings_save(&mut self) {
+    pub(in crate::app) fn flush_settings_save(&mut self) {
         if self.settings_save_at.take().is_some() {
             let cfg = self.config.lock().unwrap().clone();
             crate::app::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
@@ -123,7 +132,13 @@ impl App {
     /// as an activation arms it. The three cycle handlers call this with the
     /// next value they compute, so the TUI's cycle and the GUI's pick share
     /// one effect. A key that is no value setting changes nothing.
-    pub(crate) fn set_settings_value(&mut self, key: SettingKey, value: &str) {
+    ///
+    /// # Panics
+    ///
+    /// Panics while writing the configuration when its lock is poisoned: a
+    /// writer panicked holding it, and the cached configuration cannot be
+    /// trusted.
+    pub fn set_settings_value(&mut self, key: SettingKey, value: &str) {
         match key {
             SettingKey::SubtitleMode => {
                 self.config.lock().unwrap().subtitle_mode = value.to_string();
@@ -172,7 +187,7 @@ impl App {
     /// one `set-reserve` from the collapsed width and, from the expanded width,
     /// no request at all — there a push would reserve the full expanded strip
     /// (change `panel-reserve-space`, design D4).
-    pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+    pub(in crate::app) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         self.apply_panel_setting_pinned(key, delta, crate::app::pin::is_pinned());
     }
 

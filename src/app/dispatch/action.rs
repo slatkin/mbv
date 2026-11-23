@@ -433,7 +433,7 @@ impl App {
     /// width keeps the current width and flashes the reason.
     /// `cycle_panel_mode` guards pinned-ness, so the not-pinned arm here
     /// is unreachable.
-    pub(crate) fn pinned_view_toggle(&mut self) {
+    pub(in crate::app) fn pinned_view_toggle(&mut self) {
         self.request_pinned_view(self.pinned_width.toggled());
     }
 

@@ -198,7 +198,7 @@ impl App {
         }
     }
 
-    pub(crate) fn is_tvshows_library(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_tvshows_library(&self, lib_idx: usize) -> bool {
         self.libs[lib_idx].library.collection_type == "tvshows"
     }
 

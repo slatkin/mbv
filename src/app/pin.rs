@@ -113,13 +113,13 @@ pub fn swap_token() -> Option<String> {
 }
 
 pub use self::swap::claim_pin_swap_participant;
-pub(crate) use self::swap::pin_swap_hello;
+pub(in crate::app) use self::swap::pin_swap_hello;
 mod swap;
 
 /// The reserve mode a panel change asks for: the collapsed panel
 /// pushes the tiled windows aside, the expanded one covers them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PanelReserveMode {
+pub enum PanelReserveMode {
     /// Reserve a strip beside the panel and move the tiled windows.
     Push,
     /// Draw over the tiled windows, holding the strip of the last push.
@@ -130,7 +130,7 @@ impl PanelReserveMode {
     /// The mode the `[panel] reserve` flag picks: `Push` while it is on,
     /// `Cover` while it is off.
     #[must_use]
-    pub(crate) fn for_flag(reserve: bool) -> Self {
+    pub(in crate::app) fn for_flag(reserve: bool) -> Self {
         if reserve { Self::Push } else { Self::Cover }
     }
 
@@ -146,7 +146,7 @@ impl PanelReserveMode {
 
 /// One of the panel's four gutters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PanelGutter {
+pub enum PanelGutter {
     /// Inset from the output's top edge.
     Top,
     /// Inset from the output's bottom edge.
@@ -175,7 +175,7 @@ impl PanelGutter {
 /// the edited value is the width pinwin validates; a side or gutter row applies
 /// at the panel's current width.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PinnedSettingRequest {
+pub enum PinnedSettingRequest {
     /// `Width` (`Collapsed`) or `Expanded width` (`Expanded`): one `set-size`
     /// with the candidate width and its reserve mode.
     Width(PinnedWidth),
@@ -193,7 +193,7 @@ impl PinnedSettingRequest {
     /// The pinned width this request validates, `None` for a row that applies
     /// at the panel's current width.
     #[must_use]
-    pub(crate) fn edited_width(self) -> Option<PinnedWidth> {
+    pub fn edited_width(self) -> Option<PinnedWidth> {
         match self {
             Self::Width(width) => Some(width),
             Self::Side(_) | Self::Gutter(..) | Self::Reserve(_) => None,
@@ -203,7 +203,7 @@ impl PinnedSettingRequest {
 
 /// A width in the pinwin size grammar: logical pixels.
 #[must_use]
-pub(crate) fn size_arg(width: u16) -> String {
+pub fn size_arg(width: u16) -> String {
     format!("{width}px")
 }
 
@@ -211,14 +211,14 @@ pub(crate) fn size_arg(width: u16) -> String {
 /// flag's mode ([`PanelReserveMode::for_flag`]). The expanded panel's mode
 /// is always `Cover`; no config key picks it.
 #[must_use]
-pub(crate) fn collapsed_reserve(config: &PanelConfig) -> PanelReserveMode {
+pub fn collapsed_reserve(config: &PanelConfig) -> PanelReserveMode {
     PanelReserveMode::for_flag(config.reserve)
 }
 
 /// The `--focus-ring` value of a `run`: `off`, or the configured
 /// colour and width. Only a launch reads it; a running panel keeps its ring.
 #[must_use]
-pub(crate) fn focus_ring_arg(config: &PanelConfig) -> String {
+pub fn focus_ring_arg(config: &PanelConfig) -> String {
     if config.accent {
         format!("{}:{}", config.accent_color, config.accent_width)
     } else {
@@ -245,7 +245,7 @@ fn set_size_argv(panel: &str, width: u16, reserve: PanelReserveMode) -> Vec<Stri
 /// `width_expanded`, so one press changes the width and the reserve mode in
 /// one request.
 #[must_use]
-pub(crate) fn pinned_width_argv(
+pub(in crate::app) fn pinned_width_argv(
     panel: &str,
     config: &PanelConfig,
     width: PinnedWidth,
@@ -270,7 +270,7 @@ fn panel_name() -> Result<&'static str, String> {
 /// worker exists; only the `pinwin` child runs behind the worker and its
 /// outcome comes back on `tx`. At most one request is in flight because the
 /// caller holds the pending record that ignores further presses.
-pub(crate) fn spawn_pinned_request(
+pub(in crate::app) fn spawn_pinned_request(
     config: &PanelConfig,
     request: PinnedSettingRequest,
     tx: std::sync::mpsc::Sender<Result<(), String>>,
@@ -303,17 +303,18 @@ pub(crate) fn spawn_pinned_request(
 /// delivers this injected outcome on the caller's thread instead of running
 /// the `pinwin` child. Test callers hold [`PINNED_REQUEST_TEST_LOCK`].
 #[cfg(test)]
-pub(crate) static PINNED_REQUEST_OVERRIDE: std::sync::Mutex<Option<Result<(), String>>> =
+pub(in crate::app) static PINNED_REQUEST_OVERRIDE: std::sync::Mutex<Option<Result<(), String>>> =
     std::sync::Mutex::new(None);
 
 /// The requests the test seam delivered, in order.
 #[cfg(test)]
-pub(crate) static PINNED_REQUESTS: std::sync::Mutex<Vec<PinnedSettingRequest>> =
+pub(in crate::app) static PINNED_REQUESTS: std::sync::Mutex<Vec<PinnedSettingRequest>> =
     std::sync::Mutex::new(Vec::new());
 
 /// Serializes tests that install [`PINNED_REQUEST_OVERRIDE`].
 #[cfg(test)]
-pub(crate) static PINNED_REQUEST_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(in crate::app) static PINNED_REQUEST_TEST_LOCK: std::sync::Mutex<()> =
+    std::sync::Mutex::new(());
 
 /// `set-edge <panel> left|right`.
 #[must_use]

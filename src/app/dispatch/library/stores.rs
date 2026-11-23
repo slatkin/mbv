@@ -13,7 +13,7 @@ use crate::app::{App, FeedHomeVideoSelection};
 /// Client's own stores (`decouple-client-core` design D4a (c)). The seam
 /// types stay as private as the GUI state they carry, so the GUI Client calls
 /// this instead of `App::drain_lib_event_with_stores`.
-pub(crate) fn drain_lib_event_through(app: &mut App, gui: &mut GuiClientState) -> bool {
+pub fn drain_lib_event_through(app: &mut App, gui: &mut GuiClientState) -> bool {
     app.drain_lib_event_with_stores(Some(gui))
 }
 

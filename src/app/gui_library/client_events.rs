@@ -37,7 +37,7 @@ pub enum GuiClientEvent {
 
 /// Install one drained result in the Client's own stores: the same rule the
 /// event handler applied while this result crossed the shared library channel.
-pub(crate) fn install_client_event(gui: &mut GuiClientState, event: GuiClientEvent) {
+pub fn install_client_event(gui: &mut GuiClientState, event: GuiClientEvent) {
     match event {
         GuiClientEvent::GroupAlbums {
             lib_idx,
