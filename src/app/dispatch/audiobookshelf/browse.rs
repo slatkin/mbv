@@ -42,7 +42,7 @@ impl App {
     /// after the Service setup and key resolve: an early return on missing
     /// setup must not leak the mark and blocklist the show for the session
     /// (reorganize-podcast-pill-navigation 3.3 carried obligation).
-    pub fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
+    pub(in crate::app) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
         self.start_audiobookshelf_detail_inner(library_item_id, false);
     }
 
@@ -360,7 +360,7 @@ impl App {
     /// component-owned (split-browse-state-interaction-fields task 3.2), so
     /// this seam resolves against the unfiltered (`All`) view.
     #[cfg(test)]
-    pub fn activate_audiobookshelf_episode(
+    pub(in crate::app) fn activate_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
         episode_index: usize,
@@ -375,7 +375,7 @@ impl App {
     /// Resolve the episode at `episode_index` for enqueue without mutating any
     /// queue or opening a playback lifecycle (see `activate_audiobookshelf_episode`).
     #[cfg(test)]
-    pub fn enqueue_audiobookshelf_episode(
+    pub(in crate::app) fn enqueue_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
         episode_index: usize,
@@ -440,7 +440,7 @@ impl App {
     /// resolve through `selected_audiobookshelf_queue_item_target`, books
     /// through the id-taking book resolver. A target that no longer resolves
     /// is skipped.
-    pub fn audiobookshelf_menu_targets_queue_items(
+    pub(in crate::app) fn audiobookshelf_menu_targets_queue_items(
         &self,
         targets: &[AudiobookshelfMenuTarget],
     ) -> Vec<QueueItem> {

@@ -279,7 +279,7 @@ impl App {
     /// Caches a fetched album track list. A re-fetch replaces the list and
     /// restarts its eviction age; the cache's cap evicts the oldest entry
     /// (issue #917).
-    pub fn cache_album_tracks(&mut self, album_id: String, tracks: Vec<EmbyItem>) {
+    pub(in crate::app) fn cache_album_tracks(&mut self, album_id: String, tracks: Vec<EmbyItem>) {
         insert_capped(
             &mut self.album_tracks_cache,
             MAX_ALBUM_TRACKS_CACHE,

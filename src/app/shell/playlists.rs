@@ -159,7 +159,7 @@ mod tests {
                 item
             })
             .collect();
-        app.adopt_open_playlist(playlist, rows);
+        app.seed_open_playlist_for_test(playlist, rows);
         (Model::new(app), cmd_rx)
     }
 

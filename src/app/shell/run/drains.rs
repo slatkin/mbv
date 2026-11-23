@@ -323,12 +323,7 @@ impl Model {
         while let Some(pending) = self.app.next_pending_protocol_encode() {
             // The entry the completion stored: a key the cache replaced or
             // cleared since encodes nothing (invariant 38).
-            let Some(img) = self
-                .app
-                .images
-                .image(&pending.cache_key)
-                .and_then(|entry| entry.img.clone())
-            else {
+            let Some(img) = self.app.cached_image_pixels(&pending.cache_key) else {
                 continue;
             };
             let pixels = mbv_images::hash_image_bytes(&img);

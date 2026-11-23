@@ -51,7 +51,7 @@ impl App {
     /// active, or the receiver already is the output) and the confirmed
     /// continue-playback answer: sever, dismiss the panel, and send the
     /// selection — the owner performs the hand-off itself.
-    pub fn select_cast_output(&mut self, receiver: CastReceiver) {
+    pub(in crate::app) fn select_cast_output(&mut self, receiver: CastReceiver) {
         self.sever_connections_without_output_change();
         // Same panel-close-on-connect parity as the Emby path
         // (`connect_to_session` dismisses the Sessions sidebar).
@@ -94,7 +94,7 @@ impl App {
         let _ = self;
     }
 
-    pub fn handle_cast_event(&mut self, event: CastEvent) {
+    pub(in crate::app) fn handle_cast_event(&mut self, event: CastEvent) {
         match event {
             CastEvent::DiscoveryCompleted(receivers) => {
                 self.cast_receivers = receivers;
@@ -103,7 +103,7 @@ impl App {
         }
     }
 
-    pub fn drain_cast_events(&mut self) -> bool {
+    pub(in crate::app) fn drain_cast_events(&mut self) -> bool {
         let mut produced = false;
         while let Ok(event) = self.channels.cast_rx.try_recv() {
             produced = true;

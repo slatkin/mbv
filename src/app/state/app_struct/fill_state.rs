@@ -78,7 +78,7 @@ impl LevelFillState {
 /// success replaces it, so the panel can name the failure and a reselect
 /// can retry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TvUpcomingFetchState {
+pub(in crate::app) enum TvUpcomingFetchState {
     InFlight,
     Failed,
 }

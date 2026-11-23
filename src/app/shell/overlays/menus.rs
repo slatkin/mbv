@@ -43,8 +43,7 @@ impl Model {
     fn wide_tv_workspace_area(&self) -> Option<Rect> {
         let terminal_size = self.terminal_size();
         self.app
-            .tab
-            .emby_library_index()
+            .active_emby_library_index()
             .and_then(|lib_idx| wide_tv_show_area(&self.app, lib_idx, terminal_size))
     }
 

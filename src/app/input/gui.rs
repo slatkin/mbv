@@ -369,9 +369,9 @@ impl GuiCore {
                     (status.active, status.current_idx)
                 };
                 if active {
-                    self.app.playback_queue_mut().set_cursor(current_idx);
+                    self.app.move_queue_cursor_to_playing_slot(current_idx);
                     // Jump-to-now-playing is an explicit, authoritative move.
-                    self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_link());
+                    self.app.reanchor_queue_cursor_to_playing();
                 }
                 // The TUI flashes "Nothing is playing"; the toast surface is
                 // row 6.5's, so the idle case stays silent until then.

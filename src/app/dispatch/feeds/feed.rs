@@ -36,13 +36,13 @@ impl App {
     /// Root-listing folders whose per-folder video count is positive: the
     /// folders the pill row offers, in listing order (design D3). The count
     /// fan-out fills `folder_counts`; until it does, no folder pill shows.
-    pub fn feed_home_video_counted_folders(&self, lib_idx: usize) -> Vec<EmbyItem> {
+    pub(in crate::app) fn feed_home_video_counted_folders(&self, lib_idx: usize) -> Vec<EmbyItem> {
         self.counted_folder_iter(lib_idx).cloned().collect()
     }
 
     /// The counted folders' ids in pill order: the save boundary's input for
     /// deriving the persisted pill index from the selection.
-    pub fn feed_home_video_counted_folder_ids(&self, lib_idx: usize) -> Vec<String> {
+    pub(in crate::app) fn feed_home_video_counted_folder_ids(&self, lib_idx: usize) -> Vec<String> {
         self.counted_folder_iter(lib_idx)
             .map(|folder| folder.id.clone())
             .collect()
@@ -100,7 +100,10 @@ impl App {
             .unwrap_or_default()
     }
 
-    pub fn feed_home_video_selected_parent_id(&self, lib_idx: usize) -> Option<String> {
+    pub(in crate::app) fn feed_home_video_selected_parent_id(
+        &self,
+        lib_idx: usize,
+    ) -> Option<String> {
         let selection = self.libs.get(lib_idx)?.feed_home_video.as_ref()?;
         self.feed_home_video_parent_id(lib_idx, &selection.selection)
     }
@@ -125,7 +128,7 @@ impl App {
     /// selected item list (see `feed_home_video_selected_items`, which
     /// does clone the full list and remains the right choice for callers that
     /// actually need it).
-    pub fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<EmbyItem> {
+    pub(in crate::app) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<EmbyItem> {
         let state = self
             .libs
             .get(lib_idx)
@@ -135,7 +138,7 @@ impl App {
         items.get(idx).cloned()
     }
 
-    pub fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
         let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -191,7 +194,7 @@ impl App {
                 .is_some_and(|lvl| lvl.item_types.is_none())
     }
 
-    pub fn ensure_feed_home_video_root_loaded(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn ensure_feed_home_video_root_loaded(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
         }
@@ -265,7 +268,7 @@ impl App {
             .contains(&lib.library.name.to_lowercase())
     }
 
-    pub fn select_feed_folder_group(&mut self, lib_idx: usize, group_idx: usize) {
+    pub(in crate::app) fn select_feed_folder_group(&mut self, lib_idx: usize, group_idx: usize) {
         if self.libs[lib_idx].nav_stack.is_empty() {
             return;
         }
@@ -288,7 +291,7 @@ impl App {
     /// TUI's selection (gui-collection-dropdown design D2, D3). The callers
     /// guard the library index; an empty nav stack leaves the selection as it
     /// is.
-    pub fn apply_feed_home_video_group_selection(
+    pub(in crate::app) fn apply_feed_home_video_group_selection(
         &mut self,
         lib_idx: usize,
         selection: &FeedHomeVideoSelection,
@@ -499,7 +502,7 @@ impl App {
     /// selection left before its fetch returned is dropped, and the cache
     /// fills only through a wanted selection; only the TUI's own selection
     /// ends its loading mark.
-    pub fn handle_feed_home_video_selection_loaded(
+    pub(in crate::app) fn handle_feed_home_video_selection_loaded(
         &mut self,
         lib_idx: usize,
         parent_id: &str,
@@ -589,7 +592,7 @@ impl App {
     /// either the counts already cover every root folder (no fan-out is
     /// owed), or the fan-out this completion spawns resolves it when its last
     /// report lands — a partial arrival must never misbind it.
-    pub fn maybe_complete_feed_home_video_listing(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_complete_feed_home_video_listing(&mut self, lib_idx: usize) {
         if !self.feed_home_video_root_listing_completed(lib_idx) {
             return;
         }
@@ -634,7 +637,11 @@ impl App {
     /// covers every folder even when the map already looks fully covered.
     /// The pill-index resolution stays gated on the completed listing, so
     /// neither fan-out can misbind it.
-    pub fn complete_feed_home_video_refresh(&mut self, lib_idx: usize, parent_id: &str) -> bool {
+    pub(in crate::app) fn complete_feed_home_video_refresh(
+        &mut self,
+        lib_idx: usize,
+        parent_id: &str,
+    ) -> bool {
         // One guard site for the refreshed hidden root listing: the library
         // must be a feed-view library and the refreshed level must still be
         // its single root level with the same parent — a deeper level's

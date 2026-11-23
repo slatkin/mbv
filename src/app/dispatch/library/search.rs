@@ -25,7 +25,7 @@ use mbv_ui_model::browse::{BrowseResting, ServerRows};
 impl App {
     /// Open the global search sidebar. Sets the flag; the shell Model mounts
     /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).
-    pub fn open_search_sidebar(&mut self) {
+    pub(in crate::app) fn open_search_sidebar(&mut self) {
         self.request_sidebar_open(SidebarId::Search);
     }
 
@@ -84,7 +84,7 @@ impl App {
     // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_event`'s `AlbumIndexBuilt` rebuild-pending branch, which
     // stays behind in `actions.rs`.
-    pub fn spawn_album_index_build(&self, library_id: String) {
+    pub(in crate::app) fn spawn_album_index_build(&self, library_id: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -286,7 +286,7 @@ impl App {
     /// complete by construction (`ServerRows::complete`), and an unresolved
     /// mode (`None`) is the capture load that the size default may replace, so
     /// neither qualifies.
-    pub fn is_tv_series_root_view(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_tv_series_root_view(&self, lib_idx: usize) -> bool {
         self.libs.get(lib_idx).is_some_and(|lib| {
             lib.nav_stack.len() == 1
                 && lib.library.collection_type == "tvshows"

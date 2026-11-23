@@ -6,7 +6,7 @@ use mbv_ui_model::tab_selection::TabSelection;
 
 /// Startup restoration state, scoped to the tab selected by launch resolution.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LaunchRestore {
+pub(in crate::app) enum LaunchRestore {
     Pending(TuiLaunchState),
     TabSettled {
         state: TuiLaunchState,

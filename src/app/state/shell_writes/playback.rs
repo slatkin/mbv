@@ -10,20 +10,19 @@ use crate::app::QueueLink;
 use mbv_ctrl::CtrlCmd;
 
 impl App {
-    /// Send `swap_prepared` on the connection the pin swap arrived on: the
-    /// active Player link, or the suspended home link. The home link carries
-    /// the swap whenever one is suspended, and the caller reached here from an
-    /// event that link delivered, so a missing home link answers `false` as a
-    /// dead connection does.
+    /// Send `swap_prepared` on the connection the pin swap arrived on: the link
+    /// the event named, resolved by [`App::queue_owner_player`] — `Peer` is the
+    /// active Player connection and `Local` the suspended home link.
+    ///
+    /// The home link carries the swap whenever one is suspended, and the caller
+    /// reached here from an event that link delivered, so a missing home link
+    /// answers `false` as a dead connection does.
     pub fn reply_pin_swap_prepared(&mut self, link: QueueLink) -> bool {
-        let reply = match link {
-            QueueLink::Local => &self.player,
-            QueueLink::Peer => match self.suspended_local.as_ref() {
-                Some(home) => &home.player,
-                None => return false,
-            },
-        };
-        reply.send_ctrl_cmd(CtrlCmd::SwapPrepared)
+        if link == QueueLink::Local && self.suspended_local.is_none() {
+            return false;
+        }
+        self.queue_owner_player(link)
+            .send_ctrl_cmd(CtrlCmd::SwapPrepared)
     }
 
     /// Hold the cover-paint size of the queue card as the geometry

@@ -14,7 +14,7 @@ pub(in crate::app) enum PanelPresentation {
 
 /// The appearance-focus decision, a pure function so tests can exercise the
 /// pinned-mini branch without the `PINWIN_PANEL` claim a pinned launch needs.
-pub fn panel_appearance_focus_decision(
+pub(in crate::app) fn panel_appearance_focus_decision(
     presentation: PanelPresentation,
     focus: PanelFocus,
     panel: PanelFocus,

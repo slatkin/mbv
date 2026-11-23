@@ -127,12 +127,7 @@ impl Model {
         else {
             return;
         };
-        if let Some(lib_idx) = self
-            .app
-            .libs
-            .iter()
-            .position(|library| library.library.id == *library_id)
-        {
+        if let Some(lib_idx) = self.app.emby_library_index_of(library_id) {
             self.app.spawn_destination_latest_snapshot(lib_idx);
         }
     }

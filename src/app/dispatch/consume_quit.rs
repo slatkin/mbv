@@ -60,7 +60,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn on_video_consumed(&mut self) {
+    pub(in crate::app) fn on_video_consumed(&mut self) {
         let link = self.playing_queue_link();
         tracing::info!(name: "consume.video.processed", target: "consume", link = ?link, has_local_metadata = self.local_queue_metadata_applies(link), "video consume processed");
         if !self.local_queue_metadata_applies(link) {
@@ -85,7 +85,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn on_audio_consumed(&mut self) {
+    pub(in crate::app) fn on_audio_consumed(&mut self) {
         let link = self.playing_queue_link();
         tracing::info!(name: "consume.audio.processed", target: "consume", link = ?link, has_local_metadata = self.local_queue_metadata_applies(link), "audio consume processed");
         if !self.local_queue_metadata_applies(link) {

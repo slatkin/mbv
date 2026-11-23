@@ -14,6 +14,9 @@
 mod browse;
 mod config;
 
+pub use self::browse::{BrowseLevelFacts, BrowseLevelIdentity};
+pub use self::config::SetupFormDraft;
+
 use super::panel_targets::PanelTarget;
 use super::playback::HomeContent;
 use crate::app::App;
@@ -21,6 +24,25 @@ use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::AlbumIndexState;
 use mbv_ui_model::indicators::IndicatorStyle;
 use mbv_ui_model::playback::QueueCardProjection;
+
+/// What one artwork cache entry last built its protocols from: the decoded
+/// pixels, the hero box, and the logo the presenting Client applied.
+pub struct ImageBuildFacts {
+    pub img: image::DynamicImage,
+    pub cover_box: Option<(u16, u16)>,
+    pub logo_key: Option<String>,
+}
+
+/// The facts carry decoded pixels, so `Debug` names the type and the two small
+/// facts instead of dumping the bitmap.
+impl std::fmt::Debug for ImageBuildFacts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageBuildFacts")
+            .field("cover_box", &self.cover_box)
+            .field("logo_key", &self.logo_key)
+            .finish_non_exhaustive()
+    }
+}
 
 impl App {
     /// The recursive album index of the library with `library_id`.
@@ -274,10 +296,62 @@ impl App {
         &self.images
     }
 
+    /// The most-recent `Newest Episodes` shelf the podcast library with
+    /// `library_id` last fetched, empty while it holds none.
+    #[must_use]
+    pub fn audiobookshelf_shelf(
+        &self,
+        library_id: &str,
+    ) -> Vec<mbv_queue::AudiobookshelfEpisodeCatalog> {
+        self.audiobookshelf_shelf_cache
+            .get(library_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     /// The cached artwork entry stored under `key`.
     #[must_use]
     pub fn cached_image(&self, key: &str) -> Option<&mbv_images::CachedImage> {
         self.images.image(key)
+    }
+
+    /// The decoded pixels the artwork entry stored under `key` holds, cloned.
+    /// `None` for an absent entry and for one that resolved without artwork.
+    #[must_use]
+    pub fn cached_image_pixels(&self, key: &str) -> Option<image::DynamicImage> {
+        self.images.image(key).and_then(|entry| entry.img.clone())
+    }
+
+    /// Whether the artwork entry stored under `key` paints art: an absent
+    /// entry counts as paintable, because the caller then paints the bundled
+    /// placeholder. A stored entry that carries no decoded image does not.
+    #[must_use]
+    pub fn image_key_paints(&self, key: &str) -> bool {
+        self.images
+            .image(key)
+            .is_none_or(mbv_images::CachedImage::has_art)
+    }
+
+    /// Whether the artwork entry stored under `key` carries a decoded image,
+    /// as a derived title overlay variant must.
+    #[must_use]
+    pub fn image_cached_with_art(&self, key: &str) -> bool {
+        self.images
+            .image(key)
+            .is_some_and(mbv_images::CachedImage::has_art)
+    }
+
+    /// The hero box and the logo the artwork entry stored under `key` last
+    /// built its protocols from, beside its decoded pixels.
+    #[must_use]
+    pub fn cached_image_build_facts(&self, key: &str) -> Option<ImageBuildFacts> {
+        let entry = self.images.image(key)?;
+        let img = entry.img.clone()?;
+        Some(ImageBuildFacts {
+            img,
+            cover_box: entry.cover_box,
+            logo_key: entry.applied_logo_key.clone(),
+        })
     }
 
     /// Whether the artwork cache holds an entry stored under `key`.

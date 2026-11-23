@@ -268,12 +268,8 @@ impl Model {
             switch_tab: true,
         }) = ev
         {
-            let collection_type = self
-                .app
-                .libs
-                .get(lib_idx)
-                .map(|lib| lib.library.collection_type.clone());
-            match collection_type.as_deref() {
+            let collection_type = self.app.emby_library_collection_type(lib_idx);
+            match collection_type {
                 // The series containing (or being) the navigated item is the
                 // second level's parent (`parents[1]` in
                 // `spawn_navigate_to_item`'s stack construction).

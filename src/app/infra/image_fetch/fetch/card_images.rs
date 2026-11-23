@@ -40,7 +40,11 @@ impl App {
     /// `item_id` — the queue card's entry. The Library hero uses the
     /// hero-scoped key instead (`App::audiobookshelf_cover_key`), because it
     /// re-encodes its entry from a cover-fit crop.
-    pub fn fetch_audiobookshelf_cover(&mut self, server_url: String, item_id: String) {
+    pub(in crate::app) fn fetch_audiobookshelf_cover(
+        &mut self,
+        server_url: String,
+        item_id: String,
+    ) {
         let cache_key =
             audiobookshelf_cover_cache_key(&server_url, &item_id, self.image_protocol_suffix());
         self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
@@ -48,7 +52,11 @@ impl App {
 
     /// Book-shaped sibling of `fetch_audiobookshelf_cover` using the isolated
     /// `:bookcover:` cache key.
-    pub fn fetch_audiobookshelf_book_cover(&mut self, server_url: String, item_id: String) {
+    pub(in crate::app) fn fetch_audiobookshelf_book_cover(
+        &mut self,
+        server_url: String,
+        item_id: String,
+    ) {
         let cache_key = audiobookshelf_book_cover_cache_key(
             &server_url,
             &item_id,
@@ -57,7 +65,7 @@ impl App {
         self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
     }
 
-    pub fn fetch_audiobookshelf_image(
+    pub(in crate::app) fn fetch_audiobookshelf_image(
         &mut self,
         cache_key: String,
         server_url: String,

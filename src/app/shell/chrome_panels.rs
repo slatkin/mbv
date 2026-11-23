@@ -203,7 +203,7 @@ impl Model {
         .unzip();
         let selected = self
             .app
-            .tab
+            .active_tab()
             .to_position_with_counts(self.app.emby_library_count(), self.app.feeds_tab_pos());
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<TabPanel>()

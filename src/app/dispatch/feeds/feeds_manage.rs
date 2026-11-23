@@ -230,7 +230,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while changing the configuration when its lock is poisoned.
-    pub fn remove_feed_confirmed(&mut self, index: usize) {
+    pub(in crate::app) fn remove_feed_confirmed(&mut self, index: usize) {
         let feeds: Vec<FeedSubscription> = {
             let c = self.config.lock().unwrap();
             if index >= c.feeds.len() {
@@ -253,7 +253,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while changing the configuration when its lock is poisoned.
-    pub fn persist_feeds(&mut self, feeds: Vec<FeedSubscription>) {
+    pub(in crate::app) fn persist_feeds(&mut self, feeds: Vec<FeedSubscription>) {
         let cfg = {
             let mut c = self.config.lock().unwrap();
             c.feeds = feeds;
@@ -276,7 +276,7 @@ impl App {
     /// the last subscription was removed while Feeds is selected. The Feeds
     /// content owner resets its local selection when the subscription
     /// identity changes during the next shell sync.
-    pub fn after_feeds_mutation(&mut self) {
+    pub(in crate::app) fn after_feeds_mutation(&mut self) {
         self.sync_feed_subscriptions();
         let n = self.feed_tab.subscriptions.len();
         self.feed_tab.entries = vec![Vec::new(); n];

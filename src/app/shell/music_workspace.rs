@@ -113,16 +113,8 @@ impl Model {
         // The activated album: the resting cursor of the replaced nav stack.
         let activated_album_id = self
             .app
-            .libs
-            .iter()
-            .find(|lib| lib.library.id == library_id_lookup)
-            .and_then(|lib| {
-                let level = lib.nav_stack.last()?;
-                level
-                    .items
-                    .get(level.resting().cursor())
-                    .map(|item| item.id.clone())
-            });
+            .emby_library_index_of(&library_id_lookup)
+            .and_then(|index| self.app.emby_library_resting_item_id(index));
         // Nav stack was replaced wholesale; its resting cursor now points at
         // the activated album. Re-point the tree at that stable target, not a
         // positional cursor (the shell's only selection write to a retained
@@ -145,15 +137,8 @@ impl Model {
         // rows arrive.
         self.pending_music_track_selection = self
             .app
-            .pending_track_selection
-            .take()
-            .filter(|(lib_idx, _)| {
-                self.app
-                    .libs
-                    .get(*lib_idx)
-                    .is_some_and(|lib| lib.library.id == library_id_lookup)
-            })
-            .and_then(|(_, track_id)| {
+            .take_pending_track_selection_for(&library_id_lookup)
+            .and_then(|track_id| {
                 activated_album_id.map(|album_id| MusicTrackSelection { album_id, track_id })
             });
     }

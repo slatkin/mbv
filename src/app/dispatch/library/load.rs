@@ -199,7 +199,7 @@ impl App {
         });
     }
 
-    pub fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
+    pub(in crate::app) fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -253,7 +253,10 @@ impl App {
     /// Fetches a playlist's items synchronously and returns the playable
     /// (non-folder) ones. Flashes and returns `None` when Emby is unavailable,
     /// the fetch fails, the playlist is empty, or nothing in it is playable.
-    pub fn playlist_playable_items(&mut self, playlist_id: &str) -> Option<Vec<EmbyItem>> {
+    pub(in crate::app) fn playlist_playable_items(
+        &mut self,
+        playlist_id: &str,
+    ) -> Option<Vec<EmbyItem>> {
         let Some(client) = self.emby_snapshot() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return None;
@@ -277,7 +280,7 @@ impl App {
         Some(playable)
     }
 
-    pub fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {
+    pub(in crate::app) fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {
         // Drain existing libs, preserving nav stacks and scroll pos so that a
         // UserDataChanged websocket refresh (fired when playback starts)
         // doesn't silently reset list scroll position.
@@ -401,7 +404,7 @@ impl App {
     /// The `Newest Episodes` shelf's catalog entries, or an empty list when
     /// the shelf is absent (only that shelf feeds Home).
     #[must_use]
-    pub fn newest_episodes_items(
+    pub(in crate::app) fn newest_episodes_items(
         shelves: Vec<mbv_audiobookshelf::AudiobookshelfShelf>,
     ) -> Vec<mbv_queue::AudiobookshelfEpisodeCatalog> {
         shelves
@@ -424,7 +427,7 @@ impl App {
     /// `home-latest-sections`). Triggered when a Service becomes ready,
     /// in the Emby bootstrap, in `start_audiobookshelf_catalog_fetches`, and
     /// on every Home refresh.
-    pub fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {
+    pub(in crate::app) fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {
         match service {
             mbv_queue::ServiceKind::Emby => self.spawn_home_emby_recently_added(),
             mbv_queue::ServiceKind::Audiobookshelf => {

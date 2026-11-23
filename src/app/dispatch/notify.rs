@@ -20,7 +20,7 @@ impl App {
         }
     }
 
-    pub fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
         self.clear_saved_library_position(lib_idx);
         let Some(client) = self.emby_snapshot() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
@@ -72,7 +72,10 @@ impl App {
     /// resolving to a configured `library_routes` entry would be wrongly
     /// rejected for a reason unrelated to library routing. Mirrors the same
     /// condition Task 9 uses to gate `apply_route_for_playback`.
-    pub fn enqueue_route_conflict(&mut self, resolved_name: Option<&String>) -> bool {
+    pub(in crate::app) fn enqueue_route_conflict(
+        &mut self,
+        resolved_name: Option<&String>,
+    ) -> bool {
         if self.in_non_library_thin_client_mode() {
             tracing::info!(name: "library_route.conflict_check.skipped", target: "library_route", reason = "non_library_thin_client_owns_playback", "route conflict check skipped");
             return false;

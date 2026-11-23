@@ -69,29 +69,35 @@ impl Model {
             })
             .collect();
 
-        let setup = self
+        let setup = match self
             .app
-            .setup
-            .emby_setup_form
-            .as_ref()
-            .map(|form| SetupDraft::Emby {
-                fields: form.fields.clone(),
-                focus: form.focus,
-                busy: form.busy,
-                error: form.error.clone(),
-            })
-            .or_else(|| {
-                self.app
-                    .setup
-                    .audiobookshelf_setup_form
-                    .as_ref()
-                    .map(|form| SetupDraft::Audiobookshelf {
-                        fields: form.fields.clone(),
-                        focus: form.focus,
-                        busy: form.busy,
-                        error: form.error.clone(),
-                    })
-            });
+            .emby_setup_draft()
+            .or_else(|| self.app.audiobookshelf_setup_draft())
+        {
+            Some(crate::app::state::shell_reads::SetupFormDraft::Emby {
+                fields,
+                focus,
+                busy,
+                error,
+            }) => Some(SetupDraft::Emby {
+                fields,
+                focus,
+                busy,
+                error,
+            }),
+            Some(crate::app::state::shell_reads::SetupFormDraft::Audiobookshelf {
+                fields,
+                focus,
+                busy,
+                error,
+            }) => Some(SetupDraft::Audiobookshelf {
+                fields,
+                focus,
+                busy,
+                error,
+            }),
+            None => None,
+        };
         SettingsSnapshot {
             destination: self.app.settings_destination(),
             rows,
@@ -381,10 +387,8 @@ mod tests {
         assert!(
             model
                 .app
-                .setup
-                .emby_setup_form
-                .as_ref()
-                .is_some_and(|form| !form.error.is_empty())
+                .emby_setup_draft()
+                .is_some_and(|draft| !draft.error().is_empty())
         );
     }
 

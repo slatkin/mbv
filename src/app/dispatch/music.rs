@@ -170,7 +170,7 @@ impl App {
         );
     }
 
-    pub fn select_music_group(&mut self, lib_idx: usize, group_cursor: usize) {
+    pub(in crate::app) fn select_music_group(&mut self, lib_idx: usize, group_cursor: usize) {
         let stack_len = self.libs[lib_idx].nav_stack.len();
         if stack_len < 2 {
             return;
@@ -248,7 +248,7 @@ impl App {
     /// range from Emby (`get_items_sorted_ranged`) -- the existing in-list
     /// letter headers (`list.rs`) then bucket the smaller slice per-letter.
     /// Persists the choice so it survives a restart (`LibraryPositionLevel`).
-    pub fn select_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
+    pub(in crate::app) fn select_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
@@ -583,7 +583,7 @@ impl App {
 
     // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_loaded`, which stays behind in `actions.rs`.
-    pub fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
         // When the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.

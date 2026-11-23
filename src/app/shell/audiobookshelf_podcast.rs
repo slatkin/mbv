@@ -82,12 +82,7 @@ impl Model {
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
         let images_enabled = self.app.image_protocol_enabled();
         let library_id = snapshot.library.id.clone();
-        let latest = self
-            .app
-            .audiobookshelf_shelf_cache
-            .get(&library_id)
-            .cloned()
-            .unwrap_or_default();
+        let latest = self.app.audiobookshelf_shelf(&library_id);
         let selected_latest = self.abs_podcast_latest_selected();
         // Latest is the default pill, so its shelf loads on first view. The
         // App's shared guard owns the one-shot request the GUI's frame path

@@ -118,7 +118,7 @@ impl App {
     /// `refresh_feeds` (which adds a user-facing flash) and the async startup
     /// auto-fetch (which stays silent). Does nothing if already loading or if
     /// no subscriptions are configured.
-    pub fn start_feed_fetch(&mut self) {
+    pub(in crate::app) fn start_feed_fetch(&mut self) {
         if self.feed_tab.loading || self.feed_tab.subscriptions.is_empty() {
             return;
         }
@@ -215,7 +215,7 @@ impl App {
     /// Copy stored playback state into one entry before it is played or queued.
     /// A missing feed identity or a missing stored row leaves the entry exactly
     /// as fetched.
-    pub fn hydrate_feed_entry_state(&mut self, mut entry: FeedEntry) -> FeedEntry {
+    pub(in crate::app) fn hydrate_feed_entry_state(&mut self, mut entry: FeedEntry) -> FeedEntry {
         let Some(feed_id) = entry.feed_id.clone() else {
             return entry;
         };
@@ -231,7 +231,7 @@ impl App {
     /// Merge stored state into one subscription's freshly fetched entries with a
     /// single store read rather than one read per entry. Entries with no stored
     /// row stay as fetched (zero position, unplayed).
-    pub fn hydrate_feed_entries_for_subscription(
+    pub(in crate::app) fn hydrate_feed_entries_for_subscription(
         &mut self,
         feed_id: &str,
         entries: &mut [FeedEntry],
@@ -261,7 +261,7 @@ impl App {
     /// Store one entry's playback state and rewrite the state file. A failed
     /// write is logged and discarded: it never stops playback, and the
     /// previously written state stays intact.
-    pub fn write_feed_entry_state(
+    pub(in crate::app) fn write_feed_entry_state(
         &mut self,
         feed_id: &str,
         entry_guid: &str,
@@ -293,7 +293,7 @@ impl App {
     /// invoking Emby progress reporting. `completed` is true for known-runtime
     /// EOF or stop at/above 95% -- played entries store position zero.
     /// Unknown-runtime EOF keeps `played` false.
-    pub fn persist_feed_slot_lifecycle(
+    pub(in crate::app) fn persist_feed_slot_lifecycle(
         &mut self,
         slot_id: mbv_queue::QueueSlotId,
         position_ticks: i64,

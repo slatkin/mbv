@@ -22,6 +22,10 @@ mod artists;
 /// design D4b rule 5) live in their own child module for the same reason.
 mod home;
 
+/// The two-Player-link fixture (row 2.3, correction round 1) lives in its own
+/// child module for the same reason.
+mod links;
+
 /// The Feeds destination's test seeds and pushes (row 11.1) live in their own
 /// child module so this file stays within its line ceiling.
 mod gui_feeds;

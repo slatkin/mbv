@@ -14,7 +14,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn spawn_idle_feed_fetch(&self) {
+    pub(in crate::app) fn spawn_idle_feed_fetch(&self) {
         let Some(ref idle_feed) = self.idle_feed else {
             return;
         };
@@ -41,7 +41,7 @@ impl App {
     }
 
     /// Open the currently displayed idle-feed item in the user's browser.
-    pub fn open_idle_feed_link(&mut self) {
+    pub(in crate::app) fn open_idle_feed_link(&mut self) {
         let Some(link) = self
             .idle_feed
             .as_ref()
@@ -67,7 +67,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn advance_idle_feed_rotation(&mut self) {
+    pub(in crate::app) fn advance_idle_feed_rotation(&mut self) {
         let Some(ref mut idle_feed) = self.idle_feed else {
             return;
         };

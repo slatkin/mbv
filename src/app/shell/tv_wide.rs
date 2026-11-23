@@ -46,15 +46,11 @@ pub(in crate::app) fn wide_tv_show_area(
     lib_idx: usize,
     terminal_size: (u16, u16),
 ) -> Option<Rect> {
-    let lib = app.emby_library(lib_idx)?;
-    if lib.library.collection_type != "tvshows" {
+    let collection_type = app.emby_library_collection_type(lib_idx)?;
+    if collection_type != "tvshows" {
         return None;
     }
-    let mode = lib
-        .nav_stack
-        .last()
-        .and_then(|level| level.tv_content_mode.as_ref())
-        .or(lib.tv_content_mode.as_ref());
+    let mode = app.emby_library_tv_content_mode(lib_idx);
     if matches!(mode, Some(TvContentMode::Latest | TvContentMode::Upcoming)) {
         return None;
     }

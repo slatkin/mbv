@@ -29,6 +29,42 @@ impl App {
         true
     }
 
+    /// Hold the row holding `item_id` as the library's resting cursor: a
+    /// context menu on a library row focuses Library and pins the
+    /// persistence-facing cursor to that row. Answers whether the row was
+    /// found, so the caller saves the position only for a row that moved.
+    pub fn rest_library_cursor_on_item(&mut self, index: usize, item_id: &str) -> bool {
+        let Some(level) = self
+            .libs
+            .get_mut(index)
+            .and_then(|tab| tab.nav_stack.last_mut())
+        else {
+            return false;
+        };
+        let Some(row) = level
+            .items
+            .iter()
+            .position(|candidate| candidate.id == item_id)
+        else {
+            return false;
+        };
+        level.set_resting_cursor(row);
+        true
+    }
+
+    /// Take the deep-selection track the core armed for the Emby library with
+    /// `library_id`, leaving it in place for any other library: a foreign
+    /// library's arrival never adopts another library's selection.
+    pub fn take_pending_track_selection_for(&mut self, library_id: &str) -> Option<String> {
+        let index = self.emby_library_index_of(library_id)?;
+        match &self.pending_track_selection {
+            Some((armed_index, _)) if *armed_index == index => {
+                self.pending_track_selection.take().map(|(_, track)| track)
+            }
+            _ => None,
+        }
+    }
+
     /// Forget the deep-selection track a navigated album landing armed: the
     /// landing was rejected, so no album activation may adopt it.
     pub fn abandon_track_selection(&mut self) {
@@ -65,17 +101,6 @@ impl App {
     pub fn close_open_playlist(&mut self) {
         self.playlists_open = None;
         self.playlists_open_items.clear();
-    }
-
-    /// Hold `entry` as the playlist the Playlists overlay has open, with the
-    /// rows it holds.
-    pub fn adopt_open_playlist(
-        &mut self,
-        entry: mbv_emby_model::EmbyItem,
-        rows: Vec<mbv_emby_model::EmbyItem>,
-    ) {
-        self.playlists_open = Some(entry);
-        self.playlists_open_items = rows;
     }
 
     /// Log one queue title-site decision (invariant 16's diagnostic). Both

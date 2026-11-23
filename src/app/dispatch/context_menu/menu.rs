@@ -211,7 +211,10 @@ impl App {
     /// Cached finished state for one menu target across every Audiobookshelf
     /// browse state. A missing progress entry counts as unfinished (design
     /// D3), matching how the server reports items without listening progress.
-    pub fn audiobookshelf_target_finished(&self, target: &AudiobookshelfMenuTarget) -> bool {
+    pub(in crate::app) fn audiobookshelf_target_finished(
+        &self,
+        target: &AudiobookshelfMenuTarget,
+    ) -> bool {
         match target {
             AudiobookshelfMenuTarget::Episode {
                 library_item_id,
@@ -234,7 +237,11 @@ impl App {
     /// It is load-bearing under Queue panel focus while Home is
     /// the active Tab selection; the `self.tab.is_home()` guard short-circuits
     /// it on all other paths.
-    pub fn open_context_menu(&mut self, home_cw_selected: bool, cw_item: Option<EmbyItem>) {
+    pub(in crate::app) fn open_context_menu(
+        &mut self,
+        home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
+    ) {
         if let Some(menu) = self.build_context_menu(home_cw_selected, cw_item) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
@@ -245,7 +252,7 @@ impl App {
     /// is never a Home-tab menu, so `home_cw_selected` is a harmless `false`
     /// and `cw_item` a harmless `None` (the `self.tab.is_home()` guard
     /// short-circuits both).
-    pub fn open_context_menu_for(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn open_context_menu_for(&mut self, item: EmbyItem) {
         if let Some(menu) = self.build_context_menu_for(Some(item), false, None) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
@@ -315,7 +322,7 @@ impl App {
     /// capability derivation is an intersection — an action is present only
     /// when every selected item has the corresponding backend.
     #[must_use]
-    pub fn build_selection_menu(
+    pub(in crate::app) fn build_selection_menu(
         capabilities: Vec<ItemCapabilities>,
         items: &[EmbyItem],
         remove_targets: Vec<BulkRemoveTarget>,
@@ -402,7 +409,7 @@ impl App {
     /// tracked item. The menu is built with the keyboard anchor; the Client
     /// sets the pointer anchor it recorded before it places the menu (design
     /// D6).
-    pub fn open_context_menu_at_for_item(
+    pub(in crate::app) fn open_context_menu_at_for_item(
         &mut self,
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,

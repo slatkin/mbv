@@ -11,7 +11,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the Emby client lock is poisoned.
-    pub fn session_direct_endpoint(
+    pub(in crate::app) fn session_direct_endpoint(
         &self,
         sess: &mbv_emby::SessionInfo,
     ) -> Option<mbv_remote_player::DaemonEndpoint> {
@@ -69,7 +69,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the Emby client lock or the test override lock is poisoned.
-    pub fn fetch_sessions_blocking(
+    pub(in crate::app) fn fetch_sessions_blocking(
         &self,
     ) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError> {
         #[cfg(test)]
@@ -94,7 +94,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the direct-connect test override lock is poisoned.
-    pub fn connect_direct_endpoint(
+    pub(in crate::app) fn connect_direct_endpoint(
         &self,
         endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> Result<
@@ -160,7 +160,7 @@ impl App {
     /// conflicting flash on top of that teardown path's own flash. The
     /// caller is expected to try again only on its own next natural trigger
     /// (e.g. the next play/enqueue into this route), never from a
-    pub fn try_daemon_route_connect(
+    pub(in crate::app) fn try_daemon_route_connect(
         &self,
         endpoint: &mbv_remote_player::DaemonEndpoint,
         route_label: &str,
@@ -186,7 +186,7 @@ impl App {
     /// Returns `true` when the player has been swapped to a live reattach and
     /// the caller must skip `restore_local_mode`. Local daemons are excluded:
     /// those already have the modal reconnect paths.
-    pub fn try_reattach_remote_daemon(&mut self) -> bool {
+    pub(in crate::app) fn try_reattach_remote_daemon(&mut self) -> bool {
         self.try_reattach_remote_daemon_with_sleep(std::thread::sleep)
     }
 
@@ -198,7 +198,10 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn try_reattach_remote_daemon_with_sleep(&mut self, sleep: impl Fn(Duration)) -> bool {
+    pub(in crate::app) fn try_reattach_remote_daemon_with_sleep(
+        &mut self,
+        sleep: impl Fn(Duration),
+    ) -> bool {
         let Some(endpoint) = self.player_endpoint.clone() else {
             return false;
         };
@@ -282,7 +285,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn try_auto_reconnect(&mut self) {
+    pub(in crate::app) fn try_auto_reconnect(&mut self) {
         if !self.config.lock().unwrap().auto_reconnect {
             tracing::info!(name: "auto_reconnect.reconnect.disabled", target: "auto_reconnect", "auto-reconnect disabled; staying local");
             return;

@@ -120,16 +120,10 @@ fn build_title_overlay_variant(
     ready_logo_key: Option<&str>,
     item_kind: &str,
 ) -> bool {
-    let Some(source) = model
-        .app
-        .images
-        .image(cache_key)
-        .and_then(|entry| entry.img.as_ref())
-    else {
+    let Some(source) = model.app.cached_image_pixels(cache_key) else {
         model
             .app
-            .title_log_gate
-            .log_decision(cache_key, item_kind, "BaseImageMissing", None);
+            .log_queue_title_decision(cache_key, item_kind, "BaseImageMissing", None);
         return false;
     };
     let source_dimensions = (source.width(), source.height());
@@ -137,7 +131,7 @@ fn build_title_overlay_variant(
         .and_then(|key| model.app.cached_image(key))
         .and_then(|entry| entry.img.as_ref());
     let composed = compose_title_overlay_bitmap(
-        source,
+        &source,
         logo,
         ratatui_image::FontSize::new(model.app.image_font_size().0, model.app.image_font_size().1),
         cols,
@@ -148,10 +142,7 @@ fn build_title_overlay_variant(
     let built = model
         .image_protocols
         .build_entry(key, Some(composed), None, suffix);
-    model
-        .app
-        .images
-        .insert_derived_image(key.to_owned(), built.entry);
+    model.app.insert_derived_image(key.to_owned(), built.entry);
     if let Some(protocol) = built.protocol {
         model
             .image_protocols
@@ -185,8 +176,7 @@ impl Model {
             self.image_protocols
                 .build_entry(QUEUE_CARD_PLACEHOLDER_KEY, Some(img), None, suffix);
         self.app
-            .images
-            .insert_image(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), built.entry);
+            .insert_fetched_image(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), built.entry);
         if let Some(protocol) = built.protocol {
             self.image_protocols.insert_protocol(
                 self.app.image_cache(),
@@ -236,15 +226,13 @@ impl Model {
                     .contains(self.app.image_cache(), bare_key, suffix)
         });
         if reencode {
-            let (img, cover_box, stored_logo_key) = self
+            let crate::app::state::shell_reads::ImageBuildFacts {
+                img,
+                cover_box,
+                logo_key: stored_logo_key,
+            } = self
                 .app
-                .images
-                .image(bare_key)
-                .and_then(|e| {
-                    e.img
-                        .clone()
-                        .map(|img| (img, e.cover_box, e.applied_logo_key.clone()))
-                })
+                .cached_image_build_facts(bare_key)
                 .expect("img present, just checked");
             let logo_key = self
                 .image_protocols

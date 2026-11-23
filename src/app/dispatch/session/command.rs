@@ -2,7 +2,7 @@ use crate::app::{App, SessionEvent};
 impl App {
     /// Advances whenever queue identity or state is replaced, so in-flight
     /// playlist mutations can detect stale completions.
-    pub fn advance_queue_epoch(&mut self) {
+    pub(in crate::app) fn advance_queue_epoch(&mut self) {
         self.queue_epoch.advance();
     }
 

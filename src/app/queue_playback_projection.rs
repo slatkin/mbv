@@ -217,7 +217,7 @@ impl App {
 
     /// The now-playing title parts for `state`: the active queue item's parts,
     /// or the Emby Session's parts for slotless output. `None` while idle.
-    pub fn now_playing_title_parts(
+    pub(in crate::app) fn now_playing_title_parts(
         &self,
         state: PlaybackState,
     ) -> Option<mbv_queue::PlaybackTitleParts> {

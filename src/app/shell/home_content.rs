@@ -157,13 +157,9 @@ impl Model {
             // dated after the launch instant never marks.
             DestinationLatestSource::Emby(_) | DestinationLatestSource::Audiobookshelf(_) => self
                 .app
-                .home_recently_added
-                .get(source)
-                .is_some_and(|items| {
-                    items.iter().any(|item| {
-                        mbv_ui_model::home_latest::is_new_in_launch_window(item, window)
-                    })
-                }),
+                .home_recently_added_for(source)
+                .iter()
+                .any(|item| mbv_ui_model::home_latest::is_new_in_launch_window(item, window)),
             // Feeds has no store entry: its rows derive from `all_entries`
             // at merge time, filtered to the same 14-day cutoff.
             DestinationLatestSource::Feeds => {

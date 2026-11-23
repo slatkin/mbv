@@ -577,7 +577,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the Emby client lock is poisoned.
-    pub fn toggle_watched_home_item(&mut self, item: &EmbyItem) {
+    pub(in crate::app) fn toggle_watched_home_item(&mut self, item: &EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }

@@ -68,6 +68,14 @@ impl App {
         );
     }
 
+    /// Hold `entry` as the playlist the Playlists overlay has open, with the
+    /// rows it holds, as a settled open would leave them.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_open_playlist_for_test(&mut self, entry: EmbyItem, rows: Vec<EmbyItem>) {
+        self.playlists_open = Some(entry);
+        self.playlists_open_items = rows;
+    }
+
     /// Drop every live toast, so a test observes only the toast its own
     /// action raised.
     #[cfg(any(test, feature = "test"))]

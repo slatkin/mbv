@@ -139,7 +139,7 @@ impl App {
     /// suspended home link when a route or direct-remote peer is attached,
     /// not whichever peer is currently routed), and leaves the queue dirty
     /// until the owner's snapshot confirms it.
-    pub fn apply_saved_playlist_source(
+    pub(in crate::app) fn apply_saved_playlist_source(
         &mut self,
         source: mbv_queue::QueueSource,
         origin: QueueOrigin,
@@ -174,7 +174,7 @@ impl App {
     /// at section 0 and re-reading `current_home_item`. Folder/non-playable
     /// guards and the ancestor-route resolution match the legacy Home branch
     /// exactly.
-    pub fn enqueue_home_item(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn enqueue_home_item(&mut self, item: EmbyItem) {
         if item.is_folder {
             self.do_enqueue_folder(&item);
             return;

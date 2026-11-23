@@ -22,7 +22,7 @@ impl App {
         );
     }
 
-    pub fn clear_audiobookshelf_catalog(&mut self) {
+    pub(in crate::app) fn clear_audiobookshelf_catalog(&mut self) {
         self.setup.audiobookshelf_catalog_rx = None;
         self.setup.audiobookshelf_mark_rx = None;
         self.audiobookshelf_libraries.clear();
@@ -31,7 +31,7 @@ impl App {
         self.clear_audiobookshelf_images();
     }
 
-    pub fn clear_audiobookshelf_images(&mut self) {
+    pub(in crate::app) fn clear_audiobookshelf_images(&mut self) {
         // The shell's protocol store drops the encodings of what this cleared
         // at its next drain (`Model::prune_image_protocols`, invariant 38).
         self.images.clear_audiobookshelf_images();
@@ -41,7 +41,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn apply_audiobookshelf_completion(
+    pub(in crate::app) fn apply_audiobookshelf_completion(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::AudiobookshelfCompletion,
     ) {
@@ -106,7 +106,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn handle_audiobookshelf_worker_disconnect(
+    pub(in crate::app) fn handle_audiobookshelf_worker_disconnect(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {

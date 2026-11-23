@@ -145,7 +145,7 @@ fn current_album_ids(
 }
 
 impl App {
-    pub fn artist_detail_key(
+    pub(in crate::app) fn artist_detail_key(
         &self,
         destination: &LibraryKey,
         target: &MusicArtistTarget,
@@ -220,7 +220,7 @@ impl App {
     /// are skipped, repeats dedupe against the pending queue, and the drain
     /// runs at most `MAX_ARTIST_FALLBACK_TRACK_FETCHES` at a time; each
     /// arrival arms the next album, so rows appear progressively from cache.
-    pub fn enqueue_artist_album_tracks(&mut self, album_ids: Vec<String>) {
+    pub(in crate::app) fn enqueue_artist_album_tracks(&mut self, album_ids: Vec<String>) {
         for album_id in album_ids {
             if album_id.is_empty()
                 || self.album_tracks_cache.contains_key(&album_id)
@@ -241,7 +241,7 @@ impl App {
     /// `fetch_album_tracks` remains the sole gate for the actual request, so
     /// an album the selection path already armed is skipped without consuming
     /// a slot, and a request that could not start never occupies one.
-    pub fn drain_artist_album_track_fetches(&mut self) {
+    pub(in crate::app) fn drain_artist_album_track_fetches(&mut self) {
         while self.artist_album_track_fetches_in_flight.len() < MAX_ARTIST_FALLBACK_TRACK_FETCHES {
             let Some(album_id) = self.pending_artist_album_track_fetches.pop_front() else {
                 break;
@@ -309,7 +309,7 @@ impl App {
         self.fetch_card_image(cache_key, artist_id, String::new(), &["Primary"]);
     }
 
-    pub fn handle_artist_tracks_fetched(
+    pub(in crate::app) fn handle_artist_tracks_fetched(
         &mut self,
         destination: &LibraryKey,
         generation: SetupGeneration,
@@ -363,7 +363,7 @@ impl App {
         }
     }
 
-    pub fn handle_artist_artwork_fetched(
+    pub(in crate::app) fn handle_artist_artwork_fetched(
         &mut self,
         destination: LibraryKey,
         generation: SetupGeneration,

@@ -62,13 +62,10 @@ pub(in crate::app) fn render_queue_playback_slot(
     // placeholder when the fetch resolved empty or the slot is the
     // placeholder itself. Resolved from the image cache's authority —
     // a read, never a fetch.
-    let artwork_key = projection.cache_key.clone().filter(|key| {
-        model
-            .app
-            .images
-            .image(key)
-            .is_none_or(mbv_images::CachedImage::has_art)
-    });
+    let artwork_key = projection
+        .cache_key
+        .clone()
+        .filter(|key| model.app.image_key_paints(key));
     let placeholder_slot = artwork_key.is_none();
     if placeholder_slot {
         model.ensure_placeholder_card_image();
@@ -94,13 +91,10 @@ pub(in crate::app) fn render_queue_playback_slot(
         last_card,
         terminal_height,
     );
-    let fallback_key = projection.plain_cache_key.as_deref().filter(|key| {
-        model
-            .app
-            .images
-            .image(key)
-            .is_some_and(mbv_images::CachedImage::has_art)
-    });
+    let fallback_key = projection
+        .plain_cache_key
+        .as_deref()
+        .filter(|key| model.app.image_cached_with_art(key));
     let mut plain_fallback_painted = false;
     let mut out = (height, width, loading);
     if !painted && let Some(fallback_key) = fallback_key {

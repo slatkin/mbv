@@ -22,7 +22,7 @@ pub(in crate::app) enum RevealTarget {
 /// test covers the `item_type` → reveal mapping without a server. `ancestors`
 /// is `None` when the kind's own back-reference already decided (the worker
 /// skips the round trip).
-pub fn resolve_reveal_target(
+pub(in crate::app) fn resolve_reveal_target(
     item_type: &str,
     item: &EmbyItem,
     ancestors: Option<&[EmbyItem]>,

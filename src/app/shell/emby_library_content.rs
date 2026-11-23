@@ -69,19 +69,34 @@ impl Model {
     /// `shell/emby_library.rs::browse_identity`, reused verbatim as the shared
     /// `EmbyLibraryIdentity` shape).
     fn emby_library_owner_identity(&self, index: usize) -> EmbyLibraryIdentity {
-        let lib = &self.app.emby_libraries()[index];
-        let level = lib.nav_stack.last();
+        let facts = self.app.emby_library_level_facts(index).unwrap_or(
+            crate::app::state::shell_reads::BrowseLevelFacts {
+                depth: 0,
+                level: None,
+                has_feed_home_video: false,
+            },
+        );
+        let level = facts
+            .level
+            .unwrap_or(crate::app::state::shell_reads::BrowseLevelIdentity {
+                parent_id: String::new(),
+                letter_filter: None,
+                sort_by: String::new(),
+                sort_order: String::new(),
+                unplayed_only: false,
+                loading: false,
+                tv_content_mode: None,
+            });
         EmbyLibraryIdentity {
-            depth: lib.nav_stack.len(),
-            parent_id: level.map(|l| l.parent_id.clone()).unwrap_or_default(),
-            letter_filter: level.and_then(|l| l.letter_filter.as_ref().map(|f| f.index)),
-            sort_by: level.map(|l| l.sort_by.clone()).unwrap_or_default(),
-            sort_order: level.map(|l| l.sort_order.clone()).unwrap_or_default(),
-            unplayed_only: level.is_some_and(|l| l.unplayed_only),
-            feed_group: lib
-                .feed_home_video
-                .as_ref()
-                .map(|_| self.app.feed_home_video_selected_group_index(index)),
+            depth: facts.depth,
+            parent_id: level.parent_id,
+            letter_filter: level.letter_filter,
+            sort_by: level.sort_by,
+            sort_order: level.sort_order,
+            unplayed_only: level.unplayed_only,
+            feed_group: facts
+                .has_feed_home_video
+                .then(|| self.app.feed_home_video_selected_group_index(index)),
         }
     }
 
@@ -95,17 +110,10 @@ impl Model {
             .app
             .emby_library_feed_home_video(index)
             .map_or((0, 0), |state| (state.video_cursor, state.video_scroll));
-        let loading = self
-            .app
-            .emby_library_feed_home_video(index)
-            .map(|state| state.loading)
-            .or_else(|| {
-                self.app
-                    .emby_library(index)
-                    .and_then(|tab| tab.nav_stack.first())
-                    .map(|root| root.loading)
-            })
-            .unwrap_or(false);
+        let loading = self.app.emby_library_feed_home_video(index).map_or_else(
+            || self.app.emby_library_root_loading(index),
+            |state| state.loading,
+        );
         (items, cursor, scroll, loading)
     }
 

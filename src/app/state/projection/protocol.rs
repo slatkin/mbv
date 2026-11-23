@@ -71,7 +71,7 @@ impl App {
     /// Whether halfblocks leave the artwork unable to carry the now-playing
     /// title: the queue title site's `HalfblockConfigured` gate.
     #[must_use]
-    pub fn halfblock_configured(&self) -> bool {
+    pub(in crate::app) fn halfblock_configured(&self) -> bool {
         self.halfblock_configured
     }
 
@@ -97,7 +97,7 @@ impl App {
     /// Queue a completed fetch's cache key for the shell to encode, once the
     /// entry it stored is in place. Does nothing for a fetch that resolved
     /// empty or interrupted: it stored no pixels.
-    pub fn queue_protocol_encode(&mut self, cache_key: &str) {
+    pub(in crate::app) fn queue_protocol_encode(&mut self, cache_key: &str) {
         self.pending_protocol_encodes
             .push_back(cache_key.to_owned());
     }
@@ -115,7 +115,7 @@ impl App {
 
     /// Queue `cache_key` for the shell to drop its stored encoding, so the
     /// next paint re-encodes from the retained source.
-    pub fn queue_protocol_clear(&mut self, cache_key: &str) {
+    pub(in crate::app) fn queue_protocol_clear(&mut self, cache_key: &str) {
         self.pending_protocol_clears.push(cache_key.to_owned());
     }
 

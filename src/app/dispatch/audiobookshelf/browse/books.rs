@@ -99,7 +99,7 @@ impl App {
         }
     }
 
-    pub fn select_audiobookshelf_book(&mut self, cursor: usize) {
+    pub(in crate::app) fn select_audiobookshelf_book(&mut self, cursor: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };

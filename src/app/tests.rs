@@ -351,6 +351,7 @@ mod named_queues;
 mod narrow_browse_migration;
 mod output_handoff;
 mod panel_focus;
+mod pin_swap;
 mod pinned_view_toggle;
 mod podcast;
 mod queue;

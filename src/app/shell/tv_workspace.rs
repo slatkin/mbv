@@ -408,9 +408,8 @@ impl Model {
             .iter()
             .filter_map(|item| {
                 self.app
-                    .series_detail_cache
-                    .get(&item.id)
-                    .map(|detail| (item.id.clone(), detail.clone()))
+                    .series_detail_snapshot(&item.id)
+                    .map(|detail| (item.id.clone(), detail))
             })
             .collect()
     }

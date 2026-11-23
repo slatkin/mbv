@@ -10,7 +10,7 @@ use mbv_ui_model::sort_filter::{
 };
 
 impl App {
-    pub fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.library.collection_type != "music" {
             return false;
@@ -58,7 +58,7 @@ impl App {
     /// whole-library prefetch when the root is loaded but `all_items` is
     /// absent). Returns false when the miss is already final (complete
     /// corpus), which keeps the caller's flash-and-keep-tab path.
-    pub fn arm_pending_series_landing(
+    pub(in crate::app) fn arm_pending_series_landing(
         &mut self,
         lib_idx: usize,
         reveal: Box<EmbyItem>,
@@ -88,7 +88,7 @@ impl App {
     /// corpus flashes and leaves the tab unchanged (task 4.2). A drain for any
     /// other library (or any level other than the library root, `parent_id`)
     /// leaves the pending untouched.
-    pub fn retry_pending_series_landing(&mut self, lib_idx: usize, parent_id: &str) {
+    pub(in crate::app) fn retry_pending_series_landing(&mut self, lib_idx: usize, parent_id: &str) {
         let Some(pending) = self.pending_series_landing.take() else {
             return;
         };
@@ -253,7 +253,7 @@ impl App {
     }
 
     /// Ensures the series detail is fetched for the wide TV component.
-    pub fn enter_series_selection(&mut self, _lib_idx: usize, item: &EmbyItem) {
+    pub(in crate::app) fn enter_series_selection(&mut self, _lib_idx: usize, item: &EmbyItem) {
         if item.item_type != "Series" || item.id.is_empty() {
             return;
         }
@@ -264,7 +264,7 @@ impl App {
     /// Caches a fetched series detail. A late completion for an id already
     /// cached must not replace the newer projection, so the first entry
     /// wins. The cache's cap evicts the oldest entry (issue #917).
-    pub fn cache_series_detail(&mut self, series_id: &str, detail: SeriesDetail) {
+    pub(in crate::app) fn cache_series_detail(&mut self, series_id: &str, detail: SeriesDetail) {
         if self.series_detail_cache.contains_key(series_id) {
             return;
         }
@@ -276,7 +276,11 @@ impl App {
         );
     }
 
-    pub fn handle_series_detail_fetched(&mut self, series_id: &str, detail: SeriesDetail) {
+    pub(in crate::app) fn handle_series_detail_fetched(
+        &mut self,
+        series_id: &str,
+        detail: SeriesDetail,
+    ) {
         // A late completion must not replace a newer cached projection (for
         // example, a refresh that completed while this request was in flight).
         self.cache_series_detail(series_id, detail);
@@ -304,7 +308,7 @@ impl App {
         self.refresh_series_detail_loading(series_id);
     }
 
-    pub fn handle_series_season_episodes_fetched(
+    pub(in crate::app) fn handle_series_season_episodes_fetched(
         &mut self,
         series_id: &str,
         season_id: String,
@@ -338,12 +342,12 @@ impl App {
         }
     }
 
-    pub fn is_home_video_view(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_home_video_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         lib.library.collection_type == "homevideos"
     }
 
-    pub fn snap_grouped_album_cursor_to_display_order(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn snap_grouped_album_cursor_to_display_order(&mut self, lib_idx: usize) {
         if !self.is_viewing_album_folders(lib_idx) {
             return;
         }

@@ -230,13 +230,13 @@ impl From<PanelIntent> for Command {
 /// queue-visible layout, so the gate follows it instead of the panel mode and
 /// the link is gated off in idle `both` and `queue-only`, on in idle
 /// `library-only` where the strip displays the feed.
-pub struct IdleFeedLinkContext {
+pub(in crate::app) struct IdleFeedLinkContext {
     pub player_active: bool,
     pub playback_panel_present_idle: bool,
     pub link_available: bool,
 }
 
-pub fn idle_feed_command_for_key(
+pub(in crate::app) fn idle_feed_command_for_key(
     chord: KeyChord,
     context: &IdleFeedLinkContext,
 ) -> Option<Command> {
@@ -284,14 +284,14 @@ impl App {
         sent != QueueOpEdit::NotApplied
     }
 
-    pub fn request_relative_step(&mut self, direction: Direction) -> bool {
+    pub(in crate::app) fn request_relative_step(&mut self, direction: Direction) -> bool {
         match direction {
             Direction::Next => self.player.next(),
             Direction::Previous => self.player.previous(),
         }
     }
 
-    pub fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
+    pub(in crate::app) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
         self.request_remote_slot_jump(slot_id)
     }
 
@@ -433,7 +433,7 @@ impl App {
     /// width keeps the current width and flashes the reason.
     /// `cycle_panel_mode` guards pinned-ness, so the not-pinned arm here
     /// is unreachable.
-    pub fn pinned_view_toggle(&mut self) {
+    pub(in crate::app) fn pinned_view_toggle(&mut self) {
         self.request_pinned_view(self.pinned_width.toggled());
     }
 
@@ -469,7 +469,7 @@ impl App {
     /// collapses, so the collapsed-width and not-pinned plays do nothing;
     /// the pending guard lives in [`App::request_pinned_view`], which caps
     /// a multi-item play at one request (design D4).
-    pub fn collapse_pinned_view_after_play(&mut self) {
+    pub(in crate::app) fn collapse_pinned_view_after_play(&mut self) {
         if self.pinned_width == mbv_ui_model::settings::PinnedWidth::Expanded {
             self.request_pinned_view(mbv_ui_model::settings::PinnedWidth::Collapsed);
         }
@@ -483,7 +483,7 @@ impl App {
     /// terminal's `Resize` event arrives later), so on expand
     /// `set_panel_focus` would take its mini-view early return and leave the
     /// stored `panel_focus` stale.
-    pub fn apply_pinned_view(
+    pub(in crate::app) fn apply_pinned_view(
         &mut self,
         width: mbv_ui_model::settings::PinnedWidth,
         applied: Result<(), String>,
@@ -566,7 +566,7 @@ impl App {
     /// Own the `AppCommand::QueuePlayCursor` state transitions (extracted from
     /// `dispatch`; every early exit there returned `false`, i.e. fell through
     /// to dispatch's own `false` tail).
-    pub fn dispatch_queue_play_cursor(&mut self, t: usize) {
+    pub(in crate::app) fn dispatch_queue_play_cursor(&mut self, t: usize) {
         let Some(item) = self.queue_play_cursor_item(t) else {
             return;
         };

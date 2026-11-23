@@ -146,7 +146,7 @@ impl Model {
             sessions.set_content(
                 &self
                     .app
-                    .panel_targets
+                    .panel_targets()
                     .iter()
                     .map(|target| {
                         // The per-row direct-endpoint projection (design D6):

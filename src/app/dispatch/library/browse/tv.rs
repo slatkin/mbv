@@ -80,7 +80,7 @@ fn fetch_upcoming_with_retries<S: TvUpcomingSource>(
 /// carries, or the correct response is dropped and replaced by a generic
 /// alphabetical all-episodes refetch (seen 2026-10-06: Latest/Upcoming pill
 /// content clobbered by `SortName` episode listings).
-pub fn tv_mode_fetch_fields(
+pub(in crate::app) fn tv_mode_fetch_fields(
     mode: &mbv_queue::TvContentMode,
 ) -> (Option<&'static str>, &'static str, &'static str) {
     match mode {
@@ -94,7 +94,7 @@ pub fn tv_mode_fetch_fields(
 
 /// Stamps a root level with the fetch fields its TV content mode's fetch
 /// carries, so an arriving pill response passes the stale-root key check.
-pub fn align_level_to_tv_mode(
+pub(in crate::app) fn align_level_to_tv_mode(
     level: &mut crate::app::BrowseLevel,
     mode: &mbv_queue::TvContentMode,
 ) {
@@ -161,7 +161,7 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
 }
 
 impl App {
-    pub fn refresh_after_stop(&mut self) {
+    pub(in crate::app) fn refresh_after_stop(&mut self) {
         if let Ok(content) = self.fetch_home() {
             // The fetch runs synchronously (order-sensitive side
             // effects); the computed content travels into the stored
@@ -266,7 +266,12 @@ impl App {
         });
     }
 
-    pub fn spawn_tv_latest(&mut self, lib_idx: usize, parent_id: String, title: String) {
+    pub(in crate::app) fn spawn_tv_latest(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        title: String,
+    ) {
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)
@@ -407,7 +412,7 @@ impl App {
     /// Accept one eager TV Upcoming completion: store the per-session
     /// snapshot and fill an active Upcoming root level that is waiting for
     /// it (spec-aligned empty state when the source has no rows).
-    pub fn accept_tv_upcoming_snapshot(
+    pub(in crate::app) fn accept_tv_upcoming_snapshot(
         &mut self,
         library_id: &str,
         premieres: Vec<UpcomingPremiere>,
@@ -438,7 +443,7 @@ impl App {
     /// library `Failed` — the panel names the failure and a pill reselect or
     /// later tab load retries — and unset the loading flag of an active
     /// Upcoming root level that was waiting for the fetch.
-    pub fn tv_upcoming_snapshot_failed(&mut self, library_id: &str) {
+    pub(in crate::app) fn tv_upcoming_snapshot_failed(&mut self, library_id: &str) {
         self.tv_upcoming_fetches
             .insert(library_id.to_string(), TvUpcomingFetchState::Failed);
         let Some(lib) = self
@@ -458,7 +463,12 @@ impl App {
         }
     }
 
-    pub fn spawn_tv_upcoming(&mut self, lib_idx: usize, parent_id: String, title: String) {
+    pub(in crate::app) fn spawn_tv_upcoming(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        title: String,
+    ) {
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)

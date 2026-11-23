@@ -6,7 +6,68 @@
 use crate::app::App;
 use mbv_ui_model::settings::SettingsDestination;
 
+/// The fields a mounted setup form carries, as the Settings screen and its
+/// tests read them: the form's own values, its focused field, its busy bit,
+/// and the error it reports. The field count is the form's own (three for
+/// Emby, two for Audiobookshelf), so the type keeps each Service's shape
+/// rather than a length any caller could index past.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetupFormDraft {
+    Emby {
+        fields: [String; 3],
+        focus: usize,
+        busy: bool,
+        error: String,
+    },
+    Audiobookshelf {
+        fields: [String; 2],
+        focus: usize,
+        busy: bool,
+        error: String,
+    },
+}
+
+impl SetupFormDraft {
+    /// The error the form reports, empty while it reports none.
+    #[must_use]
+    pub fn error(&self) -> &str {
+        match self {
+            SetupFormDraft::Emby { error, .. } | SetupFormDraft::Audiobookshelf { error, .. } => {
+                error
+            }
+        }
+    }
+}
+
 impl App {
+    /// The Emby setup form's draft, while Settings shows one.
+    #[must_use]
+    pub fn emby_setup_draft(&self) -> Option<SetupFormDraft> {
+        self.setup
+            .emby_setup_form
+            .as_ref()
+            .map(|form| SetupFormDraft::Emby {
+                fields: form.fields.clone(),
+                focus: form.focus,
+                busy: form.busy,
+                error: form.error.clone(),
+            })
+    }
+
+    /// The Audiobookshelf setup form's draft, while Settings shows one.
+    #[must_use]
+    pub fn audiobookshelf_setup_draft(&self) -> Option<SetupFormDraft> {
+        self.setup
+            .audiobookshelf_setup_form
+            .as_ref()
+            .map(|form| SetupFormDraft::Audiobookshelf {
+                fields: form.fields.clone(),
+                focus: form.focus,
+                busy: form.busy,
+                error: form.error.clone(),
+            })
+    }
+
     /// The Settings screen's destination: which pane it shows.
     #[must_use]
     pub fn settings_destination(&self) -> SettingsDestination {
@@ -56,6 +117,22 @@ impl App {
     #[must_use]
     pub fn configured_feed_at(&self, index: usize) -> Option<mbv_config::FeedSubscription> {
         self.config.lock().unwrap().feeds.get(index).cloned()
+    }
+
+    /// The configured feed subscription's URL at `index`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the configuration lock is poisoned, as every core reader
+    /// of it already does.
+    #[must_use]
+    pub fn configured_feed_url_at(&self, index: usize) -> Option<String> {
+        self.config
+            .lock()
+            .unwrap()
+            .feeds
+            .get(index)
+            .map(|subscription| subscription.url.clone())
     }
 
     /// Whether a feed-manage surface is open.

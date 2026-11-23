@@ -18,7 +18,10 @@ impl App {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(sidebar));
     }
 
-    pub fn request_sidebar_dismiss(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
+    pub(in crate::app) fn request_sidebar_dismiss(
+        &mut self,
+        sidebar: mbv_ui_model::overlay::SidebarId,
+    ) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSidebar(
             sidebar,
         ));
@@ -62,15 +65,15 @@ impl App {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::SavePlaylist(dialog));
     }
 
-    pub fn dismiss_confirm(&mut self) {
+    pub(in crate::app) fn dismiss_confirm(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm);
     }
 
-    pub fn dismiss_daemon_lost(&mut self) {
+    pub(in crate::app) fn dismiss_daemon_lost(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissDaemonLost);
     }
 
-    pub fn dismiss_save_playlist(&mut self) {
+    pub(in crate::app) fn dismiss_save_playlist(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSavePlaylist);
     }
 }

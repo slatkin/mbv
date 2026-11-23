@@ -81,7 +81,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the Emby client lock is poisoned.
-    pub fn play_home_cw_item(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn play_home_cw_item(&mut self, item: EmbyItem) {
         if !is_playable(&item) {
             return;
         }

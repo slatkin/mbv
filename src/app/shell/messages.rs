@@ -658,20 +658,7 @@ impl Model {
         let Some(lib_idx) = self.app.active_emby_library_index() else {
             return;
         };
-        let Some(level) = self
-            .app
-            .libs
-            .get_mut(lib_idx)
-            .and_then(|lib| lib.nav_stack.last_mut())
-        else {
-            return;
-        };
-        if let Some(index) = level
-            .items
-            .iter()
-            .position(|candidate| candidate.id == item.id)
-        {
-            level.set_resting_cursor(index);
+        if self.app.rest_library_cursor_on_item(lib_idx, &item.id) {
             self.app.save_default_library_position(lib_idx);
         }
     }

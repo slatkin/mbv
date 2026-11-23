@@ -178,7 +178,7 @@ impl App {
     /// of dropping the setting. Returns false — leaving playback to the
     /// caller — when the item names no containing item, the policy is off, the
     /// fetch fails, or `fresh` is not in the resolved list.
-    pub fn play_autoloaded_containing_folder(
+    pub(in crate::app) fn play_autoloaded_containing_folder(
         &mut self,
         fresh: &EmbyItem,
         queue_source: mbv_queue::QueueSource,
@@ -192,7 +192,7 @@ impl App {
     /// The queue source a flat video activation claims: an episode's queue is
     /// its series; any other video is a one-container queue.
     #[must_use]
-    pub fn flat_activation_queue_source(fresh: &EmbyItem) -> mbv_queue::QueueSource {
+    pub(in crate::app) fn flat_activation_queue_source(fresh: &EmbyItem) -> mbv_queue::QueueSource {
         if fresh.series_id.is_empty() {
             mbv_queue::QueueSource::Unknown
         } else {
@@ -294,7 +294,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn grouped_track_play_action(
+    pub(in crate::app) fn grouped_track_play_action(
         &self,
         album_target: &str,
         track_id: &str,

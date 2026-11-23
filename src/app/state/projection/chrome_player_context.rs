@@ -22,7 +22,10 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn feed_subscription_display_name(&self, entry: &FeedEntry) -> Option<String> {
+    pub(in crate::app) fn feed_subscription_display_name(
+        &self,
+        entry: &FeedEntry,
+    ) -> Option<String> {
         let feed_id = entry.feed_id.as_deref()?;
         self.config
             .lock()

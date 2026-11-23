@@ -27,7 +27,7 @@ impl App {
             .map(|client| client.lock().unwrap().clone())
     }
 
-    pub fn apply_emby_completion(
+    pub(in crate::app) fn apply_emby_completion(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
     ) -> Option<HomeContent> {
@@ -129,7 +129,7 @@ impl App {
 
     /// Central boundary for an authenticated Emby request made after startup.
     /// Only classified failures reach this path; ordinary empty results do not.
-    pub fn handle_emby_runtime_failure(&mut self, error: mbv_emby::EmbyFailure) {
+    pub(in crate::app) fn handle_emby_runtime_failure(&mut self, error: mbv_emby::EmbyFailure) {
         self.transition_emby_failure(None, Err(error), |kind| {
             mbv_config::clear_service_secret_result(kind)
         });
@@ -139,7 +139,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn handle_emby_startup_worker_disconnect(
+    pub(in crate::app) fn handle_emby_startup_worker_disconnect(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
@@ -164,7 +164,7 @@ impl App {
         );
     }
 
-    pub fn apply_emby_setup_completion(
+    pub(in crate::app) fn apply_emby_setup_completion(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) -> Option<HomeContent> {
@@ -172,7 +172,7 @@ impl App {
     }
 
     #[cfg(test)]
-    pub fn apply_emby_setup_completion_without_network(
+    pub(in crate::app) fn apply_emby_setup_completion_without_network(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) -> Option<HomeContent> {
@@ -281,7 +281,10 @@ impl App {
     /// also where Home re-arms its Recently added fetch (spec
     /// `home-latest-sections`, "Recently added loads at launch independent of
     /// destinations": "when that Service becomes ready").
-    pub fn apply_emby_bootstrap(&mut self, bootstrap: mbv_emby::EmbyBootstrap) -> HomeContent {
+    pub(in crate::app) fn apply_emby_bootstrap(
+        &mut self,
+        bootstrap: mbv_emby::EmbyBootstrap,
+    ) -> HomeContent {
         let continue_items = bootstrap.continue_items;
         self.rebuild_library_tabs_from_views(&bootstrap.views);
         for lib_idx in 0..self.libs.len() {

@@ -27,7 +27,11 @@ impl App {
     /// item is a folder (the typed browser path supplies it from the
     /// component-resolved item); when `None`, the current browse level's
     /// parent is shuffled, falling back to the library id.
-    pub fn shuffle_play_target(&mut self, lib_idx: usize, explicit_folder: Option<String>) {
+    pub(in crate::app) fn shuffle_play_target(
+        &mut self,
+        lib_idx: usize,
+        explicit_folder: Option<String>,
+    ) {
         // Defensive bounds check; the shell also
         // derives a fresh `lib_idx`, so a synchronous tab change can race in).
         if lib_idx >= self.libs.len() {
@@ -134,7 +138,7 @@ impl App {
     /// source is set inside the gated confirmed path (via the action), never
     /// here, so cancelling the prompt leaves the queue source unchanged
     /// (design D4).
-    pub fn play_folder(&mut self, folder_id: &str, collection_type: String) {
+    pub(in crate::app) fn play_folder(&mut self, folder_id: &str, collection_type: String) {
         self.play_folder_gated(folder_id, collection_type, true);
     }
 
@@ -192,7 +196,7 @@ impl App {
         }
     }
 
-    pub fn is_tvshows_library(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_tvshows_library(&self, lib_idx: usize) -> bool {
         self.libs[lib_idx].library.collection_type == "tvshows"
     }
 
@@ -201,7 +205,7 @@ impl App {
     /// `execute_context_action` pass the library the folder was reached
     /// through), so this no longer reads the selected tab. Bounds-misses
     /// return false (defensive; never substitute library zero).
-    pub fn active_lib_is_tvshows(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn active_lib_is_tvshows(&self, lib_idx: usize) -> bool {
         lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)
     }
 
@@ -209,7 +213,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the Emby client lock is poisoned.
-    pub fn shuffle_folder(&mut self, lib_idx: usize, folder_id: &str) {
+    pub(in crate::app) fn shuffle_folder(&mut self, lib_idx: usize, folder_id: &str) {
         // TV libraries shuffle from a video-only fetch (Episode/Movie/Video)
         // so a season/series shuffle can't pull in stray Audio items (e.g.
         // theme songs); every other library type keeps the broader

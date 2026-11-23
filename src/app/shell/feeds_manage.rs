@@ -126,15 +126,7 @@ impl super::Model {
 
     fn confirm_remove_feed(&mut self) {
         let index = self.feeds_manage_cursor();
-        let url = self
-            .app
-            .config
-            .lock()
-            .unwrap()
-            .feeds
-            .get(index)
-            .map(|s| s.url.clone());
-        let Some(url) = url else {
+        let Some(url) = self.app.configured_feed_url_at(index) else {
             return;
         };
         self.app.request_feed_removal(&url);

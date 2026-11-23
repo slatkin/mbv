@@ -47,12 +47,12 @@ impl App {
         self.settings_destination = SettingsDestination::Services;
     }
 
-    pub fn open_keys_settings(&mut self) {
+    pub(in crate::app) fn open_keys_settings(&mut self) {
         self.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Keys;
     }
 
-    pub fn open_panel_settings(&mut self) {
+    pub(in crate::app) fn open_panel_settings(&mut self) {
         self.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Panel;
     }
@@ -158,7 +158,7 @@ impl App {
         );
     }
 
-    pub fn handle_emby_setup_worker_disconnect(&mut self) {
+    pub(in crate::app) fn handle_emby_setup_worker_disconnect(&mut self) {
         let Some(form) = self.setup.emby_setup_form.as_mut() else {
             self.setup.emby_setup_rx = None;
             return;
@@ -278,7 +278,7 @@ impl App {
         ));
     }
 
-    pub fn request_audiobookshelf_removal(&mut self) {
+    pub(in crate::app) fn request_audiobookshelf_removal(&mut self) {
         if self.audiobookshelf_runtime.state == ServiceState::NotConfigured {
             return;
         }

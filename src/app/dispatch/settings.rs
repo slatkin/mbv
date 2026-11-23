@@ -123,7 +123,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn flush_settings_save(&mut self) {
+    pub(in crate::app) fn flush_settings_save(&mut self) {
         if self.settings_save_at.take().is_some() {
             let cfg = self.config.lock().unwrap().clone();
             crate::app::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
@@ -201,7 +201,12 @@ impl App {
     /// # Panics
     ///
     /// Panics while reading the configuration when its lock is poisoned.
-    pub fn apply_panel_setting_pinned(&mut self, key: SettingKey, delta: i32, pinned: bool) {
+    pub(in crate::app) fn apply_panel_setting_pinned(
+        &mut self,
+        key: SettingKey,
+        delta: i32,
+        pinned: bool,
+    ) {
         // One request in flight: an F2 step while pinwin is still working is
         // ignored, with no queue (design D4/D7).
         if pinned && self.pinned_request_pending.is_some() {
@@ -247,7 +252,7 @@ impl App {
     /// # Panics
     ///
     /// Panics while changing the configuration when its lock is poisoned.
-    pub fn apply_panel_setting_outcome(
+    pub(in crate::app) fn apply_panel_setting_outcome(
         &mut self,
         pinned: bool,
         key: SettingKey,
@@ -297,7 +302,7 @@ impl App {
     /// arrives as a normal `Resize` observer event and leaves the image cache
     /// and `force_clear` alone (invariant 17). Both the width toggle and a
     /// Panel settings step record through here.
-    pub fn note_pinned_width_applied(&mut self, width: PinnedWidth) {
+    pub(in crate::app) fn note_pinned_width_applied(&mut self, width: PinnedWidth) {
         self.pinned_width = width;
     }
 

@@ -226,19 +226,7 @@ impl Model {
                 };
                 let item_id = item.id.clone();
                 let item_type = item.item_type.clone();
-                let libs = self
-                    .app
-                    .libs
-                    .iter()
-                    .enumerate()
-                    .map(|(i, lib)| {
-                        (
-                            i,
-                            lib.library.id.clone(),
-                            lib.library.collection_type.clone(),
-                        )
-                    })
-                    .collect();
+                let libs = self.app.emby_library_identities();
                 self.app.spawn_navigate_to_item(item_id, item_type, libs);
             }
         }

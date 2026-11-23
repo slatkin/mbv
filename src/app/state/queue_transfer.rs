@@ -28,7 +28,7 @@ pub enum QueueTransferDirection {
 
 impl QueueTransferDirection {
     /// The link whose owner receives the copy and must report playback.
-    pub fn target_link(self) -> QueueLink {
+    pub(in crate::app) fn target_link(self) -> QueueLink {
         match self {
             Self::HandOff => QueueLink::Peer,
             Self::Take => QueueLink::Local,
@@ -36,7 +36,7 @@ impl QueueTransferDirection {
     }
 
     /// The link whose owner keeps playing until the target reports playback.
-    pub fn source_link(self) -> QueueLink {
+    pub(in crate::app) fn source_link(self) -> QueueLink {
         match self {
             Self::HandOff => QueueLink::Local,
             Self::Take => QueueLink::Peer,
@@ -212,7 +212,7 @@ impl App {
     /// The transfer prompt's confirm answer (design D1): run the staged
     /// transfer. Every other key cancels it: an opened link is dropped and
     /// nothing is sent (the confirm requirement).
-    pub fn run_staged_queue_transfer(&mut self) {
+    pub(in crate::app) fn run_staged_queue_transfer(&mut self) {
         let Some(staged) = self.staged_queue_transfer.take() else {
             return;
         };
@@ -225,7 +225,7 @@ impl App {
     /// The transfer prompt's cancel answer (design D1): drop the staged
     /// transfer and any link opened to read the target queue. Nothing is
     /// sent to either Player owner.
-    pub fn cancel_staged_queue_transfer(&mut self) {
+    pub(in crate::app) fn cancel_staged_queue_transfer(&mut self) {
         self.drop_staged_queue_transfer();
     }
 
@@ -235,7 +235,7 @@ impl App {
     /// shape reads the peer link as `self.player`, which the restore has
     /// already made the local Owner. The armed pending transfer survives:
     /// its copy already landed and its settlement owns the report.
-    pub fn drop_staged_queue_transfer_on_teardown(&mut self) {
+    pub(in crate::app) fn drop_staged_queue_transfer_on_teardown(&mut self) {
         if self.staged_queue_transfer.is_none() {
             return;
         }
@@ -271,7 +271,7 @@ impl App {
     /// disconnect leaves both owners as they are, and the source keeps
     /// playing. A newer F3 action or a disconnect also replaces a staged
     /// transfer prompt, dropping any link opened for it.
-    pub fn cancel_pending_queue_transfer(&mut self) {
+    pub(in crate::app) fn cancel_pending_queue_transfer(&mut self) {
         if let Some(transfer) = self.pending_queue_transfer.take() {
             Self::drop_staged_probe_link(transfer.source_link);
         }
@@ -281,7 +281,7 @@ impl App {
     /// Report a failed transfer and drop it (design D2 failure): the source
     /// keeps playing and nothing is sent to either owner here. The
     /// replacement's rejection travels through this same report path.
-    pub fn fail_pending_queue_transfer(&mut self, message: String) {
+    pub(in crate::app) fn fail_pending_queue_transfer(&mut self, message: String) {
         if let Some(transfer) = self.pending_queue_transfer.take() {
             Self::drop_staged_probe_link(transfer.source_link);
         }
@@ -295,7 +295,7 @@ impl App {
     /// no own timeout, because the user can cancel and the source still
     /// plays. Returns whether the settlement acted (a report or a stop), so
     /// the caller can count the tick as having events.
-    pub fn settle_pending_queue_transfer(&mut self) -> bool {
+    pub(in crate::app) fn settle_pending_queue_transfer(&mut self) -> bool {
         let Some(transfer) = self.pending_queue_transfer.take() else {
             return false;
         };

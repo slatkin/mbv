@@ -43,7 +43,7 @@ impl App {
     }
 
     /// Resolve a saved Service identity only after its catalog has been built.
-    pub fn resolve_launch_service_tab(&mut self, kind: ServiceKind) {
+    pub(in crate::app) fn resolve_launch_service_tab(&mut self, kind: ServiceKind) {
         let LaunchRestore::Pending(state) = &self.launch_restore else {
             return;
         };
@@ -74,14 +74,17 @@ impl App {
 
     /// The only writer of a failed Emby state: records `state` and expires a
     /// pending Emby launch destination, so the pairing cannot be forgotten.
-    pub fn fail_emby_service(&mut self, state: mbv_core::service_runtime::ServiceState) {
+    pub(in crate::app) fn fail_emby_service(
+        &mut self,
+        state: mbv_core::service_runtime::ServiceState,
+    ) {
         self.emby_runtime.state = state;
         self.expire_launch_service(ServiceKind::Emby);
     }
 
     /// The only writer of a failed Audiobookshelf state: records `state` for
     /// `generation` and expires a pending Audiobookshelf launch destination.
-    pub fn fail_audiobookshelf_service(
+    pub(in crate::app) fn fail_audiobookshelf_service(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
         state: mbv_core::service_runtime::ServiceState,
@@ -95,7 +98,7 @@ impl App {
     /// applies its focus. Reach it through `fail_*_service`; the one direct
     /// caller is the Audiobookshelf catalog failure that leaves the Service
     /// state untouched.
-    pub fn expire_launch_service(&mut self, kind: ServiceKind) {
+    pub(in crate::app) fn expire_launch_service(&mut self, kind: ServiceKind) {
         if matches!(
             &self.launch_restore,
             LaunchRestore::Pending(mbv_config::TuiLaunchState {
@@ -216,7 +219,7 @@ impl App {
     }
 
     /// Advance the left-panel tab (wrapping); load the library if needed.
-    pub fn library_tab_next(&mut self) {
+    pub(in crate::app) fn library_tab_next(&mut self) {
         let n = self.tab_count();
         let pos = self
             .tab
@@ -226,7 +229,7 @@ impl App {
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
-    pub fn library_tab_prev(&mut self) {
+    pub(in crate::app) fn library_tab_prev(&mut self) {
         let n = self.tab_count();
         let pos = self
             .tab
@@ -243,14 +246,14 @@ impl App {
     // effect helper, instead of the App re-reading a (now deleted)
     // `home.continue_items`/`continue_cursor`. `continue_cursor` stays the
     // sole, unchanged authoritative target.
-    pub fn cw_play(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn cw_play(&mut self, item: EmbyItem) {
         if item.is_folder {
             return;
         }
         self.play_home_cw_item(item);
     }
 
-    pub fn cw_enqueue(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn cw_enqueue(&mut self, item: EmbyItem) {
         self.enqueue_home_item(item);
     }
 

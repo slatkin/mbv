@@ -48,7 +48,7 @@ impl App {
     /// (extract-client-core row 4.6): the Severity's colour is the painters'
     /// choice, and the presented facts — the text and the severity — ride the
     /// Status bar's Surface state.
-    pub fn toast_presentation(&self) -> Option<StatusToast> {
+    pub(in crate::app) fn toast_presentation(&self) -> Option<StatusToast> {
         self.in_app_toasts().last().map(presented_toast)
     }
 
@@ -159,7 +159,7 @@ impl App {
     /// peer link, else this machine's device name (the local Owner). The peer
     /// resolution mirrors `remote_label`: route name,
     /// session device name, connected endpoint host.
-    pub fn queue_owner_label(&self) -> String {
+    pub(in crate::app) fn queue_owner_label(&self) -> String {
         if self.playing_queue_link() == QueueLink::Peer {
             self.peer_owner_label()
         } else {

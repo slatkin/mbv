@@ -1,14 +1,14 @@
 use super::{App, PlaylistMutation};
 
 impl App {
-    pub fn queue_is_saved_playlist(&self) -> bool {
+    pub(in crate::app) fn queue_is_saved_playlist(&self) -> bool {
         matches!(
             self.playback_queue().source(),
             mbv_queue::QueueSource::Playlist { id: Some(_), .. }
         )
     }
 
-    pub fn queue_playlist_id(&self) -> Option<&str> {
+    pub(in crate::app) fn queue_playlist_id(&self) -> Option<&str> {
         if let mbv_queue::QueueSource::Playlist { id: Some(id), .. } =
             self.playback_queue().source()
         {
@@ -26,7 +26,7 @@ impl App {
         }
     }
 
-    pub fn save_playlist_to_emby(&mut self) -> Option<u64> {
+    pub(in crate::app) fn save_playlist_to_emby(&mut self) -> Option<u64> {
         let playlist_id = self.queue_playlist_id().map(str::to_string)?;
         let origin = self.queue_origin_or_flash()?;
         let mutation_id = self.next_playlist_mutation;
@@ -73,7 +73,11 @@ impl App {
             .is_some_and(|state| state.active.is_some() || !state.queued.is_empty())
     }
 
-    pub fn enqueue_playlist_mutation(&mut self, playlist_id: &str, mutation: PlaylistMutation) {
+    pub(in crate::app) fn enqueue_playlist_mutation(
+        &mut self,
+        playlist_id: &str,
+        mutation: PlaylistMutation,
+    ) {
         let state = self
             .playlist_mutations
             .entry(playlist_id.to_string())
@@ -86,7 +90,7 @@ impl App {
         }
     }
 
-    pub fn finish_playlist_mutation(&mut self, playlist_id: &str, mutation_id: u64) {
+    pub(in crate::app) fn finish_playlist_mutation(&mut self, playlist_id: &str, mutation_id: u64) {
         let Some(state) = self.playlist_mutations.get_mut(playlist_id) else {
             return;
         };

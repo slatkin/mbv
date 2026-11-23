@@ -183,6 +183,19 @@ impl App {
         }
     }
 
+    /// Hold `entry` as the artwork composed and encoded under `key`: a derived
+    /// entry the presenting Client builds from a source image, stored where the
+    /// cache's eviction and derived-variant rules reach it.
+    pub fn insert_derived_image(&mut self, key: String, entry: mbv_images::CachedImage) {
+        self.images.insert_derived_image(key, entry);
+    }
+
+    /// Hold `entry` as the artwork fetched for `key`: the shared placeholder a
+    /// Client builds once, stored where the cache's eviction rules reach it.
+    pub fn insert_fetched_image(&mut self, key: String, entry: mbv_images::CachedImage) {
+        self.images.insert_image(key, entry);
+    }
+
     /// Consume the force-clear request: answers whether the run loop must
     /// clear the terminal before this frame, and drops the request so the
     /// next frame repaints incrementally again.

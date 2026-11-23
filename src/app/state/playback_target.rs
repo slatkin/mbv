@@ -73,7 +73,7 @@ impl App {
     /// still slot, the compact strip, and the rail) painting none of the
     /// item's art with no way to show it again. Such a Client therefore
     /// neither acts on the hide nor writes it.
-    pub fn visual_slot_hide_in_effect(&self) -> bool {
+    pub(in crate::app) fn visual_slot_hide_in_effect(&self) -> bool {
         self.client_capabilities
             .has(ClientCapability::VisualSlotControls)
             && self.visual_slot_hidden
@@ -156,7 +156,7 @@ impl App {
     /// counts, like a
     /// `Disconnected` Cast target. `None` and `Local` both read as not an
     /// Emby Session.
-    pub fn output_is_emby_session(&self) -> bool {
+    pub(in crate::app) fn output_is_emby_session(&self) -> bool {
         matches!(
             self.playback_output,
             Some(mbv_ctrl::OutputState::EmbySession { .. })
