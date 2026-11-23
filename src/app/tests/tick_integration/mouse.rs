@@ -168,6 +168,25 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
     }
 }
 
+/// Draw one frame into a fresh terminal, sync the mounted surfaces, then draw
+/// again so the placements are current -- the steady-state loop order.
+fn drawn_harness_terminal(
+    harness: &mut TickHarness,
+    width: u16,
+    height: u16,
+) -> Terminal<TestBackend> {
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    terminal
+}
+
 fn drawn_tab_harness() -> TickHarness {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
@@ -182,18 +201,7 @@ fn drawn_tab_harness() -> TickHarness {
         0,
     );
     let mut harness = TickHarness::new(app);
-    // The sync pass mounts the panels from paint-free chrome geometry; draw
-    // once with them mounted, then sync + draw again with the placements
-    // current -- the steady-state loop order.
-    harness.model_mut().sync_mounted_surfaces();
-    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
+    drawn_harness_terminal(&mut harness, 80, 24);
     harness
 }
 
@@ -226,18 +234,12 @@ fn tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide
         app.panel_mode = PanelMode::LibraryOnly;
         app.panel_focus = PanelFocus::Library;
         let mut harness = TickHarness::new(app);
-        crate::app::tests::set_terminal_size(harness.model_mut(), terminal_width, terminal_height);
-        harness.model_mut().sync_mounted_surfaces();
-
-        let mut terminal =
-            Terminal::new(TestBackend::new(terminal_width, terminal_height)).unwrap();
-        terminal
-            .draw(|f| harness.model_mut().draw_frame(f, false, false))
-            .unwrap();
-        harness.model_mut().sync_mounted_surfaces();
-        terminal
-            .draw(|f| harness.model_mut().draw_frame(f, false, false))
-            .unwrap();
+        crate::app::shell::test_support::set_terminal_size(
+            harness.model_mut(),
+            terminal_width,
+            terminal_height,
+        );
+        drawn_harness_terminal(&mut harness, terminal_width, terminal_height);
         let tabs = tab_panel_component(&harness);
         let selected_tab = tabs.test_selected();
         let (tab, tab_position) = tabs
@@ -463,7 +465,7 @@ fn tick_chrome_panels_mount_only_where_the_root_places_them() {
     app.panel_mode = PanelMode::QueueOnly;
     let mut harness = TickHarness::new(app);
     // Wide, so the mode applies.
-    crate::app::tests::set_terminal_width(harness.model_mut(), 120);
+    crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 120);
     // One draw publishes the queue-only placements; the sync it gates must
     // keep both chrome panels unmounted.
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
@@ -504,7 +506,7 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
     app.panel_mode = PanelMode::Both;
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
-    crate::app::tests::set_terminal_size(harness.model_mut(), 60, 24);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 60, 24);
     let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
     // A mini-view draw settles the narrow placements (which place no chrome
     // panels); the following sync keeps both panels unmounted.
@@ -523,7 +525,7 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
     // Cross the threshold upward without drawing: the very next sync must
     // see the wide placements and mount both panels, before any draw
     // publishes `root_frame`.
-    crate::app::tests::set_terminal_width(harness.model_mut(), 120);
+    crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 120);
     harness.model_mut().sync_mounted_surfaces();
     assert!(
         harness.model().application.mounted(&ComponentId::TabPanel),

@@ -62,7 +62,7 @@ fn buffer_text(term: &Terminal<TestBackend>) -> String {
 /// Record a terminal size the way the TUI shell records one (row 4.3): the
 /// size lives on the `Model`, and the width also pushes the single-panel fact.
 fn set_model_terminal_size(model: &mut Model, width: u16, height: u16) {
-    crate::app::tests::set_terminal_size(model, width, height);
+    crate::app::shell::test_support::set_terminal_size(model, width, height);
 }
 
 fn draw(model: &mut Model, term: &mut Terminal<TestBackend>) -> String {

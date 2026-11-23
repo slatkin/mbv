@@ -153,7 +153,7 @@ fn sessions_component_mut(harness: &mut TickHarness) -> &mut SessionsComponent {
 }
 
 fn draw(harness: &mut TickHarness, width: u16, height: u16) {
-    crate::app::tests::set_terminal_size(harness.model_mut(), width, height);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), width, height);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
@@ -184,8 +184,7 @@ fn tick_sessions_focus_selection_and_responsive_clamp(#[case] width: u16) {
     let mut app = make_app_stub();
     app.panel_targets = sessions(&["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = width;
-    harness.model_mut().terminal_height = 14;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), width, 14);
     open_sessions(&mut harness);
     draw(&mut harness, width, 14);
 
@@ -217,8 +216,7 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
     let mut app = make_app_stub();
     app.panel_targets = sessions(&["first", "second"]);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 24;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 24);
     open_sessions(&mut harness);
     draw(&mut harness, 100, 24);
 
@@ -490,8 +488,7 @@ fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
     session.device_id = "device-tv".into();
     app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 14;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);
@@ -577,8 +574,7 @@ fn tick_sessions_direct_endpoint_activation_switches_away_from_an_mbvd_owner() {
     session.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
     app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 14;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);

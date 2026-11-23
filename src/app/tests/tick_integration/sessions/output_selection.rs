@@ -17,8 +17,7 @@ fn tick_sessions_cast_row_activation_sends_the_owner_output_selection() {
     app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
     app.panel_targets = vec![cast_target("r-1")];
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 14;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);
@@ -87,8 +86,7 @@ fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
     session.device_id = "device-tv".into();
     app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 14;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);
@@ -159,8 +157,7 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
     session.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
     app.panel_targets = vec![PanelTarget::Emby(Box::new(session.clone()))];
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 14;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);

@@ -25,7 +25,7 @@ fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
     app.panel_focus = PanelFocus::Queue;
     app.mini_view_focus = PanelFocus::Queue;
     let mut model = Model::new(app);
-    crate::app::tests::set_terminal_width(&mut model, 40);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 40);
     let app = &mut model.app;
 
     app.apply_pinned_view(PinnedWidth::Expanded, Ok(()));
@@ -51,7 +51,7 @@ fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
     let mut model = Model::new(app);
-    crate::app::tests::set_terminal_width(&mut model, 120);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 120);
     let app = &mut model.app;
 
     app.apply_pinned_view(PinnedWidth::Collapsed, Ok(()));
@@ -76,7 +76,7 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     app.panel_focus = PanelFocus::Queue;
     app.mini_view_focus = PanelFocus::Queue;
     let mut model = Model::new(app);
-    crate::app::tests::set_terminal_width(&mut model, 40);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 40);
     let app = &mut model.app;
 
     app.apply_pinned_view(
@@ -173,7 +173,7 @@ fn a_drained_outcome_applies_the_pinned_view() {
     app.panel_mode = PanelMode::QueueOnly;
     app.panel_focus = PanelFocus::Queue;
     let mut model = Model::new(app);
-    crate::app::tests::set_terminal_width(&mut model, 40);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 40);
     let app = &mut model.app;
 
     app.pinned_view_toggle();
@@ -240,7 +240,7 @@ fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_bu
         status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
     });
     let mut harness = TickHarness::new(app);
-    crate::app::tests::set_terminal_size(harness.model_mut(), 120, 51);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 120, 51);
     let mut terminal = Terminal::new(TestBackend::new(120, 51)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))

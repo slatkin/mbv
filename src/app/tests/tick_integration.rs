@@ -490,7 +490,7 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
 fn esc_closes_a_sidebar_in_mini_view() {
     let app = make_app_stub();
     let mut harness = TickHarness::new(app);
-    crate::app::tests::set_terminal_width(harness.model_mut(), 70);
+    crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().mount_sidebar(SidebarId::Sessions);
     let id = ComponentId::Overlay(OverlayId::Sessions);
 

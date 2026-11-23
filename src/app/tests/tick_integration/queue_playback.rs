@@ -83,8 +83,7 @@ fn playback_intents(
 /// harness plus the panel's retained transport hit geometry.
 fn drawn_harness(app: crate::app::App, width: u16, height: u16) -> (TickHarness, Rect, Rect) {
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = width;
-    harness.model_mut().terminal_height = height;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), width, height);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
@@ -116,8 +115,7 @@ mod strip_hits {
         let mut app = active_app(PanelMode::LibraryOnly);
         app.panel_focus = PanelFocus::Library;
         let mut harness = TickHarness::new(app);
-        harness.model_mut().terminal_width = 100;
-        harness.model_mut().terminal_height = 40;
+        crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
         harness.model_mut().sync_mounted_surfaces();
         let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
         terminal
@@ -188,8 +186,7 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         let mut app = active_app(PanelMode::QueueOnly);
         app.images.record_card_size(8, 16);
         let mut harness = TickHarness::new(app);
-        harness.model_mut().terminal_width = width;
-        harness.model_mut().terminal_height = 40;
+        crate::app::shell::test_support::set_terminal_size(harness.model_mut(), width, 40);
 
         harness.model_mut().sync_queue_card_geometry();
         let shown_card = (
@@ -265,8 +262,7 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
     let mut app = active_app(PanelMode::Both);
     app.images.record_card_size(8, 16);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 40;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
 
     harness.model_mut().sync_queue_card_geometry();
     // Set after the geometry sync so the projected fact the header reads is
@@ -310,8 +306,7 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
 fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
     let app = active_app(PanelMode::Both);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 40;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
     terminal
@@ -369,8 +364,7 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
         0,
     );
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 40;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
     terminal
@@ -416,8 +410,7 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
 fn sync_projects_queue_transport_area_before_draw() {
     let app = active_app(PanelMode::Both);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 40;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
     harness.model_mut().sync_mounted_surfaces();
     let panel = harness
         .model()
@@ -524,8 +517,7 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
         0,
     );
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 80;
-    harness.model_mut().terminal_height = 40;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 80, 40);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();
     terminal
@@ -578,8 +570,7 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         let queue_owned = mode != PanelMode::LibraryOnly;
         let app = active_app(mode);
         let mut harness = TickHarness::new(app);
-        harness.model_mut().terminal_width = width;
-        harness.model_mut().terminal_height = 40;
+        crate::app::shell::test_support::set_terminal_size(harness.model_mut(), width, 40);
         harness.model_mut().sync_mounted_surfaces();
         let mut terminal = Terminal::new(TestBackend::new(width, 40)).unwrap();
         // Two frames: the first draw publishes the visual slot's freshly
@@ -666,8 +657,7 @@ fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
     let mut app = active_app(PanelMode::Both);
     app.queue_card_projection.title_site = NowPlayingTitleSite::Artwork;
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 100;
-    harness.model_mut().terminal_height = 40;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
 
     harness.model_mut().sync_mounted_surfaces();
     harness.model_mut().app.visual_slot_hidden = true;
@@ -733,8 +723,7 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
 
     let mut harness = TickHarness::new(card_app());
     let mut sizes = Vec::new();
-    harness.model_mut().terminal_width = 120;
-    harness.model_mut().terminal_height = 40;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 120, 40);
     for _ in 0..6 {
         harness.model_mut().sync_mounted_surfaces();
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();

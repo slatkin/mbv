@@ -112,8 +112,7 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
 fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
     let app = make_app_stub();
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = 40;
-    harness.model_mut().terminal_height = 16;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 40, 16);
     harness.model_mut().mount_help();
     harness.model_mut().sync_mounted_surfaces();
 
@@ -179,7 +178,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     let mut app = crate::app::tests::render_fixtures::make_queue_app(8);
     app.mini_view_focus = PanelFocus::Queue;
     let mut harness = TickHarness::new(app);
-    crate::app::tests::set_terminal_width(harness.model_mut(), 70);
+    crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(70, 24)).unwrap();
     terminal

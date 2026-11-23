@@ -47,8 +47,7 @@ fn footer_row_text(harness: &mut TickHarness) -> String {
 fn the_footer_owner_label_flips_in_the_frame_that_first_shows_the_peer_queue() {
     let app = make_local_daemon_app_stub(make_items(2));
     let mut harness = TickHarness::new(app);
-    harness.model_mut().terminal_width = WIDTH;
-    harness.model_mut().terminal_height = HEIGHT;
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), WIDTH, HEIGHT);
     harness.model_mut().sync_mounted_surfaces();
 
     let local_row = footer_row_text(&mut harness);

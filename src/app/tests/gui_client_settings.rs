@@ -17,7 +17,7 @@ fn the_gui_setting_disables_the_tui_panel_rules() {
     // A narrow terminal plus an empty queue arms both of the TUI's rules; the
     // terminal size lives on the shell `Model`.
     let mut model = Model::new(app);
-    crate::app::tests::set_terminal_width(&mut model, 60);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 60);
     let app = &model.app;
 
     assert!(app.displayed_queue().slots().is_empty());
