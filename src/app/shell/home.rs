@@ -4,6 +4,7 @@ use super::Model;
 use mbv_components::home_content::HomeContent;
 use mbv_queue::QueueItem;
 use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_msg::HomeRequest;
 
@@ -60,7 +61,7 @@ impl Model {
             )],
         });
         if targets.len() > 1 {
-            self.home_multi_context_menu(&targets);
+            self.home_multi_context_menu(&targets, anchor);
         } else {
             self.home_single_context_menu(targets.into_iter().next(), anchor);
         }
@@ -72,7 +73,7 @@ impl Model {
     /// any non-Emby row makes the selection span Services, and that menu
     /// offers Play and Add to Queue only. An unresolved target contributes
     /// nothing, as in enqueue.
-    fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget]) {
+    fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget], anchor: Option<(u16, u16)>) {
         let resolved: Vec<(QueueItem, bool)> = targets
             .iter()
             .filter_map(|target| Some((self.app.home_stable_target(target)?, target.is_continue())))
@@ -80,6 +81,7 @@ impl Model {
         if resolved.iter().any(|(item, _)| !item.is_emby()) {
             let mixed_items = resolved.into_iter().map(|(item, _)| item).collect();
             self.app.open_home_mixed_context_menu(mixed_items);
+            self.anchor_pending_menu(anchor);
             return;
         }
         let removes: Vec<mbv_ui_model::context_menu::BulkRemoveTarget> = resolved
@@ -105,6 +107,20 @@ impl Model {
             capabilities,
             removes,
         );
+        self.anchor_pending_menu(anchor);
+    }
+
+    /// Set the pointer anchor on the menu the core just raised: the pointer
+    /// cell is the Client's, and the core builds every menu with a keyboard
+    /// anchor (design D6). A keyboard request passes `None` and keeps the
+    /// core's anchor; a raise that produced no menu changes nothing.
+    fn anchor_pending_menu(&mut self, anchor: Option<(u16, u16)>) {
+        let Some((x, y)) = anchor else {
+            return;
+        };
+        if let Some(OverlayRequest::ContextMenu(menu)) = self.app.pending_overlay.as_mut() {
+            menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x, y };
+        }
     }
 
     /// The single-row Home context menu (`openspec/specs/home-latest-sections`): a Continue row keeps today's Continue
@@ -126,8 +142,9 @@ impl Model {
             // A Continue row is always Emby content (`openspec/specs/home-latest-sections`).
             let item = item.as_emby().cloned();
             self.home_context_item.clone_from(&item);
-            if let Some((x, y)) = anchor {
-                self.app.open_context_menu_at(x, y, true, item);
+            if anchor.is_some() {
+                self.app.open_context_menu_at(true, item);
+                self.anchor_pending_menu(anchor);
             } else {
                 self.app.open_context_menu(true, item);
             }

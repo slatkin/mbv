@@ -10,6 +10,7 @@ use super::podcast::add_emby_movie_library;
 use super::*;
 use mbv_components::ContextMenuComponent;
 use mbv_components::library_panel::LibraryPanel;
+use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId};
 use ratatui::layout::Rect;
 
@@ -55,7 +56,10 @@ fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
 #[test]
 fn pointer_placement_stays_click_anchored_not_following_selection() {
     let mut app = library_app();
-    app.open_context_menu_at(70, 20, false, None);
+    app.open_context_menu_at(false, None);
+    if let Some(OverlayRequest::ContextMenu(menu)) = app.pending_overlay.as_mut() {
+        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x: 70, y: 20 };
+    }
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
@@ -327,7 +331,10 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
     // queue-column bounds from that published layout.
     term.draw(|f| crate::app::shell::draw::compose_root_frame(&mut model.app, f))
         .unwrap();
-    model.app.open_visual_slot_context_menu(2, 20);
+    model.app.open_visual_slot_context_menu();
+    if let Some(OverlayRequest::ContextMenu(menu)) = model.app.pending_overlay.as_mut() {
+        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x: 2, y: 20 };
+    }
     model.sync_modal_requests();
 
     term.draw(|f| {

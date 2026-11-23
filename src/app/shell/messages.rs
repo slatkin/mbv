@@ -165,7 +165,8 @@ impl Model {
             // eligibility ladder; the guard is the spec's defensive rule.
             ShellRequest::VisualSlotContextMenu { x, y } => {
                 if !self.blocking_overlay_active() {
-                    self.app.open_visual_slot_context_menu(x, y);
+                    self.app.open_visual_slot_context_menu();
+                    self.anchor_pending_menu_at_pointer(x, y);
                 }
             }
             request
@@ -488,7 +489,8 @@ impl Model {
             let cw_selected = Model::home_continue_watching_selected();
             if let Some((x, y)) = anchor {
                 self.app
-                    .handle_mouse_right_click_queue(slot_id, x, y, cw_selected);
+                    .handle_mouse_right_click_queue(slot_id, cw_selected);
+                self.anchor_pending_menu_at_pointer(x, y);
             } else {
                 self.app
                     .handle_keyboard_context_menu_queue(slot_id, cw_selected);
@@ -507,9 +509,20 @@ impl Model {
     ) {
         self.focus_emby_context_item(&item);
         if let Some((x, y)) = anchor {
-            self.app.open_context_menu_for_at(item, x, y);
+            self.app.open_context_menu_for_at(item);
+            self.anchor_pending_menu_at_pointer(x, y);
         } else {
             self.app.open_context_menu_for(item);
+        }
+    }
+
+    /// Set the pointer anchor on the menu the core just raised: the pointer
+    /// cell is the Client's, and the core builds every menu with a keyboard
+    /// anchor (design D6). A core raise that produced no menu leaves the
+    /// overlay queue untouched.
+    fn anchor_pending_menu_at_pointer(&mut self, x: u16, y: u16) {
+        if let Some(OverlayRequest::ContextMenu(menu)) = self.app.pending_overlay.as_mut() {
+            menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x, y };
         }
     }
 

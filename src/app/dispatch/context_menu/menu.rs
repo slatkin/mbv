@@ -387,13 +387,12 @@ impl App {
         })
     }
 
-    /// [`open_context_menu_for`](Self::open_context_menu_for) anchored at a
-    /// pointer position (narrow grouped-Music album right-click).
-    pub(in crate::app) fn open_context_menu_for_at(&mut self, item: EmbyItem, x: u16, y: u16) {
-        if let Some(mut menu) = self.build_context_menu_for(Some(item), false, None) {
-            menu.anchor = ContextMenuAnchor::Pointer { x, y };
-            self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
-        }
+    /// [`open_context_menu_for`](Self::open_context_menu_for) for a
+    /// pointer-opened menu (narrow grouped-Music album right-click). The menu
+    /// is built with the keyboard anchor; the Client sets the pointer anchor
+    /// it recorded before it places the menu (design D6).
+    pub(in crate::app) fn open_context_menu_for_at(&mut self, item: EmbyItem) {
+        self.open_context_menu_for(item);
     }
 
     /// Pointer right-click entry. `home_cw_selected` is the authoritative
@@ -408,36 +407,34 @@ impl App {
     /// the Model boundary instead.
     pub(in crate::app) fn open_context_menu_at(
         &mut self,
-        x: u16,
-        y: u16,
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,
     ) {
-        self.open_context_menu_at_for_item(x, y, home_cw_selected, cw_item, None);
+        self.open_context_menu_at_for_item(home_cw_selected, cw_item, None);
     }
 
+    /// Like [`open_context_menu_at`](Self::open_context_menu_at) with a
+    /// tracked item. The menu is built with the keyboard anchor; the Client
+    /// sets the pointer anchor it recorded before it places the menu (design
+    /// D6).
     pub(in crate::app) fn open_context_menu_at_for_item(
         &mut self,
-        x: u16,
-        y: u16,
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,
         tracked_item: Option<EmbyItem>,
     ) {
-        let Some(mut menu) = self.build_context_menu_for(tracked_item, home_cw_selected, cw_item)
-        else {
-            return;
-        };
-        menu.anchor = ContextMenuAnchor::Pointer { x, y };
-        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        if let Some(menu) = self.build_context_menu_for(tracked_item, home_cw_selected, cw_item) {
+            self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        }
     }
 
-    /// Open the queue visual slot's chrome menu at a pointer anchor: choose
-    /// the visualizer or the artwork, or hide the slot. Pointer-only (the
-    /// slot has no keyboard anchor and no row targets), so the menu clamps
-    /// inside the queue column rather than the destination-derived panel.
-    /// The label names the other content, never a toggle.
-    pub(in crate::app) fn open_visual_slot_context_menu(&mut self, x: u16, y: u16) {
+    /// Open the queue visual slot's chrome menu: choose the visualizer or the
+    /// artwork, or hide the slot. Pointer-only (the slot has no keyboard
+    /// anchor and no row targets), so the menu clamps inside the queue column
+    /// rather than the destination-derived panel. The Client sets the pointer
+    /// anchor it recorded before it places the menu (design D6). The label
+    /// names the other content, never a toggle.
+    pub(in crate::app) fn open_visual_slot_context_menu(&mut self) {
         if !self.visual_slot_shown() {
             return;
         }
@@ -459,7 +456,9 @@ impl App {
             (area.width > 0 && area.height > 0).then(|| rect_to_presentation(area))
         };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
-            anchor: ContextMenuAnchor::Pointer { x, y },
+            // Pointer-only menu: `SelectedItem` is the neutral default the
+            // Client replaces with its recorded pointer cell.
+            anchor: menu_anchor(PanelFocus::Queue),
             cursor: 0,
             entries,
             bounds,

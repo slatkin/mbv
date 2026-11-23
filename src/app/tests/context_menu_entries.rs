@@ -338,7 +338,7 @@ fn visual_slot_menu_names_the_other_content(
     let mut app = make_app_stub();
     app.visualizer_enabled = visualizer_enabled;
 
-    app.open_visual_slot_context_menu(10, 5);
+    app.open_visual_slot_context_menu();
 
     assert_eq!(pending_menu_labels(&mut app), expected);
 }

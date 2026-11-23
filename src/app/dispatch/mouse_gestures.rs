@@ -110,8 +110,6 @@ impl App {
     pub(in crate::app) fn handle_mouse_right_click_queue(
         &mut self,
         slot_id: Option<mbv_queue::QueueSlotId>,
-        col: u16,
-        row: u16,
         home_cw_selected: bool,
     ) {
         self.handle_mouse_single_click_queue(slot_id);
@@ -119,7 +117,7 @@ impl App {
         // item (for the odd Remove-from-CW coupling entry) is resolved at
         // the Model boundary at execution time, so `None` is correct here
         // (task 5.3d).
-        self.open_context_menu_at(col, row, home_cw_selected, None);
+        self.open_context_menu_at(home_cw_selected, None);
     }
 
     /// Keyboard `.` in the Queue panel (design: `.` is a selection-dependent
