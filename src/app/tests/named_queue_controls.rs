@@ -12,22 +12,24 @@ use super::named_queues::{
 };
 use super::*;
 use crate::app::gui_client_state::GuiOverlay;
-use crate::app::input::gui::with_gui_core;
 use crate::app::state::playback::ShownEntry;
+use crate::gui::GuiCore;
 use mbv_ctrl::{CtrlCmd, NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 use rstest::rstest;
 
-/// One GUI surface message, delivered through the GUI entry on `app`'s own core.
-fn gui_msg(app: &mut App, msg: Msg) {
-    with_gui_core(app, |core| core.handle_gui_surface_msg(msg));
+/// One GUI surface message, delivered through the GUI entry.
+fn gui_msg(core: &mut GuiCore, msg: Msg) {
+    core.handle_gui_surface_msg(msg);
 }
 
 /// The Queue chooser's entries, read through the GUI core.
-fn chooser_entries(app: &App) -> Vec<crate::app::gui_client_state::QueueChooserEntryProjection> {
-    crate::app::input::gui::chooser_entries(app)
+fn chooser_entries(
+    core: &GuiCore,
+) -> Vec<crate::app::gui_client_state::QueueChooserEntryProjection> {
+    core.queue_chooser_entries()
 }
 
 /// The queue the Owner mints for the first new queue beside `Default`.
@@ -172,6 +174,11 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
         0,
         "the new queue is empty"
     );
+    // The overlay is the GUI Client's, so its core takes the hand-off on the
+    // next input pass, as a real GUI Client's tick does.
+    let mut core = GuiCore::new(app);
+    core.present_pending_gui_overlay();
+    let app = core.into_app();
     let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the new queue's name is open for edit in the chooser");
     };
@@ -246,6 +253,11 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         3,
         "the current queue's rows are never the shown queue's"
     );
+    // The overlay is the GUI Client's, so its core takes the hand-off on its
+    // next input pass, as a real GUI Client's tick does.
+    let mut core = GuiCore::new(app);
+    core.route_gui_input(GuiInput::Key(answer_key(Key::Char('x'))), None);
+    let mut app = core.into_app();
     let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the new queue's name is open for edit");
     };
@@ -475,10 +487,11 @@ fn the_close_control_follows_the_shown_entry_beside_a_peer(
     app.adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
     show(&mut app);
 
-    let header = app.gui_queue_header_projection();
+    let core = GuiCore::new(app);
+    let header = core.gui_queue_header_projection();
 
     assert_eq!(
-        chooser_entries(&app).len(),
+        chooser_entries(&core).len(),
         2,
         "one local queue and the peer entry"
     );
@@ -492,25 +505,26 @@ fn the_close_control_follows_the_shown_entry_beside_a_peer(
 /// window painted rather than whatever the list's row holds now.
 #[test]
 fn a_chooser_entry_press_shows_the_painted_queue() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
-    app.show_local_current_entry();
-    with_gui_core(&mut app, |core| core.toggle_gui_queue_chooser());
+    let (app, cmd_rx) = gui_app_with_named_queues();
+    let mut core = GuiCore::new(app);
+    core.app.show_local_current_entry();
+    core.toggle_gui_queue_chooser();
     while cmd_rx.try_recv().is_ok() {}
 
     // The GUI Client's playback entry, which runs the shared effect and then
     // its own half of the chooser's entry press (design D4a (a)).
     gui_msg(
-        &mut app,
+        &mut core,
         Msg::Playback(PlaybackRequest::QueueChooserEntry(Some(resting()))),
     );
 
     assert_eq!(
-        app.shown_entry,
+        core.app.shown_entry,
         Some(ShownEntry::Local(resting())),
         "the press shows the entry it painted"
     );
     assert!(
-        !with_gui_core(&mut app, |core| core.gui_overlay_is_open()),
+        !core.gui_overlay_is_open(),
         "the chooser dismisses on the entry it showed"
     );
     assert!(
@@ -530,24 +544,26 @@ fn a_chooser_entry_press_shows_the_painted_queue() {
 /// after a close the Queue panel shows the current local queue).
 #[test]
 fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
-    app.show_named_queue(resting());
-    with_gui_core(&mut app, |core| core.toggle_gui_queue_chooser());
-    app.adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
+    let (app, cmd_rx) = gui_app_with_named_queues();
+    let mut core = GuiCore::new(app);
+    core.app.show_named_queue(resting());
+    core.toggle_gui_queue_chooser();
+    core.app
+        .adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
     while cmd_rx.try_recv().is_ok() {}
 
     gui_msg(
-        &mut app,
+        &mut core,
         Msg::Playback(PlaybackRequest::QueueChooserEntry(Some(resting()))),
     );
 
     assert_eq!(
-        app.shown_entry,
+        core.app.shown_entry,
         Some(ShownEntry::Local(current())),
         "the panel falls back to the current local queue"
     );
     assert!(
-        !with_gui_core(&mut app, |core| core.gui_overlay_is_open()),
+        !core.gui_overlay_is_open(),
         "the chooser dismisses on the entry it pressed"
     );
     assert!(

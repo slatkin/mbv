@@ -106,7 +106,7 @@ impl GuiCore {
         }
         match queue {
             Some(queue) if !self.app.named_queues.holds(queue) => {
-                self.app.show_local_current_entry()
+                self.app.show_local_current_entry();
             }
             Some(queue) => self.app.show_named_queue(queue),
             None => self.app.show_peer_entry(),
@@ -124,10 +124,13 @@ impl GuiCore {
             return;
         }
         self.app.gui.overlay = None;
-        if let Some(op) = self.app.send_named_queue_cmd("rename", |remote| {
-            remote.send_named_queue_rename(queue, name.to_string())
-        }) {
-            self.app.note_named_queue_op(op);
+        let sent = self
+            .app
+            .local_queue_player()
+            .remote()
+            .send_named_queue_rename(queue, name.to_string());
+        if let Some(op) = self.app.report_named_queue_send("rename", sent) {
+            self.note_named_queue_op(op);
         }
     }
 }

@@ -128,6 +128,7 @@ impl App {
             shown_resting: None,
             pending_new_queue: None,
             pending_named_queue_ops: std::collections::HashSet::new(),
+            pending_queue_rename: None,
             system_notifications: init.system_notifications,
             images: mbv_images::cache::ImageCache::new(
                 init.image_cache_size,

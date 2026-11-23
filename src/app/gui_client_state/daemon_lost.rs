@@ -13,8 +13,9 @@ use mbv_ui_msg::{DaemonLostIntent, Key};
 
 use super::overlay::GuiOverlay;
 use super::projection::{GuiConfirmButtonProjection, GuiConfirmButtonTone};
+use crate::app::DaemonLostModal;
 use crate::app::dispatch::session::daemon_lost::DaemonLostAnswer;
-use crate::app::{App, DaemonLostModal};
+use crate::gui::GuiCore;
 
 /// The dialog's choices in paint order: the intent the choice answers with,
 /// the button's label, the key hint inside the pill, and the tone it paints
@@ -81,21 +82,21 @@ pub(super) fn daemon_lost_entry_index(code: Key) -> Option<usize> {
     })
 }
 
-impl App {
+impl GuiCore {
     /// Present the daemon-lost dialog as the GUI canvas's own blocking
     /// overlay: the GUI drain's answer to `OverlayRequest::DaemonLost`. It
     /// replaces whatever overlay was open, as the TUI's
     /// `dismiss_blocking_modals` does.
     pub fn present_gui_daemon_lost(&mut self, modal: DaemonLostModal) {
-        self.gui.overlay = Some(GuiOverlay::DaemonLost(modal));
+        self.app.gui.overlay = Some(GuiOverlay::DaemonLost(modal));
     }
 
     /// Clear the held daemon-lost dialog: the GUI drain's answer to
     /// `OverlayRequest::DismissDaemonLost` (a successful restart raises it).
     /// Another open overlay stays.
     pub fn dismiss_gui_daemon_lost(&mut self) {
-        if matches!(self.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
-            self.gui.overlay = None;
+        if matches!(self.app.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
+            self.app.gui.overlay = None;
         }
     }
 
@@ -108,22 +109,22 @@ impl App {
     /// open overlay being the dialog, so a stale press while another overlay
     /// or none holds the slot answers nothing.
     pub(in crate::app) fn apply_gui_daemon_lost_choice(&mut self, index: usize) -> bool {
-        if !matches!(self.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
+        if !matches!(self.app.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
             return false;
         }
         let Some(intent) = daemon_lost_choice(index) else {
             return false;
         };
-        match self.apply_daemon_lost_intent(intent) {
+        match self.app.apply_daemon_lost_intent(intent) {
             DaemonLostAnswer::Restarted => false,
             DaemonLostAnswer::RestartFailed(error) => {
-                if let Some(GuiOverlay::DaemonLost(modal)) = &mut self.gui.overlay {
+                if let Some(GuiOverlay::DaemonLost(modal)) = &mut self.app.gui.overlay {
                     modal.restart_error = Some(error);
                 }
                 false
             }
             DaemonLostAnswer::Quit(quit) => {
-                self.gui.overlay = None;
+                self.app.gui.overlay = None;
                 quit
             }
         }

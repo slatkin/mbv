@@ -168,9 +168,10 @@ impl super::super::Model {
                     self.app.select_panel_target(target);
                 }
             }
-            ShellRequest::SelectChooserTarget(key) => {
-                self.app.select_chooser_target(&key);
-            }
+            // The playback-target chooser's own selection path is the GUI
+            // Client's, so this shared request is a documented no-op here (the
+            // GUI core applies it at its own entry).
+            ShellRequest::SelectChooserTarget(_) => {}
             ShellRequest::DetachSessions => {
                 self.app.detach_to_local();
                 self.dismiss_sidebar(super::super::SidebarId::Sessions);

@@ -3,13 +3,30 @@
 //! Enter and a chooser row's press share. The resolution itself is core
 //! target behaviour and lives in `state::playback_target`.
 
-use mbv_ui_model::panel_targets::SessionTargetKey;
+use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 
 use super::overlay::{GuiOverlay, TargetChooserState};
-use crate::app::App;
 use crate::app::state::panel_targets::resolve_session_target;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
+    /// Select a row's playback target by its stable key, as the playback-target
+    /// chooser's Enter and a chooser row's press both do. The local row returns
+    /// the playback to this machine and does nothing while it already plays
+    /// here, so a press on the local output raises no toast. A remote row
+    /// resolves as `select_target_for_key` does.
+    pub(in crate::app) fn select_chooser_target(&mut self, key: &ChooserTargetKey) -> bool {
+        match key {
+            ChooserTargetKey::Local => {
+                if self.app.remote_playback_attached() {
+                    self.app.detach_to_local();
+                }
+                true
+            }
+            ChooserTargetKey::Target(key) => self.select_target_for_key(key),
+        }
+    }
+
     /// Toggle the playback-target chooser (add-tauri-gui-client row 6.4):
     /// the canvas header's target press and the GUI-only `r` chord both
     /// open it, the same gesture closes it — the toggle the TUI's F3
@@ -18,10 +35,11 @@ impl App {
     /// cursor starts on the Owner's attached output, as the popover's
     /// starts on the chosen track.
     pub(in crate::app) fn toggle_gui_target_chooser(&mut self) {
-        self.gui.overlay = if let Some(GuiOverlay::TargetChooser(_)) = &self.gui.overlay {
+        self.app.gui.overlay = if let Some(GuiOverlay::TargetChooser(_)) = &self.app.gui.overlay {
             None
         } else {
             let cursor = self
+                .app
                 .playback_target_choices()
                 .iter()
                 .position(|choice| choice.is_active)
@@ -35,9 +53,9 @@ impl App {
     /// chooser's Enter and a chooser row's press share. A target the
     /// snapshot no longer holds selects nothing. Returns whether one did.
     pub(in crate::app) fn select_target_for_key(&mut self, key: &SessionTargetKey) -> bool {
-        match resolve_session_target(&self.panel_targets, key) {
+        match resolve_session_target(&self.app.panel_targets, key) {
             Some(target) => {
-                self.select_panel_target(target);
+                self.app.select_panel_target(target);
                 true
             }
             None => false,

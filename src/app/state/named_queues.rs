@@ -102,21 +102,52 @@ impl App {
     /// run this one path. One request is in flight at a time, so a press while
     /// the Owner has not answered — a double click on the control — makes no
     /// second queue. Only a Client that paints the transport chips sends it.
-    pub(in crate::app) fn request_new_queue(&mut self) {
+    /// It returns the request's `op` when it sent one, so a caller that keeps
+    /// its own bookkeeping (the GUI Client) can record it.
+    pub(in crate::app) fn request_new_queue(&mut self) -> Option<QueueOpId> {
         if !self
             .client_capabilities
             .has(ClientCapability::TransportChipKeys)
             || self.pending_new_queue.is_some()
         {
-            return;
+            return None;
         }
-        let Some(op) = self.send_named_queue_cmd(
-            "create",
-            mbv_remote_player::RemotePlayer::send_named_queue_create,
-        ) else {
-            return;
-        };
-        self.pending_new_queue = Some(op);
+        let sent = mbv_remote_player::RemotePlayer::send_named_queue_create(
+            self.local_queue_player().remote(),
+        );
+        let op = self.report_named_queue_send("create", sent);
+        self.pending_new_queue = op;
+        op
+    }
+
+    /// The outcome of one Named-queue command send to the local Owner (design
+    /// D3, D8): a failed send warns and flashes once here, and returns no
+    /// `op`, so the caller's request ends with nothing to correlate.
+    pub(in crate::app) fn report_named_queue_send(
+        &mut self,
+        command: &'static str,
+        sent: Result<QueueOpId, mbv_remote_player::RemotePlayerError>,
+    ) -> Option<QueueOpId> {
+        match sent {
+            Ok(op) => Some(op),
+            Err(e) => {
+                tracing::warn!(
+                    name: "queue.command.send_failed",
+                    target: "queue",
+                    command,
+                    error = %e,
+                    "the named queue command did not reach the Player owner"
+                );
+                self.flash_error(&e);
+                None
+            }
+        }
+    }
+
+    /// Record a Named-queue command whose answer the Client does not pump for,
+    /// so a rejection can find it (design D8).
+    pub(in crate::app) fn note_named_queue_op(&mut self, op: QueueOpId) {
+        self.pending_named_queue_ops.insert(op);
     }
 
     /// Adopt one answer to the held new-queue request (design D8, spec
@@ -200,13 +231,21 @@ impl App {
 
     /// Send one confirmed close to the local Owner (design D3, D8): it deletes a
     /// resting queue and stops playback to close the current one, then publishes
-    /// the queue list the panel follows to the current queue.
-    pub(in crate::app) fn send_named_queue_close(&mut self, queue: NamedQueueId) {
-        if let Some(op) =
-            self.send_named_queue_cmd("close", |remote| remote.send_named_queue_close(queue))
-        {
+    /// the queue list the panel follows to the current queue. It returns the
+    /// `op` it recorded, or `None` when the send failed.
+    pub(in crate::app) fn send_named_queue_close(
+        &mut self,
+        queue: NamedQueueId,
+    ) -> Option<QueueOpId> {
+        let sent = self
+            .local_queue_player()
+            .remote()
+            .send_named_queue_close(queue);
+        let op = self.report_named_queue_send("close", sent);
+        if let Some(op) = op {
             self.note_named_queue_op(op);
         }
+        op
     }
 
     /// Close one local Named queue from the close control (spec "The close
@@ -220,7 +259,7 @@ impl App {
         let plays =
             self.named_queues.current() == Some(queue) && self.shown_playback_status().active;
         if !plays {
-            self.send_named_queue_close(queue);
+            let _ = self.send_named_queue_close(queue);
             return;
         }
         let name = mbv_ui_model::ui_util::trunc_str(
@@ -243,13 +282,12 @@ impl App {
     /// leaves a Client that presents no chooser unchanged.
     fn open_new_queue_rename(&mut self, queue: NamedQueueId) {
         self.show_named_queue(queue);
-        let entries = crate::app::input::gui::chooser_entries(self);
-        let cursor = entries
-            .iter()
-            .position(|entry| entry.queue == Some(queue))
-            .unwrap_or_default();
+        // The GUI Client's core opens the chooser on the name: the overlay is
+        // that Client's presentation and the core resolves its cursor against
+        // the chooser's live list, so the core trips the one-shot hand-off here
+        // instead of naming an overlay a Client without a chooser never shows.
         let text = self.named_queues.name_of(queue).unwrap_or_default();
-        self.present_gui_queue_rename(queue, cursor, text);
+        self.pending_queue_rename = Some((queue, text));
     }
 
     /// Whether `op` is the new-queue request the control sent, which this

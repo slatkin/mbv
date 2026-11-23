@@ -7,8 +7,9 @@ use mbv_ui_model::context_menu::{ContextAction, ContextMenuEntry};
 
 use super::overlay::{GuiOverlay, GuiRowMenu};
 use crate::app::App;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// Open the GUI Client's row menu over a queue row. `targets` are the
     /// rows the opening gesture resolved — the queue surface's context-menu
     /// key or right-click, which name one row (the first of a marked
@@ -20,10 +21,10 @@ impl App {
     /// for a non-music Emby row, per the TUI queue menu's rules.
     pub(in crate::app) fn open_gui_row_menu(&mut self, targets: &[QueueSlotId]) {
         if targets.len() > 1 {
-            let Some(menu) = self.build_queue_selection_menu(targets) else {
+            let Some(menu) = self.app.build_queue_selection_menu(targets) else {
                 return;
             };
-            self.gui.overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
+            self.app.gui.overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
                 anchor_slot: targets[0],
                 cursor: 0,
                 pending_delete: false,
@@ -34,10 +35,10 @@ impl App {
         let Some(slot) = targets.first().copied() else {
             return;
         };
-        let Some(index) = self.displayed_queue().slot_index(slot) else {
+        let Some(index) = self.app.displayed_queue().slot_index(slot) else {
             return;
         };
-        let item = self.displayed_queue().emby_item_at(index);
+        let item = self.app.displayed_queue().emby_item_at(index);
         let mut entries = Vec::with_capacity(5);
         entries.push(ContextMenuEntry {
             label: "Play now",
@@ -81,7 +82,7 @@ impl App {
         // sends the ctrl command and the next queue snapshot reports the
         // new order. It lists before the removals so the menu's destructive
         // tone still opens at the remove entry.
-        if self.player.supports_queue_shuffle() {
+        if self.app.player.supports_queue_shuffle() {
             entries.push(ContextMenuEntry {
                 label: "Shuffle",
                 action: Some(ContextAction::ShuffleQueue),
@@ -97,7 +98,8 @@ impl App {
         // prompt the `c` chord raises (`App::request_clear_queue`). An
         // empty queue has nothing to clear, so the entry does not list.
         if self
-            .queue_for_link(self.playing_queue_link())
+            .app
+            .queue_for_link(self.app.playing_queue_link())
             .total_queue_len()
             > 0
         {
@@ -107,7 +109,7 @@ impl App {
                 key_hint: Some("c"),
             });
         }
-        self.gui.overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
+        self.app.gui.overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
             anchor_slot: slot,
             cursor: 0,
             pending_delete: false,
@@ -123,7 +125,7 @@ impl App {
     /// slot executes nothing. The menu's entries carry their resolved queue
     /// targets, so the index executes what the frame painted.
     pub(in crate::app) fn select_gui_row_menu_entry(&mut self, index: usize) {
-        if matches!(self.gui.overlay, Some(GuiOverlay::RowMenu(_))) {
+        if matches!(self.app.gui.overlay, Some(GuiOverlay::RowMenu(_))) {
             self.execute_gui_overlay_entry(index);
         }
     }

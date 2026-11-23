@@ -143,6 +143,12 @@ pub struct App {
     /// finds the request it answers and tells the user why; an op leaves the
     /// set when its answer arrives, and a lost Owner clears it.
     pub(in crate::app) pending_named_queue_ops: std::collections::HashSet<mbv_ctrl::QueueOpId>,
+    /// The queue a new-queue request created and the text its rename draft
+    /// opens with, handed to the GUI Client's core on its next input pass
+    /// (gui-named-queues design D8). The core makes the queue, so it sets this;
+    /// the overlay and the cursor that names its entry are GUI presentation, so
+    /// the GUI core takes it and a Client with no chooser leaves it unset.
+    pub(in crate::app) pending_queue_rename: Option<(mbv_queue::NamedQueueId, String)>,
     /// The Client core's live toasts (design D1): one list in one place, so
     /// several toasts are live at once, with the cap, the repeat rule, and
     /// the per-severity expiry owned by `ToastList`. The status row presents

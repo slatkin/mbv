@@ -10,6 +10,7 @@ use mbv_ui_msg::{Msg, ShellRequest};
 use rstest::rstest;
 
 use crate::app::gui_client_state::GuiOverlay;
+use crate::gui::GuiCore;
 
 fn emby_library_app() -> App {
     let mut app = make_app_stub();
@@ -230,9 +231,10 @@ fn the_gui_row_menu_offers_shuffle_before_the_removals() {
         Box::new(leaf_item("queued track", "Audio", "Audio", false)),
     )]));
 
-    app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
+    let mut core = GuiCore::new(app);
+    core.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
 
-    let labels = match app.gui.overlay.take() {
+    let labels = match core.app.gui.overlay.take() {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()
@@ -263,9 +265,10 @@ fn the_gui_row_menu_hides_shuffle_without_the_capability() {
         Box::new(leaf_item("queued movie", "Movie", "Video", false)),
     )]));
 
-    app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
+    let mut core = GuiCore::new(app);
+    core.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
 
-    let labels = match app.gui.overlay.take() {
+    let labels = match core.app.gui.overlay.take() {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()

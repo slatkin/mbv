@@ -2,7 +2,6 @@ mod local;
 
 use crate::app::App;
 use crate::app::state::client_capabilities::ClientCapability;
-use mbv_ui_model::panel_targets::ChooserTargetKey;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
 #[derive(Clone, Copy)]
@@ -164,23 +163,6 @@ impl App {
             self.playback_output,
             Some(mbv_ctrl::OutputState::EmbySession { .. })
         )
-    }
-
-    /// Select a row's playback target by its stable key, as the playback-target
-    /// chooser's Enter and a chooser row's press both do. The local row returns
-    /// the playback to this machine and does nothing while it already plays
-    /// here, so a press on the local output raises no toast. A remote row
-    /// resolves as `select_target_for_key` does.
-    pub(in crate::app) fn select_chooser_target(&mut self, key: &ChooserTargetKey) -> bool {
-        match key {
-            ChooserTargetKey::Local => {
-                if self.remote_playback_attached() {
-                    self.detach_to_local();
-                }
-                true
-            }
-            ChooserTargetKey::Target(key) => self.select_target_for_key(key),
-        }
     }
 }
 
