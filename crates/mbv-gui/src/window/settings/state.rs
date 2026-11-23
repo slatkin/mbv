@@ -251,7 +251,8 @@ pub fn entry_id_string(entry: &SettingsEntry) -> String {
         | SettingsEntry::KeyTarget { id, .. }
         | SettingsEntry::KeyReset { id, .. }
         | SettingsEntry::KeyClear { id, .. }
-        | SettingsEntry::Target { id, .. } => id.clone(),
+        | SettingsEntry::Target { id, .. }
+        | SettingsEntry::TargetsRefresh { id } => id.clone(),
     }
 }
 
@@ -479,6 +480,13 @@ impl SettingsState {
         });
     }
 
+    /// Refresh the Sessions section's playback targets: the same session load
+    /// and cast browse the header chooser's Refresh row starts, through the
+    /// `refreshSessions` command. The screen stays open.
+    pub fn refresh_settings_targets(&self) {
+        self.link.settings(GuiSettingsCommand::RefreshSessions);
+    }
+
     /// Activate one content entry (`state.ts`'s `activateSettingsEntry`,
     /// design D11's Enter, and Space on a toggle or a choice mark): the
     /// cursor row's own command, or the edit the row opens.
@@ -540,6 +548,7 @@ impl SettingsState {
                 });
             }
             SettingsEntry::Target { target, .. } => self.select_settings_target(target),
+            SettingsEntry::TargetsRefresh { .. } => self.refresh_settings_targets(),
         }
     }
 

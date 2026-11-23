@@ -102,7 +102,29 @@ impl App {
     /// Client runs this for a client the attach brought and for a startup its
     /// drain reports.
     pub fn start_playback_target_discovery(&mut self) {
+        self.pending_playback_target_refresh = false;
         self.spawn_sessions_load();
         self.spawn_cast_discovery();
+    }
+
+    /// Request the playback-target discovery for the next tick, or start it
+    /// now when an Emby client already exists. The GUI Client's own open
+    /// gestures (the header chooser, the Settings Sessions section) use it
+    /// rather than the start above: they run at attach time too, and a start
+    /// with no Emby client yet would leave neither half running. The tick
+    /// retries the request until a client exists, so the charge always lands
+    /// once, never stacked (the two spawns hold their in-flight guards).
+    pub fn request_playback_target_refresh(&mut self) {
+        self.pending_playback_target_refresh = true;
+        self.start_pending_playback_target_refresh();
+    }
+
+    /// Start a requested discovery now that an Emby client exists, and clear
+    /// the request. Called each tick; a request with no client stays pending.
+    pub(in crate::app) fn start_pending_playback_target_refresh(&mut self) {
+        if !self.pending_playback_target_refresh || self.emby_snapshot().is_none() {
+            return;
+        }
+        self.start_playback_target_discovery();
     }
 }

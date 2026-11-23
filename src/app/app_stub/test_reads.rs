@@ -631,6 +631,19 @@ impl App {
         self.sessions_loading
     }
 
+    /// Whether a playback-target refresh waits for a tick that has an Emby
+    /// client.
+    #[must_use]
+    pub fn playback_target_refresh_pending_for_test(&self) -> bool {
+        self.pending_playback_target_refresh
+    }
+
+    /// Whether a cast discovery browse is in flight.
+    #[must_use]
+    pub fn cast_discovery_loading_for_test(&self) -> bool {
+        self.cast_discovery_loading
+    }
+
     /// How many cast discovery browses this `App` started.
     #[must_use]
     pub fn cast_discovery_starts_for_test(&self) -> usize {

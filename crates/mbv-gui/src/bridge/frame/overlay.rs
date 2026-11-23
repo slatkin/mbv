@@ -52,6 +52,9 @@ pub enum GuiOverlayFrame {
     TargetChooser {
         cursor: usize,
         choices: Vec<GuiTargetChoice>,
+        /// Whether a target refresh is in flight: the chooser's Refresh row
+        /// paints busy until it lands.
+        refreshing: bool,
     },
     /// The Queue chooser (gui-named-queues design D8): the cursor, the local
     /// queues in queue order followed by the connected peer, each with the
@@ -128,9 +131,14 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
                 cursor: *cursor,
                 choices: choices.iter().map(GuiTrackPopoverChoice::from).collect(),
             },
-            GuiOverlayProjection::TargetChooser { cursor, choices } => Self::TargetChooser {
+            GuiOverlayProjection::TargetChooser {
+                cursor,
+                choices,
+                refreshing,
+            } => Self::TargetChooser {
                 cursor: *cursor,
                 choices: choices.iter().map(GuiTargetChoice::from).collect(),
+                refreshing: *refreshing,
             },
             GuiOverlayProjection::QueueChooser {
                 cursor,

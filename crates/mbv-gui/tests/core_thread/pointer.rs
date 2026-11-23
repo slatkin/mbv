@@ -240,7 +240,10 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
     let frame = test.held();
-    let Some(GuiOverlayFrame::TargetChooser { cursor, choices }) = &frame.overlay() else {
+    let Some(GuiOverlayFrame::TargetChooser {
+        cursor, choices, ..
+    }) = &frame.overlay()
+    else {
         panic!("the target press opened the chooser: {:?}", frame.overlay());
     };
     assert_eq!(*cursor, 0);
@@ -517,4 +520,57 @@ fn a_popover_row_press_sends_the_track_switch() {
         })
         .collect();
     assert_eq!(switches, vec![2]);
+}
+
+/// The chooser's Refresh row press starts the playback-target discovery and
+/// keeps the chooser open: the row maps to the F3 sidebar's refresh request,
+/// and the press resolves as an overlay-owned region, never as an outside
+/// press that would close it.
+#[test]
+fn the_refresh_row_press_starts_the_discovery_and_keeps_the_chooser_open() {
+    let (app, _cmd_rx) = stub_app_with_cast_target();
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.held();
+
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    test.held();
+
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                80.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::RefreshTargets),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.held();
+
+    test.tx.send(press_at(10.0, 90.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.held();
+    assert!(
+        matches!(frame.overlay(), Some(GuiOverlayFrame::TargetChooser { .. })),
+        "the refresh press keeps the chooser open"
+    );
+    // The open and the refresh each asked for a discovery; the stub holds no
+    // Emby client, so the request waits for the tick that has one.
+    assert!(
+        test.core.playback_target_refresh_requested_for_test(),
+        "the open and the refresh ask for a discovery"
+    );
 }

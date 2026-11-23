@@ -83,6 +83,8 @@ fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
         &[
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(0)),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(1)),
+            // The Refresh row closes the chooser's rows.
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::RefreshTargets),
         ]
     );
 }

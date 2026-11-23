@@ -396,6 +396,7 @@ pub(super) fn playing() -> GuiQueuePlayback {
 pub(super) fn chooser() -> GuiOverlayFrame {
     GuiOverlayFrame::TargetChooser {
         cursor: 0,
+        refreshing: false,
         choices: vec![
             GuiTargetChoice {
                 key: GuiTargetKey::Emby("session-1".to_owned()),

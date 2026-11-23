@@ -222,3 +222,79 @@ fn select_session_request_selects_the_output_and_closes() {
     assert_eq!(selections.len(), 1);
     assert!(core.gui.overlay.is_none());
 }
+
+// Opening the chooser refreshes the list it shows: the session load and the
+// cast browse start on the open, as the TUI's F3 open starts them. Closing
+// starts nothing.
+#[test]
+fn opening_the_chooser_refreshes_the_targets_and_closing_does_not() {
+    let (mut core, _cmd_rx) = cast_target_core();
+    assert_eq!(core.app_mut().cast_discovery_starts_for_test(), 0);
+
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    assert_eq!(
+        core.app_mut().cast_discovery_starts_for_test(),
+        1,
+        "the open must start one cast discovery"
+    );
+    assert!(
+        core.app_mut().sessions_load_started_for_test(),
+        "the open must start the sessions load"
+    );
+
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    assert!(core.gui.overlay.is_none());
+    assert_eq!(
+        core.app_mut().cast_discovery_starts_for_test(),
+        1,
+        "the close must start no discovery"
+    );
+}
+
+// A Refresh press starts a refresh and leaves the chooser open; a second
+// press while the browse is still in flight stacks no work.
+#[test]
+fn a_refresh_while_in_flight_starts_no_second_discovery_and_keeps_the_chooser() {
+    let (mut core, _cmd_rx) = cast_target_core();
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    assert!(core.app_mut().cast_discovery_loading_for_test());
+
+    gui_msg(
+        &mut core,
+        Msg::Shell(Box::new(ShellRequest::RefreshSessions)),
+    );
+    gui_msg(
+        &mut core,
+        Msg::Shell(Box::new(ShellRequest::RefreshSessions)),
+    );
+
+    assert_eq!(
+        core.app_mut().cast_discovery_starts_for_test(),
+        1,
+        "the in-flight guard must refuse the second browse"
+    );
+    assert!(matches!(
+        core.gui.overlay,
+        Some(GuiOverlay::TargetChooser(_))
+    ));
+}
+
+// The sessions half holds its own in-flight guard: a refresh while the
+// `/Sessions` load runs spawns no second one, so repeated presses stack no
+// work.
+#[test]
+fn a_second_refresh_while_the_sessions_load_runs_spawns_no_second_load() {
+    let (mut core, _cmd_rx) = cast_target_core();
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    assert!(core.app_mut().sessions_load_started_for_test());
+
+    gui_msg(
+        &mut core,
+        Msg::Shell(Box::new(ShellRequest::RefreshSessions)),
+    );
+
+    assert!(
+        core.app_mut().sessions_load_started_for_test(),
+        "the guard refuses the second load and leaves the first in flight"
+    );
+}

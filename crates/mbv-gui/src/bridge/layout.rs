@@ -105,6 +105,7 @@ impl RegionTarget {
             // their overlay (a sibling chip's press swaps the open popover).
             Self::QueuePlayback(
                 QueuePlaybackTargetId::TargetChoice(_)
+                | QueuePlaybackTargetId::RefreshTargets
                 | QueuePlaybackTargetId::TrackPopoverChoice(_)
                 | QueuePlaybackTargetId::AudioChip
                 | QueuePlaybackTargetId::SubtitleChip
@@ -253,6 +254,10 @@ pub enum QueuePlaybackTargetId {
     /// One row of the open playback-target chooser: the choice's index in
     /// the `targetChoices` list.
     TargetChoice(usize),
+    /// The open playback-target chooser's Refresh row, below the choices: a
+    /// press starts the same session and cast discovery the TUI's F3 refresh
+    /// starts, and the chooser stays open.
+    RefreshTargets,
     /// The audio chip: a press toggles its track popover.
     AudioChip,
     /// The subtitle chip: a press toggles its track popover. The video

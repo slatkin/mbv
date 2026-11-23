@@ -135,6 +135,13 @@ pub mod entry_id {
     pub fn target(index: usize) -> String {
         format!("target:{index}")
     }
+
+    /// The Sessions section's Refresh control: below the targets, it asks the
+    /// core for a new session list and cast browse.
+    #[must_use]
+    pub fn targets_refresh() -> String {
+        "targetsRefresh".to_owned()
+    }
 }
 
 /// One activatable control of the content pane (`entries.ts`'s
@@ -199,6 +206,8 @@ pub enum SettingsEntry {
     KeyClear { id: String, target: String },
     /// One playback target of the Sessions section.
     Target { id: String, target: GuiTargetChoice },
+    /// The Sessions section's Refresh control.
+    TargetsRefresh { id: String },
 }
 
 /// The marked ids a row's choice list holds, seeded from the frame's
@@ -312,13 +321,16 @@ pub fn settings_entries(
             entries
         }
         GuiSettingsContent::Keys { prefix, rows, .. } => keys_entries(prefix.as_deref(), rows),
-        GuiSettingsContent::Sessions { targets } => targets
+        GuiSettingsContent::Sessions { targets, .. } => targets
             .iter()
             .enumerate()
             .map(|(index, target)| SettingsEntry::Target {
                 id: entry_id::target(index),
                 target: target.clone(),
             })
+            .chain(std::iter::once(SettingsEntry::TargetsRefresh {
+                id: entry_id::targets_refresh(),
+            }))
             .collect(),
     }
 }

@@ -462,6 +462,11 @@ impl<'a> PlaybackLeaf<'a> {
                 .painted
                 .target_key(*index)
                 .map(|key| Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(key.clone())))),
+            // The chooser's Refresh row starts the discovery the TUI's F3
+            // refresh starts. The Client core keeps the chooser open.
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::RefreshTargets)) => {
+                Some(Msg::Shell(Box::new(ShellRequest::RefreshSessions)))
+            }
             // The audio and subtitle chips emit the popover's opener: the
             // press toggles the open popover as the target press toggles
             // the chooser. The video chip is label-only (design D4a's

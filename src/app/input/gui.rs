@@ -432,6 +432,11 @@ impl GuiCore {
             // chooser overlay, and the press toggles it as F3 toggles the
             // sidebar.
             ShellRequest::OpenSessions => self.toggle_gui_target_chooser(),
+            // A Refresh press — the chooser's own row, or the Settings Sessions
+            // section's button — starts the same discovery the F3 panel's
+            // refresh does. It never closes the chooser: the row is inside the
+            // overlay whose press closes it on a selection only.
+            ShellRequest::RefreshSessions => self.refresh_playback_targets(),
             // A chooser row's press selects its output through the same
             // dispatch the TUI's Sessions sidebar applies on its selected
             // row: resolve the stable key against the current target

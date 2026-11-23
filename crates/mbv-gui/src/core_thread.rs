@@ -453,6 +453,22 @@ impl CoreThread {
         self.core.gui_settings_feeds()
     }
 
+    /// How many cast discovery browses the attached Client started, for a
+    /// test that asserts a refresh started one (or refused a second).
+    #[doc(hidden)]
+    #[must_use]
+    pub fn cast_discovery_starts_for_test(&mut self) -> usize {
+        self.core.app_mut().cast_discovery_starts_for_test()
+    }
+
+    /// Whether a playback-target refresh is waiting for a tick that has an
+    /// Emby client, for a test whose stub holds none.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn playback_target_refresh_requested_for_test(&self) -> bool {
+        self.core.app().playback_target_refresh_pending_for_test()
+    }
+
     /// Apply one `LayoutReport` to the Surface state's capacity and the hit
     /// map (design D4, task row 2.4): the reported whole rows become the
     /// Queue viewport's height — the paging stride's source and the resting

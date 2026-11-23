@@ -80,6 +80,9 @@ pub enum GuiSettingsCommand {
     KeysClear { target: String },
     /// Select a playback target.
     SelectTarget { target: GuiTargetKey },
+    /// Refresh the Sessions section's playback targets: the same session load
+    /// and cast browse the header chooser's Refresh row starts.
+    RefreshSessions,
     /// Reset the GUI's UI state.
     ResetUiState,
 }
@@ -182,6 +185,7 @@ pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
         GuiSettingsCommand::SelectTarget { target } => mbv::GuiSettingsCommand::SelectTarget {
             target: chooser_target_key(&target),
         },
+        GuiSettingsCommand::RefreshSessions => mbv::GuiSettingsCommand::RefreshSessions,
         GuiSettingsCommand::ResetUiState => mbv::GuiSettingsCommand::ResetUiState,
     })
 }

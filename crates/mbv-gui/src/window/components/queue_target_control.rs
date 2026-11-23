@@ -81,9 +81,13 @@ pub fn QueueTargetControl() -> Element {
 
     // The playback target chooser: the overlay section's `targetChooser`
     // variant, `None` while another overlay (or none) is up.
-    let chooser = match sections.overlay.cloned() {
-        Some(GuiOverlayFrame::TargetChooser { cursor, choices }) => Some((cursor, choices)),
-        _ => None,
+    let (chooser, refreshing) = match sections.overlay.cloned() {
+        Some(GuiOverlayFrame::TargetChooser {
+            cursor,
+            choices,
+            refreshing,
+        }) => (Some((cursor, choices)), refreshing),
+        _ => (None, false),
     };
 
     // The pill's open state: the Queue switcher's own pair while its chooser
@@ -169,11 +173,19 @@ pub fn QueueTargetControl() -> Element {
                             )
                         })
                         .collect::<Vec<_>>();
+                    // The Refresh row closes the overlay's rows: its own
+                    // target, the last one painted and the last one marked.
+                    let refresh_mark = region_set.mark_over(
+                        0,
+                        RegionTarget::QueuePlayback(QueuePlaybackTargetId::RefreshTargets),
+                    );
                     rsx! {
                         TargetChooserPopover {
                             cursor,
                             choices,
                             row_marks,
+                            refresh_mark,
+                            refreshing,
                         }
                     }
                 }
@@ -195,6 +207,11 @@ struct TargetChooserPopoverProps {
     /// its own entry when the vector reaches it.
     #[props(default)]
     row_marks: Vec<MarkHandler>,
+    /// The Refresh row's mark, below the choices.
+    #[props(default)]
+    refresh_mark: Option<MarkHandler>,
+    /// Whether a discovery is in flight, so the Refresh row paints busy.
+    refreshing: bool,
 }
 
 impl std::fmt::Debug for TargetChooserPopoverProps {
@@ -202,6 +219,7 @@ impl std::fmt::Debug for TargetChooserPopoverProps {
         f.debug_struct("TargetChooserPopoverProps")
             .field("cursor", &self.cursor)
             .field("choices", &self.choices)
+            .field("refreshing", &self.refreshing)
             .finish_non_exhaustive()
     }
 }
@@ -266,6 +284,40 @@ fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
                             }
                         }
                     }
+                }
+            }
+            // The Refresh row (user request): a press starts the same session
+            // and cast discovery the TUI's F3 refresh starts, and the chooser
+            // stays open. While one runs the label says so and the row dims;
+            // the core refuses a second discovery until it lands.
+            button {
+                "type": "button",
+                class: "flex w-full items-center text-left",
+                role: "menuitem",
+                style: if props.refreshing {
+                    format!(
+                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; margin-top: {ROW_GAP_PX}px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {}; opacity: 0.6;",
+                        ef_var(EfToken::Grey1)
+                    )
+                } else {
+                    format!(
+                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; margin-top: {ROW_GAP_PX}px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};",
+                        ef_var(EfToken::Fg)
+                    )
+                },
+                "data-target-refresh": "",
+                onmounted: {
+                    let mark = props.refresh_mark;
+                    move |event| {
+                        if let Some(mark) = mark {
+                            mark.call(event);
+                        }
+                    }
+                },
+                if props.refreshing {
+                    "Refreshing…"
+                } else {
+                    "Refresh"
                 }
             }
         }

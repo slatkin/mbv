@@ -220,6 +220,11 @@ pub struct App {
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueLink>,
+    /// One-shot playback-target refresh for the next tick: a Client whose own
+    /// startup step begins the discovery asks for it while no Emby client
+    /// exists yet, and the tick retries it once a client does. Cleared when
+    /// the discovery starts.
+    pub(in crate::app) pending_playback_target_refresh: bool,
     /// One-shot presentation reset for the next queue sync: the shown entry
     /// changed, so the Queue Surface drops its marks and viewport before it
     /// adopts the start-slot cursor (design D7 of `gui-named-queues`).
@@ -338,6 +343,10 @@ pub struct App {
     /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
     pub(in crate::app) panel_targets: Vec<PanelTarget>,
     pub(in crate::app) sessions_loading: bool,
+    /// Whether a cast discovery browse (`spawn_cast_discovery`) is in flight.
+    /// Set when one starts and cleared when its completion is handled, so the
+    /// playback-target refresh does not stack a second browse on the first.
+    pub(in crate::app) cast_discovery_loading: bool,
     pub(in crate::app) playlists: Vec<EmbyItem>,
     pub(in crate::app) playlists_loading: bool,
     pub(in crate::app) playlists_open: Option<EmbyItem>, // playlist currently being browsed

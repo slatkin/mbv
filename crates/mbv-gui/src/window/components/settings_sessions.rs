@@ -26,9 +26,14 @@ pub fn SettingsSessions() -> Element {
     else {
         return rsx! {};
     };
-    let GuiSettingsContent::Sessions { targets } = &frame.content else {
+    let GuiSettingsContent::Sessions {
+        targets,
+        refreshing,
+    } = &frame.content
+    else {
         return rsx! {};
     };
+    let refreshing = *refreshing;
 
     rsx! {
         div {
@@ -51,6 +56,24 @@ pub fn SettingsSessions() -> Element {
                                 label: target.label.clone(),
                                 trailing: target.is_active.then(|| "● Active".to_owned()),
                             }
+                        }
+                    }
+                }
+                {
+                    // The Refresh control: the Sessions section's own button,
+                    // below the targets. It sends the header chooser's Refresh
+                    // command, so a press starts one discovery; while one runs
+                    // the label says so and the button dims.
+                    let id = entry_id::targets_refresh();
+                    let row_press = onpress;
+                    rsx! {
+                        SettingsEntryRow {
+                            key: "{id}",
+                            id: id.clone(),
+                            cursor: cursor_id.as_deref() == Some(id.as_str()),
+                            onpress: row_press,
+                            label: if refreshing { "Refreshing…" } else { "Refresh" },
+                            trailing: None,
                         }
                     }
                 }

@@ -269,6 +269,10 @@ impl ClientCore {
             outcome.input_received |= host.tick_inline_search_clock(now);
             outcome.input_received |= host.app_mut().drain_session_events();
             outcome.input_received |= host.app_mut().drain_cast_events();
+            // A playback-target refresh a Client's own gesture asked for while
+            // no Emby client existed yet starts here, on the first tick that
+            // has one.
+            host.app_mut().start_pending_playback_target_refresh();
             outcome.input_received |= host.app_mut().drain_pinned_requests();
             if host.app_mut().drain_feed_tab_results() {
                 outcome.input_received = true;

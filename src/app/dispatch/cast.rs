@@ -69,8 +69,15 @@ impl App {
     /// concurrently with `spawn_sessions_load`'s `/Sessions` fetch -- callers
     /// invoke both, never wait on this one before showing Emby rows. A test
     /// build records that the browse started but runs no LAN browse: a test
-    /// injects its receivers instead (`set_cast_receivers_for_test`).
+    /// injects its receivers instead (`set_cast_receivers_for_test`). A browse
+    /// already in flight is not started again: the flag is set here and
+    /// cleared when the completion is handled, so repeated refresh presses
+    /// stack no work.
     pub(in crate::app) fn spawn_cast_discovery(&mut self) {
+        if self.cast_discovery_loading {
+            return;
+        }
+        self.cast_discovery_loading = true;
         self.record_cast_discovery_start();
         let browse = cast_browse();
         let tx = self.channels.cast_tx.clone();
@@ -78,6 +85,14 @@ impl App {
             let receivers = browse(CAST_DISCOVERY_TIMEOUT);
             let _ = tx.send(CastEvent::DiscoveryCompleted(receivers));
         });
+    }
+
+    /// Whether either half of the playback-target discovery is in flight: the
+    /// `/Sessions` load or the cast browse. The GUI Client paints its Refresh
+    /// controls busy while one is.
+    #[must_use]
+    pub fn playback_target_discovery_busy(&self) -> bool {
+        self.sessions_loading || self.cast_discovery_loading
     }
 
     /// Record a started browse for the Clients' tests: the browse itself is a
@@ -97,6 +112,7 @@ impl App {
     pub(in crate::app) fn handle_cast_event(&mut self, event: CastEvent) {
         match event {
             CastEvent::DiscoveryCompleted(receivers) => {
+                self.cast_discovery_loading = false;
                 self.cast_receivers = receivers;
                 self.rebuild_panel_targets();
             }
