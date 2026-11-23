@@ -1,6 +1,7 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
 use crate::app::gui_client_state::GuiOverlay;
+use crate::app::state::client_capabilities::ClientCapabilities;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{
     DestinationLatestSource, HomeContent, PlaylistMutationState, SuspendedLocalSession, UndoEntry,
@@ -270,6 +271,11 @@ pub struct App {
     /// hide, so the visualizer and hide setters and the persisted hide do
     /// nothing for the GUI Client.
     pub(in crate::app) gui_client: bool,
+    /// The neutral facts this Client differs on (design D6a): each capability
+    /// stands for one thing a Client presents, so the core reads a fact and
+    /// never names a Client. Each Client builds its own value; it defaults to
+    /// empty, and no reader uses it yet.
+    pub(in crate::app) client_capabilities: ClientCapabilities,
     /// The GUI Library panel's selected collections per destination
     /// (add-gui-library-panel design D2, D5; gui-collection-dropdown design
     /// D1, D2): one stored selection per Grouped Music library, keyed by the
@@ -768,6 +774,16 @@ impl App {
     /// Library column. Runs before the restore settles, so only the
     /// `Pending` snapshot can exist here; the user can still switch focus
     /// once the session runs, and teardown keeps saving the actual focus.
+    /// Adopt the GUI Client's launch-location rule (design D6a): the GUI's
+    /// own launch location replaces the TUI's, so this `App` starts with
+    /// `LaunchRestore::Done` and no TUI launch state moves its tab or Panel
+    /// focus. A Client that arranges its own launch calls it before its first
+    /// step; the TUI Client never does, so the TUI's launch restore does not
+    /// change.
+    pub fn skip_launch_restore(&mut self) {
+        self.launch_restore = LaunchRestore::Done;
+    }
+
     pub(crate) fn pin_launch_focus_to_queue(&mut self) {
         // Written directly, not through `set_panel_focus`: at construct time
         // the terminal size is still the placeholder 80, and this rule must
