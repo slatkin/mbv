@@ -76,7 +76,7 @@ In the conversion rows of groups 6 and 7, convert the `impl App` blocks of the n
 - [x] 7.2 Convert `gui_settings/{services,sessions,feeds}.rs`, `gui_playlists.rs`, `gui_playlists/commands.rs`, and `gui_library.rs`.
 - [x] 7.3 Convert `gui_library/{launch,ensure,shows_projection,audiobooks_projection,emby_projection}.rs` and `gui_library/shows_projection/hero.rs`.
 - [x] 7.4 Convert `gui_library/{item_menu,rows_in_view,marks,podcasts_projection,podcasts,item_actions}.rs`.
-- [ ] 7.5 Convert `gui_library/{feeds_projection,feeds,audiobooks,shows,tv,emby}.rs`.
+- [x] 7.5 Convert `gui_library/{feeds_projection,feeds,audiobooks,shows,tv,emby}.rs`.
 - [ ] 7.6 Convert `gui_library/{search,projection,store,list_sort,home,artwork}.rs`.
 - [ ] 7.7 Convert `gui_library/artwork/rows.rs` and `gui_library/{collection_command,tabs,artist_lookup}.rs`.
 - [ ] 7.8 **Gate.** nextest `-p mbv -p mbv-gui`. `rg -n "^impl (crate::app::)?App\b" src/app/gui_* src/app/input/gui*` finds nothing.
