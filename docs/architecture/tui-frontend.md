@@ -79,6 +79,41 @@ adapter, so both Clients show it. A surface that is not yet shared keeps its
 state in its component until its row in the surface ledger names a Surface
 state.
 
+## Terminal facts the shell pushes
+
+Terminal geometry and pointer cells never reach the Client core: the shell
+`Model` owns `terminal_width`/`terminal_height`, the composed `AppLayout`,
+the tab strip's `tab_scroll`, and the context menu's `menu_pointer`, and it
+pushes neutral facts into the `App` the core reads (design D2, D6, D13 Rule
+B of `decouple-client-core`; ADR 0042):
+
+- **The single-panel fact.** The shell calls `App::set_single_panel` at every
+  point where it records the terminal size — the resize observer
+  (`src/app/shell.rs`) and the per-frame size on the draw path
+  (`compute_frame_layout`, `src/app/shell/draw.rs`) — so the first frame of a
+  narrow terminal is already in Mini view. The TUI owns the breakpoint
+  (`single_panel_for_width` over `MINI_VIEW_THRESHOLD`); the core reads only
+  the fact, together with the attached Client's `TerminalPanelRules`
+  capability, in `App::is_mini_view`.
+- **The left panel area.** `compose_root_frame` calls `App::set_left_panel_area`
+  with the value the frame writes to `layout.left_area` (zero under four
+  rows). The core readers (`lib_page_size`, the visualizer menu bounds) see
+  the last composed frame as a neutral `mbv_ui_model::geom::Rect`, never the
+  ratatui-bearing layout.
+- **The context menu's pointer cell.** The core builds every menu with the
+  neutral `ContextMenuAnchor::Pointer` and no cell; the shell records the
+  right-click cell — `Model::record_right_press` before the tick drains any
+  message, and the `MouseRightClick` observer — on `Model::menu_pointer`, with
+  `menu_pointer_current` separating a pointer opening from a keyboard opening
+  in the tick being dispatched, and places a pointer-anchored menu at it.
+- **The tab-reveal request.** Tab-strip scroll is TUI presentation
+  (`Model::tab_scroll`). The core only sets `App::tab_reveal_requested` where
+  the current tab must scroll into view (`dispatch/library/cw_library_tab.rs`);
+  the shell takes the request after every update step and tick drain, before
+  it paints or resolves a pointer press (`Model::reveal_requested_tab`,
+  `src/app/shell/tab_strip.rs`), so every `tab_scroll` reader sees the
+  revealed value.
+
 ## Panel and slot composition
 
 The root composes the Tab, Library, Library playback, Queue, Queue playback,

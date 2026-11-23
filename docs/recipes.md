@@ -111,9 +111,10 @@ Use this recipe for a new configurable keyboard action. Read
    chord is canvas-scoped and must not resolve in the TUI Client — also
    needs the `KeyGate::GuiClient` gate in the registry, a `KeyPolicyBinding`
    variant with a `KeyPolicyEntry` whose `name` equals the registry `id`, an
-   arm in `command_for_policy` (`src/app/input/key_policy/commands.rs`), and
-   the router snapshot's GUI fact (`gui_client: true` in
-   `src/app/input/gui.rs`).
+   arm in `command_for_policy` (`src/app/input/key_policy/commands.rs`), a
+   `KeyPolicyGate::TransportChipKeys` gate (`src/app/input/key_policy.rs`),
+   and the router snapshot's capability fact (`client_capabilities` carrying
+   `ClientCapability::TransportChipKeys`, set in `src/app/input/gui.rs`).
    *Proof:* a `#[case]` row in `crates/mbv-gui/tests/bridge/keys.rs`, and a
    routing case in `src/app/input/gui/tests.rs` for a GUI-only action.
 
