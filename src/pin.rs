@@ -422,6 +422,12 @@ fn set_reserve_argv(panel: &str, reserve: PanelReserveMode) -> Vec<String> {
     ]
 }
 
+/// `toggle <panel>`.
+#[must_use]
+fn toggle_argv(panel: &str) -> Vec<String> {
+    vec!["toggle".to_string(), panel.to_string()]
+}
+
 /// What a finished `pinwin run` reports: a success exits with
 /// its status, a failure is always logged, and a desktop launch also
 /// notifies because it has no stderr to read.
@@ -476,11 +482,6 @@ pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
     };
     let exe = launch_exe(&current, std::process::id());
     let mut command = Command::new("pinwin");
-    // The panel host owns no socket of its own: it was started by the Client
-    // whose `PINWIN_SOCKET` that Client claimed and removed.
-    if let Some(socket) = identity().socket.as_deref() {
-        command.env(PINWIN_SOCKET_ENV, socket);
-    }
     command.args(run_argv(config, &terminal, exe.as_os_str(), log_level));
     if let Some(token) = swap_token() {
         command.env(SWAP_TOKEN_ENV, token);
@@ -529,6 +530,32 @@ fn finish(status: std::process::ExitStatus) -> ! {
         notify(&format!("mbv: {reason}"));
     }
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Ask pinwin on the current Wayland display to toggle the `mbv` panel:
+/// hide it if shown, show it if hidden. Exits 1 with pinwin's
+/// reason when no panel runs or the request fails; exits 0 silently on
+/// success.
+pub(crate) fn toggle_running() {
+    if let Err(error) = run_request(&toggle_argv(PANEL_NAME), identity().socket.as_deref()) {
+        report_toggle_failure(&error.to_string());
+    }
+}
+
+/// Report a failed `--toggle` and exit 1: stderr when stdin is a
+/// terminal, otherwise a desktop notification, because a compositor key has
+/// no terminal.
+fn report_toggle_failure(reason: &str) -> ! {
+    let message = format!("mbv: {reason}");
+    match failure_action(std::io::stdin().is_terminal()) {
+        StartFailureAction::WarnInTerminal => {
+            eprintln!("{message}");
+        }
+        StartFailureAction::NotifyAndExit => {
+            notify(&message);
+        }
+    }
+    std::process::exit(1);
 }
 
 /// What a failed pinned start does next.

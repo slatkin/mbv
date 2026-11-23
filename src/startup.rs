@@ -18,7 +18,6 @@ use crate::pin;
 use crate::{ClientCapabilities, ClientCapability};
 use mbv_core::applog;
 use mbv_ctrl::OwnerAction;
-use mbv_desktop::launch::toggle_panel;
 
 /// Cap glibc malloc arenas. libmpv/ffmpeg allocate through glibc directly
 /// (mimalloc only covers Rust); with mpv's ~20 threads the default
@@ -216,7 +215,7 @@ fn pre_config_startup(args: &[String]) -> Option<StartupArgs> {
     // is handled before applog, config migration and `load_config`. It exits 1
     // itself when the request fails.
     if has_flag(args, "--toggle") {
-        toggle_panel();
+        pin::toggle_running();
         return None;
     }
 
