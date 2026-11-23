@@ -120,17 +120,28 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
     assert!(state.replacement.is_none(), "the completed batch published");
     assert_eq!(state.total, 1, "the page's total is the catalog's");
 
-    // A loaded catalog's open starts no second load: no replacement batch
-    // arms, so no worker runs and the chain stays single-flight.
+    // A loaded catalog's open starts no second catalog chain: the root step
+    // finds the published page loaded, so no replacement batch arms and the
+    // catalog request serial stays where the landed page left it.
+    let loaded_request = book_state(&app).catalog_request;
     gui_abs_open(&mut app, 0);
     assert!(
         book_state(&app).replacement.is_none(),
         "the loaded catalog's open started no refresh batch"
     );
-    assert!(
-        app.channels.lib_rx.try_recv().is_err(),
-        "no request left the loaded catalog's open"
+    assert_eq!(
+        book_state(&app).catalog_request,
+        loaded_request,
+        "the loaded catalog's open left the catalog request serial alone"
     );
+
+    // The lib channel's emptiness is no witness here. `open_abs` runs the
+    // whole ensure, and a published page lets the pass continue to its
+    // selection step, whose book-detail worker is a detached thread: its
+    // failure event can land after this test's drain. A slow worker would
+    // then fail an emptiness assertion on an open that started no catalog
+    // chain, which is what the single-flight contract forbids; the catalog
+    // serial above is the synchronous observable of that contract.
 }
 
 /// Selecting a book stores the pick and lands its chapters in the detail
