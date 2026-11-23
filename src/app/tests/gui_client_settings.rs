@@ -12,10 +12,13 @@ use crate::app::state::app_struct::LaunchRestore;
 fn the_gui_setting_disables_the_tui_panel_rules() {
     let mut app = make_app_stub();
     app.set_client_capabilities(gui_client_capabilities());
-    // A narrow terminal plus an empty queue arms both of the TUI's rules.
-    crate::app::tests::set_terminal_width(&mut app, 60);
     app.panel_focus = PanelFocus::Queue;
     app.panel_mode = PanelMode::Both;
+    // A narrow terminal plus an empty queue arms both of the TUI's rules; the
+    // terminal size lives on the shell `Model`.
+    let mut model = Model::new(app);
+    crate::app::tests::set_terminal_width(&mut model, 60);
+    let app = &model.app;
 
     assert!(app.displayed_queue().slots().is_empty());
     assert!(!app.is_mini_view());

@@ -36,6 +36,18 @@ impl Model {
             .and_then(LibraryPanel::menu_geometry)
     }
 
+    /// The Wide TV workspace's paint-free library area: the placement region
+    /// for a pointer-anchored menu over the active Emby TV library, `None`
+    /// when the library is not placed wide (task 8.2 deleted the
+    /// `tv_wide_*` pane rects).
+    fn wide_tv_workspace_area(&self) -> Option<Rect> {
+        let terminal_size = self.terminal_size();
+        self.app
+            .tab
+            .emby_library_index()
+            .and_then(|lib_idx| wide_tv_show_area(&self.app, lib_idx, terminal_size))
+    }
+
     /// Like `library_menu_geometry`, but for the mounted `QueueComponent`
     /// (task 3.1, design D11): the queue panel answers the context-menu
     /// keyboard anchor from its own retained geometry, not a shell mirror.
@@ -92,17 +104,14 @@ impl Model {
                     let panel = match self.app.effective_panel_focus() {
                         PanelFocus::Library
                             if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
-                                wide_tv_show_area(&self.app, lib_idx).is_some()
+                                wide_tv_show_area(&self.app, lib_idx, self.terminal_size())
+                                    .is_some()
                             }) =>
                         {
                             // Task 8.2 deleted the `tv_wide_*` pane rects; the
                             // panel's paint-free library content area is the
                             // placement region for the whole Wide TV workspace.
-                            self.app
-                                .tab
-                                .emby_library_index()
-                                .and_then(|lib_idx| wide_tv_show_area(&self.app, lib_idx))
-                                .unwrap_or_default()
+                            self.wide_tv_workspace_area().unwrap_or_default()
                         }
                         PanelFocus::Library => self
                             .library_menu_geometry()

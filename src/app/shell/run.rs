@@ -115,7 +115,7 @@ impl Model {
         // A pinned width change is one `pinwin set-size` request; the new size
         // reaches mbv only as the terminal's own `Resize` observer event, which
         // this pass adopts like any other resize (invariant 17).
-        let size = (self.app.terminal_width, self.app.terminal_height);
+        let size = (self.terminal_width, self.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
         if self.handled_terminal_size == size && !resize_event {
             return;
@@ -132,7 +132,7 @@ impl Model {
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
             self.app.mini_view_focus = PanelFocus::Queue;
         }
-        if self.app.clamp_queue_column_width() {
+        if self.clamp_queue_column_width() {
             self.app.save_prefs();
         }
     }
@@ -153,7 +153,7 @@ impl Model {
         // Design D6b: a direct draw (startup, or a test fixture) takes any
         // pending reveal request first, so the painted strip matches state.
         self.reveal_requested_tab();
-        super::draw::compose_root_frame(&mut self.app, f);
+        super::draw::compose_root_frame(self, f);
         // Root composition is data-driven: this is the sole panel paint loop.
         // The queue playback placement is deliberately handled by its panel
         // method; its transport geometry was projected during sync from the

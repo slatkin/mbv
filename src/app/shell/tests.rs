@@ -11,14 +11,13 @@ use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_msg::{MusicTreeAction, ShellRequest};
 use std::sync::{Arc, Mutex};
 
-/// Record a terminal size on a test `App` the way the shell records one, so
-/// its single-panel fact matches the width (row 4.7 moves these call sites
-/// to `set_single_panel`).
-fn set_test_terminal_size(app: &mut crate::app::App, width: u16, height: u16) {
-    app.terminal_width = width;
-    app.terminal_height = height;
+/// Record a terminal size on a test `Model` the way the shell records one,
+/// so its single-panel fact matches the width.
+fn set_test_terminal_size(model: &mut Model, width: u16, height: u16) {
+    model.terminal_width = width;
+    model.terminal_height = height;
     let single_panel = crate::app::App::derive_single_panel(width);
-    app.set_single_panel(single_panel);
+    model.app.set_single_panel(single_panel);
 }
 
 #[test]
@@ -82,8 +81,11 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
 #[test]
 fn terminal_resize_observer_applies_new_size_before_paint() {
     let mut model = Model::new(make_app_stub());
-    set_test_terminal_size(&mut model.app, 60, 24);
-    assert!(!crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
+    set_test_terminal_size(&mut model, 60, 24);
+    assert!(!crate::app::shell::tv_wide::is_right_panel_wide(
+        &model.app,
+        model.terminal_size()
+    ));
     let mut music_resize = false;
     let mut tv_resize = false;
     apply_terminal_observer(
@@ -95,9 +97,12 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
         &mut music_resize,
         &mut tv_resize,
     );
-    assert_eq!(model.app.terminal_width, 150);
-    assert_eq!(model.app.terminal_height, 24);
-    assert!(crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
+    assert_eq!(model.terminal_width, 150);
+    assert_eq!(model.terminal_height, 24);
+    assert!(crate::app::shell::tv_wide::is_right_panel_wide(
+        &model.app,
+        model.terminal_size()
+    ));
 }
 
 /// Regression guard for an expanded pinned panel at 120 columns, the width
@@ -110,8 +115,11 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
 #[test]
 fn the_default_pinned_expanded_width_is_wide() {
     let mut model = Model::new(make_app_stub());
-    set_test_terminal_size(&mut model.app, 120, 40);
-    assert!(crate::app::shell::tv_wide::is_right_panel_wide(&model.app));
+    set_test_terminal_size(&mut model, 120, 40);
+    assert!(crate::app::shell::tv_wide::is_right_panel_wide(
+        &model.app,
+        model.terminal_size()
+    ));
 }
 
 fn music_album(id: &str) -> EmbyItem {

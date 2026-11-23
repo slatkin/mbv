@@ -98,14 +98,16 @@ impl Model {
             services,
             keys,
             setup,
-            area: if let Some(panel_area) = super::chrome_panels::sync_panel_area(&self.app) {
+            area: if let Some(panel_area) =
+                super::chrome_panels::sync_panel_area(&self.app, self.terminal_size())
+            {
                 panel_area
             } else {
                 Rect {
                     x: 0,
                     y: 0,
-                    width: self.app.terminal_width,
-                    height: self.app.terminal_height,
+                    width: self.terminal_width,
+                    height: self.terminal_height,
                 }
             },
         }

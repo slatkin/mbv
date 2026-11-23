@@ -23,6 +23,7 @@ use crate::app::state::app_struct::LaunchRestore;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::queue::QueueComponent;
 use mbv_queue::TvContentMode;
+use mbv_render::arrangements::queue::normalize_queue_column_width;
 
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
@@ -31,6 +32,19 @@ use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::{ComponentId, PopupId};
 
 impl Model {
+    /// The shell's reader for the queue-column clamp (row 4.3 of design D2):
+    /// the terminal width and the queue-column rules are both shell facts, so
+    /// `normalize_queue_column_width` is applied here, not in the core.
+    pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
+        let normalized =
+            normalize_queue_column_width(self.app.queue_column_width, self.terminal_width);
+        if normalized == self.app.queue_column_width {
+            return false;
+        }
+        self.app.queue_column_width = normalized;
+        true
+    }
+
     /// Reset the running TUI's live presentation and saved presentation
     /// state (#745). Implements the `tui-state-reset` capability: Home is
     /// selected, every retained destination owner (active and inactive) and
@@ -88,7 +102,7 @@ impl Model {
         self.app.panel_focus = PanelFocus::Library;
         self.app.mini_view_focus = PanelFocus::Queue;
         self.app.queue_column_width = LEFT_WIDTH_DEFAULT;
-        self.app.clamp_queue_column_width();
+        self.clamp_queue_column_width();
         self.app.list_pane_width = None;
         self.app.visual_slot_hidden = false;
         self.app.visualizer_enabled = false;

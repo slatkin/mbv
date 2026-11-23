@@ -187,8 +187,6 @@ pub struct App {
     // Per-frame layout geometry from last render, used for mouse hit-testing.
     // See src/app/layout.rs for the grouping rationale.
     pub(in crate::app) layout: layout::AppLayout,
-    pub(in crate::app) terminal_width: u16,
-    pub(in crate::app) terminal_height: u16,
     /// The single-panel fact the TUI pushes from its terminal width
     /// (`App::set_single_panel`). `is_mini_view` reads it.
     pub(in crate::app) single_panel: bool,
@@ -779,25 +777,13 @@ impl App {
 
     pub(crate) fn pin_launch_focus_to_queue(&mut self) {
         // Written directly, not through `set_panel_focus`: at construct time
-        // the terminal size is still the placeholder 80, and this rule must
+        // the shell has not recorded a terminal size yet, and this rule must
         // not depend on which branch a size-dependent setter would take.
         self.panel_focus = PanelFocus::Queue;
         self.focus_queue_initial_item();
         if let LaunchRestore::Pending(state) = &mut self.launch_restore {
             state.panel_focus = mbv_config::LaunchPanelFocus::Queue;
         }
-    }
-
-    pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
-        let normalized = mbv_render::arrangements::queue::normalize_queue_column_width(
-            self.queue_column_width,
-            self.terminal_width,
-        );
-        if normalized == self.queue_column_width {
-            return false;
-        }
-        self.queue_column_width = normalized;
-        true
     }
 }
 

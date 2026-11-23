@@ -28,10 +28,11 @@ use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
-pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
+pub(crate) fn sync_panel_area(app: &App, terminal_size: (u16, u16)) -> Option<Rect> {
     let area = super::draw::compute_chrome_geometry(
         app,
-        Rect::new(0, 0, app.terminal_width, app.terminal_height),
+        terminal_size.0,
+        Rect::new(0, 0, terminal_size.0, terminal_size.1),
     )
     .panel_area;
     (area.width > 0 && area.height > 0).then_some(area)
@@ -48,7 +49,8 @@ impl Model {
         }
         let chrome = super::draw::compute_chrome_geometry(
             &self.app,
-            Rect::new(0, 0, self.app.terminal_width, self.app.terminal_height),
+            self.terminal_width,
+            Rect::new(0, 0, self.terminal_width, self.terminal_height),
         );
         if chrome.left_area.width == 0 {
             self.app.layout.card = CardGeometry::default();
@@ -64,7 +66,7 @@ impl Model {
         let wide = queue_playback_column_wide(chrome.left_area.width);
         let rect = queue_card_reserved_rect(
             self.app.images.last_card_size(),
-            self.app.terminal_height,
+            self.terminal_height,
             slot_region,
             wide,
         );
@@ -85,7 +87,8 @@ impl Model {
     fn sync_chrome_root(&self) -> RootFrame {
         super::draw::compute_chrome_geometry(
             &self.app,
-            ratatui::layout::Rect::new(0, 0, self.app.terminal_width, self.app.terminal_height),
+            self.terminal_width,
+            ratatui::layout::Rect::new(0, 0, self.terminal_width, self.terminal_height),
         )
         .root
     }
@@ -302,7 +305,7 @@ impl Model {
                     let wide = queue_playback_column_wide(placement.width);
                     queue_card_reserved_rect(
                         self.app.images.last_card_size(),
-                        self.app.terminal_height,
+                        self.terminal_height,
                         slot_region,
                         wide,
                     )
@@ -372,7 +375,13 @@ impl Model {
             slot_region,
         );
         if self.app.visual_slot_shown() {
-            super::queue_card::render_queue_playback_slot(&mut self.app, frame, slot_region, wide);
+            super::queue_card::render_queue_playback_slot(
+                &mut self.app,
+                self.terminal_height,
+                frame,
+                slot_region,
+                wide,
+            );
         }
         self.application.view(&id, frame, placement);
     }

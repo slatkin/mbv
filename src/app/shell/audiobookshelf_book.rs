@@ -93,7 +93,7 @@ impl Model {
                     }
                 }
                 AudiobookshelfBookIntent::Activate => {
-                    if super::tv_wide::is_right_panel_wide(&self.app) {
+                    if super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size()) {
                         if let Some(index) = self.app.tab.audiobookshelf_index() {
                             self.app.play_selected_audiobookshelf_book(index);
                         }
@@ -102,7 +102,7 @@ impl Model {
                     }
                 }
                 AudiobookshelfBookIntent::FocusChapters => {
-                    if super::tv_wide::is_right_panel_wide(&self.app) {
+                    if super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size()) {
                         self.update_abs_book_owner(
                             mbv_components::book_content::BookContent::enter_chapter_focus,
                         );

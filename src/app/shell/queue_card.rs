@@ -12,13 +12,14 @@ use ratatui::layout::Rect;
 
 fn render_card_visualizer(
     app: &mut App,
+    terminal_height: u16,
     f: &mut Frame,
     area: Rect,
     left_align: bool,
 ) -> (u16, u16, bool) {
     let rect = queue_card_reserved_rect(
         app.images.last_card_size(),
-        app.terminal_height,
+        terminal_height,
         area,
         left_align,
     );
@@ -39,18 +40,19 @@ fn render_card_visualizer(
 /// (task 3.4, D9)).
 pub(in crate::app) fn render_queue_playback_slot(
     app: &mut App,
+    terminal_height: u16,
     f: &mut Frame,
     area: Rect,
     left_align: bool,
 ) -> (u16, u16, bool) {
     let mut projection = app.queue_card_projection.clone();
     if projection.visualizer {
-        return render_card_visualizer(app, f, area, left_align);
+        return render_card_visualizer(app, terminal_height, f, area, left_align);
     }
     if !projection.images_enabled {
         let rect = queue_card_reserved_rect(
             app.images.last_card_size(),
-            app.terminal_height,
+            terminal_height,
             area,
             left_align,
         );
@@ -79,7 +81,6 @@ pub(in crate::app) fn render_queue_playback_slot(
     let loading =
         !placeholder_slot && (app.images.is_loading(key) || app.images.is_fetch_interrupted(key));
     let last_card = app.images.last_card_size();
-    let terminal_height = app.terminal_height;
     let image = app.cached_image_protocol_mut(key);
     let (height, width, loading, painted) = render_card_painting(
         f,

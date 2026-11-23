@@ -473,10 +473,11 @@ impl App {
     /// Take an accepted target width and assign the matching pinned view, or
     /// flash a refused request's reason and touch nothing.
     ///
-    /// The view fields are written directly: at dispatch time `terminal_width`
-    /// still holds the pre-toggle width (the terminal's `Resize` event arrives
-    /// later), so on expand `set_panel_focus` would take its mini-view early
-    /// return and leave the stored `panel_focus` stale.
+    /// The view fields are written directly: at dispatch time the shell's
+    /// recorded terminal width still holds the pre-toggle width (the
+    /// terminal's `Resize` event arrives later), so on expand
+    /// `set_panel_focus` would take its mini-view early return and leave the
+    /// stored `panel_focus` stale.
     pub(in crate::app) fn apply_pinned_view(
         &mut self,
         width: mbv_ui_model::settings::PinnedWidth,

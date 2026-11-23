@@ -96,7 +96,8 @@ impl Model {
         self.update_playlists_content();
         self.update_sessions_content();
 
-        let panel_area = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
+        let panel_area =
+            crate::app::shell::chrome_panels::sync_panel_area(&self.app, self.terminal_size());
         let help_id = ComponentId::Overlay(OverlayId::Help);
         if let Some(comp) = self.application.get_component_mut(&help_id)
             && let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>()
@@ -119,7 +120,8 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        let panel_area = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
+        let panel_area =
+            crate::app::shell::chrome_panels::sync_panel_area(&self.app, self.terminal_size());
         let direct_remote_session_id = self.app.sessions_panel_connected_id();
         // The connection mark follows the owner's reported playback output
         // (design D12/D13): the owner holds the output, a `Disconnected`

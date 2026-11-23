@@ -58,6 +58,12 @@ fn buffer_text(term: &Terminal<TestBackend>) -> String {
         .join("\n")
 }
 
+/// Record a terminal size the way the TUI shell records one (row 4.3): the
+/// size lives on the `Model`, and the width also pushes the single-panel fact.
+fn set_model_terminal_size(model: &mut Model, width: u16, height: u16) {
+    crate::app::tests::set_terminal_size(model, width, height);
+}
+
 fn draw(model: &mut Model, term: &mut Terminal<TestBackend>) -> String {
     term.draw(|f| model.draw_frame(f, false, false)).unwrap();
     buffer_text(term)
@@ -155,8 +161,6 @@ fn press(model: &mut Model, code: Key) {
 
 fn tv_shows_app() -> App {
     let mut app = make_app_stub();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
     app.mini_view_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
 
@@ -195,6 +199,7 @@ fn tv_shows_app() -> App {
 #[test]
 fn narrow_tv_browse_j_moves_painted_selection() {
     let mut model = Model::new(tv_shows_app());
+    set_model_terminal_size(&mut model, 60, 20);
     model.sync_mounted_surfaces();
     let mut term = narrow_backend();
 
@@ -220,8 +225,6 @@ fn narrow_tv_browse_j_moves_painted_selection() {
 
 fn feed_home_video_group_app() -> App {
     let mut app = make_app_stub();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
     app.mini_view_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
     app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
@@ -283,8 +286,6 @@ fn feed_home_video_group_app() -> App {
 /// geometry.
 fn wide_feed_video_group_model() -> (Model, Terminal<TestBackend>, ratatui::layout::Rect, usize) {
     let mut app = feed_home_video_group_app();
-    app.terminal_width = 140;
-    app.terminal_height = 40;
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::LibraryOnly;
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
@@ -295,6 +296,7 @@ fn wide_feed_video_group_model() -> (Model, Terminal<TestBackend>, ratatui::layo
         all.push(item);
     }
     let mut model = Model::new(app);
+    set_model_terminal_size(&mut model, 140, 40);
     model.sync_mounted_surfaces();
     leave_latest(&mut model);
     let mut term = Terminal::new(TestBackend::new(140, 40)).unwrap();
@@ -435,8 +437,6 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
 #[test]
 fn default_latest_landing_requests_the_lazy_latest_fetch_once() {
     let mut app = make_app_stub();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
     app.mini_view_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
 
@@ -467,6 +467,7 @@ fn default_latest_landing_requests_the_lazy_latest_fetch_once() {
     });
 
     let mut model = Model::new(app);
+    set_model_terminal_size(&mut model, 60, 20);
     model.sync_mounted_surfaces();
 
     assert!(

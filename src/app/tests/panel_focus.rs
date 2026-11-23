@@ -46,21 +46,21 @@ fn panel_appearance_focus_for_library(
 /// even while the library holds focus; wide keeps the focused fill.
 #[test]
 fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
-    let mut mini = make_app_stub();
-    crate::app::tests::set_terminal_width(&mut mini, 60);
-    mini.mini_view_focus = PanelFocus::Library;
-    let harness = TickHarness::new(mini);
+    let mut app = make_app_stub();
+    app.mini_view_focus = PanelFocus::Library;
+    let mut mini = TickHarness::new(app);
+    crate::app::tests::set_terminal_width(mini.model_mut(), 60);
     assert_eq!(
-        harness.model().library_body_fill(),
+        mini.model().library_body_fill(),
         mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, false)
             .fill
             .to_ratatui(),
     );
 
-    let mut wide = make_app_stub();
-    crate::app::tests::set_terminal_width(&mut wide, 100);
-    wide.panel_focus = PanelFocus::Library;
-    let wide_harness = TickHarness::new(wide);
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Library;
+    let mut wide_harness = TickHarness::new(app);
+    crate::app::tests::set_terminal_width(wide_harness.model_mut(), 100);
     assert_eq!(
         wide_harness.model().library_body_fill(),
         mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, true)
@@ -78,10 +78,10 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
 #[test]
 fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     let mut app = make_app_stub();
-    crate::app::tests::set_terminal_width(&mut app, 60);
     app.mini_view_focus = PanelFocus::Queue;
     app.local_view.adopt_items(make_items(3), 0);
     let mut harness = TickHarness::new(app);
+    crate::app::tests::set_terminal_width(harness.model_mut(), 60);
     harness.model_mut().sync_mounted_surfaces();
 
     let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
@@ -99,7 +99,11 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
         resting_zebra, focused_zebra,
         "the QueueColumn focus pair must differ for this proof to bind"
     );
-    let panel = crate::app::shell::draw::queue_panel_placement(&harness.model().app).panel_area;
+    let panel = crate::app::shell::draw::queue_panel_placement(
+        &harness.model().app,
+        harness.model().terminal_size(),
+    )
+    .panel_area;
     assert!(panel.width > 2 && panel.height > 0, "queue panel placed");
     let buf = terminal.backend().buffer();
     // The placement's outer frame columns stay outside the inset list box,
@@ -161,10 +165,10 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
 #[test]
 fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
     let mut app = make_app_stub();
-    app.terminal_width = 100;
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
+    crate::app::tests::set_terminal_width(harness.model_mut(), 100);
 
     let mut wide_terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
     wide_terminal
@@ -320,8 +324,10 @@ fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
 #[test]
 fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
     let mut app = make_app_stub();
-    app.terminal_width = 100;
     app.panel_mode = PanelMode::Both;
+    let mut model = Model::new(app);
+    crate::app::tests::set_terminal_width(&mut model, 100);
+    let app = &model.app;
 
     assert_eq!(app.effective_panel_mode(), PanelMode::LibraryOnly);
     assert_eq!(app.panel_mode, PanelMode::Both);
@@ -333,8 +339,10 @@ fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
 #[test]
 fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
     let mut app = make_app_stub();
-    app.terminal_width = 100;
     app.panel_mode = PanelMode::Both;
+    let mut model = Model::new(app);
+    crate::app::tests::set_terminal_width(&mut model, 100);
+    let app = &mut model.app;
 
     app.dispatch(&AppCommand::Panel(PanelIntent::CyclePanelMode));
 
@@ -348,11 +356,11 @@ fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
 #[test]
 fn emptied_queue_moves_stored_focus_to_library_and_refill_leaves_it_there() {
     let mut app = make_app_stub();
-    app.terminal_width = 100;
     app.panel_mode = PanelMode::Both;
     app.panel_focus = PanelFocus::Queue;
     app.local_view.adopt_items(make_items(2), 0);
     let mut model = Model::new(app);
+    crate::app::tests::set_terminal_width(&mut model, 100);
     model.sync_queue();
     assert_eq!(model.app.panel_focus, PanelFocus::Queue);
 

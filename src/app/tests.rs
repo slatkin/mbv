@@ -1,20 +1,20 @@
 use super::*;
 
-/// Record a terminal size the way the TUI shell records one: the width also
-/// pushes the single-panel fact (`App::set_single_panel`), which `is_mini_view`
-/// reads.
-pub(in crate::app) fn set_terminal_size(app: &mut App, width: u16, height: u16) {
-    app.terminal_width = width;
-    app.terminal_height = height;
+/// Record a terminal size the way the TUI shell records one: the shell keeps
+/// the size (`Model::terminal_width`/`terminal_height`) and pushes the
+/// single-panel fact (`App::set_single_panel`), which `is_mini_view` reads.
+pub(in crate::app) fn set_terminal_size(model: &mut Model, width: u16, height: u16) {
+    model.terminal_width = width;
+    model.terminal_height = height;
     let single_panel = App::derive_single_panel(width);
-    app.set_single_panel(single_panel);
+    model.app.set_single_panel(single_panel);
 }
 
 /// Record only a terminal width, pushing the matching single-panel fact.
-pub(in crate::app) fn set_terminal_width(app: &mut App, width: u16) {
-    app.terminal_width = width;
+pub(in crate::app) fn set_terminal_width(model: &mut Model, width: u16) {
+    model.terminal_width = width;
     let single_panel = App::derive_single_panel(width);
-    app.set_single_panel(single_panel);
+    model.app.set_single_panel(single_panel);
 }
 
 mod audiobookshelf_book_activation_tests;

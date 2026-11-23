@@ -35,9 +35,9 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 
     // Mini view derives its mode from `mini_view_focus`, never the stored
     // Both: a narrow terminal in the Library mini view has no boundary either.
-    let mut mini = crate::app::tests::render_fixtures::make_queue_app(2);
-    crate::app::tests::set_terminal_width(&mut mini, 70);
+    let mini = crate::app::tests::render_fixtures::make_queue_app(2);
     let mut harness = TickHarness::new(mini);
+    crate::app::tests::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().sync_mounted_surfaces();
     assert!(
         !harness

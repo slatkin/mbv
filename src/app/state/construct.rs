@@ -156,8 +156,6 @@ impl App {
             libs: Vec::new(),
             toasts: crate::app::state::toasts::ToastList::default(),
             layout: layout::AppLayout::default(),
-            terminal_width: 80,
-            terminal_height: 24,
             single_panel: false,
             pinned_width: mbv_ui_model::settings::PinnedWidth::default(),
             pinned_request_pending: None,

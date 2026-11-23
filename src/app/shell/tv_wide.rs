@@ -8,17 +8,11 @@ use ratatui::layout::Rect;
 /// panel state, paint-free — `None` when the right panel is not visible
 /// (e.g. Queue-only panel mode). Factored out of `wide_tv_show_area`
 /// so every paint-free breakpoint consumer shares one pipeline.
-fn right_panel_lib_area(app: &App) -> Option<Rect> {
-    let chrome = mbv_render::arrangements::chrome::chrome_geometry(
-        mbv_render::arrangements::chrome::ChromeGeometryInput {
-            area: Rect::new(0, 0, app.terminal_width, app.terminal_height),
-            panel_mode: app.effective_panel_mode(),
-            panel_focus: app.effective_panel_focus(),
-            queue_column_width: app.queue_column_width,
-            terminal_width: app.terminal_width,
-            card_height: app.layout.card.height,
-            playback_active: app.effective_playback_state().active,
-        },
+fn right_panel_lib_area(app: &App, terminal_size: (u16, u16)) -> Option<Rect> {
+    let chrome = super::draw::compute_chrome_geometry(
+        app,
+        terminal_size.0,
+        Rect::new(0, 0, terminal_size.0, terminal_size.1),
     );
     if !chrome.right_visible {
         return None;
@@ -34,8 +28,8 @@ fn right_panel_lib_area(app: &App) -> Option<Rect> {
 /// four deleted `is_wide_*_active()` paint-inference predicates: the
 /// breakpoint (`wide_hero_fits`) is the same for every
 /// Wide hero destination, so one predicate serves all of them.
-pub(in crate::app) fn is_right_panel_wide(app: &App) -> bool {
-    right_panel_lib_area(app).is_some_and(wide_hero::wide_hero_fits)
+pub(in crate::app) fn is_right_panel_wide(app: &App, terminal_size: (u16, u16)) -> bool {
+    right_panel_lib_area(app, terminal_size).is_some_and(wide_hero::wide_hero_fits)
 }
 
 /// The finalized library content rect when the Wide TV series Workspace
@@ -46,7 +40,11 @@ pub(in crate::app) fn is_right_panel_wide(app: &App) -> bool {
 /// stores `None`); `None` for both counts as a show mode. Computed a
 /// frame earlier than a painted rect, so mount and focus do not flash
 /// the narrow browser on entry.
-pub(in crate::app) fn wide_tv_show_area(app: &App, lib_idx: usize) -> Option<Rect> {
+pub(in crate::app) fn wide_tv_show_area(
+    app: &App,
+    lib_idx: usize,
+    terminal_size: (u16, u16),
+) -> Option<Rect> {
     let lib = app.libs.get(lib_idx)?;
     if lib.library.collection_type != "tvshows" {
         return None;
@@ -59,6 +57,6 @@ pub(in crate::app) fn wide_tv_show_area(app: &App, lib_idx: usize) -> Option<Rec
     if matches!(mode, Some(TvContentMode::Latest | TvContentMode::Upcoming)) {
         return None;
     }
-    let lib_area = right_panel_lib_area(app)?;
+    let lib_area = right_panel_lib_area(app, terminal_size)?;
     wide_hero::wide_hero_fits(lib_area).then_some(lib_area)
 }

@@ -489,9 +489,9 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
 /// would close it. The sync passes must yield focus while an overlay is up.
 #[test]
 fn esc_closes_a_sidebar_in_mini_view() {
-    let mut app = make_app_stub();
-    crate::app::tests::set_terminal_width(&mut app, 70);
+    let app = make_app_stub();
     let mut harness = TickHarness::new(app);
+    crate::app::tests::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().mount_sidebar(SidebarId::Sessions);
     let id = ComponentId::Overlay(OverlayId::Sessions);
 

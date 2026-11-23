@@ -56,7 +56,6 @@ fn app_with_card_image() -> App {
         visualizer: false,
         title_site: NowPlayingTitleSite::Header,
     };
-    app.terminal_height = 50;
     app
 }
 
@@ -68,7 +67,7 @@ fn paint_slot_in(app: &mut App, area: Rect) {
     let mut terminal = Terminal::new(TestBackend::new(48, 30)).unwrap();
     terminal
         .draw(|frame| {
-            super::render_queue_playback_slot(app, frame, area, true);
+            super::render_queue_playback_slot(app, 50, frame, area, true);
         })
         .unwrap();
 }

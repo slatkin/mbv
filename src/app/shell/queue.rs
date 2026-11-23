@@ -59,6 +59,7 @@ impl Model {
 
     fn push_queue_projection(&mut self, update: QueueSurfaceProjection) {
         let id = ComponentId::Queue;
+        let terminal_size = self.terminal_size();
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>()
         {
@@ -96,7 +97,7 @@ impl Model {
             // columns ignores window focus.
             queue.set_frame_focused(self.app.panel_appearance_focus(PanelFocus::Queue));
             queue.set_mini_view(self.app.is_mini_view());
-            queue.set_area(super::draw::queue_panel_placement(&self.app).panel_area);
+            queue.set_area(super::draw::queue_panel_placement(&self.app, terminal_size).panel_area);
         }
     }
 

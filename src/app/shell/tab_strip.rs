@@ -22,14 +22,14 @@ impl Model {
         if !std::mem::take(&mut self.app.tab_reveal_requested) {
             return;
         }
-        self.tab_scroll = reveal_scroll(&self.app, self.tab_scroll);
+        self.tab_scroll = reveal_scroll(&self.app, self.terminal_size(), self.tab_scroll);
     }
 }
 
 /// The smallest scroll anchor that shows the current tab, given the current
 /// anchor. A tab left of the anchor pulls the anchor onto it; a tab right of
 /// the visible window advances the anchor until the window reaches it.
-fn reveal_scroll(app: &App, anchor: usize) -> usize {
+fn reveal_scroll(app: &App, terminal_size: (u16, u16), anchor: usize) -> usize {
     if app.tab_count() == 0 {
         return anchor;
     }
@@ -39,7 +39,7 @@ fn reveal_scroll(app: &App, anchor: usize) -> usize {
     if pos < anchor {
         return pos;
     }
-    let avail_w = tab_strip_width(app);
+    let avail_w = tab_strip_width(app, terminal_size);
     let widths = tab_title_widths(app);
     let mut scroll = anchor;
     loop {
@@ -54,13 +54,14 @@ fn reveal_scroll(app: &App, anchor: usize) -> usize {
 
 /// Residual A: derive the tab-strip width from the shared arrangement
 /// primitive instead of reading the painted `layout.tabs_area`.
-fn tab_strip_width(app: &App) -> u16 {
-    let area = Rect::new(0, 0, app.terminal_width, app.terminal_height);
-    let chrome = super::draw::compute_chrome_geometry(app, area);
+fn tab_strip_width(app: &App, terminal_size: (u16, u16)) -> u16 {
+    let area = Rect::new(0, 0, terminal_size.0, terminal_size.1);
+    let chrome = super::draw::compute_chrome_geometry(app, terminal_size.0, area);
     if chrome.right_visible {
         tab_strip_text_width(chrome.tab_bar_area.width)
     } else {
-        app.terminal_width
+        terminal_size
+            .0
             .saturating_sub(mbv_render::layout::TABBAR_LEFT_RESERVE)
     }
 }

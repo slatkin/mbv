@@ -60,6 +60,9 @@ impl App {
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
         overlay_box: Option<(u16, u16)>,
+        // The shell's recorded terminal height (row 4.3): terminal geometry
+        // lives on the `Model`, so the caller passes it in.
+        terminal_height: u16,
         resizing: bool,
     ) -> mbv_ui_model::playback::HeroImageState {
         use mbv_ui_model::library_hero::ArtworkSource;
@@ -144,7 +147,7 @@ impl App {
                     panes.hero_area,
                     facts,
                     workspace_present,
-                    self.terminal_height,
+                    terminal_height,
                 );
                 // The optional Logo never delays the base image: it is
                 // reserved only here, once a decoded base exists to decorate,

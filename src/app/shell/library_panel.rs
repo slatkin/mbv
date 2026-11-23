@@ -459,7 +459,7 @@ impl Model {
         panel.set_active(active);
         panel.sync_overlay_state();
         panel.set_list_pane_width(list_pane_width);
-        panel.set_terminal_height(self.app.terminal_height);
+        panel.set_terminal_height(self.terminal_height);
         panel.set_mini_view(self.app.is_mini_view());
         // The same appearance-focus projection the panel's own body fill
         // (`library_body_fill`) reads, so the skeleton's palette bit and the
@@ -623,6 +623,7 @@ impl Model {
             area,
             list_pane_width,
             overlay_box,
+            self.terminal_height,
             resizing,
         );
         if let Some(panel) = self

@@ -82,10 +82,10 @@ fn playback_intents(
 
 /// Draw one real shell frame (sync pass + `draw_frame`) and return the
 /// harness plus the panel's retained transport hit geometry.
-fn drawn_harness(mut app: crate::app::App, width: u16, height: u16) -> (TickHarness, Rect, Rect) {
-    app.terminal_width = width;
-    app.terminal_height = height;
+fn drawn_harness(app: crate::app::App, width: u16, height: u16) -> (TickHarness, Rect, Rect) {
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = width;
+    harness.model_mut().terminal_height = height;
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
@@ -116,9 +116,9 @@ mod strip_hits {
     fn strip_to_both_harness() -> (TickHarness, ratatui::layout::Rect) {
         let mut app = active_app(PanelMode::LibraryOnly);
         app.panel_focus = PanelFocus::Library;
-        app.terminal_width = 100;
-        app.terminal_height = 40;
         let mut harness = TickHarness::new(app);
+        harness.model_mut().terminal_width = 100;
+        harness.model_mut().terminal_height = 40;
         harness.model_mut().sync_mounted_surfaces();
         let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
         terminal
@@ -188,10 +188,10 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
 
     for width in [80, 120] {
         let mut app = active_app(PanelMode::QueueOnly);
-        app.terminal_width = width;
-        app.terminal_height = 40;
         app.images.record_card_size(8, 16);
         let mut harness = TickHarness::new(app);
+        harness.model_mut().terminal_width = width;
+        harness.model_mut().terminal_height = 40;
 
         harness.model_mut().sync_queue_card_geometry();
         let shown_card = (
@@ -219,6 +219,7 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
 
         let root = crate::app::shell::draw::compute_chrome_geometry(
             &harness.model().app,
+            width,
             Rect::new(0, 0, width, 40),
         )
         .root;
@@ -260,10 +261,10 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
     use mbv_render::arrangements::chrome::{queue_playback_column_wide, queue_playback_rows};
 
     let mut app = active_app(PanelMode::Both);
-    app.terminal_width = 100;
-    app.terminal_height = 40;
     app.images.record_card_size(8, 16);
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = 100;
+    harness.model_mut().terminal_height = 40;
 
     harness.model_mut().sync_queue_card_geometry();
     // Set after the geometry sync so the projected fact the header reads is
@@ -274,6 +275,7 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
 
     let root = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        100,
         Rect::new(0, 0, 100, 40),
     )
     .root;
@@ -303,10 +305,10 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
 /// are separated by a blank row.
 #[test]
 fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
-    let mut app = active_app(PanelMode::Both);
-    app.terminal_width = 100;
-    app.terminal_height = 40;
+    let app = active_app(PanelMode::Both);
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = 100;
+    harness.model_mut().terminal_height = 40;
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
     terminal
@@ -314,6 +316,7 @@ fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
         .unwrap();
     let root = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        100,
         Rect::new(0, 0, 100, 40),
     )
     .root;
@@ -351,8 +354,6 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
     let mut app = make_app_stub();
     app.player.update_status(|status| status.active = false);
     app.panel_focus = PanelFocus::Queue;
-    app.terminal_width = 100;
-    app.terminal_height = 40;
     // The gap row sits inside the queue column: with the empty-queue column
     // hidden (change `hide-empty-queue-column`, D1) an empty displayed queue
     // would not place the queue panel at all.
@@ -364,6 +365,8 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
         0,
     );
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = 100;
+    harness.model_mut().terminal_height = 40;
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
     terminal
@@ -371,6 +374,7 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
         .unwrap();
     let root = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        100,
         Rect::new(0, 0, 100, 40),
     )
     .root;
@@ -405,10 +409,10 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
 
 #[test]
 fn sync_projects_queue_transport_area_before_draw() {
-    let mut app = active_app(PanelMode::Both);
-    app.terminal_width = 100;
-    app.terminal_height = 40;
+    let app = active_app(PanelMode::Both);
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = 100;
+    harness.model_mut().terminal_height = 40;
     harness.model_mut().sync_mounted_surfaces();
     let panel = harness
         .model()
@@ -504,8 +508,6 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     // Collapsed means idle: the stub player starts active (a remote-owner
     // stand-in), which would paint the transport this test expects hidden.
     app.player.update_status(|status| status.active = false);
-    app.terminal_width = 80;
-    app.terminal_height = 40;
     // The collapsed queue playback panel is part of the queue column: with
     // the empty-queue column hidden (change `hide-empty-queue-column`, D1)
     // an empty displayed queue would not mount it at all.
@@ -517,6 +519,8 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
         0,
     );
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = 80;
+    harness.model_mut().terminal_height = 40;
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();
     terminal
@@ -539,6 +543,7 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     // collapsed region above the queue panel — resolve no playback intent.
     let chrome = crate::app::shell::draw::compute_chrome_geometry(
         &harness.model().app,
+        80,
         Rect::new(0, 0, 80, 40),
     );
     let collapsed_row = chrome.left_content.y + 1;
@@ -565,10 +570,10 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         (PanelMode::LibraryOnly, 100),
     ] {
         let queue_owned = mode != PanelMode::LibraryOnly;
-        let mut app = active_app(mode);
-        app.terminal_width = width;
-        app.terminal_height = 40;
+        let app = active_app(mode);
         let mut harness = TickHarness::new(app);
+        harness.model_mut().terminal_width = width;
+        harness.model_mut().terminal_height = 40;
         harness.model_mut().sync_mounted_surfaces();
         let mut terminal = Terminal::new(TestBackend::new(width, 40)).unwrap();
         // Two frames: the first draw publishes the visual slot's freshly
@@ -653,10 +658,10 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
 #[test]
 fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
     let mut app = active_app(PanelMode::Both);
-    app.terminal_width = 100;
-    app.terminal_height = 40;
     app.queue_card_projection.title_site = NowPlayingTitleSite::Artwork;
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = 100;
+    harness.model_mut().terminal_height = 40;
 
     harness.model_mut().sync_mounted_surfaces();
     harness.model_mut().app.visual_slot_hidden = true;
@@ -677,8 +682,6 @@ fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
 fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
     fn card_app() -> crate::app::App {
         let mut app = active_app(PanelMode::Both);
-        app.terminal_width = 120;
-        app.terminal_height = 40;
         let mut configured = ratatui_image::picker::Picker::halfblocks();
         configured.set_protocol_type(ratatui_image::picker::ProtocolType::Kitty);
         app.images.configure_protocol(None, true);
@@ -710,7 +713,7 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
             terminal
                 .draw(|frame| {
                     crate::app::shell::queue_card::render_queue_playback_slot(
-                        app, frame, area, true,
+                        app, 40, frame, area, true,
                     );
                 })
                 .unwrap();
@@ -724,6 +727,8 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
 
     let mut harness = TickHarness::new(card_app());
     let mut sizes = Vec::new();
+    harness.model_mut().terminal_width = 120;
+    harness.model_mut().terminal_height = 40;
     for _ in 0..6 {
         harness.model_mut().sync_mounted_surfaces();
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
@@ -745,7 +750,7 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
         title_site: NowPlayingTitleSite::Header,
     };
     let placement =
-        crate::app::shell::draw::compute_chrome_geometry(&reference, Rect::new(0, 0, 120, 40))
+        crate::app::shell::draw::compute_chrome_geometry(&reference, 120, Rect::new(0, 0, 120, 40))
             .root
             .queue_playback
             .expect("queue playback placed while playing");

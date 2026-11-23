@@ -141,7 +141,7 @@ impl Model {
             boundary.sync(
                 area,
                 self.app.layout.left_area.x,
-                self.app.terminal_width,
+                self.terminal_width,
                 self.app.queue_column_width,
                 enabled,
             );

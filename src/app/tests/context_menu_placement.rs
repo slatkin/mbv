@@ -69,12 +69,14 @@ fn menu_anchor(model: &Model) -> ContextMenuAnchor {
 fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
+    let cell = std::cell::RefCell::new(model);
     term.draw(|f| {
-        crate::app::shell::draw::compose_root_frame(&mut model.app, f);
-        model.render_context_menu_overlay(f);
+        let mut borrowed = cell.borrow_mut();
+        crate::app::shell::draw::compose_root_frame(&mut borrowed, f);
+        borrowed.render_context_menu_overlay(f);
     })
     .unwrap();
-    let rect = mounted_context_menu_rect(model);
+    let rect = mounted_context_menu_rect(cell.into_inner());
     (rect.x, rect.y)
 }
 
@@ -354,14 +356,14 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
     // Publish the frame layout first: the live loop always has a painted
     // frame before the slot can be clicked, and the menu resolves its
     // queue-column bounds from that published layout.
-    term.draw(|f| crate::app::shell::draw::compose_root_frame(&mut model.app, f))
+    term.draw(|f| crate::app::shell::draw::compose_root_frame(&mut model, f))
         .unwrap();
     model.app.open_visual_slot_context_menu();
     right_click_at(&mut model, (2, 20));
     model.sync_modal_requests();
 
     term.draw(|f| {
-        crate::app::shell::draw::compose_root_frame(&mut model.app, f);
+        crate::app::shell::draw::compose_root_frame(&mut model, f);
         let library_area = model
             .app
             .layout

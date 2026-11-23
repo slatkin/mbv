@@ -20,7 +20,11 @@ const HEIGHT: u16 = 40;
 /// Draw one real shell frame and return the queue footer row's text.
 fn footer_row_text(harness: &mut TickHarness) -> String {
     let footer = queue_footer_row(
-        crate::app::shell::draw::queue_panel_placement(&harness.model().app).panel_area,
+        crate::app::shell::draw::queue_panel_placement(
+            &harness.model().app,
+            harness.model().terminal_size(),
+        )
+        .panel_area,
     )
     .expect("queue footer row in a queue-visible layout");
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
@@ -41,10 +45,10 @@ fn footer_row_text(harness: &mut TickHarness) -> String {
 // ("The name SHALL change in the same frame in which the shown queue changes").
 #[test]
 fn the_footer_owner_label_flips_in_the_frame_that_first_shows_the_peer_queue() {
-    let mut app = make_local_daemon_app_stub(make_items(2));
-    app.terminal_width = WIDTH;
-    app.terminal_height = HEIGHT;
+    let app = make_local_daemon_app_stub(make_items(2));
     let mut harness = TickHarness::new(app);
+    harness.model_mut().terminal_width = WIDTH;
+    harness.model_mut().terminal_height = HEIGHT;
     harness.model_mut().sync_mounted_surfaces();
 
     let local_row = footer_row_text(&mut harness);

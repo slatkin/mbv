@@ -241,9 +241,22 @@ pub struct Model {
     /// [`Model::reveal_requested_tab`] from the core's `tab_reveal_requested`
     /// request and painted by `sync_tab_panel`.
     pub(in crate::app) tab_scroll: usize,
+    /// The terminal size the shell last recorded, on the resize observer and
+    /// on the draw path's per-frame size (design D2/D6a). Terminal geometry
+    /// never reaches the core: the shell derives the single-panel fact
+    /// (`App::set_single_panel`) and the queue-column clamp from these.
+    pub(in crate::app) terminal_width: u16,
+    pub(in crate::app) terminal_height: u16,
 }
 
 impl Model {
+    /// The terminal size the shell last recorded (row 4.3 of design D2):
+    /// terminal geometry is TUI presentation, so it lives on the shell and
+    /// never reaches the core.
+    pub(in crate::app) fn terminal_size(&self) -> (u16, u16) {
+        (self.terminal_width, self.terminal_height)
+    }
+
     /// Construct the model, starting the ``TuiRealm`` crossterm listener and
     /// mounting the permanent root observer.
     #[cfg(test)]
@@ -308,7 +321,7 @@ impl Model {
         app.home_latest_launch_window = home_latest_launch_window;
         // Legacy Home Latest selector snapshots are reanchored to Continue
         // Watching by the Home owner's launch-state restoration.
-        let initial_terminal_size = (app.terminal_width, app.terminal_height);
+        let initial_terminal_size = (80, 24);
         // The compiled `[keys]` configuration is read once, here, from the
         // config the App was built with; later config saves never rewrite it
         // for the running session.
@@ -346,6 +359,8 @@ impl Model {
             workspace_now_playing: None,
             move_gate,
             tab_scroll: 0,
+            terminal_width: initial_terminal_size.0,
+            terminal_height: initial_terminal_size.1,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
@@ -415,8 +430,8 @@ fn apply_terminal_observer(
             // pass consumes the armed flag and compares it against the size
             // it last handled.
             model.pending_terminal_resize = true;
-            model.app.terminal_width = *width;
-            model.app.terminal_height = *height;
+            model.terminal_width = *width;
+            model.terminal_height = *height;
             let single_panel = App::derive_single_panel(*width);
             model.app.set_single_panel(single_panel);
             // Invariant 17: a resize neither blanks the terminal nor wipes
