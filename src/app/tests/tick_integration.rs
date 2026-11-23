@@ -11,7 +11,6 @@ use tuirealm::event::{
 use crate::app::dispatch::action::{NavigationIntent, PanelIntent, PlaybackIntent};
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
-use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
@@ -42,25 +41,26 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 #[test]
 fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.panel_focus = PanelFocus::Library;
+    app.set_panel_focus_for_test(PanelFocus::Library);
     // The restored launch focus is Queue, so the displayed queue must not be
     // empty: with the empty-queue column hidden (change
     // `hide-empty-queue-column`, D2) a sync moves the stored focus to Library.
-    app.local_view.adopt_items(
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
         )],
         0,
     );
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::Pending(
+        mbv_config::TuiLaunchState {
             version: mbv_config::TUI_LAUNCH_STATE_VERSION,
             tab: mbv_config::TabIdentity::Home,
             panel_focus: mbv_config::LaunchPanelFocus::Queue,
             selector: None,
             item: None,
-        });
+        },
+    ));
     let mut harness = TickHarness::new(app);
 
     // One production tick (no events reach the app) + the sync pass; no draw
@@ -75,17 +75,17 @@ fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
     }
     harness.model_mut().sync_mounted_surfaces();
 
-    assert_eq!(harness.model().app.tab, TabSelection::Home);
-    assert_eq!(harness.model().app.panel_focus, PanelFocus::Queue);
+    assert_eq!(harness.model().app.tab_for_test(), TabSelection::Home);
+    assert_eq!(harness.model().app.stored_panel_focus(), PanelFocus::Queue);
 }
 
 fn queue_focused_harness() -> TickHarness {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     // A focused queue needs a queue column: with the empty-queue column
     // hidden (change `hide-empty-queue-column`, D2) an empty displayed queue
     // would move the focus to the library on sync.
-    app.local_view.adopt_items(
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -97,8 +97,8 @@ fn queue_focused_harness() -> TickHarness {
 
 fn active_queue_harness() -> TickHarness {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
-    app.player.update_status(|status| status.active = true);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_playing_status_for_test(0, 0);
     TickHarness::new(app)
 }
 
@@ -196,8 +196,8 @@ fn arm_search_query(harness: &mut TickHarness, query: &str) {
 #[test]
 fn tick_delivers_seekbar_double_click_to_unfocused_playback_as_a_fraction() {
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::LibraryOnly;
-    app.panel_focus = PanelFocus::Library;
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+    app.set_panel_focus_for_test(PanelFocus::Library);
     let mut harness = TickHarness::new(app);
     harness.model_mut().layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
     harness.model_mut().sync_mounted_surfaces();
@@ -303,9 +303,9 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     );
 
     let mut library_app = crate::app::tests::render_fixtures::make_movie_app();
-    library_app.tab = TabSelection::EmbyLibrary(0);
-    library_app.panel_focus = PanelFocus::Library;
-    library_app.panel_mode = PanelMode::Both;
+    library_app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    library_app.set_panel_focus_for_test(PanelFocus::Library);
+    library_app.set_panel_mode_for_test(PanelMode::Both);
     let mut library_harness = TickHarness::new(library_app);
     library_harness.model_mut().sync_mounted_surfaces();
     // Task 6.1: Movies moved into the mounted `LibraryPanel` as the
@@ -322,12 +322,12 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     // before the focus pass routes, so this stub's index-0 tab (no libraries
     // loaded) resolves to Home in the pass, and focus follows the mounted
     // Home destination instead of falling through to UiRoot.
-    stub_app.tab = TabSelection::EmbyLibrary(0);
-    stub_app.panel_focus = PanelFocus::Library;
+    stub_app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    stub_app.set_panel_focus_for_test(PanelFocus::Library);
     let mut stub_harness = TickHarness::new(stub_app);
     stub_harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
-        stub_harness.model().app.tab,
+        stub_harness.model().app.tab_for_test(),
         TabSelection::Home,
         "the sync pass normalizes the stale destination before routing"
     );
@@ -356,16 +356,19 @@ fn tick_ctrl_arrows_switch_main_panels() {
     if let RouterOutcome::Command(command) = outcome.router {
         harness.model_mut().dispatch_router_command(&command);
     }
-    assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
+    assert_eq!(
+        harness.model().app.stored_panel_focus(),
+        PanelFocus::Library
+    );
 
     // Library focused in Both mode: Ctrl+Left moves panel focus to Queue.
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::Both;
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::Both);
     // The switch targets the queue column, so it must exist: with the
     // empty-queue column hidden (change `hide-empty-queue-column`, D2) the
     // sync would move the focus straight back to the library.
-    app.local_view.adopt_items(
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -382,14 +385,14 @@ fn tick_ctrl_arrows_switch_main_panels() {
     if let RouterOutcome::Command(command) = outcome.router {
         both.model_mut().dispatch_router_command(&command);
     }
-    assert_eq!(both.model().app.panel_focus, PanelFocus::Queue);
+    assert_eq!(both.model().app.stored_panel_focus(), PanelFocus::Queue);
 
     // The bare arrows no longer move panel focus: Library focus in Both mode
     // keeps the panel and falls through to the tree's own chord.
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::Both;
-    app.local_view.adopt_items(
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::Both);
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -405,7 +408,7 @@ fn tick_ctrl_arrows_switch_main_panels() {
         "plain Left is the tree's chord, not a panel switch"
     );
     assert_eq!(
-        plain.model().app.panel_focus,
+        plain.model().app.stored_panel_focus(),
         PanelFocus::Library,
         "plain Left leaves panel focus where it was"
     );
@@ -545,8 +548,8 @@ fn tui_realm_focus_follows_the_core_stack() {
 #[test]
 fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
-    app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_pending_overlay_for_test(OverlayRequest::Confirm(ConfirmModal {
         message: "Remove queued items".into(),
         buttons: vec![
             ConfirmButton::affirmative("Enter", "Confirm"),
@@ -595,8 +598,8 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
 #[test]
 fn stray_key_is_a_noop_on_the_confirm_modal() {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
-    app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_pending_overlay_for_test(OverlayRequest::Confirm(ConfirmModal {
         message: "Remove queued items".into(),
         buttons: vec![
             ConfirmButton::affirmative("Enter", "Confirm"),
@@ -725,11 +728,11 @@ fn f4_playlists_sidebar_toggles_open_and_closed() {
 #[test]
 fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target() {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     // The saved focus is Queue, so the displayed queue must not be empty:
     // with the empty-queue column hidden (change `hide-empty-queue-column`,
     // D2) a sync moves the stored focus to Library.
-    app.local_view.adopt_items(
+    app.seed_local_queue_emby_items_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -741,8 +744,8 @@ fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target(
     harness.step();
     harness.model_mut().sync_mounted_surfaces();
 
-    assert_eq!(harness.model().app.panel_focus, PanelFocus::Queue);
+    assert_eq!(harness.model().app.stored_panel_focus(), PanelFocus::Queue);
     // The tick adopts no queue content of its own: the queue still holds
     // exactly the one seeded item.
-    assert_eq!(harness.model().app.local_view.slots().len(), 1);
+    assert_eq!(harness.model().app.local_queue_len_for_test(), 1);
 }
