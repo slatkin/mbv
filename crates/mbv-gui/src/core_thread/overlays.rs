@@ -18,7 +18,7 @@ impl CoreThread {
     /// other gesture on its region does nothing.
     pub(super) fn confirm_button_press(&mut self, gesture: PointerGesture<Position>, index: usize) {
         if matches!(gesture, PointerGesture::Click { .. }) {
-            self.core.app_mut().execute_gui_confirm_button(index);
+            self.core.execute_gui_confirm_button(index);
         }
     }
 
@@ -32,7 +32,7 @@ impl CoreThread {
         index: usize,
     ) -> bool {
         matches!(gesture, PointerGesture::Click { .. })
-            && self.core.app_mut().execute_gui_daemon_lost_button(index)
+            && self.core.execute_gui_daemon_lost_button(index)
     }
 
     /// Whether this press lands outside an open overlay's own targets — the

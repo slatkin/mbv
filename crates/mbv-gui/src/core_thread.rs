@@ -398,6 +398,10 @@ impl CoreThread {
     /// read a Client's test has.
     #[doc(hidden)]
     #[must_use]
+    pub fn gui_panel_toggles_for_test(&self) -> mbv::PanelTogglesProjection {
+        self.core.panel_toggles_projection()
+    }
+
     pub fn gui_settings_section_for_test(&self) -> Option<mbv::GuiSettingsSection> {
         self.core.app().gui_settings().map(|state| state.section)
     }

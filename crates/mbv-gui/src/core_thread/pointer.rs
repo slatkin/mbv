@@ -85,7 +85,7 @@ impl CoreThread {
         // painted beneath (the canvas's outside press; the TUI's blocking
         // context menu dismisses the same way).
         if self.press_outside_open_overlay(&event) {
-            self.core.app_mut().dismiss_open_gui_overlay();
+            self.core.dismiss_open_gui_overlay();
             return false;
         }
         let now = Instant::now();

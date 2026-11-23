@@ -24,16 +24,12 @@ mod state;
 mod target;
 
 pub(in crate::app) use self::overlay::GuiOverlay;
-pub(in crate::app) use self::state::GuiClientState;
-// The one `overlay` value the test stub builds by hand, so its re-export
-// follows the stub's own gate and a shipped build carries no unused import.
-#[cfg(feature = "test")]
-pub(in crate::app) use self::overlay::TrackPopoverState;
 pub use self::projection::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
+pub(in crate::app) use self::state::GuiClientState;
 
 use crate::gui::GuiCore;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};

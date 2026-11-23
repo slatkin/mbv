@@ -10,11 +10,6 @@
 
 use std::sync::{Arc, Mutex};
 
-// The popover stub's two names follow the stub's own gate (`feature =
-// "test"`): an `mbv` build compiled with `cfg(test)` and without the
-// feature must not carry the import.
-#[cfg(feature = "test")]
-use super::gui_client_state::{GuiOverlay, TrackPopoverState};
 use super::{App, AppInit, QueueView};
 
 /// The GUI `sections` bench's bench-scale seeds (design D12 of
@@ -248,13 +243,14 @@ pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
 #[cfg(feature = "test")]
 #[must_use]
 pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
-    let mut app = stub_app_with_playing_items(items);
+    let app = stub_app_with_playing_items(items);
     let row = app
         .displayed_queue()
         .slot_id_at(0)
         .expect("the stub queue has a first slot");
-    app.open_gui_row_menu(&[row]);
-    app
+    let mut core = crate::gui::GuiCore::new(app);
+    core.open_gui_row_menu(&[row]);
+    core.into_app()
 }
 
 /// The `App` a Client's test drives with an active player carrying one audio
@@ -275,16 +271,10 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     // The popover opens through the GUI Client's own half of the chip press:
     // the shared playback dispatch's arm for it is a documented core no-op
     // (design D4a (a)), and the GUI entry (`input/gui.rs`) applies it after
-    // the core, with the same open the GUI's half runs: the open popover's
-    // chip, and its cursor on the chosen choice. An inactive player lists no
-    // choice, so it opens nothing.
-    let choices = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()))
-        .track_chip_popover_choices(chip);
-    if let Some(choices) = choices {
-        let cursor = choices.iter().position(|choice| choice.chosen).unwrap_or(0);
-        app.gui.overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
-    }
-    app
+    // the core. An inactive player lists no choice, so it opens nothing.
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
+    core.toggle_gui_track_popover(chip);
+    core.into_app()
 }
 /// The `App` a GUI Client's test drives with the cast receivers replaced by
 /// `receivers` (add-tauri-gui-client row 6.5's paint/press regression): the

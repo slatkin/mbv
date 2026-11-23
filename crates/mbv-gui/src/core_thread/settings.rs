@@ -123,13 +123,13 @@ impl CoreThread {
                 // canvas's own blocking overlays, and their dismissals clear
                 // them; the GUI mounts no TUI modal component for either.
                 OverlayRequest::Confirm(modal) => {
-                    self.core.app_mut().present_gui_confirm(modal.clone());
+                    self.core.present_gui_confirm(modal.clone());
                 }
                 OverlayRequest::DaemonLost(modal) => {
-                    self.core.app_mut().present_gui_daemon_lost(modal.clone());
+                    self.core.present_gui_daemon_lost(modal.clone());
                 }
-                OverlayRequest::DismissConfirm => self.core.app_mut().dismiss_gui_confirm(),
-                OverlayRequest::DismissDaemonLost => self.core.app_mut().dismiss_gui_daemon_lost(),
+                OverlayRequest::DismissConfirm => self.core.dismiss_gui_confirm(),
+                OverlayRequest::DismissDaemonLost => self.core.dismiss_gui_daemon_lost(),
                 // A TUI overlay the GUI does not present (design D2): the
                 // save-playlist and confirm-family modals, the context menu
                 // and its dismissal, and the nested Settings popups (the

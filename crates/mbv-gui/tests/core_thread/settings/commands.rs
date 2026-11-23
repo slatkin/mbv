@@ -465,7 +465,7 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
     open_settings_at(&mut test, mbv::GuiSettingsSection::Actions);
     send_key(&mut test, Key::Char('z'), KeyModifiers::NONE);
     send_key(&mut test, Key::Char('q'), KeyModifiers::NONE);
-    let toggles = test.core.app_mut().panel_toggles_projection();
+    let toggles = test.core.gui_panel_toggles_for_test();
     assert!(
         toggles.collapsed && toggles.queue_folded,
         "the toggles were on before the reset"
@@ -495,7 +495,7 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
         app.gui_library_groups_for_test(0).is_none(),
         "no kept collection survives the reset"
     );
-    let toggles = app.panel_toggles_projection();
+    let toggles = test.core.gui_panel_toggles_for_test();
     assert!(
         !toggles.collapsed && !toggles.queue_folded,
         "the panel toggles are off"

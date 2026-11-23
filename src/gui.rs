@@ -5,16 +5,20 @@
 //! `2-split-tui-gui-clients` does not need to move it once the GUI modules sit
 //! beside it (its D4c). The GUI's `CoreThread` holds one and keeps its
 //! `ClientTickHost` implementation; no `App` field becomes `pub` for it (this
-//! change's D4), so the accessor here is the narrowest surface the GUI needs.
-//! Row 8.1 moves the GUI state (`GuiClientState`) beside it.
+//! change's D4), so the owned `App` stays behind this field, visible only
+//! inside the root package. Row 8.1 moves the GUI state (`GuiClientState`)
+//! beside it.
 
 use crate::app::App;
 
 /// The GUI Client's core state: the `App` it owns. Every GUI `impl` block
-/// becomes `impl GuiCore`, and its core state is read through
-/// [`GuiCore::app`] (design D4).
+/// becomes `impl GuiCore` and reads its core state as `self.app.<...>`
+/// (design D4).
 pub struct GuiCore {
-    app: App,
+    /// The owned core. Its `impl GuiCore` blocks live under `crate::app`, so
+    /// the field is visible there; every `App` field stays as private as it
+    /// was.
+    pub(crate) app: App,
 }
 
 impl GuiCore {
@@ -24,15 +28,15 @@ impl GuiCore {
         Self { app }
     }
 
-    /// The shared `App` the GUI Client owns: the drains, the router, and the
-    /// projections read and mutate it.
+    /// The shared `App` the GUI Client owns: the tick host's drains, the
+    /// router, and the projections read and mutate it.
     #[must_use]
-    pub(crate) fn app(&self) -> &App {
+    pub fn app(&self) -> &App {
         &self.app
     }
 
     /// The shared `App` the GUI Client owns, for mutation.
-    pub(crate) fn app_mut(&mut self) -> &mut App {
+    pub fn app_mut(&mut self) -> &mut App {
         &mut self.app
     }
 

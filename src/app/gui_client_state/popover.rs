@@ -51,14 +51,17 @@ impl GuiCore {
         if !choices.iter().any(|choice| choice.id == track_id) {
             return;
         }
-        self.app.apply_track_choice(chip, track_id);
+        self.apply_track_choice(chip, track_id);
         self.app.gui.overlay = None;
     }
 
     /// Switch the chip's track to `track_id`: the one switch a track popover's
     /// Enter and a painted row's press both run.
     pub(super) fn apply_track_choice(&mut self, chip: TrackChipKind, track_id: i64) {
-        self.app.apply_track_choice(chip, track_id);
+        match chip {
+            TrackChipKind::Audio => self.app.set_audio_track(track_id),
+            TrackChipKind::Subtitles => self.app.set_subtitle_track(track_id),
+        }
     }
 
     /// Drop a track popover whose chip source is gone: the popover's

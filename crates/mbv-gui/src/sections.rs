@@ -92,6 +92,7 @@ pub struct SentRevisions {
 /// projections the sections carry (and whose gated builds start their loads),
 /// the Queue Surface state, the Queue playback Surface state
 /// (for the scrubber hover), and the Queue viewport's whole rows.
+#[derive(Debug)]
 pub struct SectionSources<'a> {
     /// The GUI Client's core the sections read.
     pub core: &'a mut GuiCore,
@@ -346,9 +347,10 @@ impl SectionLedger {
         // One playback projection read feeds the playback section, the overlay,
         // the hover's tick, the settings build, and the target-choice compare,
         // so they cannot disagree.
+        let playback = core.app().queue_playback_projection();
+        self.deadlines
+            .sample(core.app_mut(), &playback, now, &mut marked);
         let app = core.app();
-        let playback = app.queue_playback_projection();
-        self.deadlines.sample(app, &playback, now, &mut marked);
         let summary = app.queue_summary_projection(queue.multi_selection());
         // The queue's end offsets (design D5): the duration facts the summary
         // and queue sections carry in place of the clock strings the window
@@ -357,7 +359,7 @@ impl SectionLedger {
         // The header's chooser facts read the same shown queue and entry list
         // the projections above read, so the frame cannot disagree inside one
         // tick.
-        let header = app.gui_queue_header_projection();
+        let header = core.gui_queue_header_projection();
         // The attached core clears the pre-attach state (design D4): `null`
         // rides the first batch, and no later build changes it.
         self.attach.adopt(None);
@@ -370,13 +372,14 @@ impl SectionLedger {
             app.gui_ui_reset_epoch(),
         ));
         self.overlay.adopt(
-            app.gui_overlay_projection(&playback)
+            core.gui_overlay_projection(&playback)
                 .as_ref()
                 .map(GuiOverlayFrame::from),
         );
         self.hover
             .adopt(scrubber_hover(playback_surface.scrubber_hover(), &playback));
-        let artwork = card_artwork_ref(&app.queue_card_artwork());
+        let artwork = card_artwork_ref(&core.app_mut().queue_card_artwork());
+        let app = core.app();
         // The GUI-only facts (gui-art-player-overlay design D5, D7): the
         // auto-hide preference the core owns, and whether the shown local
         // queue can start while nothing plays. Both are core reads.
@@ -402,9 +405,9 @@ impl SectionLedger {
         // them (design D5).
         self.playhead_anchor
             .sample(&mut self.playhead, &playback, queue, now);
-        self.adopt_marked_gated(app, &marked, &playback);
+        self.adopt_marked_gated(core, &marked, &playback);
         if self.audit {
-            self.audit_clean_gated(app, &marked, &playback);
+            self.audit_clean_gated(core, &marked, &playback);
         }
         self.take_batch()
     }
@@ -415,7 +418,7 @@ impl SectionLedger {
     /// stale in production.
     fn audit_clean_gated(
         &self,
-        app: &mut App,
+        core: &mut GuiCore,
         marked: &HashSet<Section>,
         playback: &QueuePlaybackProjection,
     ) {
@@ -423,23 +426,24 @@ impl SectionLedger {
             audit_clean(Section::Theme, &self.theme, &GuiTheme::current());
         }
         if !marked.contains(&Section::Library) {
-            let pass = library::build(app);
+            let pass = library::build(core.app_mut());
             audit_clean(Section::Library, &self.library_list, &pass.list);
             audit_clean(Section::Library, &self.library_detail, &pass.detail);
             audit_clean(Section::Library, &self.row_menu, &pass.row_menu);
         }
         if !marked.contains(&Section::Search) {
-            let search = app
+            let search = core
+                .app()
                 .gui_search_projection()
                 .map(GuiSearchFrame::from_projection);
             audit_clean(Section::Search, &self.search, &search);
         }
         if !marked.contains(&Section::Settings) {
-            let settings = GuiSettingsFrame::build(app, playback);
+            let settings = GuiSettingsFrame::build(core.app(), playback);
             audit_clean(Section::Settings, &self.settings, &settings);
         }
         if !marked.contains(&Section::Playlists) {
-            let playlists = GuiPlaylistsFrame::build(app);
+            let playlists = GuiPlaylistsFrame::build(core.app());
             audit_clean(Section::Playlists, &self.playlists, &playlists);
         }
     }
@@ -448,7 +452,7 @@ impl SectionLedger {
     /// changes nothing sends nothing, because the build compares equal.
     fn adopt_marked_gated(
         &mut self,
-        app: &mut App,
+        core: &mut GuiCore,
         marked: &HashSet<Section>,
         playback: &QueuePlaybackProjection,
     ) {
@@ -457,7 +461,7 @@ impl SectionLedger {
         }
         if marked.contains(&Section::Library) {
             let before = (self.library_list.revision, self.library_detail.revision);
-            let pass = library::build(app);
+            let pass = library::build(core.app_mut());
             self.library_list.adopt(pass.list);
             self.library_detail.adopt(pass.detail);
             self.row_menu.adopt(pass.row_menu);
@@ -473,15 +477,17 @@ impl SectionLedger {
         }
         if marked.contains(&Section::Search) {
             self.search.adopt(
-                app.gui_search_projection()
+                core.app()
+                    .gui_search_projection()
                     .map(GuiSearchFrame::from_projection),
             );
         }
         if marked.contains(&Section::Settings) {
-            self.settings.adopt(GuiSettingsFrame::build(app, playback));
+            self.settings
+                .adopt(GuiSettingsFrame::build(core.app(), playback));
         }
         if marked.contains(&Section::Playlists) {
-            self.playlists.adopt(GuiPlaylistsFrame::build(app));
+            self.playlists.adopt(GuiPlaylistsFrame::build(core.app()));
         }
     }
 

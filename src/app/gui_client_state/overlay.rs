@@ -364,7 +364,7 @@ impl GuiCore {
             _ => None,
         };
         let popover_choices = popover_chip
-            .and_then(|chip| self.app.track_chip_popover_choices(chip))
+            .and_then(|chip| self.track_chip_popover_choices(chip))
             .map_or(0, |choices| choices.len());
         // The chooser's cursor clamps against the same live list the frame
         // projects, read before the overlay borrow as the popover's is.
@@ -420,7 +420,7 @@ impl GuiCore {
             }
             OverlayKeyOutcome::Execute(index) => self.execute_gui_overlay_entry(index),
             OverlayKeyOutcome::RenameQueue { queue, name } => {
-                self.app.rename_named_queue(queue, &name);
+                self.rename_named_queue(queue, &name);
                 false
             }
         }
@@ -467,7 +467,7 @@ impl GuiCore {
         // writes its diagnostic into that same state, so the overlay is not
         // taken here.
         if matches!(self.app.gui.overlay, Some(GuiOverlay::DaemonLost(_))) {
-            return self.app.apply_gui_daemon_lost_choice(index);
+            return self.apply_gui_daemon_lost_choice(index);
         }
         let Some(overlay) = self.app.gui.overlay.take() else {
             return false;
@@ -508,7 +508,7 @@ impl GuiCore {
                 let Some(choice) = self.app.playback_target_choices().get(index).cloned() else {
                     return false;
                 };
-                self.app.select_chooser_target(&choice.key);
+                self.select_chooser_target(&choice.key);
             }
             // A Queue chooser Enter shows the entry under the cursor: the same
             // show its press runs, and no playback starts, stops, or moves

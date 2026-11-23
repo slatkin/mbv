@@ -108,6 +108,10 @@ impl GuiCore {
         // overlay focus would keep the global gates closed and the overlay's
         // key rules would swallow input the window does not paint.
         self.close_orphaned_track_popover();
+        // A new queue the local Owner made opens the Queue chooser on its name
+        // here (design D8): the core made the queue and left the hand-off, and
+        // the overlay is this Client's own presentation.
+        self.present_pending_gui_overlay();
         let keybinds = self
             .app
             .config
@@ -398,7 +402,7 @@ impl GuiCore {
             // the frame projects, whose entries carry the canvas's key hints.
             ShellRequest::RowContextMenu(targets) => match targets {
                 mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots) => {
-                    self.app.open_gui_row_menu(&slots);
+                    self.open_gui_row_menu(&slots);
                 }
                 // The GUI's queue leaf resolves only Queue targets; the other
                 // variants name rows of surfaces this Client does not present.
@@ -410,7 +414,7 @@ impl GuiCore {
             // The open row menu's entry press (add-tauri-gui-client row 6.5):
             // the Client-core menu executes the entry the index names, the
             // same execution its Enter applies.
-            ShellRequest::ContextMenuSelect(index) => self.app.select_gui_row_menu_entry(index),
+            ShellRequest::ContextMenuSelect(index) => self.select_gui_row_menu_entry(index),
             // The Status bar's selection summary is row 6.5's.
             ShellRequest::SelectionProjection(_) => {}
             // The header's playback-target press emits the same opener the
@@ -418,19 +422,19 @@ impl GuiCore {
             // client row 6.4); the GUI's counterpart is the Client-core
             // chooser overlay, and the press toggles it as F3 toggles the
             // sidebar.
-            ShellRequest::OpenSessions => self.app.toggle_gui_target_chooser(),
+            ShellRequest::OpenSessions => self.toggle_gui_target_chooser(),
             // A chooser row's press selects its output through the same
             // dispatch the TUI's Sessions sidebar applies on its selected
             // row: resolve the stable key against the current target
             // snapshot, do nothing when the target is gone, and close the
             // chooser on the selection the sidebar's dismiss carries.
             ShellRequest::SelectSession(key) => {
-                if self.app.select_target_for_key(&key) {
+                if self.select_target_for_key(&key) {
                     self.app.gui.overlay = None;
                 }
             }
             ShellRequest::SelectChooserTarget(key) => {
-                if self.app.select_chooser_target(&key) {
+                if self.select_chooser_target(&key) {
                     self.app.gui.overlay = None;
                 }
             }
@@ -534,7 +538,7 @@ impl GuiCore {
             AppCommand::Panel(PanelIntent::ToggleQueueFold) => self.toggle_queue_fold(),
             AppCommand::Panel(PanelIntent::ToggleQueueChooser) => self.toggle_gui_queue_chooser(),
             AppCommand::Panel(PanelIntent::ToggleTargetChooser) => {
-                self.app.toggle_gui_target_chooser();
+                self.toggle_gui_target_chooser();
             }
             AppCommand::Playback(PlaybackIntent::ToggleTrackPopover(chip)) => {
                 self.toggle_gui_track_popover(*chip);
@@ -588,32 +592,6 @@ impl GuiCore {
             Command::Shell(_) => false,
         }
     }
-}
-
-/// The Queue chooser's entries, read through the GUI core. One read path
-/// serves the chooser's keys, its presses, and the projection while the files
-/// around this row still hold their `impl App` blocks (rows 6.3 and 6.4).
-pub(crate) fn chooser_entries(
-    app: &crate::app::App,
-) -> Vec<crate::app::gui_client_state::QueueChooserEntryProjection> {
-    GuiCore::new(from_app(app)).queue_chooser_entries()
-}
-
-/// A scratch `App` a read can be wrapped in, for a caller that still holds
-/// the real one behind a shared reference (rows 6.3 and 6.4).
-fn from_app(app: &crate::app::App) -> crate::app::App {
-    let _ = app;
-    crate::app::app_stub::make_app_stub()
-}
-
-/// The GUI Client's routing entry as a caller that still takes the `App`
-/// reaches it: a scratch core for the one call, since the results a routing
-/// call produces land in the `App` the caller reads next while later rows
-/// convert the rest (rows 6.3 and 6.4).
-pub fn with_gui_core<T>(app: &mut crate::app::App, entry: impl FnOnce(&mut GuiCore) -> T) -> T {
-    let _ = &mut *app;
-    let mut core = GuiCore::new(crate::app::app_stub::make_app_stub());
-    entry(&mut core)
 }
 
 #[cfg(test)]

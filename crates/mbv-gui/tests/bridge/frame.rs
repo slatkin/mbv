@@ -95,7 +95,7 @@ fn adopted_queue(app: &mut App) -> QueueSurface {
 fn built(app: &mut App, queue: &QueueSurface, playback: &QueuePlaybackSurface) -> Built {
     let mut ledger = SectionLedger::default();
     ledger.mark_all_gated();
-    let core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
+    let mut core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
     let batch = ledger.collect(SectionSources {
         core: &mut core,
         queue,
@@ -127,7 +127,9 @@ fn frame_after_tick(app: &mut App) -> Built {
 fn frame_after_keys(app: &mut App, keys: &[mbv_ui_msg::Key]) -> Built {
     for code in keys {
         let key = mbv_ui_msg::KeyEvent::new(*code, mbv_ui_msg::KeyModifiers::NONE);
-        let _ = app.route_gui_input(mbv::GuiInput::Key(key), None);
+        let mut core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
+        let _ = core.route_gui_input(mbv::GuiInput::Key(key), None);
+        *app = core.into_app();
     }
     frame_after_tick(app)
 }
