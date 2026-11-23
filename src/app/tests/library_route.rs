@@ -21,11 +21,17 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
     }
 
     let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    let _connect_guard = crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_TEST_LOCK
+        .lock()
+        .unwrap();
     CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(counting_connect);
+    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = Some(counting_connect);
     let _app = make_app_stub();
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = None;
 
     assert_eq!(CALLS.load(std::sync::atomic::Ordering::SeqCst), 0);
 }

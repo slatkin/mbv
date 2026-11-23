@@ -161,10 +161,12 @@ fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
 // Owns player-target-locality "Daemon target transitions update classification".
 #[test]
 fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
-    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
-
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
+    let _connect_guard = crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_TEST_LOCK
+        .lock()
+        .unwrap();
+    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = Some(reconnect_local_daemon);
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (route, route_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
     app.switch_to_direct_remote(
@@ -200,7 +202,9 @@ fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
             .len(),
         2
     );
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+    *crate::app::shell::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = None;
 }
 
 // local-daemon-thin-client: the daemon's Bound queue is the client's
