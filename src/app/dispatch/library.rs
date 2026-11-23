@@ -1,3 +1,4 @@
+pub(in crate::app) mod artist_lookup;
 pub(in crate::app) mod browse;
 pub(in crate::app) mod browse_level;
 pub(in crate::app) mod cursor;

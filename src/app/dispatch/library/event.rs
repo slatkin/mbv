@@ -1,3 +1,4 @@
+use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::state::app_struct::{LevelFillState, MAX_ALBUM_TRACKS_CACHE, insert_capped};
 use crate::app::state::events::{
@@ -109,7 +110,7 @@ impl App {
             }
             MusicEvent::ArtistItemIdsFetched { artist_items } => {
                 for (name, id) in artist_items {
-                    self.record_artist_item_id(&name, id);
+                    ArtistNameLookup::record(self, &name, id);
                 }
                 // The resolver gained sources the rows resolve through, so
                 // each Client re-queues the artwork its in-view rows lack.
@@ -119,8 +120,11 @@ impl App {
                     &[ClientLibraryEffect::RowArtSourcesChanged],
                 );
             }
+            // The App half records the answer; the Client that searched
+            // re-queues the rows it unblocks (`decouple-client-core` design
+            // D4a (b)).
             MusicEvent::ArtistNameSearched { name, candidates } => {
-                self.handle_gui_artist_name_searched(&name, candidates.as_deref());
+                ArtistNameLookup::searched(self, &name, candidates.as_deref());
             }
             MusicEvent::GroupWarmupListed { generation, groups } => {
                 self.handle_music_group_warmup_listed(generation, groups);
