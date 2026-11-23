@@ -489,18 +489,15 @@ impl GuiCore {
         if let Command::App(AppCommand::Navigation(intent)) = command {
             match intent {
                 NavigationIntent::NextLibraryTab => {
-                    crate::app::gui_library::tabs_step_library_tab(&mut self.app, 1);
+                    self.step_gui_library_tab(1);
                     return false;
                 }
                 NavigationIntent::PreviousLibraryTab => {
-                    crate::app::gui_library::tabs_step_library_tab(&mut self.app, -1);
+                    self.step_gui_library_tab(-1);
                     return false;
                 }
                 NavigationIntent::SetLibraryTab(position) => {
-                    crate::app::gui_library::open_gui_library_position_for_app(
-                        &mut self.app,
-                        *position,
-                    );
+                    self.open_gui_library_position(*position);
                     return false;
                 }
                 // Not destination steps: each of these keeps its own dispatch

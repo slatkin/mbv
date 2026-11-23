@@ -102,6 +102,33 @@ impl GuiCore {
     pub fn gui_library_tabs(&self) -> GuiLibraryTabs {
         library_tabs(&self.app)
     }
+
+    /// Step the active destination by `step` presented tabs, wrapping (design
+    /// D2): the GUI Client's `Tab` and `Shift+Tab`, which the window content
+    /// does not take. The step opens the destination it lands on through the
+    /// core's one open step, so a router step opens as a press on the tab
+    /// does, and it visits only the presented set — a destination the top bar
+    /// does not paint is never opened. A tab state outside that set (no
+    /// catalog yet) starts the step at Home.
+    ///
+    /// The step runs on this core's own state: the open step it calls keeps
+    /// the state it leaves (a destination's `Loading` mark among it), exactly
+    /// as the window's open-destination command does.
+    pub(in crate::app) fn step_gui_library_tab(&mut self, step: isize) {
+        let positions = presented_tab_positions(&self.app);
+        let current = self
+            .app
+            .tab
+            .to_position_with_counts(self.app.libs.len(), self.app.feeds_tab_pos());
+        let index = positions
+            .iter()
+            .position(|position| *position == current)
+            .unwrap_or(0);
+        let len = isize::try_from(positions.len()).unwrap_or(1);
+        let index = isize::try_from(index).unwrap_or(0);
+        let next = usize::try_from((index + step).rem_euclid(len)).unwrap_or(0);
+        self.open_gui_library_position(positions[next]);
+    }
 }
 
 /// The active destination's kind over the `App` the GUI core owns (design D2,
@@ -180,27 +207,6 @@ fn presented_tab_positions(app: &App) -> Vec<usize> {
     positions.sort_unstable();
     positions.dedup();
     positions
-}
-
-/// Step the active destination by `step` presented tabs, wrapping (design D2):
-/// the GUI Client's `Tab` and `Shift+Tab`, which the window content does not
-/// take. The step opens the destination it lands on through the one open step,
-/// so a router step opens as a press on the tab does, and it visits only the
-/// presented set — a destination the top bar does not paint is never opened. A
-/// tab state outside that set (no catalog yet) starts the step at Home.
-pub(in crate::app) fn step_library_tab(app: &mut App, step: isize) {
-    let positions = presented_tab_positions(app);
-    let current = app
-        .tab
-        .to_position_with_counts(app.libs.len(), app.feeds_tab_pos());
-    let index = positions
-        .iter()
-        .position(|position| *position == current)
-        .unwrap_or(0);
-    let len = isize::try_from(positions.len()).unwrap_or(1);
-    let index = isize::try_from(index).unwrap_or(0);
-    let next = usize::try_from((index + step).rem_euclid(len)).unwrap_or(0);
-    super::open_gui_library_position_for_app(app, positions[next]);
 }
 
 /// One presented destination's tab label (design D2): the library's display

@@ -107,7 +107,6 @@ pub(in crate::app) use self::store::GuiGroupAlbums;
 use self::store::GuiMusicCollectionSite;
 #[cfg(test)]
 pub(in crate::app) use self::store::install_library_collection;
-pub(in crate::app) use self::tabs::step_library_tab as tabs_step_library_tab;
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 #[cfg(test)]
 pub(in crate::app) use self::tabs::{
@@ -729,15 +728,6 @@ fn log_stale_library_item(command: &str, item_id: &str) {
 /// the core's `GuiCore::gui_playing_track_id` makes.
 pub fn playing_track_id_for_shell(app: &App) -> Option<String> {
     playing_track_id(app)
-}
-
-/// The GUI's one open step over an `App` the caller holds rather than a GUI
-/// core: the tab step and the router's numbered destinations hold the shell's
-/// `App`, so they enter through this wrapper, which runs the core's step.
-pub(in crate::app) fn open_gui_library_position_for_app(app: &mut App, position: usize) {
-    let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.open_gui_library_position(position);
-    *app = core.into_app();
 }
 
 /// The URL opener the `openUrl` command runs: the shared `open_url` spawn,
