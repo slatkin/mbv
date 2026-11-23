@@ -32,7 +32,7 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::queue_panel::geometry::{MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX};
-use crate::window::icons::{Check, ChevronDown, Monitor};
+use crate::window::icons::{Check, ChevronDown, Monitor, RefreshCcwDot};
 use crate::window::layout::region_set::{MarkHandler, use_region_set};
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var, role_var};
@@ -314,6 +314,12 @@ fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
                         }
                     }
                 },
+                // The refresh glyph spins while a discovery runs.
+                RefreshCcwDot {
+                    size: 16,
+                    class: if props.refreshing { "animate-spin" } else { "" },
+                    aria_hidden: true,
+                }
                 if props.refreshing {
                     "Refreshing…"
                 } else {

@@ -43,6 +43,9 @@ pub struct SettingsEntryRowProps {
     /// Indent the row under its group header.
     #[props(default)]
     pub indent: bool,
+    /// A glyph painted before the label (the Sessions Refresh icon), if any.
+    #[props(default)]
+    pub leading: Option<Element>,
 }
 
 /// The one entry row.
@@ -56,6 +59,7 @@ pub fn SettingsEntryRow(props: SettingsEntryRowProps) -> Element {
     let press_id = props.id.clone();
     let label = props.label;
     let trailing = props.trailing;
+    let leading = props.leading;
     // The row that paints the cursor reveals itself: the former screen's
     // `scrollIntoView` on the pane's `[data-settings-cursor]` row (D15).
     let mut reveal = cursor_reveal(cursor);
@@ -77,6 +81,13 @@ pub fn SettingsEntryRow(props: SettingsEntryRowProps) -> Element {
                     if marked {
                         Check { size: 14 }
                     }
+                }
+            }
+            if let Some(leading) = leading {
+                span {
+                    class: "flex flex-none items-center",
+                    "aria-hidden": "true",
+                    {leading}
                 }
             }
             Truncate {

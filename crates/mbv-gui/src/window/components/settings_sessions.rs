@@ -12,6 +12,7 @@ use crate::window::components::settings_entry_row::SettingsEntryRow;
 use crate::window::components::settings_screen::{
     SETTINGS_PANES_GRID_STYLE, SettingsPaneScaffold, settings_pane,
 };
+use crate::window::icons::RefreshCcwDot;
 use crate::window::settings::entries::entry_id;
 
 /// The one Sessions pane.
@@ -74,6 +75,13 @@ pub fn SettingsSessions() -> Element {
                             onpress: row_press,
                             label: if refreshing { "Refreshing…" } else { "Refresh" },
                             trailing: None,
+                            // The refresh glyph spins while a discovery runs.
+                            leading: rsx! {
+                                RefreshCcwDot {
+                                    size: 14,
+                                    class: if refreshing { "animate-spin" } else { "" },
+                                }
+                            },
                         }
                     }
                 }
