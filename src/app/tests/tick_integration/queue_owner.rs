@@ -3,8 +3,6 @@
 //! shows, and the name flips in the same frame that first shows the peer
 //! queue after a connect.
 
-use std::sync::mpsc;
-
 use crate::app::shell::test_support::{Terminal, TestBackend};
 
 use super::harness::TickHarness;
@@ -60,11 +58,11 @@ fn the_footer_owner_label_flips_in_the_frame_that_first_shows_the_peer_queue() {
         "no peer is named before the connect: {local_row:?}"
     );
 
-    let (remote, _peer_events) = RemotePlayer::stub(make_items(3), 0);
-    harness.model_mut().app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("peer-owner", "mbv"),
+    let (remote, peer_events) = RemotePlayer::stub(make_items(3), 0);
+    harness.model_mut().app.attach_direct_remote_for_test(
+        "peer-owner",
         remote,
-        mpsc::channel().1,
+        peer_events,
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     harness.step();

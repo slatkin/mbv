@@ -6,7 +6,6 @@ use crate::app::shell::test_support::{Terminal, TestBackend};
 use ratatui::layout::Rect;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
@@ -49,20 +48,17 @@ fn is_seek_fill(symbol: &str) -> bool {
 /// mode (mini view uses the ephemeral queue focus).
 fn active_app(panel_mode: PanelMode) -> crate::app::App {
     let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
-    app.panel_mode = panel_mode;
+    app.set_panel_mode_for_test(panel_mode);
     if panel_mode != PanelMode::Both {
-        app.mini_view_focus = PanelFocus::Queue;
+        app.set_mini_view_focus_for_test(PanelFocus::Queue);
     }
-    app.panel_focus = PanelFocus::Queue;
-    {
-        app.player.update_status(|status| {
-            status.active = true;
-            status.queue_len = 3;
-            status.current_idx = 0;
-            status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
-            status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
-        });
-    };
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_playing_position_for_test(
+        0,
+        45 * mbv_emby_model::TICKS_PER_SECOND,
+        Some(90 * mbv_emby_model::TICKS_PER_SECOND),
+    );
+    app.set_player_queue_len_for_test(3);
     app
 }
 
@@ -106,6 +102,11 @@ fn drawn_harness(app: crate::app::App, width: u16, height: u16) -> (TickHarness,
 /// while the queue column is hidden, so it keeps no hit geometry across a
 /// layout switch either.
 #[cfg(test)]
+/// The visual slot and artwork half of this file's tests, split so the file
+/// stays within its line ceiling: the title's home over a hidden slot, and the
+/// queue card's paint checkpoint. The fixtures stay here.
+mod visual_slot;
+
 mod strip_hits {
     use super::*;
 
@@ -113,7 +114,7 @@ mod strip_hits {
     /// transport hit geometry), then switch to `both` and draw again.
     fn strip_to_both_harness() -> (TickHarness, ratatui::layout::Rect) {
         let mut app = active_app(PanelMode::LibraryOnly);
-        app.panel_focus = PanelFocus::Library;
+        app.set_panel_focus_for_test(PanelFocus::Library);
         let mut harness = TickHarness::new(app);
         crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
         harness.model_mut().sync_mounted_surfaces();
@@ -143,7 +144,10 @@ mod strip_hits {
         // Switch to `both`: the queue column becomes visible and the strip
         // stops painting — the D1 mount rule unmounts it, so neither the
         // component nor its hits survive the switch.
-        harness.model_mut().app.panel_mode = PanelMode::Both;
+        harness
+            .model_mut()
+            .app
+            .set_panel_mode_for_test(PanelMode::Both);
         harness.model_mut().sync_mounted_surfaces();
         terminal
             .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
@@ -184,7 +188,7 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
 
     for width in [80, 120] {
         let mut app = active_app(PanelMode::QueueOnly);
-        app.images.record_card_size(8, 16);
+        app.record_card_size_for_test(8, 16);
         let mut harness = TickHarness::new(app);
         crate::app::shell::test_support::set_terminal_size(harness.model_mut(), width, 40);
 
@@ -195,9 +199,12 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         );
         assert!(shown_card.0 > 0, "slot has a reservation at width {width}");
         assert!(shown_card.1 > 0, "slot has a width at width {width}");
-        let checkpoint = harness.model().app.images.last_card_size();
+        let checkpoint = harness.model().app.last_card_size();
 
-        harness.model_mut().app.visual_slot_hidden = true;
+        harness
+            .model_mut()
+            .app
+            .set_visual_slot_hidden_for_test(true);
         harness.model_mut().sync_queue_card_geometry();
         assert_eq!(
             (
@@ -207,7 +214,7 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
             (0, 0)
         );
         assert_eq!(
-            harness.model().app.images.last_card_size(),
+            harness.model().app.last_card_size(),
             checkpoint,
             "hiding preserves the paint checkpoint"
         );
@@ -239,7 +246,10 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
             "queue starts below the header, transport, and gap row at width {width}"
         );
 
-        harness.model_mut().app.visual_slot_hidden = false;
+        harness
+            .model_mut()
+            .app
+            .set_visual_slot_hidden_for_test(false);
         harness.model_mut().sync_queue_card_geometry();
         assert_eq!(
             (
@@ -260,14 +270,17 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
     use mbv_render::arrangements::chrome::{queue_playback_column_wide, queue_playback_rows};
 
     let mut app = active_app(PanelMode::Both);
-    app.images.record_card_size(8, 16);
+    app.record_card_size_for_test(8, 16);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
 
     harness.model_mut().sync_queue_card_geometry();
     // Set after the geometry sync so the projected fact the header reads is
     // exactly the one under test.
-    harness.model_mut().app.queue_card_projection.title_site = NowPlayingTitleSite::Artwork;
+    harness
+        .model_mut()
+        .app
+        .seed_queue_card_title_site_for_test(NowPlayingTitleSite::Artwork);
     let card_height = harness.model().layout.card.height;
     assert!(card_height > 0, "the slot has a reservation while playing");
 
@@ -283,7 +296,7 @@ fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
         .expect("queue playback placed while playing");
     let queue = root.queue.expect("queue placed");
     let slot_transport_rows = queue_playback_rows(
-        queue_playback_column_wide(harness.model().app.queue_column_width),
+        queue_playback_column_wide(harness.model().app.queue_column_width()),
         card_height,
         true,
     );
@@ -351,12 +364,12 @@ fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
 #[test]
 fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
     let mut app = make_app_stub();
-    app.player.update_status(|status| status.active = false);
-    app.panel_focus = PanelFocus::Queue;
+    app.seed_idle_player_for_test();
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     // The gap row sits inside the queue column: with the empty-queue column
     // hidden (change `hide-empty-queue-column`, D1) an empty displayed queue
     // would not place the queue panel at all.
-    app.local_view.adopt_items(
+    app.seed_local_queue_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -505,11 +518,11 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     let mut app = make_app_stub();
     // Collapsed means idle: the stub player starts active (a remote-owner
     // stand-in), which would paint the transport this test expects hidden.
-    app.player.update_status(|status| status.active = false);
+    app.seed_idle_player_for_test();
     // The collapsed queue playback panel is part of the queue column: with
     // the empty-queue column hidden (change `hide-empty-queue-column`, D1)
     // an empty displayed queue would not mount it at all.
-    app.local_view.adopt_items(
+    app.seed_local_queue_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -646,147 +659,4 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         }
         assert!(painted > 0, "{mode:?}: the seekbar track painted");
     }
-}
-
-/// Hiding the visual slot while playing (the user's hide toggle) takes the
-/// title's home back from the artwork: the sync pass resets the carried-over
-/// site to `Header`, so the header reappears over a slot that paints nothing
-/// instead of the title living nowhere.
-#[test]
-fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
-    let mut app = active_app(PanelMode::Both);
-    app.queue_card_projection.title_site = NowPlayingTitleSite::Artwork;
-    let mut harness = TickHarness::new(app);
-    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 40);
-
-    harness.model_mut().sync_mounted_surfaces();
-    harness.model_mut().app.visual_slot_hidden = true;
-    harness.model_mut().sync_mounted_surfaces();
-    assert_eq!(
-        harness.model().app.queue_card_projection.title_site,
-        NowPlayingTitleSite::Header,
-        "the hidden slot's header is the title's home again"
-    );
-}
-
-/// Install a configured kitty picker and the halfblock fallback on a model the
-/// way `init_image_protocols` does, so the slot's paint resolves a protocol (a
-/// bare `App` carries none).
-fn set_image_protocols(mut model: crate::app::Model) -> crate::app::Model {
-    let mut configured = ratatui_image::picker::Picker::halfblocks();
-    configured.set_protocol_type(ratatui_image::picker::ProtocolType::Kitty);
-    crate::app::shell::install_image_pickers_for_test(
-        &mut model,
-        configured,
-        ratatui_image::picker::Picker::halfblocks(),
-    );
-    model
-}
-
-/// The queue card's geometry checkpoint must reach its target and hold: the
-/// recorded size settles on the same target a feedback-free paint of the slot
-/// produces, never drifting or stalling below it. The feedback loop behind
-/// this (the 2026-10-04 user report) is documented at
-/// `queue_card_reserved_rect`.
-#[test]
-fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
-    fn card_app() -> crate::app::App {
-        let mut app = active_app(PanelMode::Both);
-        app.images.configure_protocol(None, true);
-        // A cached square artwork for the active item (the fixture's shared
-        // "id", a Movie: its landscape card key) so the slot paints instead
-        // of reserving a fetch no test client would complete.
-        app.images.insert_image(
-            mbv_images::emby_queue_landscape_cache_key("id"),
-            mbv_images::CachedImage {
-                img: Some(image::DynamicImage::ImageRgba8(
-                    image::RgbaImage::from_pixel(200, 200, image::Rgba([20, 40, 60, 255])),
-                )),
-                source: None,
-                cover_box: None,
-                applied_logo_key: None,
-            },
-        );
-        app
-    }
-
-    fn paint_until_recorded(
-        app: &mut crate::app::Model,
-        area: ratatui::layout::Rect,
-    ) -> (u16, u16) {
-        let mut size = (0, 0);
-        // Bounded spins, no sleeps: each paint pumps the protocol's encode
-        // channel; the fitted size lands within a few.
-        for _ in 0..50 {
-            let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
-            terminal
-                .draw(|frame| {
-                    crate::app::shell::queue_card::render_queue_playback_slot(
-                        app, 40, frame, area, true,
-                    );
-                })
-                .unwrap();
-            size = app.app.images.last_card_size();
-            if size != (0, 0) {
-                break;
-            }
-        }
-        size
-    }
-
-    // The slot paints through the configured picker the shell installs before
-    // the listener starts (`Model::init_image_pickers`), which encodes the
-    // seeded artwork's protocol from its retained source. The picker lives on
-    // the shell, so the seeded model itself runs the loop.
-    let (_, listener) = TickHarness::port();
-    let mut harness = TickHarness::from_model(set_image_protocols(
-        crate::app::Model::new_with_listener(card_app(), listener),
-    ));
-    let mut sizes = Vec::new();
-    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 120, 40);
-    for _ in 0..6 {
-        harness.model_mut().sync_mounted_surfaces();
-        let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
-        terminal
-            .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-            .unwrap();
-        sizes.push(harness.model().app.images.last_card_size());
-    }
-
-    // The feedback-free reference: the same slot painted with its height
-    // raised to the tier cap — the rows the band offers once it is sized by
-    // the target itself — with the slot projected directly (no sync pass).
-    let mut reference = set_image_protocols(crate::app::Model::new(card_app()));
-    reference.app.queue_card_projection = mbv_ui_model::playback::QueueCardProjection {
-        cache_key: Some(mbv_images::emby_queue_landscape_cache_key("id")),
-        plain_cache_key: None,
-        images_enabled: true,
-        visualizer: false,
-        title_site: NowPlayingTitleSite::Header,
-    };
-    let placement = crate::app::shell::draw::compute_chrome_geometry(
-        &reference.app,
-        0,
-        120,
-        Rect::new(0, 0, 120, 40),
-    )
-    .root
-    .queue_playback
-    .expect("queue playback placed while playing");
-    let slot = mbv_render::arrangements::chrome::queue_playback_slot_region(placement);
-    let target_area = ratatui::layout::Rect {
-        height: mbv_render::components::card::queue_card_height_cap(40),
-        ..slot
-    };
-    let expected = paint_until_recorded(&mut reference, target_area);
-    assert_ne!(expected, (0, 0), "the reference paint recorded a size");
-
-    assert_eq!(
-        sizes[4], sizes[5],
-        "the checkpoint must hold steady once reached"
-    );
-    assert_eq!(
-        sizes[5], expected,
-        "the closed loop must settle on the feedback-free target, not drift or stall below it"
-    );
 }

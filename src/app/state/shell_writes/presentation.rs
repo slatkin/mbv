@@ -63,6 +63,14 @@ impl App {
         self.mini_view_focus = PanelFocus::Queue;
     }
 
+    /// Hold `focus` as the mini view's own focus target, without the stored
+    /// wide focus moving: the state a narrow terminal's layout holds after a
+    /// focus-follow press.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_mini_view_focus_for_test(&mut self, focus: PanelFocus) {
+        self.mini_view_focus = focus;
+    }
+
     /// Return every presentation field to its default for a UI-state reset
     /// (#745): the Panel mode and its startup focus, the queue column's
     /// default width, the persisted list-pane override (cleared here, saved by

@@ -85,18 +85,10 @@ impl TickHarness {
     pub(in crate::app) fn step(&mut self) -> StepOutcome {
         // The run loop drains one Player event before Application::tick();
         // process it here too so integration tests exercise the same event →
-        // mounted-surface sync path. Mirror `drain_player_events`' ordering:
-        // events the queue-op answer pump deferred replay first (row 5.1).
+        // mounted-surface sync path. `drain_player_event` replays the events
+        // the queue-op answer pump deferred before the live receiver (row 5.1).
         self.model.drain_suspended_home_events();
-        let event = self
-            .model
-            .app
-            .deferred_player_events
-            .pop_front()
-            .or_else(|| self.model.app.player_rx.try_recv().ok());
-        if let Some(event) = event {
-            self.model.app.handle_player_event(event);
-        }
+        self.model.app.drain_player_event();
         // Mirror the run loop's pending-transfer settlement, which runs in the
         // same tick phase that adopts owner snapshots (row 7.1, design D2).
         self.model.app.settle_pending_queue_transfer();

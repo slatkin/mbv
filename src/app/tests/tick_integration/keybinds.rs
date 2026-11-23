@@ -11,7 +11,7 @@ use crate::app::dispatch::action::{NavigationIntent, PlaybackIntent, ShellComman
 use crate::app::input::router::RouterOutcome;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{
-    QueueViewTestExt, make_app_stub, make_item, make_items, make_local_daemon_app_stub_with_cmd_rx,
+    make_app_stub, make_item, make_items, make_local_daemon_app_stub_with_cmd_rx,
 };
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use mbv_ui_model::browse::ServerRows;
@@ -29,7 +29,7 @@ fn key(code: Key) -> Event<UserEvent> {
 /// inert.
 #[test]
 fn configured_rebind_fires_through_tick() {
-    let app = make_app_stub();
+    let mut app = make_app_stub();
     let config = crate::app::config::Config {
         keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
@@ -44,7 +44,7 @@ fn configured_rebind_fires_through_tick() {
         .expect("valid keys configuration"),
         ..Default::default()
     };
-    *app.config.lock().unwrap() = config.clone();
+    app.config_for_test(|held| *held = config.clone());
     let mut harness = TickHarness::new(app);
 
     // The configured chord opens Help through the live tick path. The
@@ -70,8 +70,8 @@ fn configured_rebind_fires_through_tick() {
 
     // A fresh model with the same configuration: the declared default is
     // inert (F1 reaches no policy layer and mounts nothing).
-    let app = make_app_stub();
-    *app.config.lock().unwrap() = config.clone();
+    let mut app = make_app_stub();
+    app.config_for_test(|held| *held = config.clone());
     let mut harness = TickHarness::new(app);
     harness.inject(key(Key::Function(1)));
     let outcome = harness.step();
@@ -112,7 +112,7 @@ fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
 /// is ungated, so no player state is needed.
 #[test]
 fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
-    let app = make_app_stub();
+    let mut app = make_app_stub();
     let config = crate::app::config::Config {
         keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
@@ -127,7 +127,7 @@ fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
         .expect("valid keys configuration"),
         ..Default::default()
     };
-    *app.config.lock().unwrap() = config.clone();
+    app.config_for_test(|held| *held = config.clone());
     let mut harness = TickHarness::new(app);
 
     harness.inject(key(Key::Char('k')));
@@ -139,8 +139,8 @@ fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
     );
 
     // The declared default `+` (and its `=` alias) no longer resolves.
-    let app = make_app_stub();
-    *app.config.lock().unwrap() = config;
+    let mut app = make_app_stub();
+    app.config_for_test(|held| *held = config);
     let mut harness = TickHarness::new(app);
     harness.inject(key(Key::Char('+')));
     let outcome = harness.step();
@@ -156,8 +156,8 @@ fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
 /// an active player.
 #[test]
 fn shift_n_default_fires_next_track_through_tick() {
-    let app = make_app_stub();
-    app.player.update_status(|status| status.active = true);
+    let mut app = make_app_stub();
+    app.seed_playing_status_for_test(0, 0);
     let mut harness = TickHarness::new(app);
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('N'),
@@ -182,11 +182,11 @@ fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
     while cmd_rx.try_recv().is_ok() {}
     // A non-empty viewed queue makes the removed Queue-refresh branch
     // observable: that branch would have sent UnifiedQueueRefresh here.
-    app.local_view.adopt_items(make_items(2), 0);
+    app.seed_local_queue_for_test(make_items(2), 0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
+    app.push_library_for_test(LibraryTab {
         nav_stack: vec![BrowseLevel {
             rows: ServerRows::new(1),
             parent_id: "lib-movies".into(),
@@ -205,8 +205,8 @@ fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
         }],
         ..LibraryTab::new(library)
     });
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Queue;
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     let mut harness = TickHarness::new(app);
 
     harness.inject(key(Key::Function(5)));
@@ -224,7 +224,7 @@ fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
         .dispatch_router_command(&ShellCommand::RefreshCurrentView.into());
 
     assert!(
-        harness.model().app.libs[0].nav_stack[0].loading,
+        harness.model().app.library_level_loading_for_test(0),
         "the selected Emby library is the refresh target under Queue focus"
     );
     assert!(

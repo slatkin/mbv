@@ -6,8 +6,8 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
+use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::tests::{QueueViewTestExt, make_app_stub};
 use crate::app::{App, PanelFocus, PanelMode};
 use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use mbv_emby_model::test_support::make_item;
@@ -27,22 +27,17 @@ fn inert_key() -> Event<mbv_ui_msg::UserEvent> {
 /// audio track with an artist (two parts), slot 1 a movie (one part).
 fn title_parts_app(active_idx: usize) -> App {
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::Both;
-    app.panel_focus = PanelFocus::Queue;
+    app.set_panel_mode_for_test(PanelMode::Both);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     let mut track = make_item("Track Two", "Audio");
     track.id = "track-two".into();
     track.media_type = "Audio".into();
     track.artist = "Artist B".into();
     let mut movie = make_item("Movie One", "Movie");
     movie.id = "movie-one".into();
-    app.local_view.adopt_items(vec![track, movie], 0);
-    {
-        app.player.update_status(|status| {
-            status.active = true;
-            status.current_idx = active_idx;
-            status.queue_len = 2;
-        });
-    };
+    app.seed_local_queue_for_test(vec![track, movie], 0);
+    app.seed_playing_position_for_test(active_idx, 0, None);
+    app.set_player_queue_len_for_test(2);
     app
 }
 
@@ -97,11 +92,7 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
         "the two-part slot projects a title part and a context part"
     );
 
-    harness
-        .model_mut()
-        .app
-        .player
-        .update_status(|status| status.current_idx = 1);
+    harness.model_mut().app.set_player_current_idx_for_test(1);
     step_tick(&mut harness);
     assert_eq!(
         queue_panel(&harness)
@@ -113,8 +104,14 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
 
     // Right-column strip (queue column hidden): the same playheads project
     // through the same shared projection into the other panel.
-    harness.model_mut().app.panel_mode = PanelMode::LibraryOnly;
-    harness.model_mut().app.panel_focus = PanelFocus::Library;
+    harness
+        .model_mut()
+        .app
+        .set_panel_mode_for_test(PanelMode::LibraryOnly);
+    harness
+        .model_mut()
+        .app
+        .set_panel_focus_for_test(PanelFocus::Library);
     step_tick(&mut harness);
     assert_eq!(
         strip(&harness).title_parts_for_test().as_ref(),
@@ -122,11 +119,7 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
         "the strip receives the single-part projection"
     );
 
-    harness
-        .model_mut()
-        .app
-        .player
-        .update_status(|status| status.current_idx = 0);
+    harness.model_mut().app.set_player_current_idx_for_test(0);
     step_tick(&mut harness);
     assert_eq!(
         strip(&harness).title_parts_for_test().as_ref(),

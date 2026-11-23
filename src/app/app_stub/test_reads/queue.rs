@@ -30,6 +30,24 @@ impl App {
         self.local_view = crate::app::QueueView::from_snapshot(state);
     }
 
+    /// Hold `site` as where the now-playing title paints, as the projection
+    /// pass leaves it once the artwork can carry it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_queue_card_title_site_for_test(
+        &mut self,
+        site: mbv_ui_model::playback::NowPlayingTitleSite,
+    ) {
+        self.queue_card_projection.title_site = site;
+    }
+
+    /// The site the now-playing title paints on: the header, or the artwork
+    /// once it can carry the title.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn queue_card_title_site_for_test(&self) -> mbv_ui_model::playback::NowPlayingTitleSite {
+        self.queue_card_projection.title_site
+    }
+
     /// The revision the projected queue view carries: the identity a repaint
     /// updates instead of rebuilding the rows.
     #[cfg(any(test, feature = "test"))]

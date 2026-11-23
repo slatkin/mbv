@@ -61,14 +61,10 @@ fn capability_owner_app(
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
     let mut app = make_app_stub();
-    let (mut remote, player_rx, cmd_rx) =
-        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
     compatibility.supports_playback_output = supports_playback_output;
     compatibility.supports_emby_session_output = emby_session;
-    remote.set_ctrl_compatibility_for_test(compatibility);
-    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
-    app.player_rx = player_rx;
+    let cmd_rx = app.set_player_with_compatibility_for_test(compatibility);
     (app, cmd_rx)
 }
 
@@ -182,7 +178,7 @@ fn enter_request(harness: &mut TickHarness) -> SessionTargetKey {
 #[case::ordinary(100)]
 fn tick_sessions_focus_selection_and_responsive_clamp(#[case] width: u16) {
     let mut app = make_app_stub();
-    app.panel_targets = sessions(&["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]);
+    app.seed_panel_targets_for_test(sessions(&["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]));
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), width, 14);
     open_sessions(&mut harness);
@@ -214,7 +210,7 @@ fn tick_sessions_focus_selection_and_responsive_clamp(#[case] width: u16) {
 #[test]
 fn tick_sessions_pointer_selects_then_reclick_activates() {
     let mut app = make_app_stub();
-    app.panel_targets = sessions(&["first", "second"]);
+    app.seed_panel_targets_for_test(sessions(&["first", "second"]));
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 24);
     open_sessions(&mut harness);
@@ -278,7 +274,7 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
 #[test]
 fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
     let mut app = make_app_stub();
-    app.panel_targets = sessions(&["removed", "kept"]);
+    app.seed_panel_targets_for_test(sessions(&["removed", "kept"]));
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
 
@@ -293,7 +289,10 @@ fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
         Some(SessionTargetKey::Emby("removed".into()))
     );
 
-    harness.model_mut().app.panel_targets = sessions(&["replacement", "kept"]);
+    harness
+        .model_mut()
+        .app
+        .seed_panel_targets_for_test(sessions(&["replacement", "kept"]));
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
         sessions_component_mut(&mut harness).target_at_for_test(old_point),
@@ -334,7 +333,7 @@ fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
 #[test]
 fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
     let mut app = make_app_stub();
-    app.panel_targets = sessions(&["first", "second"]);
+    app.seed_panel_targets_for_test(sessions(&["first", "second"]));
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
 
@@ -378,13 +377,16 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
 #[test]
 fn tick_sessions_reordered_snapshot_activates_selected_identity() {
     let (mut app, cmd_rx) = both_output_capabilities_owner_app();
-    app.panel_targets = sessions(&["first", "selected"]);
+    app.seed_panel_targets_for_test(sessions(&["first", "selected"]));
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
 
     harness.inject(key(Key::Down));
     harness.step();
-    harness.model_mut().app.panel_targets = sessions(&["selected", "first"]);
+    harness
+        .model_mut()
+        .app
+        .seed_panel_targets_for_test(sessions(&["selected", "first"]));
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
         sessions_component_mut(&mut harness)
@@ -395,7 +397,10 @@ fn tick_sessions_reordered_snapshot_activates_selected_identity() {
 
     let request = enter_request(&mut harness);
     assert_eq!(request, SessionTargetKey::Emby("selected".into()));
-    harness.model_mut().app.panel_targets = sessions(&["selected", "first"]);
+    harness
+        .model_mut()
+        .app
+        .seed_panel_targets_for_test(sessions(&["selected", "first"]));
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
         Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
@@ -417,13 +422,16 @@ fn tick_sessions_reordered_snapshot_activates_selected_identity() {
 #[test]
 fn tick_sessions_removed_target_request_is_noop_not_former_index_replacement() {
     let mut app = make_app_stub();
-    app.panel_targets = sessions(&["selected", "replacement"]);
+    app.seed_panel_targets_for_test(sessions(&["selected", "replacement"]));
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);
     assert_eq!(request, SessionTargetKey::Emby("selected".into()));
-    harness.model_mut().app.panel_targets = sessions(&["replacement"]);
+    harness
+        .model_mut()
+        .app
+        .seed_panel_targets_for_test(sessions(&["replacement"]));
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
         Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
@@ -457,19 +465,22 @@ fn a_capabilityless_owner_rebuild_offers_no_cast_row() {
     let (mut app, _cmd_rx) = capabilityless_owner_app();
     let mut session = mbv_emby::test_support::make_session("Living Room TV", "mbv");
     session.id = "sess-tv".into();
-    app.sessions = vec![session];
-    app.cast_receivers = vec![CastReceiver {
-        id: "r-1".to_string(),
-        friendly_name: "Living Room".to_string(),
-        host: "192.168.0.5".to_string(),
-        port: 8009,
-    }];
+    app.seed_sessions_and_receivers_for_test(
+        vec![session],
+        vec![CastReceiver {
+            id: "r-1".to_string(),
+            friendly_name: "Living Room".to_string(),
+            host: "192.168.0.5".to_string(),
+            port: 8009,
+        }],
+    );
 
     app.rebuild_panel_targets();
 
-    assert_eq!(app.panel_targets.len(), 1);
+    let targets = app.panel_targets();
+    assert_eq!(targets.len(), 1);
     assert!(
-        matches!(&app.panel_targets[0], PanelTarget::Emby(session) if session.id == "sess-tv"),
+        matches!(&targets[0], PanelTarget::Emby(session) if session.id == "sess-tv"),
         "only the Emby row is offered"
     );
 }
@@ -482,11 +493,11 @@ fn a_capabilityless_owner_rebuild_offers_no_cast_row() {
 #[test]
 fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
     let (mut app, cmd_rx) = capabilityless_owner_app();
-    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    app.set_player_endpoint_for_test(mbv_remote_player::DaemonEndpoint::Local);
     let mut session = mbv_emby::test_support::make_session("Living Room TV", "Emby");
     session.id = "sess-tv".into();
     session.device_id = "device-tv".into();
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(session))]);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
@@ -562,17 +573,17 @@ fn tick_sessions_direct_endpoint_activation_switches_away_from_an_mbvd_owner() {
 
     // The owner is the packaged daemon this Client is already attached to.
     let (mut app, cmd_rx) = capabilityless_owner_app();
-    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Tcp(
-        "192.168.1.9:47788".parse().unwrap(),
-    ));
-    app.direct_remote_connected = true;
-    app.direct_remote_session_id = Some("sess-mbvd".into());
+    app.seed_direct_remote_for_test(
+        mbv_remote_player::DaemonEndpoint::Tcp("192.168.1.9:47788".parse().unwrap()),
+        "sess-mbvd".to_string(),
+        "mbv".to_string(),
+    );
     let mut session = mbv_emby::test_support::make_session("peer-host", "mbv");
     session.id = "sess-peer".into();
     session.device_id = "device-peer".into();
     session.host = "192.168.1.20".into();
     session.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(session))]);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
@@ -595,10 +606,10 @@ fn tick_sessions_direct_endpoint_activation_switches_away_from_an_mbvd_owner() {
         "the activation connects to the selected Session's direct endpoint"
     );
     let app = &harness.model().app;
-    assert_eq!(app.player_endpoint, Some(peer_endpoint));
-    assert_eq!(app.direct_remote_session_id.as_deref(), Some("sess-peer"));
-    assert_eq!(app.direct_remote_label.as_deref(), Some("peer-host"));
-    assert!(app.direct_remote_connected);
+    assert_eq!(app.player_endpoint_for_test(), Some(&peer_endpoint));
+    assert_eq!(app.direct_remote_session_id_for_test(), Some("sess-peer"));
+    assert_eq!(app.direct_remote_label_for_test(), Some("peer-host"));
+    assert!(app.direct_remote_connected_for_test());
     assert!(
         cmd_rx.try_recv().is_err(),
         "the previous owner is severed without an output selection: mbvd keeps its own playback"

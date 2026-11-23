@@ -2,7 +2,6 @@ use crate::app::shell::test_support::{Terminal, TestBackend};
 use ratatui::layout::Rect;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
@@ -115,14 +114,17 @@ fn only_the_blocking_modals_own_messages(messages: &[Msg]) -> bool {
 fn tick_blocking_confirm_modal_suppresses_underlying_mouse_activity() {
     let (mut harness, rows) = search_sidebar_with_painted_results();
     let modal_id = ComponentId::Modal(ModalId::Confirm);
-    harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
-        message: "Remove queued items".into(),
-        buttons: vec![
-            ConfirmButton::affirmative("Enter", "Confirm"),
-            ConfirmButton::cancel("Esc", "Cancel"),
-        ],
-        on_confirm: ConfirmAction::ClearQueue,
-    }));
+    harness
+        .model_mut()
+        .app
+        .seed_pending_overlay_for_test(OverlayRequest::Confirm(ConfirmModal {
+            message: "Remove queued items".into(),
+            buttons: vec![
+                ConfirmButton::affirmative("Enter", "Confirm"),
+                ConfirmButton::cancel("Esc", "Cancel"),
+            ],
+            on_confirm: ConfirmAction::ClearQueue,
+        }));
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().application.mounted(&modal_id));
     assert_eq!(
@@ -138,11 +140,14 @@ fn tick_blocking_confirm_modal_suppresses_underlying_mouse_activity() {
 fn tick_blocking_daemon_lost_modal_suppresses_underlying_mouse_activity() {
     let (mut harness, rows) = search_sidebar_with_painted_results();
     let modal_id = ComponentId::Modal(ModalId::DaemonLost);
-    harness.model_mut().app.pending_overlay = Some(OverlayRequest::DaemonLost(DaemonLostModal {
-        last_playing_title: Some("Birthday Clip".into()),
-        daemon_log_path: "/tmp/mbvd.log".into(),
-        restart_error: None,
-    }));
+    harness
+        .model_mut()
+        .app
+        .seed_pending_overlay_for_test(OverlayRequest::DaemonLost(DaemonLostModal {
+            last_playing_title: Some("Birthday Clip".into()),
+            daemon_log_path: "/tmp/mbvd.log".into(),
+            restart_error: None,
+        }));
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().application.mounted(&modal_id));
     assert_eq!(
@@ -189,11 +194,11 @@ fn drawn_harness_terminal(
 
 fn drawn_tab_harness() -> TickHarness {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.tab = TabSelection::Home;
+    app.seed_active_tab_for_test(TabSelection::Home);
     // The tab-bar geometry under test is the two-panel layout: with the
     // empty-queue column hidden (change `hide-empty-queue-column`, D1) an
     // empty displayed queue would render library-only and move the tab bar.
-    app.local_view.adopt_items(
+    app.seed_local_queue_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -231,8 +236,8 @@ fn library_panel_component(harness: &TickHarness) -> &LibraryPanel {
 fn tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide_modes() {
     for (terminal_width, terminal_height) in [(80, 24), (120, 30)] {
         let mut app = crate::app::tests::render_fixtures::make_music_group_app();
-        app.panel_mode = PanelMode::LibraryOnly;
-        app.panel_focus = PanelFocus::Library;
+        app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+        app.set_panel_focus_for_test(PanelFocus::Library);
         let mut harness = TickHarness::new(app);
         crate::app::shell::test_support::set_terminal_size(
             harness.model_mut(),
@@ -353,7 +358,7 @@ fn tab_bar_click_switches_active_tab() {
     apply_outcome(&mut harness, outcome);
 
     assert_eq!(
-        harness.model().app.tab,
+        harness.model().app.tab_for_test(),
         TabSelection::EmbyLibrary(0),
         "clicking the Movies tab switches to it, mirroring keyboard tab-cycling"
     );
@@ -384,7 +389,7 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
     apply_outcome(&mut harness, outcome);
 
     assert_eq!(
-        harness.model().app.tab,
+        harness.model().app.tab_for_test(),
         TabSelection::Home,
         "a click outside the tab bar placement is a no-op"
     );
@@ -397,12 +402,11 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
 #[test]
 fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.ui_volume = 60;
-    app.mute_on = false;
+    app.seed_idle_volume_and_mute_for_test(60, false);
     // The stub player starts active (a remote-owner stand-in), which would
     // route the volume intent through the player status instead of the
     // shell's idle `ui_volume` this test stages.
-    app.player.update_status(|status| status.active = false);
+    app.seed_idle_player_for_test();
     let mut harness = TickHarness::new(app);
     // The panels mount in the first sync pass from paint-free chrome
     // geometry; draw with them mounted, then sync + draw again -- the
@@ -437,7 +441,11 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     );
     apply_outcome(&mut harness, outcome);
     assert_eq!(
-        harness.model().app.ui_volume,
+        harness
+            .model()
+            .app
+            .presentation_facts_for_test()
+            .stored_volume,
         55,
         "scroll down lowers the volume by the legacy wheel step"
     );
@@ -462,7 +470,7 @@ fn tab_panel_status_regions(harness: &TickHarness) -> mbv_render::StatusBarRegio
 #[test]
 fn tick_chrome_panels_mount_only_where_the_root_places_them() {
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::QueueOnly;
+    app.set_panel_mode_for_test(PanelMode::QueueOnly);
     let mut harness = TickHarness::new(app);
     // Wide, so the mode applies.
     crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 120);
@@ -503,8 +511,8 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
     // Start below the mini-view threshold: `effective_panel_mode` follows
     // `mini_view_focus` (Queue), so QueueOnly places no chrome panels.
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::Both;
-    app.panel_focus = PanelFocus::Library;
+    app.set_panel_mode_for_test(PanelMode::Both);
+    app.set_panel_focus_for_test(PanelFocus::Library);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 60, 24);
     let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
@@ -546,7 +554,7 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
 #[test]
 fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     // The queue panel retains its own geometry from its paint (task 3.1); the
     // wheel eligibility below follows the painted surface, not a seeded
     let mut harness = TickHarness::new(app);
@@ -571,16 +579,19 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
     );
 
     let menu_id = ComponentId::Overlay(OverlayId::ContextMenu);
-    harness.model_mut().app.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
-        anchor: ContextMenuAnchor::SelectedItem(PanelFocus::Queue),
-        entries: vec![ContextMenuEntry {
-            label: "Play",
-            action: Some(ContextAction::Play),
-            key_hint: None,
-        }],
-        cursor: 0,
-        bounds: None,
-    }));
+    harness
+        .model_mut()
+        .app
+        .seed_pending_overlay_for_test(OverlayRequest::ContextMenu(ContextMenu {
+            anchor: ContextMenuAnchor::SelectedItem(PanelFocus::Queue),
+            entries: vec![ContextMenuEntry {
+                label: "Play",
+                action: Some(ContextAction::Play),
+                key_hint: None,
+            }],
+            cursor: 0,
+            bounds: None,
+        }));
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().application.mounted(&menu_id));
     assert_eq!(
@@ -609,8 +620,8 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
 #[test]
 fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
-    app.panel_mode = PanelMode::Both;
-    app.panel_focus = PanelFocus::Library;
+    app.set_panel_mode_for_test(PanelMode::Both);
+    app.set_panel_focus_for_test(PanelFocus::Library);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
@@ -714,86 +725,12 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     harness.model_mut().sync_mounted_surfaces();
 }
 
-/// End to end: the queue playback panel resolves a right-click on the visual
-/// slot, the shell opens the slot's chrome menu from the click, and the Hide
-/// entry hides the slot. The slot rect comes from the panel's own projected
-/// hit geometry, not a recomputed expectation.
-#[test]
-fn tick_visual_slot_right_click_opens_the_menu_and_hide_hides_the_slot() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.tab = TabSelection::Home;
-    // The two-panel layout needs a non-empty queue (hide-empty-queue-column D1).
-    app.local_view
-        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
-
-    let slot = visual_slot_area(&harness);
-    assert!(
-        slot.width > 0,
-        "the visual slot must be projected: {slot:?}"
-    );
-
-    harness.inject(Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Right),
-        column: slot.x,
-        row: slot.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let outcome = harness.step();
-    apply_outcome(&mut harness, outcome);
-    harness.model_mut().sync_mounted_surfaces();
-
-    let menu_id = ComponentId::Overlay(OverlayId::ContextMenu);
-    assert!(
-        harness.model().application.mounted(&menu_id),
-        "a right-click on the visual slot opens its chrome menu"
-    );
-
-    press_key(&mut harness, tuirealm::event::Key::Down);
-    press_key(&mut harness, tuirealm::event::Key::Enter);
-
-    assert!(
-        harness.model().app.visual_slot_hidden,
-        "the Hide entry hides the visual slot"
-    );
-}
-
-/// The queue playback panel's projected visual slot rect.
-fn visual_slot_area(harness: &TickHarness) -> Rect {
-    harness
-        .model()
-        .application
-        .get_component(&ComponentId::QueuePlaybackPanel)
-        .expect("queue playback panel mounted")
-        .as_any()
-        .downcast_ref::<mbv_components::QueuePlaybackPanel>()
-        .expect("queue playback panel type")
-        .visual_slot_area_for_test()
-}
-
-/// Inject one key, step, and feed the produced messages to the shell.
-fn press_key(harness: &mut TickHarness, code: tuirealm::event::Key) {
-    harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
-        code,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let outcome = harness.step();
-    apply_outcome(harness, outcome);
-}
-
 // --- task 1.4: the boundary is a two-panel-layout component. RootFrame places
 // it (and the sync pass mounts it) only in the Both layout; queue-only and
 // library-only find it unmounted, and returning to Both remounts it.
 
 mod panels;
+
+/// The visual slot's right-click and Hide entry, split so this file stays
+/// within its line ceiling. The fixtures stay here.
+mod visual_slot;

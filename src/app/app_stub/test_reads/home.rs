@@ -459,6 +459,39 @@ impl App {
         );
     }
 
+    /// Hold the unconfigured Emby runtime, so no background refresh runs over
+    /// a test's own transport: what a launch before a setup leaves.
+    #[cfg(any(test, feature = "test"))]
+    pub fn clear_emby_runtime_for_test(&mut self) {
+        self.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
+    }
+
+    /// Whether the open level of the Emby library at `index` is loading, as a
+    /// landed fetch clears it.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn library_level_loading_for_test(&self, index: usize) -> bool {
+        self.libs
+            .get(index)
+            .and_then(|tab| tab.nav_stack.first())
+            .is_some_and(|open| open.loading)
+    }
+
+    /// Whether the Settings toggle's mouse-capture flip is armed, and the
+    /// capture value it will apply.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn mouse_capture_pending_for_test(&self) -> Option<bool> {
+        self.mouse_capture_pending
+    }
+
+    /// Whether a deferred Settings save is armed.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn image_cached_for_test(&self, key: &str) -> bool {
+        self.images.is_cached(key)
+    }
+
     /// Hold the Audiobookshelf Service state and its stored credential user,
     /// as a login attempt's connect leaves them.
     #[cfg(any(test, feature = "test"))]
@@ -502,6 +535,28 @@ impl App {
                 status.runtime_ticks = runtime;
             }
         });
+    }
+
+    /// Hold `len` as the local player's queued slot count, as a status drain
+    /// reports it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_player_queue_len_for_test(&mut self, len: usize) {
+        self.player.update_status(|status| status.queue_len = len);
+    }
+
+    /// Move the local player's playhead to slot `current_idx`, as a status
+    /// drain reports it, leaving the rest of its status as it stands.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_player_current_idx_for_test(&mut self, current_idx: usize) {
+        self.player
+            .update_status(|status| status.current_idx = current_idx);
+    }
+
+    /// Hold `title` as the local player's reported title, as a status drain
+    /// leaves it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_player_title_for_test(&mut self, title: String) {
+        self.player.update_status(|status| status.title = title);
     }
 
     /// Mark the local player idle after its queue was adopted.

@@ -5,7 +5,7 @@ use mbv_components::library_panel::owner::LibraryContentOwner as _;
 fn queue_boundary_unmounts_outside_the_two_panel_layout() {
     for mode in [PanelMode::QueueOnly, PanelMode::LibraryOnly] {
         let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
-        app.panel_mode = mode;
+        app.set_panel_mode_for_test(mode);
         let mut harness = TickHarness::new(app);
         assert!(
             harness
@@ -22,7 +22,10 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
                 .mounted(&ComponentId::QueueBoundary),
             "{mode:?} unmounts the boundary"
         );
-        harness.model_mut().app.panel_mode = PanelMode::Both;
+        harness
+            .model_mut()
+            .app
+            .set_panel_mode_for_test(PanelMode::Both);
         harness.model_mut().sync_mounted_surfaces();
         assert!(
             harness
@@ -50,7 +53,7 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 #[test]
 fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
     let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
-    app.panel_mode = PanelMode::Both;
+    app.set_panel_mode_for_test(PanelMode::Both);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -64,12 +67,15 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
         .root_frame
         .queue_boundary
         .expect("two-panel layout places the boundary in RootFrame");
-    let width = harness.model().app.queue_column_width;
-    harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
-        message: "overlay owns the pointer".into(),
-        buttons: vec![ConfirmButton::cancel("Esc", "Cancel")],
-        on_confirm: ConfirmAction::ClearQueue,
-    }));
+    let width = harness.model().app.queue_column_width();
+    harness
+        .model_mut()
+        .app
+        .seed_pending_overlay_for_test(OverlayRequest::Confirm(ConfirmModal {
+            message: "overlay owns the pointer".into(),
+            buttons: vec![ConfirmButton::cancel("Esc", "Cancel")],
+            on_confirm: ConfirmAction::ClearQueue,
+        }));
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(harness.model().mouse_subscribed.len(), 1);
 
@@ -96,7 +102,7 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
                 && !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))
         }));
     }
-    assert_eq!(harness.model().app.queue_column_width, width);
+    assert_eq!(harness.model().app.queue_column_width(), width);
 }
 
 // --- Task 7.3 (breakpoint half): the Movies destination keeps its embedded
@@ -109,8 +115,8 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
 #[test]
 fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_stale_one() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
@@ -216,9 +222,9 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
     let mut second_album = make_item("Album 2", "MusicAlbum");
     second_album.id = "album-2".into();
     second_album.artist = "Alpha".into();
-    app.libs[0].nav_stack[1].items.push(second_album);
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
+    app.push_library_row_for_test(0, 1, second_album);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let music_id = ComponentId::Library;
@@ -272,7 +278,7 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
 #[test]
 fn image_hold_outlives_the_drag_by_the_settle_window() {
     let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
-    app.panel_mode = PanelMode::Both;
+    app.set_panel_mode_for_test(PanelMode::Both);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -286,7 +292,7 @@ fn image_hold_outlives_the_drag_by_the_settle_window() {
         .root_frame
         .queue_boundary
         .expect("two-panel layout places the boundary in RootFrame");
-    let width_before = harness.model().app.queue_column_width;
+    let width_before = harness.model().app.queue_column_width();
     let drag_to = |column| {
         Event::Mouse(MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),
@@ -309,7 +315,7 @@ fn image_hold_outlives_the_drag_by_the_settle_window() {
     apply_outcome(&mut harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
     assert_ne!(
-        harness.model().app.queue_column_width,
+        harness.model().app.queue_column_width(),
         width_before,
         "the drag moved the column, so the hold is exercised"
     );

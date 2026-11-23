@@ -34,12 +34,14 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     // One carrier row per playlist, targeted by the playlist `id`
     // (wheel-scrolls-viewport 5.3b): the seed must use distinct ids, the way
     // a real server does, or the shared owner cannot address row 1.
-    app.playlists = vec![make_item("P1", "Playlist"), make_item("P2", "Playlist")];
-    app.playlists[0].id = "p1".into();
-    app.playlists[1].id = "p2".into();
-    assert!(app.playlists_open.is_none());
+    let mut p1 = make_item("P1", "Playlist");
+    p1.id = "p1".into();
+    let mut p2 = make_item("P2", "Playlist");
+    p2.id = "p2".into();
+    app.seed_playlists_for_test(vec![p1, p2]);
+    assert!(app.playlists_open().is_none());
     assert_eq!(
-        app.playlists_open_items,
+        app.playlists_open_items(),
         [] as [mbv_emby_model::EmbyItem; 0]
     );
     let mut harness = TickHarness::new(app);
@@ -176,7 +178,7 @@ fn mounted_library_cursor(harness: &mut TickHarness) -> usize {
 #[test]
 fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     let mut app = crate::app::tests::render_fixtures::make_queue_app(8);
-    app.mini_view_focus = PanelFocus::Queue;
+    app.set_mini_view_focus_for_test(PanelFocus::Queue);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().sync_mounted_surfaces();

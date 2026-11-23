@@ -78,8 +78,16 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
 
-    assert!(!harness.model().app.config.lock().unwrap().mouse_support);
-    assert_eq!(harness.model().app.mouse_capture_pending, Some(false));
+    assert!(
+        !harness
+            .model_mut()
+            .app
+            .config_for_test(|config| config.mouse_support)
+    );
+    assert_eq!(
+        harness.model().app.mouse_capture_pending_for_test(),
+        Some(false)
+    );
 }
 
 /// #745 (row 5.2): the Actions `Reset UI State` row routes Enter through the
@@ -113,7 +121,10 @@ fn settings_reset_ui_state_row_runs_the_coordinator_and_dismisses_settings() {
 
     // A non-default focus the coordinator must restore, so delivery is
     // observable independently of dismissal.
-    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness
+        .model_mut()
+        .app
+        .set_panel_focus_for_test(PanelFocus::Queue);
 
     // Locate the ResetUiState row via the production cursor map, the single
     // source of truth for the flat row order.
@@ -142,12 +153,12 @@ fn settings_reset_ui_state_row_runs_the_coordinator_and_dismisses_settings() {
         "Reset UI State must dismiss Settings"
     );
     assert_eq!(
-        harness.model().app.panel_focus,
+        harness.model().app.stored_panel_focus(),
         PanelFocus::Library,
         "the reset coordinator must restore the default focus"
     );
     assert!(
-        harness.model().app.settings_save_at.is_none(),
+        !harness.model().app.gui_settings_save_armed_for_test(),
         "the reset must bypass the configuration-edit/save path"
     );
 }

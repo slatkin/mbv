@@ -20,23 +20,15 @@ fn reconnect_local_daemon(
 #[test]
 fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
     let mut app = make_local_daemon_app_stub(make_items(1));
-    let (remote, _) = RemotePlayer::stub(make_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
-        remote,
-        mpsc::channel().1,
+    app.switch_to_direct_remote_for_test(
+        "remote-owner",
+        make_items(2),
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     let (event_tx, event_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = event_rx;
-    {
-        app.player.update_status(|status| {
-            status.position_ticks = 9876;
-            status.current_idx = 1;
-            status.active = true;
-            status.title = "Remote status".into();
-        });
-    };
+    app.set_suspended_local_events_for_test(event_rx);
+    app.seed_playing_position_for_test(1, 9876, None);
+    app.set_player_title_for_test("Remote status".to_string());
     let snapshot = |items: Vec<mbv_emby_model::EmbyItem>, source: mbv_queue::QueueSource| {
         let mut state = emby_unified_state(&items, 0);
         state.source = source;
@@ -62,12 +54,13 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
 
     let app = &harness.model().app;
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
-    assert_eq!(app.local_view.emby_items(), make_items(3));
+    let home_queue = app.queue_for_link(QueueLink::Local);
+    assert_eq!(home_queue.emby_items(), make_items(3));
     assert!(matches!(
-        app.local_view.source(),
+        home_queue.source(),
         mbv_queue::QueueSource::Series
     ));
-    let status = app.player.status_snapshot();
+    let status = app.player_status_snapshot();
     assert_eq!(status.position_ticks, 9876);
     assert_eq!(status.current_idx, 1);
     assert!(status.active);
@@ -77,15 +70,13 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
 #[test]
 fn suspended_home_disconnect_raises_owner_lost_modal() {
     let mut app = make_local_daemon_app_stub(make_items(1));
-    let (remote, _) = RemotePlayer::stub(make_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
-        remote,
-        mpsc::channel().1,
+    app.switch_to_direct_remote_for_test(
+        "remote-owner",
+        make_items(2),
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     let (event_tx, event_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = event_rx;
+    app.set_suspended_local_events_for_test(event_rx);
     event_tx
         .send(mbv_ctrl::player::PlayerEvent::RemoteDisconnected(
             "home owner lost".into(),
@@ -109,15 +100,13 @@ fn suspended_home_disconnect_raises_owner_lost_modal() {
 fn suspended_home_shutdown_announced_exits_cleanly() {
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_local_daemon_app_stub(make_items(1));
-    let (remote, _) = RemotePlayer::stub(make_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
-        remote,
-        mpsc::channel().1,
+    app.switch_to_direct_remote_for_test(
+        "remote-owner",
+        make_items(2),
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     let (event_tx, event_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = event_rx;
+    app.set_suspended_local_events_for_test(event_rx);
     event_tx
         .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
         .unwrap();
@@ -133,9 +122,13 @@ fn suspended_home_shutdown_announced_exits_cleanly() {
                 mbv_ui_msg::ModalId::DaemonLost,
             ))
     );
-    assert!(harness.model().app.suspended_local.is_none());
+    assert!(!harness.model().app.home_link_is_suspended_for_test());
     assert_eq!(
-        harness.model().app.pending_exit_message.as_deref(),
+        harness
+            .model_mut()
+            .app
+            .take_pending_exit_message()
+            .as_deref(),
         Some("mbv: the Owner process was stopped — exiting.")
     );
     assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
@@ -147,15 +140,13 @@ fn suspended_home_shutdown_announced_exits_cleanly() {
 fn routed_remote_shutdown_announced_restores_suspended_home_without_quitting() {
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_local_daemon_app_stub(make_items(1));
-    let (remote, _) = RemotePlayer::stub(make_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
-        remote,
-        mpsc::channel().1,
+    app.switch_to_direct_remote_for_test(
+        "remote-owner",
+        make_items(2),
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     let (event_tx, event_rx) = mpsc::channel();
-    app.player_rx = event_rx;
+    app.set_active_player_events_for_test(event_rx);
     event_tx
         .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
         .unwrap();
@@ -165,9 +156,15 @@ fn routed_remote_shutdown_announced_restores_suspended_home_without_quitting() {
 
     let app = &harness.model().app;
     assert!(app.is_local_daemon());
-    assert!(app.suspended_local.is_none());
-    assert!(!app.player.is_remote_disconnected());
-    assert!(app.pending_exit_message.is_none());
+    assert!(!app.home_link_is_suspended_for_test());
+    assert!(!app.player_remote_disconnected());
+    assert!(
+        harness
+            .model_mut()
+            .app
+            .take_pending_exit_message()
+            .is_none()
+    );
     assert!(!crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
 }
 
@@ -176,7 +173,7 @@ fn local_home_shutdown_announced_exits_cleanly() {
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (event_tx, event_rx) = mpsc::channel();
-    app.player_rx = event_rx;
+    app.set_active_player_events_for_test(event_rx);
     event_tx
         .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
         .unwrap();
@@ -193,7 +190,11 @@ fn local_home_shutdown_announced_exits_cleanly() {
             ))
     );
     assert_eq!(
-        harness.model().app.pending_exit_message.as_deref(),
+        harness
+            .model_mut()
+            .app
+            .take_pending_exit_message()
+            .as_deref(),
         Some("mbv: the Owner process was stopped — exiting.")
     );
     assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
@@ -207,15 +208,13 @@ fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
     let mut app = make_local_daemon_app_stub(make_items(1));
-    let (remote, _) = RemotePlayer::stub(make_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
-        remote,
-        mpsc::channel().1,
+    app.switch_to_direct_remote_for_test(
+        "remote-owner",
+        make_items(2),
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     let (event_tx, event_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = event_rx;
+    app.set_suspended_local_events_for_test(event_rx);
     event_tx
         .send(mbv_ctrl::player::PlayerEvent::RemoteDisconnected(
             "home owner lost".into(),
@@ -225,7 +224,7 @@ fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
     let mut harness = TickHarness::new(app);
     harness.step();
 
-    assert!(harness.model().app.suspended_local.is_none());
+    assert!(!harness.model().app.home_link_is_suspended_for_test());
     let prepared = harness
         .model_mut()
         .app
@@ -254,23 +253,18 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     let mut app = make_local_daemon_app_stub(local_items.clone());
     // This test covers the disconnect projection, not an unrelated failed
     // Emby refresh that `refresh_after_stop` may perform.
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
+    app.clear_emby_runtime_for_test();
     let (remote, _peer_events, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(make_items(3), 0);
     let (event_tx, event_rx) = mpsc::channel();
     let endpoint = DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
-        remote,
-        mpsc::channel().1,
-        &endpoint,
-    );
+    app.attach_direct_remote_for_test("remote-owner", remote, mpsc::channel().1, &endpoint);
     // The production attach wraps the link in the wake relay (design D7 of
     // `extract-client-core`), which forwards asynchronously; the injected
     // event must drain synchronously inside `step`, so the test drives the
     // raw channel like the other disconnect tests do.
-    app.player_rx = event_rx;
+    app.set_active_player_events_for_test(event_rx);
 
-    assert!(app.remote_view.is_some());
+    assert!(app.has_remote_view_for_test());
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     assert_eq!(app.displayed_queue().emby_items().len(), 3);
 
@@ -283,7 +277,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.remote_view.is_none());
+    assert!(!app.has_remote_view_for_test());
     assert_eq!(app.playing_queue_link(), QueueLink::Local);
     assert_eq!(app.displayed_queue().emby_items().len(), local_items.len());
     assert_eq!(app.displayed_queue().emby_items(), local_items);
@@ -308,8 +302,8 @@ fn user_disconnect_shows_local_queue_and_sends_the_peer_no_stop() {
     let local_items = make_items(1);
     let mut app = make_local_daemon_app_stub(local_items.clone());
     let (remote, _peer_events, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(make_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
+    app.attach_direct_remote_for_test(
+        "remote-owner",
         remote,
         mpsc::channel().1,
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
@@ -317,7 +311,7 @@ fn user_disconnect_shows_local_queue_and_sends_the_peer_no_stop() {
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     // The stub owner plays by default; the no-Stop contract is about a
     // playing peer.
-    assert!(app.player.status_snapshot().active);
+    assert!(app.player_status_snapshot().active);
 
     let mut harness = TickHarness::new(app);
     let (mut music_resize, mut tv_resize) = (false, false);
@@ -328,7 +322,7 @@ fn user_disconnect_shows_local_queue_and_sends_the_peer_no_stop() {
     );
 
     let app = &harness.model().app;
-    assert!(!app.direct_remote_connected);
+    assert!(!app.direct_remote_connected_for_test());
     assert_eq!(app.playing_queue_link(), QueueLink::Local);
     assert_eq!(app.displayed_queue().emby_items(), local_items);
     while let Ok(cmd) = peer_cmd_rx.try_recv() {

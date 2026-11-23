@@ -61,8 +61,8 @@ fn prefix_config(assignments: &[(&str, &str)]) -> crate::app::config::Config {
 }
 
 fn harness_with(config: crate::app::config::Config) -> TickHarness {
-    let app = make_app_stub();
-    *app.config.lock().unwrap() = config;
+    let mut app = make_app_stub();
+    app.config_for_test(|held| *held = config);
     TickHarness::new(app)
 }
 
@@ -84,19 +84,20 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
 
 fn home_harness(count: usize, config: crate::app::config::Config) -> TickHarness {
     let mut app = make_app_stub();
-    *app.config.lock().unwrap() = config;
-    app.tab = TabSelection::Home;
-    app.panel_focus = PanelFocus::Library;
-    app.mini_view_focus = PanelFocus::Library;
+    app.config_for_test(|held| *held = config);
+    app.seed_active_tab_for_test(TabSelection::Home);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().app.home_content.continue_items = (0..count)
-        .map(|i| {
-            let mut item = make_item(&format!("Home Item {i}"), "Movie");
-            item.id = format!("home-{i}");
-            item
-        })
-        .collect();
-    harness.model_mut().app.home_content.loading = false;
+    harness.model_mut().app.seed_home_content_for_test(
+        (0..count)
+            .map(|i| {
+                let mut item = make_item(&format!("Home Item {i}"), "Movie");
+                item.id = format!("home-{i}");
+                item
+            })
+            .collect(),
+    );
     harness.model_mut().push_home_content();
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness, 160, 30);
@@ -134,7 +135,7 @@ fn arming_consumes_the_prefix_chord() {
     let outcome = harness.step();
     assert_eq!(outcome.router, RouterOutcome::PrefixArm);
     assert!(
-        harness.model().app.prefix_armed,
+        harness.model().app.prefix_armed(),
         "the router outcome arms prefix mode"
     );
     assert!(
@@ -155,7 +156,7 @@ fn mouse_event_disarms_without_altering_handling() {
     harness.inject(key(Key::Char('b')).tap_ctrl());
     let outcome = harness.step();
     assert_eq!(outcome.router, RouterOutcome::PrefixArm);
-    assert!(harness.model().app.prefix_armed);
+    assert!(harness.model().app.prefix_armed());
 
     // The same mouse event, from a harness that was never armed, for the
     // handling comparison below.
@@ -176,7 +177,7 @@ fn mouse_event_disarms_without_altering_handling() {
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
     assert!(
-        !harness.model().app.prefix_armed,
+        !harness.model().app.prefix_armed(),
         "the mouse event silently disarms prefix mode"
     );
     assert_eq!(
@@ -200,7 +201,7 @@ fn mouse_event_disarms_without_altering_handling() {
             .model_mut()
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
-    assert!(!harness.model().app.prefix_armed);
+    assert!(!harness.model().app.prefix_armed());
     harness.inject(key(Key::Char('x')));
     assert_eq!(
         harness.step().router,
@@ -230,7 +231,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
     let outcome = harness.step();
     assert_eq!(outcome.router, RouterOutcome::PrefixSwallow);
     assert!(
-        !harness.model().app.prefix_armed,
+        !harness.model().app.prefix_armed(),
         "an unmapped armed chord disarms"
     );
     assert_eq!(
@@ -255,7 +256,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
         1,
         "disarmed, the chord reaches the component again"
     );
-    assert!(!harness.model().app.prefix_armed);
+    assert!(!harness.model().app.prefix_armed());
 
     // Rearm and fire the mapped chord: it executes (the shell dispatches
     // the panel-mode cycle) and disarms.
@@ -268,14 +269,14 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
         RouterOutcome::PrefixDispatch(PanelIntent::CyclePanelMode.into())
     );
     assert!(
-        !harness.model().app.prefix_armed,
+        !harness.model().app.prefix_armed(),
         "a mapped dispatch disarms"
     );
     harness
         .model_mut()
         .dispatch_router_command(&PanelIntent::CyclePanelMode.into());
     assert_ne!(
-        harness.model().app.panel_mode,
+        harness.model().app.stored_panel_mode(),
         mbv_ui_model::settings::PanelMode::default(),
         "the mapped prefix action executed through the shell"
     );
@@ -289,7 +290,7 @@ fn double_prefix_re_arms_through_tick() {
 
     harness.inject(key(Key::Char('b')).tap_ctrl());
     assert_eq!(harness.step().router, RouterOutcome::PrefixArm);
-    assert!(harness.model().app.prefix_armed);
+    assert!(harness.model().app.prefix_armed());
 
     harness.inject(key(Key::Char('b')).tap_ctrl());
     let outcome = harness.step();
@@ -298,7 +299,10 @@ fn double_prefix_re_arms_through_tick() {
         RouterOutcome::PrefixArm,
         "double prefix re-arms"
     );
-    assert!(harness.model().app.prefix_armed, "prefix mode stays armed");
+    assert!(
+        harness.model().app.prefix_armed(),
+        "prefix mode stays armed"
+    );
     assert!(
         outcome
             .messages
@@ -328,7 +332,7 @@ fn unmapped_chord_swallows_disarms_and_the_next_chord_routes_normally() {
     let outcome = harness.step();
     assert_eq!(outcome.router, RouterOutcome::PrefixSwallow);
     assert!(
-        !harness.model().app.prefix_armed,
+        !harness.model().app.prefix_armed(),
         "the unmapped chord disarms"
     );
     assert!(

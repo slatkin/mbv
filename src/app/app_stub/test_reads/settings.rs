@@ -17,7 +17,7 @@ impl App {
 
     /// Whether the deferred settings save is armed (row 5.1): an accepted
     /// `activate` arms it, a refused one does not.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn gui_settings_save_armed_for_test(&self) -> bool {
         self.settings_save_at.is_some()
