@@ -152,9 +152,9 @@ pub fn spawn(sink: SectionSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandl
                 return;
             }
         };
-        // The GUI Client's attach passes `ClientKind::Gui`, which sends a
-        // plain Hello (design D9) and claims the local link's `named-queues`
-        // (gui-named-queues design D7) before the first Owner connection.
+        // The GUI Client's `ClientCapabilities` claim the local link's
+        // `named-queues` (gui-named-queues design D7) before its first Owner
+        // connection, and its attach claims no Pin-swap participation.
         let steps = LibraryOwnerSteps::new(&config);
         let outcome = {
             let mut campaign = AttachCampaign::new(&rx, &sink, &quit, &steps);

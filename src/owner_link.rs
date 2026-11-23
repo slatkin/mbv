@@ -137,7 +137,10 @@ pub fn attach_owner(
 /// The Pin-swap claim follows this process's claimed Pin-swap participation
 /// (`pin_swap_hello`, claimed at start-up).
 #[must_use]
-fn hello_claims(capabilities: ClientCapabilities, endpoint: &DaemonEndpoint) -> ClientHelloClaims {
+pub(crate) fn hello_claims(
+    capabilities: ClientCapabilities,
+    endpoint: &DaemonEndpoint,
+) -> ClientHelloClaims {
     ClientHelloClaims {
         pin_swap: crate::pin::pin_swap_hello(),
         named_queues: endpoint.is_local() && capabilities.has(ClientCapability::ShownQueueEntries),

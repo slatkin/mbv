@@ -544,6 +544,11 @@ impl OwnerSteps for LibraryOwnerSteps<'_> {
     }
 
     fn attach(&self, program: &Path) -> Result<App, RemotePlayerError> {
+        // The GUI Client takes no part in Pin swap (design D6a of
+        // `decouple-client-core`): it claims that before `attach_owner`, so
+        // its first Owner connection already advertises a plain Hello
+        // (design D9 of `extract-client-core`).
+        mbv::claim_pin_swap_participant(false);
         attach_owner(
             self.config,
             Some(program),

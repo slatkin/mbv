@@ -99,10 +99,6 @@ pub struct App {
     /// `mbv` program it resolved, so an Owner restart never starts the GUI
     /// program as the Owner.
     pub(in crate::app) owner_exe: Option<std::path::PathBuf>,
-    /// Which Client this process runs (gui-named-queues design D7): the Hello
-    /// claims every later App-side reconnect sends follow it. The Owner link
-    /// records it at attach time; it never changes during the session.
-    pub(in crate::app) client_kind: crate::ClientKind,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
     /// answer. `drain_player_events` takes these before

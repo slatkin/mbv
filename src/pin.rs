@@ -199,6 +199,7 @@ pub(crate) fn swap_token() -> Option<String> {
     SWAP_TOKEN.get().cloned().flatten()
 }
 
+pub use self::swap::claim_pin_swap_participant;
 pub(crate) use self::swap::pin_swap_hello;
 mod swap;
 
