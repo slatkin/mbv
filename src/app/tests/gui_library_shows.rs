@@ -7,7 +7,8 @@
 //! Service, worker, or mock transport runs.
 
 use super::*;
-use crate::app::gui_library::{GuiSectionRequest, GuiShowsNewEvent};
+
+use crate::app::gui_library::GuiSectionRequest;
 use crate::config::TestStateDirGuard;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
@@ -477,13 +478,7 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
         },
     );
     let mut core = crate::app::tests::core_holding_stub_gui(&mut app);
-    handle_gui_shows_new(
-        &mut core,
-        GuiShowsNewEvent {
-            library_id: "lib-tv".into(),
-            result,
-        },
-    );
+    handle_gui_shows_new(&mut core, "lib-tv", result);
     core.into_app_keeping_gui(&mut app);
 
     let projection = crate::app::tests::gui_shows_projection(&mut app, 0);

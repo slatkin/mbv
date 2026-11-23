@@ -56,6 +56,7 @@ pub use self::gui_client_state::{
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
+pub(crate) use self::gui_library::client_events::install_client_event;
 pub use self::gui_library::{
     GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
     GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,

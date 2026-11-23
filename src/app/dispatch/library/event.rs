@@ -1,7 +1,5 @@
 use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
-use crate::app::dispatch::library::stores::{
-    ClientLibraryEffect, ClientLibraryEventSeam, ClientLibraryStores,
-};
+use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::state::app_struct::{LevelFillState, MAX_ALBUM_TRACKS_CACHE, insert_capped};
 use crate::app::state::events::{
     LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
@@ -70,36 +68,6 @@ impl App {
             LibEvent::Series(event) => self.handle_series_event(event),
             LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
-            // The GUI Library's collection store owns this event (add-gui-
-            // library-panel design D5); the TUI never starts one.
-            LibEvent::GuiGroupAlbums(event) => {
-                collect_client_event(stores, ClientLibraryEventSeam::GroupAlbums(event));
-            }
-            // The GUI Library's root-list store owns this event (add-gui-
-            // library-panel design D12, row 8.1); the TUI never starts one.
-            LibEvent::GuiEmbyRootItems(event) => {
-                let lib_idx = event.lib_idx;
-                collect_client_event(
-                    stores,
-                    ClientLibraryEventSeam::EmbyRootItems {
-                        lib_idx,
-                        items: crate::app::gui_library::handle_emby_root_items(event),
-                    },
-                );
-            }
-            // The GUI Shows New list's store owns this event
-            // (gui-collection-dropdown design D9); only the GUI Client's launch
-            // starts one, so the TUI never receives it.
-            LibEvent::GuiShowsNew(event) => {
-                let (library_id, request) = crate::app::gui_library::handle_shows_new(event);
-                collect_client_event(
-                    stores,
-                    ClientLibraryEventSeam::ShowsNew {
-                        library_id,
-                        request,
-                    },
-                );
-            }
             // A feed-group target's failed fetch (gui-collection-dropdown
             // design D3): the GUI Library's store records the terminal failure
             // mark its shown pass honours, and the shared in-flight mark
@@ -601,17 +569,5 @@ impl App {
                 }
             }
         }
-    }
-}
-
-/// Hand one Client-owned event carriage to its stores, when the calling Client
-/// keeps any (`decouple-client-core` design D4): the TUI passes `None`, so it
-/// drops the carriage it never starts.
-fn collect_client_event(
-    stores: Option<&mut dyn ClientLibraryStores>,
-    seam: ClientLibraryEventSeam,
-) {
-    if let Some(stores) = stores {
-        stores.apply_event(seam);
     }
 }

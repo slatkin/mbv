@@ -9,6 +9,7 @@ pub(in crate::app) mod artist_lookup;
 mod artwork;
 mod audiobooks;
 mod audiobooks_projection;
+pub(in crate::app) mod client_events;
 mod collection;
 mod collection_command;
 mod emby;
@@ -52,10 +53,7 @@ use self::collection_command::CollectionOp;
 use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(in crate::app) use self::emby::emby_feed_wants_target_in_set;
-pub(in crate::app) use self::emby::{
-    GuiEmbyRootItems, GuiEmbyRootItemsEvent, handle_emby_root_items,
-    handle_feed_home_video_selection_failed,
-};
+pub(in crate::app) use self::emby::{GuiEmbyRootItems, handle_feed_home_video_selection_failed};
 pub use self::emby_projection::{
     GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
@@ -100,16 +98,15 @@ pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
 #[cfg(test)]
 pub(in crate::app) use self::shows::shows_view;
-pub(in crate::app) use self::shows::{GuiShowsNewEvent, handle_shows_new};
 pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
 pub use self::shows_view::GuiShowsView;
+pub(in crate::app) use self::store::GuiGroupAlbums;
 use self::store::GuiMusicCollectionSite;
 #[cfg(test)]
 pub(in crate::app) use self::store::install_library_collection;
-pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent, group_albums_mark};
 pub(in crate::app) use self::tabs::step_library_tab as tabs_step_library_tab;
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 #[cfg(test)]

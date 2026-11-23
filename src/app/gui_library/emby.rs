@@ -29,7 +29,8 @@ use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
 use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::gui_client_state::GuiClientState;
-use crate::app::state::events::{FeedHomeVideoSelectionFailed, LibEvent};
+use crate::app::gui_library::client_events::GuiClientEvent;
+use crate::app::state::events::FeedHomeVideoSelectionFailed;
 use crate::app::{App, FeedHomeVideoSelection};
 use crate::gui::GuiCore;
 
@@ -45,15 +46,6 @@ pub(in crate::app) enum GuiEmbyRootItems {
     Loaded(Vec<EmbyItem>),
     /// The root-list fetch failed.
     Failed,
-}
-
-/// The completion of one plain Emby library's root-list fetch, carried on
-/// the shared library event channel. Only the GUI Client's root-list store
-/// starts one, so the TUI never receives it.
-#[derive(Debug)]
-pub(in crate::app) struct GuiEmbyRootItemsEvent {
-    pub(in crate::app) lib_idx: usize,
-    pub(in crate::app) result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
 }
 
 /// The GUI Library's own state per Emby library (row 8.1): the row the Hero
@@ -551,33 +543,11 @@ pub(in crate::app) fn fetch_emby_root_items(
     debug_assert_eq!(sort_order.as_str(), "Ascending");
     gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Loading);
     let parent_id = app.libs[lib_idx].library.id.clone();
-    let tx = app.channels.lib_tx.clone();
+    let tx = app.gui_client_event_sender();
     std::thread::spawn(move || {
         let result = super::store::fetch_all_pages(&client, &parent_id, item_types.as_deref());
-        let _ = tx.send(LibEvent::GuiEmbyRootItems(GuiEmbyRootItemsEvent {
-            lib_idx,
-            result,
-        }));
+        let _ = tx.send(GuiClientEvent::EmbyRootItems { lib_idx, result });
     });
-}
-
-/// Land one plain Emby library's root-list fetch (row 8.1): a loaded list
-/// replaces the loading mark, and a failure marks only that library.
-pub(in crate::app) fn handle_emby_root_items(event: GuiEmbyRootItemsEvent) -> GuiEmbyRootItems {
-    let GuiEmbyRootItemsEvent { lib_idx, result } = event;
-    match result {
-        Ok(items) => GuiEmbyRootItems::Loaded(items),
-        Err(error) => {
-            tracing::info!(
-                name: "gui_library.emby_root.failed",
-                target: "gui_library",
-                library_index = lib_idx,
-                error = %error,
-                "the library's root list failed to load"
-            );
-            GuiEmbyRootItems::Failed
-        }
-    }
 }
 
 /// Play the plain Emby-library row a command names (design D12, row 8.1): the

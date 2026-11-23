@@ -160,16 +160,12 @@ fn app_with_stored_groups(
     app
 }
 
-/// Drain one started group's fetch completion, the Client tick's library
-/// drain over the mocked transport's answer: the event's store half installs
-/// in the GUI state the tests keep beside the `App` (task 8.1).
+/// Drain one started group's fetch completion, the GUI tick's Client-event
+/// drain over the mocked transport's answer (design D5, task 8.3): the result
+/// rides the channel `GuiCore` owns, and its mark installs in the GUI state
+/// the tests keep beside the `App`.
 fn land_one_group(app: &mut App) {
-    let event = app
-        .channels
-        .lib_rx
-        .recv_timeout(Duration::from_secs(2))
-        .expect("the group's album fetch completed");
-    crate::app::tests::stub_gui_state(|gui| app.handle_lib_event(event, Some(gui)));
+    crate::app::tests::wait_for_client_event(app);
 }
 
 #[test]

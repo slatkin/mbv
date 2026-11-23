@@ -12,7 +12,7 @@ use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollection
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
 use crate::app::gui_client_state::GuiClientState;
-use crate::app::state::events::LibEvent;
+use crate::app::gui_library::client_events::GuiClientEvent;
 use crate::app::{App, PAGE_SIZE};
 
 /// One group's album list in the store (design D5): a group's first selection
@@ -28,16 +28,6 @@ pub(in crate::app) enum GuiGroupAlbums {
     Loaded(Vec<EmbyItem>),
     /// The group's fetch failed.
     Failed,
-}
-
-/// The completion of one group's album fetch, carried on the shared library
-/// event channel. Only the GUI Client's store starts one, so the TUI never
-/// receives it.
-#[derive(Debug)]
-pub(in crate::app) struct GuiGroupAlbumsEvent {
-    pub(in crate::app) lib_idx: usize,
-    pub(in crate::app) group_id: String,
-    pub(in crate::app) result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
 }
 
 /// Install the collection set of the Grouped Music library `lib_idx` over the
@@ -195,34 +185,15 @@ pub(in crate::app) fn fetch_group_albums(
         .entry(lib_idx)
         .or_default()
         .insert(group_id.clone(), GuiGroupAlbums::Loading);
-    let tx = app.channels.lib_tx.clone();
+    let tx = app.gui_client_event_sender();
     std::thread::spawn(move || {
         let result = fetch_all_pages(&client, &group_id, None);
-        let _ = tx.send(LibEvent::GuiGroupAlbums(GuiGroupAlbumsEvent {
+        let _ = tx.send(GuiClientEvent::GroupAlbums {
             lib_idx,
             group_id,
             result,
-        }));
+        });
     });
-}
-
-/// The store mark one group's album fetch lands (design D5): a loaded list
-/// replaces the loading mark, and a failure marks only that group.
-pub(in crate::app) fn group_albums_mark(
-    result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
-) -> GuiGroupAlbums {
-    match result {
-        Ok(albums) => GuiGroupAlbums::Loaded(albums),
-        Err(error) => {
-            tracing::info!(
-                name: "gui_library.group_albums.failed",
-                target: "gui_library",
-                error = %error,
-                "the group's album list failed to load"
-            );
-            GuiGroupAlbums::Failed
-        }
-    }
 }
 
 /// The Grouped Music destination's collection-command site

@@ -22,6 +22,37 @@ impl App {
         self.client_waker.clone()
     }
 
+    /// The sender a GUI Library fetch worker clones (design D5 of
+    /// `decouple-client-core`): the worker sends its result here instead of
+    /// the shared library event channel, and the GUI Client's core drains it
+    /// in `ClientTickHost::drain_client_events`. A TUI Client never starts one
+    /// of these fetches.
+    pub(in crate::app) fn gui_client_event_sender(
+        &self,
+    ) -> crate::app::state::gui_client_events::GuiClientEventSender {
+        self.gui_client_events.sender()
+    }
+
+    /// Take one queued Client-only fetch result (design D5 of
+    /// `decouple-client-core`), for the GUI's `ClientTickHost::drain_client_events`
+    /// and for a test that drains over the `App` it holds.
+    pub(crate) fn take_one_gui_client_event(
+        &self,
+    ) -> Option<crate::app::gui_library::client_events::GuiClientEvent> {
+        self.gui_client_events.try_take()
+    }
+
+    /// Wait up to `timeout` for one queued Client-only fetch result (task 8.3
+    /// of `decouple-client-core`), for a test drain that has no tick to wake
+    /// it.
+    #[cfg(test)]
+    pub(crate) fn wait_for_one_gui_client_event_for_test(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Option<crate::app::gui_library::client_events::GuiClientEvent> {
+        self.gui_client_events.wait_take_for_test(timeout)
+    }
+
     /// Record the `mbv` program this Client starts the Owner from (design
     /// D9 of `extract-client-core`). The Owner link sets it at attach time;
     /// `None` keeps this process's own executable.

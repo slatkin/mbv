@@ -166,6 +166,18 @@ impl ClientTickHost for CoreThread {
         had_events
     }
 
+    fn drain_client_events(&mut self) -> bool {
+        // The GUI Library's Client-only fetches report here (design D5): each
+        // result installs in `GuiClientState`'s own stores, exactly as the
+        // shared library drain would have applied it, and the Library
+        // section's next batch carries the change.
+        let mut had_events = false;
+        while self.core.drain_client_event() {
+            had_events = true;
+        }
+        had_events
+    }
+
     fn drain_search_results(&mut self) -> bool {
         // The GUI mounts no search surface, so no component receives the
         // search worker's result (add-gui-library-panel design D12, row 12.1).

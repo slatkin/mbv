@@ -39,6 +39,18 @@ fn with_stub_gui<T>(
     value
 }
 
+/// Wait for one Client-only fetch result and install it through the GUI's own
+/// client-event drain (task 8.3 of `decouple-client-core`): a worker's send
+/// lands on the `App`'s channel. Production wakes the tick with the
+/// `ClientWaker`; a test has no tick to wake, so it waits on the channel and
+/// fails when the worker never reports.
+pub(in crate::app) fn wait_for_client_event(app: &mut crate::app::App) {
+    let event = app
+        .wait_for_one_gui_client_event_for_test(std::time::Duration::from_secs(2))
+        .expect("the Client-only fetch reported its result");
+    stub_gui_state(|gui| crate::app::install_client_event(gui, event));
+}
+
 /// A `GuiCore` over a stub `App` a test holds, with the state a test seeded
 /// beside it: the test takes the `App` back with `into_app_keeping_gui`.
 pub(in crate::app) fn core_holding_stub_gui(app: &mut crate::app::App) -> crate::gui::GuiCore {
@@ -177,13 +189,21 @@ pub(in crate::app) fn gui_tv_select_season(app: &mut crate::app::App, lib_idx: u
     with_stub_gui(app, |core| core.gui_tv_select_season(lib_idx, id));
 }
 
-/// Land one Shows New fetch over a stub `App` a test holds.
+/// Land one Shows New fetch over a stub `App` a test holds: the result
+/// installs in the Client's own stores through the one drain the GUI tick runs
+/// (design D5 of `decouple-client-core`), as the worker's send would.
 pub(in crate::app) fn handle_gui_shows_new(
     core: &mut crate::gui::GuiCore,
-    event: crate::app::gui_library::GuiShowsNewEvent,
+    library_id: &str,
+    result: Result<Vec<mbv_emby_model::EmbyItem>, mbv_emby::EmbyError>,
 ) {
-    let seam = crate::app::gui_library::handle_shows_new(event);
-    core.gui.shows_new.insert(seam.0, seam.1);
+    crate::app::gui_library::client_events::install_client_event(
+        core.gui_state_mut(),
+        crate::app::gui_library::client_events::GuiClientEvent::ShowsNew {
+            library_id: library_id.to_string(),
+            result,
+        },
+    );
 }
 
 /// The Music destination's projection over a stub `App` a test holds.

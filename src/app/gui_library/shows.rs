@@ -18,17 +18,8 @@ use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use crate::app::App;
 use crate::app::gui_client_state::GuiClientState;
-use crate::app::state::events::LibEvent;
+use crate::app::gui_library::client_events::GuiClientEvent;
 use crate::gui::GuiCore;
-
-/// The GUI Shows New list's fetch completion (design D9): one Emby TV
-/// library's latest episodes, sent through the shared library event channel.
-/// Only the GUI Client's launch starts one, so the TUI never receives it.
-#[derive(Debug)]
-pub(in crate::app) struct GuiShowsNewEvent {
-    pub(in crate::app) library_id: String,
-    pub(in crate::app) result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
-}
 
 impl GuiCore {
     /// Install one Shows view (design D8).
@@ -112,36 +103,11 @@ fn spawn_shows_new(app: &mut App, gui: &mut GuiClientState, library_id: String) 
     // with landed rows, empty when the fetch fails.
     gui.shows_new
         .insert(library_id.clone(), GuiSectionRequest::Requesting);
-    let tx = app.channels.lib_tx.clone();
+    let tx = app.gui_client_event_sender();
     std::thread::spawn(move || {
         let result = client.get_latest_episodes(&library_id, 30);
-        let _ = tx.send(LibEvent::GuiShowsNew(GuiShowsNewEvent {
-            library_id,
-            result,
-        }));
+        let _ = tx.send(GuiClientEvent::ShowsNew { library_id, result });
     });
-}
-
-/// Land one TV library's New fetch (design D9): success and failure both land
-/// the request, so an empty or failed list paints the empty state and no later
-/// launch step or frame starts the same fetch again.
-pub(in crate::app) fn handle_shows_new(
-    event: GuiShowsNewEvent,
-) -> (String, GuiSectionRequest<EmbyItem>) {
-    let GuiShowsNewEvent { library_id, result } = event;
-    match result {
-        Ok(items) => (library_id.clone(), GuiSectionRequest::landed(items)),
-        Err(error) => {
-            tracing::info!(
-                name: "gui_library.shows_new.failed",
-                target: "gui_library",
-                library_id,
-                error = %error,
-                "the library's latest episodes failed to load"
-            );
-            (library_id.clone(), GuiSectionRequest::landed(Vec::new()))
-        }
-    }
 }
 
 /// The Emby item a New row names (design D9): the merged per-library episodes

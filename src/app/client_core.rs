@@ -87,6 +87,12 @@ pub trait ClientTickHost {
     /// touches; `true` when any event arrived.
     fn drain_lib_events(&mut self) -> bool;
 
+    /// Drain the events this Client's own fetch workers report (design D5):
+    /// the GUI Client drains its own channel here, through `GuiCore`, after
+    /// `drain_lib_events`. `true` when any event arrived. The TUI Client starts
+    /// no such fetch and drains nothing.
+    fn drain_client_events(&mut self) -> bool;
+
     /// Drain search-worker results into the search surface; `true` when
     /// any arrived.
     fn drain_search_results(&mut self) -> bool;
@@ -251,6 +257,7 @@ impl ClientCore {
 
             outcome.input_received |= host.app_mut().drain_notif_actions();
             outcome.input_received |= host.drain_lib_events();
+            outcome.input_received |= host.drain_client_events();
             outcome.input_received |= host.drain_search_results();
             // The search debounce is control-owned; the core fires the wall
             // clock once per iteration and routes an emitted request

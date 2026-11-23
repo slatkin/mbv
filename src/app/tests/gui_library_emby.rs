@@ -121,11 +121,11 @@ fn drain_one(app: &mut App) -> bool {
     true
 }
 
-/// Land one fetch completion the way the GUI core tick's drain applies it
-/// (`drain_lib_event_with_stores`, which `drain_one` mirrors): wait for the
-/// next event, put it back as a worker leaves it, and drain that one event. A
-/// count fan-out event may land before the completion and lands first.
+/// Land one library event as the GUI tick's drain does.
 fn land(app: &mut App) {
+    if drain_one(app) {
+        return;
+    }
     let event = app
         .channels
         .lib_rx
@@ -201,17 +201,15 @@ fn checked_folder_ids<'a>(app: &'a App, folder_id: &str) -> Vec<&'a str> {
 fn opening_a_movies_library_lands_its_root_rows_on_the_app() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
-    // The open's listing and the store's paged fetch read the same catalog,
-    // and the pump's second `land` may wake on an event that was already on
-    // the channel, after which the store's next page request arrives on its
-    // own. A path-keyed answer follows each request's own path, so the
-    // concurrent workers' interleaving cannot script one wrongly.
+    // The open's listing and the store's paged fetch read the same catalog, so
+    // a path-keyed answer follows each request's own path: the concurrent
+    // workers' interleaving cannot script one wrongly.
     http.respond_when("ParentId=lib-movies", 200, MOVIES_BODY);
     let mut app = emby_app(&http, "movies", MOVIES_ID, "Movies");
 
     gui_emby_open(&mut app, 0);
     land(&mut app);
-    land(&mut app);
+    crate::app::tests::wait_for_client_event(&mut app);
     while drain_one(&mut app) {}
 
     assert_eq!(

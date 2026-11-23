@@ -15,7 +15,6 @@ use crate::app::GuiLibraryMenuRow;
 use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::gui_client_state::GuiOverlay;
 use crate::app::gui_library::emby_feed_wants_target_in_set;
-use crate::app::gui_library::group_albums_mark;
 use crate::app::gui_library::{
     GuiAudiobooksSelection, GuiCollectionSelection, GuiEmbyLibrarySelection, GuiEmbyRootItems,
     GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiListSort, GuiPodcastsSelection,
@@ -244,30 +243,5 @@ impl ClientLibraryStores for GuiClientState {
 
     fn apply(&mut self, app: &mut App, effect: ClientLibraryEffect) {
         self.apply_library_effect(app, effect);
-    }
-
-    fn install_group_albums(&mut self, event: crate::app::gui_library::GuiGroupAlbumsEvent) {
-        let lib_idx = event.lib_idx;
-        let group_id = event.group_id;
-        self.music_albums
-            .entry(lib_idx)
-            .or_default()
-            .insert(group_id, group_albums_mark(event.result));
-    }
-
-    fn install_emby_roots(
-        &mut self,
-        lib_idx: usize,
-        items: crate::app::gui_library::GuiEmbyRootItems,
-    ) {
-        self.emby_roots.insert(lib_idx, items);
-    }
-
-    fn install_shows_new(
-        &mut self,
-        library_id: String,
-        request: crate::app::gui_library::GuiSectionRequest<mbv_emby_model::EmbyItem>,
-    ) {
-        self.shows_new.insert(library_id, request);
     }
 }

@@ -12,6 +12,7 @@
 
 use crate::app::App;
 use crate::app::gui_client_state::GuiClientState;
+use crate::app::install_client_event;
 
 /// The GUI Client's core state: the `App` it owns and its own Client state.
 /// Every GUI `impl` block becomes `impl GuiCore` and reads its core state as
@@ -74,6 +75,19 @@ impl GuiCore {
     /// event. The GUI's tick host calls this once per event.
     pub fn drain_lib_event(&mut self) -> bool {
         crate::app::drain_lib_event_through(&mut self.app, &mut self.gui)
+    }
+
+    /// Take one Client-only fetch result and install it in this Client's own
+    /// stores (design D5): the GUI's tick host drains one per call, after the
+    /// library drains, for the waker to have woken it for. The channel lives
+    /// on the owned `App`, so the result survives a `GuiCore` built for one
+    /// call.
+    pub fn drain_client_event(&mut self) -> bool {
+        let Some(event) = self.app.take_one_gui_client_event() else {
+            return false;
+        };
+        install_client_event(&mut self.gui, event);
+        true
     }
 
     /// Take the GUI Client's own state a dependent Client's test seeds beside

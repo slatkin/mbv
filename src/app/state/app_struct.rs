@@ -91,6 +91,11 @@ pub struct App {
     /// installed waker reaches every relay — including one the initial
     /// attach already spawned.
     pub(in crate::app) client_waker: crate::app::ClientWaker,
+    /// The channel the GUI Library's Client-only fetch workers send on (design
+    /// D5 of `decouple-client-core`): the workers clone the sender, and the
+    /// GUI Client's core takes the receiver once it exists. The TUI Client
+    /// never starts one of these fetches, so it never receives an event.
+    pub(in crate::app) gui_client_events: crate::app::state::gui_client_events::GuiClientEvents,
     /// The `mbv` program this Client starts the Owner from (design D9 of
     /// `extract-client-core`). `None` starts this process's own executable —
     /// the TUI Client, which is `mbv` itself. The GUI Client records the

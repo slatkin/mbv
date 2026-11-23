@@ -578,7 +578,15 @@ impl CoreThread {
         // batch it sends already carry the seed.
         self.take_seeded_gui_state();
         match self.rx.recv_timeout(self.idle_cadence) {
-            Ok(input) => self.pending.push(input),
+            Ok(input) => {
+                self.pending.push(input);
+                // Take every input already queued beside it, so a wake that
+                // arrives while a command is pending never delays that
+                // command to a later step.
+                while let Ok(input) = self.rx.try_recv() {
+                    self.pending.push(input);
+                }
+            }
             // The idle cadence keeps the maintenance phases running with no
             // input queued.
             Err(RecvTimeoutError::Timeout) => {}
