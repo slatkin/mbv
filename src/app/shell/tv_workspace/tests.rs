@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::render_fixtures::{make_movie_app, ready_emby_runtime};
+use crate::app::tests::render_fixtures::make_movie_app;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_msg::{Msg, ShellRequest};
@@ -11,32 +11,27 @@ mod selection;
 
 fn mounted_tv_model_with_mock_emby(http: &MockHttp) -> Model {
     let mut model = mounted_tv_model();
-    let mut config = model.app.config.lock().unwrap().clone();
+    let mut config = model.app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
     crate::app::tests::install_test_emby(&mut model.app, config);
     let client = model
         .app
-        .emby_runtime
-        .client
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap()
-        .clone()
+        .cached_emby_client_for_test()
+        .expect("the installed test Emby client")
         .with_test_agent(http.agent());
-    model.app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
-        std::sync::Arc::new(std::sync::Mutex::new(client)),
-    );
+    model.app.adopt_ready_emby_client_for_test(client);
     model
 }
 
 fn mounted_tv_model() -> Model {
     let mut app = make_movie_app();
-    app.libs[0].library.collection_type = "tvshows".into();
-    for item in &mut app.libs[0].nav_stack[0].items {
-        item.item_type = "Series".into();
-        item.image_tags.thumb = "tag".into();
-    }
+    app.edit_library_for_test(0, |tab| {
+        tab.library.collection_type = "tvshows".into();
+        for item in &mut tab.nav_stack[0].items {
+            item.item_type = "Series".into();
+            item.image_tags.thumb = "tag".into();
+        }
+    });
     // Wide breakpoint is now driven synchronously by terminal size
     // (`wide_tv_show_area`), not this previous-frame paint rect.
     let mut model = Model::new(app);
@@ -61,16 +56,16 @@ fn expanding_an_uncached_show_starts_the_detail_fetch() {
     let http = MockHttp::new();
     http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
     let mut model = mounted_tv_model_with_mock_emby(&http);
-    assert!(model.app.series_detail_loading.is_empty());
-    assert!(model.app.series_detail_cache.is_empty());
+    assert!(model.app.series_detail_loading_for_test().is_empty());
+    assert!(model.app.series_detail_snapshot("movie-focused").is_none());
 
     model.handle_tv_request(ShellRequest::TvTreeExpand {
         target: mbv_ui_msg::TvTreeTarget::Show("tv-id:13:movie-focused".into()),
     });
 
     assert_eq!(
-        model.app.series_detail_loading,
-        std::collections::HashSet::from(["movie-focused".into()]),
+        model.app.series_detail_loading_for_test(),
+        &std::collections::HashSet::from(["movie-focused".into()]),
         "uncached expansion must arm the detail fetch"
     );
 }
@@ -90,8 +85,8 @@ fn season_pill_click_arms_the_selected_seasons_lazy_episode_fetch() {
     season_two.id = "season-2".into();
     let mut episodes = std::collections::HashMap::new();
     episodes.insert("season-1".into(), Vec::new());
-    model.app.series_detail_cache.insert(
-        "movie-focused".into(),
+    model.app.seed_series_detail_for_test(
+        "movie-focused",
         mbv_ui_model::browse::SeriesDetail {
             seasons: vec![season_one, season_two],
             episodes,
@@ -113,7 +108,7 @@ fn season_pill_click_arms_the_selected_seasons_lazy_episode_fetch() {
     assert!(
         model
             .app
-            .series_season_loading
+            .series_season_loading_for_test()
             .contains(&("movie-focused".into(), "season-2".into())),
         "the clicked pill's season must be fetching, not blank"
     );
@@ -134,10 +129,15 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
         .app
         .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
     assert_eq!(
-        model.app.pending_series_season_expansions,
-        std::collections::HashSet::from([("movie-focused".into(), "season-2".into())])
+        model.app.pending_series_season_expansions_for_test(),
+        &std::collections::HashSet::from([("movie-focused".into(), "season-2".into())])
     );
-    assert!(model.app.series_detail_loading.contains("movie-focused"));
+    assert!(
+        model
+            .app
+            .series_detail_loading_for_test()
+            .contains("movie-focused")
+    );
 
     let seasons = ["season-1", "season-2", "season-3"]
         .into_iter()
@@ -155,10 +155,15 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
         },
     );
 
-    assert!(model.app.pending_series_season_expansions.is_empty());
+    assert!(
+        model
+            .app
+            .pending_series_season_expansions_for_test()
+            .is_empty()
+    );
     assert_eq!(
-        model.app.series_season_loading,
-        std::collections::HashSet::from([
+        model.app.series_season_loading_for_test(),
+        &std::collections::HashSet::from([
             ("movie-focused".into(), "season-1".into()),
             ("movie-focused".into(), "season-2".into()),
         ]),
@@ -171,8 +176,8 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
     let mut app = make_movie_app();
     let mut cached_season = mbv_emby_model::test_support::make_item("Current", "Season");
     cached_season.id = "current-season".into();
-    app.series_detail_cache.insert(
-        "show-id".into(),
+    app.seed_series_detail_for_test(
+        "show-id",
         mbv_ui_model::browse::SeriesDetail {
             seasons: vec![cached_season],
             episodes: std::collections::HashMap::new(),
@@ -190,33 +195,39 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
     );
 
     assert_eq!(
-        app.series_detail_cache["show-id"].seasons[0].id,
-        "current-season"
+        app.series_detail_snapshot("show-id")
+            .and_then(|detail| detail.seasons.first().map(|season| season.id.clone())),
+        Some("current-season".to_string())
     );
 }
 
 #[test]
 fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
     let mut model = mounted_tv_model();
-    model.app.emby_runtime = ready_emby_runtime();
+    model.app.adopt_ready_emby_runtime_for_test();
 
     model.push_tv_workspace_content();
-    assert!(model.app.series_detail_loading.contains("movie-focused"));
+    assert!(
+        model
+            .app
+            .series_detail_loading_for_test()
+            .contains("movie-focused")
+    );
 
     // Re-pushing the same selection does not duplicate the request.
     model.push_tv_workspace_content();
-    assert_eq!(model.app.series_detail_loading.len(), 1);
+    assert_eq!(model.app.series_detail_loading_for_test().len(), 1);
 
-    model.app.series_detail_cache.insert(
-        "movie-focused".into(),
+    model.app.seed_series_detail_for_test(
+        "movie-focused",
         mbv_ui_model::browse::SeriesDetail {
             seasons: Vec::new(),
             episodes: std::collections::HashMap::new(),
         },
     );
-    model.app.series_detail_loading.clear();
+    model.app.clear_series_detail_loading_for_test();
     model.push_tv_workspace_content();
-    assert!(model.app.series_detail_loading.is_empty());
+    assert!(model.app.series_detail_loading_for_test().is_empty());
 }
 
 /// A Wide TV row move stamps navigation before the push in its handler, so
@@ -225,11 +236,11 @@ fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
 #[test]
 fn wide_tv_row_move_defers_series_detail_fetch() {
     let mut model = mounted_tv_model();
-    model.app.emby_runtime = ready_emby_runtime();
+    model.app.adopt_ready_emby_runtime_for_test();
 
     model.handle_tv_request(ShellRequest::TvMoveRows { rows: 1 });
 
-    assert!(model.app.series_detail_loading.is_empty());
+    assert!(model.app.series_detail_loading_for_test().is_empty());
 }
 
 /// keep-destination-components-mounted task 3.1: the TV workspace stays
@@ -275,8 +286,8 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     episode.series_id = "movie-second".into();
     let mut episodes = std::collections::HashMap::new();
     episodes.insert("season-1".into(), vec![episode]);
-    model.app.series_detail_cache.insert(
-        "movie-second".into(),
+    model.app.seed_series_detail_for_test(
+        "movie-second",
         mbv_ui_model::browse::SeriesDetail {
             seasons: vec![season],
             episodes,
@@ -350,12 +361,17 @@ fn the_failed_upcoming_fetch_projects_into_the_panel_placeholder() {
 
     let http = MockHttp::new();
     let mut model = mounted_tv_model_with_mock_emby(&http);
-    let library_id = model.app.libs[0].library.id.clone();
-    model.app.libs[0].nav_stack[0].tv_content_mode = Some(mbv_queue::TvContentMode::Upcoming);
-    model.app.tv_upcoming_fetches.insert(
-        library_id.clone(),
-        crate::app::state::app_struct::TvUpcomingFetchState::Failed,
-    );
+    let library_id = model
+        .app
+        .emby_library_id(0)
+        .expect("the TV library tab")
+        .to_string();
+    model
+        .app
+        .set_library_tv_content_mode_for_test(0, mbv_queue::TvContentMode::Upcoming);
+    model
+        .app
+        .mark_tv_upcoming_fetch_failed_for_test(&library_id);
 
     model.sync_tv_content();
 
@@ -369,9 +385,8 @@ fn the_failed_upcoming_fetch_projects_into_the_panel_placeholder() {
         }
         other => panic!("a failed Upcoming fetch must show the placeholder slot, got {other:?}"),
     }
-    assert_eq!(
-        model.app.tv_upcoming_fetches.get(&library_id),
-        Some(&crate::app::state::app_struct::TvUpcomingFetchState::Failed),
+    assert!(
+        model.app.tv_upcoming_fetch_marked_failed(&library_id),
         "the failed state stays marked for the shell's retry paths",
     );
 }

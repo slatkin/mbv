@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::render_fixtures::make_movie_app;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_model::settings::PanelFocus;
@@ -8,15 +7,21 @@ use mbv_ui_msg::OverlayId;
 
 // ADR 0024 D2 (task 2.3): the three-rung mouse-eligibility ladder.
 
+/// The two-panel destination a mouse-eligibility test drives: the Emby
+/// library tab active, Library focus, both panels shown.
+fn seed_library_destination(app: &mut crate::app::App) {
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::Both);
+}
+
 fn eligibility_model() -> Model {
     let mut model = Model::new(make_movie_app());
-    model.app.tab = TabSelection::EmbyLibrary(0);
-    model.app.panel_focus = PanelFocus::Library;
-    model.app.panel_mode = PanelMode::Both;
+    seed_library_destination(&mut model.app);
     // The rung ladder is defined for the two-panel layout: with the
     // empty-queue column hidden (change `hide-empty-queue-column`, D1) an
     // empty displayed queue would render library-only instead.
-    model.app.local_view.adopt_items(
+    model.app.seed_local_queue_for_test(
         vec![mbv_emby_model::test_support::make_item(
             "Queue Item",
             "Movie",
@@ -78,13 +83,13 @@ fn mouse_eligibility_rung1_blocking_overlay_is_exclusive() {
 fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
     let tv_child = |wide: bool| {
         let mut app = make_movie_app();
-        app.libs[0].library.collection_type = "tvshows".into();
-        for item in &mut app.libs[0].nav_stack[0].items {
-            item.item_type = "Series".into();
-        }
-        app.tab = TabSelection::EmbyLibrary(0);
-        app.panel_focus = PanelFocus::Library;
-        app.panel_mode = PanelMode::Both;
+        app.edit_library_for_test(0, |tab| {
+            tab.library.collection_type = "tvshows".into();
+            for item in &mut tab.nav_stack[0].items {
+                item.item_type = "Series".into();
+            }
+        });
+        seed_library_destination(&mut app);
         // Wide breakpoint is now driven synchronously by terminal size
         // (`wide_tv_show_area`), not this previous-frame paint rect.
         let mut model = Model::new(app);
@@ -135,9 +140,7 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
 #[test]
 fn shell_routes_focus_to_the_active_destination_child() {
     let mut model = Model::new(make_movie_app());
-    model.app.tab = TabSelection::EmbyLibrary(0);
-    model.app.panel_focus = PanelFocus::Library;
-    model.app.panel_mode = PanelMode::Both;
+    seed_library_destination(&mut model.app);
     model.sync_mounted_surfaces();
 
     // Task 6.1: the migrated Movies surface routes through the mounted
@@ -188,9 +191,7 @@ fn shell_blocking_overlay_owns_focus_and_dismiss_returns_to_destination() {
     use mbv_components::ConfirmComponent;
     use mbv_ui_msg::ModalId;
     let mut model = Model::new(make_movie_app());
-    model.app.tab = TabSelection::EmbyLibrary(0);
-    model.app.panel_focus = PanelFocus::Library;
-    model.app.panel_mode = PanelMode::Both;
+    seed_library_destination(&mut model.app);
     // First: the destination child owns focus (the single focus pass).
     // Task 6.1: the migrated Movies surface is the mounted `LibraryPanel`.
     model.sync_mounted_surfaces();
@@ -241,9 +242,7 @@ fn shell_blocking_overlay_owns_focus_and_dismiss_returns_to_destination() {
 #[test]
 fn shell_first_tick_focus_lands_on_the_active_destination_child() {
     let mut model = Model::new(make_movie_app());
-    model.app.tab = TabSelection::EmbyLibrary(0);
-    model.app.panel_focus = PanelFocus::Library;
-    model.app.panel_mode = PanelMode::Both;
+    seed_library_destination(&mut model.app);
     // Startup state: UiRoot is active (Model::new), no destination child
     // has been activated yet (no prior active() in sync_*).
     assert_eq!(model.application.focus(), Some(&ComponentId::UiRoot));

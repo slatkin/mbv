@@ -1,7 +1,6 @@
 use super::*;
 use crate::app::tests::{
-    QueueViewTestExt, live_owner_channel, make_app_stub, make_items,
-    make_remote_app_stub_with_cmd_rx,
+    live_owner_channel, make_app_stub, make_items, make_remote_app_stub_with_cmd_rx,
 };
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_msg::Msg;
@@ -13,7 +12,7 @@ fn queue_rows_follow_readopted_owner_snapshot_with_same_wire_revision_issue_836(
     first.active_slot = None;
     first.revision = 7;
     let mut app = make_app_stub();
-    app.local_view = crate::app::QueueView::from_snapshot(&first);
+    app.seed_local_queue_snapshot_for_test(&first);
     let mut model = Model::new(app);
 
     model.sync_queue();
@@ -23,7 +22,7 @@ fn queue_rows_follow_readopted_owner_snapshot_with_same_wire_revision_issue_836(
     let mut replacement = crate::app::tests::emby_unified_state(&make_items(1), 0);
     replacement.active_slot = None;
     replacement.revision = 7;
-    model.app.local_view.adopt(
+    model.app.readopt_local_queue_for_test(
         &replacement,
         crate::app::state::queue_view::AdoptCause::Replacement,
     );
@@ -43,17 +42,12 @@ fn queue_projection_uses_adopted_pending_transition_without_progress() {
         target_slot: 101,
     });
     let mut app = make_app_stub();
-    app.local_view = crate::app::QueueView::from_snapshot(&snapshot);
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.position_ticks = 500;
-        status.runtime_ticks = 1_000;
-    });
+    app.seed_local_queue_snapshot_for_test(&snapshot);
+    app.seed_playing_position_for_test(0, 500, Some(1_000));
 
     let displayed = app.displayed_playback_state();
     let rows = mbv_components::queue::queue_media_rows(
-        app.local_view.slots(),
+        app.playback_queue().slots(),
         app.displayed_queue_playback_state(),
         app.pending_playback_slot(),
     );
@@ -76,21 +70,16 @@ fn queue_projection_uses_adopted_pending_transition_without_progress() {
 #[test]
 fn now_playing_music_row_carries_no_progress() {
     let mut app = make_app_stub();
-    app.local_view.adopt_queue_items(
+    app.seed_playback_queue_for_test(
         vec![mbv_queue::QueueItem::Emby(Box::new(make_item(
             "song", "Audio",
         )))],
         0,
     );
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.position_ticks = 500;
-        status.runtime_ticks = 1_000;
-    });
+    app.seed_playing_position_for_test(0, 500, Some(1_000));
 
     let rows = mbv_components::queue::queue_media_rows(
-        app.local_view.slots(),
+        app.playback_queue().slots(),
         app.displayed_queue_playback_state(),
         app.pending_playback_slot(),
     );
@@ -115,12 +104,8 @@ fn deleting_before_playing_row_keeps_highlight_on_playing_slot() {
     // item as playing.
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.local_view =
-        crate::app::QueueView::from_snapshot(&crate::app::tests::emby_unified_state(&items, 1));
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 1;
-    });
+    app.seed_local_queue_snapshot_for_test(&crate::app::tests::emby_unified_state(&items, 1));
+    app.seed_playing_status_for_test(1, items.len());
 
     // The owner applied the delete of the first row: the playing slot
     // (101) is now first. The status has not refreshed yet —
@@ -128,7 +113,7 @@ fn deleting_before_playing_row_keeps_highlight_on_playing_slot() {
     let mut after_delete = crate::app::tests::emby_unified_state(&items[1..], 0);
     after_delete.slots[0].slot_id = 101;
     after_delete.active_slot = Some(101);
-    app.local_view.adopt(
+    app.readopt_local_queue_for_test(
         &after_delete,
         crate::app::state::queue_view::AdoptCause::OwnAnswer,
     );
@@ -136,7 +121,7 @@ fn deleting_before_playing_row_keeps_highlight_on_playing_slot() {
     let displayed = app.displayed_queue_playback_state();
     assert_eq!(displayed.active_idx, Some(0));
     let rows = mbv_components::queue::queue_media_rows(
-        app.local_view.slots(),
+        app.playback_queue().slots(),
         displayed,
         app.pending_playback_slot(),
     );
@@ -159,19 +144,15 @@ fn deleting_playing_row_after_ordinal_shift_still_asks_now_playing_confirm() {
     // observed active slot by identity.
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.local_view =
-        crate::app::QueueView::from_snapshot(&crate::app::tests::emby_unified_state(&items, 1));
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 1;
-    });
+    app.seed_local_queue_snapshot_for_test(&crate::app::tests::emby_unified_state(&items, 1));
+    app.seed_playing_status_for_test(1, items.len());
 
     // Same post-delete adoption as the highlight regression: the playing
     // slot (101) is now first while `current_idx` still names ordinal 1.
     let mut after_delete = crate::app::tests::emby_unified_state(&items[1..], 0);
     after_delete.slots[0].slot_id = 101;
     after_delete.active_slot = Some(101);
-    app.local_view.adopt(
+    app.readopt_local_queue_for_test(
         &after_delete,
         crate::app::state::queue_view::AdoptCause::OwnAnswer,
     );
@@ -179,7 +160,7 @@ fn deleting_playing_row_after_ordinal_shift_still_asks_now_playing_confirm() {
     app.remove_from_queue(0);
 
     assert!(matches!(
-        app.pending_overlay,
+        app.pending_overlay_request_for_test(),
         Some(mbv_ui_model::overlay::OverlayRequest::Confirm(_))
     ));
 }
@@ -187,7 +168,7 @@ fn deleting_playing_row_after_ordinal_shift_still_asks_now_playing_confirm() {
 #[test]
 fn unchanged_queue_revision_skips_projection_rebuild() {
     let mut app = make_app_stub();
-    app.local_view.adopt_items(make_items(2), 0);
+    app.seed_local_queue_for_test(make_items(2), 0);
     let mut model = Model::new(app);
     model.sync_queue();
 
@@ -202,19 +183,13 @@ fn progress_only_change_patches_one_row_without_rebuilding_slots_review_u17_1() 
     // progress move always satisfies, so every progress tick rebuilt the row
     // set instead of re-projecting the active row.
     let mut app = make_app_stub();
-    app.local_view.adopt_items(make_items(2), 0);
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.runtime_ticks = 1_000;
-        status.position_ticks = 100;
-    });
+    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_playing_position_for_test(0, 100, Some(1_000));
     let mut model = Model::new(app);
     model.sync_queue();
     model
         .app
-        .player
-        .update_status(|status| status.position_ticks = 500);
+        .seed_playing_position_for_test(0, 500, Some(1_000));
 
     let update = model.app.queue_surface_projection();
 
@@ -230,10 +205,10 @@ fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
     state.active_slot = None;
     state.revision = 7;
     let mut app = make_app_stub();
-    app.local_view = crate::app::QueueView::from_snapshot(&state);
+    app.seed_local_queue_snapshot_for_test(&state);
     let mut model = Model::new(app);
     model.sync_queue();
-    let previous_revision = model.app.local_view.revision();
+    let previous_revision = model.app.local_queue_revision_for_test();
 
     let mut replacement_items = make_items(2);
     replacement_items[0].id = "replacement".into();
@@ -241,8 +216,8 @@ fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
     replacement.active_slot = None;
     replacement.revision = 7;
     replacement.lineage = mbv_queue::QueueLineage(1);
-    model.app.local_view = crate::app::QueueView::from_snapshot(&replacement);
-    assert_eq!(model.app.local_view.revision(), previous_revision);
+    model.app.seed_local_queue_snapshot_for_test(&replacement);
+    assert_eq!(model.app.local_queue_revision_for_test(), previous_revision);
     let update = model.app.queue_surface_projection();
 
     assert!(update.slots.is_some());
@@ -259,68 +234,55 @@ fn queue_projection_fetches_now_playing_image_once_and_none_on_repaint() {
     // reservation set and counters together pin the request count.
     let mut app = make_app_stub();
     let items = crate::app::tests::make_items(2);
-    app.local_view.adopt_queue_items(
+    app.seed_playback_queue_for_test(
         items
             .into_iter()
             .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
             .collect::<Vec<_>>(),
         0,
     );
-    app.panel_focus = PanelFocus::Queue;
-    app.images.configure_protocol(None, true);
-    {
-        app.player.update_status(|status| {
-            status.active = true;
-            status.current_idx = 0;
-        });
-    };
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.enable_image_protocol_for_test();
+    app.seed_playing_status_for_test(0, 2);
     let mut model = Model::new(app);
 
     model.sync_queue();
     // `make_items` builds Movies, whose card now reserves the landscape
     // key (`{id}:QB`), not the portrait `{id}:P` (commit 55c37ea71).
     assert!(
-        model.app.images.is_loading("id0:QB"),
+        model.app.queue_card_fetch_loading_for_test("id0:QB"),
         "the now-playing key must be reserved by the projection push"
     );
-    let fetch_work = model.app.images.fetch_work_snapshot();
+    let fetch_work = model.app.queue_card_fetch_work_for_test();
 
     // Repaint tick: nothing changed, so the push starts no new fetch.
     model.sync_queue();
-    assert_eq!(model.app.images.fetch_work_snapshot(), fetch_work);
+    assert_eq!(model.app.queue_card_fetch_work_for_test(), fetch_work);
 
     // A new now-playing key reserves exactly one new key.
-    model
-        .app
-        .player
-        .update_status(|status| status.current_idx = 1);
+    model.app.seed_playing_status_for_test(1, 2);
     model.sync_queue();
-    assert!(model.app.images.is_loading("id1:QB"));
+    assert!(model.app.queue_card_fetch_loading_for_test("id1:QB"));
 }
 
 #[test]
 fn hidden_visual_slot_skips_artwork_fetch_until_shown() {
     let mut app = make_app_stub();
-    app.local_view.adopt_items(make_items(2), 0);
-    app.images.configure_protocol(None, true);
-    app.visual_slot_hidden = true;
-    {
-        app.player.update_status(|status| {
-            status.active = true;
-            status.current_idx = 0;
-        });
-    };
+    app.seed_local_queue_for_test(make_items(2), 0);
+    app.enable_image_protocol_for_test();
+    app.set_visual_slot_hidden_for_test(true);
+    app.seed_playing_status_for_test(0, 2);
     let mut model = Model::new(app);
 
     model.sync_queue();
-    assert_eq!(model.app.images.card_image_fetch_calls(), 0);
+    assert_eq!(model.app.card_image_fetch_count_for_test(), 0);
     // `make_items` builds Movies → the landscape card key (commit 55c37ea71).
-    assert!(!model.app.images.is_loading("id0:QB"));
+    assert!(!model.app.queue_card_fetch_loading_for_test("id0:QB"));
 
-    model.app.visual_slot_hidden = false;
+    model.app.set_visual_slot_hidden_for_test(false);
     model.sync_queue();
-    assert!(model.app.images.card_image_fetch_calls() > 0);
-    assert!(model.app.images.is_loading("id0:QB"));
+    assert!(model.app.card_image_fetch_count_for_test() > 0);
+    assert!(model.app.queue_card_fetch_loading_for_test("id0:QB"));
 }
 
 #[test]
@@ -330,14 +292,14 @@ fn queue_arrow_moves_component_cursor_only_not_app_follow() {
     // `queue_cursor` (the shell-owned follow position) is not written
     // (task 3.2 — the mirror in select_queue_slot is gone).
     let mut app = make_app_stub();
-    app.local_view.adopt_queue_items(
+    app.seed_playback_queue_for_test(
         vec![
             mbv_queue::QueueItem::Emby(Box::new(make_item("one", "Movie"))),
             mbv_queue::QueueItem::Emby(Box::new(make_item("two", "Movie"))),
         ],
         0,
     );
-    app.panel_focus = PanelFocus::Queue;
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     let mut model = Model::new(app);
     model.sync_queue();
     let id = ComponentId::Queue;
@@ -354,7 +316,7 @@ fn queue_arrow_moves_component_cursor_only_not_app_follow() {
             .expect("Queue component mounted")
     };
     assert_eq!(component_cursor(&model), 0);
-    assert_eq!(model.app.local_view.cursor(), 0);
+    assert_eq!(model.app.local_queue_cursor_for_test(), 0);
 
     let message = model
         .application
@@ -375,7 +337,7 @@ fn queue_arrow_moves_component_cursor_only_not_app_follow() {
         "component cursor moved to row 1"
     );
     assert_eq!(
-        model.app.local_view.cursor(),
+        model.app.local_queue_cursor_for_test(),
         0,
         "QueueRequest::Cursor must not write App's follow cursor"
     );
@@ -405,16 +367,19 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
     use crate::app::state::playback::{QueueTarget, UndoEntry};
     let mut app = make_app_stub();
     let _cmd_rx = live_owner_channel(&mut app);
-    app.local_view.adopt_queue_items(emby_items(2), 0);
-    app.queue_undo_stack.push(UndoEntry::Remove {
-        target: QueueTarget::current(QueueLink::Local),
-        index: 0,
-        item: Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
-            "restored", "Movie",
-        )))),
-    });
+    app.seed_playback_queue_for_test(emby_items(2), 0);
+    app.seed_queue_undo_for_test(
+        QueueLink::Local,
+        UndoEntry::Remove {
+            target: QueueTarget::current(QueueLink::Local),
+            index: 0,
+            item: Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
+                "restored", "Movie",
+            )))),
+        },
+    );
     let mut model = Model::new(app);
-    assert!(!model.app.has_direct_remote_queue());
+    assert!(!model.app.has_direct_remote_queue_for_test());
 
     model.handle_queue_request(QueueRequest::Undo {
         link: QueueLink::Peer,
@@ -426,7 +391,7 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
         "no spurious remote-undo-unsupported error"
     );
     assert!(
-        model.app.queue_undo_stack.is_empty(),
+        model.app.queue_undo_is_empty_for_test(QueueLink::Local),
         "the Local undo entry was consumed"
     );
 }
@@ -442,11 +407,14 @@ fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
     let (app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(2));
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     let mut app = app;
-    app.remote_queue_undo_stack.push(UndoEntry::Move {
-        target: QueueTarget::current(QueueLink::Peer),
-        slot_id: mbv_queue::QueueSlotId::from_raw(2),
-        from: 0,
-    });
+    app.seed_queue_undo_for_test(
+        QueueLink::Peer,
+        UndoEntry::Move {
+            target: QueueTarget::current(QueueLink::Peer),
+            slot_id: mbv_queue::QueueSlotId::from_raw(2),
+            from: 0,
+        },
+    );
     let mut model = Model::new(app);
 
     model.handle_queue_request(QueueRequest::Undo {
@@ -454,7 +422,7 @@ fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
     });
 
     assert!(
-        model.app.remote_queue_undo_stack.is_empty(),
+        model.app.queue_undo_is_empty_for_test(QueueLink::Peer),
         "the peer undo entry was consumed"
     );
     assert_ne!(

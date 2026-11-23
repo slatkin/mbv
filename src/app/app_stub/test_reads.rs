@@ -34,6 +34,10 @@ mod gui_feeds;
 /// in their own child module for the same reason.
 mod gui_marks;
 
+/// The queue surfaces' test seeds and reads (`split-tui-gui-clients` design
+/// D4b rule 5) sit in their own child module for the same reason.
+mod queue;
+
 /// The GUI Search data path's test seam (row 12.1) sits in its own child
 /// module for the same reason.
 mod search;

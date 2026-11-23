@@ -44,20 +44,21 @@ fn app_with_card_image() -> Model {
     let mut app = make_app_stub();
     let mut configured = Picker::halfblocks();
     configured.set_protocol_type(ProtocolType::Kitty);
-    app.images.configure_protocol(None, true);
+    app.enable_image_protocol_for_test();
     let mut model = Model::new(app);
     crate::app::shell::install_image_pickers_for_test(&mut model, configured, Picker::halfblocks());
     model
         .app
-        .images
-        .insert_image(CARD_KEY.to_owned(), cached(Some(card_image(4, 2))));
-    model.app.queue_card_projection = QueueCardProjection {
-        cache_key: Some(CARD_KEY.to_owned()),
-        plain_cache_key: None,
-        images_enabled: true,
-        visualizer: false,
-        title_site: NowPlayingTitleSite::Header,
-    };
+        .insert_cached_image_for_test(CARD_KEY, cached(Some(card_image(4, 2))));
+    model
+        .app
+        .seed_queue_card_projection_for_test(QueueCardProjection {
+            cache_key: Some(CARD_KEY.to_owned()),
+            plain_cache_key: None,
+            images_enabled: true,
+            visualizer: false,
+            title_site: NowPlayingTitleSite::Header,
+        });
     model
 }
 
@@ -79,15 +80,15 @@ fn paint_slot_in(app: &mut Model, area: Rect) {
 #[test]
 fn an_interrupted_fetch_does_not_paint_the_no_image_placeholder() {
     let mut app = app_with_card_image();
-    app.app.images.remove_image(CARD_KEY);
-    app.app.images.fetch_interrupted(CARD_KEY.to_owned());
+    app.app.remove_cached_image_for_test(CARD_KEY);
+    app.app.interrupt_card_image_fetch_for_test(CARD_KEY);
 
     paint_slot(&mut app);
 
     assert!(
-        !app.app
-            .images
-            .is_cached(mbv_images::QUEUE_CARD_PLACEHOLDER_KEY)
+        app.app
+            .cached_image(mbv_images::QUEUE_CARD_PLACEHOLDER_KEY)
+            .is_none()
     );
 }
 
@@ -96,8 +97,7 @@ fn an_interrupted_fetch_does_not_paint_the_no_image_placeholder() {
 fn app_with_square_card_image() -> Model {
     let mut app = app_with_card_image();
     app.app
-        .images
-        .insert_image(CARD_KEY.to_owned(), cached(Some(card_image(100, 100))));
+        .insert_cached_image_for_test(CARD_KEY, cached(Some(card_image(100, 100))));
     app
 }
 
@@ -112,8 +112,8 @@ fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
     paint_slot_in(&mut tall, Rect::new(0, 0, 40, 24));
 
     assert_eq!(
-        short.app.images.last_card_size(),
-        tall.app.images.last_card_size(),
+        short.app.last_card_size(),
+        tall.app.last_card_size(),
         "the same artwork must record the same size whatever the slot region's height"
     );
 }
@@ -128,20 +128,20 @@ fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
 fn dimmed_backdrop_paint_does_not_move_the_queue_card_checkpoint() {
     let mut app = app_with_card_image();
     // The configured protocol's last paint before any modal opened.
-    app.app.images.record_card_size(16, 32);
+    app.app.record_card_size_for_test(16, 32);
 
-    app.app.dim_backdrop_active = true;
+    app.app.set_dim_backdrop_active_for_test(true);
     paint_slot(&mut app);
     assert_eq!(
-        app.app.images.last_card_size(),
+        app.app.last_card_size(),
         (16, 32),
         "the dimmed backdrop's fallback paint must not move the checkpoint"
     );
 
-    app.app.dim_backdrop_active = false;
+    app.app.set_dim_backdrop_active_for_test(false);
     paint_slot(&mut app);
     assert_ne!(
-        app.app.images.last_card_size(),
+        app.app.last_card_size(),
         (16, 32),
         "recording resumes for the configured protocol's paint"
     );

@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::tests::QueueViewTestExt;
 use mbv_emby_model::test_support::make_item;
 
 #[test]
@@ -12,18 +11,17 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .local_view
-        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_tv_content();
     model.sync_active_destination();
 
     // Divergence: the panel-hosted TvContent owner selects index 0 while
     // App's mirrored BrowseLevel cursor is stale at index 1. Resolve narrow
     // extras using the component-owned cursor, as the production seam does.
-    model.app.libs[0].nav_stack[0].set_resting_cursor(1);
+    model.app.set_library_level_cursor_for_test(0, 0, 1);
     let component_cursor = model.test_tv_owner().browse_cursor();
     assert_eq!(component_cursor, 0);
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
+    assert_eq!(model.app.emby_library_level_cursor(0, 0), Some(1));
 
     assert_eq!(
         model.test_tv_owner().selected_item_id(),
@@ -31,13 +29,15 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
         "the shared TV owner resolves its own selected Series"
     );
 
-    model.app.libs[0].nav_stack[0].set_resting_cursor(component_cursor);
+    model
+        .app
+        .set_library_level_cursor_for_test(0, 0, component_cursor);
 
     // Wide TV layout => enter_series_selection targets the component's
     // Series (asserted by the resolved target, not merely the bool).
     let wide_target = model
         .app
-        .selected_series_item(0, model.app.libs[0].nav_stack[0].resting().cursor())
+        .selected_series_item(0, model.app.emby_library_level_cursor(0, 0).unwrap_or(0))
         .expect("series");
     assert_eq!(wide_target.id, "movie-focused");
     assert!(model.app.activate_selected_series(0));
@@ -46,13 +46,13 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     // mounted owner's Library Hero overlay.
     model.terminal_width = 80;
     model.terminal_height = 24;
-    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
+    model.app.set_library_level_cursor_for_test(0, 0, 0);
     let mut season = make_item("Season 1", "Season");
     season.id = "season-1".into();
     let mut episode = make_item("Episode 1", "Episode");
     episode.id = "episode-1".into();
-    model.app.series_detail_cache.insert(
-        "movie-focused".into(),
+    model.app.seed_series_detail_for_test(
+        "movie-focused",
         SeriesDetail {
             seasons: vec![season],
             episodes: [("season-1".into(), vec![episode])].into_iter().collect(),
@@ -87,12 +87,14 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     );
 
     // Guard 1: a non-tvshows collection_type rejects.
-    model.app.libs[0].library.collection_type = "movies".into();
+    model.app.set_library_collection_type_for_test(0, "movies");
     assert!(!model.app.activate_selected_series(0));
 
     // Guard 2: a selected item that is not a Series rejects.
-    model.app.libs[0].library.collection_type = "tvshows".into();
-    model.app.libs[0].nav_stack[0].items[0].item_type = "Movie".into();
+    model.app.set_library_collection_type_for_test(0, "tvshows");
+    model
+        .app
+        .set_library_row_item_type_for_test(0, 0, 0, "Movie");
     assert!(!model.app.activate_selected_series(0));
 }
 
@@ -106,16 +108,21 @@ fn wide_emby_library_activate_enters_the_workspace_not_a_flat_drill_in() {
     let mut model = mounted_tv_model();
     model.sync_library_panel();
     assert!(
-        !model.app.tv_workspace_wide.is_empty(),
+        model.app.tv_workspace_painted_wide_for_test(0),
         "the wide fixture publishes the Client's write-back fact"
     );
-    let item = model.app.libs[0].nav_stack[0].items[0].clone();
-    let depth_before = model.app.libs[0].nav_stack.len();
+    let item = model
+        .app
+        .emby_library_level(0)
+        .and_then(|level| level.items.first())
+        .cloned()
+        .expect("the TV library's first Series row");
+    let depth_before = model.app.emby_library_level_count(0);
 
     model.handle_emby_library_request(mbv_ui_msg::ShellRequest::EmbyLibraryActivate { item });
 
     assert_eq!(
-        model.app.libs[0].nav_stack.len(),
+        model.app.emby_library_level_count(0),
         depth_before,
         "wide Series activation keeps the persistent Workspace, never a drill-in"
     );
@@ -133,8 +140,7 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .local_view
-        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.push_tv_workspace_content();
     model.sync_library_panel();
 
@@ -187,14 +193,18 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     let mut app = make_movie_app();
     // library 0 stays "movies" (never wide TV eligible).
     let mut tv_app = make_movie_app();
-    let mut tv_lib = tv_app.libs.remove(0);
+    let mut tv_lib = tv_app
+        .take_libraries_for_test()
+        .into_iter()
+        .next()
+        .expect("the fixture's TV library");
     tv_lib.library.id = "lib-tvshows".into();
     tv_lib.library.collection_type = "tvshows".into();
     for item in &mut tv_lib.nav_stack[0].items {
         item.item_type = "Series".into();
     }
-    app.libs.push(tv_lib);
-    app.tab = TabSelection::EmbyLibrary(1);
+    app.push_library_for_test(tv_lib);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(1));
     let mut model = Model::new(app);
     model.terminal_width = 160;
     model.terminal_height = 40;
@@ -212,7 +222,7 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
 
     assert!(model.app.activate_selected_series(1));
     assert!(
-        model.app.pending_overlay.is_none(),
+        model.app.pending_overlay_request_for_test().is_none(),
         "library 1 is wide-eligible; activation must enter the persistent \
          workspace, not open a separate constituent picker"
     );

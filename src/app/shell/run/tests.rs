@@ -5,7 +5,7 @@ use crate::app::SessionEvent;
 use crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion;
 use crate::app::state::events::LibEvent;
 use crate::app::tests::make_app_stub;
-use crate::app::tests::render_fixtures::{catalog_receiver, make_movie_app};
+use crate::app::tests::render_fixtures::{CatalogResult, catalog_receiver, make_movie_app};
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,
@@ -20,11 +20,13 @@ use std::collections::HashMap;
 
 fn mounted_wide_tv_model() -> Model {
     let mut app = make_movie_app();
-    app.libs[0].library.collection_type = "tvshows".into();
-    for item in &mut app.libs[0].nav_stack[0].items {
-        item.item_type = "Series".into();
-        item.image_tags.thumb = "tag".into();
-    }
+    app.edit_library_for_test(0, |tab| {
+        tab.library.collection_type = "tvshows".into();
+        for item in &mut tab.nav_stack[0].items {
+            item.item_type = "Series".into();
+            item.image_tags.thumb = "tag".into();
+        }
+    });
     // Wide breakpoint is now driven synchronously by terminal size
     // (`wide_tv_show_area`), not this previous-frame paint rect.
     let mut model = Model::new(app);
@@ -49,7 +51,7 @@ fn wide_tv_shows_placeholder(model: &mut Model) -> bool {
 #[test]
 fn series_image_completion_repushes_tv_workspace_content() {
     let mut model = mounted_wide_tv_model();
-    model.app.images.configure_protocol(None, true);
+    model.app.enable_image_protocol_for_test();
     // The sync pass is the production projection seam (task 5.10's central
     // hero projection owns the fetch for every migrated owner, TV included
     // since task 8.4). One throwaway draw publishes `root_frame` first — the
@@ -73,8 +75,8 @@ fn series_image_completion_repushes_tv_workspace_content() {
     );
     // The fixture has no Emby client, so the fetch cannot start: the key stays
     // open to a retry (invariant 27) and the shell still re-projects it.
-    assert!(model.app.images.is_fetch_interrupted(&painted_key));
-    assert!(!model.app.images.is_cached(&painted_key));
+    assert!(model.app.image_cache().is_fetch_interrupted(&painted_key));
+    assert!(model.app.cached_image(&painted_key).is_none());
 }
 
 /// Task 2.3: no other image namespace may drive the TV projection. The cached
@@ -85,10 +87,7 @@ fn series_image_completion_repushes_tv_workspace_content() {
 #[test]
 fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     let mut app = make_app_stub();
-    app.channels
-        .notif_action_tx
-        .send("clear:yes".into())
-        .expect("notif channel");
+    app.send_notif_action_for_test("clear:yes");
 
     assert!(
         app.drain_notif_actions(),
@@ -96,7 +95,7 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     );
     assert!(
         matches!(
-            app.pending_overlay,
+            app.pending_overlay_request_for_test(),
             Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm)
         ),
         "clear:yes must dismiss the confirmation modal"
@@ -119,20 +118,24 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
 #[test]
 fn drain_session_events_dispatches_a_queued_event() {
     let mut app = make_app_stub();
-    app.sessions_loading = true;
-    app.channels
-        .sessions_tx
-        .send(SessionEvent::Loaded {
-            sessions: vec![mbv_emby::test_support::make_session("living-room", "mbv")],
-        })
-        .expect("sessions channel");
+    app.set_sessions_loading_for_test(true);
+    app.send_session_event_for_test(SessionEvent::Loaded {
+        sessions: vec![mbv_emby::test_support::make_session("living-room", "mbv")],
+    });
 
     assert!(
         app.drain_session_events(),
         "a queued event must report produced=true"
     );
-    assert_eq!(app.sessions.len(), 1, "the Loaded event must be dispatched");
-    assert!(!app.sessions_loading, "Loaded must clear the loading flag");
+    assert_eq!(
+        app.sessions_for_test().len(),
+        1,
+        "the Loaded event must be dispatched"
+    );
+    assert!(
+        !app.sessions_loading_for_test(),
+        "Loaded must clear the loading flag"
+    );
 }
 
 /// Task 3.2: an empty sessions channel reports produced=false.
@@ -182,25 +185,45 @@ fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
 /// reset lands on `NotConfigured`.
 #[test]
 fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
-    let mut app = make_app_stub();
-    app.audiobookshelf_runtime.begin_setup();
-    let (tx, rx) = std::sync::mpsc::channel::<AudiobookshelfSetupCompletion>();
-    drop(tx);
-    app.setup.audiobookshelf_setup_rx = Some(rx);
+    // The sender drops here: the worker exited without a completion.
+    let (_, rx) = std::sync::mpsc::channel::<AudiobookshelfSetupCompletion>();
+    let mut app = audiobookshelf_setup_attempt_app(rx);
 
     assert!(
         app.drain_audiobookshelf_events(),
         "a Disconnected setup receiver must report produced"
     );
     assert_eq!(
-        app.audiobookshelf_runtime.state,
+        app.audiobookshelf_service_state(),
         ServiceState::NotConfigured,
         "the setup disconnect resets to the form's previous state"
     );
     assert!(
-        app.setup.audiobookshelf_setup_rx.is_none(),
+        !app.audiobookshelf_setup_receiver_present_for_test(),
         "the disconnected setup receiver is not put back"
     );
+}
+
+/// The stub `App` of a running Audiobookshelf setup attempt whose worker has
+/// already handed back `rx`: the attempt started, its receiver installed, and
+/// its completion sender dropped, so the drain sees the worker exit.
+fn audiobookshelf_setup_attempt_app(
+    rx: std::sync::mpsc::Receiver<AudiobookshelfSetupCompletion>,
+) -> App {
+    let mut app = make_app_stub();
+    app.begin_audiobookshelf_setup_for_test();
+    app.seed_audiobookshelf_setup_receiver_for_test(rx);
+    app
+}
+
+/// The production catalog hand-off: the stub `App` with `completion` queued on
+/// the Audiobookshelf catalog load's result receiver, as a completed catalog
+/// fetch leaves it, so the drain that applies it is the production path.
+fn audiobookshelf_catalog_completion_app(completion: CatalogResult) -> App {
+    let mut app = make_app_stub();
+    let generation = app.audiobookshelf_setup_generation_for_test();
+    app.seed_audiobookshelf_catalog_receiver_for_test(catalog_receiver(generation, completion));
+    app
 }
 
 /// Task 3.3: the catalog receiver has no disconnect handler — a dropped worker
@@ -211,32 +234,26 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
 /// `NeedsAuthentication` and clears the stored credential.
 #[test]
 fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_credential() {
-    let mut app = make_app_stub();
-    let generation = app.audiobookshelf_runtime.generation();
-    app.audiobookshelf_runtime.state = ServiceState::Connecting;
-    app.audiobookshelf_runtime.user = Some(AudiobookshelfUser {
+    let mut app = audiobookshelf_catalog_completion_app(Err(AudiobookshelfError::from_class(
+        AudiobookshelfFailureClass::AuthenticationRejected,
+    )));
+    app.seed_audiobookshelf_service_connecting_for_test(AudiobookshelfUser {
         id: "user-1".into(),
         username: "listener".into(),
     });
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "saved-token")
         .expect("secret is written under the test state dir");
-    app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
-        generation,
-        Err(AudiobookshelfError::from_class(
-            AudiobookshelfFailureClass::AuthenticationRejected,
-        )),
-    ));
 
     assert!(
         app.drain_audiobookshelf_events(),
         "the completion must be reported"
     );
     assert_eq!(
-        app.audiobookshelf_runtime.state,
+        app.audiobookshelf_service_state(),
         ServiceState::NeedsAuthentication
     );
     assert!(
-        app.audiobookshelf_runtime.user.is_none(),
+        app.audiobookshelf_service_user_for_test().is_none(),
         "a rejection clears the runtime user"
     );
     assert!(
@@ -255,8 +272,6 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
 /// catalog loop fetches no shelf.
 #[test]
 fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
-    let mut app = make_app_stub();
-    let generation = app.audiobookshelf_runtime.generation();
     let podcast_progress = HashMap::from([(
         ("pod-1".to_string(), "ep-1".to_string()),
         AudiobookshelfProgress {
@@ -274,51 +289,47 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
             is_finished: false,
         },
     )]);
-    app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
-        generation,
-        Ok((
-            vec![
-                audiobookshelf_library("pod-1", "podcast"),
-                audiobookshelf_library("book-1", "book"),
-            ],
-            podcast_progress.clone(),
-            book_progress.clone(),
-        )),
-    ));
+    let mut app = audiobookshelf_catalog_completion_app(Ok((
+        vec![
+            audiobookshelf_library("pod-1", "podcast"),
+            audiobookshelf_library("book-1", "book"),
+        ],
+        podcast_progress.clone(),
+        book_progress.clone(),
+    )));
 
     assert!(
         app.drain_audiobookshelf_events(),
         "the catalog completion must be reported"
     );
 
-    assert_eq!(app.audiobookshelf_libraries.len(), 2);
+    let browse = app.audiobookshelf_browse_states_for_test();
+    let book_browse = app.audiobookshelf_book_states_for_test();
+    assert_eq!(app.audiobookshelf_libraries().len(), 2);
+    assert_eq!(browse.len(), 2, "podcast browse is built for every library");
     assert_eq!(
-        app.audiobookshelf_browse.len(),
-        2,
-        "podcast browse is built for every library"
-    );
-    assert_eq!(
-        app.audiobookshelf_book_browse.len(),
+        book_browse.len(),
         2,
         "book browse is built for every library"
     );
     assert_eq!(
-        app.audiobookshelf_browse[0].progress, podcast_progress,
+        browse[0].progress, podcast_progress,
         "podcast progress lands in the podcast map"
     );
     assert!(
-        app.audiobookshelf_browse[1].progress.is_empty(),
+        browse[1].progress.is_empty(),
         "book progress must not land in the podcast map"
     );
     assert_eq!(
-        app.audiobookshelf_book_browse[1].progress, book_progress,
+        book_browse[1].progress, book_progress,
         "book progress lands in the book map"
     );
     assert!(
-        app.audiobookshelf_book_browse[0].progress.is_empty(),
+        book_browse[0].progress.is_empty(),
         "podcast progress must not land in the book map"
     );
 
+    let generation = app.audiobookshelf_setup_generation_for_test();
     assert_catalog_fetches(&mut app, generation);
 }
 
@@ -354,7 +365,7 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
         "a podcast library requests shows and a book library requests books"
     );
     assert!(
-        app.channels.lib_rx.try_recv().is_err(),
+        !app.has_queued_lib_event_for_test(),
         "the startup catalog loop must not fetch the destination Latest shelf"
     );
 }
@@ -409,15 +420,15 @@ fn music_level(
 
 fn music_two_artist_stale_pf() -> App {
     let mut app = make_app_stub();
-    app.tab = crate::app::TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
-    app.music_levels = vec!["group".into(), "album".into()];
+    app.seed_active_tab_for_test(crate::app::TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_grouped_music_levels_for_test();
     let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.is_folder = true;
     library.collection_type = "music".into();
     let (groups, albums) = music_two_artist_items();
-    app.libs.push(crate::app::LibraryTab {
+    app.push_library_for_test(crate::app::LibraryTab {
         nav_stack: vec![
             music_level("lib-music", "Music", groups, 0),
             music_level("group-soul", "Soul", albums, 1),
@@ -475,14 +486,10 @@ fn deliver_music_stale_pf_restore(model: &mut Model) {
     };
     model
         .app
-        .library_position_state
-        .libraries
-        .insert("lib-music".into(), position.clone());
+        .seed_library_position_for_test("lib-music", position.clone());
     model
         .app
-        .channels
-        .lib_tx
-        .send(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
+        .send_lib_event_for_test(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
             lib_idx: 0,
             requested_position: position.clone(),
             position,
@@ -490,17 +497,17 @@ fn deliver_music_stale_pf_restore(model: &mut Model) {
                 music_level("lib-music", "Music", groups, 0),
                 music_level("group-soul", "Soul", albums, 1),
             ],
-        }))
-        .expect("lib event channel");
+        }));
     model.drain_lib_events();
 }
 
 #[test]
 fn music_launch_state_first_artist_root_survives_a_stale_saved_position_restore() {
     let mut app = music_two_artist_stale_pf();
-    app.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(music_launch_state_aaliyah());
+    app.seed_emby_service_state_for_test(mbv_core::service_runtime::ServiceState::Ready);
+    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::Pending(
+        music_launch_state_aaliyah(),
+    ));
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     // The snapshot's saved item is legacy (a launch snapshot no longer
@@ -537,9 +544,13 @@ fn music_owner_artist_survives_a_stale_restore_after_a_tab_round_trip() {
         Some("Aaliyah"),
     );
 
-    model.app.tab = crate::app::TabSelection::Home;
+    model
+        .app
+        .seed_active_tab_for_test(crate::app::TabSelection::Home);
     model.sync_mounted_surfaces();
-    model.app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    model
+        .app
+        .seed_active_tab_for_test(crate::app::TabSelection::EmbyLibrary(0));
     model.sync_mounted_surfaces();
     assert_eq!(
         model
@@ -619,24 +630,26 @@ fn home_recently_added_feed_row(pub_date_secs: Option<u64>) -> mbv_queue::QueueI
 #[test]
 fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
     let mut model = Model::new(make_app_stub());
-    let stale = model.app.emby_runtime.generation();
-    model.app.emby_runtime.begin_setup();
-    model
-        .app
-        .channels
-        .lib_tx
-        .send(LibEvent::ModelContent(
-            ModelContentEvent::HomeRecentlyAddedFetched {
-                source: crate::app::DestinationLatestSource::Emby("lib".into()),
-                generation: stale,
-                items: vec![home_recently_added_feed_row(Some(0))],
-            },
-        ))
-        .expect("lib event channel");
+    let stale = model.app.emby_setup_generation_for_test();
+    model.app.begin_emby_setup_for_test();
+    model.app.send_lib_event_for_test(LibEvent::ModelContent(
+        ModelContentEvent::HomeRecentlyAddedFetched {
+            source: crate::app::DestinationLatestSource::Emby("lib".into()),
+            generation: stale,
+            items: vec![home_recently_added_feed_row(Some(0))],
+        },
+    ));
 
     model.drain_lib_events();
 
-    assert!(model.app.home_recently_added.is_empty());
+    assert!(
+        model
+            .app
+            .home_recently_added_rows_for_test(&crate::app::DestinationLatestSource::Emby(
+                "lib".into()
+            ))
+            .is_empty()
+    );
 }
 
 /// Design D2: the shell filters each source's items to the 14-day cutoff
@@ -647,30 +660,27 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
     let mut model = Model::new(make_app_stub());
     let current = model.home_latest_launch_window.current;
     let day = 24 * 60 * 60;
-    model
-        .app
-        .channels
-        .lib_tx
-        .send(LibEvent::ModelContent(
-            ModelContentEvent::HomeRecentlyAddedFetched {
-                source: crate::app::DestinationLatestSource::Emby("lib".into()),
-                generation: model.app.emby_runtime.generation(),
-                items: vec![
-                    home_recently_added_feed_row(Some(current - day)),
-                    home_recently_added_feed_row(Some(current - 20 * day)),
-                    home_recently_added_feed_row(None),
-                ],
-            },
-        ))
-        .expect("lib event channel");
+    let generation = model.app.emby_setup_generation_for_test();
+    model.app.send_lib_event_for_test(LibEvent::ModelContent(
+        ModelContentEvent::HomeRecentlyAddedFetched {
+            source: crate::app::DestinationLatestSource::Emby("lib".into()),
+            generation,
+            items: vec![
+                home_recently_added_feed_row(Some(current - day)),
+                home_recently_added_feed_row(Some(current - 20 * day)),
+                home_recently_added_feed_row(None),
+            ],
+        },
+    ));
 
     model.drain_lib_events();
 
-    let rows = model
-        .app
-        .home_recently_added
-        .get(&crate::app::DestinationLatestSource::Emby("lib".into()))
-        .expect("live generation stores under its source");
+    let rows =
+        model
+            .app
+            .home_recently_added_rows_for_test(&crate::app::DestinationLatestSource::Emby(
+                "lib".into(),
+            ));
     assert_eq!(rows.len(), 1);
 }
 
@@ -681,18 +691,14 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
 fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain() {
     let mut model = Model::new(make_app_stub());
     let current = model.home_latest_launch_window.current;
-    model
-        .app
-        .channels
-        .lib_tx
-        .send(LibEvent::ModelContent(
-            ModelContentEvent::HomeRecentlyAddedFetched {
-                source: crate::app::DestinationLatestSource::Emby("lib".into()),
-                generation: model.app.emby_runtime.generation(),
-                items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
-            },
-        ))
-        .expect("lib event channel");
+    let generation = model.app.emby_setup_generation_for_test();
+    model.app.send_lib_event_for_test(LibEvent::ModelContent(
+        ModelContentEvent::HomeRecentlyAddedFetched {
+            source: crate::app::DestinationLatestSource::Emby("lib".into()),
+            generation,
+            items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
+        },
+    ));
 
     model.drain_lib_events();
 
@@ -712,18 +718,14 @@ fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain()
 fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
     let mut model = Model::new(make_app_stub());
     let current = model.home_latest_launch_window.current;
-    model
-        .app
-        .channels
-        .lib_tx
-        .send(LibEvent::ModelContent(
-            ModelContentEvent::HomeRecentlyAddedFetched {
-                source: crate::app::DestinationLatestSource::Emby("lib".into()),
-                generation: model.app.emby_runtime.generation(),
-                items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
-            },
-        ))
-        .expect("lib event channel");
+    let generation = model.app.emby_setup_generation_for_test();
+    model.app.send_lib_event_for_test(LibEvent::ModelContent(
+        ModelContentEvent::HomeRecentlyAddedFetched {
+            source: crate::app::DestinationLatestSource::Emby("lib".into()),
+            generation,
+            items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
+        },
+    ));
     model.drain_lib_events();
     assert_eq!(
         model
@@ -735,7 +737,7 @@ fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
         "the fetched rows reached the owner before the library dropped"
     );
 
-    model.app.libs.clear();
+    model.app.clear_libraries_for_test();
     model.assign_home_content(crate::app::state::playback::HomeContent {
         continue_items: Vec::new(),
         loading: false,
@@ -749,3 +751,6 @@ fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
             .is_empty()
     );
 }
+
+// The Service setup hand-offs the drains above consume.
+mod setup_receivers;

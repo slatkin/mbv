@@ -41,6 +41,22 @@ impl App {
         self.panel_focus = PanelFocus::Library;
     }
 
+    /// Hold `mode` as the Panel mode, as a Settings restore or a Client's own
+    /// saved-layout load leaves it: the state a UI-state-reset test starts
+    /// from before it asserts the mode it restored.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_panel_mode_for_test(&mut self, mode: PanelMode) {
+        self.panel_mode = mode;
+    }
+
+    /// Hold `focus` as the focused panel without the card-checkpoint reset a
+    /// key or a click runs: the state a Client holds once it has settled
+    /// there, as a restored layout or a test's fixture leaves it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_panel_focus_for_test(&mut self, focus: PanelFocus) {
+        self.panel_focus = focus;
+    }
+
     /// Focus the Queue after the terminal crossed into the mini view. The
     /// stored wide focus is untouched: only the mini view's own target moves.
     pub fn focus_queue_for_mini_view(&mut self) {

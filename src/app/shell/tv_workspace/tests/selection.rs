@@ -14,7 +14,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     fn drive(code: Key) -> (Model, ShellRequest) {
         let mut model = mounted_tv_model();
         // Letter pills need a captured total for TvCycleLetterPill to run.
-        model.app.libs[0].library_total = Some(1000);
+        model.app.set_library_total_for_test(0, 1000);
         let request = model.test_tv_owner_mut().test_key(&KeyEvent {
             code,
             modifiers: KeyModifiers::NONE,
@@ -40,7 +40,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         .app
         .handle_mouse_single_click_tv(0, TvHit::SeriesRow("movie-second".into()));
     model.push_tv_workspace_content();
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
+    assert_eq!(model.app.emby_library_level_cursor(0, 0), Some(1));
     assert_eq!(
         model
             .test_tv_owner()
@@ -81,15 +81,15 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     ));
     model.handle_tv_request(request);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().cursor(),
-        0,
+        model.app.emby_library_level_cursor(0, 0),
+        Some(0),
         "TvCycleLetterPill must not write the component cursor into App's browse level"
     );
 
     // Right expands the selected show through the existing lazy-load request;
     // it does not move focus to the Wide Workspace.
     let mut model = mounted_tv_model();
-    model.app.libs[0].library_total = Some(1000);
+    model.app.set_library_total_for_test(0, 1000);
     let request = model.test_tv_owner_mut().test_key(&KeyEvent {
         code: Key::Right,
         modifiers: KeyModifiers::NONE,
@@ -100,7 +100,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand {
            target: mbv_ui_msg::TvTreeTarget::Show(_)
        })));
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
+    assert_eq!(model.app.emby_library_level_cursor(0, 0), Some(0));
 }
 
 #[test]
@@ -115,8 +115,8 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     episode.series_id = "movie-focused".into();
     let mut episodes = std::collections::HashMap::new();
     episodes.insert("season-2".into(), vec![episode]);
-    model.app.series_detail_cache.insert(
-        "movie-focused".into(),
+    model.app.seed_series_detail_for_test(
+        "movie-focused",
         mbv_ui_model::browse::SeriesDetail {
             seasons: vec![season_one, season_two],
             episodes,
@@ -143,7 +143,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
      if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { delta: 1 })));
     // Make the App library cursor stale after the component has selected
     // the series; episode activation must not consult that cursor.
-    model.app.libs[0].nav_stack[0].set_resting_cursor(1);
+    model.app.set_library_level_cursor_for_test(0, 0, 1);
 
     let episode = model
         .test_tv_owner()
@@ -163,38 +163,41 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     // fail.
     let mut third = mbv_emby_model::test_support::make_item("Third Series", "Series");
     third.id = "movie-third".into();
-    model.app.libs[0].nav_stack[0].items.push(third);
+    model.app.push_library_row_for_test(0, 0, third);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().cursor(),
-        1,
+        model.app.emby_library_level_cursor(0, 0),
+        Some(1),
         "the stale App cursor must still diverge before TvBack"
     );
-    model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
-        rows: ServerRows::complete(0),
-        parent_id: "movie-third".into(),
-        title: "Seasons".into(),
-        items: vec![],
+    model.app.push_library_level_for_test(
+        0,
+        crate::app::BrowseLevel {
+            rows: ServerRows::complete(0),
+            parent_id: "movie-third".into(),
+            title: "Seasons".into(),
+            items: vec![],
 
-        resting: BrowseResting::new(99, 0),
-        item_types: Some("Season".into()),
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        loading: false,
-        all_items: None,
-        letter_filter: None,
-        tv_content_mode: None,
-        music_grouping: None,
-    });
+            resting: BrowseResting::new(99, 0),
+            item_types: Some("Season".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        },
+    );
     model.handle_tv_request(ShellRequest::TvBack);
     assert_eq!(
-        model.app.libs[0].nav_stack.len(),
+        model.app.emby_library_level_count(0),
         1,
         "TvBack must pop the seasons child level"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().cursor(),
-        2,
+        model.app.emby_library_level_cursor(0, 0),
+        Some(2),
         "TvBack restores the series cursor by parent_id (row of movie-third), not a reset 0, the popped child cursor 99, or the stale 1"
     );
 }

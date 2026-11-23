@@ -4,8 +4,7 @@
 //! chapter, and no active item or a different book resolving to nothing.
 
 use super::*;
-use crate::app::QueueView;
-use crate::app::tests::{QueueViewTestExt, emby_unified_state, make_app_stub, make_items};
+use crate::app::tests::{emby_unified_state, make_app_stub, make_items};
 use mbv_audiobookshelf::{AudiobookshelfChapter, AudiobookshelfLibrary};
 use mbv_ctrl::{TransitionSummary, UnifiedQueueSlot, UnifiedQueueStateData};
 use mbv_queue::QueueSource;
@@ -13,13 +12,8 @@ use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
 
 fn emby_playing_app(position_ticks: i64) -> App {
     let mut app = make_app_stub();
-    app.local_view.adopt_items(make_items(2), 0);
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.position_ticks = position_ticks;
-        status.runtime_ticks = 10_000;
-    });
+    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_playing_position_for_test(0, position_ticks, Some(10_000));
     app
 }
 
@@ -33,13 +27,8 @@ fn pending_emby_app() -> App {
         target_slot: 101,
     });
     let mut app = make_app_stub();
-    app.local_view = QueueView::from_snapshot(&snapshot);
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.position_ticks = 5_000;
-        status.runtime_ticks = 10_000;
-    });
+    app.seed_local_queue_state_for_test(&snapshot);
+    app.seed_playing_position_for_test(0, 5_000, Some(10_000));
     app
 }
 
@@ -87,19 +76,18 @@ fn book_app(cached_id: &str, playing_id: &str, position_secs: f64) -> App {
             Vec::new(),
         ),
     );
-    app.audiobookshelf_book_browse.push(state);
-    app.playback_queue_mut().adopt_queue_items(
+    app.seed_audiobookshelf_book_browse_for_test(vec![state]);
+    app.seed_playback_queue_for_test(
         vec![QueueItem::Audiobookshelf(AudiobookshelfItem::Book(
             book_queue_item(playing_id),
         ))],
         0,
     );
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.position_ticks = mbv_emby_model::seconds_to_ticks(position_secs);
-        status.runtime_ticks = mbv_emby_model::seconds_to_ticks(300.0);
-    });
+    app.seed_playing_position_for_test(
+        0,
+        mbv_emby_model::seconds_to_ticks(position_secs),
+        Some(mbv_emby_model::seconds_to_ticks(300.0)),
+    );
     app
 }
 
@@ -120,7 +108,7 @@ fn pending_book_app() -> App {
             Vec::new(),
         ),
     );
-    app.audiobookshelf_book_browse.push(state);
+    app.seed_audiobookshelf_book_browse_for_test(vec![state]);
     let snapshot = UnifiedQueueStateData {
         queue: None,
         start_slot: None,
@@ -148,22 +136,15 @@ fn pending_book_app() -> App {
         }),
         queued_latest_transition: None,
     };
-    app.local_view = QueueView::from_snapshot(&snapshot);
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.position_ticks = 5_000;
-        status.runtime_ticks = 10_000;
-    });
+    app.seed_local_queue_state_for_test(&snapshot);
+    app.seed_playing_position_for_test(0, 5_000, Some(10_000));
     app
 }
 
 fn inactive_player_app() -> App {
     let mut app = make_app_stub();
-    app.local_view.adopt_items(make_items(2), 0);
-    app.player.update_status(|status| {
-        status.active = false;
-    });
+    app.seed_local_queue_for_test(make_items(2), 0);
+    app.seed_idle_player_for_test();
     app
 }
 

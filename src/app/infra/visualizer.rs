@@ -105,6 +105,11 @@ impl App {
     /// neither acts on the hide nor writes it
     /// (`App::visual_slot_hide_in_effect`), so the state and the stored
     /// preference stay the TUI's.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_visual_slot_hidden_for_test(&mut self, hidden: bool) {
+        self.set_visual_slot_hidden(hidden);
+    }
+
     pub(in crate::app) fn set_visual_slot_hidden(&mut self, hidden: bool) {
         if !self
             .client_capabilities

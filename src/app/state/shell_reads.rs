@@ -76,6 +76,80 @@ impl App {
         )
     }
 
+    /// The series whose detail fetch is in flight, as a Client's own
+    /// expansion armed it. A test observes the arm and its completion
+    /// through it; the fetch itself is the production path under test.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn series_detail_loading_for_test(&self) -> &std::collections::HashSet<String> {
+        &self.series_detail_loading
+    }
+
+    /// The seasons whose episode fetch is in flight, as `(series id, season
+    /// id)`.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn series_season_loading_for_test(&self) -> &std::collections::HashSet<(String, String)> {
+        &self.series_season_loading
+    }
+
+    /// The season expansions that wait on a series detail fetch, as
+    /// `(series id, season id)`.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pending_series_season_expansions_for_test(
+        &self,
+    ) -> &std::collections::HashSet<(String, String)> {
+        &self.pending_series_season_expansions
+    }
+
+    /// The letter filter the Emby library at `index`'s open level carries, if
+    /// it holds one.
+    #[must_use]
+    pub fn emby_library_letter_filter(
+        &self,
+        index: usize,
+    ) -> Option<&mbv_ui_model::sort_filter::LetterFilter> {
+        self.libs
+            .get(index)?
+            .nav_stack
+            .last()?
+            .letter_filter
+            .as_ref()
+    }
+
+    /// Whether the Emby library at `index`'s open level paints as loading.
+    #[must_use]
+    pub fn emby_library_level_loading(&self, index: usize) -> bool {
+        self.libs
+            .get(index)
+            .and_then(|tab| tab.nav_stack.last())
+            .is_some_and(|level| level.loading)
+    }
+
+    /// Whether a Client painted `index`'s Wide TV series Workspace wide in its
+    /// last pass: the write-back fact the shared Series-activation branch
+    /// reads.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn tv_workspace_painted_wide_for_test(&self, index: usize) -> bool {
+        self.tv_workspace_wide.contains(&index)
+    }
+
+    /// The id of the Emby library at `index`, or `None` when no tab sits
+    /// there.
+    #[must_use]
+    pub fn emby_library_id(&self, index: usize) -> Option<&str> {
+        self.libs.get(index).map(|tab| tab.library.id.as_str())
+    }
+
+    /// Whether the library's last TV Upcoming fetch is marked failed, as the
+    /// shell's retry paths read it.
+    #[must_use]
+    pub fn tv_upcoming_fetch_marked_failed(&self, library_id: &str) -> bool {
+        self.tv_upcoming_fetch_failed(library_id)
+    }
+
     /// Whether the albums' track lists cache holds `album_id`.
     #[must_use]
     pub fn album_tracks_cached(&self, album_id: &str) -> bool {
@@ -258,6 +332,16 @@ impl App {
         self.emby_runtime.generation()
     }
 
+    /// The user the Audiobookshelf Service is signed in as, while it holds
+    /// one.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn audiobookshelf_service_user_for_test(
+        &self,
+    ) -> Option<&mbv_audiobookshelf::AudiobookshelfUser> {
+        self.audiobookshelf_runtime.user.as_ref()
+    }
+
     /// The Audiobookshelf service state the status row and the Sessions panel
     /// paint.
     #[must_use]
@@ -313,6 +397,58 @@ impl App {
     #[must_use]
     pub fn cached_image(&self, key: &str) -> Option<&mbv_images::CachedImage> {
         self.images.image(key)
+    }
+
+    /// Whether launch restoration has settled: the shell reads it before it
+    /// decides whether a settled destination still owns the snapshot.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn launch_restore_settled_for_test(&self) -> bool {
+        self.launch_restore == crate::app::state::app_struct::LaunchRestore::Done
+    }
+
+    /// The Emby client the ready runtime holds, for a Client's own test that
+    /// drives a mocked transport: `None` while no client is cached.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the runtime's client lock is poisoned: a writer panicked
+    /// holding it, so the client cannot be read.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn cached_emby_client_for_test(&self) -> Option<mbv_emby::EmbyClient> {
+        let client = self.emby_runtime.client.as_ref()?;
+        Some(
+            client
+                .lock()
+                .unwrap_or_else(|poisoned| {
+                    panic!("the Emby client lock was poisoned: {poisoned:?}")
+                })
+                .clone(),
+        )
+    }
+
+    /// The image cache's recorded card size, as the last produced paint left
+    /// it: whether a paint moved the geometry checkpoint.
+    #[cfg(any(test, feature = "test"))]
+    pub fn record_card_size_for_test(&mut self, height: u16, width: u16) {
+        self.images.record_card_size(height, width);
+    }
+
+    /// The artwork cache, for a Client's own test to write the entry a fetch
+    /// or a paint would have shared. The production read stays
+    /// [`App::image_cache`], which hands out no `&mut`; a test uses this one to
+    /// stand in for the store the core already writes.
+    #[cfg(any(test, feature = "test"))]
+    pub fn image_cache_mut(&mut self) -> &mut mbv_images::cache::ImageCache {
+        &mut self.images
+    }
+
+    /// The cover box the artwork entry stored under `key` was last encoded
+    /// for, as the store kept it.
+    #[must_use]
+    pub fn cached_cover_box(&self, key: &str) -> Option<(u16, u16)> {
+        self.images.image(key).and_then(|entry| entry.cover_box)
     }
 
     /// The decoded pixels the artwork entry stored under `key` holds, cloned.
@@ -526,4 +662,44 @@ impl App {
     pub fn client_capabilities(&self) -> &super::client_capabilities::ClientCapabilities {
         &self.client_capabilities
     }
+
+    /// The presentation facts a Client's test reads back after an action: the
+    /// Panel mode and focus, the queue column and hero list-pane widths, the
+    /// visual slot, the volume and mute the idle indicator shows, and the
+    /// Settings destination.
+    ///
+    /// A UI-state-reset test asserts what the reset restored to these fields
+    /// and what it protected in the volume/mute pair.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn presentation_facts_for_test(&self) -> PresentationFacts {
+        PresentationFacts {
+            panel_mode: self.panel_mode,
+            panel_focus: self.panel_focus,
+            mini_view_focus: self.mini_view_focus,
+            queue_column_width: self.queue_column_width,
+            list_pane_width: self.list_pane_width,
+            visual_slot_hidden: self.visual_slot_hidden,
+            stored_volume: self.ui_volume,
+            stored_mute: self.mute_on,
+            settings_destination: self.settings_destination,
+        }
+    }
+}
+
+/// The presentation facts [`App::presentation_facts_for_test`] reads back.
+#[cfg(any(test, feature = "test"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PresentationFacts {
+    pub panel_mode: mbv_ui_model::settings::PanelMode,
+    pub panel_focus: mbv_ui_model::settings::PanelFocus,
+    pub mini_view_focus: mbv_ui_model::settings::PanelFocus,
+    pub queue_column_width: u16,
+    pub list_pane_width: Option<u16>,
+    pub visual_slot_hidden: bool,
+    /// The stored idle volume, as the indicator reads it while nothing plays.
+    pub stored_volume: u8,
+    /// Whether the stored idle mute is on.
+    pub stored_mute: bool,
+    pub settings_destination: mbv_ui_model::settings::SettingsDestination,
 }

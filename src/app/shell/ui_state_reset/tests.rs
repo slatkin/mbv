@@ -5,7 +5,6 @@
 //! cancellation is owned by `tests/lifecycle/lifecycle_launch_restore.rs`.
 
 use super::*;
-use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::playback::DestinationLatestSource;
 use crate::app::tests::render_fixtures::{make_movie_app, make_queue_app};
 use crate::app::{BrowseEvent, BrowseLevel, LibEvent, LibraryTab, TabSelection};
@@ -118,14 +117,13 @@ fn seeded_reset_model() -> (
     usize,
 ) {
     let mut app = make_queue_app(3);
-    app.ui_volume = 37;
-    app.mute_on = true;
-    app.panel_mode = PanelMode::LibraryOnly;
-    app.queue_column_width = 62;
-    app.list_pane_width = Some(54);
-    app.visual_slot_hidden = true;
-    app.local_view.set_cursor(2);
-    app.libs.push(second_movies_library());
+    app.seed_idle_volume_and_mute_for_test(37, true);
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+    app.set_queue_column_width(62);
+    app.set_list_pane_width(Some(54));
+    app.set_visual_slot_hidden_for_test(true);
+    app.move_local_queue_cursor_for_test(2);
+    app.push_library_for_test(second_movies_library());
     // A committed show pill whose owner reset returns to the state pill: the
     // shell-owned fan-out scope must follow (#745, design D5).
     let abs_library = AudiobookshelfLibrary {
@@ -135,16 +133,18 @@ fn seeded_reset_model() -> (
     };
     let mut abs_state = AudiobookshelfBrowseState::new(abs_library.clone());
     abs_state.committed_show_pill = Some("show-a".into());
-    app.audiobookshelf_libraries.push(abs_library);
-    app.audiobookshelf_browse.push(abs_state);
+    app.seed_audiobookshelf_libraries_for_test(vec![abs_library]);
+    app.seed_audiobookshelf_browse_for_test(vec![abs_state]);
     // Non-default root presentation plus a drilled-in level.
-    app.libs[0].nav_stack[0].letter_filter = Some(LetterFilter::default_filter_for_kind(
-        LetterFilterKind::from_collection_type("movies"),
-    ));
-    app.libs[0].nav_stack[0].unplayed_only = true;
-    app.libs[0].nav_stack[0].sort_by = "DateCreated".into();
-    app.libs[0].nav_stack[0].resting = BrowseResting::new(1, 4);
-    app.libs[0].nav_stack.push(deep_level());
+    app.edit_library_for_test(0, |tab| {
+        tab.nav_stack[0].letter_filter = Some(LetterFilter::default_filter_for_kind(
+            LetterFilterKind::from_collection_type("movies"),
+        ));
+        tab.nav_stack[0].unplayed_only = true;
+        tab.nav_stack[0].sort_by = "DateCreated".into();
+        tab.nav_stack[0].resting = BrowseResting::new(1, 4);
+        tab.nav_stack.push(deep_level());
+    });
     // Saved presentation state that the reset must forget without deleting
     // unrelated values.
     std::fs::write(
@@ -187,7 +187,7 @@ fn seeded_reset_model() -> (
         .expect("active owner")
         .apply_position(1, 3);
     queue_component_mut(&mut model).set_cursor(&QueueCursorUpdate::Set(2));
-    let queue_len_before = model.app.local_view.total_queue_len();
+    let queue_len_before = model.app.local_queue_len_for_test();
     assert_eq!(owner_cursor(&model, &key1), 1);
     assert_eq!(owner_cursor(&model, &key2), 1);
     assert_eq!(queue_component(&model).test_cursor(), 2);
@@ -195,21 +195,26 @@ fn seeded_reset_model() -> (
 }
 
 fn assert_default_presentation(model: &Model, key1: &LibraryKey, key2: &LibraryKey) {
-    assert_eq!(model.app.tab, TabSelection::Home);
-    assert_eq!(model.app.launch_restore, LaunchRestore::Done);
-    assert_eq!(model.app.panel_mode, PanelMode::Both);
-    assert_eq!(model.app.panel_focus, PanelFocus::Library);
-    assert_eq!(model.app.mini_view_focus, PanelFocus::Queue);
-    assert_eq!(model.app.queue_column_width, LEFT_WIDTH_DEFAULT);
-    assert!(model.app.list_pane_width.is_none());
-    assert!(!model.app.visual_slot_hidden);
+    let facts = model.app.presentation_facts_for_test();
+    assert_eq!(model.app.active_tab(), TabSelection::Home);
+    assert!(
+        model.app.launch_restore_settled_for_test(),
+        "launch restoration settles"
+    );
+    assert_eq!(facts.panel_mode, PanelMode::Both);
+    assert_eq!(facts.panel_focus, PanelFocus::Library);
+    assert_eq!(facts.mini_view_focus, PanelFocus::Queue);
+    assert_eq!(facts.queue_column_width, LEFT_WIDTH_DEFAULT);
+    assert!(facts.list_pane_width.is_none());
+    assert!(!facts.visual_slot_hidden);
     assert_eq!(model.tab_scroll, 0);
-    assert_eq!(model.app.settings_destination, SettingsDestination::Main);
+    assert_eq!(facts.settings_destination, SettingsDestination::Main);
     // Browse roots: deep levels dropped, root fields back to defaults,
     // fetched content retained.
-    assert_eq!(model.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(model.app.libs[1].nav_stack.len(), 1);
-    let root = &model.app.libs[0].nav_stack[0];
+    let libraries = model.app.emby_libraries();
+    assert_eq!(libraries[0].nav_stack.len(), 1);
+    assert_eq!(libraries[1].nav_stack.len(), 1);
+    let root = &libraries[0].nav_stack[0];
     assert_eq!(root.sort_by, "SortName");
     assert_eq!(root.sort_order, "Ascending");
     assert!(!root.unplayed_only);
@@ -223,7 +228,7 @@ fn assert_default_presentation(model: &Model, key1: &LibraryKey, key2: &LibraryK
     assert_eq!(queue_component(model).test_cursor(), 0);
     // The podcast owner's default state pill aligns the shell fan-out scope.
     assert!(
-        model.app.audiobookshelf_browse[0]
+        model.app.audiobookshelf_browse_states_for_test()[0]
             .committed_show_pill
             .is_none()
     );
@@ -234,10 +239,11 @@ fn assert_protected_state(
     acknowledged: &DestinationLatestSource,
     queue_len_before: usize,
 ) {
-    assert_eq!(model.app.ui_volume, 37);
-    assert!(model.app.mute_on);
-    assert_eq!(model.app.local_view.total_queue_len(), queue_len_before);
-    assert_eq!(model.app.local_view.cursor(), 2);
+    let facts = model.app.presentation_facts_for_test();
+    assert_eq!(facts.stored_volume, 37);
+    assert!(facts.stored_mute);
+    assert_eq!(model.app.local_queue_len_for_test(), queue_len_before);
+    assert_eq!(model.app.local_queue_cursor_for_test(), 2);
     assert!(
         model
             .acknowledged_home_latest_sources
@@ -297,23 +303,24 @@ fn stale_root_level() -> BrowseLevel {
 fn late_root_browse_completion_after_reset_keeps_reset_defaults() {
     let mut app = make_movie_app();
     // A root load in flight when the reset runs, carrying pre-reset intent.
-    app.libs[0].nav_stack[0].loading = true;
-    app.libs[0].nav_stack[0].sort_by = "DateCreated".into();
-    app.libs[0].nav_stack[0].sort_order = "Descending".into();
-    app.libs[0].nav_stack[0].unplayed_only = true;
+    app.edit_library_for_test(0, |tab| {
+        tab.nav_stack[0].loading = true;
+        tab.nav_stack[0].sort_by = "DateCreated".into();
+        tab.nav_stack[0].sort_order = "Descending".into();
+        tab.nav_stack[0].unplayed_only = true;
+    });
     let mut model = Model::new(app);
 
     model.reset_ui_state();
-    model.app.handle_lib_event(
-        LibEvent::Browse(BrowseEvent::Loaded {
+    model
+        .app
+        .apply_lib_event_for_test(LibEvent::Browse(BrowseEvent::Loaded {
             lib_idx: 0,
             parent_id: "lib-movies".into(),
             level: Box::new(stale_root_level()),
-        }),
-        None,
-    );
+        }));
 
-    let root = &model.app.libs[0].nav_stack[0];
+    let root = &model.app.emby_libraries()[0].nav_stack[0];
     assert_eq!(root.sort_by, "SortName");
     assert_eq!(root.sort_order, "Ascending");
     assert!(!root.unplayed_only);

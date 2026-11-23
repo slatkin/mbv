@@ -6,9 +6,8 @@
 //! tick-integration or render tests.
 
 use super::*;
-use crate::app::tests::QueueViewTestExt;
+use crate::app::LibraryTab;
 use crate::app::tests::render_fixtures::make_music_group_app;
-use crate::app::{LibraryTab, PanelFocus};
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::library_panel::owner::LibraryContentOwner;
 use mbv_emby_model::test_support::make_item;
@@ -75,14 +74,15 @@ fn painted_music_offset(model: &mut Model) -> usize {
 #[test]
 fn narrow_enter_requests_album_activation() {
     let mut model = Model::new(make_music_group_app());
-    model.app.panel_focus = PanelFocus::Library;
+    model
+        .app
+        .set_panel_focus_for_test(crate::app::PanelFocus::Library);
     // The narrow breakpoint needs the queue column: with the empty-queue
     // column hidden (change `hide-empty-queue-column`, D1) an empty
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .local_view
-        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
     assert!(!crate::app::shell::tv_wide::is_right_panel_wide(
         &model.app,
@@ -116,8 +116,7 @@ fn narrow_enter_requests_album_activation() {
     track.id = "track-1".into();
     model
         .app
-        .album_tracks_cache
-        .insert("album-1".into(), vec![track]);
+        .seed_album_tracks_for_test(&[("album-1", &[("track-1", "Track One", 1, 0)])]);
     model.sync_mounted_surfaces();
     assert_eq!(
         model
@@ -136,9 +135,10 @@ fn wide_enter_enters_inline_track_focus() {
     track.id = "track-1".into();
     model
         .app
-        .album_tracks_cache
-        .insert("album-1".into(), vec![track]);
-    model.app.panel_focus = PanelFocus::Library;
+        .seed_album_tracks_for_test(&[("album-1", &[("track-1", "Track One", 1, 0)])]);
+    model
+        .app
+        .set_panel_focus_for_test(crate::app::PanelFocus::Library);
     wide(&mut model);
     model.sync_mounted_surfaces();
     assert!(crate::app::shell::tv_wide::is_right_panel_wide(
@@ -160,16 +160,16 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
     track.id = "track-1".into();
     model
         .app
-        .album_tracks_cache
-        .insert("album-1".into(), vec![track]);
-    model.app.panel_focus = PanelFocus::Library;
+        .seed_album_tracks_for_test(&[("album-1", &[("track-1", "Track One", 1, 0)])]);
+    model
+        .app
+        .set_panel_focus_for_test(crate::app::PanelFocus::Library);
     // The narrow breakpoint needs the queue column: with the empty-queue
     // column hidden (change `hide-empty-queue-column`, D1) an empty
     // displayed queue would widen the library into the wide breakpoint.
     model
         .app
-        .local_view
-        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
+        .seed_local_queue_for_test(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
     assert!(!crate::app::shell::tv_wide::is_right_panel_wide(
         &model.app,
@@ -200,7 +200,9 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
 #[test]
 fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
     let mut model = Model::new(make_music_group_app());
-    model.app.panel_focus = PanelFocus::Library;
+    model
+        .app
+        .set_panel_focus_for_test(crate::app::PanelFocus::Library);
     wide(&mut model);
     model.sync_mounted_surfaces();
     expand_and_descend_to_first_album(&mut model);
@@ -225,8 +227,7 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
     track.id = "track-1".into();
     model
         .app
-        .album_tracks_cache
-        .insert("album-1".into(), vec![track]);
+        .seed_album_tracks_for_test(&[("album-1", &[("track-1", "Track One", 1, 0)])]);
     model.push_music_workspace_content();
     assert!(
         model.test_music_owner().track_focused(),
@@ -243,9 +244,9 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
 
 fn music_library_app_with_three_albums() -> crate::app::App {
     let mut app = crate::app::tests::make_app_stub();
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
-    app.music_levels = vec!["group".into(), "album".into()];
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(crate::app::PanelFocus::Library);
+    app.seed_grouped_music_levels_for_test();
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.is_folder = true;
@@ -262,7 +263,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
             album
         })
         .collect();
-    app.libs.push(LibraryTab {
+    app.push_library_for_test(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
                 rows: ServerRows::new(1),
@@ -332,7 +333,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
     let key = music_key();
     assert!(model.library_panel_has_owner(&key));
 
-    assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), 0);
+    assert_eq!(model.app.emby_library_level_cursor(0, 1), Some(0));
     assert_eq!(model.test_music_owner().album_cursor(), 0);
 
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
@@ -352,8 +353,8 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         "owner cursor must diverge"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[1].resting().cursor(),
-        0,
+        model.app.emby_library_level_cursor(0, 1),
+        Some(0),
         "App cursor must stay put"
     );
 
@@ -362,23 +363,26 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
     // active owner, but the panel keeps it retained.
     let mut track = make_item("Track 1", "Audio");
     track.id = "track-1".into();
-    model.app.libs[0].nav_stack.push(BrowseLevel {
-        rows: ServerRows::new(1),
-        parent_id: "album-0".into(),
-        title: "Tracks".into(),
-        items: vec![track],
+    model.app.push_library_level_for_test(
+        0,
+        BrowseLevel {
+            rows: ServerRows::new(1),
+            parent_id: "album-0".into(),
+            title: "Tracks".into(),
+            items: vec![track],
 
-        resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
-        item_types: None,
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        loading: false,
-        all_items: None,
-        letter_filter: None,
-        tv_content_mode: None,
-        music_grouping: None,
-    });
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        },
+    );
     model.sync_mounted_surfaces();
     assert!(!model.app.is_viewing_album_folders(0));
     assert!(
@@ -401,8 +405,8 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         "the divergent owner-local album cursor must survive the drill-and-return round trip"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[1].resting().cursor(),
-        0,
+        model.app.emby_library_level_cursor(0, 1),
+        Some(0),
         "App cursor stays at its own value throughout"
     );
 }
@@ -419,7 +423,7 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
         let mut album = make_item(&format!("Album {index}"), "MusicAlbum");
         album.id = format!("album-{index}");
         album.artist = "Alpha".into();
-        app.libs[0].nav_stack[1].items.push(album);
+        app.edit_library_level_for_test(0, 1, |level| level.items.push(album));
     }
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
@@ -454,7 +458,7 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
 
     // Tab away to Home: Music is no longer the active owner, but stays
     // retained (its library is still in the catalog).
-    model.app.tab = TabSelection::Home;
+    model.app.seed_active_tab_for_test(TabSelection::Home);
     model.sync_mounted_surfaces();
     assert!(model.music_owner().is_none());
     assert!(
@@ -463,7 +467,9 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
     );
 
     // Tab back: the same owner re-activates with its cursor/scroll intact.
-    model.app.tab = TabSelection::EmbyLibrary(0);
+    model
+        .app
+        .seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     model.sync_mounted_surfaces();
     assert_eq!(
         model.test_music_owner().album_cursor(),
@@ -500,9 +506,9 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
 
 fn music_two_artist_app() -> crate::app::App {
     let mut app = crate::app::tests::make_app_stub();
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
-    app.music_levels = vec!["group".into(), "album".into()];
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(crate::app::PanelFocus::Library);
+    app.seed_grouped_music_levels_for_test();
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.is_folder = true;
@@ -518,7 +524,7 @@ fn music_two_artist_app() -> crate::app::App {
     pf.id = "album-pf".into();
     pf.artist = "Pizzicato Five".into();
     pf.is_folder = true;
-    app.libs.push(LibraryTab {
+    app.push_library_for_test(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
                 rows: ServerRows::new(1),
@@ -572,7 +578,7 @@ fn recursive_album_activation_reanchors_the_tree_to_the_activated_album() {
         Some("Aaliyah"),
     );
 
-    let nav_stack = std::mem::take(&mut model.app.libs[0].nav_stack);
+    let nav_stack = model.app.take_library_levels_for_test(0);
     model.on_recursive_album_activated("lib-music".into(), nav_stack);
     model.push_music_workspace_content();
 
@@ -609,7 +615,7 @@ fn music_group_switch_reanchors_to_the_new_levels_first_album() {
     // A pill/group switch pops the album level and pushes a fresh one whose
     // resting cursor names its first album; the typed level-start re-anchor
     // resolves that to a stable album id once the content is present.
-    model.app.libs[0].nav_stack[1].set_resting_cursor(0);
+    model.app.set_library_level_cursor_for_test(0, 1, 0);
     model.reanchor_music_owner_to_level_start();
     model.push_music_workspace_content();
 

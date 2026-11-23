@@ -8,7 +8,6 @@ use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_msg::{MusicTreeAction, ShellRequest};
-use std::sync::{Arc, Mutex};
 
 /// Record a terminal size on a test `Model` the way the shell records one,
 /// so its single-panel fact matches the width.
@@ -50,10 +49,7 @@ fn ui_root_router_command_opens_help() {
 #[test]
 fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     let mut model = Model::new(make_app_stub());
-    model
-        .app
-        .player
-        .update_status(|status| status.active = true);
+    model.app.seed_playing_status_for_test(0, 0);
     // A focused media list holding an active Visual selection consumes Space
     // for its row-local toggle; the shell sees the leaf's consumption only.
     model.visual_selection = Some((PanelFocus::Library, 2));
@@ -149,7 +145,7 @@ fn mocked_music_action_model(
     http: &MockHttp,
 ) -> (Model, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut app, command_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
-    let mut config = app.config.lock().unwrap().clone();
+    let mut config = app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
     install_test_emby(&mut app, config);
     let client = app
@@ -161,18 +157,19 @@ fn mocked_music_action_model(
         .unwrap()
         .clone()
         .with_test_agent(http.agent());
-    app.emby_runtime =
-        crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+    app.adopt_ready_emby_client_for_test(client);
 
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "music-library".into();
     library.collection_type = "music".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
+    app.push_library_for_test(LibraryTab::new(library));
     // Keep Model::new on Home so mounting does not start an unrelated browse;
     // the shell action below still exercises the active Emby-library route.
     let mut model = Model::new(app);
-    model.app.tab = TabSelection::EmbyLibrary(0);
+    model
+        .app
+        .seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     while command_rx.try_recv().is_ok() {}
     (model, command_rx)
 }

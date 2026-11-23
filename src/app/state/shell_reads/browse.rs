@@ -283,4 +283,64 @@ impl App {
     pub fn feeds_state(&self) -> &FeedTabState {
         &self.feed_tab
     }
+
+    /// The local queue's projected view, as a UI-state reset leaves it: a
+    /// Client's test asserts what the reset kept and what it rewrote through
+    /// the same view the Client projects.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn local_queue_view_for_test(&self) -> &crate::app::QueueView {
+        &self.local_view
+    }
+
+    /// The number of browse levels `index`'s Emby library has open: `0`
+    /// before it opens, `1` at its root.
+    #[must_use]
+    pub fn emby_library_level_count(&self, index: usize) -> usize {
+        self.libs.get(index).map_or(0, |tab| tab.nav_stack.len())
+    }
+
+    /// The resting cursor of `level`'s browse level in `index`'s Emby
+    /// library: the position the shell's own browse state holds, which the
+    /// panel's owner selection is re-pointed from. `None` for a library or a
+    /// level that is not open.
+    #[must_use]
+    pub fn emby_library_level_cursor(&self, index: usize, level: usize) -> Option<usize> {
+        Some(
+            self.libs
+                .get(index)?
+                .nav_stack
+                .get(level)?
+                .resting()
+                .cursor(),
+        )
+    }
+
+    /// The retained Audiobookshelf book states, one per stored library, as a
+    /// landed catalog leaves them.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn audiobookshelf_book_states_for_test(&self) -> &[AudiobookshelfBookBrowseState] {
+        &self.audiobookshelf_book_browse
+    }
+
+    /// The overlay request the core holds for its Client to mount, as a
+    /// Client's own action left it: whether one is pending, and which.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pending_overlay_request_for_test(
+        &self,
+    ) -> Option<&mbv_ui_model::overlay::OverlayRequest> {
+        self.pending_overlay.as_ref()
+    }
+
+    /// The retained Audiobookshelf browse states, one per stored library, as
+    /// a UI-state reset leaves them.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn audiobookshelf_browse_states_for_test(
+        &self,
+    ) -> &[mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState] {
+        &self.audiobookshelf_browse
+    }
 }

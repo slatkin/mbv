@@ -49,8 +49,11 @@ fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
         panic!("Multiselect should emit a shell request");
     };
     model.handle_multiselect_commit();
+    let hidden_libraries = model
+        .app
+        .config_for_test(|config| config.hidden_libraries.clone());
     assert_eq!(
-        model.app.config.lock().unwrap().hidden_libraries,
+        hidden_libraries,
         vec!["movies".to_string()],
         "hidden selection must persist to config"
     );
@@ -192,18 +195,22 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
     use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
     let mut model = Model::new(make_app_stub());
-    model.app.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(
-        ContextMenu {
-            anchor: ContextMenuAnchor::SelectedItem(mbv_ui_model::settings::PanelFocus::Library),
-            entries: vec![ContextMenuEntry {
-                label: "Play",
-                action: Some(ContextAction::Play),
-                key_hint: None,
-            }],
-            cursor: 0,
-            bounds: None,
-        },
-    ));
+    model
+        .app
+        .seed_pending_overlay_for_test(mbv_ui_model::overlay::OverlayRequest::ContextMenu(
+            ContextMenu {
+                anchor: ContextMenuAnchor::SelectedItem(
+                    mbv_ui_model::settings::PanelFocus::Library,
+                ),
+                entries: vec![ContextMenuEntry {
+                    label: "Play",
+                    action: Some(ContextAction::Play),
+                    key_hint: None,
+                }],
+                cursor: 0,
+                bounds: None,
+            },
+        ));
     model.sync_modal_requests();
     let id = ComponentId::Overlay(OverlayId::ContextMenu);
     assert!(model.application.mounted(&id));
@@ -250,8 +257,10 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
 fn my_languages_commit_writes_prefs_through_to_player() {
     let _state_dir = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
-    model.app.config.lock().unwrap().subtitle_lang = "English".into(); // selected: stays
-    model.app.config.lock().unwrap().audio_lang = "jpn".into(); // not selected: cleared
+    model.app.config_for_test(|config| {
+        config.subtitle_lang = "English".into(); // selected: stays
+        config.audio_lang = "jpn".into(); // not selected: cleared
+    });
     let id = ComponentId::Popup(PopupId::Multiselect);
     model
         .application
@@ -270,20 +279,25 @@ fn my_languages_commit_writes_prefs_through_to_player() {
 
     model.handle_multiselect_commit();
 
+    let prefs = model.app.player_prefs_snapshot_for_test();
+    let (my_languages, subtitle_lang, audio_lang) = model.app.config_for_test(|config| {
+        (
+            config.my_languages.clone(),
+            config.subtitle_lang.clone(),
+            config.audio_lang.clone(),
+        )
+    });
     assert_eq!(
-        model.app.config.lock().unwrap().my_languages,
+        my_languages,
         vec!["English".to_string()],
         "committed selection persists to config"
     );
-    let prefs = model.app.player.subtitle_prefs_snapshot();
     assert_eq!(
-        prefs.subtitle_lang,
-        model.app.config.lock().unwrap().subtitle_lang,
+        prefs.subtitle_lang, subtitle_lang,
         "player subtitle prefs must mirror committed config"
     );
     assert_eq!(
-        prefs.audio_lang,
-        model.app.config.lock().unwrap().audio_lang,
+        prefs.audio_lang, audio_lang,
         "player audio prefs must mirror committed config"
     );
 }
