@@ -37,15 +37,18 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
     active.is_folder = true;
     active.path = "/videos/active".into();
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        level: Box::new(youtube_root_level(
-            ServerRows::loaded(2, 2),
-            vec![empty, active.clone()],
-            false,
-        )),
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            level: Box::new(youtube_root_level(
+                ServerRows::loaded(2, 2),
+                vec![empty, active.clone()],
+                false,
+            )),
+        }),
+        None,
+    );
 
     active
 }
@@ -88,14 +91,15 @@ fn first_folder_selection_triggers_its_fetch_and_the_result_fills_the_cache(
 
     let mut video = make_item("Episode 1", "Movie");
     video.path = "/videos/active/ep1.mp4".into();
-    app.handle_lib_event(LibEvent::Browse(
-        BrowseEvent::FeedHomeVideoSelectionLoaded {
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::FeedHomeVideoSelectionLoaded {
             lib_idx: 0,
             parent_id: active.id.clone(),
             selection: FeedHomeVideoSelection::Folder(active.id.clone()),
             items: vec![video],
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(!state.loading, "the fetch returned");
@@ -150,12 +154,15 @@ fn refresh_drops_caches_refetches_only_the_current_selection(make_home_video_app
     let video = make_item("Episode 1", "Movie");
     seed_selection_cache(&mut app, FeedHomeVideoSelection::All, vec![video]);
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![active],
-        total_count: 1,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Refreshed {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            items: vec![active],
+            total_count: 1,
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(state.items.is_empty(), "refresh drops the session cache");
@@ -166,14 +173,15 @@ fn refresh_drops_caches_refetches_only_the_current_selection(make_home_video_app
         "the current selection refetches after refresh"
     );
 
-    app.handle_lib_event(LibEvent::Browse(
-        BrowseEvent::FeedHomeVideoSelectionLoaded {
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::FeedHomeVideoSelectionLoaded {
             lib_idx: 0,
             parent_id: "lib-youtube".into(),
             selection: FeedHomeVideoSelection::All,
             items: vec![make_item("Episode 2", "Movie")],
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(state.items.len(), 1, "unloaded pills stay unloaded");
@@ -192,14 +200,15 @@ fn stale_selection_result_is_dropped(make_home_video_app: App) {
     app.select_feed_folder_group(0, 1);
     assert!(app.libs[0].feed_home_video.as_ref().unwrap().loading);
 
-    app.handle_lib_event(LibEvent::Browse(
-        BrowseEvent::FeedHomeVideoSelectionLoaded {
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::FeedHomeVideoSelectionLoaded {
             lib_idx: 0,
             parent_id: "lib-youtube".into(),
             selection: FeedHomeVideoSelection::All,
             items: vec![make_item("Stale", "Movie")],
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(state.items.is_empty(), "the stale result stored nothing");
@@ -241,14 +250,15 @@ fn ensure_feed_home_video_group_level_does_not_push_and_resolves_selected_items(
 /// Sends one per-folder count event for the library root listing (task 3.3):
 /// one fan-out thread's report for one folder.
 fn send_folder_count(app: &mut App, parent_id: &str, folder_id: &str, count: usize) {
-    app.handle_lib_event(LibEvent::Browse(
-        BrowseEvent::FeedHomeVideoFolderCountLoaded {
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::FeedHomeVideoFolderCountLoaded {
             lib_idx: 0,
             parent_id: parent_id.to_string(),
             folder_id: folder_id.to_string(),
             count: Some(count),
-        },
-    ));
+        }),
+        None,
+    );
 }
 
 /// Contract (tasks.md 3.3, spec "Watched-only folder keeps its pill"): the
@@ -280,19 +290,22 @@ fn folder_counts_event_gives_a_watched_only_folder_its_pill(make_home_video_app:
 #[rstest]
 fn separate_count_events_accumulate_into_the_pill_row(make_home_video_app: App) {
     let mut app = make_home_video_app;
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        level: Box::new(youtube_root_level(
-            ServerRows::loaded(3, 3),
-            vec![
-                make_root_folder("folder-a", "Channel A"),
-                make_root_folder("folder-b", "Channel B"),
-                make_root_folder("folder-c", "Channel C"),
-            ],
-            false,
-        )),
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            level: Box::new(youtube_root_level(
+                ServerRows::loaded(3, 3),
+                vec![
+                    make_root_folder("folder-a", "Channel A"),
+                    make_root_folder("folder-b", "Channel B"),
+                    make_root_folder("folder-c", "Channel C"),
+                ],
+                false,
+            )),
+        }),
+        None,
+    );
 
     send_folder_count(&mut app, "lib-youtube", "folder-a", 1);
 
@@ -393,18 +406,21 @@ fn folder_counts_event_resolves_the_pending_pill_index(make_home_video_app: App)
 fn out_of_order_count_arrivals_do_not_misbind_a_restored_pill_index(make_home_video_app: App) {
     let mut app = make_home_video_app;
     // Listing order: A first, B second — the restored index 1 names A's pill.
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        level: Box::new(youtube_root_level(
-            ServerRows::loaded(2, 2),
-            vec![
-                make_root_folder("folder-a", "Channel A"),
-                make_root_folder("folder-b", "Channel B"),
-            ],
-            false,
-        )),
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            level: Box::new(youtube_root_level(
+                ServerRows::loaded(2, 2),
+                vec![
+                    make_root_folder("folder-a", "Channel A"),
+                    make_root_folder("folder-b", "Channel B"),
+                ],
+                false,
+            )),
+        }),
+        None,
+    );
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
     state.restored_group = Some(1);
     // The spawn's quiescence accounting: two owed reports.
@@ -493,14 +509,15 @@ fn selecting_an_uncached_pill_while_a_fetch_is_in_flight_hands_loading_over(
 
     // The old selection's late result is stale-dropped and leaves the
     // hand-off intact.
-    app.handle_lib_event(LibEvent::Browse(
-        BrowseEvent::FeedHomeVideoSelectionLoaded {
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::FeedHomeVideoSelectionLoaded {
             lib_idx: 0,
             parent_id: "lib-youtube".into(),
             selection: FeedHomeVideoSelection::All,
             items: vec![make_item("Stale", "Movie")],
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(state.items.is_empty(), "the stale result stored nothing");
@@ -528,19 +545,22 @@ fn make_root_folder(id: &str, name: &str) -> EmbyItem {
 #[rstest]
 fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app: App) {
     let mut app = make_home_video_app;
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        level: Box::new(youtube_root_level(
-            ServerRows::loaded(3, 3),
-            vec![
-                make_root_folder("folder-a", "Channel A"),
-                make_root_folder("folder-b", "Channel B"),
-                make_root_folder("folder-c", "Channel C"),
-            ],
-            false,
-        )),
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            level: Box::new(youtube_root_level(
+                ServerRows::loaded(3, 3),
+                vec![
+                    make_root_folder("folder-a", "Channel A"),
+                    make_root_folder("folder-b", "Channel B"),
+                    make_root_folder("folder-c", "Channel C"),
+                ],
+                false,
+            )),
+        }),
+        None,
+    );
     for id in ["folder-a", "folder-b", "folder-c"] {
         seed_folder_counts(&mut app, id, 1);
     }
@@ -548,12 +568,15 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
         state.selection = FeedHomeVideoSelection::Folder("folder-c".into());
     }
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![make_root_folder("folder-a", "Channel A")],
-        total_count: 3,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Refreshed {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            items: vec![make_root_folder("folder-a", "Channel A")],
+            total_count: 3,
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(
@@ -562,15 +585,18 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
         "the selection outlives the partial listing"
     );
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::PageAppended {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![
-            make_root_folder("folder-b", "Channel B"),
-            make_root_folder("folder-c", "Channel C"),
-        ],
-        total_count: 3,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::PageAppended {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            items: vec![
+                make_root_folder("folder-b", "Channel B"),
+                make_root_folder("folder-c", "Channel C"),
+            ],
+            total_count: 3,
+        }),
+        None,
+    );
 
     assert_eq!(
         app.feed_home_video_counted_folders(0)
@@ -603,12 +629,15 @@ fn a_full_refresh_invalidates_the_folder_counts_so_the_fan_out_requeries(make_ho
     let active = seed_home_video_root_loaded(&mut app);
     seed_folder_counts(&mut app, &active.id, 2);
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![active],
-        total_count: 1,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Refreshed {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            items: vec![active],
+            total_count: 1,
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(
@@ -644,12 +673,15 @@ fn a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts(make_ho
     seed_folder_counts(&mut app, "folder-b", 1);
     seed_folder_counts(&mut app, "folder-c", 1);
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![make_root_folder("folder-a", "Channel A")],
-        total_count: 3,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Refreshed {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            items: vec![make_root_folder("folder-a", "Channel A")],
+            total_count: 3,
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(
@@ -692,22 +724,28 @@ fn the_listing_completion_after_a_partial_refresh_requeries_every_folder(make_ho
     seed_folder_counts(&mut app, "folder-b", 1);
     seed_folder_counts(&mut app, "folder-c", 1);
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![make_root_folder("folder-a", "Channel A")],
-        total_count: 3,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Refreshed {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            items: vec![make_root_folder("folder-a", "Channel A")],
+            total_count: 3,
+        }),
+        None,
+    );
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::PageAppended {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![
-            make_root_folder("folder-b", "Channel B"),
-            make_root_folder("folder-c", "Channel C"),
-        ],
-        total_count: 3,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::PageAppended {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            items: vec![
+                make_root_folder("folder-b", "Channel B"),
+                make_root_folder("folder-c", "Channel C"),
+            ],
+            total_count: 3,
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(
@@ -748,14 +786,15 @@ fn listing_completion_keeps_loading_while_the_selection_fetch_is_in_flight(
         "the in-flight selection fetch owns the loading flag"
     );
 
-    app.handle_lib_event(LibEvent::Browse(
-        BrowseEvent::FeedHomeVideoSelectionLoaded {
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::FeedHomeVideoSelectionLoaded {
             lib_idx: 0,
             parent_id: "lib-youtube".into(),
             selection: FeedHomeVideoSelection::All,
             items: vec![make_item("Episode 1", "Movie")],
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(!state.loading, "the fetch's own result clears the flag");

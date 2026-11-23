@@ -215,7 +215,7 @@ impl Model {
             }) => *lib_idx,
             _ => unreachable!("restore handler called with a different library event"),
         };
-        self.app.handle_lib_event(ev);
+        self.app.handle_lib_event(ev, None);
         let latest = self.app.libs.get(lib_idx).and_then(|lib| {
             let level = lib.nav_stack.last()?;
             (lib.library.collection_type == "tvshows"

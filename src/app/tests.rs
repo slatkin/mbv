@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
+
 // The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
 // to `crate::app::shell::test_support` (task 4.7): they write the shell
 // `Model`'s size and push the single-panel fact the core reads.

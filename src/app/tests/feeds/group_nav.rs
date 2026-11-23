@@ -301,15 +301,18 @@ fn listing_completion_resolves_the_pending_pill_index_into_the_selection() {
         ..LibraryTab::new(library)
     });
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        level: Box::new(youtube_root_level(
-            ServerRows::loaded(1, 1),
-            vec![folder.clone()],
-            false,
-        )),
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            level: Box::new(youtube_root_level(
+                ServerRows::loaded(1, 1),
+                vec![folder.clone()],
+                false,
+            )),
+        }),
+        None,
+    );
 
     assert_eq!(
         app.libs[0]

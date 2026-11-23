@@ -1,3 +1,4 @@
+use crate::app::dispatch::library::stores::ClientLibraryStores;
 use crate::app::state::events::BrowseEvent;
 use crate::app::{App, BrowseLevel};
 use mbv_emby_model::EmbyItem;
@@ -5,7 +6,11 @@ use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use mbv_ui_model::sort_filter::LIBRARY_PILL_THRESHOLD;
 
 impl App {
-    pub(super) fn handle_browse_event(&mut self, ev: BrowseEvent) {
+    pub(super) fn handle_browse_event(
+        &mut self,
+        ev: BrowseEvent,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) {
         match ev {
             BrowseEvent::Loaded {
                 lib_idx,
@@ -39,9 +44,23 @@ impl App {
                 parent_id,
                 selection,
                 items,
-            } => {
-                self.handle_feed_home_video_selection_loaded(lib_idx, &parent_id, selection, items);
-            }
+            } => match stores {
+                // The landed target's store work passes straight down: the
+                // handler reads the Client's wanted-selection answer and
+                // raises `FeedTargetLanded` on the same `stores`.
+                Some(stores) => {
+                    self.handle_feed_home_video_selection_loaded(
+                        lib_idx,
+                        &parent_id,
+                        selection,
+                        items,
+                        Some(stores),
+                    );
+                }
+                None => self.handle_feed_home_video_selection_loaded(
+                    lib_idx, &parent_id, selection, items, None,
+                ),
+            },
             BrowseEvent::FeedHomeVideoFolderCountLoaded {
                 lib_idx,
                 parent_id,

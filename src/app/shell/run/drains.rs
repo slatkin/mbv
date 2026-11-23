@@ -111,12 +111,14 @@ impl Model {
                         &parent_id,
                         &level,
                     );
-                    self.app
-                        .handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+                    self.app.handle_lib_event(
+                        LibEvent::Browse(BrowseEvent::Loaded {
                             lib_idx,
                             parent_id,
                             level,
-                        }));
+                        }),
+                        None,
+                    );
                     if let Some((library_id, mode, items)) = tv_snapshot {
                         self.apply_tv_root_completion(&library_id, mode.as_ref(), items);
                     }
@@ -146,7 +148,7 @@ impl Model {
                     self.push_inline_search_content();
                 }
                 LibEvent::Series(SeriesEvent::DetailFetched { .. }) => {
-                    self.app.handle_lib_event(ev);
+                    self.app.handle_lib_event(ev, None);
                     self.push_tv_workspace_content();
                 }
                 // Artist detail completions (tasks 6.1/6.2): the App arms
@@ -157,7 +159,7 @@ impl Model {
                     MusicEvent::ArtistTracksFetched { .. }
                     | MusicEvent::ArtistArtworkFetched { .. },
                 ) => {
-                    self.app.handle_lib_event(ev);
+                    self.app.handle_lib_event(ev, None);
                 }
                 ev => self.handle_inline_search_lib_event(ev),
             }

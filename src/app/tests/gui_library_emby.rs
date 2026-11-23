@@ -103,6 +103,25 @@ fn emby_app(http: &MockHttp, collection_type: &str, library_id: &str, name: &str
     app
 }
 
+/// The GUI's library stores as the core's library event seam takes them: the
+/// same answers the GUI's own store reader gives, so a simulated GUI tick
+/// applies the App half and the GUI half together.
+#[derive(Debug)]
+pub(super) struct TestGuiLibraryStores;
+
+impl ClientLibraryStores for TestGuiLibraryStores {
+    fn wants_feed_target(
+        &self,
+        app: &App,
+        lib_idx: usize,
+        target: &FeedHomeVideoSelection,
+    ) -> bool {
+        app.gui_emby_feed_wants_target(lib_idx, target)
+    }
+
+    fn apply(&mut self, _app: &mut App, _effect: ClientLibraryEffect) {}
+}
+
 /// Land one fetch completion the way the GUI core tick's drain applies it:
 /// the event rides the lib channel exactly as the fetch worker sends it, and
 /// `App::drain_lib_event`'s own handler applies the App-side half.
@@ -112,7 +131,7 @@ fn land(app: &mut App) {
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("the fetch completed");
-    app.handle_lib_event(event);
+    app.handle_lib_event(event, Some(&mut TestGuiLibraryStores));
 }
 
 /// Land events until the root level's listing has landed: the open spawns

@@ -22,6 +22,7 @@ use mbv_ui_model::feed::FeedHomeVideoTarget;
 use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
+use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::state::events::{FeedHomeVideoSelectionFailed, LibEvent};
 use crate::app::{App, FeedHomeVideoSelection};
 
@@ -395,7 +396,7 @@ impl App {
     /// claimed wants nothing, so the TUI's own stale-drop rule alone applies
     /// to its results. All is one compare, and a checked set is the key set's
     /// own compare, so no target list is built.
-    pub(in crate::app) fn gui_emby_feed_wants_target(
+    pub fn gui_emby_feed_wants_target(
         &self,
         lib_idx: usize,
         target: &FeedHomeVideoSelection,
@@ -424,6 +425,7 @@ impl App {
     pub(in crate::app) fn handle_feed_home_video_selection_failed(
         &mut self,
         event: FeedHomeVideoSelectionFailed,
+        stores: Option<&mut dyn ClientLibraryStores>,
     ) {
         let FeedHomeVideoSelectionFailed {
             lib_idx,
@@ -438,13 +440,6 @@ impl App {
         {
             state.fetching = None;
         }
-        if let Some(claim) = self
-            .gui_emby_libs
-            .get_mut(&lib_idx)
-            .and_then(|selection| selection.feed_claim.as_mut())
-        {
-            claim.failed.insert(selection);
-        }
         tracing::info!(
             name: "feed.home_video.selection_fetch_failed",
             target: "gui_library",
@@ -453,6 +448,12 @@ impl App {
             "the feed-group target's items failed to load"
         );
         self.log_feed_home_video_state(lib_idx, "selection_fetch_failed");
+        // The Client's terminal failure mark is the last thing this arm does,
+        // exactly as the direct claim write that used to sit above was.
+        self.apply_library_effects(
+            stores,
+            &[ClientLibraryEffect::FeedTargetFailed { lib_idx, selection }],
+        );
     }
 
     /// Start `lib_idx`'s root-list fetch when the store holds no list (row

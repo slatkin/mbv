@@ -156,7 +156,7 @@ fn land_one_group(app: &mut App) {
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("the group's album fetch completed");
-    app.handle_lib_event(event);
+    app.handle_lib_event(event, None);
 }
 
 #[test]

@@ -300,13 +300,14 @@ fn late_root_browse_completion_after_reset_keeps_reset_defaults() {
     let mut model = Model::new(app);
 
     model.reset_ui_state();
-    model
-        .app
-        .handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+    model.app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Loaded {
             lib_idx: 0,
             parent_id: "lib-movies".into(),
             level: Box::new(stale_root_level()),
-        }));
+        }),
+        None,
+    );
 
     let root = &model.app.libs[0].nav_stack[0];
     assert_eq!(root.sort_by, "SortName");

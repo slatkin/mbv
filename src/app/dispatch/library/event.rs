@@ -1,3 +1,4 @@
+use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::state::app_struct::{LevelFillState, MAX_ALBUM_TRACKS_CACHE, insert_capped};
 use crate::app::state::events::{
     LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
@@ -49,10 +50,20 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
+    pub(in crate::app) fn handle_lib_event(
+        &mut self,
+        ev: LibEvent,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) {
         match ev {
-            LibEvent::Browse(event) => self.handle_browse_event(event),
-            LibEvent::Music(event) => self.handle_music_event(event),
+            LibEvent::Browse(event) => match stores {
+                // The Browse tree hands the Client's stores straight down to
+                // the one arm that uses them (`FeedHomeVideoSelectionLoaded`);
+                // the other arms take none.
+                Some(stores) => self.handle_browse_event(event, Some(stores)),
+                None => self.handle_browse_event(event, None),
+            },
+            LibEvent::Music(event) => self.handle_music_event(event, stores),
             LibEvent::Series(event) => self.handle_series_event(event),
             LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
@@ -74,7 +85,7 @@ impl App {
             // as the `LibEvent::Error` arm this fetch used to send did.
             LibEvent::FeedHomeVideoSelectionFailed(event) => {
                 self.handle_error(&event.error);
-                self.handle_feed_home_video_selection_failed(event);
+                self.handle_feed_home_video_selection_failed(event, stores);
             }
             // A `ModelContent` event's App-side half is
             // `handle_model_content_event`: both Clients' drains run it, and
@@ -84,7 +95,7 @@ impl App {
         }
     }
 
-    fn handle_music_event(&mut self, ev: MusicEvent) {
+    fn handle_music_event(&mut self, ev: MusicEvent, stores: Option<&mut dyn ClientLibraryStores>) {
         match ev {
             MusicEvent::AlbumIndexBuilt { library_id, result } => {
                 self.handle_album_index_built(library_id, result);
@@ -100,7 +111,13 @@ impl App {
                 for (name, id) in artist_items {
                     self.record_artist_item_id(&name, id);
                 }
-                self.gui_queue_in_view_row_fetches();
+                // The resolver gained sources the rows resolve through, so
+                // each Client re-queues the artwork its in-view rows lack.
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::RowArtSourcesChanged],
+                );
             }
             MusicEvent::ArtistNameSearched { name, candidates } => {
                 self.handle_gui_artist_name_searched(&name, candidates.as_deref());
@@ -344,6 +361,21 @@ impl App {
         self.pending_navigate_tab_switch = None;
         self.pending_series_landing = None;
         self.flash(format!("Library error: {error}"), ToastSeverity::Error);
+    }
+
+    /// Apply the store effects one library event raised, in order. A Client
+    /// that keeps no library stores passes `None`, so nothing runs.
+    pub(in crate::app) fn apply_library_effects(
+        &mut self,
+        stores: Option<&mut dyn ClientLibraryStores>,
+        effects: &[ClientLibraryEffect],
+    ) {
+        let Some(stores) = stores else {
+            return;
+        };
+        for effect in effects {
+            stores.apply(self, effect.clone());
+        }
     }
 
     /// The `RecursiveAlbumActivated` arm: install the landed nav stack and

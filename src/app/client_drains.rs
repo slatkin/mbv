@@ -250,7 +250,7 @@ impl App {
         let Ok(event) = self.channels.lib_rx.try_recv() else {
             return false;
         };
-        self.handle_lib_event(event);
+        self.handle_lib_event(event, None);
         true
     }
 

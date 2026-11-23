@@ -382,8 +382,8 @@ mod tests {
     #[test]
     fn books_fetched_appends_page_and_selects_first_book() {
         let mut app = app_with_book_state();
-        app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BooksFetched {
+        app.handle_lib_event(
+            LibEvent::Audiobookshelf(AudiobookshelfEvent::BooksFetched {
                 generation: SetupGeneration::default(),
                 request: 0,
                 library_id: "books".into(),
@@ -393,8 +393,9 @@ mod tests {
                     total: 21,
                     items: vec![book("book-a")],
                 }),
-            },
-        ));
+            }),
+            None,
+        );
 
         let state = &app.audiobookshelf_book_browse[0];
         assert_eq!(state.books.len(), 1);
@@ -409,8 +410,8 @@ mod tests {
         let mut app = app_with_book_state();
         app.audiobookshelf_book_browse[0].books.push(book("book-a"));
         let request = app.audiobookshelf_book_browse[0].begin_catalog_replacement();
-        app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BooksFetched {
+        app.handle_lib_event(
+            LibEvent::Audiobookshelf(AudiobookshelfEvent::BooksFetched {
                 generation: SetupGeneration::default(),
                 request,
                 library_id: "books".into(),
@@ -420,8 +421,9 @@ mod tests {
                     total: 1,
                     items: vec![book("book-b")],
                 }),
-            },
-        ));
+            }),
+            None,
+        );
 
         let state = &app.audiobookshelf_book_browse[0];
         assert!(state.replacement.is_none(), "the completed batch commits");
@@ -445,8 +447,8 @@ mod tests {
         if stale {
             app.audiobookshelf_runtime.begin_setup();
         }
-        app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BooksFetched {
+        app.handle_lib_event(
+            LibEvent::Audiobookshelf(AudiobookshelfEvent::BooksFetched {
                 generation: SetupGeneration::default(),
                 request,
                 library_id: library_id.into(),
@@ -456,8 +458,9 @@ mod tests {
                     total: 1,
                     items: vec![book("book-a")],
                 }),
-            },
-        ));
+            }),
+            None,
+        );
     }
 
     #[rstest]
@@ -518,14 +521,15 @@ mod tests {
         state.selected_id = Some("book-a".into());
         state.detail_loading_ids.insert("book-a".into(), 1);
         state.detail_loading = true;
-        app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BookDetailLoaded {
+        app.handle_lib_event(
+            LibEvent::Audiobookshelf(AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
                 request: 1,
                 library_item_id: "book-a".into(),
                 result: detail_result(succeeds),
-            },
-        ));
+            }),
+            None,
+        );
 
         let state = &app.audiobookshelf_book_browse[0];
         assert!(!state.detail_loading);
@@ -538,14 +542,15 @@ mod tests {
         library_item_id: &str,
         request: u64,
     ) {
-        app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BookDetailLoaded {
+        app.handle_lib_event(
+            LibEvent::Audiobookshelf(AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
                 request,
                 library_item_id: library_item_id.into(),
                 result: Ok((Vec::new(), Vec::new())),
-            },
-        ));
+            }),
+            None,
+        );
     }
 
     #[rstest]

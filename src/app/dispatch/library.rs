@@ -7,3 +7,4 @@ pub(in crate::app) mod event_reconcile;
 pub(in crate::app) mod load;
 pub(in crate::app) mod search;
 pub(in crate::app) mod shuffle_folder;
+pub(in crate::app) mod stores;
