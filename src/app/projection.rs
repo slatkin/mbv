@@ -91,15 +91,17 @@ impl App {
             return State(mbv_ui_model::playback::HeroImageState::None);
         };
         let Some(decoded) = self.hero_artwork_decoded(&cache_key) else {
-            // A fetch that resolved empty is final: the shared placeholder
-            // shows and no encode is owed. An interrupted fetch wrote no entry
-            // and may still succeed on its retry (invariant 27), so it stays
-            // `Loading` like a fetch in flight.
-            let resolved_empty = self
+            // A settled entry holds no decoded pixels — the fetch resolved
+            // empty, or this Client keeps the server's bytes only. Either way
+            // nothing more will arrive through this projection, so the shared
+            // placeholder is final. An interrupted fetch wrote no entry and
+            // may still succeed on its retry (invariant 27), so a missing key
+            // stays `Loading` like a fetch in flight.
+            let settled = self
                 .images
                 .image(&cache_key)
-                .is_some_and(|entry| !entry.has_art());
-            if resolved_empty {
+                .is_some_and(|entry| entry.img.is_none());
+            if settled {
                 return State(mbv_ui_model::playback::HeroImageState::None);
             }
             return State(mbv_ui_model::playback::HeroImageState::Loading);

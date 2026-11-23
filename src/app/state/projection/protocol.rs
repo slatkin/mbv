@@ -54,12 +54,6 @@ impl App {
         self.active_image_font_size = active_font_size;
     }
 
-    /// Record the cell grid of the picker that paints under the current
-    /// artwork suffix, for the facts re-pushed when the dim state changes.
-    pub fn set_active_image_font_size(&mut self, font_size: (u16, u16)) {
-        self.active_image_font_size = font_size;
-    }
-
     /// Record the configured protocol's suffix, which the artwork cache keys
     /// embed.
     pub fn set_configured_protocol_suffix(&mut self, suffix: &'static str) {
