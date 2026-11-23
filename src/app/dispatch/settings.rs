@@ -98,7 +98,7 @@ impl App {
     /// Panics while reading the configuration when its lock is poisoned: a
     /// writer panicked holding it, and the cached configuration cannot be
     /// trusted.
-    pub fn handle_settings_activate(&mut self, key: SettingKey) {
+    pub(in crate::app) fn handle_settings_activate(&mut self, key: SettingKey) {
         // A read-only row arms no save: it returns before the save below.
         if setting_row_kind(key) == SettingRowKind::ReadOnly {
             return;
@@ -138,7 +138,7 @@ impl App {
     /// Panics while writing the configuration when its lock is poisoned: a
     /// writer panicked holding it, and the cached configuration cannot be
     /// trusted.
-    pub fn set_settings_value(&mut self, key: SettingKey, value: &str) {
+    pub(in crate::app) fn set_settings_value(&mut self, key: SettingKey, value: &str) {
         match key {
             SettingKey::SubtitleMode => {
                 self.config.lock().unwrap().subtitle_mode = value.to_string();

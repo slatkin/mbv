@@ -261,7 +261,7 @@ impl App {
     ///
     /// Panics when `lib_idx` names no loaded library, and while reading the
     /// configuration when its lock is poisoned.
-    pub fn is_feed_home_video_library(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_feed_home_video_library(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.library.collection_type != "homevideos" {
             return false;
