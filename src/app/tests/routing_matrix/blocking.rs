@@ -3,9 +3,7 @@
 use super::support::*;
 use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
 use crate::app::input::resolver::KeyChord;
-use crate::app::input::router::{
-    RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
-};
+use crate::app::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 use mbv_ui_msg::ConfirmIntent;
 use mbv_ui_msg::{ComponentId, ModalId, Msg, ShellRequest};
 use mbv_ui_msg::{Key, KeyModifiers};
@@ -75,9 +73,10 @@ fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
 
     for code in [Key::Char('z'), Key::Char('q')] {
         assert_eq!(
-            resolve_router_outcome_with_focused(
+            resolve_router_outcome(
                 KeyChord::from_key(key(code)),
                 &snapshot,
+                &disarmed(),
                 Some(&focused),
                 &default_keybinds()
             ),
@@ -150,9 +149,10 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
 fn twitch_url_open_resolves_to_its_shell_command_on_the_default_chord() {
     let key = key_mod(Key::Char('T'), KeyModifiers::SHIFT);
     assert_eq!(
-        resolve_router_outcome_with_focused(
+        resolve_router_outcome(
             KeyChord::from_key(key),
             &idle_snapshot(),
+            &disarmed(),
             None,
             &default_keybinds()
         ),
@@ -173,9 +173,10 @@ fn twitch_url_open_is_swallowed_under_a_blocking_overlay() {
         ..RouterSnapshot::default()
     };
     assert_eq!(
-        resolve_router_outcome_with_focused(
+        resolve_router_outcome(
             KeyChord::from_key(key),
             &snapshot,
+            &disarmed(),
             None,
             &default_keybinds()
         ),
@@ -199,9 +200,10 @@ fn rebound_global_respects_blocking_overlays() {
     };
 
     assert_eq!(
-        resolve_router_outcome_with_focused(
+        resolve_router_outcome(
             KeyChord::from_key(rebound_key),
             &snapshot,
+            &disarmed(),
             None,
             &keybinds
         ),
@@ -209,9 +211,10 @@ fn rebound_global_respects_blocking_overlays() {
         "a rebound chord under a blocking overlay is swallowed"
     );
     assert_eq!(
-        resolve_router_outcome_with_focused(
+        resolve_router_outcome(
             KeyChord::from_key(rebound_key),
             &snapshot,
+            &disarmed(),
             Some(&ComponentId::Modal(ModalId::Confirm)),
             &keybinds
         ),

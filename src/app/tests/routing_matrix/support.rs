@@ -24,9 +24,7 @@
 //! candidate resolves as `Deferred`.
 
 use crate::app::input::resolver::KeyChord;
-use crate::app::input::router::{
-    RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
-};
+use crate::app::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 use crate::app::shell::fold_keyboard_messages;
 use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
 use mbv_ui_msg::{
@@ -66,9 +64,10 @@ pub(crate) fn fold_tick(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
-    let outcome = resolve_router_outcome_with_focused(
+    let outcome = resolve_router_outcome(
         KeyChord::new(key.code, key.modifiers),
         &snapshot,
+        &disarmed(),
         None,
         &default_keybinds(),
     );
@@ -109,13 +108,21 @@ pub(crate) fn fold_tick_focused(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
-    let outcome = resolve_router_outcome_with_focused(
+    let outcome = resolve_router_outcome(
         KeyChord::new(key.code, key.modifiers),
         &snapshot,
+        &disarmed(),
         focused,
         &default_keybinds(),
     );
     fold_keyboard_messages(messages, focused, &outcome)
+}
+
+/// The router's neutral prefix access for the matrix rows, which resolve
+/// unarmed chords: the core `App` stub, whose armed bit is false (design D6,
+/// row 8.4).
+pub(crate) fn disarmed() -> impl crate::app::RouterNow {
+    crate::app::tests::make_app_stub()
 }
 
 pub(crate) fn idle_snapshot() -> RouterSnapshot {

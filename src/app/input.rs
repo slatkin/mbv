@@ -3,7 +3,7 @@ mod confirm_keys;
 pub(in crate::app) mod gui;
 pub(in crate::app) mod key_policy;
 pub(in crate::app) use key_policy::{
-    OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState,
+    OverlayFocus, RemoteControlTarget, RouterNow, RouterOverlayState, RouterPlaybackState,
 };
 mod lib_keys;
 mod playlist_keys;
@@ -19,6 +19,16 @@ mod music_track_test_support;
 
 use super::{App, PanelFocus, TabSelection};
 use mbv_emby_model::EmbyItem;
+
+impl crate::app::input::RouterNow for App {
+    /// The core's armed bit, read through the router's neutral access
+    /// (design D6 of `decouple-client-core`): the router resolves a Client's
+    /// prefix state without a snapshot field the Client has to copy.
+    fn prefix_armed(&self) -> bool {
+        self.prefix_armed
+    }
+}
+
 impl App {
     pub(in crate::app) fn context_menu_play_state(item: &EmbyItem) -> bool {
         if item.is_folder {

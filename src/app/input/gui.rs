@@ -3,8 +3,11 @@
 //! (ADR 0023) and applies the outcome to the `App`.
 //!
 //! The snapshot's `App`-side facts — the player state, the panel mode and
-//! focus, the prefix bit, and the idle-feed link — are `pub(in crate::app)`,
+//! focus, the capabilities, and the idle-feed link — are `pub(in crate::app)`,
 //! so the snapshot is built here in the library, not in a GUI program. The
+//! prefix state the router reads outside the snapshot is this Client's own,
+//! reached through the router's neutral [`RouterNow`] access (`GuiCore`'s
+//! implementor) so the GUI routing entry never hands the router a field. The
 //! GUI-side facts — the mounted surfaces and their Surface state — belong to
 //! the GUI Client, which supplies the focused one as the router's leaf
 //! ([`GuiSurfaceLeaf`]).
@@ -26,7 +29,7 @@ use mbv_ui_msg::{
 
 use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
 use super::resolver::KeyChord;
-use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused};
+use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 use crate::app::RemoteControlTarget;
 use crate::app::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent,
@@ -164,7 +167,6 @@ impl GuiCore {
             },
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
-            prefix_armed: self.app.prefix_armed,
             visual_selection_active: leaf
                 .as_ref()
                 .is_some_and(|surface| surface.visual_selection_active()),
@@ -186,7 +188,11 @@ impl GuiCore {
         // (`mbv-gui`'s `bridge/keys.rs`, mirroring the TUI edge); the router
         // normalizes the chord and resolves it. No translation happens here.
         let chord = KeyChord::from_key(key);
-        match resolve_router_outcome_with_focused(chord, &snapshot, focused.as_ref(), &keybinds) {
+        // The router's one entry (design D6, row 8.4): the snapshot carries
+        // the policy's facts and `self` carries the Client's own neutral state
+        // through `RouterNow`, so this site reads no routing state of its own
+        // and resolves through the same rules the TUI Client does.
+        match resolve_router_outcome(chord, &snapshot, self, focused.as_ref(), &keybinds) {
             RouterOutcome::Command(command) => self.apply_gui_router_command(&command, leaf),
             RouterOutcome::PrefixArm => {
                 self.app.prefix_armed = true;

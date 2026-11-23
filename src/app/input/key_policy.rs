@@ -12,6 +12,7 @@ use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_msg::{Key, KeyModifiers};
 
 mod snapshot;
+pub use snapshot::RouterNow;
 pub use snapshot::{
     OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
 };

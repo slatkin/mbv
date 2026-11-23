@@ -140,6 +140,16 @@ impl GuiCore {
     }
 }
 
+impl crate::app::RouterNow for GuiCore {
+    /// The armed bit the router reads for this Client. It lives beside the
+    /// core the GUI owns, so the routing entry reads it through the router's
+    /// neutral access instead of the router reading the routing site's
+    /// fields (design D6 of `decouple-client-core`, row 8.4).
+    fn prefix_armed(&self) -> bool {
+        self.app.prefix_armed()
+    }
+}
+
 impl std::fmt::Debug for GuiCore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GuiCore")

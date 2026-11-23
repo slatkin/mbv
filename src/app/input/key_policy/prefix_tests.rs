@@ -1,12 +1,15 @@
 //! Prefix-mode arming and armed dispatch through the single routing site.
 /// Task 6.2 (design D6): the prefix-mode state machine — every arm of
-/// the two policy layers plus the App-owned armed bit, resolved through
-/// `resolve_router_outcome_with_focused` (the single routing site).
+/// the two policy layers plus the armed bit, resolved through
+/// `resolve_router_outcome` (the single routing site, reached with the
+/// prefix state through its neutral `RouterNow` access).
 mod prefix_mode {
     use super::super::test_support::*;
     use super::super::*;
     use crate::app::dispatch::action::{NavigationIntent, VisualIntent};
     use crate::app::input::router::RouterOutcome;
+    use crate::app::stub_app_with_prefix_and_toast;
+    use crate::app::tests::make_app_stub;
 
     /// A neutral key press with `mods`, the shape the TUI edge hands the router.
     fn neutral_key(code: Key, mods: KeyModifiers) -> mbv_ui_msg::KeyEvent {
@@ -40,12 +43,25 @@ mod prefix_mode {
         .expect("valid prefix configuration")
     }
 
+    /// A snapshot for the armed rows: prefix mode is no snapshot fact (design
+    /// D6, row 8.4), so the arming rows reach it through [`armed`].
     fn armed_snapshot() -> RouterSnapshot {
         RouterSnapshot {
             panel_mode: PanelMode::Both,
-            prefix_armed: true,
             ..RouterSnapshot::default()
         }
+    }
+
+    /// The router's neutral prefix access with prefix mode armed: the core
+    /// `App` carrying the armed bit (design D6, row 8.4), which the router
+    /// reads through its one method rather than from a snapshot field.
+    fn armed() -> impl RouterNow {
+        stub_app_with_prefix_and_toast("armed")
+    }
+
+    /// The router's neutral prefix access with prefix mode disarmed.
+    fn disarmed() -> impl RouterNow {
+        make_app_stub()
     }
 
     fn resolve(
@@ -53,9 +69,25 @@ mod prefix_mode {
         snapshot: &RouterSnapshot,
         keybinds: &Keybinds,
     ) -> RouterOutcome {
-        crate::app::input::router::resolve_router_outcome_with_focused(
+        crate::app::input::router::resolve_router_outcome(
             KeyChord::from_key(key),
             snapshot,
+            &disarmed(),
+            None,
+            keybinds,
+        )
+    }
+
+    /// Resolve one chord with prefix mode armed: the armed rows' entry.
+    fn resolve_armed(
+        key: mbv_ui_msg::KeyEvent,
+        snapshot: &RouterSnapshot,
+        keybinds: &Keybinds,
+    ) -> RouterOutcome {
+        crate::app::input::router::resolve_router_outcome(
+            KeyChord::from_key(key),
+            snapshot,
+            &armed(),
             None,
             keybinds,
         )
@@ -97,9 +129,10 @@ mod prefix_mode {
         // request stands.
         let focused = mbv_ui_msg::ComponentId::Modal(mbv_ui_msg::ModalId::Confirm);
         assert_eq!(
-            crate::app::input::router::resolve_router_outcome_with_focused(
+            crate::app::input::router::resolve_router_outcome(
                 KeyChord::from_key(neutral_key(Key::Char('b'), KeyModifiers::CONTROL)),
                 &blocked,
+                &disarmed(),
                 Some(&focused),
                 &keybinds
             ),
@@ -113,7 +146,7 @@ mod prefix_mode {
         // so it fires while armed and disarms.
         let keybinds = prefix_keybinds(&[("next_library_tab", "n")]);
         assert_eq!(
-            resolve(
+            resolve_armed(
                 neutral_key(Key::Char('n'), KeyModifiers::NONE),
                 &armed_snapshot(),
                 &keybinds
@@ -132,7 +165,7 @@ mod prefix_mode {
         let mut link = armed_snapshot();
         link.playback.idle_feed_link_available = true;
         assert_eq!(
-            resolve(
+            resolve_armed(
                 neutral_key(Key::Char('f'), KeyModifiers::NONE),
                 &link,
                 &keybinds
@@ -141,7 +174,7 @@ mod prefix_mode {
         );
         // The gate's non-chord conditions still close it.
         assert_eq!(
-            resolve(
+            resolve_armed(
                 neutral_key(Key::Char('f'), KeyModifiers::NONE),
                 &armed_snapshot(),
                 &keybinds
@@ -155,7 +188,7 @@ mod prefix_mode {
     fn armed_unmapped_chord_swallows_and_disarms() {
         let keybinds = prefix_keybinds(&[]);
         assert_eq!(
-            resolve(
+            resolve_armed(
                 neutral_key(Key::Char('k'), KeyModifiers::NONE),
                 &armed_snapshot(),
                 &keybinds

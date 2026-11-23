@@ -1,8 +1,18 @@
 use super::Model;
 use crate::app::dispatch::action::Command;
 use crate::app::dispatch::action::ShellCommand;
-use crate::app::input::router::{RouterOutcome, RouterSnapshot};
+use crate::app::input::router::{RouterNow, RouterOutcome, RouterSnapshot};
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
+
+impl RouterNow for Model {
+    /// The App-owned armed bit, read through the router's neutral access
+    /// rather than handed to it as a snapshot field (design D6): the TUI
+    /// shell keeps the owner too, because arming also holds focus off and
+    /// disarming releases it (`self::prefix_mode`).
+    fn prefix_armed(&self) -> bool {
+        self.app.prefix_armed
+    }
+}
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
 /// tick's message list and return the messages that survive.
@@ -288,7 +298,6 @@ impl Model {
             },
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
-            prefix_armed: self.app.prefix_armed,
             visual_selection_active: self.visual_selection.is_some(),
             // The TUI Client holds no `TransportChipKeys`, so the transport
             // chips' key layers (add-tauri-gui-client row 6.2) stay inert
@@ -300,6 +309,7 @@ impl Model {
         let outcome = super::neutral_edge::resolve_tui_key(
             neutral_key,
             &snapshot,
+            self,
             self.application.focus(),
             &self.keybinds,
         );

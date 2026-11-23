@@ -14,6 +14,7 @@ use super::resolver::KeyChord;
 use crate::app::dispatch::action::{AppCommand, Command, PlaybackIntent};
 use mbv_ui_msg::ComponentId;
 
+pub use super::key_policy::RouterNow;
 pub(in crate::app) use super::key_policy::RouterSnapshot;
 
 /// ADR 0002's three routing outcomes, exactly. `Application::tick` returns the
@@ -41,17 +42,26 @@ pub enum RouterOutcome {
     PrefixSwallow,
 }
 
-/// Resolve a chord against the live ordered policy. A matched command is
-/// dispatched by the shell; blocking and catch-all layers swallow the leaf.
+/// Resolve a chord against the live ordered policy, with the Client's own
+/// neutral access to the state that lives outside the snapshot (`now`).
+///
+/// This is the router's one entry (design D6 of `decouple-client-core`): a
+/// Client supplies the coordinator state through a [`RouterNow`] and reads a plain
+/// [`RouterOutcome`], so no routing site reads another Client's fields and
+/// every Client resolves through these rules. The TUI shell (through
+/// [`super::super::shell::neutral_edge::resolve_tui_key`]) and the GUI Client
+/// (`super::gui`) both call it.
+///
+/// A matched command is dispatched by the Client's shell; blocking and
+/// catch-all layers swallow the leaf.
 ///
 /// The two-argument form treats every chord as occurring with no text entry
-/// focused. Production routing goes through
-/// `resolve_router_outcome_with_focused`, which carries the focused leaf so
-/// the policy can tell "the leaf is the blocking overlay" from "an overlay is
-/// mounted elsewhere". The rules, in the order they apply:
+/// focused. Production routing carries the focused leaf so the policy can tell
+/// "the leaf is the blocking overlay" from "an overlay is mounted elsewhere".
+/// The rules, in the order they apply:
 ///
 /// 0. **Armed prefix capture** (design D6, task 6.2): while
-///    `snapshot.prefix_armed` is true the chord resolves against the prefix
+///    `now.prefix_armed()` is true the chord resolves against the prefix
 ///    namespace only (`resolve_armed_outcome`); no chord reaches any surface.
 /// 1. **Never swallow the focused leaf's own typed request.** When the
 ///    policy would return `Swallow` and the focused leaf is the blocking
@@ -70,16 +80,17 @@ pub enum RouterOutcome {
 /// (`crate::app::shell::neutral_edge`) and normalizes it with
 /// [`KeyChord::from_key`]; the router never names a toolkit type and never
 /// translates a key itself (`extract-client-core` design D4).
-pub(in crate::app) fn resolve_router_outcome_with_focused(
+pub(in crate::app) fn resolve_router_outcome(
     chord: KeyChord,
     snapshot: &RouterSnapshot,
+    now: &dyn RouterNow,
     focused: Option<&ComponentId>,
     keybinds: &Keybinds,
 ) -> RouterOutcome {
     // Armed prefix capture (design D6): while armed, every chord resolves
     // against the prefix namespace only — before text-entry, overlay, and
     // leaf arbitration, none of which can see an armed chord.
-    if snapshot.prefix_armed {
+    if now.prefix_armed() {
         return resolve_armed_outcome(chord, snapshot, keybinds);
     }
     let focused_is_blocking_overlay =

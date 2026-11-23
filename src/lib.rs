@@ -48,7 +48,7 @@ pub use self::app::{
     OverlayFocus, PanelIntent, PanelTogglesProjection, PlaybackIntent, PlaybackTargetChoice,
     PlayerEventDrain, QueueCardArtwork, QueueChooserEntryProjection, QueueChooserRenameProjection,
     QueueEndOffsets, QueueFooterProjection, QueueHeaderProjection, QueuePlaybackProjection,
-    QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget, RouterOutcome,
+    QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget, RouterNow, RouterOutcome,
     RouterOverlayState, RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SetupSecret,
     ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
     TrackChoice, TrackPopoverChoice, VisualIntent, WorkspaceRelayout, artist_rows_in_view_id,

@@ -7,7 +7,7 @@
 //! The router and its policy match [`KeyChord`]; see `crate::app::input::router`.
 
 use crate::app::input::resolver::KeyChord;
-use crate::app::input::router::{RouterOutcome, RouterSnapshot};
+use crate::app::input::router::{RouterNow, RouterOutcome, RouterSnapshot};
 use mbv_keybinds::Keybinds;
 use mbv_ui_msg::ComponentId;
 
@@ -18,12 +18,14 @@ use mbv_ui_msg::ComponentId;
 pub(in crate::app) fn resolve_tui_key(
     key: mbv_ui_msg::KeyEvent,
     snapshot: &RouterSnapshot,
+    now: &dyn RouterNow,
     focused: Option<&ComponentId>,
     keybinds: &Keybinds,
 ) -> RouterOutcome {
-    crate::app::input::router::resolve_router_outcome_with_focused(
+    crate::app::input::router::resolve_router_outcome(
         KeyChord::from_key(key),
         snapshot,
+        now,
         focused,
         keybinds,
     )

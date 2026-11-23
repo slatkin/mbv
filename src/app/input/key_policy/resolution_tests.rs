@@ -2,13 +2,30 @@
 use super::test_support::*;
 use super::*;
 use crate::app::dispatch::action::{PanelIntent, PlaybackIntent, VisualIntent};
-use crate::app::tests::gui_client_capabilities;
+use crate::app::tests::{gui_client_capabilities, make_app_stub};
 use mbv_keybinds::{Chord, KEYBIND_ACTIONS};
 use mbv_ui_model::playback::VOLUME_STEP;
 
 /// A neutral key press with `mods`, the shape the router resolves.
 fn neutral_key(code: Key, mods: KeyModifiers) -> mbv_ui_msg::KeyEvent {
     mbv_ui_msg::KeyEvent::new(code, mods)
+}
+
+/// The router's neutral prefix access for these unarmed rows (design D6, row
+/// 8.4): the core `App`, whose armed bit is false in a fresh stub.
+fn disarmed() -> impl RouterNow {
+    make_app_stub()
+}
+
+/// Resolve one chord through the router's entry with prefix mode unarmed.
+fn route(key: mbv_ui_msg::KeyEvent, snapshot: &RouterSnapshot) -> crate::RouterOutcome {
+    crate::app::input::router::resolve_router_outcome(
+        KeyChord::from_key(key),
+        snapshot,
+        &disarmed(),
+        None,
+        &keybinds(),
+    )
 }
 
 #[test]
@@ -31,23 +48,13 @@ fn panel_mode_cycle_falls_through_during_text_entry() {
     let mut text_entry = snapshot();
     text_entry.overlays.text_entry_focused = true;
     assert_eq!(
-        crate::app::input::router::resolve_router_outcome_with_focused(
-            KeyChord::from_key(key),
-            &text_entry,
-            None,
-            &keybinds()
-        ),
+        route(key, &text_entry),
         crate::app::input::router::RouterOutcome::FallThrough
     );
 
     let normal = snapshot();
     assert_eq!(
-        crate::app::input::router::resolve_router_outcome_with_focused(
-            KeyChord::from_key(key),
-            &normal,
-            None,
-            &keybinds()
-        ),
+        route(key, &normal),
         crate::app::input::router::RouterOutcome::Command(PanelIntent::CyclePanelMode.into())
     );
 }
@@ -56,12 +63,7 @@ fn panel_mode_cycle_falls_through_during_text_entry() {
 fn hide_visual_slot_routes_to_command_without_overlay() {
     let key = neutral_key(Key::Char('h'), KeyModifiers::NONE);
     assert_eq!(
-        crate::app::input::router::resolve_router_outcome_with_focused(
-            KeyChord::from_key(key),
-            &snapshot(),
-            None,
-            &keybinds()
-        ),
+        route(key, &snapshot()),
         crate::app::input::router::RouterOutcome::Command(
             VisualIntent::ToggleVisualSlotHidden.into()
         )
@@ -85,12 +87,7 @@ fn sessions_transfer_keys_fall_through_to_the_sidebar_leaf() {
             "sessions_sidebar_transfer"
         );
         assert_eq!(
-            crate::app::input::router::resolve_router_outcome_with_focused(
-                KeyChord::from_key(neutral_key(code, KeyModifiers::NONE)),
-                &sessions,
-                None,
-                &keybinds()
-            ),
+            route(neutral_key(code, KeyModifiers::NONE), &sessions),
             crate::app::input::router::RouterOutcome::FallThrough
         );
     }
@@ -257,12 +254,7 @@ fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
         "alt_swallow"
     );
     assert_eq!(
-        crate::app::input::router::resolve_router_outcome_with_focused(
-            KeyChord::from_key(neutral_key(Key::Char('k'), KeyModifiers::ALT)),
-            &snapshot(),
-            None,
-            &keybinds()
-        ),
+        route(neutral_key(Key::Char('k'), KeyModifiers::ALT), &snapshot()),
         crate::app::input::router::RouterOutcome::Swallow
     );
 }

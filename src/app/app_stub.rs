@@ -273,7 +273,7 @@ pub fn stub_app_with_unsaved_queue(n: usize) -> App {
 /// The `App` a Client's test drives with prefix mode armed and `message`
 /// flashed as a live Neutral toast, so the Status bar carries both
 /// (`extract-client-core` row 6.5).
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
     use mbv_ui_model::toast::ToastSeverity;
