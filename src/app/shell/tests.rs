@@ -1,9 +1,8 @@
 use super::*;
 use crate::app::LibraryTab;
 use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
-use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::{install_test_emby, make_app_stub, make_remote_app_stub_with_cmd_rx};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
@@ -23,10 +22,10 @@ fn set_test_terminal_size(model: &mut Model, width: u16, height: u16) {
 #[test]
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
-    let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
-        crossterm_key_to_neutral(key),
-    ))];
+    let neutral_key = super::neutral_edge::translate_key(tuirealm::event::KeyEvent::from(
+        KeyEvent::new(KeyCode::F(1), crossterm::event::KeyModifiers::NONE),
+    ));
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(neutral_key))];
     assert_eq!(
         model.router_outcome(&messages),
         RouterOutcome::Command(ShellCommand::OpenHelp.into())
@@ -58,9 +57,9 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     // A focused media list holding an active Visual selection consumes Space
     // for its row-local toggle; the shell sees the leaf's consumption only.
     model.visual_selection = Some((PanelFocus::Library, 2));
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
-        crossterm_key_to_neutral(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
-    ))];
+    let neutral_key =
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Char(' '), mbv_ui_msg::KeyModifiers::NONE);
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(neutral_key))];
 
     assert_eq!(
         model.router_outcome(&messages),

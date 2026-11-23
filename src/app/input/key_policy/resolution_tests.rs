@@ -2,11 +2,14 @@
 use super::test_support::*;
 use super::*;
 use crate::app::dispatch::action::{PanelIntent, PlaybackIntent, VisualIntent};
-use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::gui_client_capabilities;
-use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{Chord, KEYBIND_ACTIONS};
 use mbv_ui_model::playback::VOLUME_STEP;
+
+/// A neutral key press with `mods`, the shape the router resolves.
+fn neutral_key(code: Key, mods: KeyModifiers) -> mbv_ui_msg::KeyEvent {
+    mbv_ui_msg::KeyEvent::new(code, mods)
+}
 
 #[test]
 fn policy_entries_have_unique_ordered_names() {
@@ -24,15 +27,12 @@ fn policy_entries_have_unique_ordered_names() {
 
 #[test]
 fn panel_mode_cycle_falls_through_during_text_entry() {
-    let key = crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-        KeyCode::Char('x'),
-        KeyModifiers::NONE,
-    ));
+    let key = neutral_key(Key::Char('x'), KeyModifiers::NONE);
     let mut text_entry = snapshot();
     text_entry.overlays.text_entry_focused = true;
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
-            key,
+            KeyChord::from_key(key),
             &text_entry,
             None,
             &keybinds()
@@ -43,7 +43,7 @@ fn panel_mode_cycle_falls_through_during_text_entry() {
     let normal = snapshot();
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
-            key,
+            KeyChord::from_key(key),
             &normal,
             None,
             &keybinds()
@@ -54,13 +54,10 @@ fn panel_mode_cycle_falls_through_during_text_entry() {
 
 #[test]
 fn hide_visual_slot_routes_to_command_without_overlay() {
-    let key = crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-        KeyCode::Char('h'),
-        KeyModifiers::NONE,
-    ));
+    let key = neutral_key(Key::Char('h'), KeyModifiers::NONE);
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
-            key,
+            KeyChord::from_key(key),
             &snapshot(),
             None,
             &keybinds()
@@ -80,7 +77,7 @@ fn hide_visual_slot_routes_to_command_without_overlay() {
 fn sessions_transfer_keys_fall_through_to_the_sidebar_leaf() {
     let mut sessions = snapshot();
     sessions.overlays.sessions_sidebar = true;
-    for code in [KeyCode::Char('h'), KeyCode::Char('t')] {
+    for code in [Key::Char('h'), Key::Char('t')] {
         assert_eq!(
             resolve_policy(chord(code, KeyModifiers::NONE), &sessions, &keybinds())
                 .unwrap()
@@ -89,10 +86,7 @@ fn sessions_transfer_keys_fall_through_to_the_sidebar_leaf() {
         );
         assert_eq!(
             crate::app::input::router::resolve_router_outcome_with_focused(
-                crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-                    code,
-                    crossterm::event::KeyModifiers::NONE,
-                )),
+                KeyChord::from_key(neutral_key(code, KeyModifiers::NONE)),
                 &sessions,
                 None,
                 &keybinds()
@@ -102,7 +96,7 @@ fn sessions_transfer_keys_fall_through_to_the_sidebar_leaf() {
     }
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char('h'), KeyModifiers::NONE),
+            chord(Key::Char('h'), KeyModifiers::NONE),
             &snapshot(),
             &keybinds()
         )
@@ -119,7 +113,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     active.playback.player_active = true;
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char(' '), KeyModifiers::NONE),
+            chord(Key::Char(' '), KeyModifiers::NONE),
             &active,
             &keybinds()
         )
@@ -129,7 +123,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     );
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char('a'), KeyModifiers::CONTROL),
+            chord(Key::Char('a'), KeyModifiers::CONTROL),
             &active,
             &keybinds()
         )
@@ -141,7 +135,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     idle_feed.playback.idle_feed_link_available = true;
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char('o'), KeyModifiers::NONE),
+            chord(Key::Char('o'), KeyModifiers::NONE),
             &idle_feed,
             &keybinds()
         )
@@ -155,7 +149,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     idle_feed.overlays.text_entry_focused = true;
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char('o'), KeyModifiers::NONE),
+            chord(Key::Char('o'), KeyModifiers::NONE),
             &idle_feed,
             &keybinds()
         )
@@ -167,7 +161,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     typing.overlays.text_entry_focused = true;
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char(' '), KeyModifiers::NONE),
+            chord(Key::Char(' '), KeyModifiers::NONE),
             &typing,
             &keybinds()
         )
@@ -185,7 +179,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
 fn rebound_transport_action_fires_on_configured_chord_only() {
     // Ungated rebind: volume_up off the `+`/`=` alias onto `k`.
     let keybinds = rebound("volume_up", "k");
-    let new_chord = chord(KeyCode::Char('k'), KeyModifiers::NONE);
+    let new_chord = chord(Key::Char('k'), KeyModifiers::NONE);
     assert_eq!(
         resolve_policy(new_chord, &snapshot(), &keybinds)
             .unwrap()
@@ -199,7 +193,7 @@ fn rebound_transport_action_fires_on_configured_chord_only() {
     for inert in ['+', '='] {
         assert_eq!(
             resolve_policy(
-                chord(KeyCode::Char(inert), KeyModifiers::NONE),
+                chord(Key::Char(inert), KeyModifiers::NONE),
                 &snapshot(),
                 &keybinds
             )
@@ -212,7 +206,7 @@ fn rebound_transport_action_fires_on_configured_chord_only() {
     // Gated rebind: toggle_play_pause off Space onto Ctrl+p; fires only
     // under its own eligibility condition.
     let keybinds = rebound("toggle_play_pause", "Ctrl+p");
-    let new_chord = chord(KeyCode::Char('p'), KeyModifiers::CONTROL);
+    let new_chord = chord(Key::Char('p'), KeyModifiers::CONTROL);
     let mut active = snapshot();
     active.playback.player_active = true;
     assert_eq!(
@@ -230,7 +224,7 @@ fn rebound_transport_action_fires_on_configured_chord_only() {
     );
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char(' '), KeyModifiers::NONE),
+            chord(Key::Char(' '), KeyModifiers::NONE),
             &active,
             &keybinds
         )
@@ -257,17 +251,14 @@ fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
     }
     // Still swallows: an Alt-modified chord resolves to the guard and the
     // router folds it to Swallow.
-    let key = chord(KeyCode::Char('k'), KeyModifiers::ALT);
+    let key = chord(Key::Char('k'), KeyModifiers::ALT);
     assert_eq!(
         resolve_policy(key, &snapshot(), &keybinds()).unwrap().name,
         "alt_swallow"
     );
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
-            crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-                KeyCode::Char('k'),
-                KeyModifiers::ALT,
-            )),
+            KeyChord::from_key(neutral_key(Key::Char('k'), KeyModifiers::ALT)),
             &snapshot(),
             None,
             &keybinds()
@@ -281,7 +272,7 @@ fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
 /// action id so chord matching resolves through the registry.
 #[test]
 fn clear_queue_is_gated_when_context_menu_is_open() {
-    let key = chord(KeyCode::Char('c'), KeyModifiers::NONE);
+    let key = chord(Key::Char('c'), KeyModifiers::NONE);
     assert_eq!(
         resolve_policy(key, &snapshot(), &keybinds()).unwrap().name,
         "clear_queue_prompt_c"
@@ -303,7 +294,7 @@ fn exact_chord_narrowing_keeps_accidental_superset_chords_inert() {
     // Ctrl+Shift terminal encodings of `/` for search — stay inert.
     assert_eq!(
         resolve_policy(
-            chord(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            chord(Key::Char('c'), KeyModifiers::CONTROL),
             &snapshot(),
             &keybinds()
         )
@@ -311,10 +302,10 @@ fn exact_chord_narrowing_keeps_accidental_superset_chords_inert() {
         None,
         "Ctrl+C must not fire clear_queue_prompt_c"
     );
-    for code in [KeyCode::Char('/'), KeyCode::Char('_')] {
+    for code in [Key::Char('/'), Key::Char('_')] {
         assert_eq!(
             resolve_policy(
-                chord(code, KeyModifiers::CONTROL | KeyModifiers::SHIFT),
+                chord(code, KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),),
                 &snapshot(),
                 &keybinds()
             )
@@ -382,12 +373,12 @@ fn gui_queue_controls_need_the_gui_queue_target() {
     };
     let expected = [
         (
-            KeyCode::Char('t'),
+            Key::Char('t'),
             KeyModifiers::NONE,
             "gui_queue_chooser_toggle",
         ),
-        (KeyCode::Char('t'), KeyModifiers::CONTROL, "gui_new_queue"),
-        (KeyCode::Char('w'), KeyModifiers::CONTROL, "gui_close_queue"),
+        (Key::Char('t'), KeyModifiers::CONTROL, "gui_new_queue"),
+        (Key::Char('w'), KeyModifiers::CONTROL, "gui_close_queue"),
     ];
     for (code, mods, name) in expected {
         assert_eq!(

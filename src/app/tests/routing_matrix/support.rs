@@ -23,14 +23,15 @@
 //! candidate policy: a consumed chord falls through to the leaf, and the
 //! candidate resolves as `Deferred`.
 
+use crate::app::input::resolver::KeyChord;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
 use crate::app::shell::fold_keyboard_messages;
-use crate::app::test_seams::crossterm_key_to_neutral;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
-use mbv_ui_msg::{ComponentId, KeyEvent as NeutralKeyEvent, Msg, TerminalObserverEvent};
+use mbv_ui_msg::{
+    ComponentId, Key, KeyEvent as NeutralKeyEvent, KeyModifiers, Msg, TerminalObserverEvent,
+};
 
 /// The registry-defaults configuration the matrix resolves against (task
 /// 3.2): no prefix, every declared action on its declared chords.
@@ -65,17 +66,21 @@ pub(crate) fn fold_tick(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
-    let outcome = resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds());
+    let outcome = resolve_router_outcome_with_focused(
+        KeyChord::new(key.code, key.modifiers),
+        &snapshot,
+        None,
+        &default_keybinds(),
+    );
     fold_keyboard_messages(messages, focused, &outcome)
 }
 
-/// A chord with modifiers, delivered crossterm-case and translated at the
-/// edge like every production key.
-pub(crate) fn key_mod(code: KeyCode, modifiers: KeyModifiers) -> NeutralKeyEvent {
-    crossterm_key_to_neutral(KeyEvent::new(code, modifiers))
+/// A neutral key with modifiers, the shape the TUI edge hands the router.
+pub(crate) fn key_mod(code: Key, modifiers: KeyModifiers) -> NeutralKeyEvent {
+    NeutralKeyEvent::new(code, modifiers)
 }
 
-pub(crate) fn key(code: KeyCode) -> NeutralKeyEvent {
+pub(crate) fn key(code: Key) -> NeutralKeyEvent {
     key_mod(code, KeyModifiers::NONE)
 }
 
@@ -104,7 +109,12 @@ pub(crate) fn fold_tick_focused(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
-    let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused, &default_keybinds());
+    let outcome = resolve_router_outcome_with_focused(
+        KeyChord::new(key.code, key.modifiers),
+        &snapshot,
+        focused,
+        &default_keybinds(),
+    );
     fold_keyboard_messages(messages, focused, &outcome)
 }
 
@@ -135,7 +145,7 @@ fn stale_summary_does_not_change_current_leaf_arbitration() {
     let focused = Some(ComponentId::Library);
     let messages = fold_tick_with_outcome(
         Some(stale_summary.clone()),
-        key(KeyCode::Char('z')),
+        key(Key::Char('z')),
         focused.as_ref(),
         &RouterOutcome::FallThrough,
     );
@@ -143,7 +153,7 @@ fn stale_summary_does_not_change_current_leaf_arbitration() {
 
     let swallowed = fold_tick_with_outcome(
         Some(stale_summary),
-        key(KeyCode::Char('z')),
+        key(Key::Char('z')),
         focused.as_ref(),
         &RouterOutcome::Swallow,
     );
@@ -157,7 +167,7 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
 
     let command = fold_tick_with_outcome(
         leaf.clone(),
-        key(KeyCode::Char('q')),
+        key(Key::Char('q')),
         focused.as_ref(),
         &RouterOutcome::Command(crate::app::dispatch::action::AppCommand::Quit.into()),
     );
@@ -168,7 +178,7 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
 
     let swallow = fold_tick_with_outcome(
         leaf.clone(),
-        key(KeyCode::Char('q')),
+        key(Key::Char('q')),
         focused.as_ref(),
         &RouterOutcome::Swallow,
     );
@@ -179,7 +189,7 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
 
     let fall_through = fold_tick_with_outcome(
         leaf,
-        key(KeyCode::Char('z')),
+        key(Key::Char('z')),
         focused.as_ref(),
         &RouterOutcome::FallThrough,
     );

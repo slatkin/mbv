@@ -2,19 +2,19 @@
 
 use super::support::*;
 use crate::app::dispatch::action::{PlaybackIntent, VisualIntent};
+use crate::app::input::resolver::KeyChord;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
 use crate::app::tests::gui_client_capabilities;
-use crossterm::event::{KeyCode, KeyModifiers};
-use mbv_ui_msg::{ComponentId, Msg, ShellRequest, TrackChipKind};
+use mbv_ui_msg::{ComponentId, Key, KeyModifiers, Msg, ShellRequest, TrackChipKind};
 
 #[test]
 fn playback_gating_esc_falls_through_to_consumed_leaf() {
     let leaf = Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryBack)));
     let out = fold_tick(
         leaf,
-        key(KeyCode::Esc),
+        key(Key::Esc),
         Some(&ComponentId::Library),
         active_snapshot(),
     );
@@ -27,7 +27,7 @@ fn playback_gating_esc_falls_through_to_consumed_leaf() {
 fn playback_gating_space_toggles_without_a_visual_selection() {
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char(' ')),
+            KeyChord::from_key(key(Key::Char(' '))),
             &active_snapshot(),
             None,
             &default_keybinds()
@@ -43,7 +43,7 @@ fn playback_gating_space_defers_to_a_visual_selection() {
     };
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char(' ')),
+            KeyChord::from_key(key(Key::Char(' '))),
             &snapshot,
             None,
             &default_keybinds()
@@ -55,7 +55,7 @@ fn playback_gating_space_defers_to_a_visual_selection() {
 fn playback_gating_esc_falls_through_with_default_bindings() {
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Esc),
+            KeyChord::from_key(key(Key::Esc)),
             &active_snapshot(),
             None,
             &default_keybinds()
@@ -67,7 +67,7 @@ fn playback_gating_esc_falls_through_with_default_bindings() {
 fn playback_gating_default_stop_chord_commands_a_stop_when_the_gate_is_open() {
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key_mod(KeyCode::Char('S'), crossterm::event::KeyModifiers::SHIFT),
+            KeyChord::from_key(key_mod(Key::Char('S'), KeyModifiers::SHIFT)),
             &active_snapshot(),
             None,
             &default_keybinds()
@@ -81,7 +81,7 @@ fn playback_gating_default_stop_chord_falls_through_during_text_entry() {
     snapshot.overlays.text_entry_focused = true;
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key_mod(KeyCode::Char('S'), crossterm::event::KeyModifiers::SHIFT),
+            KeyChord::from_key(key_mod(Key::Char('S'), KeyModifiers::SHIFT)),
             &snapshot,
             None,
             &default_keybinds()
@@ -93,7 +93,7 @@ fn playback_gating_default_stop_chord_falls_through_during_text_entry() {
 fn playback_gating_esc_stop_override_claims_a_deferred_stop() {
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Esc),
+            KeyChord::from_key(key(Key::Esc)),
             &active_snapshot(),
             None,
             &keybinds_with_override("stop", "Esc")
@@ -106,7 +106,7 @@ fn playback_policy_preserves_per_key_eligibility() {
     let active = active_snapshot();
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('<')),
+            KeyChord::from_key(key(Key::Char('<'))),
             &active,
             None,
             &default_keybinds()
@@ -115,7 +115,7 @@ fn playback_policy_preserves_per_key_eligibility() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('#')),
+            KeyChord::from_key(key(Key::Char('#'))),
             &active,
             None,
             &default_keybinds()
@@ -124,7 +124,7 @@ fn playback_policy_preserves_per_key_eligibility() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('a')),
+            KeyChord::from_key(key(Key::Char('a'))),
             &active,
             None,
             &default_keybinds()
@@ -133,7 +133,7 @@ fn playback_policy_preserves_per_key_eligibility() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('m')),
+            KeyChord::from_key(key(Key::Char('m'))),
             &idle_snapshot(),
             None,
             &default_keybinds()
@@ -145,7 +145,7 @@ fn playback_policy_preserves_per_key_eligibility() {
 fn visualizer_resolves_to_router_command() {
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('v')),
+            KeyChord::from_key(key(Key::Char('v'))),
             &idle_snapshot(),
             None,
             &default_keybinds()
@@ -169,7 +169,7 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
 
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('v')),
+            KeyChord::from_key(key(Key::Char('v'))),
             &snapshot,
             None,
             &default_keybinds()
@@ -178,7 +178,7 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('m')),
+            KeyChord::from_key(key(Key::Char('m'))),
             &snapshot,
             None,
             &default_keybinds()
@@ -204,7 +204,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     };
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('o')),
+            KeyChord::from_key(key(Key::Char('o'))),
             &snapshot,
             None,
             &default_keybinds()
@@ -222,7 +222,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     };
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('o')),
+            KeyChord::from_key(key(Key::Char('o'))),
             &queue_only_idle,
             None,
             &default_keybinds()
@@ -242,7 +242,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     };
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('o')),
+            KeyChord::from_key(key(Key::Char('o'))),
             &both_idle,
             None,
             &default_keybinds()
@@ -262,7 +262,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     };
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('o')),
+            KeyChord::from_key(key(Key::Char('o'))),
             &library_only_idle,
             None,
             &default_keybinds()
@@ -282,7 +282,7 @@ fn gui_context_seek_brackets_command_only_with_transport_chip_keys() {
     };
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('[')),
+            KeyChord::from_key(key(Key::Char('['))),
             &gui,
             None,
             &default_keybinds()
@@ -291,7 +291,7 @@ fn gui_context_seek_brackets_command_only_with_transport_chip_keys() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char(']')),
+            KeyChord::from_key(key(Key::Char(']'))),
             &gui,
             None,
             &default_keybinds()
@@ -300,7 +300,7 @@ fn gui_context_seek_brackets_command_only_with_transport_chip_keys() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('[')),
+            KeyChord::from_key(key(Key::Char('['))),
             &active_snapshot(),
             None,
             &default_keybinds()
@@ -322,7 +322,7 @@ fn gui_context_popover_chords_command_only_with_popover_chord_keys() {
     };
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('a')),
+            KeyChord::from_key(key(Key::Char('a'))),
             &gui,
             None,
             &default_keybinds()
@@ -331,7 +331,7 @@ fn gui_context_popover_chords_command_only_with_popover_chord_keys() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('s')),
+            KeyChord::from_key(key(Key::Char('s'))),
             &gui,
             None,
             &default_keybinds()
@@ -340,7 +340,7 @@ fn gui_context_popover_chords_command_only_with_popover_chord_keys() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('a')),
+            KeyChord::from_key(key(Key::Char('a'))),
             &active_snapshot(),
             None,
             &default_keybinds()
@@ -349,7 +349,7 @@ fn gui_context_popover_chords_command_only_with_popover_chord_keys() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('s')),
+            KeyChord::from_key(key(Key::Char('s'))),
             &active_snapshot(),
             None,
             &default_keybinds()
@@ -366,13 +366,13 @@ fn gui_context_popover_chords_command_only_with_popover_chord_keys() {
 #[test]
 fn gui_queue_control_chords_are_unbound_in_the_tui_client() {
     for chord in [
-        key(KeyCode::Char('t')),
-        key_mod(KeyCode::Char('t'), KeyModifiers::CONTROL),
-        key_mod(KeyCode::Char('w'), KeyModifiers::CONTROL),
+        key(Key::Char('t')),
+        key_mod(Key::Char('t'), KeyModifiers::CONTROL),
+        key_mod(Key::Char('w'), KeyModifiers::CONTROL),
     ] {
         assert_eq!(
             resolve_router_outcome_with_focused(
-                chord,
+                KeyChord::from_key(chord),
                 &active_snapshot(),
                 None,
                 &default_keybinds()

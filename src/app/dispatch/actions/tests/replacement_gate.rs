@@ -54,10 +54,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
     assert!(app.play_album_track("album-1", &track));
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Esc,
-            crossterm::event::KeyModifiers::NONE,
-        )),
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Esc, mbv_ui_msg::KeyModifiers::NONE),
     );
 
     assert!(!app.queue_deferrals.has_gated_replacement());
@@ -111,10 +108,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
 
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Esc,
-            crossterm::event::KeyModifiers::NONE,
-        )),
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Esc, mbv_ui_msg::KeyModifiers::NONE),
     );
 
     assert!(!app.queue_deferrals.has_gated_replacement());

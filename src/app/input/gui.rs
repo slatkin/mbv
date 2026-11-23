@@ -25,6 +25,7 @@ use mbv_ui_msg::{
 };
 
 use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
+use super::resolver::KeyChord;
 use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused};
 use crate::app::dispatch::action::{AppCommand, Command, NavigationIntent, PanelIntent};
 use crate::app::{App, RemoteControlTarget};
@@ -170,7 +171,11 @@ impl App {
         } else {
             leaf.as_ref().map(|surface| surface.id())
         };
-        match resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref(), &keybinds) {
+        // The GUI bridges its toolkit's keys to the neutral vocabulary itself
+        // (`mbv-gui`'s `bridge/keys.rs`, mirroring the TUI edge); the router
+        // normalizes the chord and resolves it. No translation happens here.
+        let chord = KeyChord::from_key(key);
+        match resolve_router_outcome_with_focused(chord, &snapshot, focused.as_ref(), &keybinds) {
             RouterOutcome::Command(command) => self.apply_gui_router_command(&command, leaf),
             RouterOutcome::PrefixArm => {
                 self.prefix_armed = true;

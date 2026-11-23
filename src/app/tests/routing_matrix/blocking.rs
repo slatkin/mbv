@@ -2,12 +2,13 @@
 
 use super::support::*;
 use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
+use crate::app::input::resolver::KeyChord;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use crossterm::event::KeyCode;
 use mbv_ui_msg::ConfirmIntent;
 use mbv_ui_msg::{ComponentId, ModalId, Msg, ShellRequest};
+use mbv_ui_msg::{Key, KeyModifiers};
 
 #[test]
 fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
@@ -23,7 +24,7 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
     ))));
     let out = fold_tick_focused(
         leaf,
-        key(KeyCode::Char('x')),
+        key(Key::Char('x')),
         Some(&ComponentId::Modal(ModalId::Confirm)),
         snapshot,
     );
@@ -47,7 +48,7 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
     ))));
     let out = fold_tick_focused(
         leaf,
-        key(KeyCode::Char('q')),
+        key(Key::Char('q')),
         Some(&ComponentId::Modal(ModalId::Confirm)),
         snapshot,
     );
@@ -72,10 +73,10 @@ fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
     };
     let focused = ComponentId::Modal(ModalId::Confirm);
 
-    for code in [KeyCode::Char('z'), KeyCode::Char('q')] {
+    for code in [Key::Char('z'), Key::Char('q')] {
         assert_eq!(
             resolve_router_outcome_with_focused(
-                key(code),
+                KeyChord::from_key(key(code)),
                 &snapshot,
                 Some(&focused),
                 &default_keybinds()
@@ -92,7 +93,7 @@ fn injected_swallow_discards_leaf_message() {
     ))));
     let out = fold_tick_with_outcome(
         leaf,
-        key(KeyCode::Char('x')),
+        key(Key::Char('x')),
         Some(&ComponentId::Modal(ModalId::Confirm)),
         &RouterOutcome::Swallow,
     );
@@ -106,7 +107,7 @@ fn router_command_discards_focused_leaf_message() {
     let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
     let out = fold_tick_with_outcome(
         leaf,
-        key(KeyCode::Char('q')),
+        key(Key::Char('q')),
         Some(&ComponentId::Library),
         &RouterOutcome::Command(PlaybackIntent::Stop.into()),
     );
@@ -120,7 +121,7 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
     let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
     let out = fold_tick_with_outcome(
         leaf,
-        key(KeyCode::Down),
+        key(Key::Down),
         Some(&ComponentId::Library),
         &RouterOutcome::FallThrough,
     );
@@ -133,7 +134,7 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
 fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
     let out = fold_tick_with_outcome(
         None,
-        key(KeyCode::Down),
+        key(Key::Down),
         Some(&ComponentId::Library),
         &RouterOutcome::FallThrough,
     );
@@ -147,9 +148,14 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
 /// the shell-owned mount command when no overlay blocks it.
 #[test]
 fn twitch_url_open_resolves_to_its_shell_command_on_the_default_chord() {
-    let key = key_mod(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
+    let key = key_mod(Key::Char('T'), KeyModifiers::SHIFT);
     assert_eq!(
-        resolve_router_outcome_with_focused(key, &idle_snapshot(), None, &default_keybinds()),
+        resolve_router_outcome_with_focused(
+            KeyChord::from_key(key),
+            &idle_snapshot(),
+            None,
+            &default_keybinds()
+        ),
         RouterOutcome::Command(ShellCommand::OpenTwitchUrl.into())
     );
 }
@@ -158,7 +164,7 @@ fn twitch_url_open_resolves_to_its_shell_command_on_the_default_chord() {
 /// mounted the chord is swallowed and the prompt does not open.
 #[test]
 fn twitch_url_open_is_swallowed_under_a_blocking_overlay() {
-    let key = key_mod(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
+    let key = key_mod(Key::Char('T'), KeyModifiers::SHIFT);
     let snapshot = RouterSnapshot {
         overlays: crate::app::input::RouterOverlayState {
             focus: crate::app::input::OverlayFocus::Blocking,
@@ -167,7 +173,12 @@ fn twitch_url_open_is_swallowed_under_a_blocking_overlay() {
         ..RouterSnapshot::default()
     };
     assert_eq!(
-        resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds()),
+        resolve_router_outcome_with_focused(
+            KeyChord::from_key(key),
+            &snapshot,
+            None,
+            &default_keybinds()
+        ),
         RouterOutcome::Swallow
     );
 }
@@ -178,7 +189,7 @@ fn rebound_global_respects_blocking_overlays() {
     // overlay the rebound chord must not fire — the overlay routing rules
     // hold for configured chords exactly as for declared defaults.
     let keybinds = keybinds_with_override("help_open", "Ctrl+h");
-    let rebound_key = key_mod(KeyCode::Char('h'), crossterm::event::KeyModifiers::CONTROL);
+    let rebound_key = key_mod(Key::Char('h'), KeyModifiers::CONTROL);
     let snapshot = RouterSnapshot {
         overlays: crate::app::input::RouterOverlayState {
             focus: crate::app::input::OverlayFocus::Blocking,
@@ -188,13 +199,18 @@ fn rebound_global_respects_blocking_overlays() {
     };
 
     assert_eq!(
-        resolve_router_outcome_with_focused(rebound_key, &snapshot, None, &keybinds),
+        resolve_router_outcome_with_focused(
+            KeyChord::from_key(rebound_key),
+            &snapshot,
+            None,
+            &keybinds
+        ),
         RouterOutcome::Swallow,
         "a rebound chord under a blocking overlay is swallowed"
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            rebound_key,
+            KeyChord::from_key(rebound_key),
             &snapshot,
             Some(&ComponentId::Modal(ModalId::Confirm)),
             &keybinds

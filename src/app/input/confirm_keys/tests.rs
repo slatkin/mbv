@@ -1,10 +1,9 @@
 use super::*;
 use crate::app::state::playback::{ReplacementExecutor, RoutedReplacementPrep};
-use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::*;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
+use mbv_ui_msg::KeyModifiers;
 
 /// Design D6: one `PlayItems` payload as the grouped-track resolver produces
 /// it, so the gate tests exercise the same executable shape the tree path
@@ -24,10 +23,10 @@ fn audio(id: &str) -> EmbyItem {
     item
 }
 
-/// A neutral key with no modifiers, translated from the crossterm-case code
-/// the tests spell (`extract-client-core` task 2.2: confirm keys are neutral).
-fn key(code: KeyCode) -> mbv_ui_msg::KeyEvent {
-    crossterm_key_to_neutral(KeyEvent::new(code, KeyModifiers::NONE))
+/// A neutral key with no modifiers (`extract-client-core` task 2.2: confirm
+/// keys are neutral, so the tests spell them in the neutral vocabulary).
+fn key(code: Key) -> mbv_ui_msg::KeyEvent {
+    mbv_ui_msg::KeyEvent::new(code, KeyModifiers::NONE)
 }
 
 /// Whether the shared confirm modal is the current pending overlay.
@@ -163,7 +162,7 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
     app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Enter));
 
     assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(
@@ -183,7 +182,7 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Esc));
 
     assert!(
         !app.queue_deferrals.has_gated_replacement(),
@@ -207,7 +206,7 @@ fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     mount_confirmation(&mut app);
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Enter));
 
     assert_eq!(
         pending_confirm_action(&app),
@@ -229,12 +228,12 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
     let (mut app, cmd_rx) = dirty_saved_playlist_app();
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Enter));
     mount_confirmation(&mut app);
 
     app.apply_confirm_action(
         ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        key(KeyCode::Char('d')),
+        key(Key::Char('d')),
     );
 
     assert!(!app.queue_deferrals.is_save_deferred());
@@ -256,11 +255,11 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     // behind the dirty-playlist save prompt's `s` answer.
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Enter));
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        key(KeyCode::Char('s')),
+        key(Key::Char('s')),
     );
     assert_eq!(queue_ids(&app), ["existing"], "the save defers execution");
     assert!(
@@ -313,7 +312,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     // Only the gated payload's own confirmation executes it: the save
     // completion did not leave the mounted prompt inert.
     mount_confirmation(&mut app);
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Enter));
     assert_eq!(
         sent_replace_ids(&cmd_rx),
         ["track-2"],
@@ -354,7 +353,7 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     );
     assert_eq!(app.playback_queue().cursor(), 0);
 
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Esc));
 
     assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["existing"]);
@@ -438,7 +437,7 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
     assert_eq!(queue_ids(&app), ["existing"], "the gate changes no queue");
 
     mount_confirmation(&mut app);
-    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(Key::Enter));
 
     assert_eq!(
         pending_confirm_action(&app),
@@ -492,7 +491,7 @@ fn save_deferral_ignores_a_different_save_for_the_same_playlist() {
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        key(KeyCode::Char('s')),
+        key(Key::Char('s')),
     );
 
     successful_save_completion(&mut app, 99);
@@ -508,7 +507,7 @@ fn failed_bound_save_drops_the_deferred_replacement() {
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        key(KeyCode::Char('s')),
+        key(Key::Char('s')),
     );
     let failed_save_id = app
         .playlist_mutations

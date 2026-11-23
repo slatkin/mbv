@@ -46,16 +46,3 @@ pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> 
 pub(in crate::app) type OpenUrlFn = fn(&str);
 pub(in crate::app) static OPEN_URL_OVERRIDE: Mutex<Option<OpenUrlFn>> = Mutex::new(None);
 pub(in crate::app) static OPEN_URL_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-/// Convert a crossterm `KeyEvent` to the neutral `KeyEvent` the router
-/// resolves (`extract-client-core` design D4, task 2.2). Test-only: production
-/// input enters through the `TuiRealm` listener and is translated at the
-/// `UiRoot` observer edge (`mbv_components::root::neutral_key`); the
-/// routing-matrix and shell tests drive the seam with crossterm keys, so
-/// they convert through the same production translation rather than a
-/// private copy.
-pub(in crate::app) fn crossterm_key_to_neutral(
-    key: crossterm::event::KeyEvent,
-) -> mbv_ui_msg::KeyEvent {
-    mbv_components::root::neutral_key(tuirealm::event::KeyEvent::from(key))
-}

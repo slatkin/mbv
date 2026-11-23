@@ -4,7 +4,7 @@
 
 use std::sync::mpsc;
 
-use crossterm::event::KeyCode;
+use mbv_ui_msg::Key;
 
 use crate::app::tests::tick_integration::harness::TickHarness;
 use mbv_ctrl::player::PlayerEvent;
@@ -104,7 +104,7 @@ fn take_from_the_connected_peer_stops_it_only_after_local_observes_and_ends_unco
 
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
 
     // The local Owner carries the copy: the peer queue's submitted slot ids,
@@ -208,7 +208,7 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
 
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
 
     let Some(CtrlCmd::UnifiedQueueReplace {
@@ -363,7 +363,7 @@ fn a_connected_take_whose_peer_link_died_never_stops_the_local_owner() {
     app.pending_overlay = None;
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
     assert!(
         app.pending_queue_transfer.is_some(),
@@ -429,7 +429,7 @@ fn a_settled_take_never_stops_a_different_peer_attachment() {
     app.pending_overlay = None;
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
     assert!(
         app.pending_queue_transfer.is_some(),
@@ -591,7 +591,7 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
     app.pending_overlay = None;
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
 
     assert!(

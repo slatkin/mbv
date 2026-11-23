@@ -95,7 +95,7 @@ pub use self::input::gui::GuiSurfaceLeaf;
 pub use self::input::key_policy::{
     OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
 };
-pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
+pub use self::input::router::RouterOutcome;
 pub use self::queue_card_artwork::QueueCardArtwork;
 pub use self::queue_footer_projection::{FooterPill, QueueFooterProjection};
 pub use self::queue_playback_projection::{

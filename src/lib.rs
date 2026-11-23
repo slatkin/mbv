@@ -51,7 +51,7 @@ pub use self::app::{
     RouterOverlayState, RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SetupSecret,
     ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
     TrackChoice, TrackPopoverChoice, VisualIntent, WorkspaceRelayout, artist_rows_in_view_id,
-    compare_gui_date_order, gui_feeds_platform, resolve_router_outcome_with_focused,
+    compare_gui_date_order, gui_feeds_platform,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{

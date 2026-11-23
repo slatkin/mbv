@@ -22,9 +22,9 @@ use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
 mod arbitration;
-pub(in crate::app) type ArbitrationDiagnostic = arbitration::ArbitrationDiagnostic;
 #[cfg(test)]
 pub(in crate::app) use arbitration::fold_keyboard_messages;
+pub(in crate::app) type ArbitrationDiagnostic = arbitration::ArbitrationDiagnostic;
 pub(in crate::app) use arbitration::{arbitrate_key, fold_mouse_messages};
 mod audiobookshelf_book;
 mod audiobookshelf_podcast;
@@ -47,6 +47,9 @@ mod library_panel;
 mod messages;
 mod modal_actions;
 mod music_workspace;
+/// The TUI input edge: terminal keys and mouse events cross into the neutral
+/// vocabulary here, before any core module reads them.
+pub(in crate::app) mod neutral_edge;
 pub(in crate::app) mod now_playing;
 mod overlays;
 mod playback;

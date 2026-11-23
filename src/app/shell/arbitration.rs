@@ -1,9 +1,7 @@
 use super::Model;
 use crate::app::dispatch::action::Command;
 use crate::app::dispatch::action::ShellCommand;
-use crate::app::input::router::{
-    RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
-};
+use crate::app::input::router::{RouterOutcome, RouterSnapshot};
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -237,14 +235,16 @@ impl Model {
     /// Build the router snapshot and resolve the terminal chord. The router
     /// reads a plain-data snapshot, never component attributes (ADR 0023).
     pub(in crate::app) fn router_outcome(&mut self, messages: &[Msg]) -> RouterOutcome {
-        let Some(tui_key) = messages.iter().find_map(|msg| match msg {
+        let Some(neutral_key) = messages.iter().find_map(|msg| match msg {
             Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(*key),
             _ => None,
         }) else {
             return RouterOutcome::FallThrough;
         };
-        // The router resolves the neutral chord the TUI edge translated
-        // (`extract-client-core` design D4); no back-conversion exists.
+        // The TUI edge translates the terminal key into the neutral
+        // vocabulary (`super::neutral_edge`) and the router normalizes the
+        // neutral chord (`extract-client-core` design D4); the core never
+        // names a terminal type, and no back-conversion exists.
         // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
         // initializers below call `effective_playback_state()`, which locks it
         // again. A temporary created anywhere inside the struct literal lives
@@ -297,8 +297,8 @@ impl Model {
             client_capabilities: self.app.client_capabilities,
         };
 
-        let outcome = resolve_router_outcome_with_focused(
-            tui_key,
+        let outcome = super::neutral_edge::resolve_tui_key(
+            neutral_key,
             &snapshot,
             self.application.focus(),
             &self.keybinds,

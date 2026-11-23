@@ -85,10 +85,7 @@ pub(crate) use super::app_stub::{gui_client_capabilities, make_app_stub, make_bu
 pub(crate) fn confirm_replace_queue(app: &mut App) {
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Enter,
-            crossterm::event::KeyModifiers::NONE,
-        )),
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Enter, mbv_ui_msg::KeyModifiers::NONE),
     );
 }
 

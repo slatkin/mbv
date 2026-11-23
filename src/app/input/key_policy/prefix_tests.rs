@@ -7,7 +7,11 @@ mod prefix_mode {
     use super::super::*;
     use crate::app::dispatch::action::{NavigationIntent, VisualIntent};
     use crate::app::input::router::RouterOutcome;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    /// A neutral key press with `mods`, the shape the TUI edge hands the router.
+    fn neutral_key(code: Key, mods: KeyModifiers) -> mbv_ui_msg::KeyEvent {
+        mbv_ui_msg::KeyEvent::new(code, mods)
+    }
 
     fn prefix_keybinds(assignments: &[(&str, &str)]) -> Keybinds {
         let mut sections: Vec<(String, mbv_keybinds::RawSection)> = Vec::new();
@@ -44,9 +48,13 @@ mod prefix_mode {
         }
     }
 
-    fn resolve(key: KeyEvent, snapshot: &RouterSnapshot, keybinds: &Keybinds) -> RouterOutcome {
+    fn resolve(
+        key: mbv_ui_msg::KeyEvent,
+        snapshot: &RouterSnapshot,
+        keybinds: &Keybinds,
+    ) -> RouterOutcome {
         crate::app::input::router::resolve_router_outcome_with_focused(
-            crate::app::test_seams::crossterm_key_to_neutral(key),
+            KeyChord::from_key(key),
             snapshot,
             None,
             keybinds,
@@ -56,14 +64,14 @@ mod prefix_mode {
     #[test]
     fn prefix_arm_is_the_top_layer_and_arms_through_the_router() {
         let keybinds = prefix_keybinds(&[]);
-        let key = chord(KeyCode::Char('b'), KeyModifiers::CONTROL);
+        let key = chord(Key::Char('b'), KeyModifiers::CONTROL);
         assert_eq!(
             resolve_policy(key, &snapshot(), &keybinds).unwrap().name,
             "prefix_arm"
         );
         assert_eq!(
             resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
+                neutral_key(Key::Char('b'), KeyModifiers::CONTROL),
                 &snapshot(),
                 &keybinds
             ),
@@ -78,7 +86,7 @@ mod prefix_mode {
         blocked.overlays.focus = OverlayFocus::Blocking;
         assert_eq!(
             resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
+                neutral_key(Key::Char('b'), KeyModifiers::CONTROL),
                 &blocked,
                 &keybinds
             ),
@@ -90,10 +98,7 @@ mod prefix_mode {
         let focused = mbv_ui_msg::ComponentId::Modal(mbv_ui_msg::ModalId::Confirm);
         assert_eq!(
             crate::app::input::router::resolve_router_outcome_with_focused(
-                crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-                    KeyCode::Char('b'),
-                    KeyModifiers::CONTROL
-                ),),
+                KeyChord::from_key(neutral_key(Key::Char('b'), KeyModifiers::CONTROL)),
                 &blocked,
                 Some(&focused),
                 &keybinds
@@ -109,7 +114,7 @@ mod prefix_mode {
         let keybinds = prefix_keybinds(&[("next_library_tab", "n")]);
         assert_eq!(
             resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+                neutral_key(Key::Char('n'), KeyModifiers::NONE),
                 &armed_snapshot(),
                 &keybinds
             ),
@@ -128,7 +133,7 @@ mod prefix_mode {
         link.playback.idle_feed_link_available = true;
         assert_eq!(
             resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+                neutral_key(Key::Char('f'), KeyModifiers::NONE),
                 &link,
                 &keybinds
             ),
@@ -137,7 +142,7 @@ mod prefix_mode {
         // The gate's non-chord conditions still close it.
         assert_eq!(
             resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+                neutral_key(Key::Char('f'), KeyModifiers::NONE),
                 &armed_snapshot(),
                 &keybinds
             ),
@@ -151,7 +156,7 @@ mod prefix_mode {
         let keybinds = prefix_keybinds(&[]);
         assert_eq!(
             resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
+                neutral_key(Key::Char('k'), KeyModifiers::NONE),
                 &armed_snapshot(),
                 &keybinds
             ),

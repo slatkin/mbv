@@ -7,7 +7,7 @@
 //! leaf's own typed request stands).
 
 use mbv_keybinds::Keybinds;
-use mbv_ui_msg::{Key, KeyEvent};
+use mbv_ui_msg::Key;
 
 use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
 use super::resolver::KeyChord;
@@ -66,13 +66,16 @@ pub enum RouterOutcome {
 ///
 /// The `blocking_overlay_open` catch-all rules stay: they still discard the
 /// focused leaf's message when no overlay is mounted.
-pub fn resolve_router_outcome_with_focused(
-    key: KeyEvent,
+/// The shell translates a terminal key into this neutral chord at the TUI edge
+/// (`crate::app::shell::neutral_edge`) and normalizes it with
+/// [`KeyChord::from_key`]; the router never names a toolkit type and never
+/// translates a key itself (`extract-client-core` design D4).
+pub(in crate::app) fn resolve_router_outcome_with_focused(
+    chord: KeyChord,
     snapshot: &RouterSnapshot,
     focused: Option<&ComponentId>,
     keybinds: &Keybinds,
 ) -> RouterOutcome {
-    let chord = KeyChord::from_key(key);
     // Armed prefix capture (design D6): while armed, every chord resolves
     // against the prefix namespace only — before text-entry, overlay, and
     // leaf arbitration, none of which can see an armed chord.
