@@ -586,6 +586,14 @@ impl App {
         self.launch_restore = state;
     }
 
+    /// The launch restore the shell holds: whether a saved launch is still
+    /// pending, settled onto a tab, or spent.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn launch_restore_for_test(&self) -> crate::app::state::app_struct::LaunchRestore {
+        self.launch_restore.clone()
+    }
+
     /// Empty the Emby catalog, as a Service teardown that dropped every view
     /// leaves it.
     #[cfg(any(test, feature = "test"))]

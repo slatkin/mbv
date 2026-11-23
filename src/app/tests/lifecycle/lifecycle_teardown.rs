@@ -4,8 +4,8 @@ use super::*;
 fn teardown_flushes_pending_settings_save() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.config.lock().unwrap().consume_audio = true;
-    app.settings_save_at = Some(Instant::now());
+    app.config_for_test(|config| config.consume_audio = true);
+    app.seed_deferred_settings_save_for_test();
 
     app.teardown(Duration::from_secs(1), false);
 
@@ -16,8 +16,8 @@ fn teardown_flushes_pending_settings_save() {
 fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.config.lock().unwrap().auto_reconnect = true;
-    app.active_route = Some("music".to_string());
+    app.config_for_test(|config| config.auto_reconnect = true);
+    app.seed_active_route_for_test(Some("music".to_string()));
 
     app.teardown(Duration::from_secs(1), false);
 
@@ -38,8 +38,8 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
         },
     ));
     let mut app = make_app_stub();
-    assert!(!app.config.lock().unwrap().auto_reconnect);
-    app.active_route = None;
+    assert!(!app.config_for_test(|config| config.auto_reconnect));
+    app.seed_active_route_for_test(None);
 
     app.teardown(Duration::from_secs(1), false);
 
@@ -68,7 +68,7 @@ fn teardown_without_a_remote_keeps_the_saved_target() {
         },
     ));
     let mut app = make_app_stub();
-    app.config.lock().unwrap().auto_reconnect = true;
+    app.config_for_test(|config| config.auto_reconnect = true);
 
     app.teardown(Duration::from_secs(1), false);
 
@@ -92,13 +92,13 @@ fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
         },
     ));
     let mut app = make_app_stub();
-    app.config.lock().unwrap().auto_reconnect = true;
-    app.direct_remote_connected = true;
+    app.config_for_test(|config| config.auto_reconnect = true);
+    app.seed_direct_remote_connected_for_test();
     // The Local endpoint puts `restore_local_mode` on its own local-baseline
     // early return, so the detach needs no owner connection.
-    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    app.set_player_endpoint_for_test(mbv_remote_player::DaemonEndpoint::Local);
 
-    app.disconnect_remote();
+    app.disconnect_remote_for_test();
 
     app.teardown(Duration::from_secs(1), false);
 
@@ -120,14 +120,14 @@ fn swapped_out_teardown_sends_no_shutdown_request() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_app_stub();
-    app.config.lock().unwrap().stay_alive = false;
+    app.config_for_test(|config| config.stay_alive = false);
 
     let (home_remote, _home_rx, home_peer) = mbv_remote_player::connect_stub_daemon_pair().unwrap();
     let (event_tx, event_rx) = std::sync::mpsc::channel();
-    app.suspended_local = Some(crate::app::SuspendedLocalSession {
-        player: mbv_player::PlayerProxy::from_remote(home_remote, false),
-        player_rx: event_rx,
-    });
+    app.suspend_home_link_for_test(
+        mbv_player::PlayerProxy::from_remote(home_remote, false),
+        event_rx,
+    );
     let mut model = crate::app::Model::new(app);
 
     // The run loop's home-link drain delivers the Owner's `SwapQuit` to the
@@ -141,16 +141,9 @@ fn swapped_out_teardown_sends_no_shutdown_request() {
 
     model.teardown(Duration::ZERO);
 
-    assert!(model.app.pending_exit_message.is_none());
+    assert!(model.app.pending_exit_message_for_test().is_none());
     assert_eq!(mbv_config::load_tui_launch_state(), None);
 
-    model
-        .app
-        .suspended_local
-        .as_ref()
-        .unwrap()
-        .player
-        .remote()
-        .disconnect();
+    model.app.suspended_home_remote_disconnect_for_test();
     home_peer.join().unwrap();
 }

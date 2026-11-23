@@ -81,7 +81,7 @@ fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
 
     model.app.accept_home_recently_added(
         source.clone(),
-        model.app.emby_runtime.generation(),
+        model.app.emby_setup_generation_for_test(),
         vec![movie_dated("movie", i64::try_from(current - 60).unwrap())],
     );
 
@@ -104,7 +104,7 @@ fn acknowledging_the_source_clears_its_marker() {
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
     model.app.accept_home_recently_added(
         source.clone(),
-        model.app.emby_runtime.generation(),
+        model.app.emby_setup_generation_for_test(),
         vec![movie_dated("movie", i64::try_from(current - 60).unwrap())],
     );
     assert!(model.destination_latest_marker(&source));
@@ -127,7 +127,7 @@ fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
 
     model.app.accept_home_recently_added(
         source.clone(),
-        model.app.emby_runtime.generation(),
+        model.app.emby_setup_generation_for_test(),
         vec![movie_dated(
             "movie",
             i64::try_from(current - 20 * 24 * 60 * 60).unwrap(),
@@ -150,7 +150,7 @@ fn an_item_dated_after_the_launch_instant_does_not_mark() {
 
     model.app.accept_home_recently_added(
         source.clone(),
-        model.app.emby_runtime.generation(),
+        model.app.emby_setup_generation_for_test(),
         vec![movie_dated(
             "movie",
             i64::try_from(current + 60 * 60).unwrap(),
@@ -188,7 +188,7 @@ fn a_podcast_library_marks_from_its_home_recently_added_rows() {
 
     model.app.accept_home_recently_added(
         source.clone(),
-        model.app.audiobookshelf_runtime.generation(),
+        model.app.audiobookshelf_setup_generation_for_test(),
         vec![QueueItem::Audiobookshelf(
             mbv_queue::AudiobookshelfItem::Episode(queue_episode),
         )],
@@ -206,7 +206,9 @@ fn a_feed_entry_inside_the_launch_window_marks_the_feeds_destination() {
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
-    model.app.feed_tab.all_entries = vec![feed_entry(current - 60)];
+    model
+        .app
+        .seed_feed_entries_for_test(vec![feed_entry(current - 60)]);
 
     assert!(model.destination_latest_marker(&crate::app::DestinationLatestSource::Feeds));
 }

@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 /// not terminal across candidates: the next candidate creation for the level
 /// retries, and unresolved albums settle via `SETTLE_WINDOW` regardless.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) enum LevelFillState {
+pub enum LevelFillState {
     /// A level fill is in flight. Set by `spawn_level_artist_fetch`.
     /// `orphan_risk` is true for a warm-up fill that lacked the level's album
     /// paths, so a later browse can perform one path-aware upgrade.

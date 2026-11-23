@@ -32,11 +32,11 @@ fn paged_movie_level(items_loaded: usize, total_count: usize, cursor: usize) -> 
 fn viewport_reach_within_prefetch_ahead_arms_the_next_page_fetch() {
     // PREFETCH_AHEAD is 25; 30 of 100 items loaded (not fully loaded).
     let mut app = make_app_stub();
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
+    app.push_library_for_test(LibraryTab {
         nav_stack: vec![paged_movie_level(30, 100, 0)],
         ..LibraryTab::new(library)
     });
@@ -52,21 +52,19 @@ fn viewport_reach_within_prefetch_ahead_arms_the_next_page_fetch() {
     );
 
     assert!(
-        model.app.libs[0].nav_stack.last().unwrap().loading,
+        model.app.emby_library_root_loading(0),
         "a reach within PREFETCH_AHEAD of the loaded edge must arm the next page"
     );
     assert_eq!(
-        model.app.panel_focus,
+        model.app.stored_panel_focus(),
         PanelFocus::Library,
         "a claimed wheel must focus Library"
     );
     assert_eq!(
-        model.app.libs[0]
-            .nav_stack
-            .last()
-            .unwrap()
-            .resting()
-            .cursor(),
+        model
+            .app
+            .emby_library_level_cursor(0, 0)
+            .unwrap_or_default(),
         0,
         "a reach report must never move the selection"
     );

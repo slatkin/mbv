@@ -61,6 +61,24 @@ impl App {
         self.local_view.set_cursor(cursor);
     }
 
+    /// Hold `items` as the local queue view's Emby slots, cursor at `cursor`,
+    /// as the Owner's queue adoption leaves them: the shape the queue tests
+    /// seed with Emby fixtures.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_local_queue_emby_items_for_test(
+        &mut self,
+        items: Vec<mbv_emby_model::EmbyItem>,
+        cursor: usize,
+    ) {
+        self.seed_local_queue_items_for_test(
+            items
+                .into_iter()
+                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
+            cursor,
+        );
+    }
+
     /// Hold `site` as where the now-playing title paints, as the projection
     /// pass leaves it once the artwork can carry it.
     #[cfg(any(test, feature = "test"))]
@@ -104,6 +122,157 @@ impl App {
         entry: crate::app::state::playback::UndoEntry,
     ) {
         self.undo_stack_for_link_mut(link).push(entry);
+    }
+
+    /// Hold `source` as the local queue view's source, as a queue adopted from
+    /// a saved playlist or an album browse leaves it: the shape the consume
+    /// and save paths read.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_local_queue_source_for_test(&mut self, source: mbv_queue::QueueSource) {
+        let state = mbv_ctrl::UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
+            status: mbv_ctrl::player::PlayerStatus::default(),
+            active_slot: None,
+            slots: self
+                .local_view
+                .slots()
+                .iter()
+                .map(|slot| mbv_ctrl::UnifiedQueueSlot {
+                    slot_id: mbv_ctrl::slot_id_to_u64(slot.slot_id),
+                    item: slot.item.clone(),
+                })
+                .collect(),
+            revision: 1,
+            source,
+            lineage: mbv_queue::QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        };
+        let cursor = self.local_view.cursor();
+        self.local_view.adopt(
+            &state,
+            crate::app::state::queue_view::AdoptCause::Replacement,
+        );
+        self.local_view.set_cursor(cursor);
+    }
+
+    /// Whether the local queue holds unsaved edits: the flag a save prompt
+    /// reads before it replaces or drops the queue.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn queue_dirty_for_test(&self) -> bool {
+        self.queue_dirty
+    }
+
+    /// The slot the recorded delete waits to stop: the pending-delete marker
+    /// the Stopped event clears, or `None` while no delete is recorded.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pending_delete_slot_for_test(&self) -> Option<mbv_queue::QueueSlotId> {
+        self.pending_delete_slot
+    }
+
+    /// The slots the recorded multi-delete waits to stop, or `None` while no
+    /// multi-delete is recorded.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pending_delete_selection_for_test(&self) -> Option<Vec<mbv_queue::QueueSlotId>> {
+        self.pending_delete_selection.clone()
+    }
+
+    /// Whether a queue transfer waits to settle: the pending transfer the
+    /// observation tick settles or fails.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pending_queue_transfer_for_test(&self) -> bool {
+        self.pending_queue_transfer.is_some()
+    }
+
+    /// Whether a peer's queue is held beside the home queue: the state a
+    /// direct remote-control connection installs.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn has_remote_queue_for_test(&self) -> bool {
+        self.has_remote_queue()
+    }
+
+    /// Remove the slot at `pos` through the production removal path, as the
+    /// queue panel's delete does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn remove_from_queue_for_test(&mut self, pos: usize) {
+        self.remove_from_queue(pos);
+    }
+
+    /// Remove `slot_ids` from `target`'s queue through the production
+    /// multi-delete path, as the queue panel's selection delete does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn remove_slots_from_queue_for_test(
+        &mut self,
+        target: crate::app::QueueTarget,
+        slot_ids: &[mbv_queue::QueueSlotId],
+    ) {
+        self.remove_slots_from_queue(target, slot_ids);
+    }
+
+    /// Undo `link`'s last queue edit through the production undo path, as the
+    /// queue panel's undo does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn undo_last_queue_edit_for_test(&mut self, link: mbv_ui_model::playback::QueueLink) {
+        self.undo_last_queue_edit(link);
+    }
+
+    /// Send `op` on `target`'s queue link through the production queue-op
+    /// path, as the queue panel's edit does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn queue_op_for_test(
+        &mut self,
+        target: crate::app::QueueTarget,
+        op: mbv_remote_player::QueueOp,
+    ) {
+        self.queue_op(target, op);
+    }
+
+    /// Wait for `id`'s queue-op answer through the production pump, as the
+    /// edit path does before the next input.
+    #[cfg(any(test, feature = "test"))]
+    pub fn await_queue_op_for_test(
+        &mut self,
+        link: mbv_ui_model::playback::QueueLink,
+        id: mbv_ctrl::QueueOpId,
+    ) {
+        self.await_queue_op(link, id);
+    }
+
+    /// Wait for `id`'s queue-op answer with the pump bound to `bound`, as the
+    /// timeout-path tests drive it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn await_queue_op_with_bound_for_test(
+        &mut self,
+        link: mbv_ui_model::playback::QueueLink,
+        id: mbv_ctrl::QueueOpId,
+        bound: std::time::Duration,
+    ) {
+        self.await_queue_op_with_bound(link, id, bound);
+    }
+
+    /// Adopt `snapshot` as `link`'s queue through the production owner-update
+    /// path, as a background owner broadcast does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn handle_unified_queue_updated_for_test(
+        &mut self,
+        link: mbv_ui_model::playback::QueueLink,
+        snapshot: &mbv_ctrl::UnifiedQueueStateData,
+    ) {
+        self.handle_unified_queue_updated(link, snapshot);
+    }
+
+    /// The queue link the shown playback resolves to: the one an edit
+    /// addresses.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn active_queue_link_for_test(&self) -> mbv_ui_model::playback::QueueLink {
+        self.active_queue_link()
     }
 
     /// Whether `link`'s undo stack holds no entry: whether the undo consumed

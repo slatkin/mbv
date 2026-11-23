@@ -25,7 +25,7 @@ fn app_with_card_image() -> Model {
     let mut app = make_app_stub();
     let mut configured = Picker::halfblocks();
     configured.set_protocol_type(ProtocolType::Kitty);
-    app.images.configure_protocol(None, true);
+    app.configure_image_protocol_for_test(None, true);
     let mut model = Model::new(app);
     crate::app::shell::install_image_pickers_for_test(&mut model, configured, Picker::halfblocks());
     model.app.images.insert_image(

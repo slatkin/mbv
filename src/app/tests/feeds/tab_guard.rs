@@ -2,6 +2,52 @@ use crate::app::tests::*;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::browse::ServerRows;
 
+/// The stub app holding one Movies library whose root level lists one row: the
+/// catalog a Feeds-tab guard observes for mutation.
+fn movies_library_app() -> App {
+    let mut app = make_app_stub();
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.collection_type = "movies".into();
+    library.is_folder = true;
+    app.push_library_for_test(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            rows: ServerRows::new(1),
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: vec![make_item("Item 0", "Movie")],
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+    app
+}
+
+/// The one subscription a Feeds-tab guard configures.
+fn test_feed_subscription() -> mbv_config::FeedSubscription {
+    mbv_config::FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: mbv_queue::FeedKind::Audio,
+    }
+}
+
+/// The app holding the one subscription a Feeds-tab guard configures.
+fn feeds_tab_app() -> App {
+    let mut app = make_app_stub();
+    app.seed_feeds_tab_for_test(vec![test_feed_subscription()], Vec::new());
+    app
+}
+
 fn playable_feed_entry(guid: &str) -> FeedEntry {
     FeedEntry {
         guid: guid.into(),
@@ -23,49 +69,17 @@ fn playable_feed_entry(guid: &str) -> FeedEntry {
 /// feed-specific actions rather than library-item dispatch.
 #[test]
 fn feeds_tab_does_not_route_into_library_behavior() {
-    let mut app = make_app_stub();
-
     // Set up a library so a bounds-miss shuffle target can be checked.
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.collection_type = "movies".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: vec![make_item("Item 0", "Movie")],
-
-            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
+    let mut app = movies_library_app();
 
     // Configure a feed subscription and select the Feeds tab.
-    app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: mbv_queue::FeedKind::Audio,
-    }];
-    app.feed_tab
-        .entries
-        .resize_with(app.feed_tab.subscriptions.len(), Vec::new);
-    app.tab = TabSelection::Feeds;
-    app.panel_focus = PanelFocus::Library;
+    app.seed_feeds_tab_for_test(vec![test_feed_subscription()], Vec::new());
+    app.seed_active_tab_for_test(TabSelection::Feeds);
+    app.set_panel_focus_for_test(PanelFocus::Library);
 
     // 1. Feeds must not have a library index.
     assert_eq!(
-        app.tab.emby_library_index(),
+        app.tab_for_test().emby_library_index(),
         None,
         "Feeds should not expose a library index"
     );
@@ -73,10 +87,11 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     // 2. A bounds-miss shuffle target (the old tab-recovery would
     // panic on emby_library_index().unwrap()) must return early without
     // panic or mutation.
-    let queue_len_before = app.local_view.emby_items().len();
-    app.shuffle_play_target(app.libs.len(), None); // index past the single library
+    let queue_len_before = app.local_queue_len_for_test();
+    let past_the_catalog = app.libs_for_test().len();
+    app.shuffle_play_selected(past_the_catalog, &make_item("Item 0", "Movie"));
     assert_eq!(
-        app.local_view.emby_items().len(),
+        app.local_queue_len_for_test(),
         queue_len_before,
         "a bounds-miss shuffle must not touch the queue"
     );
@@ -92,8 +107,8 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     // 4. The library tab's nav_stack cursor must be untouched — Feeds
     //    did not dispatch into library browsing.
     assert_eq!(
-        app.libs[0].nav_stack[0].resting().cursor(),
-        0,
+        app.emby_library_level_cursor(0, 0),
+        Some(0),
         "library cursor must remain unchanged by feed-tab key handling"
     );
 }
@@ -105,7 +120,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
 #[test]
 fn feed_tab_play_entry_no_source_does_not_dispatch() {
     let mut app = make_app_stub();
-    app.feed_tab.entries = vec![vec![FeedEntry {
+    let entry = FeedEntry {
         guid: "a".into(),
         title: "Entry A".into(),
         enclosure_url: None,
@@ -117,9 +132,9 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
         feed_id: None,
         position_ticks: 0,
         played: false,
-    }]];
-    app.feed_tab.rebuild_all_entries();
-    app.play_feed_entry(app.feed_tab.entries[0][0].clone());
+    };
+    app.seed_feeds_tab_for_test(vec![test_feed_subscription()], vec![entry.clone()]);
+    app.play_feed_entry(entry);
 
     assert!(
         app.newest_toast_text().contains("no playable source"),
@@ -136,10 +151,10 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
 fn direct_remote_feed_play_submits_the_selected_entry() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(1));
-    app.feed_tab.entries = vec![vec![playable_feed_entry("feed-play")]];
-    app.feed_tab.rebuild_all_entries();
+    let entry = playable_feed_entry("feed-play");
+    app.seed_feeds_tab_for_test(vec![test_feed_subscription()], vec![entry.clone()]);
 
-    app.play_feed_entry(app.feed_tab.entries[0][0].clone());
+    app.play_feed_entry(entry);
 
     // Enter on a media item always replaces the queue with exactly the played
     // entry and starts it (queue-owner-process #857 review follow-up), in the
@@ -160,10 +175,10 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
 
 #[test]
 fn feed_selection_enqueue_preserves_supplied_order() {
-    let mut app = make_app_stub();
+    let mut app = feeds_tab_app();
     // Row 5.3: each enqueue is an Append owner op, so the supplied order is
     // observed on the wire rather than in an optimistic Client write.
-    let cmd_rx = super::super::live_owner_channel(&mut app);
+    let cmd_rx = app.set_player_with_command_rx_for_test();
     app.enqueue_feed_entries(vec![
         playable_feed_entry("feed-first"),
         playable_feed_entry("feed-second"),
@@ -195,29 +210,9 @@ fn feed_selection_enqueue_preserves_supplied_order() {
 /// are replaced.
 #[test]
 fn f5_on_feeds_tab_invokes_feed_refresh() {
-    let mut app = make_app_stub();
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: vec![make_item("Item 0", "Movie")],
-
-            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
+    let mut app = movies_library_app();
+    app.edit_library_level_for_test(0, 0, |level| {
+        level.item_types = Some("Movie".into());
     });
     let abs_library = mbv_audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
@@ -239,32 +234,34 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
             cover_path: None,
         }],
     );
-    app.audiobookshelf_libraries.push(abs_library);
-    app.audiobookshelf_browse.push(abs_state);
-    app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: mbv_queue::FeedKind::Audio,
-    }];
-    app.feed_tab.entries.resize_with(1, Vec::new);
-    app.tab = TabSelection::Feeds;
-    app.panel_focus = PanelFocus::Library;
+    app.seed_audiobookshelf_libraries_for_test(vec![abs_library]);
+    app.seed_audiobookshelf_browse_for_test(vec![abs_state]);
+    app.seed_feeds_tab_for_test(vec![test_feed_subscription()], Vec::new());
+    app.seed_active_tab_for_test(TabSelection::Feeds);
+    app.set_panel_focus_for_test(PanelFocus::Library);
 
     app.refresh_current_view(false);
 
-    assert!(app.feed_tab.loading, "Feeds F5 must start a feed refresh");
+    assert!(
+        app.feeds_refresh_in_flight_for_test(),
+        "Feeds F5 must start a feed refresh"
+    );
     assert_eq!(
-        app.feed_tab.pending_results, 1,
+        app.feeds_pending_results_for_test(),
+        1,
         "the single subscription must be fetching"
     );
     assert!(
-        !app.libs[0].nav_stack[0].loading,
+        !app.library_level_loading_for_test(0),
         "Feeds F5 must not reload the Emby library"
     );
     assert_eq!(
-        app.audiobookshelf_browse[0].shows.len(),
+        app.audiobookshelf_browse_state(0)
+            .expect("the stored catalog")
+            .shows
+            .len(),
         1,
         "Feeds F5 must not clear the Audiobookshelf catalog"
     );
-    assert_eq!(app.local_view.total_queue_len(), 0);
+    assert_eq!(app.local_queue_len_for_test(), 0);
 }

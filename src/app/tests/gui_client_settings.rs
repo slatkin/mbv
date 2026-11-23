@@ -11,9 +11,9 @@ use crate::app::state::app_struct::LaunchRestore;
 #[test]
 fn the_gui_setting_disables_the_tui_panel_rules() {
     let mut app = make_app_stub();
-    app.set_client_capabilities(gui_client_capabilities());
-    app.panel_focus = PanelFocus::Queue;
-    app.panel_mode = PanelMode::Both;
+    app.set_gui_client_capabilities_for_test();
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.set_panel_mode_for_test(PanelMode::Both);
     // A narrow terminal plus an empty queue arms both of the TUI's rules; the
     // terminal size lives on the shell `Model`.
     let mut model = Model::new(app);
@@ -44,11 +44,14 @@ fn the_gui_setting_starts_with_the_launch_restore_done() {
     })
     .unwrap();
     let mut app = make_app_stub();
-    assert!(matches!(app.launch_restore, LaunchRestore::Pending(_)));
+    assert!(matches!(
+        app.launch_restore_for_test(),
+        LaunchRestore::Pending(_)
+    ));
 
     app.skip_launch_restore();
 
-    assert_eq!(app.launch_restore, LaunchRestore::Done);
+    assert_eq!(app.launch_restore_for_test(), LaunchRestore::Done);
 }
 
 /// The card key a playing Movie row resolves to: the landscape key the card
@@ -61,13 +64,8 @@ const CARD_KEY: &str = "id:QB";
 /// does not enable the `test` feature, so the exported stubs are not there.
 fn playing_movie_app() -> App {
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(vec![make_item("Item 0", "Movie")], 0);
-    app.player.update_status(|status| {
-        status.active = true;
-        status.current_idx = 0;
-        status.queue_len = 1;
-    });
+    app.seed_local_queue_emby_items_for_test(vec![make_item("Item 0", "Movie")], 0);
+    app.seed_playing_status_for_test(0, 1);
     app.enable_card_images_for_test();
     app
 }

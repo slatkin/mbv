@@ -60,18 +60,18 @@ fn take_from_the_connected_peer_stops_it_only_after_local_observes_and_ends_unco
     peer.update_status(|status| status.position_ticks = 1_900_000_000);
     let sess = peer_session("peer-owner");
     let (_dropped_tx, attach_rx) = mpsc::channel();
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &sess,
         peer,
         attach_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(sess))]);
     // The local Owner's post-replacement answer, pre-pushed onto its
     // suspended link: the submitted slot ids (1..=5) are kept (design D8),
     // and the start slot 2 is observed active and playing.
     let (home_tx, home_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = home_rx;
+    app.set_suspended_local_events_for_test(home_rx);
     home_tx
         .send(applied(1, peer_snapshot(&peer_items, 1, true)))
         .unwrap();
@@ -82,7 +82,7 @@ fn take_from_the_connected_peer_stops_it_only_after_local_observes_and_ends_unco
 
     // The populated local queue raised the confirm prompt and nothing was
     // sent to either Player owner.
-    let modal = match &app.pending_overlay {
+    let modal = match app.pending_overlay_for_test() {
         Some(OverlayRequest::Confirm(modal)) => modal,
         other => panic!("a populated local queue must raise the confirm prompt, got {other:?}"),
     };
@@ -100,7 +100,7 @@ fn take_from_the_connected_peer_stops_it_only_after_local_observes_and_ends_unco
         "the peer receives nothing before the user confirms"
     );
     // Mirror the shell's modal dismissal before the confirm answer.
-    app.pending_overlay = None;
+    app.clear_pending_overlay_for_test();
 
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
@@ -136,7 +136,7 @@ fn take_from_the_connected_peer_stops_it_only_after_local_observes_and_ends_unco
     );
     assert!(op.is_some(), "the copy is an answered owner operation");
     assert!(
-        app.pending_queue_transfer.is_some(),
+        app.pending_queue_transfer_for_test(),
         "the pending transfer arms after the copy is sent"
     );
     assert!(
@@ -148,14 +148,17 @@ fn take_from_the_connected_peer_stops_it_only_after_local_observes_and_ends_unco
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !app.pending_queue_transfer_for_test(),
+        "the transfer settles"
+    );
     assert!(
         stop_sent_to(&peer_cmd_rx),
         "the peer stops only after the local Owner observed the start slot"
     );
     assert!(!stop_sent_to(&local_cmd_rx), "the local Owner never stops");
     assert!(
-        !app.direct_remote_connected && !app.has_remote_queue(),
+        !app.direct_remote_connected_for_test() && !app.has_remote_queue_for_test(),
         "the Take ends unconnected and the queue panel shows the local Owner queue"
     );
     assert!(
@@ -182,12 +185,14 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
     let (_dropped_tx, probe_event_rx) = mpsc::channel();
     *PROBE_LINK.lock().unwrap() = Some((probe, probe_event_rx));
     *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
+        "peer-owner",
+    )))]);
     // The local Owner's post-replacement answer, pre-pushed onto its event
     // receiver: the submitted slot ids (1..=3) are kept (design D8), and the
     // start slot 2 is observed active and playing.
     let (local_tx, local_rx) = mpsc::channel();
-    app.player_rx = local_rx;
+    app.set_active_player_events_for_test(local_rx);
     local_tx
         .send(applied(1, peer_snapshot(&peer_items, 1, true)))
         .unwrap();
@@ -197,14 +202,17 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
     app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
 
     assert!(
-        matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
+        matches!(
+            app.pending_overlay_for_test(),
+            Some(OverlayRequest::Confirm(_))
+        ),
         "the populated local queue asks first"
     );
     assert!(
         local_replace(&local_cmd_rx).is_none() && peer_replace(&probe_cmd_rx).is_none(),
         "nothing is sent before the user confirms"
     );
-    app.pending_overlay = None;
+    app.clear_pending_overlay_for_test();
 
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
@@ -236,11 +244,11 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
         "the copy carries the peer playback position"
     );
     assert!(
-        app.pending_queue_transfer.is_some(),
+        app.pending_queue_transfer_for_test(),
         "the pending transfer arms after the copy is sent"
     );
     assert!(
-        !app.direct_remote_connected && !app.has_remote_queue(),
+        !app.direct_remote_connected_for_test() && !app.has_remote_queue_for_test(),
         "the unconnected Take never attaches the probe"
     );
     assert!(
@@ -252,16 +260,19 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !app.pending_queue_transfer_for_test(),
+        "the transfer settles"
+    );
     assert!(
         stop_sent_to(&probe_cmd_rx),
         "the source stop reaches the probe link, never self.player"
     );
     assert!(!stop_sent_to(&local_cmd_rx), "the local Owner never stops");
     assert!(
-        app.staged_queue_transfer.is_none()
-            && !app.direct_remote_connected
-            && !app.has_remote_queue(),
+        !app.queue_transfer_is_staged_for_test()
+            && !app.direct_remote_connected_for_test()
+            && !app.has_remote_queue_for_test(),
         "the settled Take leaves no staged link and the Client stays unconnected"
     );
     *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
@@ -289,13 +300,13 @@ fn a_peer_snapshot_without_an_active_slot_receives_nothing_and_leaves_the_local_
     });
     let sess = peer_session("peer-owner");
     let (_dropped_tx, attach_rx) = mpsc::channel();
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &sess,
         peer,
         attach_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(sess))]);
     while local_cmd_rx.try_recv().is_ok() {}
     while peer_cmd_rx.try_recv().is_ok() {}
 
@@ -309,8 +320,8 @@ fn a_peer_snapshot_without_an_active_slot_receives_nothing_and_leaves_the_local_
         peer_replace(&peer_cmd_rx).is_none() && !stop_sent_to(&peer_cmd_rx),
         "the peer receives nothing"
     );
-    assert!(app.pending_queue_transfer.is_none());
-    assert!(app.staged_queue_transfer.is_none());
+    assert!(!app.pending_queue_transfer_for_test());
+    assert!(!app.queue_transfer_is_staged_for_test());
     assert!(
         app.newest_toast_text()
             .contains("nothing is playing on the peer"),
@@ -318,7 +329,7 @@ fn a_peer_snapshot_without_an_active_slot_receives_nothing_and_leaves_the_local_
         app.newest_toast_text()
     );
     assert_eq!(
-        app.local_view
+        app.queue_for_link(crate::app::QueueLink::Local)
             .slots()
             .iter()
             .map(|slot| slot.slot_id.raw())
@@ -342,17 +353,17 @@ fn a_connected_take_whose_peer_link_died_never_stops_the_local_owner() {
     peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
     let sess = peer_session("peer-owner");
     let (_dropped_tx, attach_rx) = mpsc::channel();
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &sess,
         peer,
         attach_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(sess))]);
     // The local Owner's post-replacement answer, pre-pushed onto its
     // suspended link: the start slot is observed active and playing.
     let (home_tx, home_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = home_rx;
+    app.set_suspended_local_events_for_test(home_rx);
     home_tx
         .send(applied(1, peer_snapshot(&make_audio_items(3), 1, true)))
         .unwrap();
@@ -360,25 +371,28 @@ fn a_connected_take_whose_peer_link_died_never_stops_the_local_owner() {
     while peer_cmd_rx.try_recv().is_ok() {}
 
     app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
-    app.pending_overlay = None;
+    app.clear_pending_overlay_for_test();
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
         confirm_key(Key::Enter),
     );
     assert!(
-        app.pending_queue_transfer.is_some(),
+        app.pending_queue_transfer_for_test(),
         "the confirmed Take armed the pending transfer"
     );
 
     // The peer link drops and the teardown reinstalls the home link (auto
     // reattach disabled or failed): `self.player` is the local Owner again.
-    app.restore_local_mode("Daemon disconnected — returned to local mode");
+    app.restore_local_mode_for_test("Daemon disconnected — returned to local mode");
 
     let mut harness = TickHarness::new(app);
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !app.pending_queue_transfer_for_test(),
+        "the transfer settles"
+    );
     assert!(
         !stop_sent_to(&local_cmd_rx),
         "the source stop must never land on the local Owner"
@@ -388,7 +402,7 @@ fn a_connected_take_whose_peer_link_died_never_stops_the_local_owner() {
         "the local Owner keeps playing the taken queue"
     );
     assert!(
-        !app.direct_remote_connected && !app.has_remote_queue(),
+        !app.direct_remote_connected_for_test() && !app.has_remote_queue_for_test(),
         "the Take ends unconnected"
     );
 }
@@ -407,18 +421,18 @@ fn a_settled_take_never_stops_a_different_peer_attachment() {
     peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
     let sess = peer_session("peer-owner");
     let (_dropped_tx, attach_rx) = mpsc::channel();
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &sess,
         peer,
         attach_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(sess))]);
     // The local Owner's post-replacement answer, pre-pushed onto its
     // suspended link: the start slot is queued but not yet observed
     // active, so the settlement stays armed across the reconnect below.
     let (home_tx, home_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = home_rx;
+    app.set_suspended_local_events_for_test(home_rx);
     home_tx
         .send(applied(1, peer_snapshot(&make_audio_items(3), 99, false)))
         .unwrap();
@@ -426,24 +440,24 @@ fn a_settled_take_never_stops_a_different_peer_attachment() {
     while peer_cmd_rx.try_recv().is_ok() {}
 
     app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
-    app.pending_overlay = None;
+    app.clear_pending_overlay_for_test();
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
         confirm_key(Key::Enter),
     );
     assert!(
-        app.pending_queue_transfer.is_some(),
+        app.pending_queue_transfer_for_test(),
         "the confirmed Take armed the pending transfer"
     );
 
     // The peer link drops and the teardown reinstalls the home link; the
     // user then connects to a different peer before the local Owner
     // reports the start slot playing.
-    app.restore_local_mode("Daemon disconnected — returned to local mode");
+    app.restore_local_mode_for_test("Daemon disconnected — returned to local mode");
     let other_sess = peer_session("peer-other");
     let (other_peer, other_peer_rx, other_cmd_rx) =
         RemotePlayer::stub_with_command_rx(make_audio_items(1), 0);
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &other_sess,
         other_peer,
         other_peer_rx,
@@ -464,7 +478,10 @@ fn a_settled_take_never_stops_a_different_peer_attachment() {
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !app.pending_queue_transfer_for_test(),
+        "the transfer settles"
+    );
     assert!(
         !stop_sent_to(&other_cmd_rx),
         "the source stop never lands on the different peer"
@@ -474,7 +491,7 @@ fn a_settled_take_never_stops_a_different_peer_attachment() {
         "the local Owner keeps playing the taken queue"
     );
     assert!(
-        app.direct_remote_connected && app.has_remote_queue(),
+        app.direct_remote_connected_for_test() && app.has_remote_queue_for_test(),
         "the different peer attachment is not the transfer's link to close"
     );
 }
@@ -494,13 +511,13 @@ fn a_local_owner_without_the_start_position_capability_refuses_the_take() {
     peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
     let sess = peer_session("peer-owner");
     let (_dropped_tx, attach_rx) = mpsc::channel();
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &sess,
         peer,
         attach_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(sess))]);
     while local_cmd_rx.try_recv().is_ok() {}
     while peer_cmd_rx.try_recv().is_ok() {}
 
@@ -511,7 +528,7 @@ fn a_local_owner_without_the_start_position_capability_refuses_the_take() {
         "the refused Take sends nothing to either owner"
     );
     assert!(
-        app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
+        !app.pending_queue_transfer_for_test() && !app.queue_transfer_is_staged_for_test(),
         "the refused Take arms and stages nothing"
     );
     assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
@@ -534,15 +551,15 @@ fn a_dead_home_link_refuses_the_connected_take_before_anything_is_sent() {
     peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
     let sess = peer_session("peer-owner");
     let (_dropped_tx, attach_rx) = mpsc::channel();
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &sess,
         peer,
         attach_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(sess))]);
     // The home link died behind the attachment.
-    app.suspended_local = None;
+    app.drop_suspended_home_link_for_test();
     while local_cmd_rx.try_recv().is_ok() {}
     while peer_cmd_rx.try_recv().is_ok() {}
 
@@ -553,7 +570,7 @@ fn a_dead_home_link_refuses_the_connected_take_before_anything_is_sent() {
         "the copy must not reach the peer attachment"
     );
     assert!(
-        app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
+        !app.pending_queue_transfer_for_test() && !app.queue_transfer_is_staged_for_test(),
         "the refused Take arms nothing"
     );
     assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
@@ -580,15 +597,20 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
     let (_dropped_tx, probe_event_rx) = mpsc::channel();
     *PROBE_LINK.lock().unwrap() = Some((probe, probe_event_rx));
     *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
+        "peer-owner",
+    )))]);
 
     app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
 
     assert!(
-        matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
+        matches!(
+            app.pending_overlay_for_test(),
+            Some(OverlayRequest::Confirm(_))
+        ),
         "the staged Take raised the confirm prompt"
     );
-    app.pending_overlay = None;
+    app.clear_pending_overlay_for_test();
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(transfer_key()),
         confirm_key(Key::Enter),
@@ -605,7 +627,7 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
         "nothing is sent to either owner"
     );
     assert!(
-        app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
+        !app.pending_queue_transfer_for_test() && !app.queue_transfer_is_staged_for_test(),
         "the dead probe arms nothing"
     );
     *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;

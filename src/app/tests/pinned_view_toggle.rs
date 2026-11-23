@@ -20,21 +20,21 @@ use mbv_ui_msg::ComponentId;
 #[test]
 fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
     let mut app = make_app_stub();
-    app.pinned_width = PinnedWidth::Collapsed;
-    app.panel_mode = PanelMode::QueueOnly;
-    app.panel_focus = PanelFocus::Queue;
-    app.mini_view_focus = PanelFocus::Queue;
+    app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
+    app.set_panel_mode_for_test(PanelMode::QueueOnly);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.set_mini_view_focus_for_test(PanelFocus::Queue);
     let mut model = Model::new(app);
     crate::app::shell::test_support::set_terminal_width(&mut model, 40);
     let app = &mut model.app;
 
-    app.apply_pinned_view(PinnedWidth::Expanded, Ok(()));
+    app.apply_pinned_view_for_test(PinnedWidth::Expanded, Ok(()));
 
-    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
-    assert_eq!(app.panel_mode, PanelMode::LibraryOnly);
-    assert_eq!(app.mini_view_focus, PanelFocus::Library);
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
+    assert_eq!(app.stored_panel_mode(), PanelMode::LibraryOnly);
+    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Library);
     assert_eq!(
-        app.panel_focus,
+        app.stored_panel_focus(),
         PanelFocus::Library,
         "the stored panel focus must be written, not derived"
     );
@@ -46,21 +46,21 @@ fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
 #[test]
 fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
     let mut app = make_app_stub();
-    app.pinned_width = PinnedWidth::Expanded;
-    app.panel_mode = PanelMode::LibraryOnly;
-    app.panel_focus = PanelFocus::Library;
-    app.mini_view_focus = PanelFocus::Library;
+    app.seed_pinned_width_for_test(PinnedWidth::Expanded);
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
     let mut model = Model::new(app);
     crate::app::shell::test_support::set_terminal_width(&mut model, 120);
     let app = &mut model.app;
 
-    app.apply_pinned_view(PinnedWidth::Collapsed, Ok(()));
+    app.apply_pinned_view_for_test(PinnedWidth::Collapsed, Ok(()));
 
-    assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
-    assert_eq!(app.panel_mode, PanelMode::QueueOnly);
-    assert_eq!(app.mini_view_focus, PanelFocus::Queue);
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
+    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
+    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Queue);
     assert_eq!(
-        app.panel_focus,
+        app.stored_panel_focus(),
         PanelFocus::Queue,
         "the stored panel focus must be written, not derived"
     );
@@ -71,23 +71,23 @@ fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
 #[test]
 fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     let mut app = make_app_stub();
-    app.pinned_width = PinnedWidth::Collapsed;
-    app.panel_mode = PanelMode::QueueOnly;
-    app.panel_focus = PanelFocus::Queue;
-    app.mini_view_focus = PanelFocus::Queue;
+    app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
+    app.set_panel_mode_for_test(PanelMode::QueueOnly);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.set_mini_view_focus_for_test(PanelFocus::Queue);
     let mut model = Model::new(app);
     crate::app::shell::test_support::set_terminal_width(&mut model, 40);
     let app = &mut model.app;
 
-    app.apply_pinned_view(
+    app.apply_pinned_view_for_test(
         PinnedWidth::Expanded,
         Err("the layout is invalid for this monitor".into()),
     );
 
-    assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
-    assert_eq!(app.panel_mode, PanelMode::QueueOnly);
-    assert_eq!(app.mini_view_focus, PanelFocus::Queue);
-    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
+    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
+    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Queue);
+    assert_eq!(app.stored_panel_focus(), PanelFocus::Queue);
     assert_eq!(
         app.newest_toast_text(),
         "the layout is invalid for this monitor",
@@ -104,17 +104,17 @@ fn a_second_x_press_while_a_request_is_pending_sends_nothing() {
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
     PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
-    app.pinned_width = PinnedWidth::Collapsed;
+    app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
 
-    app.pinned_view_toggle();
-    app.pinned_view_toggle();
+    app.pinned_view_toggle_for_test();
+    app.pinned_view_toggle_for_test();
 
     assert_eq!(
         PINNED_REQUESTS.lock().unwrap().len(),
         1,
         "the pending press is ignored, not queued"
     );
-    assert!(app.pinned_request_pending.is_some());
+    assert!(app.pinned_request_pending_for_test());
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
@@ -127,9 +127,9 @@ fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request()
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
     PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
-    app.pinned_width = PinnedWidth::Expanded;
+    app.seed_pinned_width_for_test(PinnedWidth::Expanded);
 
-    app.collapse_pinned_view_after_play();
+    app.collapse_pinned_view_after_play_for_test();
 
     let requests = PINNED_REQUESTS.lock().unwrap().clone();
     assert_eq!(requests.len(), 1, "one collapse request for the play");
@@ -137,10 +137,10 @@ fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request()
         requests[0],
         crate::app::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
     );
-    assert!(app.drain_pinned_requests());
-    assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
-    assert_eq!(app.panel_mode, PanelMode::QueueOnly);
-    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    assert!(app.drain_pinned_requests_for_test());
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
+    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
+    assert_eq!(app.stored_panel_focus(), PanelFocus::Queue);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
@@ -152,12 +152,12 @@ fn the_play_collapse_step_from_the_collapsed_width_records_no_request() {
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
     PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
-    app.pinned_width = PinnedWidth::Collapsed;
+    app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
 
-    app.collapse_pinned_view_after_play();
+    app.collapse_pinned_view_after_play_for_test();
 
     assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
-    assert!(app.pinned_request_pending.is_none());
+    assert!(!app.pinned_request_pending_for_test());
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
@@ -169,24 +169,24 @@ fn a_drained_outcome_applies_the_pinned_view() {
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
     PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
-    app.pinned_width = PinnedWidth::Collapsed;
-    app.panel_mode = PanelMode::QueueOnly;
-    app.panel_focus = PanelFocus::Queue;
+    app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
+    app.set_panel_mode_for_test(PanelMode::QueueOnly);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
     let mut model = Model::new(app);
     crate::app::shell::test_support::set_terminal_width(&mut model, 40);
     let app = &mut model.app;
 
-    app.pinned_view_toggle();
+    app.pinned_view_toggle_for_test();
 
     assert_eq!(
-        app.pinned_width,
+        app.pinned_width_for_test(),
         PinnedWidth::Collapsed,
         "no wait for pinwin"
     );
-    assert!(app.drain_pinned_requests());
-    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+    assert!(app.drain_pinned_requests_for_test());
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
     assert!(
-        app.pinned_request_pending.is_none(),
+        !app.pinned_request_pending_for_test(),
         "the slot is free again"
     );
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
@@ -197,23 +197,23 @@ fn a_drained_outcome_applies_the_pinned_view() {
 #[test]
 fn recording_the_toggled_width_leaves_the_panel_mode_alone() {
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::LibraryOnly;
-    app.panel_focus = PanelFocus::Library;
-    app.mini_view_focus = PanelFocus::Library;
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
 
-    app.note_pinned_width_applied(PinnedWidth::Expanded);
+    app.note_pinned_width_applied_for_test(PinnedWidth::Expanded);
 
-    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
-    assert_eq!(app.panel_mode, PanelMode::LibraryOnly);
-    assert_eq!(app.panel_focus, PanelFocus::Library);
-    assert_eq!(app.mini_view_focus, PanelFocus::Library);
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
+    assert_eq!(app.stored_panel_mode(), PanelMode::LibraryOnly);
+    assert_eq!(app.stored_panel_focus(), PanelFocus::Library);
+    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Library);
 
-    app.note_pinned_width_applied(PinnedWidth::Collapsed);
+    app.note_pinned_width_applied_for_test(PinnedWidth::Collapsed);
 
-    assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
-    assert_eq!(app.panel_mode, PanelMode::LibraryOnly);
-    assert_eq!(app.panel_focus, PanelFocus::Library);
-    assert_eq!(app.mini_view_focus, PanelFocus::Library);
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
+    assert_eq!(app.stored_panel_mode(), PanelMode::LibraryOnly);
+    assert_eq!(app.stored_panel_focus(), PanelFocus::Library);
+    assert_eq!(app.stored_mini_view_focus(), PanelFocus::Library);
 }
 
 /// Regression (2026-10-05 crash, pinned view toggle): the collapse race must
@@ -230,15 +230,14 @@ fn recording_the_toggled_width_leaves_the_panel_mode_alone() {
 #[test]
 fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_buffer() {
     let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
-    app.panel_mode = PanelMode::LibraryOnly;
-    app.panel_focus = PanelFocus::Library;
-    app.player.update_status(|status| {
-        status.active = true;
-        status.queue_len = 3;
-        status.current_idx = 0;
-        status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
-        status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
-    });
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_playing_position_for_test(
+        0,
+        45 * mbv_emby_model::TICKS_PER_SECOND,
+        Some(90 * mbv_emby_model::TICKS_PER_SECOND),
+    );
+    app.set_player_queue_len_for_test(3);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 120, 51);
     let mut terminal = Terminal::new(TestBackend::new(120, 51)).unwrap();
@@ -248,10 +247,10 @@ fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_bu
 
     // The toggle dispatch: the view flips immediately, the width stays stale.
     let model = harness.model_mut();
-    model.app.panel_mode = PanelMode::QueueOnly;
-    model.app.mini_view_focus = PanelFocus::Queue;
-    model.app.panel_focus = PanelFocus::Queue;
-    model.app.focus_queue_initial_item();
+    model.app.set_panel_mode_for_test(PanelMode::QueueOnly);
+    model.app.set_mini_view_focus_for_test(PanelFocus::Queue);
+    model.app.set_panel_focus_for_test(PanelFocus::Queue);
+    model.app.focus_queue_initial_item_for_test();
     // The race frame: the sync pass still sees the stale expanded width, and
     // the draw's buffer already holds the snapped collapsed size.
     harness.model_mut().sync_mounted_surfaces();

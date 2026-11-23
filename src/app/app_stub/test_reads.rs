@@ -38,6 +38,16 @@ mod gui_marks;
 /// D4b rule 5) sit in their own child module for the same reason.
 mod queue;
 
+/// The Emby Service runtime's test seams (`split-tui-gui-clients` design D4b
+/// rule 5) sit in their own child module for the same reason.
+mod emby_service;
+
+/// The presentation fixtures a TUI-staying test drives — the pinned view, the
+/// visual-slot hide, the Home Latest launch window, a staged transfer, and the
+/// music grouping's terminal states (`split-tui-gui-clients` design D4b rule
+/// 5) — sit in their own child module for the same reason.
+mod presentation;
+
 /// The GUI Search data path's test seam (row 12.1) sits in its own child
 /// module for the same reason.
 mod search;

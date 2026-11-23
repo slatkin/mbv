@@ -4,9 +4,26 @@
 //! `test_reads.rs` stays within its line ceiling, as the GUI Feeds and Search
 //! seams do.
 
+use std::time::Instant;
+
 use super::super::App;
 
 impl App {
+    /// Hold a deferred Settings save whose deadline is due, as a changed
+    /// setting that waits for the save deadline sits: the state the teardown
+    /// flushes.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_deferred_settings_save_for_test(&mut self) {
+        self.settings_save_at = Some(Instant::now());
+    }
+
+    /// Remove the Emby Service through the production removal path, as the
+    /// confirm's own answer does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn remove_emby_confirmed_for_test(&mut self) {
+        self.remove_emby_confirmed();
+    }
+
     /// The configuration the Settings screen's edits land in (row 5.1): an
     /// accepted `activate` changes it, a refused one leaves it alone.
     #[cfg(feature = "test")]
@@ -15,12 +32,40 @@ impl App {
         self.with_config(Clone::clone)
     }
 
+    /// Hold `popup` as the open Feeds management overlay, as its Client's
+    /// mount leaves it: the popup the add-result drain reads.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_feeds_manage_popup_for_test(
+        &mut self,
+        popup: mbv_ui_model::feeds_manage::FeedsManagePopup,
+    ) {
+        self.feeds_manage = Some(popup);
+    }
+
+    /// The id of the add the Feeds management overlay is waiting on, while
+    /// one is in flight.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn feeds_manage_pending_add_for_test(&self) -> Option<u64> {
+        self.feeds_manage
+            .as_ref()
+            .and_then(|popup| popup.pending_add)
+    }
+
+    /// Whether this `App` holds an Emby Service client, as a completed setup
+    /// leaves it.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn emby_client_present_for_test(&self) -> bool {
+        self.emby_runtime.client.is_some()
+    }
+
     /// Whether the deferred settings save is armed (row 5.1): an accepted
     /// `activate` arms it, a refused one does not.
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn gui_settings_save_armed_for_test(&self) -> bool {
-        self.settings_save_at.is_some()
+        self.settings_save_armed()
     }
 
     /// The open setup form's server URL (row 5.2), whichever form holds it.

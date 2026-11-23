@@ -594,6 +594,13 @@ impl App {
         self.panel_mode
     }
 
+    /// The mini view's own focus target, before the wide focus it shadows:
+    /// what a narrow terminal's layout composes from.
+    #[must_use]
+    pub fn stored_mini_view_focus(&self) -> mbv_ui_model::settings::PanelFocus {
+        self.mini_view_focus
+    }
+
     /// Whether the prefix key is armed.
     #[must_use]
     pub fn prefix_armed(&self) -> bool {

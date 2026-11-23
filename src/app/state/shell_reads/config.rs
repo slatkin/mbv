@@ -74,6 +74,13 @@ impl App {
         self.settings_destination
     }
 
+    /// Whether a Settings save is deferred and still owed: the write waits for
+    /// the save deadline an explicit save or the teardown flushes.
+    #[must_use]
+    pub fn settings_save_armed(&self) -> bool {
+        self.settings_save_at.is_some()
+    }
+
     /// The mounted Emby setup form, while Settings shows it.
     #[must_use]
     pub fn emby_setup_form_present(&self) -> bool {

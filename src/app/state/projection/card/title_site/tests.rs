@@ -63,16 +63,10 @@ fn cached_colour_image(width: u32, height: u32) -> CachedImage {
 /// store is the shell's (`Model`), so these tests drive the model.
 fn overlay_app() -> Model {
     let mut app = make_queue_app(1);
-    {
-        app.player.update_status(|status| {
-            status.active = true;
-            status.current_idx = 0;
-            status.queue_len = 1;
-        });
-    };
+    app.seed_playing_status_for_test(0, 1);
     let mut picker = Picker::halfblocks();
     picker.set_protocol_type(ProtocolType::Kitty);
-    app.images.configure_protocol(None, true);
+    app.configure_image_protocol_for_test(None, true);
     let mut model = Model::new(app);
     crate::app::shell::install_image_pickers_for_test(&mut model, picker, Picker::halfblocks());
     // (height, width): the card box the overlay is composed for.

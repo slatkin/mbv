@@ -171,7 +171,7 @@ impl App {
         self.apply_emby_setup_completion_inner(completion, true)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     pub(in crate::app) fn apply_emby_setup_completion_without_network(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::SetupCompletion,

@@ -505,12 +505,7 @@ pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
 /// deleted Bare ownership, so `make_app_stub`'s player is a
 /// `RemotePlayer::stub` whose command channel is already dropped.
 pub(crate) fn live_owner_channel(app: &mut App) -> std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd> {
-    let (remote, player_rx, cmd_rx) =
-        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
-    remote.update_status(|status| status.volume_max = 100);
-    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
-    app.player_rx = player_rx;
-    cmd_rx
+    app.set_player_with_command_rx_for_test()
 }
 
 #[test]
@@ -520,23 +515,25 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
     let item = make_item("Ready item", "Audio");
     // Completion computes the Continue Watching snapshot; the shell assigns it.
     let content = app
-        .apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-            generation: app.emby_runtime.generation(),
-            result: Ok(crate::app::dispatch::session::service_startup::Startup {
-                client,
-                bootstrap: mbv_emby::EmbyBootstrap {
-                    continue_items: vec![item],
-                    views: Vec::new(),
-                },
-                setup: mbv_config::EmbySetup::default(),
-            }),
-        })
+        .apply_emby_completion_for_test(
+            crate::app::dispatch::session::service_startup::Completion {
+                generation: app.emby_setup_generation_for_test(),
+                result: Ok(crate::app::dispatch::session::service_startup::Startup {
+                    client,
+                    bootstrap: mbv_emby::EmbyBootstrap {
+                        continue_items: vec![item],
+                        views: Vec::new(),
+                    },
+                    setup: mbv_config::EmbySetup::default(),
+                }),
+            },
+        )
         .expect("Ok startup must bootstrap the Returned Home content");
     assert_eq!(
-        app.emby_runtime.state,
+        app.emby_service_state_for_test(),
         mbv_core::service_runtime::ServiceState::Ready
     );
-    assert!(app.emby_runtime.client.is_some());
+    assert!(app.emby_client_present_for_test());
     assert_eq!(content.continue_items.len(), 1);
     assert!(!content.loading);
 }
@@ -544,25 +541,26 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
 #[test]
 fn stale_emby_completion_does_not_change_runtime_or_home() {
     let mut app = make_app_stub();
-    app.emby_runtime.begin_setup();
+    app.begin_emby_setup_for_test();
     let stale_generation = mbv_core::service_runtime::SetupGeneration::default();
     // Home content lives on the App (row 6.1): a stale completion returns no
     // snapshot, so the stored `home_content` stays untouched — the invariance
-    // that used to be asserted on `app.home.continue_items` here.
-    let content =
-        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
+    // that used to be asserted on the Home content's `continue_items` here.
+    let content = app.apply_emby_completion_for_test(
+        crate::app::dispatch::session::service_startup::Completion {
             generation: stale_generation,
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client: mbv_emby::EmbyClient::new(crate::app::config::Config::default()),
                 bootstrap: mbv_emby::EmbyBootstrap::default(),
                 setup: mbv_config::EmbySetup::default(),
             }),
-        });
+        },
+    );
     assert_eq!(
-        app.emby_runtime.state,
+        app.emby_service_state_for_test(),
         mbv_core::service_runtime::ServiceState::Connecting
     );
-    assert!(app.emby_runtime.client.is_none());
+    assert!(!app.emby_client_present_for_test());
     assert!(
         content.is_none(),
         "stale completion must not deliver a Home content snapshot"
@@ -570,9 +568,7 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
 }
 
 pub(crate) fn install_test_emby(app: &mut App, config: crate::app::config::Config) {
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(mbv_emby::EmbyClient::new(config)),
-    ));
+    app.adopt_ready_emby_client_for_test(mbv_emby::EmbyClient::new(config));
 }
 
 fn remote_stub_config() -> crate::app::config::Config {
@@ -581,7 +577,7 @@ fn remote_stub_config() -> crate::app::config::Config {
 
 fn close_initial_services(app: &mut App) {
     app.close_settings();
-    app.pending_overlay = None;
+    app.clear_pending_overlay_for_test();
 }
 
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
@@ -605,11 +601,9 @@ pub(crate) fn make_remote_app_stub_at_index(
         config,
     );
     close_initial_services(&mut app);
-    app.local_view
-        .adopt_items(local_items, app.local_view.cursor());
-    app.local_view.set_cursor(0);
+    app.seed_local_queue_emby_items_for_test(local_items, 0);
     // Default to "focused, past grace window" for mouse tests.
-    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
+    app.backdate_refocus_for_test(Duration::from_secs(5));
     app
 }
 
@@ -630,11 +624,9 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
         config,
     );
     close_initial_services(&mut app);
-    app.local_view
-        .adopt_items(local_items, app.local_view.cursor());
-    app.local_view.set_cursor(0);
+    app.seed_local_queue_emby_items_for_test(local_items, 0);
     while cmd_rx.try_recv().is_ok() {}
-    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
+    app.backdate_refocus_for_test(Duration::from_secs(5));
     (app, cmd_rx)
 }
 
@@ -655,15 +647,13 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
         config,
     );
     close_initial_services(&mut app);
-    app.local_view
-        .adopt_items(local_items, app.local_view.cursor());
-    app.local_view.set_cursor(0);
+    app.seed_local_queue_emby_items_for_test(local_items, 0);
     // `App::new_remote` synchronizes this client's subtitle/audio-language
     // prefs to the freshly attached daemon before returning; drain that so
     // callers see only commands their own test actions send.
     while cmd_rx.try_recv().is_ok() {}
     // Default to "focused, past grace window" for mouse tests.
-    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
+    app.backdate_refocus_for_test(Duration::from_secs(5));
     (app, cmd_rx)
 }
 

@@ -1,10 +1,9 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::queue_transfer::{PendingQueueTransfer, QueueTransferDirection};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_audio_items, make_local_daemon_app_stub_with_cmd_rx};
 use mbv_ctrl::player::PlayerStatus;
 use mbv_ctrl::{CtrlCmd, UnifiedQueueSlot, UnifiedQueueStateData};
-use mbv_queue::{QueueItem, QueueLineage, QueueSlotId, QueueSource};
+use mbv_queue::{QueueItem, QueueLineage, QueueSource};
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 
 /// Design D2 failure (queue-handoff-and-take row 7.1): when the target's
@@ -15,8 +14,8 @@ use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 fn a_target_snapshot_without_the_start_slot_stops_the_target_and_never_the_source() {
     let (mut app, local_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_audio_items(2));
     let (peer, peer_rx, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(make_audio_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("peer-owner", "mbv"),
+    app.attach_direct_remote_for_test(
+        "peer-owner",
         peer,
         peer_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:1".parse().unwrap()),
@@ -52,21 +51,16 @@ fn a_target_snapshot_without_the_start_slot_stops_the_target_and_never_the_sourc
         in_flight_transition: None,
         queued_latest_transition: None,
     };
-    let link = app.active_queue_link();
-    app.handle_unified_queue_updated(link, &snapshot);
+    let link = app.active_queue_link_for_test();
+    app.handle_unified_queue_updated_for_test(link, &snapshot);
 
-    app.pending_queue_transfer = Some(PendingQueueTransfer {
-        direction: QueueTransferDirection::HandOff,
-        target: mbv_ui_model::panel_targets::SessionTargetKey::Emby("peer-owner".to_string()),
-        start_slot: QueueSlotId::from_raw(1),
-        source_link: None,
-    });
+    app.stage_hand_off_settlement_for_test("peer-owner", 1);
 
     let mut harness = TickHarness::new(app);
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.pending_queue_transfer.is_none());
+    assert!(!app.pending_queue_transfer_for_test());
     // `PlayerProxy::stop` asks the owner through its standard playback-intent
     // stop (the same send the transport and consume paths use).
     assert!(matches!(

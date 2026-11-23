@@ -56,6 +56,20 @@ impl App {
         ACTIVE_COMMANDS.with(|slot| *slot.borrow_mut() = Some(cmd_rx));
     }
 
+    /// Put a stub Player on the active connection and answer the receiver of
+    /// what it is sent, leaving both on this `App`: what a test that observes
+    /// the commands its own actions send reads.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn set_player_with_command_rx_for_test(&mut self) -> mpsc::Receiver<CtrlCmd> {
+        let (remote, player_rx, cmd_rx) =
+            mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+        remote.update_status(|status| status.volume_max = 100);
+        self.player = mbv_player::PlayerProxy::from_remote(remote, false);
+        self.player_rx = player_rx;
+        cmd_rx
+    }
+
     /// Hold `player` as the Player on the active connection: the stub a test
     /// built over its own advertised compatibility, whose command channel the
     /// stub recorded as that connection's.
@@ -252,6 +266,90 @@ fn took_swap_prepared(slot: &std::cell::RefCell<Option<mpsc::Receiver<CtrlCmd>>>
     receiver
         .try_iter()
         .any(|command| matches!(command, CtrlCmd::SwapPrepared))
+}
+
+impl App {
+    /// Attach `remote` as the direct peer behind the caller's `sess`, exactly
+    /// as the Sessions-panel's direct-remote connect does, so a test that
+    /// crafts the Session's identity (its id, its endpoint command) installs
+    /// that same connection. `peer_events` carries what the peer sends.
+    #[cfg(any(test, feature = "test"))]
+    pub fn attach_direct_peer_for_test(
+        &mut self,
+        sess: &mbv_emby::SessionInfo,
+        remote: mbv_remote_player::RemotePlayer,
+        peer_events: mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+        endpoint: &mbv_remote_player::DaemonEndpoint,
+    ) {
+        self.switch_to_direct_remote(sess, remote, peer_events, endpoint);
+    }
+
+    /// Restore local playback mode through the production path, as the
+    /// transfer teardown does after a peer link is lost.
+    #[cfg(any(test, feature = "test"))]
+    pub fn restore_local_mode_for_test(&mut self, status: &str) {
+        self.restore_local_mode(status);
+    }
+
+    /// Detach the direct peer through the production path, as a user leaving
+    /// remote control does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn disconnect_remote_for_test(&mut self) {
+        self.disconnect_remote();
+    }
+
+    /// Note that this run attached a direct peer: the connection fact the
+    /// teardown reads when it decides what the saved remote target was.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_direct_remote_connected_for_test(&mut self) {
+        self.direct_remote_connected = true;
+    }
+
+    /// Hold `output` as the Player's reported playback output, as the Owner's
+    /// status reports it: the Cast or Emby Session output a transfer reads at
+    /// its attach.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_player_output_for_test(&mut self, output: mbv_ctrl::OutputState) {
+        self.player.remote().update_playback_output_for_test(output);
+    }
+
+    /// Hold `route` as the Service library route this run navigated, as a
+    /// routed remote control leaves it: the route the teardown persists.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_active_route_for_test(&mut self, route: Option<String>) {
+        self.active_route = route;
+    }
+
+    /// Suspend `player` as the home Player link, delivering its events over
+    /// `player_rx`, exactly as a peer attach leaves the home link: what a
+    /// test that holds the home stub daemon observes its suspended link
+    /// receives.
+    #[cfg(any(test, feature = "test"))]
+    pub fn suspend_home_link_for_test(
+        &mut self,
+        player: mbv_player::PlayerProxy,
+        player_rx: mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+    ) {
+        self.suspended_local =
+            Some(crate::app::state::playback::SuspendedLocalSession { player, player_rx });
+    }
+
+    /// Drop the suspended home link, as a home-link loss behind an active
+    /// peer attachment leaves the link: `None`, with no restore the real
+    /// disconnect path runs.
+    #[cfg(any(test, feature = "test"))]
+    pub fn drop_suspended_home_link_for_test(&mut self) {
+        self.suspended_local = None;
+    }
+
+    /// Disconnect the suspended home link's Player, as the test's own stub
+    /// daemon teardown does before it joins the daemon thread.
+    #[cfg(any(test, feature = "test"))]
+    pub fn suspended_home_remote_disconnect_for_test(&mut self) {
+        if let Some(link) = self.suspended_local.as_ref() {
+            link.player.remote().disconnect();
+        }
+    }
 }
 
 thread_local! {

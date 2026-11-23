@@ -129,9 +129,9 @@ fn owner_scroll(model: &mut Model) -> usize {
 
 /// The shell's resting home-video cursor for the feed fixture's library tab.
 fn feed_video_cursor(model: &mut Model) -> usize {
-    model.app.libs[0]
-        .feed_home_video
-        .as_ref()
+    model
+        .app
+        .emby_library_feed_home_video(0)
         .expect("feed home-video state")
         .video_cursor
 }
@@ -162,15 +162,15 @@ fn press(model: &mut Model, code: Key) {
 
 fn tv_shows_app() -> App {
     let mut app = make_app_stub();
-    app.mini_view_focus = PanelFocus::Library;
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
 
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-shows".into();
     library.collection_type = "tvshows".into();
     library.is_folder = true;
 
-    app.libs.push(LibraryTab {
+    app.push_library_for_test(LibraryTab {
         nav_stack: vec![BrowseLevel {
             rows: ServerRows::new(5),
             parent_id: "lib-shows".into(),
@@ -226,9 +226,9 @@ fn narrow_tv_browse_j_moves_painted_selection() {
 
 fn feed_home_video_group_app() -> App {
     let mut app = make_app_stub();
-    app.mini_view_focus = PanelFocus::Library;
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.config_for_test(|config| config.feed_view_libraries = vec!["youtube".into()]);
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();
     library.collection_type = "homevideos".into();
@@ -243,7 +243,7 @@ fn feed_home_video_group_app() -> App {
     first.overview = "Distinctive wrapping overview fragment for inline expansion.".into();
     let mut second = make_item("Video Two", "Movie");
     second.id = "video-two".into();
-    app.libs.push(LibraryTab {
+    app.push_library_for_test(LibraryTab {
         nav_stack: vec![BrowseLevel {
             rows: ServerRows::new(1),
             parent_id: "lib-youtube".into(),
@@ -287,15 +287,17 @@ fn feed_home_video_group_app() -> App {
 /// geometry.
 fn wide_feed_video_group_model() -> (Model, Terminal<TestBackend>, ratatui::layout::Rect, usize) {
     let mut app = feed_home_video_group_app();
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
-    let state = app.libs[0].feed_home_video.as_mut().unwrap();
-    let all = state.items.get_mut(&FeedHomeVideoSelection::All).unwrap();
-    for i in 0..30 {
-        let mut item = make_item(&format!("Video extra {i}"), "Movie");
-        item.id = format!("video-extra-{i}");
-        all.push(item);
-    }
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+    app.edit_library_for_test(0, |tab| {
+        let state = tab.feed_home_video.as_mut().unwrap();
+        let all = state.items.get_mut(&FeedHomeVideoSelection::All).unwrap();
+        for i in 0..30 {
+            let mut item = make_item(&format!("Video extra {i}"), "Movie");
+            item.id = format!("video-extra-{i}");
+            all.push(item);
+        }
+    });
     let mut model = Model::new(app);
     set_model_terminal_size(&mut model, 140, 40);
     model.sync_mounted_surfaces();
@@ -308,9 +310,9 @@ fn wide_feed_video_group_model() -> (Model, Terminal<TestBackend>, ratatui::layo
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
         .and_then(LibraryPanel::test_list_rect)
         .expect("the Library panel painted a list slot");
-    let total_rows = model.app.libs[0]
-        .feed_home_video
-        .as_ref()
+    let total_rows = model
+        .app
+        .emby_library_feed_home_video(0)
         .unwrap()
         .selected_len();
     assert!(total_rows > 2, "the feed fixture must hold several rows");
@@ -335,9 +337,9 @@ fn end_select_last_row(model: &mut Model) -> usize {
         }))
         .expect("End emits the typed cursor echo");
     model.handle_terminal_message(end, &mut false, &mut false);
-    let total_rows = model.app.libs[0]
-        .feed_home_video
-        .as_ref()
+    let total_rows = model
+        .app
+        .emby_library_feed_home_video(0)
         .unwrap()
         .selected_len();
     assert_eq!(
@@ -438,15 +440,15 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
 #[test]
 fn default_latest_landing_requests_the_lazy_latest_fetch_once() {
     let mut app = make_app_stub();
-    app.mini_view_focus = PanelFocus::Library;
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     library.is_folder = true;
 
-    app.libs.push(LibraryTab {
+    app.push_library_for_test(LibraryTab {
         nav_stack: vec![BrowseLevel {
             rows: ServerRows::new(5),
             parent_id: "lib-movies".into(),

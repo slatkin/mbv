@@ -25,6 +25,23 @@ impl App {
             .expect("the clock reaches back by the test's navigation delay");
     }
 
+    /// Hold the window-focus grace window as elapsed `by` ago, as a terminal
+    /// that regained focus `by` ago sits: the state the mouse tests observe
+    /// the grace rules against.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the platform clock cannot reach back by `by`, which a
+    /// test's short delay never causes.
+    #[cfg(any(test, feature = "test"))]
+    pub fn backdate_refocus_for_test(&mut self, by: Duration) {
+        self.refocus_at = Some(
+            Instant::now()
+                .checked_sub(by)
+                .expect("the clock reaches back by the test's grace window"),
+        );
+    }
+
     /// Move the playing slot to `index` with no input, as the Owner's status
     /// does when playback advances (the playhead's own change, design D3 rule
     /// 4).

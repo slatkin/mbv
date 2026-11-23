@@ -102,6 +102,15 @@ pub(super) fn peer_snapshot(
     }
 }
 
+/// Deliver `event` on the active Owner link and drain it, as the link's own
+/// delivery inside a tick does.
+fn drain_player_event(event: PlayerEvent, app: &mut App) {
+    let (event_tx, event_rx) = mpsc::channel();
+    app.set_active_player_events_for_test(event_rx);
+    event_tx.send(event).unwrap();
+    app.drain_player_event();
+}
+
 pub(super) fn applied(op: u64, snapshot: UnifiedQueueStateData) -> PlayerEvent {
     PlayerEvent::QueueOpResult {
         op: QueueOpId(op),
@@ -122,8 +131,7 @@ pub(super) fn confirm_key(code: Key) -> mbv_ui_msg::KeyEvent {
 /// source gate holds unless a test moves it.
 fn hand_off_source_app(items: Vec<EmbyItem>) -> (App, mpsc::Receiver<CtrlCmd>) {
     let (app, local_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(items);
-    app.player
-        .update_status(|status| status.position_ticks = 75_400_000);
+    app.set_playing_position_for_test(75_400_000, false);
     while local_cmd_rx.try_recv().is_ok() {}
     (app, local_cmd_rx)
 }
@@ -147,15 +155,15 @@ fn connected_hand_off_app(
     let sess = peer_session("peer-owner");
     let (mut peer, peer_rx, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(peer_items, 0);
     peer.set_ctrl_compatibility_for_test(compat);
-    app.switch_to_direct_remote(
+    app.attach_direct_peer_for_test(
         &sess,
         peer,
         peer_rx,
         &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
     );
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(sess))]);
     let (peer_tx, peer_rx) = mpsc::channel();
-    app.player_rx = peer_rx;
+    app.set_active_player_events_for_test(peer_rx);
     while peer_cmd_rx.try_recv().is_ok() {}
     (app, local_cmd_rx, peer_cmd_rx, peer_tx)
 }
@@ -203,12 +211,14 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
     *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
+        "peer-owner",
+    )))]);
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
 
     // The populated peer queue raised the confirm prompt and nothing was sent.
-    let modal = match &app.pending_overlay {
+    let modal = match app.pending_overlay_for_test() {
         Some(OverlayRequest::Confirm(modal)) => modal,
         other => panic!("a populated peer queue must raise the confirm prompt, got {other:?}"),
     };
@@ -223,7 +233,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
     );
     assert!(!stop_sent_to(&local_cmd_rx), "local keeps playing");
     // Mirror the shell's modal dismissal before the confirm answer.
-    app.pending_overlay = None;
+    app.clear_pending_overlay_for_test();
 
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
@@ -232,9 +242,12 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
 
     // The peer link is attached (as by Connect) and carries the copy: the
     // local queue's slots, the active slot's index, and the local position.
-    assert!(app.direct_remote_connected, "Hand off ends connected");
     assert!(
-        app.has_remote_queue(),
+        app.direct_remote_connected_for_test(),
+        "Hand off ends connected"
+    );
+    assert!(
+        app.has_remote_queue_for_test(),
         "the queue panel shows the peer queue"
     );
     let Some(CtrlCmd::UnifiedQueueReplace {
@@ -265,7 +278,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
     );
     assert!(op.is_some(), "the copy is an answered owner operation");
     assert!(
-        app.pending_queue_transfer.is_some(),
+        app.pending_queue_transfer_for_test(),
         "the pending transfer arms after the copy is sent"
     );
     assert!(!stop_sent_to(&local_cmd_rx), "local still plays");
@@ -274,7 +287,10 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !app.pending_queue_transfer_for_test(),
+        "the transfer settles"
+    );
     assert!(
         stop_sent_to(&local_cmd_rx),
         "local stops only after the peer observed the start slot"
@@ -299,12 +315,17 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
     *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
+        "peer-owner",
+    )))]);
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
 
     assert!(
-        matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
+        matches!(
+            app.pending_overlay_for_test(),
+            Some(OverlayRequest::Confirm(_))
+        ),
         "the populated peer queue asks first"
     );
     app.apply_confirm_action(
@@ -313,11 +334,11 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
     );
 
     assert!(
-        app.staged_queue_transfer.is_none(),
+        !app.queue_transfer_is_staged_for_test(),
         "the staged link is dropped"
     );
     assert!(
-        !app.direct_remote_connected && !app.has_remote_queue(),
+        !app.direct_remote_connected_for_test() && !app.has_remote_queue_for_test(),
         "cancel leaves the Client unconnected"
     );
     assert!(
@@ -353,8 +374,8 @@ fn an_audio_only_peer_refuses_a_video_active_item_and_sends_nothing() {
         "the refused copy is never sent"
     );
     assert!(!stop_sent_to(&local_cmd_rx), "local playback continues");
-    assert!(app.pending_queue_transfer.is_none());
-    assert!(app.staged_queue_transfer.is_none());
+    assert!(!app.pending_queue_transfer_for_test());
+    assert!(!app.queue_transfer_is_staged_for_test());
     assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
     assert!(
         app.newest_toast_text()
@@ -363,7 +384,10 @@ fn an_audio_only_peer_refuses_a_video_active_item_and_sends_nothing() {
         app.newest_toast_text()
     );
     assert!(
-        !matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
+        !matches!(
+            app.pending_overlay_for_test(),
+            Some(OverlayRequest::Confirm(_))
+        ),
         "a refused Hand off never asks to replace the peer queue"
     );
 }
@@ -386,8 +410,8 @@ fn an_older_peer_without_the_start_position_capability_is_refused() {
         "an older peer receives no copy"
     );
     assert!(!stop_sent_to(&local_cmd_rx), "local playback continues");
-    assert!(app.pending_queue_transfer.is_none());
-    assert!(app.staged_queue_transfer.is_none());
+    assert!(!app.pending_queue_transfer_for_test());
+    assert!(!app.queue_transfer_is_staged_for_test());
     assert!(
         app.newest_toast_text()
             .contains("does not support Hand off"),
@@ -415,7 +439,7 @@ fn a_peer_link_lost_before_observation_leaves_local_playing() {
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
 
     assert!(
-        app.pending_queue_transfer.is_some(),
+        app.pending_queue_transfer_for_test(),
         "the answered copy arms the pending transfer"
     );
     peer_tx
@@ -426,7 +450,10 @@ fn a_peer_link_lost_before_observation_leaves_local_playing() {
     harness.step();
 
     let app = &harness.model().app;
-    assert!(app.pending_queue_transfer.is_none(), "the transfer reports");
+    assert!(
+        !app.pending_queue_transfer_for_test(),
+        "the transfer reports"
+    );
     assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
     assert!(
         app.newest_toast_text().starts_with("Hand off failed"),
@@ -467,13 +494,11 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
     let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     let items = make_audio_items(3);
     let (mut app, local_cmd_rx) = hand_off_source_app(items.clone());
-    app.player
-        .remote()
-        .update_playback_output_for_test(mbv_ctrl::OutputState::Cast {
-            receiver_id: "r-1".to_string(),
-            name: "Living Room".to_string(),
-            connection: mbv_ctrl::OutputConnection::Connected,
-        });
+    app.set_player_output_for_test(mbv_ctrl::OutputState::Cast {
+        receiver_id: "r-1".to_string(),
+        name: "Living Room".to_string(),
+        connection: mbv_ctrl::OutputConnection::Connected,
+    });
     let (mut probe, _stub_rx, _peer_cmd_rx) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     probe.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
     let (answer_tx, answer_rx) = mpsc::channel();
@@ -482,7 +507,9 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
     *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
+    app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
+        "peer-owner",
+    )))]);
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
 
@@ -532,26 +559,29 @@ fn a_dead_home_link_never_stops_the_peer_at_the_success_settlement() {
         .send(applied(1, peer_snapshot(&make_audio_items(2), 0, true)))
         .unwrap();
     let (home_tx, home_rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = home_rx;
+    app.set_suspended_local_events_for_test(home_rx);
     home_tx
         .send(PlayerEvent::RemoteDisconnected("home owner lost".into()))
         .unwrap();
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
-    assert!(app.pending_queue_transfer.is_some(), "the copy armed");
+    assert!(app.pending_queue_transfer_for_test(), "the copy armed");
 
     let mut harness = TickHarness::new(app);
     harness.step();
 
     let model = harness.model();
     let app = &model.app;
-    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !app.pending_queue_transfer_for_test(),
+        "the transfer settles"
+    );
     assert!(
         !stop_sent_to(&peer_cmd_rx),
         "the settlement must never stop the peer it just handed off to"
     );
     assert!(
-        app.has_remote_queue(),
+        app.has_remote_queue_for_test(),
         "the peer keeps the handed-off queue and playback"
     );
     assert!(
@@ -578,29 +608,38 @@ fn a_peer_loss_during_the_hand_off_confirm_drops_the_prompt_and_sends_nothing() 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
 
     assert!(
-        matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
+        matches!(
+            app.pending_overlay_for_test(),
+            Some(OverlayRequest::Confirm(_))
+        ),
         "the populated peer queue asks first"
     );
     assert!(
-        app.staged_queue_transfer.is_some(),
+        app.queue_transfer_is_staged_for_test(),
         "the connected Hand off is staged behind the prompt"
     );
 
     // The peer link dies while the prompt is up; auto-reconnect is off in
     // the stub config, so the teardown restores the local link.
-    app.handle_player_event(PlayerEvent::RemoteDisconnected("peer gone".into()));
+    drain_player_event(
+        PlayerEvent::RemoteDisconnected("peer gone".into()),
+        &mut app,
+    );
 
     assert!(
-        app.staged_queue_transfer.is_none(),
+        !app.queue_transfer_is_staged_for_test(),
         "the staged transfer dies with the connection"
     );
     assert!(
-        matches!(app.pending_overlay, Some(OverlayRequest::DismissConfirm)),
+        matches!(
+            app.pending_overlay_for_test(),
+            Some(OverlayRequest::DismissConfirm)
+        ),
         "the teardown dismisses the transfer prompt, got {:?}",
-        app.pending_overlay.as_ref().map(std::mem::discriminant)
+        app.pending_overlay_for_test().map(std::mem::discriminant)
     );
     assert!(
-        !app.direct_remote_connected && !app.has_remote_queue(),
+        !app.direct_remote_connected_for_test() && !app.has_remote_queue_for_test(),
         "the teardown restored the local link"
     );
 
@@ -617,9 +656,9 @@ fn a_peer_loss_during_the_hand_off_confirm_drops_the_prompt_and_sends_nothing() 
             .any(|cmd| matches!(cmd, CtrlCmd::UnifiedQueueReplace { .. })),
         "the staged Hand off never reaches the local Owner, got {sent:?}"
     );
-    assert!(app.pending_queue_transfer.is_none());
+    assert!(!app.pending_queue_transfer_for_test());
     assert_eq!(
-        app.local_view
+        app.queue_for_link(crate::app::QueueLink::Local)
             .slots()
             .iter()
             .map(|slot| slot.slot_id.raw())
@@ -642,18 +681,18 @@ fn a_confirmed_hand_off_without_a_peer_link_reports_and_sends_nothing() {
     );
 
     // The peer link dies and the teardown restores the local link.
-    app.handle_player_event(PlayerEvent::RemoteDisconnected("peer gone".into()));
-    assert!(!app.has_remote_queue());
+    drain_player_event(
+        PlayerEvent::RemoteDisconnected("peer gone".into()),
+        &mut app,
+    );
+    assert!(!app.has_remote_queue_for_test());
 
     // Re-stage the connected shape directly: `link = None` reads the
     // current attachment at the copy, which is now the local Owner.
-    app.staged_queue_transfer = Some(crate::app::state::queue_transfer::StagedQueueTransfer {
-        direction: QueueTransferDirection::HandOff,
-        target: hand_off_key(),
-        sess: peer_session("peer-owner"),
-        endpoint: DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
-        link: None,
-    });
+    app.seed_staged_hand_off_transfer_for_test(
+        peer_session("peer-owner"),
+        DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
+    );
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
         confirm_key(Key::Enter),
@@ -677,9 +716,9 @@ fn a_confirmed_hand_off_without_a_peer_link_reports_and_sends_nothing() {
         peer_replace(&peer_cmd_rx).is_none(),
         "the peer receives nothing"
     );
-    assert!(app.pending_queue_transfer.is_none());
+    assert!(!app.pending_queue_transfer_for_test());
     assert_eq!(
-        app.local_view
+        app.queue_for_link(crate::app::QueueLink::Local)
             .slots()
             .iter()
             .map(|slot| slot.slot_id.raw())

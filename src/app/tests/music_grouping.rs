@@ -6,7 +6,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::browse::ServerRows;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {
     BrowseLevel {

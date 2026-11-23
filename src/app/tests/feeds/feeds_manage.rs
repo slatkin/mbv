@@ -1,8 +1,8 @@
-use crate::app::Model;
 use crate::app::tests::make_app_stub;
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
-use mbv_ui_model::feeds_manage::{FeedAddResult, FeedsManagePopup};
+use mbv_ui_model::feeds_manage::{FeedAddDrain, FeedAddResult, FeedsManagePopup};
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {
     FeedSubscription {
@@ -12,17 +12,50 @@ fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {
     }
 }
 
+/// A stub app holding the given configured subscriptions, with the Feeds tab
+/// they project.
+fn app_with_feeds(feeds: Vec<FeedSubscription>) -> crate::app::App {
+    let mut app = make_app_stub();
+    app.config_for_test(|config| config.feeds = feeds);
+    app.sync_feed_subscriptions();
+    app
+}
+
+/// A stub app holding the given Feeds management popup, as the overlay mount
+/// leaves it.
+fn app_with_feed_popup(popup: FeedsManagePopup) -> crate::app::App {
+    let mut app = make_app_stub();
+    app.seed_feeds_manage_popup_for_test(popup);
+    app
+}
+
+/// A popup whose newest queued add result is `id`, with `pending` as the
+/// submission the popup is waiting on.
+fn popup_waiting_on(pending: u64, result: FeedAddResult) -> FeedsManagePopup {
+    let mut popup = FeedsManagePopup::new();
+    popup
+        .add_tx
+        .send(result)
+        .expect("the popup's own channel is open");
+    popup.pending_add = Some(pending);
+    popup
+}
+
+fn enter() -> KeyEvent {
+    KeyEvent::new(Key::Enter, KeyModifiers::NONE)
+}
+
 #[test]
 fn feed_state_transition_is_safe_without_emby() {
-    let mut app = make_app_stub();
-    assert!(app.emby_runtime.client.is_none());
-    app.config.lock().unwrap().feeds = vec![sub(
+    let mut app = app_with_feeds(vec![sub(
         "Feed-only",
         "https://example.test/feed.xml",
         FeedKind::Audio,
-    )];
+    )]);
+
+    assert!(!app.emby_client_present_for_test());
     app.sync_feed_subscriptions();
-    assert_eq!(app.feed_tab.subscriptions[0].name, "Feed-only");
+    assert_eq!(app.feeds_state().subscriptions[0].name, "Feed-only");
 }
 
 /// §6.3: editing a subscription changes only its name and kind. A URL
@@ -32,20 +65,23 @@ fn feed_state_transition_is_safe_without_emby() {
 /// the others in order.
 #[test]
 fn remove_feed_confirmed_rewrites_list() {
-    let mut app = make_app_stub();
-    app.config.lock().unwrap().feeds = vec![
+    let mut app = app_with_feeds(vec![
         sub("A", "https://a", FeedKind::Video),
         sub("B", "https://b", FeedKind::Video),
         sub("C", "https://c", FeedKind::Video),
-    ];
+    ]);
 
-    app.remove_feed_confirmed(1);
+    app.request_feed_removal("https://b");
+    let prompt = app
+        .take_pending_overlay_request_for_test()
+        .expect("the removal raises its confirmation prompt");
+    let mbv_ui_model::overlay::OverlayRequest::Confirm(modal) = prompt else {
+        panic!("the removal confirms through a modal");
+    };
+    app.apply_confirm_action(modal.on_confirm, enter());
 
     let names: Vec<String> = app
-        .config
-        .lock()
-        .unwrap()
-        .feeds
+        .configured_feeds()
         .iter()
         .map(|s| s.name.clone())
         .collect();
@@ -61,27 +97,27 @@ fn remove_feed_confirmed_rewrites_list() {
 /// dropped without touching config.
 #[test]
 fn stale_add_result_is_dropped() {
-    let mut model = Model::new(make_app_stub());
-    let mut popup = FeedsManagePopup::new();
-    popup
-        .add_tx
-        .send(FeedAddResult {
+    let popup = popup_waiting_on(
+        5,
+        FeedAddResult {
             id: 3,
             name: "Stale".into(),
             url: "https://stale".into(),
             kind: FeedKind::Video,
             result: Ok(()),
-        })
-        .unwrap();
-    popup.pending_add = Some(5); // a newer submission is the current one
-    model.app.feeds_manage = Some(popup);
+        },
+    );
+    let mut app = app_with_feed_popup(popup);
 
-    let had_events = model.drain_feed_add_results();
+    let drain = app.drain_feed_add_results();
 
-    assert!(had_events, "the stale message should still be drained");
-    assert!(model.app.config.lock().unwrap().feeds.is_empty());
+    assert!(
+        matches!(drain, FeedAddDrain::Discarded),
+        "the stale message should still be drained"
+    );
+    assert!(app.configured_feeds().is_empty());
     assert_eq!(
-        model.app.feeds_manage.as_ref().unwrap().pending_add,
+        app.feeds_manage_pending_add_for_test(),
         Some(5),
         "the still-current pending id must be untouched"
     );
@@ -95,25 +131,22 @@ fn stale_add_result_is_dropped() {
 /// save.
 #[test]
 fn add_fetch_failure_does_not_save() {
-    let mut model = Model::new(make_app_stub());
-    let mut popup = FeedsManagePopup::new();
-    popup.pending_add = Some(1);
-    popup
-        .add_tx
-        .send(FeedAddResult {
+    let popup = popup_waiting_on(
+        1,
+        FeedAddResult {
             id: 1,
             name: "Broken".into(),
             url: "https://broken".into(),
             kind: FeedKind::Video,
             result: Err(mbv_ui_model::UiModelError::operation("connection refused")),
-        })
-        .unwrap();
-    model.app.feeds_manage = Some(popup);
+        },
+    );
+    let mut app = app_with_feed_popup(popup);
 
-    model.drain_feed_add_results();
+    app.drain_feed_add_results();
 
-    assert!(model.app.config.lock().unwrap().feeds.is_empty());
-    assert!(model.app.newest_toast_text().contains("Couldn't add feed"));
+    assert!(app.configured_feeds().is_empty());
+    assert!(app.newest_toast_text().contains("Couldn't add feed"));
 }
 
 /// D5 of `add-gui-settings-screen`: the URL is the subscription list's
@@ -123,24 +156,23 @@ fn add_fetch_failure_does_not_save() {
 /// drain as a fetch failure ("Couldn't add feed: ...").
 #[test]
 fn duplicate_url_add_is_refused_and_list_unchanged() {
-    let mut model = Model::new(make_app_stub());
-    model.app.feeds_manage = Some(FeedsManagePopup::new());
-    model.app.config.lock().unwrap().feeds = vec![sub("A", "https://a", FeedKind::Video)];
+    let mut app = app_with_feeds(vec![sub("A", "https://a", FeedKind::Video)]);
+    app.seed_feeds_manage_popup_for_test(FeedsManagePopup::new());
 
-    let id = model.app.begin_feed_add("B", "https://a", FeedKind::Video);
+    let id = app.begin_feed_add("B", "https://a", FeedKind::Video);
 
     assert!(
         id.is_some(),
         "a duplicate add must report through the add-result drain"
     );
     assert!(
-        model.drain_feed_add_results(),
-        "the refusal must drain as a handled result"
+        matches!(app.drain_feed_add_results(), FeedAddDrain::Failed),
+        "the refusal drains as a handled result"
     );
-    let feeds = model.app.config.lock().unwrap().feeds.clone();
+    let feeds = app.configured_feeds();
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "A");
     assert_eq!(feeds[0].url, "https://a");
-    assert!(model.app.newest_toast_text().contains("Couldn't add feed"));
-    assert_eq!(model.app.feeds_manage.as_ref().unwrap().pending_add, None);
+    assert!(app.newest_toast_text().contains("Couldn't add feed"));
+    assert_eq!(app.feeds_manage_pending_add_for_test(), None);
 }

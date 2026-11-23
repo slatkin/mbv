@@ -8,8 +8,8 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{
-    QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
-    make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
+    close_initial_services, emby_unified_state, make_items, make_local_daemon_app_stub,
+    make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
 use crate::app::{App, QueueLink, QueueTarget};
 use mbv_ctrl::player::PlayerEvent;
@@ -46,7 +46,7 @@ pub(super) fn answered_local_daemon_app() -> (App, mpsc::Receiver<CtrlCmd>) {
 /// sender alive to deliver preloaded events.
 pub(super) fn inject_player_rx(app: &mut App) -> mpsc::Sender<PlayerEvent> {
     let (tx, rx) = mpsc::channel();
-    app.player_rx = rx;
+    app.set_active_player_events_for_test(rx);
     tx
 }
 
@@ -106,7 +106,7 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
     })
     .unwrap();
 
-    app.queue_op(
+    app.queue_op_for_test(
         QueueTarget::current(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
@@ -120,7 +120,7 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
         "the matching answer's snapshot is the adopted state"
     );
     assert!(
-        app.deferred_player_events.is_empty(),
+        app.deferred_player_events_len_for_test() == 0,
         "the earlier snapshot was adopted inline, not deferred"
     );
     assert!(
@@ -145,19 +145,19 @@ fn suspended_home_queue_op_disconnect_is_drained_as_a_home_event() {
     // the home drain and cannot disconnect the currently viewed remote owner.
     let (mut app, _cmd_rx) = answered_local_daemon_app();
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
-    app.switch_to_direct_remote(
-        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
+    app.attach_direct_remote_for_test(
+        "remote-owner",
         remote,
         remote_rx,
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     let (tx, rx) = mpsc::channel();
-    app.suspended_local.as_mut().unwrap().player_rx = rx;
+    app.set_suspended_local_events_for_test(rx);
     tx.send(PlayerEvent::RemoteDisconnected("home owner lost".into()))
         .unwrap();
     tx.send(applied(1, snapshot(2))).unwrap();
 
-    app.queue_op(
+    app.queue_op_for_test(
         QueueTarget::current(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
@@ -166,13 +166,13 @@ fn suspended_home_queue_op_disconnect_is_drained_as_a_home_event() {
     );
 
     assert!(
-        app.deferred_player_events.is_empty(),
+        app.deferred_player_events_len_for_test() == 0,
         "a suspended home's disconnect must not be replayed through the live player"
     );
     let mut harness = TickHarness::new(app);
     harness.step();
 
-    assert!(harness.model().app.suspended_local.is_none());
+    assert!(!harness.model().app.home_link_is_suspended_for_test());
     assert!(
         harness
             .model()
@@ -199,7 +199,7 @@ fn await_queue_op_defers_an_interleaved_remote_disconnected_to_the_next_tick() {
     })
     .unwrap();
 
-    app.await_queue_op(QueueLink::Local, QueueOpId(9));
+    app.await_queue_op_for_test(QueueLink::Local, QueueOpId(9));
 
     assert_eq!(
         app.queue_for_link(QueueLink::Local).total_queue_len(),
@@ -207,11 +207,11 @@ fn await_queue_op_defers_an_interleaved_remote_disconnected_to_the_next_tick() {
         "the answer is still adopted"
     );
     assert!(
-        app.pending_overlay.is_none(),
+        app.pending_overlay_for_test().is_none(),
         "the pump must not handle the disconnect itself"
     );
     assert_eq!(
-        app.deferred_player_events.len(),
+        app.deferred_player_events_len_for_test(),
         1,
         "the disconnect is deferred, in order"
     );
@@ -235,10 +235,10 @@ fn await_queue_op_timeout_flashes_and_a_late_applied_is_adopted_afterwards() {
     // a missing answer times out with a flash and leaves the view unchanged;
     // a late `Applied` is still adopted afterwards as a background snapshot.
     let mut app = make_local_daemon_app_stub(make_items(2));
-    app.local_view.adopt_items(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     let tx = inject_player_rx(&mut app);
 
-    app.await_queue_op_with_bound(QueueLink::Local, QueueOpId(3), Duration::ZERO);
+    app.await_queue_op_with_bound_for_test(QueueLink::Local, QueueOpId(3), Duration::ZERO);
 
     assert_eq!(
         app.newest_toast_text(),
@@ -278,20 +278,20 @@ fn rapid_repeated_removals_each_act_on_the_answered_state() {
     // Client holds no editable queue of its own.
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.adopt_items(make_items(4), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(4), 0);
     // Nothing is playing: the stub player starts active on row 0, which
     // would route row-0 removals into the now-playing confirm flow.
-    app.player.update_status(|status| status.active = false);
+    app.seed_idle_player_for_test();
     // One answer per removal, each holding the queue as the owner keeps it
     // after applying that removal (slot identities re-based per snapshot).
     tx.send(applied(1, snapshot_from_base(3, 100))).unwrap();
     tx.send(applied(2, snapshot_from_base(2, 200))).unwrap();
     tx.send(applied(3, snapshot_from_base(1, 300))).unwrap();
 
-    let first_slot = app.local_view.slot_id_at(0).unwrap();
-    app.remove_from_queue(0);
-    app.remove_from_queue(0);
-    app.remove_from_queue(0);
+    let first_slot = app.queue_for_link(QueueLink::Local).slot_id_at(0).unwrap();
+    app.remove_from_queue_for_test(0);
+    app.remove_from_queue_for_test(0);
+    app.remove_from_queue_for_test(0);
 
     let mut sent_slot_ids = Vec::new();
     while let Ok(cmd) = cmd_rx.try_recv() {
@@ -322,8 +322,8 @@ fn undoing_a_removal_appends_before_the_entry_now_at_that_index() {
     // Append anchored before the slot now at the removed entry's position.
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.adopt_items(make_items(4), 0);
-    app.player.update_status(|status| status.active = false);
+    app.seed_local_queue_emby_items_for_test(make_items(4), 0);
+    app.seed_idle_player_for_test();
     // Owner answer: the third entry (index 2) is gone; the entry that
     // followed it now sits at index 2 with slot 102.
     let mut remaining = make_items(4);
@@ -336,8 +336,8 @@ fn undoing_a_removal_appends_before_the_entry_now_at_that_index() {
     });
     tx.send(applied(1, Box::new(undo_answer))).unwrap();
 
-    app.remove_from_queue(2);
-    app.undo_last_queue_edit(QueueLink::Local);
+    app.remove_from_queue_for_test(2);
+    app.undo_last_queue_edit_for_test(QueueLink::Local);
 
     let _remove = cmd_rx.try_recv().unwrap();
     let undo = cmd_rx.try_recv().unwrap();
@@ -364,13 +364,13 @@ fn undoing_a_removal_past_the_end_appends_at_the_end() {
     // exists, the anchor is absent and the item is appended at the end.
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.adopt_items(make_items(2), 0);
-    app.player.update_status(|status| status.active = false);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
+    app.seed_idle_player_for_test();
     // Owner answer: the last entry is gone; one entry remains (slot 100).
     tx.send(applied(1, snapshot_from_base(1, 100))).unwrap();
 
-    app.remove_from_queue(1);
-    app.undo_last_queue_edit(QueueLink::Local);
+    app.remove_from_queue_for_test(1);
+    app.undo_last_queue_edit_for_test(QueueLink::Local);
 
     let _remove = cmd_rx.try_recv().unwrap();
     let undo = cmd_rx.try_recv().unwrap();
@@ -396,7 +396,7 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
     while cmd_rx.try_recv().is_ok() {}
     let _tx = inject_player_rx(&mut app);
 
-    app.queue_op(
+    app.queue_op_for_test(
         QueueTarget::current(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
@@ -405,7 +405,7 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
     );
 
     assert!(
-        app.deferred_player_events.is_empty(),
+        app.deferred_player_events_len_for_test() == 0,
         "no events were pumped for a legacy owner"
     );
     assert!(
@@ -429,11 +429,11 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
     // browse-destination refresh (#745).
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.adopt_items(make_items(2), 0);
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
     // The owner answers Applied at once with the refreshed queue.
     tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
 
-    app.queue_op(QueueTarget::current(QueueLink::Local), QueueOp::Refresh);
+    app.queue_op_for_test(QueueTarget::current(QueueLink::Local), QueueOp::Refresh);
 
     assert!(
         matches!(
@@ -540,7 +540,7 @@ fn an_accepted_play_at_the_expanded_pinned_width_records_one_collapse_request() 
     let (mut app, _cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
     tx.send(applied(1, snapshot(1))).unwrap();
-    app.pinned_width = PinnedWidth::Expanded;
+    app.seed_pinned_width_for_test(PinnedWidth::Expanded);
 
     assert!(app.submit_queue_item(one_queue_item().remove(0), true));
 
@@ -567,12 +567,12 @@ fn a_not_applied_play_records_no_collapse_request() {
         outcome: QueueOpOutcome::Rejected("the owner refused the replace".into()),
     })
     .unwrap();
-    app.pinned_width = PinnedWidth::Expanded;
+    app.seed_pinned_width_for_test(PinnedWidth::Expanded);
 
     assert!(!app.submit_queue_item(one_queue_item().remove(0), true));
 
     assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
-    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
@@ -586,11 +586,11 @@ fn an_enqueue_records_no_collapse_request() {
     let (mut app, _cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
     tx.send(applied(1, snapshot(3))).unwrap();
-    app.pinned_width = PinnedWidth::Expanded;
+    app.seed_pinned_width_for_test(PinnedWidth::Expanded);
 
     assert!(app.submit_queue_item(one_queue_item().remove(0), false));
 
     assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
-    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+    assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }

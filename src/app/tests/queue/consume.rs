@@ -1,5 +1,18 @@
+use std::sync::mpsc;
+
 use crate::app::tests::*;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+
+/// Deliver `event` on the active Owner link and drain it, as the link's own
+/// delivery inside a tick does: the event reaches the same handler the drain
+/// runs, so the test observes one injected event per call. The event comes
+/// first so its own reads of `app` finish before the drain borrows it.
+fn drain_player_event(event: PlayerEvent, app: &mut App) {
+    let (event_tx, event_rx) = mpsc::channel();
+    app.set_active_player_events_for_test(event_rx);
+    event_tx.send(event).unwrap();
+    app.drain_player_event();
+}
 
 #[test]
 fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
@@ -7,20 +20,17 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
     // confirmation nor its Stopped event optimistically edits the Client view.
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(3), app.local_view.cursor());
+    app.seed_local_queue_emby_items_for_test(make_items(3), 0);
     // TrackChanged(0) activates slot 0, mirroring real playback where the
     // model's active_slot_id becomes Some before the delete.
-    app.handle_player_event(PlayerEvent::TrackChanged {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        transition: None,
-    });
-    {
-        app.player.update_status(|st| {
-            st.active = true;
-            st.current_idx = 0;
-        });
-    };
+    drain_player_event(
+        PlayerEvent::TrackChanged {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            transition: None,
+        },
+        &mut app,
+    );
+    app.seed_playing_status_for_test(0, app.local_queue_len_for_test());
     app.ask_confirm(ConfirmModal {
         message: String::new(),
         buttons: Vec::new(),
@@ -33,37 +43,39 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
     let app = &mut model.app;
 
     assert_eq!(
-        app.local_view.emby_items().len(),
+        app.queue_for_link(QueueLink::Local).emby_items().len(),
         3,
         "the Client view waits for the owner's queue snapshot"
     );
     // Row 4.1 removed the in-process undo push; undo returns as an owner op in Unit 5.2.
     assert!(
-        app.pending_delete_slot.is_some(),
+        app.pending_delete_slot_for_test().is_some(),
         "the pending delete must be recorded so the eventual Stopped event recognizes it"
     );
 
-    app.handle_player_event(PlayerEvent::Stopped {
-        slot_id: app.playback_queue().slot_id_at(0),
-        run_identity: 0,
-        position_ticks: 0,
-        played: false,
-        consume: false,
-        error: None,
-    });
+    drain_player_event(
+        PlayerEvent::Stopped {
+            slot_id: app.playback_queue().slot_id_at(0),
+            run_identity: 0,
+            position_ticks: 0,
+            played: false,
+            consume: false,
+            error: None,
+        },
+        app,
+    );
 
     assert_eq!(
-        app.local_view.emby_items().len(),
+        app.queue_for_link(QueueLink::Local).emby_items().len(),
         3,
         "the Stopped event must not optimistically change the Client view"
     );
-    assert_eq!(
-        app.queue_undo_stack.len(),
-        0,
+    assert!(
+        app.queue_undo_is_empty_for_test(QueueLink::Local),
         "the Stopped event must not push a second undo entry"
     );
     assert!(
-        app.pending_delete_slot.is_none(),
+        app.pending_delete_slot_for_test().is_none(),
         "the Stopped event must clear the pending-delete marker"
     );
 }
@@ -72,8 +84,7 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
 fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(1), app.local_view.cursor());
+    app.seed_local_queue_emby_items_for_test(make_items(1), 0);
     app.ask_confirm(ConfirmModal {
         message: String::new(),
         buttons: Vec::new(),
@@ -85,9 +96,9 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
     model.handle_confirm_key(KeyEvent::new(Key::Enter, KeyModifiers::NONE));
     let app = &mut model.app;
 
-    assert_eq!(app.local_view.emby_items().len(), 1);
-    assert!(app.pending_delete_slot.is_none());
-    assert!(!app.queue_dirty);
+    assert_eq!(app.queue_for_link(QueueLink::Local).emby_items().len(), 1);
+    assert!(app.pending_delete_slot_for_test().is_none());
+    assert!(!app.queue_dirty_for_test());
 }
 
 #[test]
@@ -99,53 +110,70 @@ fn stopped_consume_keeps_the_client_view_until_the_owner_snapshot() {
     // consume_videos already works for a video's Stopped-path removal.
     let items = make_audio_items(1);
     let mut app = make_app_stub();
-    app.local_view.adopt_items(items, app.local_view.cursor());
-    app.config.lock().unwrap().consume_audio = true;
+    app.seed_local_queue_emby_items_for_test(items, 0);
+    app.config_for_test(|config| config.consume_audio = true);
 
-    app.handle_player_event(PlayerEvent::Stopped {
-        slot_id: app.playback_queue().slot_id_at(0),
-        run_identity: 0,
-        position_ticks: 0,
-        played: false,
-        consume: true,
-        error: None,
-    });
+    drain_player_event(
+        PlayerEvent::Stopped {
+            slot_id: app.playback_queue().slot_id_at(0),
+            run_identity: 0,
+            position_ticks: 0,
+            played: false,
+            consume: true,
+            error: None,
+        },
+        &mut app,
+    );
 
-    assert_eq!(app.local_view.emby_items().len(), 1);
+    assert_eq!(app.queue_for_link(QueueLink::Local).emby_items().len(), 1);
 }
 
 #[test]
 fn track_completed_for_removed_slot_does_not_mutate_queue() {
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(2), app.local_view.cursor());
-    let ids_before: Vec<_> = app.local_view.slots().iter().map(|s| s.slot_id).collect();
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
+    let ids_before: Vec<_> = app
+        .queue_for_link(QueueLink::Local)
+        .slots()
+        .iter()
+        .map(|s| s.slot_id)
+        .collect();
 
     // a slot id that was never allocated in this queue
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: mbv_queue::QueueSlotId::from_raw(9999),
-        run_identity: 0,
-        position_ticks: 600_000_000,
-        played: true,
-        consume: true,
-    });
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id: mbv_queue::QueueSlotId::from_raw(9999),
+            run_identity: 0,
+            position_ticks: 600_000_000,
+            played: true,
+            consume: true,
+        },
+        &mut app,
+    );
 
-    let ids_after: Vec<_> = app.local_view.slots().iter().map(|s| s.slot_id).collect();
+    let ids_after: Vec<_> = app
+        .queue_for_link(QueueLink::Local)
+        .slots()
+        .iter()
+        .map(|s| s.slot_id)
+        .collect();
     assert_eq!(ids_before, ids_after);
 }
 
 #[test]
 fn track_changed_activates_the_current_slot() {
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(3), app.local_view.cursor());
-    app.handle_player_event(PlayerEvent::TrackChanged {
-        slot_id: app.playback_queue().slot_id_at(1).unwrap(),
-        transition: None,
-    });
+    app.seed_local_queue_emby_items_for_test(make_items(3), 0);
+    drain_player_event(
+        PlayerEvent::TrackChanged {
+            slot_id: app.playback_queue().slot_id_at(1).unwrap(),
+            transition: None,
+        },
+        &mut app,
+    );
 
     assert_eq!(
-        app.local_view.cursor(),
+        app.local_queue_cursor_for_test(),
         1,
         "TrackChanged resolves the owner's stable slot to the selected view position"
     );
@@ -155,27 +183,32 @@ fn track_changed_activates_the_current_slot() {
 fn track_completed_consume_keeps_the_client_view_until_owner_snapshot() {
     // The completion reaction must not consume the Client's read-only queue.
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(3), app.local_view.cursor());
-    let slot_b = app.local_view.slots()[1].slot_id;
-    app.config.lock().unwrap().consume_videos = true;
+    app.seed_local_queue_emby_items_for_test(make_items(3), 0);
+    let slot_b = app.queue_for_link(QueueLink::Local).slots()[1].slot_id;
+    app.config_for_test(|config| config.consume_videos = true);
 
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        run_identity: 0,
-        position_ticks: 0,
-        played: true,
-        consume: true,
-    });
-    assert_eq!(app.local_view.slots().len(), 3);
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            run_identity: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        },
+        &mut app,
+    );
+    assert_eq!(app.queue_for_link(QueueLink::Local).slots().len(), 3);
 
-    app.handle_player_event(PlayerEvent::TrackChanged {
-        slot_id: slot_b,
-        transition: None,
-    });
+    drain_player_event(
+        PlayerEvent::TrackChanged {
+            slot_id: slot_b,
+            transition: None,
+        },
+        &mut app,
+    );
 
-    assert_eq!(app.local_view.slots().len(), 3);
-    assert_eq!(app.local_view.cursor(), 1);
+    assert_eq!(app.queue_for_link(QueueLink::Local).slots().len(), 3);
+    assert_eq!(app.local_queue_cursor_for_test(), 1);
 }
 
 #[test]
@@ -183,21 +216,23 @@ fn a_video_consume_flag_is_ignored_when_video_consumption_is_disabled() {
     // queue-owner-process design D9: client consume side effects follow the
     // owner-provided consume flag only when this media kind is enabled.
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(2), app.local_view.cursor());
-    app.config.lock().unwrap().consume_videos = false;
-    app.config.lock().unwrap().save_playlist_on_consume = true;
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
+    app.config_for_test(|config| config.consume_videos = false);
+    app.config_for_test(|config| config.save_playlist_on_consume = true);
 
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        run_identity: 0,
-        position_ticks: 0,
-        played: true,
-        consume: true,
-    });
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            run_identity: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        },
+        &mut app,
+    );
 
     assert!(
-        !app.queue_dirty,
+        !app.queue_dirty_for_test(),
         "disabled video consumption has no consume reaction"
     );
 }
@@ -207,27 +242,29 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.local_view.adopt_items(items, app.local_view.cursor());
-    app.local_view
-        .adopt_source(mbv_queue::QueueSource::Playlist {
-            id: Some("pl1".to_string()),
-            name: "My Playlist".to_string(),
-        });
-    app.config.lock().unwrap().consume_videos = true;
-    app.config.lock().unwrap().save_playlist_on_consume = false;
+    app.seed_local_queue_emby_items_for_test(items, 0);
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Playlist {
+        id: Some("pl1".to_string()),
+        name: "My Playlist".to_string(),
+    });
+    app.config_for_test(|config| config.consume_videos = true);
+    app.config_for_test(|config| config.save_playlist_on_consume = false);
 
     // First item finishes playing and is consumed at completion.
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        run_identity: 0,
-        position_ticks: 0,
-        played: true,
-        consume: true,
-    });
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            run_identity: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        },
+        &mut app,
+    );
 
-    assert_eq!(app.local_view.emby_items().len(), 2);
+    assert_eq!(app.queue_for_link(QueueLink::Local).emby_items().len(), 2);
     assert!(
-        app.queue_dirty,
+        app.queue_dirty_for_test(),
         "consuming an item changes the saved playlist's contents; without \
              save_playlist_on_consume the queue must be marked dirty so the user is still \
              prompted to save before quitting/replacing the queue"
@@ -239,26 +276,28 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.local_view.adopt_items(items, app.local_view.cursor());
-    app.local_view
-        .adopt_source(mbv_queue::QueueSource::Playlist {
-            id: Some("pl1".to_string()),
-            name: "My Playlist".to_string(),
-        });
-    app.config.lock().unwrap().consume_videos = true;
-    app.config.lock().unwrap().save_playlist_on_consume = true;
-
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        run_identity: 0,
-        position_ticks: 0,
-        played: true,
-        consume: true,
+    app.seed_local_queue_emby_items_for_test(items, 0);
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Playlist {
+        id: Some("pl1".to_string()),
+        name: "My Playlist".to_string(),
     });
+    app.config_for_test(|config| config.consume_videos = true);
+    app.config_for_test(|config| config.save_playlist_on_consume = true);
 
-    assert_eq!(app.local_view.emby_items().len(), 2);
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            run_identity: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        },
+        &mut app,
+    );
+
+    assert_eq!(app.queue_for_link(QueueLink::Local).emby_items().len(), 2);
     assert!(
-        !app.queue_dirty,
+        !app.queue_dirty_for_test(),
         "with save_playlist_on_consume enabled, consuming from a saved playlist should \
              trigger an immediate re-save to Emby (mirroring the manual save-playlist flow), \
              so the queue is no longer considered dirty"
@@ -275,33 +314,35 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
     // the trap scenario: before the link gate, consuming on the *remote* queue would
     // still fire save_playlist_to_emby() and push the unrelated, unmodified local
     // playlist to Emby.
-    app.local_view
-        .adopt_source(mbv_queue::QueueSource::Playlist {
-            id: Some("pl1".to_string()),
-            name: "My Playlist".to_string(),
-        });
-    app.config.lock().unwrap().consume_videos = true;
-    app.config.lock().unwrap().save_playlist_on_consume = true;
-
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        run_identity: 0,
-        position_ticks: 0,
-        played: true,
-        consume: true,
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Playlist {
+        id: Some("pl1".to_string()),
+        name: "My Playlist".to_string(),
     });
+    app.config_for_test(|config| config.consume_videos = true);
+    app.config_for_test(|config| config.save_playlist_on_consume = true);
+
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            run_identity: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        },
+        &mut app,
+    );
     assert_eq!(
-        app.remote_view.as_ref().unwrap().emby_items().len(),
+        app.queue_for_link(QueueLink::Peer).emby_items().len(),
         2,
         "the Client must not remove from the out-of-process owner queue"
     );
     assert_eq!(
-        app.local_view.emby_items().len(),
+        app.queue_for_link(QueueLink::Local).emby_items().len(),
         local_items.len(),
         "consume on a direct-remote queue must not touch the unrelated local playlist"
     );
     assert!(
-        !app.queue_dirty,
+        !app.queue_dirty_for_test(),
         "consume on a direct-remote queue must not mark the local queue dirty or trigger \
              an autosave of the local playlist — the change happened on the remote queue"
     );
@@ -312,38 +353,44 @@ fn clients_hold_no_editable_queue_track_completed_audio_consume_keeps_view_until
     let _guard = crate::app::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
-    app.local_view.adopt_items(items, app.local_view.cursor());
-    let slot_id = app.local_view.slot_id_at(0).unwrap();
+    app.seed_local_queue_emby_items_for_test(items, 0);
+    let slot_id = app.queue_for_link(QueueLink::Local).slot_id_at(0).unwrap();
     let item_before = app
-        .local_view
+        .queue_for_link(QueueLink::Local)
         .item_at(0)
         .unwrap()
         .as_emby()
         .unwrap()
         .clone();
-    app.local_view
-        .adopt_source(mbv_queue::QueueSource::Playlist {
-            id: Some("pl1".to_string()),
-            name: "My Playlist".to_string(),
-        });
-    app.config.lock().unwrap().consume_audio = true;
-    app.config.lock().unwrap().save_playlist_on_consume_audio = false;
-
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id,
-        run_identity: 0,
-        position_ticks: 600_000_000,
-        played: true,
-        consume: true,
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Playlist {
+        id: Some("pl1".to_string()),
+        name: "My Playlist".to_string(),
     });
+    app.config_for_test(|config| config.consume_audio = true);
+    app.config_for_test(|config| config.save_playlist_on_consume_audio = false);
 
-    assert_eq!(app.local_view.emby_items().len(), 2);
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id,
+            run_identity: 0,
+            position_ticks: 600_000_000,
+            played: true,
+            consume: true,
+        },
+        &mut app,
+    );
+
+    assert_eq!(app.queue_for_link(QueueLink::Local).emby_items().len(), 2);
     assert_eq!(
-        app.local_view.item_at(0).unwrap().as_emby().unwrap(),
+        app.queue_for_link(QueueLink::Local)
+            .item_at(0)
+            .unwrap()
+            .as_emby()
+            .unwrap(),
         &item_before
     );
     assert!(
-        app.queue_dirty,
+        app.queue_dirty_for_test(),
         "consuming an audio item changes the saved playlist's contents; without \
              save_playlist_on_consume_audio the queue must be marked dirty so the user is \
              still prompted to save before quitting/replacing the queue"
@@ -355,26 +402,28 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
     let _guard = crate::app::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
-    app.local_view.adopt_items(items, app.local_view.cursor());
-    app.local_view
-        .adopt_source(mbv_queue::QueueSource::Playlist {
-            id: Some("pl1".to_string()),
-            name: "My Playlist".to_string(),
-        });
-    app.config.lock().unwrap().consume_audio = true;
-    app.config.lock().unwrap().save_playlist_on_consume_audio = true;
-
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        run_identity: 0,
-        position_ticks: 0,
-        played: false,
-        consume: true,
+    app.seed_local_queue_emby_items_for_test(items, 0);
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Playlist {
+        id: Some("pl1".to_string()),
+        name: "My Playlist".to_string(),
     });
+    app.config_for_test(|config| config.consume_audio = true);
+    app.config_for_test(|config| config.save_playlist_on_consume_audio = true);
 
-    assert_eq!(app.local_view.emby_items().len(), 2);
+    drain_player_event(
+        PlayerEvent::TrackCompleted {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            run_identity: 0,
+            position_ticks: 0,
+            played: false,
+            consume: true,
+        },
+        &mut app,
+    );
+
+    assert_eq!(app.queue_for_link(QueueLink::Local).emby_items().len(), 2);
     assert!(
-        !app.queue_dirty,
+        !app.queue_dirty_for_test(),
         "with save_playlist_on_consume_audio enabled, consuming from a saved playlist \
              should trigger an immediate re-save to Emby, so the queue is no longer dirty"
     );
@@ -387,35 +436,34 @@ fn multi_delete_including_active_confirms_whole_selection_before_any_removal() {
     // confirmation (issue: non-confirmable rows deleted before the modal).
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(3), app.local_view.cursor());
-    app.handle_player_event(PlayerEvent::TrackChanged {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        transition: None,
-    });
-    app.player.update_status(|st| {
-        st.active = true;
-        st.current_idx = 0;
-    });
+    app.seed_local_queue_emby_items_for_test(make_items(3), 0);
+    drain_player_event(
+        PlayerEvent::TrackChanged {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            transition: None,
+        },
+        &mut app,
+    );
+    app.seed_playing_status_for_test(0, app.local_queue_len_for_test());
     let slot_ids = vec![
         app.playback_queue().slot_id_at(0).unwrap(),
         app.playback_queue().slot_id_at(2).unwrap(),
     ];
 
-    app.remove_slots_from_queue(QueueTarget::current(QueueLink::Local), &slot_ids);
+    app.remove_slots_from_queue_for_test(QueueTarget::current(QueueLink::Local), &slot_ids);
 
     assert_eq!(
-        app.local_view.emby_items().len(),
+        app.queue_for_link(QueueLink::Local).emby_items().len(),
         3,
         "no row is removed before the multi-delete confirmation is answered"
     );
-    assert!(app.pending_delete_slot.is_none());
-    assert!(app.pending_delete_selection.is_none());
+    assert!(app.pending_delete_slot_for_test().is_none());
+    assert!(app.pending_delete_selection_for_test().is_none());
     assert!(
-        app.queue_undo_stack.is_empty(),
+        app.queue_undo_is_empty_for_test(QueueLink::Local),
         "no undo entry is recorded before confirmation"
     );
-    let pending = match &app.pending_overlay {
+    let pending = match app.pending_overlay_for_test() {
         Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
         other => panic!("one multi-delete confirmation must be pending, got {other:?}"),
     };
@@ -439,16 +487,15 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let cmd_rx = live_owner_channel(&mut app);
-    app.local_view
-        .adopt_items(make_items(3), app.local_view.cursor());
-    app.handle_player_event(PlayerEvent::TrackChanged {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        transition: None,
-    });
-    app.player.update_status(|st| {
-        st.active = true;
-        st.current_idx = 0;
-    });
+    app.seed_local_queue_emby_items_for_test(make_items(3), 0);
+    drain_player_event(
+        PlayerEvent::TrackChanged {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            transition: None,
+        },
+        &mut app,
+    );
+    app.seed_playing_status_for_test(0, app.local_queue_len_for_test());
     let slot_ids = vec![
         app.playback_queue().slot_id_at(0).unwrap(),
         app.playback_queue().slot_id_at(1).unwrap(),
@@ -458,8 +505,8 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
         .copied()
         .map(mbv_ctrl::slot_id_to_u64)
         .collect();
-    app.remove_slots_from_queue(QueueTarget::current(QueueLink::Local), &slot_ids);
-    app.pending_overlay = None;
+    app.remove_slots_from_queue_for_test(QueueTarget::current(QueueLink::Local), &slot_ids);
+    app.clear_pending_overlay_for_test();
     app.apply_confirm_action(
         ConfirmAction::RemoveActiveQueueSelection {
             link: QueueLink::Local,
@@ -468,27 +515,30 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
         KeyEvent::new(Key::Enter, KeyModifiers::NONE),
     );
     assert_eq!(
-        app.local_view.emby_items().len(),
+        app.queue_for_link(QueueLink::Local).emby_items().len(),
         3,
         "the confirmed multi-delete leaves the Client view for the owner snapshot"
     );
     assert_eq!(
-        app.pending_delete_selection.as_deref(),
+        app.pending_delete_selection_for_test().as_deref(),
         Some(slot_ids.as_slice())
     );
 
-    app.handle_player_event(PlayerEvent::Stopped {
-        slot_id: app.playback_queue().slot_id_at(0),
-        run_identity: 0,
-        position_ticks: 0,
-        played: false,
-        consume: false,
-        error: None,
-    });
+    drain_player_event(
+        PlayerEvent::Stopped {
+            slot_id: app.playback_queue().slot_id_at(0),
+            run_identity: 0,
+            position_ticks: 0,
+            played: false,
+            consume: false,
+            error: None,
+        },
+        &mut app,
+    );
 
-    assert!(app.pending_delete_selection.is_none());
+    assert!(app.pending_delete_selection_for_test().is_none());
     assert_eq!(
-        app.local_view.emby_items().len(),
+        app.queue_for_link(QueueLink::Local).emby_items().len(),
         3,
         "the Stopped event must not optimistically change the Client view"
     );
@@ -511,22 +561,21 @@ fn cancelled_multi_delete_with_active_removes_nothing() {
     // no row is removed.
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.local_view
-        .adopt_items(make_items(3), app.local_view.cursor());
-    app.handle_player_event(PlayerEvent::TrackChanged {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
-        transition: None,
-    });
-    app.player.update_status(|st| {
-        st.active = true;
-        st.current_idx = 0;
-    });
+    app.seed_local_queue_emby_items_for_test(make_items(3), 0);
+    drain_player_event(
+        PlayerEvent::TrackChanged {
+            slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+            transition: None,
+        },
+        &mut app,
+    );
+    app.seed_playing_status_for_test(0, app.local_queue_len_for_test());
     let slot_ids = vec![
         app.playback_queue().slot_id_at(0).unwrap(),
         app.playback_queue().slot_id_at(2).unwrap(),
     ];
-    app.remove_slots_from_queue(QueueTarget::current(QueueLink::Local), &slot_ids);
-    app.pending_overlay = None;
+    app.remove_slots_from_queue_for_test(QueueTarget::current(QueueLink::Local), &slot_ids);
+    app.clear_pending_overlay_for_test();
     app.apply_confirm_action(
         ConfirmAction::RemoveActiveQueueSelection {
             link: QueueLink::Local,
@@ -534,7 +583,7 @@ fn cancelled_multi_delete_with_active_removes_nothing() {
         },
         KeyEvent::new(Key::Esc, KeyModifiers::NONE),
     );
-    assert_eq!(app.local_view.emby_items().len(), 3);
-    assert!(app.pending_delete_slot.is_none());
-    assert!(app.pending_delete_selection.is_none());
+    assert_eq!(app.queue_for_link(QueueLink::Local).emby_items().len(), 3);
+    assert!(app.pending_delete_slot_for_test().is_none());
+    assert!(app.pending_delete_selection_for_test().is_none());
 }
