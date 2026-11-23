@@ -268,7 +268,7 @@ pub fn QueuePanel() -> Element {
                         rsx! {
                             div {
                                 class: "pointer-events-none absolute",
-                                style: "top: var(--canvas-queue-header-height); bottom: var(--mbv-cell-row); right: calc(var(--mbv-cell-col) * -1 + 0.5px); width: 6px;",
+                                style: "top: calc(var(--canvas-queue-header-height) + 6px); bottom: calc(var(--mbv-cell-row) + 6px); right: calc(var(--mbv-cell-col) * -1 + 0.5px); width: 6px;",
                                 "data-scrollbar": "",
                                 div {
                                     class: "absolute",
