@@ -21,7 +21,9 @@ use mbv_desktop::launch::{
 pub(crate) use crate::app::pin::IN_PANEL_FLAG;
 pub use crate::app::pin::{claim_panel_identity, claim_swap_token, is_pinned, swap_token};
 
-use crate::app::pin::{PanelReserveMode, collapsed_reserve, focus_ring_arg, size_arg};
+use crate::app::pin::{
+    PanelReserveMode, claimed_socket, collapsed_reserve, focus_ring_arg, size_arg,
+};
 
 /// Why a pinned launch did not reach `pinwin run`.
 #[derive(Debug)]
@@ -215,7 +217,7 @@ fn finish(status: std::process::ExitStatus) -> ! {
 /// reason when no panel runs or the request fails; exits 0 silently on
 /// success.
 pub(crate) fn toggle_running() {
-    if let Err(error) = run_request(&toggle_argv(PANEL_NAME), None) {
+    if let Err(error) = run_request(&toggle_argv(PANEL_NAME), claimed_socket()) {
         report_toggle_failure(&error.to_string());
     }
 }

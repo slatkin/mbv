@@ -86,6 +86,14 @@ fn identity() -> &'static PanelIdentity {
     PANEL_IDENTITY.get_or_init(PanelIdentity::default)
 }
 
+/// The claimed `PINWIN_SOCKET` of this launch: the daemon socket that serves
+/// this panel, `None` outside a panel. Every panel request this process sends,
+/// including the `--toggle` launch's, names that socket.
+#[must_use]
+pub fn claimed_socket() -> Option<&'static str> {
+    identity().socket.as_deref()
+}
+
 /// The swap token this launch was started with, claimed once at startup.
 /// `None` for every launch the user started.
 static SWAP_TOKEN: OnceLock<Option<String>> = OnceLock::new();
