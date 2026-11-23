@@ -8,28 +8,54 @@
 //! under `cfg(test)`, so a dependent crate's dev-dependency can enable it;
 //! the shipped builds never compile it.
 
+#[cfg(feature = "test")]
 use std::sync::{Arc, Mutex};
 
-use super::{App, AppInit, QueueView};
+use super::App;
+#[cfg(feature = "test")]
+use super::QueueView;
+
+/// The stub constructions over `App::build`, in their own child module so this
+/// one stays within its line ceiling. Their first half is the construction a
+/// caller outside the `test` builds uses too (the parked `App` a Client wrapper
+/// moves out, `app::gui_library`, `app::gui_settings`, `app::input::gui`).
+pub(in crate::app) mod built;
+
+pub use self::built::handoff_app;
+#[cfg(any(test, feature = "test"))]
+pub use self::built::make_app_stub;
 
 /// The GUI `sections` bench's bench-scale seeds (design D12 of
 /// `gui-change-driven-sections`), in their own child module.
 #[cfg(feature = "test")]
 mod gui_scale;
 
-/// Minimal `App` stub for logic-only tests: the ordinary `App::build`
-/// construction ([`make_built_app`]) plus the stub-friendly defaults below.
+/// The capabilities a GUI Client presents (design D6a of
+/// `decouple-client-core`). It is the headless stand-in for the set
+/// `attach_owner` records at a real GUI attach, so a GUI test gives its stub
+/// this value instead of setting capability flags by hand.
+#[cfg(any(test, feature = "test"))]
 #[must_use]
-pub fn make_app_stub() -> App {
-    let mut app = make_built_app();
-    apply_app_stub_defaults(&mut app);
-    app
+pub fn gui_client_capabilities() -> crate::ClientCapabilities {
+    crate::ClientCapabilities::empty()
+        .with(crate::ClientCapability::ShownQueueEntries)
+        .with(crate::ClientCapability::TransportChipKeys)
 }
 
 fn apply_app_stub_defaults(app: &mut App) {
     // `build` doubles the configured image cache size; the stub keeps its
-    // original (undoubled) budget so eviction behaviour is unchanged.
+    // original (undoubled) budget so eviction behaviour is unchanged, under
+    // the `test` support build it was set from.
+    #[cfg(any(test, feature = "test"))]
     app.images.set_cache_capacity_for_test(50);
+    // The stub stands in for a TUI Client without an Owner attach (design
+    // D6a of `decouple-client-core`): it holds the capabilities the TUI
+    // presents, which `App::build` leaves empty until a Client sets them.
+    app.set_client_capabilities(
+        crate::ClientCapabilities::empty()
+            .with(crate::ClientCapability::TerminalPanelRules)
+            .with(crate::ClientCapability::VisualSlotControls),
+    );
     // Ignore any on-disk feed entry state; a stub starts empty.
     app.feed_entry_state = mbv_feed::FeedEntryStore::default();
     // Default to a focused window that reported focus in the past, so
@@ -53,6 +79,52 @@ pub fn stub_app_with_queue(n: usize) -> App {
     // list keeps the whole window (task 3.6).
     app.player.update_status(|status| status.active = false);
     app
+}
+
+/// The `App` a GUI Client's test drives with `n` queue slots, holding the
+/// [`gui_client_capabilities`] a real GUI attach records (design D6a of
+/// `decouple-client-core`), over a player whose command channel stays open and
+/// the sender of its Owner-event channel. The stub capabilities are the TUI's
+/// preset, which gates every GUI-only control, and the plain stub's player
+/// channel is already dropped, so a test of a control takes this App, the
+/// receiver of the Owner commands it sends, and the events it injects. The
+/// Owner's two-queue list is adopted and its current queue shown, so the header
+/// controls act on a named entry (design D7 of `gui-named-queues`).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_for_gui_client(
+    n: usize,
+) -> (
+    App,
+    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+    std::sync::mpsc::Sender<mbv_ctrl::player::PlayerEvent>,
+) {
+    let mut app = stub_app_with_queue(n);
+    app.set_client_capabilities(gui_client_capabilities());
+    let (remote, _player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.update_status(|status| status.volume_max = 100);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.player_rx = rx;
+    let current = mbv_queue::NamedQueueId::from_raw(1);
+    app.adopt_named_queue_list(
+        vec![
+            mbv_ctrl::NamedQueueEntry {
+                id: current,
+                name: "Default".to_string(),
+                len: n,
+            },
+            mbv_ctrl::NamedQueueEntry {
+                id: mbv_queue::NamedQueueId::from_raw(2),
+                name: "Kids".to_string(),
+                len: 1,
+            },
+        ],
+        current,
+    );
+    app.show_local_current_entry();
+    (app, cmd_rx, tx)
 }
 
 /// The `App` a GUI Client's test drives with `n` queue slots over a player
@@ -85,7 +157,7 @@ fn app_with_cmd_rx() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     compatibility.supports_answered_queue_ops = false;
     remote.set_ctrl_compatibility_for_test(compatibility);
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
-    let mut app = built_app(player, player_rx);
+    let mut app = built::built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
     while cmd_rx.try_recv().is_ok() {}
     (app, cmd_rx)
@@ -201,7 +273,7 @@ pub fn stub_app_with_unsaved_queue(n: usize) -> App {
 /// The `App` a Client's test drives with prefix mode armed and `message`
 /// flashed as a live Neutral toast, so the Status bar carries both
 /// (`extract-client-core` row 6.5).
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
     use mbv_ui_model::toast::ToastSeverity;
@@ -224,13 +296,18 @@ pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
 #[cfg(feature = "test")]
 #[must_use]
 pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
-    let mut app = stub_app_with_playing_items(items);
+    let app = stub_app_with_playing_items(items);
     let row = app
         .displayed_queue()
         .slot_id_at(0)
         .expect("the stub queue has a first slot");
-    app.open_gui_row_menu(&[row]);
-    app
+    let mut core = crate::gui::GuiCore::new(app);
+    core.open_gui_row_menu(&[row]);
+    // The overlay is the wrapper's own Client state, and the test reads the
+    // state beside the `App` (row 8.1 of `decouple-client-core`), so what the
+    // chord opened goes back out.
+    core.publish_seeded_gui_state_for_test();
+    core.into_app()
 }
 
 /// The `App` a Client's test drives with an active player carrying one audio
@@ -240,8 +317,6 @@ pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
 #[cfg(feature = "test")]
 #[must_use]
 pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
-    use mbv_ui_msg::PlaybackRequest;
-
     let mut app = stub_app_with_playing_queue(1);
     app.player.update_status(|status| {
         status.active = true;
@@ -250,8 +325,17 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
         status.sub_id = 0;
     });
-    app.handle_playback_request(&PlaybackRequest::OpenTrackPopover(chip));
-    app
+    // The popover opens through the GUI Client's own half of the chip press:
+    // the shared playback dispatch's arm for it is a documented core no-op
+    // (design D4a (a)), and the GUI entry (`input/gui.rs`) applies it after
+    // the core. An inactive player lists no choice, so it opens nothing.
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
+    core.toggle_gui_track_popover(chip);
+    // The overlay is the wrapper's own Client state, and the test reads the
+    // state beside the `App` (row 8.1 of `decouple-client-core`), so what the
+    // press opened goes back out.
+    core.publish_seeded_gui_state_for_test();
+    core.into_app()
 }
 /// The `App` a GUI Client's test drives with the cast receivers replaced by
 /// `receivers` (add-tauri-gui-client row 6.5's paint/press regression): the
@@ -348,7 +432,7 @@ pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::
         status.runtime_ticks = 10 * 60 * mbv_emby_model::TICKS_PER_SECOND;
     });
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
-    let mut app = built_app(player, player_rx);
+    let mut app = built::built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
     app.cast_receivers = vec![mbv_cast::discovery::CastReceiver {
         id: "receiver-1".to_string(),
@@ -373,8 +457,15 @@ pub fn stub_app_with_failed_emby_setup() -> App {
     use crate::app::dispatch::session::services_settings::EmbySetupForm;
     use mbv_core::service_runtime::ServiceState;
 
-    let mut app = make_app_stub();
-    app.open_gui_settings_at(super::GuiSettingsSection::Services);
+    let mut core = crate::gui::GuiCore::new(make_app_stub());
+    core.apply_gui_settings_overlay(&mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
+        mbv_ui_model::overlay::SidebarId::Settings,
+    ));
+    // The open screen is the wrapper's own Client state, and the test reads
+    // the state beside the `App` (row 8.1 of `decouple-client-core`), so it
+    // goes back out.
+    core.publish_seeded_gui_state_for_test();
+    let mut app = core.into_app();
     app.setup.emby_setup_form = Some(EmbySetupForm {
         fields: [
             "https://emby.example.test".to_string(),
@@ -409,7 +500,7 @@ pub fn stub_app_with_track_choices() -> (App, std::sync::mpsc::Receiver<mbv_ctrl
         status.sub_id = 0;
     });
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
-    let mut app = built_app(player, player_rx);
+    let mut app = built::built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
     // The construction's preference sync lands on the channel before the
     // test starts; drain it so the test sees only commands its actions send.
@@ -531,6 +622,12 @@ pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>
 /// (`app_stub::test_reads`).
 #[cfg(any(test, feature = "test"))]
 pub(in crate::app) mod test_reads;
+#[cfg(feature = "test")]
+pub use self::test_reads::drain_lib_event_with_stores_for_test;
+#[cfg(any(test, feature = "test"))]
+pub use self::test_reads::gui_state_for_test;
+#[cfg(feature = "test")]
+pub use self::test_reads::seeded_gui_state_for_test;
 
 /// The `App` a GUI Client's Owner-exit test drives (`daemon-disconnect-`
 /// `handling` "Clients exit cleanly on an announced shutdown"): the stub
@@ -549,67 +646,4 @@ pub fn stub_app_with_local_daemon_events(
     let (tx, rx) = std::sync::mpsc::channel();
     app.player_rx = rx;
     (app, tx)
-}
-
-/// The ordinary `App::build` construction over stub channels: no live
-/// Owner, no live Service, and the stub player whose command channel is
-/// already dropped.
-#[must_use]
-pub fn make_built_app() -> App {
-    use mbv_player::PlayerProxy;
-
-    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-    remote.update_status(|status| status.volume_max = 100);
-    built_app(PlayerProxy::from_remote(remote, false), player_rx)
-}
-
-/// The `App::build` construction over `player` and its event channel, the
-/// shared half of every stub that needs its own player wiring (a command
-/// channel of its own, say).
-fn built_app(
-    player: mbv_player::PlayerProxy,
-    player_rx: std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
-) -> App {
-    let (_, ws_rx) = std::sync::mpsc::channel();
-    let (_, transport_rx) = std::sync::mpsc::channel();
-    let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
-    let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
-
-    let config = crate::config::Config::default();
-
-    App::build(AppInit {
-        config: Arc::new(Mutex::new(config)),
-        emby_runtime: crate::app::state::service_runtime::EmbyRuntime::default(),
-        audiobookshelf_runtime: crate::app::state::service_runtime::AudiobookshelfRuntime::new(
-            false,
-        ),
-        player,
-        player_rx,
-        ws_rx,
-        transport_rx,
-        ws_send_tx: None,
-        audiobookshelf_socket_rx: {
-            let (_, rx) = std::sync::mpsc::channel();
-            rx
-        },
-        audiobookshelf_socket_tx: None,
-        audiobookshelf_socket_generation: None,
-        local_view: QueueView::default(),
-        remote_view: None,
-        system_notifications: false,
-        image_protocol: None,
-        image_protocol_enabled: false,
-        hidden_libraries: Vec::new(),
-        library_routes: std::collections::BTreeMap::new(),
-        music_levels: Vec::new(),
-        use_nerd_fonts: false,
-        indicator_style: mbv_render::indicators::IndicatorStyle::default(),
-        image_cache_size: 50,
-        image_decode: mbv_images::ImageDecode::Pixels,
-        visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
-        card_image_tx,
-        card_image_rx,
-        channels,
-        idle_feed: None,
-    })
 }

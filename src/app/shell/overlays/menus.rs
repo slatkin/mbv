@@ -1,4 +1,5 @@
 use super::super::Model;
+use super::super::tv_wide::wide_tv_show_area;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::{
     ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
@@ -35,6 +36,18 @@ impl Model {
             .and_then(LibraryPanel::menu_geometry)
     }
 
+    /// The Wide TV workspace's paint-free library area: the placement region
+    /// for a pointer-anchored menu over the active Emby TV library, `None`
+    /// when the library is not placed wide (task 8.2 deleted the
+    /// `tv_wide_*` pane rects).
+    fn wide_tv_workspace_area(&self) -> Option<Rect> {
+        let terminal_size = self.terminal_size();
+        self.app
+            .tab
+            .emby_library_index()
+            .and_then(|lib_idx| wide_tv_show_area(&self.app, lib_idx, terminal_size))
+    }
+
     /// Like `library_menu_geometry`, but for the mounted `QueueComponent`
     /// (task 3.1, design D11): the queue panel answers the context-menu
     /// keyboard anchor from its own retained geometry, not a shell mirror.
@@ -55,7 +68,7 @@ impl Model {
         entries: &[ContextMenuEntry],
         bounds: Option<mbv_ui_model::geom::Rect>,
     ) -> Rect {
-        let layout = &self.app.layout;
+        let layout = &self.layout;
         let size = ContextMenu::rendered_size(entries);
         // An opener-named containing panel (the queue visual slot's chrome
         // menu) wins ahead of the destination-derived panel: the slot menu is
@@ -87,21 +100,18 @@ impl Model {
                     };
                     (panel, selected)
                 }
-                ContextMenuAnchor::Pointer { .. } => {
+                ContextMenuAnchor::Pointer => {
                     let panel = match self.app.effective_panel_focus() {
                         PanelFocus::Library
                             if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
-                                self.app.wide_tv_show_area(lib_idx).is_some()
+                                wide_tv_show_area(&self.app, lib_idx, self.terminal_size())
+                                    .is_some()
                             }) =>
                         {
                             // Task 8.2 deleted the `tv_wide_*` pane rects; the
                             // panel's paint-free library content area is the
                             // placement region for the whole Wide TV workspace.
-                            self.app
-                                .tab
-                                .emby_library_index()
-                                .and_then(|lib_idx| self.app.wide_tv_show_area(lib_idx))
-                                .unwrap_or_default()
+                            self.wide_tv_workspace_area().unwrap_or_default()
                         }
                         PanelFocus::Library => self
                             .library_menu_geometry()
@@ -116,7 +126,7 @@ impl Model {
             }
         };
         let pointer = match &anchor {
-            ContextMenuAnchor::Pointer { x, y } => Some((*x, *y)),
+            ContextMenuAnchor::Pointer => self.menu_pointer,
             ContextMenuAnchor::SelectedItem(_) => None,
         };
         let (x, y) = ContextMenu::place(

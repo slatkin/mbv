@@ -7,10 +7,10 @@ use mbv_ui_msg::TrackChipKind;
 
 use super::overlay::{GuiOverlay, TrackPopoverState};
 use super::projection::TrackPopoverChoice;
-use crate::app::App;
 use crate::app::queue_playback_projection::{TrackChip, TrackChips};
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// Toggle a track chip's popover (the `OpenTrackPopover` request's
     /// App-side effect): the chip's press opens its popover, and the same
     /// press on the open popover's chip closes it, as the target chooser's
@@ -19,17 +19,17 @@ impl App {
     /// so an inactive player or a remote output has nothing to list. The
     /// cursor starts on the chosen choice.
     pub(in crate::app) fn toggle_gui_track_popover(&mut self, chip: TrackChipKind) {
-        if matches!(&self.gui_overlay, Some(GuiOverlay::TrackPopover(popover)) if popover.chip == chip)
+        if matches!(&self.gui.overlay, Some(GuiOverlay::TrackPopover(popover)) if popover.chip == chip)
         {
-            self.gui_overlay = None;
+            self.gui.overlay = None;
             return;
         }
-        let Some(chips) = self.track_chips() else {
+        let Some(chips) = self.app.track_chips() else {
             return;
         };
         let choices = track_popover_choices(chip, &chips);
         let cursor = choices.iter().position(|choice| choice.chosen).unwrap_or(0);
-        self.gui_overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
+        self.gui.overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
     }
 
     /// Activate the open track popover's painted choice by its track id (the
@@ -41,26 +41,26 @@ impl App {
     /// popover — a stale row press while another overlay or none holds the
     /// slot executes nothing.
     pub(in crate::app) fn select_gui_track_popover_track(&mut self, track_id: i64) {
-        let Some(GuiOverlay::TrackPopover(popover)) = &self.gui_overlay else {
+        let Some(GuiOverlay::TrackPopover(popover)) = &self.gui.overlay else {
             return;
         };
         let chip = popover.chip;
-        let Some(choices) = self.track_popover_choices(chip) else {
+        let Some(choices) = self.track_chip_popover_choices(chip) else {
             return;
         };
         if !choices.iter().any(|choice| choice.id == track_id) {
             return;
         }
         self.apply_track_choice(chip, track_id);
-        self.gui_overlay = None;
+        self.gui.overlay = None;
     }
 
     /// Switch the chip's track to `track_id`: the one switch a track popover's
     /// Enter and a painted row's press both run.
     pub(super) fn apply_track_choice(&mut self, chip: TrackChipKind, track_id: i64) {
         match chip {
-            TrackChipKind::Audio => self.set_audio_track(track_id),
-            TrackChipKind::Subtitles => self.set_subtitle_track(track_id),
+            TrackChipKind::Audio => self.app.set_audio_track(track_id),
+            TrackChipKind::Subtitles => self.app.set_subtitle_track(track_id),
         }
     }
 
@@ -72,10 +72,10 @@ impl App {
     /// overlay's key rules keep consuming input the window does not paint.
     /// The GUI input entry reconciles before it builds the snapshot.
     pub(in crate::app) fn close_orphaned_track_popover(&mut self) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::TrackPopover(_)))
-            && self.track_chips().is_none()
+        if matches!(self.gui.overlay, Some(GuiOverlay::TrackPopover(_)))
+            && self.app.track_chips().is_none()
         {
-            self.gui_overlay = None;
+            self.gui.overlay = None;
         }
     }
 
@@ -83,11 +83,11 @@ impl App {
     /// lists the player's audio tracks; the subtitle chip lists Off and then
     /// the subtitle tracks (the `gui-client` spec). `None` while the local
     /// player is inactive — the chips' source is the local player's stream.
-    pub(in crate::app) fn track_popover_choices(
+    pub(in crate::app) fn track_chip_popover_choices(
         &self,
         chip: TrackChipKind,
     ) -> Option<Vec<TrackPopoverChoice>> {
-        let chips = self.track_chips()?;
+        let chips = self.app.track_chips()?;
         Some(track_popover_choices(chip, &chips))
     }
 }

@@ -78,7 +78,9 @@ fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
         SHOWS_LIBRARY.1.into(),
         "tvshows".into(),
     ));
-    app.apply_gui_library_command(GuiLibraryCommand::OpenDestination { position: 0 }.into());
+    let mut core = mbv::GuiCore::new(std::mem::replace(app, mbv_gui::test_support::handoff_app()));
+    core.apply_gui_library_command(GuiLibraryCommand::OpenDestination { position: 0 }.into());
+    *app = core.into_app();
 }
 
 /// Seed the grouped Music library and the Audiobookshelf catalog, whose
@@ -92,8 +94,7 @@ fn seed_music_and_podcasts(app: &mut mbv::App, http: &MockHttp) {
 /// The tab position the presented Podcasts destination carries.
 fn podcasts_position(test: &mut TestCore) -> usize {
     test.core
-        .app_mut()
-        .gui_library_tabs()
+        .gui_library_tabs_for_test()
         .tabs
         .iter()
         .find(|tab| tab.label == "Podcasts")
@@ -176,7 +177,7 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
     );
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        Some("grp-hiphop")
+        Some("grp-hiphop".to_string())
     );
 }
 
@@ -276,13 +277,12 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
     // the Podcasts entry installs although no show list has landed.
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        Some("grp-hiphop"),
+        Some("grp-hiphop".to_string()),
         "the opened destination restores its own saved entry"
     );
     assert_eq!(
         test.core
-            .app_mut()
-            .gui_list_sort(mbv::GuiSortTarget::Podcasts(1)),
+            .gui_list_sort_for_test(mbv::GuiSortTarget::Podcasts(1)),
         mbv::GuiListSort::Oldest,
         "the resting destination installs its saved order as its sort with no show list"
     );

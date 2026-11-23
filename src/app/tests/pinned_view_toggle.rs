@@ -6,6 +6,7 @@
 //! no `pinwin` process runs and nothing sleeps.
 
 use super::*;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_components::QueuePlaybackPanel;
@@ -13,17 +14,19 @@ use mbv_ui_model::settings::PinnedWidth;
 use mbv_ui_msg::ComponentId;
 
 /// From the collapsed width, an accepted expand records the
-/// expanded width and stores the library view. `terminal_width` is held at the
-/// pre-toggle collapsed width, so a `set_panel_focus` call would take its
-/// mini-view branch and leave `panel_focus` stale at `Queue`.
+/// expanded width and stores the library view. The `Model`'s terminal width is
+/// held at the pre-toggle collapsed width, so a `set_panel_focus` call would
+/// take its mini-view branch and leave `panel_focus` stale at `Queue`.
 #[test]
 fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
     let mut app = make_app_stub();
-    app.terminal_width = 40;
     app.pinned_width = PinnedWidth::Collapsed;
     app.panel_mode = PanelMode::QueueOnly;
     app.panel_focus = PanelFocus::Queue;
     app.mini_view_focus = PanelFocus::Queue;
+    let mut model = Model::new(app);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 40);
+    let app = &mut model.app;
 
     app.apply_pinned_view(PinnedWidth::Expanded, Ok(()));
 
@@ -43,11 +46,13 @@ fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
 #[test]
 fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
     let mut app = make_app_stub();
-    app.terminal_width = 120;
     app.pinned_width = PinnedWidth::Expanded;
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
+    let mut model = Model::new(app);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 120);
+    let app = &mut model.app;
 
     app.apply_pinned_view(PinnedWidth::Collapsed, Ok(()));
 
@@ -66,11 +71,13 @@ fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
 #[test]
 fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     let mut app = make_app_stub();
-    app.terminal_width = 40;
     app.pinned_width = PinnedWidth::Collapsed;
     app.panel_mode = PanelMode::QueueOnly;
     app.panel_focus = PanelFocus::Queue;
     app.mini_view_focus = PanelFocus::Queue;
+    let mut model = Model::new(app);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 40);
+    let app = &mut model.app;
 
     app.apply_pinned_view(
         PinnedWidth::Expanded,
@@ -162,10 +169,12 @@ fn a_drained_outcome_applies_the_pinned_view() {
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
     PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
-    app.terminal_width = 40;
     app.pinned_width = PinnedWidth::Collapsed;
     app.panel_mode = PanelMode::QueueOnly;
     app.panel_focus = PanelFocus::Queue;
+    let mut model = Model::new(app);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 40);
+    let app = &mut model.app;
 
     app.pinned_view_toggle();
 
@@ -223,8 +232,6 @@ fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_bu
     let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
-    app.terminal_width = 120;
-    app.terminal_height = 51;
     app.player.update_status(|status| {
         status.active = true;
         status.queue_len = 3;
@@ -233,6 +240,7 @@ fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_bu
         status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
     });
     let mut harness = TickHarness::new(app);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 120, 51);
     let mut terminal = Terminal::new(TestBackend::new(120, 51)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))

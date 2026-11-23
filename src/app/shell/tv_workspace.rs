@@ -94,7 +94,9 @@ impl Model {
                     .tv_owner()
                     .and_then(TvContent::selected_tree_show)
                     .is_some_and(|selected| selected.id == item.id && selected.name == item.name);
-                if self.app.wide_tv_show_area(lib_idx).is_some() {
+                if super::tv_wide::wide_tv_show_area(&self.app, lib_idx, self.terminal_size())
+                    .is_some()
+                {
                     self.app.activate_selected_series_item(lib_idx, &item);
                 } else if owner_has_target {
                     self.open_library_hero_overlay();
@@ -149,7 +151,7 @@ impl Model {
         // prior stable target).
         self.reanchor_tv_owner_selection(&item.id);
         self.push_tv_workspace_content();
-        if self.app.wide_tv_show_area(lib_idx).is_some() {
+        if super::tv_wide::wide_tv_show_area(&self.app, lib_idx, self.terminal_size()).is_some() {
             self.app.activate_selected_series_item(lib_idx, item);
             // The workspace is active: episode selection takes the local
             // focus, like music's track-selection mode.
@@ -365,7 +367,7 @@ impl Model {
     pub(in crate::app) fn test_paint_library_panel(
         &mut self,
         area: ratatui::layout::Rect,
-    ) -> Option<mbv_components::library_panel::PanelHeroImagePaint> {
+    ) -> Option<mbv_ui_model::library_hero::PanelHeroImagePaint> {
         let mut terminal =
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
                 .expect("test terminal");
@@ -414,7 +416,27 @@ impl Model {
             .collect()
     }
 
+    /// Publish the one library whose Wide TV series Workspace this Client
+    /// paints, as the write-back the core's shared Series-activation branch
+    /// reads (design D2). The breakpoint is terminal geometry, so the core
+    /// cannot compute it. It runs first in every content push, so a library
+    /// that is no longer wide (or no longer the tab) never leaves a stale
+    /// entry behind. A non-TvShows TV tab still publishes its breakpoint: its
+    /// Series rows open the Workspace at wide width.
+    fn publish_wide_workspace(&mut self) {
+        self.app.tv_workspace_wide.clear();
+        let Some(index) = self.app.tab.emby_library_index() else {
+            return;
+        };
+        if self.app.libs.get(index).is_some()
+            && super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size())
+        {
+            self.app.tv_workspace_wide.insert(index);
+        }
+    }
+
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {
+        self.publish_wide_workspace();
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
@@ -425,7 +447,7 @@ impl Model {
         if library.library.collection_type != "tvshows" {
             return;
         }
-        let is_wide = self.app.is_right_panel_wide();
+        let is_wide = super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size());
         let list = self.app.library_list_render_ctx(
             index,
             self.app.libs[index]

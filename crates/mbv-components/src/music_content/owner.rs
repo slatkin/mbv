@@ -5,7 +5,7 @@ use super::{
     LibraryPanelContent, LibrarySlotEvent, MediaListSurfaceInput, Msg, MusicContent,
     MusicTreeAction, RowIntent, SelectorIdentity, ShellRequest, TreeOperation,
 };
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::playback::HeroImageState;
 
 impl InlineSearchHost for MusicContent {
     fn inline_search(&self) -> &InlineSearch {
@@ -601,14 +601,12 @@ impl MusicContent {
                 (!items.is_empty()).then_some(Msg::Shell(Box::new(
                     ShellRequest::MusicRowContextMenu(
                         mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                        None,
                     ),
                 )))
             }
             Some(RowIntent::Context(target)) => self.workspace_track_item(&target).map(|track| {
                 Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                     mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![track]),
-                    None,
                 )))
             }),
             _ => None,
@@ -624,13 +622,11 @@ impl MusicContent {
             }
             Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                 mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                None,
             ))))
         } else {
             self.selected_item().map(|item| {
                 Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                     mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
-                    None,
                 )))
             })
         }

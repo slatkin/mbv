@@ -16,16 +16,16 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::{Block, Paragraph};
 
-use super::content::{
-    HeroContent, PanelHeroImagePaint, PanelListPaintPolicy, Workspace, WorkspaceHeader,
-};
+use super::content::{HeroContent, PanelListPaintPolicy, Workspace, WorkspaceHeader};
 use super::hero_header::paint_hero_pane_content;
 use super::slots::paint_pill_bar_row;
 use crate::mouse::hit::HitRegions;
 use mbv_render::arrangements::padded_rect;
-use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::{PANE_PAD_X, PANE_PAD_Y, PillBarWindow, place_media_list_below};
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
+use mbv_ui_model::library_hero::PanelHeroImagePaint;
+use mbv_ui_model::playback::HeroImageState;
 
 /// Blank rows between the header/overview content's painted bottom edge and
 /// the Workspace box (design D3: the Workspace sits below the overview).
@@ -88,7 +88,7 @@ pub fn paint_library_hero_content(
         (&hero.facts.artwork.image, image_box)
     {
         geometry.hero_image = Some(PanelHeroImagePaint {
-            area: image_area,
+            area: mbv_render::layout::rect_to_presentation(image_area),
             cache_key: cache_key.clone(),
             centered: true,
         });

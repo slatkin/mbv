@@ -6,10 +6,10 @@ use mbv_queue::NamedQueueId;
 
 use super::overlay::{GuiOverlay, QueueChooserState};
 use super::projection::QueueChooserEntryProjection;
-use crate::app::App;
 use crate::app::state::playback::ShownEntry;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// The Queue chooser's entries (spec `gui-queue-chooser` "The chooser lists
     /// local queues and connected peers"): every Named queue of the local Owner
     /// in queue order, then one entry for the connected peer Player owner,
@@ -23,16 +23,17 @@ impl App {
     /// the Owner keeps that fresh — or the peer's own view.
     #[must_use]
     pub(in crate::app) fn queue_chooser_entries(&self) -> Vec<QueueChooserEntryProjection> {
-        let current = self.named_queues.current();
-        let local_plays = self.local_owner_plays();
-        let shown_resting = self.shown_resting_live();
+        let current = self.app.named_queues.current();
+        let local_plays = self.app.local_owner_plays();
+        let shown_resting = self.app.shown_resting_live();
         let mut entries: Vec<QueueChooserEntryProjection> = self
+            .app
             .named_queues
             .entries()
             .iter()
             .map(|entry| {
                 let len = if current == Some(entry.id) {
-                    self.local_view.total_queue_len()
+                    self.app.local_view.total_queue_len()
                 } else if let Some((shown, view)) = &shown_resting
                     && *shown == entry.id
                 {
@@ -43,22 +44,23 @@ impl App {
                 QueueChooserEntryProjection {
                     label: entry.name.clone(),
                     queue: Some(entry.id),
-                    shown: self.gui_shown_entry == Some(ShownEntry::Local(entry.id)),
+                    shown: self.app.shown_entry == Some(ShownEntry::Local(entry.id)),
                     current: current == Some(entry.id),
                     playing: local_plays && current == Some(entry.id),
                     len,
                 }
             })
             .collect();
-        if self.has_direct_remote_queue() {
+        if self.app.has_direct_remote_queue() {
             let peer_len = self
+                .app
                 .remote_view
                 .as_ref()
                 .map_or(0, crate::app::QueueView::total_queue_len);
             entries.push(QueueChooserEntryProjection {
-                label: self.peer_owner_label(),
+                label: self.app.peer_owner_label(),
                 queue: None,
-                shown: self.gui_shown_entry == Some(ShownEntry::Peer),
+                shown: self.app.shown_entry == Some(ShownEntry::Peer),
                 current: false,
                 playing: false,
                 len: peer_len,
@@ -72,8 +74,8 @@ impl App {
     /// cursor on the shown entry, so Enter leaves the shown queue as it is, and
     /// it starts no rename draft.
     pub(in crate::app) fn toggle_gui_queue_chooser(&mut self) {
-        if let Some(GuiOverlay::QueueChooser(_)) = &self.gui_overlay {
-            self.gui_overlay = None;
+        if let Some(GuiOverlay::QueueChooser(_)) = &self.gui.overlay {
+            self.gui.overlay = None;
             return;
         }
         let cursor = self
@@ -81,7 +83,7 @@ impl App {
             .iter()
             .position(|entry| entry.shown)
             .unwrap_or(0);
-        self.gui_overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
+        self.gui.overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
             cursor,
             renaming: None,
         }));
@@ -99,13 +101,15 @@ impl App {
     /// the current queue, as it does after a close, so the shown entry never
     /// names a queue with no label and no edits.
     pub(in crate::app) fn show_gui_queue_chooser_entry(&mut self, queue: Option<NamedQueueId>) {
-        if matches!(self.gui_overlay, Some(GuiOverlay::QueueChooser(_))) {
-            self.gui_overlay = None;
+        if matches!(self.gui.overlay, Some(GuiOverlay::QueueChooser(_))) {
+            self.gui.overlay = None;
         }
         match queue {
-            Some(queue) if !self.named_queues.holds(queue) => self.show_local_current_entry(),
-            Some(queue) => self.show_named_queue(queue),
-            None => self.show_peer_entry(),
+            Some(queue) if !self.app.named_queues.holds(queue) => {
+                self.app.show_local_current_entry();
+            }
+            Some(queue) => self.app.show_named_queue(queue),
+            None => self.app.show_peer_entry(),
         }
     }
 
@@ -119,10 +123,13 @@ impl App {
         if name.is_empty() {
             return;
         }
-        self.gui_overlay = None;
-        if let Some(op) = self.send_named_queue_cmd("rename", |remote| {
-            remote.send_named_queue_rename(queue, name.to_string())
-        }) {
+        self.gui.overlay = None;
+        let sent = self
+            .app
+            .local_queue_player()
+            .remote()
+            .send_named_queue_rename(queue, name.to_string());
+        if let Some(op) = self.app.report_named_queue_send("rename", sent) {
             self.note_named_queue_op(op);
         }
     }

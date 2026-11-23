@@ -35,9 +35,9 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 
     // Mini view derives its mode from `mini_view_focus`, never the stored
     // Both: a narrow terminal in the Library mini view has no boundary either.
-    let mut mini = crate::app::tests::render_fixtures::make_queue_app(2);
-    mini.terminal_width = 70;
+    let mini = crate::app::tests::render_fixtures::make_queue_app(2);
     let mut harness = TickHarness::new(mini);
+    crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().sync_mounted_surfaces();
     assert!(
         !harness
@@ -60,7 +60,6 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
     harness.model_mut().sync_mounted_surfaces();
     let boundary = harness
         .model()
-        .app
         .layout
         .root_frame
         .queue_boundary
@@ -266,7 +265,7 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
 
 // Invariant 20: the image hold outlives the drag itself by the settle window
 // (`RESIZE_DRAG_SETTLE`), so a pause-and-resume drag does not re-encode at
-// every hesitation. The window is shell timing on `App::resize_drag_activity`;
+// every hesitation. The window is shell timing on `Model::resize_drag_activity`;
 // the live bit stays with the boundary component. Tests backdate the instant
 // instead of sleeping.
 
@@ -283,7 +282,6 @@ fn image_hold_outlives_the_drag_by_the_settle_window() {
     harness.model_mut().sync_mounted_surfaces();
     let boundary = harness
         .model()
-        .app
         .layout
         .root_frame
         .queue_boundary
@@ -345,7 +343,7 @@ fn image_hold_outlives_the_drag_by_the_settle_window() {
 }
 
 fn backdate_resize_drag_activity(harness: &mut TickHarness, millis: u64) {
-    harness.model_mut().app.resize_drag_activity = Some(
+    harness.model_mut().resize_drag_activity = Some(
         std::time::Instant::now()
             .checked_sub(std::time::Duration::from_millis(millis))
             .expect("the backdated instant is representable"),

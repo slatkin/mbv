@@ -45,10 +45,10 @@ impl HomeContent {
         (!targets.is_empty()).then(|| Msg::Shell(Box::new(ShellRequest::Home(make(targets)))))
     }
 
-    fn context_menu(targets: Vec<HomeItemTarget>, anchor: Option<(u16, u16)>) -> Option<Msg> {
+    fn context_menu(targets: Vec<HomeItemTarget>) -> Option<Msg> {
         (!targets.is_empty()).then(|| {
             Msg::Shell(Box::new(ShellRequest::Home(HomeRequest::ContextMenu(
-                targets, anchor,
+                targets,
             ))))
         })
     }
@@ -73,7 +73,7 @@ impl HomeContent {
             Key::PageDown => self.navigate(MediaListOperation::Page(1)),
             Key::Home => self.navigate(MediaListOperation::First),
             Key::End => self.navigate(MediaListOperation::Last),
-            Key::Char('.') => Self::context_menu(self.action_item_targets(), None),
+            Key::Char('.') => Self::context_menu(self.action_item_targets()),
             Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.action_request(HomeRequest::Enqueue)
             }
@@ -125,13 +125,13 @@ impl HomeContent {
             MediaListSurfaceInput::DoubleClick(_) => Some(Msg::Shell(Box::new(
                 ShellRequest::Home(HomeRequest::RowActivate(self.selected_item_target()?)),
             ))),
-            MediaListSurfaceInput::ContextClick(at) => {
+            MediaListSurfaceInput::ContextClick(_) => {
                 let targets = match outcome.external_intent {
                     Some(RowIntent::Context(target)) => vec![target],
                     Some(RowIntent::ContextSelection(targets)) => self.display_order(&targets),
                     _ => self.action_item_targets(),
                 };
-                Self::context_menu(targets, Some((at.x, at.y)))
+                Self::context_menu(targets)
             }
             _ => None,
         }

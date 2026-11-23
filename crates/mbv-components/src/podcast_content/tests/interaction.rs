@@ -72,7 +72,7 @@ fn dot_opens_the_selected_episode_context_menu_anchored_to_the_selection() {
         Some(Msg::Shell(ref shell_boxed))
             if matches!(
                 shell_boxed.as_ref(),
-                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets))
                     if targets.as_slice() == [AudiobookshelfMenuTarget::Episode {
                         library_item_id: "alpha".into(),
                         episode_id: "dated".into(),
@@ -97,7 +97,7 @@ fn dot_over_a_visual_selection_emits_every_marked_episode_in_list_order() {
         Some(Msg::Shell(ref shell_boxed))
             if matches!(
                 shell_boxed.as_ref(),
-                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets))
                     if targets.as_slice() == [
                         AudiobookshelfMenuTarget::Episode {
                             library_item_id: "alpha".into(),

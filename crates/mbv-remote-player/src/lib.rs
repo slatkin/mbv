@@ -74,7 +74,6 @@ mod queue_op;
 #[doc(inline)]
 pub use error::RemotePlayerError;
 
-#[cfg(any(test, feature = "test"))]
 mod stub;
 
 #[cfg(test)]

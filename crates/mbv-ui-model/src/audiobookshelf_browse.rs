@@ -5,7 +5,7 @@ pub mod books;
 mod podcast;
 
 #[doc(inline)]
-pub use books::{AudiobookshelfBookBrowseState, BookRow};
+pub use books::{AudiobookshelfBookBrowseState, BookRow, book_rows};
 #[doc(inline)]
 pub use podcast::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection, PodcastDisplayRow,

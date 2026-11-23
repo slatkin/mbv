@@ -26,13 +26,13 @@ fn the_open_actions_follow_the_toggle_rule(
     #[case] expected: Option<GuiSettingsSection>,
 ) {
     let mut app = make_app_stub();
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
     if let Some(section) = shown {
-        app.open_gui_settings_at(section);
+        core.open_gui_settings_at(section);
     }
+    core.toggle_gui_settings(group);
 
-    app.toggle_gui_settings(group);
-
-    assert_eq!(app.gui_settings().map(|state| state.section), expected);
+    assert_eq!(core.gui_settings().map(|state| state.section), expected);
 }
 
 /// A setup secret never reaches a log line (design D9, the spec's *A failed

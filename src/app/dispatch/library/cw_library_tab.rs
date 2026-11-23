@@ -202,7 +202,10 @@ impl App {
                 self.set_panel_focus(PanelFocus::Library);
             }
         }
-        self.ensure_tab_visible();
+        // Tab-strip scroll is TUI presentation (design D6b): the core only
+        // requests the reveal, and the TUI's next update step runs the rule
+        // against its live geometry before it paints or resolves a press.
+        self.tab_reveal_requested = true;
         self.save_prefs();
     }
 

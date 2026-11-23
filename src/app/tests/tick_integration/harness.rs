@@ -99,6 +99,10 @@ impl TickHarness {
             .application
             .tick(PollStrategy::Once(TICK_TIMEOUT))
             .expect("tick injected event");
+        // Mirror the run loop: the right-press record runs on the raw tick
+        // messages, before any is drained, so the focused panel's own menu
+        // request is pointer-anchored in the same tick (design D6).
+        self.model.record_right_press(&raw_messages);
         // Mirror the run loop: the mouse fold runs before the keyboard router
         // fold (ADR 0024). A keyboard tick passes the mouse fold untouched.
         let folded = fold_mouse_messages(raw_messages.clone());

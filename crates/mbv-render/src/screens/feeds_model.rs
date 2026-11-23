@@ -1,5 +1,4 @@
 use mbv_ui_model::feed_age::{AgeGroupedRow, FeedAgeGroup, age_grouped_rows};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FeedDisplayRow {
@@ -23,12 +22,4 @@ pub fn feed_display_rows(entries: &[mbv_queue::FeedEntry], now_secs: u64) -> Vec
             AgeGroupedRow::Item(index, _) => FeedDisplayRow::Entry(index),
         },
     )
-}
-
-#[must_use]
-pub fn current_time_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }

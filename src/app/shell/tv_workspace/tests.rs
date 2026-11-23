@@ -39,9 +39,9 @@ fn mounted_tv_model() -> Model {
     }
     // Wide breakpoint is now driven synchronously by terminal size
     // (`wide_tv_show_area`), not this previous-frame paint rect.
-    app.terminal_width = 160;
-    app.terminal_height = 40;
     let mut model = Model::new(app);
+    model.terminal_width = 160;
+    model.terminal_height = 40;
     model.sync_tv_content();
     model.sync_active_destination();
     model
@@ -303,8 +303,8 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     // Narrow: the merged owner stays the same mounted component (task 8.1,
     // design D12) -- the pointer never clears, unlike the pre-merge
     // two-component hand-off.
-    model.app.terminal_width = 80;
-    model.app.terminal_height = 24;
+    model.terminal_width = 80;
+    model.terminal_height = 24;
     model.sync_tv_content();
     model.sync_active_destination();
     assert!(
@@ -313,8 +313,8 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     );
 
     // Wide again: still the same component.
-    model.app.terminal_width = 160;
-    model.app.terminal_height = 40;
+    model.terminal_width = 160;
+    model.terminal_height = 40;
     model.sync_tv_content();
     model.sync_active_destination();
     assert!(

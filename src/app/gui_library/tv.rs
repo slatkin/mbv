@@ -8,11 +8,17 @@
 //! the two Clients cannot drift: the series and season loads are
 //! `fetch_series_detail` and `fetch_series_season_episodes`. The TUI never
 //! reads any of it.
+//!
+//! Every step is a free function over the `App` the GUI core owns, with the
+//! `GuiCore` entries as one-line calls (design D4), so the core's `App` steps
+//! reach them without a core.
 
 use mbv_queue::TvContentMode;
 
-use super::App;
 use super::tabs::GuiDestinationKind;
+use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
+use crate::gui::GuiCore;
 
 /// The GUI Library's Shows selection (design D12, D8): per Shows library, the
 /// selected series and the selected season. The season is never kept across a
@@ -28,101 +34,135 @@ pub struct GuiTvShowsSelection {
     pub season_id: Option<String>,
 }
 
-impl App {
-    /// Whether `lib_idx` names an Emby TV (Shows) library: every GUI Shows
-    /// method's destination guard.
-    pub(in crate::app::gui_library) fn gui_tv_library(&self, lib_idx: usize) -> bool {
-        self.libs
-            .get(lib_idx)
-            .is_some_and(|lib| lib.library.collection_type == "tvshows")
-    }
-
+impl GuiCore {
     /// Open the Shows library `lib_idx` (design D12, D8; gui-one-destination-ensure
     /// design D4): the GUI's one view mode is the All series list, which the
     /// destination's load pass root step settles, so the open has no
-    /// user-action work beyond its guard. The TUI's own activation, which an
-    /// empty stack needs, is that root step too. A
-    /// `lib_idx` that names no Shows library is an ignored command.
+    /// user-action work beyond its guard.
     pub fn gui_tv_open(&mut self, lib_idx: usize) {
-        if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
-                "tvOpen",
-                format_args!("the destination is no Shows library"),
-            );
-            return;
-        }
-        self.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
+        open_tv(&mut self.app, &mut self.gui, lib_idx);
     }
 
-    /// Start the Shows library's root load (gui-one-destination-ensure design
-    /// D3): the shared activation path when the stack holds no level, then the
-    /// TUI's own All-mode load, so a library whose TUI default or saved
-    /// position is another mode lands the series list. The pass's root step
-    /// calls this, and so the GUI's frame keeps the one root load however the
-    /// destination opened.
-    pub(in crate::app::gui_library) fn load_gui_shows_root(&mut self, lib_idx: usize) {
-        if self.libs[lib_idx].nav_stack.is_empty() {
-            self.activate_library_position(lib_idx);
-        }
-        self.apply_tv_letter_mode(lib_idx, &TvContentMode::All);
-    }
-
-    /// Select the series the Hero shows (design D12): the selection's
-    /// series, the season reset (the pills are not kept across series), and
-    /// the series-detail load — the trigger that today lives only in the
-    /// presenting Client's workspace push (`push_tv_workspace_content`), so
-    /// a Client that keeps no shell state starts it here. A stale frame's id
-    /// — no row of the library's root list, or a row that is no Series — is
-    /// an ignored command.
+    /// Select the series the Hero shows (design D12).
     pub fn gui_tv_select_series(&mut self, lib_idx: usize, series_id: &str) {
-        if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
-                "tvSelectSeries",
-                format_args!("the destination is no Shows library"),
-            );
-            return;
-        }
-        let in_root = self.libs[lib_idx].nav_stack.last().is_some_and(|level| {
-            level
-                .items
-                .iter()
-                .any(|item| item.id == series_id && item.item_type == "Series")
-        });
-        if !in_root {
-            Self::log_stale_library_item("tvSelectSeries", series_id);
-            return;
-        }
-        let entry = self.gui_tv_shows.entry(lib_idx).or_default();
-        if entry.series_id.as_deref() != Some(series_id) {
-            entry.season_id = None;
-        }
-        entry.series_id = Some(series_id.to_string());
-        self.fetch_series_detail(series_id);
+        select_tv_series(&mut self.app, &mut self.gui, lib_idx, series_id);
     }
 
     /// Select the season whose episodes the Hero's Workspace shows (design
-    /// D12): the selection's season and the season-episodes load —
-    /// `fetch_series_season_episodes`, which fetches the series detail
-    /// first when the cache lacks it and deduplicates what is in flight or
-    /// cached. A season command with no selected series is an ignored
-    /// command, as is a `lib_idx` that names no Shows library.
+    /// D12).
     pub fn gui_tv_select_season(&mut self, lib_idx: usize, season_id: &str) {
-        if !self.gui_tv_library(lib_idx) {
-            Self::log_ignored_library_command(
-                "tvSelectSeason",
-                format_args!("the destination is no Shows library"),
-            );
-            return;
-        }
-        let entry = self.gui_tv_shows.entry(lib_idx).or_default();
-        let Some(series_id) = entry.series_id.clone() else {
-            Self::log_ignored_library_command(
-                "tvSelectSeason",
-                format_args!("no series is selected"),
-            );
-            return;
-        };
-        entry.season_id = Some(season_id.to_string());
-        self.fetch_series_season_episodes(series_id, season_id.to_string());
+        select_tv_season(&mut self.app, &mut self.gui, lib_idx, season_id);
     }
+}
+
+/// Whether `lib_idx` names an Emby TV (Shows) library: every GUI Shows
+/// step's destination guard.
+pub(in crate::app::gui_library) fn tv_library(app: &App, lib_idx: usize) -> bool {
+    app.libs
+        .get(lib_idx)
+        .is_some_and(|lib| lib.library.collection_type == "tvshows")
+}
+
+/// Open the Shows library `lib_idx` (design D12, D8; gui-one-destination-ensure
+/// design D4): the GUI's one view mode is the All series list, which the
+/// destination's load pass root step settles, so the open has no user-action
+/// work beyond its guard. The TUI's own activation, which an empty stack needs,
+/// is that root step too. A `lib_idx` that names no Shows library is an
+/// ignored command.
+pub(in crate::app::gui_library) fn open_tv(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+) {
+    if !tv_library(app, lib_idx) {
+        super::log_ignored_library_command(
+            "tvOpen",
+            format_args!("the destination is no Shows library"),
+        );
+        return;
+    }
+    // The ordered load pass is the GUI core's, so the open step hands the
+    // core the App it holds.
+    let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = std::mem::take(gui);
+    core.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
+    *gui = std::mem::take(core.gui_state_mut());
+    *app = core.into_app();
+}
+
+/// Start the Shows library's root load (gui-one-destination-ensure design D3):
+/// the shared activation path when the stack holds no level, then the TUI's
+/// own All-mode load, so a library whose TUI default or saved position is
+/// another mode lands the series list. The pass's root step calls this, and so
+/// the GUI's frame keeps the one root load however the destination opened.
+pub(in crate::app::gui_library) fn load_shows_root(app: &mut App, lib_idx: usize) {
+    if app.libs[lib_idx].nav_stack.is_empty() {
+        app.activate_library_position(lib_idx);
+    }
+    app.apply_tv_letter_mode(lib_idx, &TvContentMode::All);
+}
+
+/// Select the series the Hero shows (design D12): the selection's series, the
+/// season reset (the pills are not kept across series), and the series-detail
+/// load — the trigger that today lives only in the presenting Client's
+/// workspace push (`push_tv_workspace_content`), so a Client that keeps no
+/// shell state starts it here. A stale frame's id — no row of the library's
+/// root list, or a row that is no Series — is an ignored command.
+pub(in crate::app::gui_library) fn select_tv_series(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+    series_id: &str,
+) {
+    if !tv_library(app, lib_idx) {
+        super::log_ignored_library_command(
+            "tvSelectSeries",
+            format_args!("the destination is no Shows library"),
+        );
+        return;
+    }
+    let in_root = app.libs[lib_idx].nav_stack.last().is_some_and(|level| {
+        level
+            .items
+            .iter()
+            .any(|item| item.id == series_id && item.item_type == "Series")
+    });
+    if !in_root {
+        super::log_stale_library_item("tvSelectSeries", series_id);
+        return;
+    }
+    let entry = gui.tv_shows.entry(lib_idx).or_default();
+    if entry.series_id.as_deref() != Some(series_id) {
+        entry.season_id = None;
+    }
+    entry.series_id = Some(series_id.to_string());
+    app.fetch_series_detail(series_id);
+}
+
+/// Select the season whose episodes the Hero's Workspace shows (design D12):
+/// the selection's season and the season-episodes load —
+/// `fetch_series_season_episodes`, which fetches the series detail first when
+/// the cache lacks it and deduplicates what is in flight or cached. A season
+/// command with no selected series is an ignored command, as is a `lib_idx`
+/// that names no Shows library.
+pub(in crate::app::gui_library) fn select_tv_season(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+    season_id: &str,
+) {
+    if !tv_library(app, lib_idx) {
+        super::log_ignored_library_command(
+            "tvSelectSeason",
+            format_args!("the destination is no Shows library"),
+        );
+        return;
+    }
+    let entry = gui.tv_shows.entry(lib_idx).or_default();
+    let Some(series_id) = entry.series_id.clone() else {
+        super::log_ignored_library_command("tvSelectSeason", format_args!("no series is selected"));
+        return;
+    };
+    entry.season_id = Some(season_id.to_string());
+    app.fetch_series_season_episodes(series_id, season_id.to_string());
 }

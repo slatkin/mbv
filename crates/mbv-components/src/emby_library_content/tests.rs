@@ -181,7 +181,6 @@ fn feed_group_video_row_menu_key_emits_the_painted_item() {
         owner.handle_key(&key(Key::Char('.'))),
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![video]),
-            None,
         ))))
     );
 }

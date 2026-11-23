@@ -50,14 +50,14 @@ impl App {
     pub fn queue_card_artwork(&mut self) -> QueueCardArtwork {
         if self.visual_slot_shown() {
             // The GUI has no resize drag: the hold is always off.
-            self.refresh_queue_card_image(false);
+            crate::app::state::projection::card::refresh_queue_card_image(self, false);
         } else if self.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing: the artwork can no longer
             // carry the title, so the header is its only home again — the
             // same reset the TUI's sync runs.
             self.queue_card_projection.title_site = NowPlayingTitleSite::Header;
         }
-        if !self.visual_slot_shown() || self.visualizer_enabled || !self.images.images_enabled() {
+        if !self.visual_slot_shown() || self.visualizer_enabled || !self.images.protocol_enabled() {
             return QueueCardArtwork::Hidden;
         }
         let Some(cache_key) = self.queue_card_projection.cache_key.clone() else {
@@ -100,7 +100,6 @@ impl App {
             mbv_images::CachedImage {
                 source: Some(test_source(&img)),
                 img: Some(img),
-                protocols: std::collections::HashMap::new(),
                 cover_box: None,
                 applied_logo_key: None,
             },

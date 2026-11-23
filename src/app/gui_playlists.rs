@@ -10,7 +10,7 @@ mod commands;
 
 use mbv_emby_model::EmbyItem;
 
-use super::App;
+use crate::gui::GuiCore;
 
 /// The Playlists screen's requests (window content → core). Identities are
 /// stable playlist and item ids, never row positions, so a request built from a
@@ -79,32 +79,42 @@ pub struct GuiPlaylistItemProjection {
     pub name: String,
 }
 
-impl App {
+impl GuiCore {
     /// Whether the Playlists screen is open: the fact the window's frame and
     /// the dismissal read.
     #[must_use]
     pub fn gui_playlists_is_open(&self) -> bool {
-        self.gui_playlists_open
+        self.gui.playlists_screen_open
     }
 
     /// Open the screen and load the saved playlists. The Settings screen and
     /// the Playlists screen never show together, so the open closes Settings.
     pub fn open_gui_playlists(&mut self) {
+        // The Settings and Playlists screens never show together, so the open
+        // closes Settings through the Settings screen's own entry.
         self.close_gui_settings();
-        self.gui_playlists_open = true;
-        self.spawn_load_playlists();
+        self.gui.playlists_screen_open = true;
+        self.app.spawn_load_playlists();
     }
 
     /// Close the screen and drop the open playlist.
     pub fn close_gui_playlists(&mut self) {
-        self.gui_playlists_open = false;
-        self.playlists_open = None;
-        self.playlists_open_items.clear();
+        self.gui.playlists_screen_open = false;
+        self.app.playlists_open = None;
+        self.app.playlists_open_items.clear();
+    }
+
+    /// Whether the Playlists screen is open, for a Client's test that asserts a
+    /// key or a drained request opened or closed it.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_playlists_open_for_test(&self) -> bool {
+        self.gui_playlists_is_open()
     }
 
     /// Open the screen when closed, close it when open.
     pub fn toggle_gui_playlists(&mut self) {
-        if self.gui_playlists_open {
+        if self.gui.playlists_screen_open {
             self.close_gui_playlists();
         } else {
             self.open_gui_playlists();
@@ -114,23 +124,27 @@ impl App {
     /// The screen's content, `None` while the screen is closed.
     #[must_use]
     pub fn gui_playlists(&self) -> Option<GuiPlaylistsProjection> {
-        self.gui_playlists_open.then(|| GuiPlaylistsProjection {
-            playlists: self.playlists.iter().map(playlist_row).collect(),
-            open: self
-                .playlists_open
-                .as_ref()
-                .map(|playlist| GuiOpenPlaylistProjection {
-                    id: playlist.id.clone(),
-                    name: playlist.name.clone(),
-                    items: self
-                        .playlists_open_items
-                        .iter()
-                        .map(playlist_item)
-                        .collect(),
-                }),
-            loading: self.playlists_loading,
-            open_loading: self.playlists_open_loading,
-        })
+        self.gui
+            .playlists_screen_open
+            .then(|| GuiPlaylistsProjection {
+                playlists: self.app.playlists.iter().map(playlist_row).collect(),
+                open: self
+                    .app
+                    .playlists_open
+                    .as_ref()
+                    .map(|playlist| GuiOpenPlaylistProjection {
+                        id: playlist.id.clone(),
+                        name: playlist.name.clone(),
+                        items: self
+                            .app
+                            .playlists_open_items
+                            .iter()
+                            .map(playlist_item)
+                            .collect(),
+                    }),
+                loading: self.app.playlists_loading,
+                open_loading: self.app.playlists_open_loading,
+            })
     }
 
     /// Log the Playlists request whose frame is stale: it changes nothing.

@@ -126,12 +126,7 @@ impl Model {
         // The boundary reads its rect from `RootFrame` (the previous full
         // frame's placement -- the same paint signal the layout side channel
         // used to carry).
-        let area = self
-            .app
-            .layout
-            .root_frame
-            .queue_boundary
-            .unwrap_or_default();
+        let area = self.layout.root_frame.queue_boundary.unwrap_or_default();
         let enabled = self.queue_boundary_mouse_eligible() && area.width == 1 && area.height > 0;
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(boundary) = comp
@@ -140,8 +135,8 @@ impl Model {
         {
             boundary.sync(
                 area,
-                self.app.layout.left_area.x,
-                self.app.terminal_width,
+                self.layout.left_area.x,
+                self.terminal_width,
                 self.app.queue_column_width,
                 enabled,
             );

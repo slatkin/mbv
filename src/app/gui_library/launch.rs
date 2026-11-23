@@ -27,8 +27,9 @@ use super::{
     GuiPodcastsCollectionSite,
 };
 use crate::app::App;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// The GUI's launch location (design D9, D10): the active destination, the
     /// selected collections of each destination, and each destination's list
     /// sort. Read at orderly exit only; nothing writes it while the window is
@@ -57,14 +58,14 @@ impl App {
         // The saved sorts key by destination identity, so they install before
         // any catalog lands, and a retry cannot clobber them either.
         self.restore_gui_launch_sorts(state);
-        if self.presented_destinations().is_empty() {
+        if presented_destinations(&self.app).is_empty() {
             return GuiLaunchOpen::Retry;
         }
         // The catalog has landed, so the Shows destination's two per-library
         // lists are requested now, once per launch (gui-collection-dropdown
         // design D9). Both requests are idempotent, so a later catalog landing
         // re-requests nothing.
-        self.spawn_gui_shows_sections();
+        super::shows::spawn_shows_sections(&mut self.app, &mut self.gui);
         self.restore_gui_shows_view(state.shows_view);
         GuiLaunchOpen::Opened(self.gui_launch_destination())
     }
@@ -74,7 +75,8 @@ impl App {
     /// changed, so a destination the session never touched opens on its own
     /// default.
     fn gui_launch_sorts(&self) -> Vec<GuiLaunchListSort> {
-        self.gui_list_sorts
+        self.gui
+            .list_sorts
             .iter()
             .map(|(destination, sort)| GuiLaunchListSort {
                 destination: destination.clone(),
@@ -121,11 +123,11 @@ impl App {
     /// is active to take it. A view the session already chose is not
     /// overwritten.
     fn restore_gui_shows_view(&mut self, view: GuiLaunchShowsView) {
-        for kind in self.presented_destinations() {
+        for kind in presented_destinations(&self.app) {
             let GuiDestinationKind::Shows { lib_idx } = kind else {
                 continue;
             };
-            if !self.gui_shows_views.contains_key(&lib_idx) {
+            if !self.gui.shows_views.contains_key(&lib_idx) {
                 self.set_gui_shows_view(lib_idx, shows_view(view));
             }
         }
@@ -135,20 +137,22 @@ impl App {
     /// choice when there is one, else the first presented Shows library's, so
     /// a session that changed a resting destination still saves its view.
     fn gui_launch_shows_view(&self) -> GuiLaunchShowsView {
-        let active = match self.gui_active_destination() {
+        let active = match super::tabs::active_destination(&self.app) {
             Some(GuiDestinationKind::Shows { lib_idx }) => Some(lib_idx),
             _ => None,
         };
         let shows = active.or_else(|| {
-            self.presented_destinations().into_iter().find_map(|kind| {
-                let GuiDestinationKind::Shows { lib_idx } = kind else {
-                    return None;
-                };
-                Some(lib_idx)
-            })
+            presented_destinations(&self.app)
+                .into_iter()
+                .find_map(|kind| {
+                    let GuiDestinationKind::Shows { lib_idx } = kind else {
+                        return None;
+                    };
+                    Some(lib_idx)
+                })
         });
         shows.map_or(GuiLaunchShowsView::All, |lib_idx| {
-            launch_shows_view(self.gui_shows_view(lib_idx))
+            launch_shows_view(super::shows::shows_view(&self.gui, lib_idx))
         })
     }
 
@@ -234,15 +238,16 @@ impl App {
     /// The identity of the active destination (design D9), as the saved file
     /// carries it: a stable Service library id, never a tab position.
     fn gui_launch_destination(&self) -> TabIdentity {
-        match self.tab {
+        match self.app.tab {
             TabSelection::Home => TabIdentity::Home,
             TabSelection::Feeds => TabIdentity::Feeds,
             TabSelection::EmbyLibrary(lib_idx) => {
-                self.libs.get(lib_idx).map_or(TabIdentity::Home, |tab| {
+                self.app.libs.get(lib_idx).map_or(TabIdentity::Home, |tab| {
                     library_identity(ServiceKind::Emby, &tab.library.id)
                 })
             }
             TabSelection::AudiobookshelfLibrary(index) => self
+                .app
                 .audiobookshelf_libraries
                 .get(index)
                 .map_or(TabIdentity::Home, |library| {
@@ -258,11 +263,11 @@ impl App {
     /// stored set and picks, so the four destinations share one save path. The file keeps the list shape, and each entry holds the
     /// checked ids (an empty list is All), so the saved file is stable.
     fn gui_launch_collections(&self) -> Vec<GuiDestinationCollections> {
-        self.presented_destinations()
+        presented_destinations(&self.app)
             .into_iter()
             .filter_map(|kind| {
                 let target = self.gui_collection_target(kind)?;
-                let destination = self.gui_destination_identity(kind)?;
+                let destination = destination_identity(&self.app, kind)?;
                 let launch_target = launch_collection_target(&target);
                 match target {
                     GuiCollectionTarget::Music(lib_idx) => self.gui_launch_collection_entry(
@@ -300,15 +305,15 @@ impl App {
         target: GuiLaunchCollectionTarget,
         destination: TabIdentity,
     ) -> Option<GuiDestinationCollections> {
-        if !site.has_stored_selection(self) {
+        if !site.has_stored_selection(&self.gui) {
             return None;
         }
         Some(GuiDestinationCollections {
             destination,
             target,
-            group_ids: site.stored_set(self).checked_keys().to_vec(),
+            group_ids: site.stored_set(&self.gui).checked_keys().to_vec(),
             order: None,
-            picks: site.saved_picks(self),
+            picks: site.saved_picks(&self.gui),
         })
     }
 
@@ -324,7 +329,8 @@ impl App {
             }
             GuiDestinationKind::Feeds => Some(GuiCollectionTarget::Feeds),
             GuiDestinationKind::Library { lib_idx }
-                if lib_idx < self.libs.len() && self.is_feed_home_video_library(lib_idx) =>
+                if lib_idx < self.app.libs.len()
+                    && self.app.is_feed_home_video_library(lib_idx) =>
             {
                 Some(GuiCollectionTarget::EmbyFeed(lib_idx))
             }
@@ -332,29 +338,6 @@ impl App {
             | GuiDestinationKind::Shows { .. }
             | GuiDestinationKind::Library { .. }
             | GuiDestinationKind::Audiobooks { .. } => None,
-        }
-    }
-
-    /// The launch identity a presented destination carries: a stable Service
-    /// library id, or Feeds for the one synthetic tab.
-    pub(in crate::app::gui_library) fn gui_destination_identity(
-        &self,
-        kind: GuiDestinationKind,
-    ) -> Option<TabIdentity> {
-        match kind {
-            GuiDestinationKind::Home => Some(TabIdentity::Home),
-            GuiDestinationKind::Feeds => Some(TabIdentity::Feeds),
-            GuiDestinationKind::Music { lib_idx }
-            | GuiDestinationKind::Shows { lib_idx }
-            | GuiDestinationKind::Library { lib_idx } => self
-                .libs
-                .get(lib_idx)
-                .map(|lib| library_identity(ServiceKind::Emby, &lib.library.id)),
-            GuiDestinationKind::Audiobooks { lib_idx }
-            | GuiDestinationKind::Podcasts { lib_idx } => self
-                .audiobookshelf_libraries
-                .get(lib_idx)
-                .map(|lib| library_identity(ServiceKind::Audiobookshelf, &lib.id)),
         }
     }
 
@@ -372,7 +355,7 @@ impl App {
         site: &impl GuiCollectionSite,
         entry: &GuiDestinationCollections,
     ) {
-        let present = site.present(self);
+        let present = site.present(&self.app);
         let picks = match &present {
             Some(present) => entry
                 .picks
@@ -388,75 +371,18 @@ impl App {
         let set = GuiCollectionSet::Checked(entry.group_ids.clone())
             .effective(present)
             .into_owned();
-        if site.has_stored_selection(self) {
+        if site.has_stored_selection(&self.gui) {
             // The user already selected in the pre-restore window: the
             // restore never clobbers a choice the session made.
             return;
         }
-        site.install_picks(self, &picks);
-        self.apply_collection_at(site, CollectionOp::Restore { set });
-    }
-
-    /// The destinations the GUI presents, in catalog order (design D9, D2):
-    /// the Grouped Music libraries, the Emby TV (Shows) libraries, every
-    /// other Emby library (row 8.1's plain Emby-library destination), the
-    /// Audiobookshelf libraries — the book libraries' Audiobooks destination
-    /// (row 9.1) and the podcast libraries' Podcasts destination (row 10.1) —
-    /// and the Feeds tab when subscriptions are configured (row 11.1), as the
-    /// destination-kind enum names them. The launch restore's resolution and
-    /// the frame's destination tabs (`gui_library_tabs`) read this one list,
-    /// so they cannot disagree about the presented set.
-    pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<GuiDestinationKind> {
-        let mut presented: Vec<GuiDestinationKind> = (0..self.libs.len())
-            .map(|lib_idx| {
-                if self.is_grouped_music_library(lib_idx) {
-                    GuiDestinationKind::Music { lib_idx }
-                } else if self.libs[lib_idx].library.collection_type == "tvshows" {
-                    GuiDestinationKind::Shows { lib_idx }
-                } else {
-                    GuiDestinationKind::Library { lib_idx }
-                }
-            })
-            .collect();
-        // The Audiobookshelf libraries' tab positions follow the Emby ones,
-        // so appending them keeps the catalog order. A library's browse kind
-        // picks its destination: a book library presents Audiobooks and a
-        // podcast library presents Podcasts.
-        presented.extend(
-            (0..self.audiobookshelf_libraries.len()).filter_map(|lib_idx| {
-                match self.audiobookshelf_kind_at(lib_idx) {
-                    Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
-                        Some(GuiDestinationKind::Audiobooks { lib_idx })
-                    }
-                    Some(
-                        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast,
-                    ) => Some(GuiDestinationKind::Podcasts { lib_idx }),
-                    None => None,
-                }
-            }),
+        site.install_picks(&mut self.app, &mut self.gui, &picks);
+        super::collection_command::apply_collection_at(
+            &mut self.app,
+            &mut self.gui,
+            site,
+            CollectionOp::Restore { set },
         );
-        // The Feeds tab follows every Service library, and it presents while
-        // subscriptions are configured (row 11.1): the TUI's own tab-strip
-        // rule, so a subscription set the session emptied presents no tab.
-        presented.extend(
-            self.has_feeds_subscriptions()
-                .then_some(GuiDestinationKind::Feeds),
-        );
-        presented
-    }
-
-    /// Whether an open-destination command's `position` names a destination
-    /// the GUI presents (design D2): Home, or one of the presented
-    /// destinations' tab positions. The command arm reads this one
-    /// definition, so a stale frame's position cannot activate a destination
-    /// the top bar does not paint — an unpresented destination opens
-    /// nothing, as the absent digit key does.
-    pub(in crate::app::gui_library) fn presents_open_position(&self, position: usize) -> bool {
-        position == 0
-            || self
-                .presented_destinations()
-                .iter()
-                .any(|kind| self.gui_destination_position(*kind) == Some(position))
     }
 
     /// The presented destination a saved collection entry names (design D9),
@@ -480,7 +406,7 @@ impl App {
         if saved.is_some_and(|(kind, _)| self.launch_catalog_pending(kind)) {
             return LaunchDestination::Pending;
         }
-        let presented = self.presented_destinations();
+        let presented = presented_destinations(&self.app);
         // Nothing is presented yet: no catalog has landed, so the restore
         // waits for one, and the window stays interactive meanwhile.
         if presented.is_empty() {
@@ -515,7 +441,7 @@ impl App {
     fn launch_catalog_pending(&self, kind: ServiceKind) -> bool {
         match kind {
             ServiceKind::Emby => {
-                self.emby_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
+                self.app.emby_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
             }
             ServiceKind::Audiobookshelf => self.gui_abs_catalog_pending(),
         }
@@ -529,9 +455,9 @@ impl App {
     fn gui_destination_library_id(&self, kind: ServiceKind, lib_idx: usize) -> Option<String> {
         match kind {
             ServiceKind::Audiobookshelf => {
-                Some(self.audiobookshelf_libraries.get(lib_idx)?.id.clone())
+                Some(self.app.audiobookshelf_libraries.get(lib_idx)?.id.clone())
             }
-            ServiceKind::Emby => Some(self.libs.get(lib_idx)?.library.id.clone()),
+            ServiceKind::Emby => Some(self.app.libs.get(lib_idx)?.library.id.clone()),
         }
     }
 
@@ -540,21 +466,107 @@ impl App {
     /// either way the libraries list is not final, and a saved
     /// Audiobookshelf destination's resolution must wait for it.
     fn gui_abs_catalog_pending(&self) -> bool {
-        self.audiobookshelf_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
-            || self.setup.audiobookshelf_catalog_rx.is_some()
+        self.app.audiobookshelf_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
+            || self.app.setup.audiobookshelf_catalog_rx.is_some()
     }
+}
 
-    /// The active Grouped Music library's group level: the library's root in
-    /// `nav_stack`, whose items are the collection groups the pills paint.
-    pub(in crate::app::gui_library) fn gui_music_group_level(
-        &self,
-        lib_idx: usize,
-    ) -> Option<&BrowseLevel> {
-        let lib = self.libs.get(lib_idx)?;
-        lib.nav_stack
-            .iter()
-            .find(|level| level.parent_id == lib.library.id)
+/// The active Grouped Music library's group level: the library's root in
+/// `nav_stack`, whose items are the collection groups the pills paint. It
+/// reads only the core's library state, so it is a core function the Music
+/// destination's collection site and projections share.
+pub(in crate::app) fn music_group_level(app: &App, lib_idx: usize) -> Option<&BrowseLevel> {
+    let lib = app.libs.get(lib_idx)?;
+    lib.nav_stack
+        .iter()
+        .find(|level| level.parent_id == lib.library.id)
+}
+
+/// The launch identity a presented destination carries: a stable Service
+/// library id, or Feeds for the one synthetic tab. It reads only the core's
+/// library catalog, so it is a core function the launch surface and the list
+/// sort's target identity share.
+pub(in crate::app) fn destination_identity(
+    app: &App,
+    kind: GuiDestinationKind,
+) -> Option<TabIdentity> {
+    match kind {
+        GuiDestinationKind::Home => Some(TabIdentity::Home),
+        GuiDestinationKind::Feeds => Some(TabIdentity::Feeds),
+        GuiDestinationKind::Music { lib_idx }
+        | GuiDestinationKind::Shows { lib_idx }
+        | GuiDestinationKind::Library { lib_idx } => app
+            .libs
+            .get(lib_idx)
+            .map(|lib| library_identity(ServiceKind::Emby, &lib.library.id)),
+        GuiDestinationKind::Audiobooks { lib_idx } | GuiDestinationKind::Podcasts { lib_idx } => {
+            app.audiobookshelf_libraries
+                .get(lib_idx)
+                .map(|lib| library_identity(ServiceKind::Audiobookshelf, &lib.id))
+        }
     }
+}
+
+/// The destinations the GUI presents, in catalog order (design D9, D2): the
+/// Grouped Music libraries, the Emby TV (Shows) libraries, every other Emby
+/// library (row 8.1's plain Emby-library destination), the Audiobookshelf
+/// libraries — the book libraries' Audiobooks destination (row 9.1) and the
+/// podcast libraries' Podcasts destination (row 10.1) — and the Feeds tab when
+/// subscriptions are configured (row 11.1), as the destination-kind enum names
+/// them. The launch restore's resolution, the frame's destination tabs, and the
+/// tabs' destination positions read this one list, so they cannot disagree
+/// about the presented set. It reads only the core's catalog, so it is a core
+/// function.
+pub(in crate::app) fn presented_destinations(app: &App) -> Vec<GuiDestinationKind> {
+    let mut presented: Vec<GuiDestinationKind> = (0..app.libs.len())
+        .map(|lib_idx| {
+            if app.is_grouped_music_library(lib_idx) {
+                GuiDestinationKind::Music { lib_idx }
+            } else if app.libs[lib_idx].library.collection_type == "tvshows" {
+                GuiDestinationKind::Shows { lib_idx }
+            } else {
+                GuiDestinationKind::Library { lib_idx }
+            }
+        })
+        .collect();
+    // The Audiobookshelf libraries' tab positions follow the Emby ones, so
+    // appending them keeps the catalog order. A library's browse kind picks its
+    // destination: a book library presents Audiobooks and a podcast library
+    // presents Podcasts.
+    presented.extend(
+        (0..app.audiobookshelf_libraries.len()).filter_map(|lib_idx| {
+            match app.audiobookshelf_kind_at(lib_idx) {
+                Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
+                    Some(GuiDestinationKind::Audiobooks { lib_idx })
+                }
+                Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast) => {
+                    Some(GuiDestinationKind::Podcasts { lib_idx })
+                }
+                None => None,
+            }
+        }),
+    );
+    // The Feeds tab follows every Service library, and it presents while
+    // subscriptions are configured (row 11.1): the TUI's own tab-strip rule, so
+    // a subscription set the session emptied presents no tab.
+    presented.extend(
+        app.has_feeds_subscriptions()
+            .then_some(GuiDestinationKind::Feeds),
+    );
+    presented
+}
+
+/// Whether an open-destination command's `position` names a destination the
+/// GUI presents (design D2): Home, or one of the presented destinations' tab
+/// positions. The command arm reads this one definition, so a stale frame's
+/// position cannot activate a destination the top bar does not paint — an
+/// unpresented destination opens nothing, as the absent digit key does. It
+/// reads only the core's catalog, so it is a core function.
+pub(in crate::app) fn presents_open_position(app: &App, position: usize) -> bool {
+    position == 0
+        || presented_destinations(app)
+            .iter()
+            .any(|kind| super::tabs::destination_position(app, *kind) == Some(position))
 }
 
 /// What the launch location's first phase found (add-gui-library-panel

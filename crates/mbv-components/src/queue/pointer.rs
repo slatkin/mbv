@@ -24,7 +24,7 @@ impl QueueComponent {
             PointerGesture::Scroll { at, delta } => self.handle_scroll(at, delta),
             PointerGesture::Click { at, selection } => self.handle_click(at, selection),
             PointerGesture::DoubleClick(at) => self.handle_double_click(at),
-            PointerGesture::RightClick(at) => self.handle_right_click(at, mouse.column, mouse.row),
+            PointerGesture::RightClick(at) => self.handle_right_click(at),
             PointerGesture::Drag { to, .. } => self.handle_drag(to),
             PointerGesture::DragEnd => {
                 self.drag_grab = None;
@@ -87,7 +87,7 @@ impl QueueComponent {
         })))
     }
 
-    fn handle_right_click(&mut self, at: Position, column: u16, row: u16) -> Option<Msg> {
+    fn handle_right_click(&mut self, at: Position) -> Option<Msg> {
         // Legacy parity: a right-click on blank queue space opens no
         // menu. Only resolve a menu when the click lands on a row —
         // never fall back to the prior selection (design.md D4).
@@ -101,7 +101,6 @@ impl QueueComponent {
         };
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Queue(targets),
-            Some((column, row)),
         ))))
     }
 

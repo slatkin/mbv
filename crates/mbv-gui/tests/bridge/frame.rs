@@ -1,8 +1,9 @@
 mod settings_screen;
 
 use mbv::{
-    App, stub_app_with_open_row_menu, stub_app_with_playing_items, stub_app_with_playing_queue,
-    stub_app_with_queue, stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    App, GuiCore, gui_client_capabilities, stub_app_with_open_row_menu,
+    stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_queue,
+    stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
@@ -94,13 +95,20 @@ fn adopted_queue(app: &mut App) -> QueueSurface {
 fn built(app: &mut App, queue: &QueueSurface, playback: &QueuePlaybackSurface) -> Built {
     let mut ledger = SectionLedger::default();
     ledger.mark_all_gated();
+    let mut core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
+    // The wrapper owns its own Client state, and the test seeded and reads the
+    // state beside the `App` (row 8.1 of `decouple-client-core`), so the
+    // collect runs over the seeded one and publishes back what it left.
+    core.take_seeded_gui_state_for_test();
     let batch = ledger.collect(SectionSources {
-        app,
+        core: &mut core,
         queue,
         playback_surface: playback,
         viewport_rows: VIEWPORT_ROWS,
         now: std::time::Instant::now(),
     });
+    core.publish_seeded_gui_state_for_test();
+    *app = core.into_app();
     Built(batch.expect("the first collect builds every section"))
 }
 
@@ -124,7 +132,11 @@ fn frame_after_tick(app: &mut App) -> Built {
 fn frame_after_keys(app: &mut App, keys: &[mbv_ui_msg::Key]) -> Built {
     for code in keys {
         let key = mbv_ui_msg::KeyEvent::new(*code, mbv_ui_msg::KeyModifiers::NONE);
-        let _ = app.route_gui_input(mbv::GuiInput::Key(key), None);
+        let mut core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
+        core.take_seeded_gui_state_for_test();
+        let _ = core.route_gui_input(mbv::GuiInput::Key(key), None);
+        core.publish_seeded_gui_state_for_test();
+        *app = core.into_app();
     }
     frame_after_tick(app)
 }
@@ -408,7 +420,7 @@ fn playing_queue_frame_carries_the_status_indicator_cluster() {
 #[test]
 fn queue_filter_narrows_projected_rows_only() {
     let mut app = stub_app_with_playing_queue(3);
-    app.enable_gui_client();
+    app.set_client_capabilities_for_test(gui_client_capabilities());
     // The stub titles are "Item 0", "Item 1", "Item 2": the query matches
     // one row.
     let frame = frame_after_keys(

@@ -3,6 +3,7 @@ use super::{PanelFocus, QueueLink};
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{FooterPill, QueueSurfaceProjection};
 use mbv_components::QueueComponent;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueRequest};
 use ratatui::style::{Modifier, Style};
@@ -30,7 +31,7 @@ impl Model {
         // same gate the card's render used.
         if self.app.visual_slot_shown() {
             let resizing = self.refresh_resize_drag_hold();
-            self.app.refresh_queue_card_image(resizing);
+            crate::app::state::projection::card::refresh_queue_card_image(&mut self.app, resizing);
         } else if self.app.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing (the user's hide toggle): the
             // artwork can no longer carry the title, so the header is its
@@ -58,6 +59,7 @@ impl Model {
 
     fn push_queue_projection(&mut self, update: QueueSurfaceProjection) {
         let id = ComponentId::Queue;
+        let terminal_size = self.terminal_size();
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>()
         {
@@ -89,13 +91,20 @@ impl Model {
             );
             // The queue panel's placement (task 3.1): computed from the
             // same paint-free checkpoint the draw path consumes (the last
-            // published card geometry; see `App::queue_panel_placement`).
+            // published card geometry; see `draw::queue_panel_placement`).
             // The frame is an appearance surface: unpinned mini view always
             // rests; a pinned mini view follows the window focus, while 80+
             // columns ignores window focus.
             queue.set_frame_focused(self.app.panel_appearance_focus(PanelFocus::Queue));
             queue.set_mini_view(self.app.is_mini_view());
-            queue.set_area(self.app.queue_panel_placement().panel_area);
+            queue.set_area(
+                super::draw::queue_panel_placement(
+                    &self.app,
+                    self.layout.card.height,
+                    terminal_size,
+                )
+                .panel_area,
+            );
         }
     }
 

@@ -107,15 +107,11 @@ impl App {
     /// Watching removal. The bare `Play` and `Enqueue` actions execute
     /// through the shell's `home_context_item`, which the caller sets to
     /// this item.
-    pub(in crate::app) fn open_explicit_item_context_menu(
-        &mut self,
-        item: &EmbyItem,
-        anchor: Option<(u16, u16)>,
-    ) {
+    pub(in crate::app) fn open_explicit_item_context_menu(&mut self, item: &EmbyItem) {
         let Some(mut menu) = self.build_explicit_item_context_menu(item) else {
             return;
         };
-        menu.anchor = menu_anchor(anchor, mbv_ui_model::settings::PanelFocus::Library);
+        menu.anchor = menu_anchor(mbv_ui_model::settings::PanelFocus::Library);
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
     }
 
@@ -146,11 +142,7 @@ impl App {
     /// Service identity"): a selection spanning Services offers Play and Add to Queue only,
     /// and both entries carry the shell-resolved queue items in display
     /// order. An empty resolution opens nothing.
-    pub(in crate::app) fn open_home_mixed_context_menu(
-        &mut self,
-        items: Vec<QueueItem>,
-        anchor: Option<(u16, u16)>,
-    ) {
+    pub(in crate::app) fn open_home_mixed_context_menu(&mut self, items: Vec<QueueItem>) {
         if items.is_empty() {
             return;
         }
@@ -166,7 +158,7 @@ impl App {
             ContextAction::HomeEnqueueSelection(items),
         );
         self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
-            anchor: menu_anchor(anchor, PanelFocus::Library),
+            anchor: menu_anchor(PanelFocus::Library),
             cursor: ContextMenu::first_selectable(&entries),
             entries,
             bounds: None,

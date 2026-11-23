@@ -5,12 +5,10 @@
 //! builds its title and availability from the same helpers.
 
 use mbv_emby_model::TICKS_PER_SECOND;
-use mbv_render::components::chrome_player::TransportAvailability;
-use mbv_render::components::indicators::{
-    StatusIndicator, short_resolution_label, status_indicator_items,
-};
+use mbv_ui_model::indicators::{StatusIndicator, short_resolution_label, status_indicator_items};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 use mbv_ui_model::playback::PlaybackState;
+use mbv_ui_model::playback::TransportAvailability;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_model::ui_util::{fmt_duration_short, fmt_wall_clock};
 use time::UtcOffset;

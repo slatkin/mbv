@@ -21,6 +21,8 @@ mbv-queue = { path = "../mbv-queue" }
 mbv-feed = { path = "../mbv-feed" }
 mbv-config = { path = "../mbv-config" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-theme = { path = "../mbv-theme" }
+mbv-text = { path = "../mbv-text" }
 unicode-width.workspace = true
 time.workspace = true
 

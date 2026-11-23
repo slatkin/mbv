@@ -177,12 +177,12 @@ impl App {
     /// shown entry: the TUI Client keeps the connection rule, whatever its
     /// shown-entry field holds.
     fn queue_link_resolution(&self) -> QueueLinkResolution {
-        let gui_shown_entry = if self.gui_client {
-            self.gui_shown_entry
+        let shown_entry = if self.shows_queue_entries() {
+            self.shown_entry
         } else {
             None
         };
-        QueueLinkResolution::new(self.has_direct_remote_queue(), gui_shown_entry)
+        QueueLinkResolution::new(self.has_direct_remote_queue(), shown_entry)
     }
 
     pub(in crate::app) fn local_queue_metadata_applies(&self, link: QueueLink) -> bool {

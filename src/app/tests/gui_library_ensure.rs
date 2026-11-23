@@ -39,15 +39,15 @@ impl RecordingLoads<'_> {
 }
 
 impl GuiDestinationLoads for RecordingLoads<'_> {
-    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+    fn ensure_root(&self, _app: &mut App, _gui: &mut GuiClientState) -> GuiStepOutcome {
         self.record(LoadStep::Root)
     }
 
-    fn ensure_selection(&self, _app: &mut App) -> GuiStepOutcome {
+    fn ensure_selection(&self, _app: &mut App, _gui: &mut GuiClientState) -> GuiStepOutcome {
         self.record(LoadStep::Selection)
     }
 
-    fn ensure_dependents(&self, _app: &mut App) {
+    fn ensure_dependents(&self, _app: &mut App, _gui: &mut GuiClientState) {
         self.record(LoadStep::Dependents);
     }
 }
@@ -55,11 +55,16 @@ impl GuiDestinationLoads for RecordingLoads<'_> {
 #[test]
 fn driver_runs_root_then_selection_then_dependents() {
     let mut app = make_app_stub();
+    let mut gui = GuiClientState::new(false);
     let steps = RefCell::new(Vec::new());
-    app.run_gui_destination_loads(&RecordingLoads {
-        steps: &steps,
-        halt_at: None,
-    });
+    crate::app::gui_library::ensure::run_gui_destination_loads(
+        &mut app,
+        &mut gui,
+        &RecordingLoads {
+            steps: &steps,
+            halt_at: None,
+        },
+    );
     assert_eq!(
         steps.into_inner(),
         vec![LoadStep::Root, LoadStep::Selection, LoadStep::Dependents]
@@ -71,11 +76,16 @@ fn driver_runs_root_then_selection_then_dependents() {
 #[test]
 fn driver_stops_at_the_step_that_calls_for_a_load() {
     let mut app = make_app_stub();
+    let mut gui = GuiClientState::new(false);
     let steps = RefCell::new(Vec::new());
-    app.run_gui_destination_loads(&RecordingLoads {
-        steps: &steps,
-        halt_at: Some(LoadStep::Selection),
-    });
+    crate::app::gui_library::ensure::run_gui_destination_loads(
+        &mut app,
+        &mut gui,
+        &RecordingLoads {
+            steps: &steps,
+            halt_at: Some(LoadStep::Selection),
+        },
+    );
     assert_eq!(
         steps.into_inner(),
         vec![LoadStep::Root, LoadStep::Selection]

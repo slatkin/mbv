@@ -782,11 +782,14 @@ mod tv_pill_stale_key_tests {
         };
         let level = build_tv_latest_level(&source, "tv-library".into(), "TV".into())
             .expect("fake Latest request succeeds");
-        app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
-            lib_idx: 0,
-            parent_id: "tv-library".into(),
-            level: Box::new(level),
-        }));
+        app.handle_lib_event(
+            LibEvent::Browse(BrowseEvent::Loaded {
+                lib_idx: 0,
+                parent_id: "tv-library".into(),
+                level: Box::new(level),
+            }),
+            None,
+        );
 
         let level = &app.libs[0].nav_stack[0];
         assert_eq!(level.items, vec![episode]);

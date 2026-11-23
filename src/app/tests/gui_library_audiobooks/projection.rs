@@ -79,7 +79,7 @@ fn the_projection_carries_the_rows_letters_and_the_default_pick() {
         None,
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
@@ -137,7 +137,7 @@ fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
         Some(1800.0),
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
@@ -212,7 +212,7 @@ fn a_chapter_row_paints_its_own_span_not_its_absolute_end() {
         None,
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let workspace = projection
         .hero
@@ -243,7 +243,7 @@ fn the_workspace_falls_back_to_part_rows_without_chapters() {
         None,
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let workspace = projection
         .hero
@@ -315,7 +315,7 @@ fn the_playing_book_rides_the_projection() {
         status.position_ticks = mbv_emby_model::seconds_to_ticks(2000.0);
     });
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     assert_eq!(
         projection.playing_book_id.as_deref(),
@@ -345,10 +345,13 @@ fn the_play_command_replaces_the_queue_with_the_book_at_its_saved_position() {
     app.seed_gui_abs_book_progress_for_test(0, "book-a", 300.0, false);
     let cmd_rx = super::live_owner_channel(&mut app);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlay {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlay {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
 
     let replaced = cmd_rx.try_iter().find_map(|command| match command {
         mbv_ctrl::CtrlCmd::UnifiedQueueReplace { items, .. } => match &*items {
@@ -384,10 +387,13 @@ fn the_queue_command_appends_the_book() {
     );
     let cmd_rx = super::live_owner_channel(&mut app);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsQueue {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsQueue {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
 
     let appended: Vec<String> = cmd_rx
         .try_iter()
@@ -453,11 +459,14 @@ fn the_chapter_command_seeks_on_the_active_book() {
     });
     while cmd_rx.try_recv().is_ok() {}
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
-        lib_idx: 0,
-        book_id: "book-a".into(),
-        chapter: 2,
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
+            lib_idx: 0,
+            book_id: "book-a".into(),
+            chapter: 2,
+        },
+    );
 
     assert!(
         matches!(
@@ -493,19 +502,25 @@ fn a_denied_owner_flashes_the_owner_unavailable_toast_and_submits_nothing() {
     let cmd_rx = super::live_owner_channel(&mut app);
     app.set_abs_admission_for_test(false);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlay {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlay {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
     assert_eq!(
         app.newest_toast_text(),
         "Audiobookshelf playback owner is unavailable",
         "the play's refusal flashes the owner-unavailable toast"
     );
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsQueue {
-        lib_idx: 0,
-        item_id: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsQueue {
+            lib_idx: 0,
+            item_id: "book-a".into(),
+        },
+    );
     assert!(
         cmd_rx.try_recv().is_err(),
         "a denied owner receives no queue change"
@@ -533,25 +548,34 @@ fn stale_book_and_chapter_ids_change_nothing() {
     app.seed_gui_abs_book_detail_for_test(0, "book-a", &[(1, 0.0, 100.0, "One")], &[]);
     let cmd_rx = super::live_owner_channel(&mut app);
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlay {
-        lib_idx: 0,
-        item_id: "gone".into(),
-    });
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsQueue {
-        lib_idx: 0,
-        item_id: "gone".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlay {
+            lib_idx: 0,
+            item_id: "gone".into(),
+        },
+    );
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsQueue {
+            lib_idx: 0,
+            item_id: "gone".into(),
+        },
+    );
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
     assert!(
         app.newest_toast_text().is_empty(),
         "a stale id flashes no toast"
     );
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
-        lib_idx: 0,
-        book_id: "book-a".into(),
-        chapter: 9,
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
+            lib_idx: 0,
+            book_id: "book-a".into(),
+            chapter: 9,
+        },
+    );
     assert_eq!(
         app.newest_toast_text(),
         "That chapter is no longer available",
@@ -581,14 +605,17 @@ fn the_select_command_stores_the_pick() {
         )],
     );
 
-    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsSelect {
-        lib_idx: 0,
-        row: "book-a".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        crate::app::gui_library::GuiLibraryCommand::AbsSelect {
+            lib_idx: 0,
+            row: "book-a".into(),
+        },
+    );
 
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
-        Some("book-a"),
+        Some("book-a".to_string()),
         "the select command stored the pick"
     );
 }
@@ -617,7 +644,7 @@ fn the_book_hero_restores_the_narrator_year_and_description() {
     book.published_year = Some("1999".into());
     book.description = Some("A novel of manners. https://example.test/x".into());
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(
@@ -662,7 +689,7 @@ fn a_book_row_shows_its_cover() {
     ));
     app.seed_card_image_for_test(key.clone(), cover);
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     assert_eq!(
         projection.rows[0].art,

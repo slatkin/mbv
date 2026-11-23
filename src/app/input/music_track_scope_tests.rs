@@ -10,8 +10,8 @@ fn wide_track_focus_model(track_count: usize) -> (Model, ComponentId) {
     let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", track_count);
     let mut model = Model::new(app);
-    model.app.terminal_width = 160;
-    model.app.terminal_height = 40;
+    model.terminal_width = 160;
+    model.terminal_height = 40;
     model.push_music_workspace_content();
     model.sync_active_destination();
     let id = ComponentId::Library;

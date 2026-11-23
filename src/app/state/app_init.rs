@@ -29,7 +29,7 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) use_nerd_fonts: bool,
-    pub(in crate::app) indicator_style: mbv_render::indicators::IndicatorStyle,
+    pub(in crate::app) indicator_style: mbv_ui_model::indicators::IndicatorStyle,
     pub(in crate::app) image_cache_size: usize,
     pub(in crate::app) image_decode: mbv_images::ImageDecode,
     pub(in crate::app) visualizer_glyph: String,

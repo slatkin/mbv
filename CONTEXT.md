@@ -139,6 +139,10 @@ Client core:
 The layer of interaction behaviour that the TUI Client and the GUI Client share for the surfaces that both present. It holds each of their interaction rules one time: Surface state, the focus stack, neutral key and pointer events, the one Keyboard Router, list capacity, and the semantic hit map. For those surfaces a Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events, and it never reimplements an interaction rule. A surface that one Client presents alone, such as the *GUI Library panel*, keeps its rules in that Client.
 _Avoid_: core (bare), shared UI layer, interaction layer (bare)
 
+Client capability:
+One thing a Client presents that the *Client core* reads as a neutral fact instead of a Client kind. The four values are TerminalPanelRules (one panel only and the hidden empty Queue column), VisualSlotControls (the visualizer and the visual-slot hide control), ShownQueueEntries (the shown entry the *Queue chooser* picks), and TransportChipKeys (the transport chips, the seek controls, the playback-target chooser, and queue rows moved by key). Each Client builds its own `ClientCapabilities` value and attaches with it; the attach step stores it, and the core reads it from the first frame. The core never names a Client and holds no flag that says which Client attached.
+_Avoid_: client kind, the deleted kind flag and GUI-fact field the capabilities replace (ADR 0042), gui client (one word)
+
 Surface state:
 The interaction state of one interactive surface, held one time where both Clients share it. Cursor, selection, marks, viewport counted in items, local focus, and drafts are examples. It depends on no terminal library, no terminal UI framework, and no GUI toolkit. A Client's adapter forwards neutral events to it and paints from it. The adapter holds no copy of its values.
 _Avoid_: widget state, UI state (bare), duplicate state

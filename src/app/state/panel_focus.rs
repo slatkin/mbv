@@ -1,3 +1,4 @@
+use crate::app::state::client_capabilities::ClientCapability;
 use crate::app::{App, PanelFocus, PanelMode};
 use std::time::Instant;
 
@@ -27,35 +28,55 @@ pub(in crate::app) fn panel_appearance_focus_decision(
 }
 
 impl App {
-    /// Whether the terminal is below `MINI_VIEW_THRESHOLD` columns, i.e. the
-    /// Power View is in mini view: a single displayed panel, no sibling to
-    /// contrast a focused palette against. The GUI Client arranges its own
-    /// panels from its measured size, so its geometry fact keeps this false.
+    /// Whether the Power View is in mini view: a single displayed panel, no
+    /// sibling to contrast a focused palette against. The TUI pushes this
+    /// fact from its terminal size (design D6a/D6b), so the core reads no
+    /// terminal width. A Client that does not follow the terminal-panel rules
+    /// arranges its own panels from its measured size, so its capability
+    /// keeps this false.
     pub(in crate::app) fn is_mini_view(&self) -> bool {
-        !self.client_arranges_panels()
-            && self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
+        self.client_capabilities
+            .has(ClientCapability::TerminalPanelRules)
+            && self.single_panel
+    }
+
+    /// Record the single-panel fact the TUI derives from its terminal width.
+    /// The TUI sets it at every point where it records the terminal size, on
+    /// resize and in the per-frame size on the draw path.
+    pub(in crate::app) fn set_single_panel(&mut self, single_panel: bool) {
+        self.single_panel = single_panel;
+    }
+
+    /// Record the left panel column the TUI shell composed this frame (design
+    /// D13 Rule B). Layout geometry is TUI presentation and lives on the shell
+    /// `Model`; the core reads only this neutral area, and the TUI pushes it
+    /// from the value it writes to its own layout, so a core reader sees the
+    /// last composed frame. A Client that composes no frame never sets it.
+    pub(in crate::app) fn set_left_panel_area(&mut self, area: mbv_ui_model::geom::Rect) {
+        self.left_panel_area = area;
     }
 
     /// Whether the two-panel layout's queue column is hidden this frame
     /// because the displayed queue has no slots. Mini view and queue-only keep
     /// the
     /// empty-queue placeholder, so only the wide two-panel layout hides.
-    /// A Client that arranges its own panels always paints the Queue panel, so
-    /// its geometry fact keeps this false too.
+    /// A Client without the terminal-panel rules always paints the Queue
+    /// panel, so its capability keeps this false too.
     /// The stored `panel_mode` is never written: the `x` cycle reads the
     /// stored mode and still advances `both -> queue-only` while hidden.
     pub(in crate::app) fn queue_column_hidden_empty(&self) -> bool {
-        !self.client_arranges_panels()
+        self.client_capabilities
+            .has(ClientCapability::TerminalPanelRules)
             && !self.is_mini_view()
             && self.panel_mode == PanelMode::Both
             && self.displayed_queue().slots().is_empty()
     }
 
     /// The panel mode actually in effect for rendering/input this frame.
-    /// Below `MINI_VIEW_THRESHOLD` columns the Power View ignores the stored
-    /// three-state `panel_mode` and derives a two-state mini view from the
-    /// ephemeral `mini_view_focus`; at 80+ columns the stored mode is used,
-    /// except that an empty displayed queue renders library-only.
+    /// In mini view the Power View ignores the stored three-state
+    /// `panel_mode` and derives a two-state mini view from the ephemeral
+    /// `mini_view_focus`; in wide view the stored mode is used, except that
+    /// an empty displayed queue renders library-only.
     pub(in crate::app) fn effective_panel_mode(&self) -> PanelMode {
         if self.is_mini_view() {
             match self.mini_view_focus {
@@ -69,10 +90,10 @@ impl App {
         }
     }
 
-    /// The panel focus actually in effect for input routing this frame. Below
-    /// `MINI_VIEW_THRESHOLD` columns this is `mini_view_focus`; at 80+ columns
-    /// the stored `panel_focus` is returned, except that a hidden empty queue
-    /// column never holds focus.
+    /// The panel focus actually in effect for input routing this frame. In
+    /// mini view this is `mini_view_focus`; in wide view the stored
+    /// `panel_focus` is returned, except that a hidden empty queue column
+    /// never holds focus.
     pub(in crate::app) fn effective_panel_focus(&self) -> PanelFocus {
         if self.is_mini_view() {
             self.mini_view_focus
@@ -117,7 +138,7 @@ impl App {
     }
 
     pub(in crate::app) fn set_panel_focus(&mut self, focus: PanelFocus) {
-        // Below MINI_VIEW_THRESHOLD, focus-follow call sites (mouse clicks,
+        // In mini view, focus-follow call sites (mouse clicks,
         // Alt+Left/Right, context actions) must move the ephemeral mini-view
         // focus, never the real persisted panel_focus -- that state has to
         // survive narrowing/widening untouched.

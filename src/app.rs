@@ -1,22 +1,33 @@
-#[cfg(any(test, feature = "test"))]
 mod app_stub;
+
+/// The parked `App` a Client wrapper moves out of position while it holds the
+/// live one in a `GuiCore` (design D4a of `decouple-client-core`). It is a stub
+/// construction, so it compiles in every build: shipped wrappers park it too.
+pub use self::app_stub::handoff_app;
+
 mod client_core;
 mod client_drains;
 mod dispatch;
-mod gui_client_state;
+pub mod gui_client_state;
 mod gui_library;
 mod gui_playlists;
 mod gui_settings;
+#[cfg(any(test, feature = "test"))]
+pub use self::app_stub::gui_state_for_test;
+#[cfg(feature = "test")]
+pub use self::app_stub::seeded_gui_state_for_test;
+#[cfg(any(test, feature = "test"))]
+pub use self::app_stub::stub_app_with_prefix_and_toast;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
-    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,
+    drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,
+    set_subtitle_tracks_for_test, stub_app_for_gui_client, stub_app_with_cached_emby_client,
     stub_app_with_cast_target, stub_app_with_completed_emby_startup,
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_failed_emby_setup,
     stub_app_with_local_daemon_events, stub_app_with_open_row_menu,
     stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
-    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_queue_and_cmd_rx,
-    stub_app_with_rebound_quit, stub_app_with_track_choices, stub_app_with_track_popover,
-    stub_app_with_unsaved_queue,
+    stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
+    stub_app_with_track_choices, stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 mod infra;
 mod input;
@@ -39,11 +50,20 @@ pub use self::client_drains::{
 pub use self::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
 };
+pub(crate) use self::dispatch::library::stores::drain_lib_event_through;
+pub use self::gui_client_state::GuiClientState;
 pub use self::gui_client_state::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
+/// The Client-only fetch result a dependent Client's test scripts onto the
+/// `App`'s channel (`decouple-client-core` design D5): the next tick's
+/// `drain_client_events` takes it exactly as it takes a worker's own send.
+#[cfg(feature = "test")]
+#[doc(hidden)]
+pub use self::gui_library::client_events::GuiClientEvent;
+pub(crate) use self::gui_library::client_events::install_client_event;
 pub use self::gui_library::{
     GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
     GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,
@@ -69,8 +89,10 @@ pub use self::gui_library::{
 };
 pub use self::gui_library::{
     GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
-    artist_rows_in_view_id,
+    artist_rows_in_view_id, playing_track_id_for_shell,
 };
+#[cfg(test)]
+pub(in crate::app) use self::gui_library::{gui_active_destination, gui_library_tabs};
 pub use self::gui_playlists::{
     GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,
     GuiPlaylistsCommand, GuiPlaylistsProjection,
@@ -85,18 +107,18 @@ pub use self::gui_settings::{
     SetupSecret,
 };
 pub use self::infra::image_fetch::CardImageDrain;
+pub(in crate::app) use self::infra::open_url::open_url;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,
 };
-pub(crate) use self::infra::terminal::set_mouse_capture;
-pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
 pub use self::input::gui::GuiInput;
 pub use self::input::gui::GuiSurfaceLeaf;
 pub use self::input::key_policy::{
-    OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
+    OverlayFocus, RemoteControlTarget, RouterNow, RouterOverlayState, RouterPlaybackState,
+    RouterSnapshot,
 };
-pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
+pub use self::input::router::RouterOutcome;
 pub use self::queue_card_artwork::QueueCardArtwork;
 pub use self::queue_footer_projection::{FooterPill, QueueFooterProjection};
 pub use self::queue_playback_projection::{
@@ -105,6 +127,7 @@ pub use self::queue_playback_projection::{
 };
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
 pub use self::queue_surface::QueueSurfaceProjection;
+pub(crate) use self::shell::set_mouse_capture;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;
@@ -137,7 +160,6 @@ pub(crate) use crate::app::state::queue_view::QueueView;
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
 use mbv_emby_model::EmbyItem;
-pub(crate) use mbv_images::resize::spawn_resize_worker;
 #[cfg(test)]
 use mbv_ui_model::browse::restore_library_position;
 use mbv_ui_model::browse::{

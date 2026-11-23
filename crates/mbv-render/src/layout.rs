@@ -18,8 +18,6 @@
 
 use ratatui::layout::Rect;
 
-pub const LEFT_WIDTH_DEFAULT: u16 = 40;
-pub const LEFT_WIDTH_STEP: u16 = 5;
 /// The single wide/narrow breakpoint. Minimum list-pane / Home-pane width at
 /// which the view switches to a two-column layout. Every screen and
 /// arrangement reads this one constant instead of testing width itself.
@@ -126,6 +124,19 @@ pub struct AppLayout {
 #[must_use]
 pub fn rect_to_presentation(rect: Rect) -> mbv_ui_model::geom::Rect {
     mbv_ui_model::geom::Rect {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+    }
+}
+
+/// Convert a neutral presentation `Rect` back to a render-layer cell
+/// rectangle: the other half of the same edge, for a model rect that a TUI
+/// painter has to fill (task 1.7, the panel's retained hero image paint).
+#[must_use]
+pub fn presentation_to_rect(rect: mbv_ui_model::geom::Rect) -> Rect {
+    Rect {
         x: rect.x,
         y: rect.y,
         width: rect.width,

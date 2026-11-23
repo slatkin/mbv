@@ -1,6 +1,6 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
-use crate::app::gui_client_state::GuiOverlay;
+use crate::app::state::client_capabilities::ClientCapabilities;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{
     DestinationLatestSource, HomeContent, PlaylistMutationState, SuspendedLocalSession, UndoEntry,
@@ -13,8 +13,6 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::QueueSlotId;
-use mbv_render as render;
-use mbv_render::layout;
 use mbv_ui_model::browse::{AlbumIndexState, SeriesDetail};
 use mbv_ui_model::feed::IdleFeed;
 use mbv_ui_model::feed_tab::FeedTabState;
@@ -93,16 +91,17 @@ pub struct App {
     /// installed waker reaches every relay — including one the initial
     /// attach already spawned.
     pub(in crate::app) client_waker: crate::app::ClientWaker,
+    /// The channel the GUI Library's Client-only fetch workers send on (design
+    /// D5 of `decouple-client-core`): the workers clone the sender, and the
+    /// GUI Client's core takes the receiver once it exists. The TUI Client
+    /// never starts one of these fetches, so it never receives an event.
+    pub(in crate::app) gui_client_events: crate::app::state::gui_client_events::GuiClientEvents,
     /// The `mbv` program this Client starts the Owner from (design D9 of
     /// `extract-client-core`). `None` starts this process's own executable —
     /// the TUI Client, which is `mbv` itself. The GUI Client records the
     /// `mbv` program it resolved, so an Owner restart never starts the GUI
     /// program as the Owner.
     pub(in crate::app) owner_exe: Option<std::path::PathBuf>,
-    /// Which Client this process runs (gui-named-queues design D7): the Hello
-    /// claims every later App-side reconnect sends follow it. The Owner link
-    /// records it at attach time; it never changes during the session.
-    pub(in crate::app) client_kind: crate::ClientKind,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
     /// answer. `drain_player_events` takes these before
@@ -130,7 +129,7 @@ pub struct App {
     /// peer whose queue the Queue panel, the player panel, and the edits follow
     /// (design D7, ADR 0041). `None` for the TUI Client, which keeps the
     /// connection rule (ADR 0034).
-    pub(in crate::app) gui_shown_entry: Option<crate::app::state::playback::ShownEntry>,
+    pub(in crate::app) shown_entry: Option<crate::app::state::playback::ShownEntry>,
     /// The shown resting queue's own view, beside the current queue's
     /// `local_view` (design D7): filled from `NamedQueueSnapshot` while the GUI
     /// Client shows a queue that rests.
@@ -148,6 +147,12 @@ pub struct App {
     /// finds the request it answers and tells the user why; an op leaves the
     /// set when its answer arrives, and a lost Owner clears it.
     pub(in crate::app) pending_named_queue_ops: std::collections::HashSet<mbv_ctrl::QueueOpId>,
+    /// The queue a new-queue request created and the text its rename draft
+    /// opens with, handed to the GUI Client's core on its next input pass
+    /// (gui-named-queues design D8). The core makes the queue, so it sets this;
+    /// the overlay and the cursor that names its entry are GUI presentation, so
+    /// the GUI core takes it and a Client with no chooser leaves it unset.
+    pub(in crate::app) pending_queue_rename: Option<(mbv_queue::NamedQueueId, String)>,
     /// The Client core's live toasts (design D1): one list in one place, so
     /// several toasts are live at once, with the cap, the repeat rule, and
     /// the per-severity expiry owned by `ToastList`. The status row presents
@@ -162,7 +167,6 @@ pub struct App {
     /// down to a bool that must be manually kept in sync.
     pub(in crate::app) player_endpoint: Option<mbv_remote_player::DaemonEndpoint>,
     pub(in crate::app) hidden_libraries: Vec<String>,
-    pub(in crate::app) home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
     /// Home content (add-gui-library-panel row 6.1): the authoritative
     /// Continue Watching snapshot both Clients store. The launch Home load
     /// fills it (`App::load_home_at_startup`), a rebuilt startup-drain
@@ -188,11 +192,16 @@ pub struct App {
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,
-    // Per-frame layout geometry from last render, used for mouse hit-testing.
-    // See src/app/layout.rs for the grouping rationale.
-    pub(in crate::app) layout: layout::AppLayout,
-    pub(in crate::app) terminal_width: u16,
-    pub(in crate::app) terminal_height: u16,
+    /// The left panel column of the last composed frame, as a neutral
+    /// rectangle (design D13 Rule B). The TUI shell owns its layout record;
+    /// the core keeps only this area, which the TUI pushes from the frame it
+    /// composed (`App::set_left_panel_area`). A Client that composes no such
+    /// frame leaves it zero, which is what the shell's default layout gave
+    /// the core readers before the move.
+    pub(in crate::app) left_panel_area: mbv_ui_model::geom::Rect,
+    /// The single-panel fact the TUI pushes from its terminal width
+    /// (`App::set_single_panel`). `is_mini_view` reads it.
+    pub(in crate::app) single_panel: bool,
     /// Shell handoff for a modal raised by App-owned effects. The mounted
     /// component owns the modal after the next Model tick.
     pub(in crate::app) pending_overlay: Option<mbv_ui_model::overlay::OverlayRequest>,
@@ -252,165 +261,15 @@ pub struct App {
     /// width at paint time (`list_pane_width`).
     pub(in crate::app) list_pane_width: Option<u16>,
     pub(in crate::app) visual_slot_hidden: bool,
-    /// Whether the GUI Client's player controls auto-hide (design D5 of
-    /// `gui-art-player-overlay`): while an item plays and the pointer is not
-    /// over the artwork. Persisted across launches; the TUI Client paints no
-    /// auto-hide control and never reads it.
-    pub(in crate::app) gui_player_auto_hide: bool,
     pub(in crate::app) panel_mode: PanelMode,
-    /// The one Client-kind fact (add-gui-library-panel design D4, D9):
-    /// `true` for a GUI Client, `false` for a TUI Client. The GUI Client
-    /// sets it before its first step (`App::enable_gui_client`); the TUI
-    /// Client never does. It decides both facts the Clients differ on,
-    /// exposed as `App::client_arranges_panels` and
-    /// `App::visual_slot_controls`: the GUI Client arranges its own panels
-    /// from its measured size and always paints the Queue panel, so
-    /// `terminal_width` has no meaning there and the terminal-width Mini
-    /// check and the hidden empty queue column do not apply; and only the
-    /// TUI Client paints the visualizer and a control for the visual slot's
-    /// hide, so the visualizer and hide setters and the persisted hide do
-    /// nothing for the GUI Client.
-    pub(in crate::app) gui_client: bool,
-    /// The GUI Library panel's selected collections per destination
-    /// (add-gui-library-panel design D2, D5; gui-collection-dropdown design
-    /// D1, D2): one stored selection per Grouped Music library, keyed by the
-    /// library index — the checked set (All or the checked collection ids),
-    /// whose order half the Music destination never reads. An absent entry is
-    /// All, and a checked set the library emptied falls back to All where the
-    /// selection is read. The window content sends the choice with the
-    /// collection commands; the TUI never reads it.
-    pub(in crate::app) gui_library_groups:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSelection>,
-    /// The GUI Library's Music collection store (design D5): each selected
-    /// group's album list, keyed by the library index, then the group id. It
-    /// lands outside `nav_stack`, so the TUI's navigation state and fetches do
-    /// not change, and a per-frame reader looks a group up through its
-    /// borrowed id.
-    pub(in crate::app) gui_music_albums: std::collections::HashMap<
-        usize,
-        std::collections::HashMap<String, crate::app::gui_library::GuiGroupAlbums>,
-    >,
-    /// The album each collection group's pill last showed in the GUI Library's
-    /// Hero (design D13), keyed by the library index and the group id. A group
-    /// with no entry shows its first album. The TUI never reads it.
-    pub(in crate::app) gui_library_picks: std::collections::HashMap<(usize, String), String>,
-    /// The album the Hero last showed while All or several Music groups were
-    /// checked (gui-collection-dropdown design D11), keyed by the library
-    /// index: the session-only union pick, which the launch file never saves.
-    /// The TUI never reads it.
-    pub(in crate::app) gui_music_union_picks: std::collections::HashMap<usize, String>,
-    /// The row whose full menu the frame's `rowMenu` section carries (the
-    /// GUI Library's right-click item menu): the row the row-menu command
-    /// last named, by its destination identity. The TUI never reads it.
-    pub(in crate::app) gui_library_row_menu_target: Option<crate::app::GuiLibraryMenuRow>,
-    /// The latest `RowsInView` set per Library list (gui-delineated-rows design
-    /// D7): the stable row ids the window last painted with its overscan. The
-    /// core queues a `Row` fetch for each in-view row of the active
-    /// destination's list once navigation is idle, and re-queues an interrupted
-    /// key while its row is still in its set (invariant 27). The TUI never
-    /// reads it.
-    pub(in crate::app) gui_rows_in_view:
-        std::collections::HashMap<crate::app::gui_library::GuiRowArtScope, Vec<String>>,
-    /// The Home row the GUI Library's Hero shows (design D2, D12): the row
-    /// the select command last named, as the Home-stable id the Home paths
-    /// resolve. A row whose item the Home data no longer carries falls back
-    /// to the first item row in the projection, so the Hero's default is
-    /// never blank. The TUI never reads it.
-    pub(in crate::app) gui_home_selection: Option<crate::app::gui_library::GuiHomeRowId>,
-    /// The flat Shows row whose Hero the GUI holds (gui-collection-dropdown
-    /// design D9): the New row the select command last named. The projection
-    /// falls back to the first New row, so the Hero is never blank, and an
-    /// Upcoming row is display-only and never lands here.
-    pub(in crate::app) gui_shows_flat_selection: Option<String>,
-    /// The GUI Shows destination's single view per library (design D8): All,
-    /// New, or Upcoming. A library with no entry shows All, the default.
-    pub(in crate::app) gui_shows_views:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiShowsView>,
-    /// The GUI Shows New list's per-library source (gui-collection-dropdown
-    /// design D9): each Emby TV library's latest episodes, keyed by the
-    /// library id, filled by the GUI launch's one worker fetch per library.
-    /// An absent entry has not been requested, `Requesting` is in flight, and
-    /// `Landed` holds the rows — empty when the fetch returned nothing or
-    /// failed, so the view paints its empty state and does not re-request.
-    /// The view merges every library's landed list by `date_added`, newest
-    /// first, and de-duplicates by item id. It lives outside `nav_stack`, so
-    /// the TUI's own levels stay unchanged, and the TUI never reads it.
-    pub(in crate::app) gui_shows_new: std::collections::HashMap<
-        String,
-        crate::app::gui_library::GuiSectionRequest<mbv_emby_model::EmbyItem>,
-    >,
-    /// The GUI Library's Shows selection (add-gui-library-panel design D12,
-    /// the USER-APPROVED GUI Shows design): per Shows library, the active
-    /// view mode (default from `resolve_tv_content_mode`), the selected
-    /// series, and the selected season. The TUI never reads it.
-    pub(in crate::app) gui_tv_shows:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiTvShowsSelection>,
-    /// The GUI Library's own state per Emby library (add-gui-library-panel
-    /// design D12, row 8.1; gui-collection-dropdown design D2, D3): the row
-    /// the Hero shows, and a feed-view library's claim on its fetched results.
-    /// The feed-view library's checked folders are the separate
-    /// `gui_emby_feed_sets` store, so the library tab's own
-    /// `feed_home_video` selection stays the TUI's. The TUI never reads it.
-    pub(in crate::app) gui_emby_libs:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLibrarySelection>,
-    /// The GUI Library's Emby feed-group selection (add-gui-library-panel
-    /// design D12, row 8.1; gui-collection-dropdown design D2, D3, D4): per
-    /// feed-group library, one stored selection — the checked folders (or
-    /// All) and the list's date order. The GUI reads and fills the library tab's shared
-    /// `feed_home_video` cache without writing its `selection`, so the TUI's
-    /// own pill selection stays the TUI's. A library with no entry has set no
-    /// GUI selection and reads All on Newest; the store is session memory
-    /// only. The TUI never reads it.
-    pub(in crate::app) gui_emby_feed_sets:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSelection>,
-    /// The GUI Library's Emby root-list store (row 8.1): each plain Emby
-    /// library's full root list, paged to completion, keyed by the library
-    /// index. It lands outside `nav_stack`, because the TUI's root path
-    /// buckets a large library by letter range and pages a smaller one as its
-    /// cursor moves, so neither serves the full flat list the letter rail
-    /// reads. The TUI never reads it.
-    pub(in crate::app) gui_emby_roots:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyRootItems>,
-    /// The GUI Library's Audiobooks selection (add-gui-library-panel design
-    /// D12, row 9.1): per Audiobookshelf book library, the book the Hero
-    /// shows, by stable `library_item_id`. The TUI's own resting selection is
-    /// the browse state's `selected_id`, which this store never writes, so
-    /// the two Clients' selections stay independent. The TUI never reads it.
-    pub(in crate::app) gui_abs_libs:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiAudiobooksSelection>,
-    /// The GUI Library's Podcasts selection (add-gui-library-panel design
-    /// D12, row 10.1; gui-collection-dropdown design D1, D2): per podcast
-    /// library, the checked shows (default All), the date order (default
-    /// Newest), and the episode the Hero shows, by the provider's
-    /// `(library_item_id, episode_id)` identity. The browse state's
-    /// `committed_show_pill` is the one write both Clients make — the bounded
-    /// fan-out's scope reads it — while the browse state's own selected show
-    /// and episode stay the TUI's. The TUI never reads this store.
-    pub(in crate::app) gui_podcast_libs:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiPodcastsSelection>,
-    /// The GUI Library's Feeds selection (add-gui-library-panel design D12,
-    /// row 11.1; gui-collection-dropdown design D1, D2): the checked
-    /// subscriptions (default All), the date order (default Newest), and the
-    /// entry the Hero shows, by the entry's stable `guid`. One feed tab exists
-    /// per Client, so one store holds it. The TUI's feed group and Watched
-    /// filter stay the TUI owner's, and the TUI never reads this store.
-    pub(in crate::app) gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection,
-    /// The GUI Library panel's list sorts (gui-flat-list-sort design D3):
-    /// one sort per destination, keyed by the destination's stable identity
-    /// and held in the order the destinations were first sorted, so a set
-    /// replaces its entry in place. A destination with no entry reads its
-    /// target's default. The TUI never reads it.
-    pub(in crate::app) gui_list_sorts: Vec<(
-        mbv_config::TabIdentity,
-        crate::app::gui_library::GuiListSort,
-    )>,
-    /// The GUI Library's Search store (add-gui-library-panel design D12, row
-    /// 12.1): the live query, whether its result is still out, whether it
-    /// failed, and the result rows. The GUI mounts no search component, so the
-    /// GUI tick host drains the App's search channel into this store through
-    /// `App::drain_gui_search_results`. The TUI keeps its own drain into the
-    /// mounted `SearchSidebarComponent`, and it never reads this store.
-    pub(in crate::app) gui_search: crate::app::gui_library::GuiSearchStore,
+    /// The neutral facts this Client differs on (design D6a): each capability
+    /// stands for one thing a Client presents, so the core reads a fact and
+    /// never names a Client. Each Client builds its own value: `App::build`
+    /// starts empty and the Owner attach records the Client's own set before
+    /// its first step. The terminal-panel rules and the visual-slot controls
+    /// gate the mini view, the hidden empty queue column, and the visualizer
+    /// and visual-slot hide setters.
+    pub(in crate::app) client_capabilities: ClientCapabilities,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the
@@ -448,7 +307,7 @@ pub struct App {
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
     pub(in crate::app) queue_card_projection: mbv_ui_model::playback::QueueCardProjection,
-    pub(in crate::app) title_log_gate: crate::app::state::projection::card::TitleLogGate,
+    pub(in crate::app) title_log_gate: crate::app::state::projection::card::artwork::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
@@ -491,7 +350,7 @@ pub struct App {
     /// `state::queue_deferrals`; this is the only place slot ownership lives.
     pub(in crate::app) queue_deferrals: QueueDeferrals,
     pub(in crate::app) use_nerd_fonts: bool,
-    pub(in crate::app) indicator_style: render::indicators::IndicatorStyle,
+    pub(in crate::app) indicator_style: mbv_ui_model::indicators::IndicatorStyle,
     pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
@@ -560,36 +419,25 @@ pub struct App {
     /// disarmed by an armed-dispatch outcome, and silently cleared on any
     /// mouse event. Sticky until a disarm event; no timed expiry.
     pub(in crate::app) prefix_armed: bool,
-    /// The GUI Client's Client-core presentation state (add-tauri-gui-client
-    /// row 6.2): the canvas panel's collapse (`z`) and queue-fold (`q`)
-    /// toggles. The Client core holds them, so a window-content reload keeps
-    /// them; the TUI Client never reads them.
-    pub(in crate::app) panel_collapsed: bool,
-    /// The `q` toggle: the expanded panel's queue folded to its one-line
-    /// summary.
-    pub(in crate::app) queue_folded: bool,
     /// The queue filter's text: it narrows the projected rows locally and
     /// never touches the canonical queue. Empty text filters nothing.
     pub(in crate::app) queue_filter: String,
     /// Whether the queue filter's text entry holds the keyboard: the fact
     /// that suppresses the global bindings while the user types.
     pub(in crate::app) queue_filter_active: bool,
-    /// The GUI Client's open overlay: the queue row's menu or a track chip's
-    /// popover (design D4a). `None` while none is open.
-    pub(in crate::app) gui_overlay: Option<GuiOverlay>,
-    /// The GUI Settings screen's open state (`add-gui-settings-screen`
-    /// design D2): `None` while closed. The GUI core thread's drain drives it
-    /// and its focus sync mirrors it onto the core `FocusStack`; the TUI
-    /// Client never sets it (its Settings sidebar keeps its own shell state).
-    pub(in crate::app) gui_settings: Option<crate::app::gui_settings::GuiSettingsState>,
-    /// Whether the GUI's Playlists screen is open.
-    pub(in crate::app) gui_playlists_open: bool,
-    /// The UI-reset counter the GUI frame carries (`add-gui-settings-screen`
-    /// design D10): the front end resets its interaction stores when the value
-    /// changes. Row 5.6 raises it. The TUI Client never reads it.
-    pub(in crate::app) gui_ui_reset_epoch: u64,
     pub(in crate::app) force_clear: bool,
-    pub(in crate::app) tab_scroll: usize,
+    /// Set by the core where the tab strip must reveal the current tab
+    /// (design D6b): the tab-strip scroll is TUI presentation, so the TUI
+    /// shell runs its reveal rule after every update step and tick drain and
+    /// clears this. The GUI ignores it, since it has its own tab strip.
+    pub(in crate::app) tab_reveal_requested: bool,
+    /// Emby libraries whose Wide TV series Workspace the Client last painted
+    /// wide. The breakpoint is terminal geometry, so only a Client computes
+    /// it; this set is the Client's write-back, and the core reads it for the
+    /// one activation branch both Clients reach (design D2). The TUI sets it
+    /// from its painted layout each sync pass; a Client that paints no such
+    /// workspace leaves it empty.
+    pub(in crate::app) tv_workspace_wide: std::collections::HashSet<usize>,
     pub(in crate::app) ui_volume: u8,
     pub(in crate::app) pre_mute_volume: Option<u8>,
     pub(in crate::app) mute_on: bool,
@@ -627,10 +475,11 @@ pub struct App {
     /// `Primary` image; never an artist key. Cleared on Service swap.
     pub(in crate::app) artist_name_item_ids: std::collections::HashMap<String, String>,
     /// Normalized artist name -> its artist search state while the name has no
-    /// resolved id (`gui_library::artist_lookup`). Cleared on Service swap.
+    /// resolved id (`dispatch::library::artist_lookup`). Cleared on Service
+    /// swap.
     pub(in crate::app) artist_name_lookups: std::collections::HashMap<
         String,
-        crate::app::gui_library::artist_lookup::GuiArtistNameLookup,
+        crate::app::dispatch::library::artist_lookup::ArtistNameLookupEntry,
     >,
     /// Per-level album-artist fill lifecycle: one background request fills
     /// every album bucket in a level, so the fill state is keyed by level id
@@ -691,6 +540,11 @@ pub struct App {
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
     pub(in crate::app) images: mbv_images::cache::ImageCache,
+    /// This Client's terminal image protocols: the pickers, the resize worker,
+    /// and the encoding of every cached key a TUI painter renders (design
+    /// D7). A Client that paints no terminal protocol (`mbv-gui`) never
+    /// initializes the pickers, so its store builds no encoding.
+    pub(in crate::app) image_protocols: mbv_tui_support::ImageProtocols,
     /// What this Client's image fetches keep (design D14), chosen at
     /// construction and passed to every fetch thread.
     pub(in crate::app) image_decode: mbv_images::ImageDecode,
@@ -719,9 +573,6 @@ pub struct App {
     /// palette, held while Settings is open so cycling can return to it
     /// (issue #875). Cleared each time Settings mounts; never persisted.
     pub(in crate::app) accent_custom: Option<mbv_config::PanelAccentColor>,
-    /// The last sync pass that saw a live resize drag; starts the settle
-    /// window (invariant 20). The live bit stays with the gesture components.
-    pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
     #[cfg(any(test, feature = "test"))]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
     /// How many cast discovery browses this `App` started. Only the Clients'
@@ -757,27 +608,25 @@ impl App {
     /// Library column. Runs before the restore settles, so only the
     /// `Pending` snapshot can exist here; the user can still switch focus
     /// once the session runs, and teardown keeps saving the actual focus.
+    /// Adopt the GUI Client's launch-location rule (design D6a): the GUI's
+    /// own launch location replaces the TUI's, so this `App` starts with
+    /// `LaunchRestore::Done` and no TUI launch state moves its tab or Panel
+    /// focus. A Client that arranges its own launch calls it before its first
+    /// step; the TUI Client never does, so the TUI's launch restore does not
+    /// change.
+    pub fn skip_launch_restore(&mut self) {
+        self.launch_restore = LaunchRestore::Done;
+    }
+
     pub(crate) fn pin_launch_focus_to_queue(&mut self) {
         // Written directly, not through `set_panel_focus`: at construct time
-        // the terminal size is still the placeholder 80, and this rule must
+        // the shell has not recorded a terminal size yet, and this rule must
         // not depend on which branch a size-dependent setter would take.
         self.panel_focus = PanelFocus::Queue;
         self.focus_queue_initial_item();
         if let LaunchRestore::Pending(state) = &mut self.launch_restore {
             state.panel_focus = mbv_config::LaunchPanelFocus::Queue;
         }
-    }
-
-    pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
-        let normalized = mbv_render::arrangements::queue::normalize_queue_column_width(
-            self.queue_column_width,
-            self.terminal_width,
-        );
-        if normalized == self.queue_column_width {
-            return false;
-        }
-        self.queue_column_width = normalized;
-        true
     }
 }
 

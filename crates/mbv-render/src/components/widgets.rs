@@ -3,6 +3,7 @@ use crate::components::media_list::queue_row_background;
 use mbv_core::service_runtime::ServiceState;
 use mbv_theme as palette;
 use mbv_theme::{HINT_CHIPS, Role};
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -10,10 +11,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
-
-// Configured music albums need the image worker's child-audio lookup; their
-// album containers do not reliably expose usable Primary images.
-pub const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
 
 /// Resolve the glyph colour from the service's connection state.
 #[must_use]

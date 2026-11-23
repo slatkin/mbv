@@ -8,6 +8,7 @@
 use mbv_ui_model::tab_selection::TabSelection;
 
 use crate::app::App;
+use crate::gui::GuiCore;
 
 /// The destination kind one tab position names (design D2, D12): the one
 /// abstraction the top bar, the content gate, and the launch restore read,
@@ -81,129 +82,13 @@ pub struct GuiLibraryTabs {
     pub current: Option<usize>,
 }
 
-impl App {
+impl GuiCore {
     /// The active destination's kind (design D2, D12): the one fact the
     /// content gate, the tabs' current mark, and the Shows open step read.
     /// `None` for every destination the GUI does not present yet.
     #[must_use]
     pub fn gui_active_destination(&self) -> Option<GuiDestinationKind> {
-        match self.tab {
-            TabSelection::Home => Some(GuiDestinationKind::Home),
-            // The feed tab presents while subscriptions are configured, so a
-            // subscription set the session emptied presents no destination.
-            TabSelection::Feeds if self.has_feeds_subscriptions() => {
-                Some(GuiDestinationKind::Feeds)
-            }
-            TabSelection::EmbyLibrary(lib_idx) if lib_idx < self.libs.len() => {
-                if self.is_grouped_music_library(lib_idx) {
-                    Some(GuiDestinationKind::Music { lib_idx })
-                } else if self.libs[lib_idx].library.collection_type == "tvshows" {
-                    Some(GuiDestinationKind::Shows { lib_idx })
-                } else {
-                    Some(GuiDestinationKind::Library { lib_idx })
-                }
-            }
-            TabSelection::AudiobookshelfLibrary(index)
-                if index < self.audiobookshelf_libraries.len() =>
-            {
-                match self.audiobookshelf_kind_at(index) {
-                    Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
-                        Some(GuiDestinationKind::Audiobooks { lib_idx: index })
-                    }
-                    Some(
-                        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast,
-                    ) => Some(GuiDestinationKind::Podcasts { lib_idx: index }),
-                    None => None,
-                }
-            }
-            _ => None,
-        }
-    }
-
-    /// The tab position one presented destination's tab takes (design D2):
-    /// the position the open-destination command takes. `None` for Home,
-    /// which names no library tab, and for Feeds while no subscription makes
-    /// its tab. Every destination kind is named, so a new kind is a compile
-    /// error here rather than a tab that silently takes another kind's
-    /// position.
-    pub(in crate::app::gui_library) fn gui_destination_position(
-        &self,
-        kind: GuiDestinationKind,
-    ) -> Option<usize> {
-        let emby_position = |lib_idx: usize| {
-            TabSelection::EmbyLibrary(lib_idx)
-                .to_position_with_counts(self.libs.len(), self.feeds_tab_pos())
-        };
-        match kind {
-            GuiDestinationKind::Home => None,
-            GuiDestinationKind::Feeds => self.feeds_tab_pos(),
-            GuiDestinationKind::Music { lib_idx }
-            | GuiDestinationKind::Shows { lib_idx }
-            | GuiDestinationKind::Library { lib_idx } => Some(emby_position(lib_idx)),
-            GuiDestinationKind::Audiobooks { lib_idx }
-            | GuiDestinationKind::Podcasts { lib_idx } => Some(
-                TabSelection::AudiobookshelfLibrary(lib_idx)
-                    .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
-            ),
-        }
-    }
-
-    /// The tab positions the GUI presents, Home first (design D2): Home's
-    /// position 0, then every presented destination's position in tab order.
-    /// The destination steps read this one list, so a step never lands on a
-    /// tab position that names no presented destination.
-    fn presented_tab_positions(&self) -> Vec<usize> {
-        let mut positions = vec![0];
-        positions.extend(
-            self.presented_destinations()
-                .into_iter()
-                .filter_map(|kind| self.gui_destination_position(kind)),
-        );
-        positions.sort_unstable();
-        positions.dedup();
-        positions
-    }
-
-    /// Step the active destination by `step` presented tabs, wrapping (design
-    /// D2): the GUI Client's `Tab` and `Shift+Tab`, which the window content
-    /// does not take. The step opens the destination it lands on through the
-    /// one open step, so a router step opens as a press on the tab does, and
-    /// it visits only the presented set — a destination the top bar does not
-    /// paint is never opened. A tab state outside that set (no catalog yet)
-    /// starts the step at Home.
-    pub(in crate::app) fn step_gui_library_tab(&mut self, step: isize) {
-        let positions = self.presented_tab_positions();
-        let current = self
-            .tab
-            .to_position_with_counts(self.libs.len(), self.feeds_tab_pos());
-        let index = positions
-            .iter()
-            .position(|position| *position == current)
-            .unwrap_or(0);
-        let len = isize::try_from(positions.len()).unwrap_or(1);
-        let index = isize::try_from(index).unwrap_or(0);
-        let next = usize::try_from((index + step).rem_euclid(len)).unwrap_or(0);
-        self.open_gui_library_position(positions[next]);
-    }
-
-    /// One presented destination's tab label (design D2): the library's
-    /// display name, or the Feeds tab's fixed label, as the TUI's tab strip
-    /// paints it. Every destination kind is named, so a new kind is a compile
-    /// error here rather than a tab that silently takes another kind's label.
-    fn gui_destination_label(&self, kind: GuiDestinationKind) -> Option<String> {
-        match kind {
-            GuiDestinationKind::Home => None,
-            GuiDestinationKind::Feeds => Some("Feeds".to_string()),
-            GuiDestinationKind::Audiobooks { lib_idx }
-            | GuiDestinationKind::Podcasts { lib_idx } => {
-                Some(self.audiobookshelf_libraries.get(lib_idx)?.name.clone())
-            }
-            GuiDestinationKind::Music { lib_idx }
-            | GuiDestinationKind::Shows { lib_idx }
-            | GuiDestinationKind::Library { lib_idx } => {
-                Some(self.libs.get(lib_idx)?.library.name.clone())
-            }
-        }
+        active_destination(&self.app)
     }
 
     /// The destination tabs the Library panel's frame carries (design D2):
@@ -215,18 +100,151 @@ impl App {
     /// and the restore cannot disagree.
     #[must_use]
     pub fn gui_library_tabs(&self) -> GuiLibraryTabs {
-        let tabs = self
-            .presented_destinations()
-            .into_iter()
-            .filter_map(|kind| {
-                let position = self.gui_destination_position(kind)?;
-                let label = self.gui_destination_label(kind)?;
-                Some(GuiLibraryTab { position, label })
-            })
-            .collect();
-        let current = self
-            .gui_active_destination()
-            .and_then(|kind| self.gui_destination_position(kind));
-        GuiLibraryTabs { tabs, current }
+        library_tabs(&self.app)
     }
+
+    /// Step the active destination by `step` presented tabs, wrapping (design
+    /// D2): the GUI Client's `Tab` and `Shift+Tab`, which the window content
+    /// does not take. The step opens the destination it lands on through the
+    /// core's one open step, so a router step opens as a press on the tab
+    /// does, and it visits only the presented set — a destination the top bar
+    /// does not paint is never opened. A tab state outside that set (no
+    /// catalog yet) starts the step at Home.
+    ///
+    /// The step runs on this core's own state: the open step it calls keeps
+    /// the state it leaves (a destination's `Loading` mark among it), exactly
+    /// as the window's open-destination command does.
+    pub(in crate::app) fn step_gui_library_tab(&mut self, step: isize) {
+        let positions = presented_tab_positions(&self.app);
+        let current = self
+            .app
+            .tab
+            .to_position_with_counts(self.app.libs.len(), self.app.feeds_tab_pos());
+        let index = positions
+            .iter()
+            .position(|position| *position == current)
+            .unwrap_or(0);
+        let len = isize::try_from(positions.len()).unwrap_or(1);
+        let index = isize::try_from(index).unwrap_or(0);
+        let next = usize::try_from((index + step).rem_euclid(len)).unwrap_or(0);
+        self.open_gui_library_position(positions[next]);
+    }
+}
+
+/// The active destination's kind over the `App` the GUI core owns (design D2,
+/// D12): the one fact the content gate, the tabs' current mark, and the Shows
+/// open step read. `None` for every destination the GUI does not present yet.
+#[must_use]
+pub(in crate::app) fn active_destination(app: &App) -> Option<GuiDestinationKind> {
+    match app.tab {
+        TabSelection::Home => Some(GuiDestinationKind::Home),
+        // The feed tab presents while subscriptions are configured, so a
+        // subscription set the session emptied presents no destination.
+        TabSelection::Feeds if app.has_feeds_subscriptions() => Some(GuiDestinationKind::Feeds),
+        TabSelection::EmbyLibrary(lib_idx) if lib_idx < app.libs.len() => {
+            if app.is_grouped_music_library(lib_idx) {
+                Some(GuiDestinationKind::Music { lib_idx })
+            } else if app.libs[lib_idx].library.collection_type == "tvshows" {
+                Some(GuiDestinationKind::Shows { lib_idx })
+            } else {
+                Some(GuiDestinationKind::Library { lib_idx })
+            }
+        }
+        TabSelection::AudiobookshelfLibrary(index)
+            if index < app.audiobookshelf_libraries.len() =>
+        {
+            match app.audiobookshelf_kind_at(index) {
+                Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
+                    Some(GuiDestinationKind::Audiobooks { lib_idx: index })
+                }
+                Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast) => {
+                    Some(GuiDestinationKind::Podcasts { lib_idx: index })
+                }
+                None => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The tab position one presented destination's tab takes (design D2): the
+/// position the open-destination command takes. `None` for Home, which names
+/// no library tab, and for Feeds while no subscription makes its tab. Every
+/// destination kind is named, so a new kind is a compile error here rather
+/// than a tab that silently takes another kind's position.
+#[must_use]
+pub(in crate::app) fn destination_position(app: &App, kind: GuiDestinationKind) -> Option<usize> {
+    let emby_position = |lib_idx: usize| {
+        TabSelection::EmbyLibrary(lib_idx)
+            .to_position_with_counts(app.libs.len(), app.feeds_tab_pos())
+    };
+    match kind {
+        GuiDestinationKind::Home => None,
+        GuiDestinationKind::Feeds => app.feeds_tab_pos(),
+        GuiDestinationKind::Music { lib_idx }
+        | GuiDestinationKind::Shows { lib_idx }
+        | GuiDestinationKind::Library { lib_idx } => Some(emby_position(lib_idx)),
+        GuiDestinationKind::Audiobooks { lib_idx } | GuiDestinationKind::Podcasts { lib_idx } => {
+            Some(
+                TabSelection::AudiobookshelfLibrary(lib_idx)
+                    .to_position_with_counts(app.libs.len(), app.feeds_tab_pos()),
+            )
+        }
+    }
+}
+
+/// The tab positions the GUI presents, Home first (design D2): Home's position
+/// 0, then every presented destination's position in tab order. The
+/// destination steps read this one list, so a step never lands on a tab
+/// position that names no presented destination.
+fn presented_tab_positions(app: &App) -> Vec<usize> {
+    let mut positions = vec![0];
+    positions.extend(
+        super::launch::presented_destinations(app)
+            .into_iter()
+            .filter_map(|kind| destination_position(app, kind)),
+    );
+    positions.sort_unstable();
+    positions.dedup();
+    positions
+}
+
+/// One presented destination's tab label (design D2): the library's display
+/// name, or the Feeds tab's fixed label, as the TUI's tab strip paints it.
+/// Every destination kind is named, so a new kind is a compile error here
+/// rather than a tab that silently takes another kind's label.
+fn destination_label(app: &App, kind: GuiDestinationKind) -> Option<String> {
+    match kind {
+        GuiDestinationKind::Home => None,
+        GuiDestinationKind::Feeds => Some("Feeds".to_string()),
+        GuiDestinationKind::Audiobooks { lib_idx } | GuiDestinationKind::Podcasts { lib_idx } => {
+            Some(app.audiobookshelf_libraries.get(lib_idx)?.name.clone())
+        }
+        GuiDestinationKind::Music { lib_idx }
+        | GuiDestinationKind::Shows { lib_idx }
+        | GuiDestinationKind::Library { lib_idx } => {
+            Some(app.libs.get(lib_idx)?.library.name.clone())
+        }
+    }
+}
+
+/// The destination tabs the Library panel's frame carries over the `App` the
+/// GUI core owns (design D2): the presented destinations in catalog order —
+/// one tab per Grouped Music and Shows library, per plain Emby library, per
+/// Audiobookshelf library of either kind, and the Feeds tab — and the active
+/// tab's position when the active destination is one of them. The presented
+/// list is the launch restore's (`presented_destinations`), so the top bar and
+/// the restore cannot disagree.
+#[must_use]
+pub(in crate::app) fn library_tabs(app: &App) -> GuiLibraryTabs {
+    let tabs = super::launch::presented_destinations(app)
+        .into_iter()
+        .filter_map(|kind| {
+            let position = destination_position(app, kind)?;
+            let label = destination_label(app, kind)?;
+            Some(GuiLibraryTab { position, label })
+        })
+        .collect();
+    let current = active_destination(app).and_then(|kind| destination_position(app, kind));
+    GuiLibraryTabs { tabs, current }
 }

@@ -24,13 +24,18 @@ use mbv_render::components::card::queue_card_reserved_rect;
 use mbv_render::components::widgets::fill_surface;
 use mbv_render::layout::CardGeometry;
 use mbv_render::{StatusBarModel, VisualModeIndicator};
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
-pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
-    let area = app
-        .compute_chrome_geometry(Rect::new(0, 0, app.terminal_width, app.terminal_height))
-        .panel_area;
+pub(crate) fn sync_panel_area(app: &App, terminal_size: (u16, u16)) -> Option<Rect> {
+    let area = super::draw::compute_chrome_geometry(
+        app,
+        0,
+        terminal_size.0,
+        Rect::new(0, 0, terminal_size.0, terminal_size.1),
+    )
+    .panel_area;
     (area.width > 0 && area.height > 0).then_some(area)
 }
 
@@ -40,55 +45,55 @@ impl Model {
     /// remains read-only with respect to `AppLayout`.
     pub(in crate::app) fn sync_queue_card_geometry(&mut self) {
         if !self.app.visual_slot_shown() {
-            self.app.layout.card = CardGeometry::default();
+            self.layout.card = CardGeometry::default();
             return;
         }
-        let chrome = self.app.compute_chrome_geometry(Rect::new(
-            0,
-            0,
-            self.app.terminal_width,
-            self.app.terminal_height,
-        ));
+        let chrome = super::draw::compute_chrome_geometry(
+            &self.app,
+            self.layout.card.height,
+            self.terminal_width,
+            Rect::new(0, 0, self.terminal_width, self.terminal_height),
+        );
         if chrome.left_area.width == 0 {
-            self.app.layout.card = CardGeometry::default();
+            self.layout.card = CardGeometry::default();
             return;
         }
         // The slot region below the always-reserved header band, resolved
         // from the same placement the sync/paint passes use.
         let Some(placement) = chrome.root.queue_playback else {
-            self.app.layout.card = CardGeometry::default();
+            self.layout.card = CardGeometry::default();
             return;
         };
         let slot_region = queue_playback_slot_region(placement);
         let wide = queue_playback_column_wide(chrome.left_area.width);
         let rect = queue_card_reserved_rect(
             self.app.images.last_card_size(),
-            self.app.terminal_height,
+            self.terminal_height,
             slot_region,
             wide,
         );
-        self.app.layout.card = CardGeometry {
+        self.layout.card = CardGeometry {
             height: rect.height,
             width: rect.width,
         };
     }
 
-    /// Paint-free chrome geometry for the sync pass. `compute_chrome_geometry`
-    /// is a pure read of `App` state (its S0 doc comment), so the panel mounts
+    /// Paint-free chrome geometry for the sync pass.
+    /// `draw::compute_chrome_geometry` is a pure read of `App` state (its S0
+    /// doc comment), so the panel mounts
     /// are decidable here — before any draw — from the same computation the
     /// draw path publishes as `AppLayout.root_frame`. Deciding from the
     /// published `root_frame` instead would leave a placement that just
     /// appeared (startup, or leaving mini-view) unmounted for the first frame
     /// that shows it.
     fn sync_chrome_root(&self) -> RootFrame {
-        self.app
-            .compute_chrome_geometry(ratatui::layout::Rect::new(
-                0,
-                0,
-                self.app.terminal_width,
-                self.app.terminal_height,
-            ))
-            .root
+        super::draw::compute_chrome_geometry(
+            &self.app,
+            self.layout.card.height,
+            self.terminal_width,
+            ratatui::layout::Rect::new(0, 0, self.terminal_width, self.terminal_height),
+        )
+        .root
     }
 }
 
@@ -203,7 +208,7 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<TabPanel>()
         {
-            panel.set_content(titles, markers, selected, self.app.tab_scroll);
+            panel.set_content(titles, markers, selected, self.tab_scroll);
         }
     }
 
@@ -241,9 +246,9 @@ impl Model {
             .filter(|summary| summary.count > 0)
             .map(|summary| (self.app.effective_panel_focus(), summary.count));
         let model = StatusBarModel {
-            mute: self.app.mute_status_spans(),
-            volume: self.app.volume_status_spans(),
-            right: self.app.status_bar_right_spans(),
+            mute: super::chrome_status::mute_status_spans(&self.app),
+            volume: super::chrome_status::volume_status_spans(&self.app),
+            right: super::chrome_status::status_bar_right_spans(self),
             visual_mode: self
                 .visual_selection
                 .map(|(_, count)| VisualModeIndicator { count }),
@@ -287,7 +292,7 @@ impl Model {
             placement.map(|placement| {
                 let slot_region = queue_playback_slot_region(placement);
                 let wide = queue_playback_column_wide(placement.width);
-                let card = &self.app.layout.card;
+                let card = &self.layout.card;
                 queue_playback_transport_area(slot_region, wide, card.width, card.height)
             })
         };
@@ -303,7 +308,7 @@ impl Model {
                     let wide = queue_playback_column_wide(placement.width);
                     queue_card_reserved_rect(
                         self.app.images.last_card_size(),
-                        self.app.terminal_height,
+                        self.terminal_height,
                         slot_region,
                         wide,
                     )
@@ -373,8 +378,13 @@ impl Model {
             slot_region,
         );
         if self.app.visual_slot_shown() {
-            self.app
-                .render_queue_playback_slot(frame, slot_region, wide);
+            super::queue_card::render_queue_playback_slot(
+                &mut self.app,
+                self.terminal_height,
+                frame,
+                slot_region,
+                wide,
+            );
         }
         self.application.view(&id, frame, placement);
     }

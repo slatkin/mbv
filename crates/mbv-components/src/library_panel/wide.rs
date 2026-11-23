@@ -25,6 +25,7 @@ use mbv_theme as palette;
 use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
 use super::hero_composition::{full_width_claim, paint_library_hero_content};
 use super::slots::{paint_pill_row_gap, paint_selector_row};
+use mbv_ui_model::library_hero::PanelHeroImagePaint;
 
 #[must_use]
 pub fn selector_row_visible(content: &LibraryPanelContent<'_>) -> bool {
@@ -84,7 +85,7 @@ pub struct WideSkeletonGeometry {
     pub workspace: Option<(Rect, Rect)>,
     /// The projected hero image's paint (task 5.10, design D9), when the
     /// header reserved a ready image's box.
-    pub hero_image: Option<super::content::PanelHeroImagePaint>,
+    pub hero_image: Option<PanelHeroImagePaint>,
     pub overview_box: Option<Rect>,
     pub overview_content_length: usize,
     pub overview_viewport: usize,

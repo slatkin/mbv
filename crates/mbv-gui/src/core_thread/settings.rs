@@ -8,9 +8,8 @@
 //! The Settings screen's UI reset lives here too (design D10): its steps span
 //! the App and this thread's own state, so the command runs them in one place.
 
-use mbv::{GuiSettingsGroup, GuiSettingsSection, TickOutcome};
+use mbv::TickOutcome;
 use mbv_ui_model::overlay::{OverlayRequest, SidebarId};
-use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::{ComponentId, OverlayId};
 
 use super::CoreThread;
@@ -38,16 +37,28 @@ impl CoreThread {
     pub(super) fn reset_gui_ui_state(&mut self) {
         // Step 1: abandon the saved launch restore, then Home.
         self.launch_restore = GuiLaunchRestore::Done;
-        self.app.reset_gui_ui_state();
+        self.core.reset_gui_ui_state();
         // Step 3's core half: the Queue Surface's cursor, marks, and viewport.
         // The queue's contents and the viewed link stay.
         self.queue.reset_presentation();
         // Steps 4 to 6: the overlays and the Settings screen already closed
         // with the App's steps; the saved launch location goes, then the
         // counter rises.
-        self.app.clear_gui_launch_state();
-        self.app.bump_gui_ui_reset_epoch();
+        self.core.clear_gui_launch_state();
+        self.core.bump_gui_ui_reset_epoch();
     }
+    /// Present the overlays the core handed off for this tick (design D8 of
+    /// `gui-named-queues`): a new queue the local Owner made opens the Queue
+    /// chooser on its name. The core sets the one-shot hand-off, because the
+    /// overlay is this Client's presentation, so the tick takes it here and
+    /// its frame paints the open draft — whether the tick routed an input or
+    /// only drained the Owner's answer.
+    pub(super) fn present_pending_overlay(&mut self, input_received: &mut bool) {
+        if self.core.present_pending_gui_overlay() {
+            *input_received = true;
+        }
+    }
+
     /// Drain the App's pending shell request once per tick (design D2), then
     /// mirror the Settings screen's state onto the core `FocusStack`: opening
     /// pushes `ComponentId::Overlay(OverlayId::Settings)`, closing pops it, so
@@ -64,20 +75,19 @@ impl CoreThread {
     /// too, because a restart ends the tick before the input phase and a
     /// daemon-lost request would otherwise wait a tick.
     pub(super) fn apply_pending_overlay_request(&mut self, input_received: &mut bool) {
-        if let Some(request) = self.app.take_pending_overlay() {
+        if let Some(request) = self.core.app_mut().take_pending_overlay() {
             *input_received = true;
             match &request {
                 OverlayRequest::ToggleSidebar(sidebar) => match sidebar {
                     // F2 toggles the F2 group — every section except the two
-                    // sidebars' own (design D2, the spec's open-action rule).
-                    SidebarId::Settings => {
-                        self.app.toggle_gui_settings(GuiSettingsGroup::F2);
+                    // sidebars' own (design D2, the spec's open-action rule) —
+                    // and F3 toggles the Sessions group: the Settings screen's
+                    // own entry owns both rules.
+                    SidebarId::Settings | SidebarId::Sessions => {
+                        self.core.apply_gui_settings_overlay(&request);
                     }
-                    // F3 and F4 toggle their own sections.
-                    SidebarId::Sessions => {
-                        self.app.toggle_gui_settings(GuiSettingsGroup::Sessions);
-                    }
-                    SidebarId::Playlists => self.app.toggle_gui_playlists(),
+                    // F4 toggles the Playlists screen.
+                    SidebarId::Playlists => self.core.toggle_gui_playlists(),
                     // Search has no toggle request path: its open raises
                     // `OpenSidebar(Search)` below, which the GUI drops too.
                     SidebarId::Search => log_undelivered(&request),
@@ -87,16 +97,7 @@ impl CoreThread {
                     // reach the GUI here: the section the App's
                     // `settings_destination` names opens (design D2).
                     SidebarId::Settings => {
-                        let section = match self.app.gui_settings_destination() {
-                            SettingsDestination::Services | SettingsDestination::Main => {
-                                GuiSettingsSection::Services
-                            }
-                            SettingsDestination::Keys => GuiSettingsSection::Keys,
-                            // The Panel page is TUI state (design D4); the
-                            // GUI maps it to Services.
-                            SettingsDestination::Panel => GuiSettingsSection::Services,
-                        };
-                        self.app.open_gui_settings_at(section);
+                        self.core.apply_gui_settings_overlay(&request);
                     }
                     // The GUI presents no Search sidebar, and the two other
                     // ids never raise an open request.
@@ -108,7 +109,7 @@ impl CoreThread {
                     // The playlist play's `ReplacementExecutor` raises this
                     // after the queue replaces (design D2): the screen closes,
                     // so the replaced queue shows.
-                    SidebarId::Playlists => self.app.close_gui_playlists(),
+                    SidebarId::Playlists => self.core.close_gui_playlists(),
                     // The GUI's Sessions and Settings close through the
                     // screen's own commands, and no Search dismissal exists.
                     SidebarId::Settings | SidebarId::Sessions | SidebarId::Search => {
@@ -118,12 +119,14 @@ impl CoreThread {
                 // The confirmation and the daemon-lost dialog present as the
                 // canvas's own blocking overlays, and their dismissals clear
                 // them; the GUI mounts no TUI modal component for either.
-                OverlayRequest::Confirm(modal) => self.app.present_gui_confirm(modal.clone()),
-                OverlayRequest::DaemonLost(modal) => {
-                    self.app.present_gui_daemon_lost(modal.clone());
+                OverlayRequest::Confirm(modal) => {
+                    self.core.present_gui_confirm(modal.clone());
                 }
-                OverlayRequest::DismissConfirm => self.app.dismiss_gui_confirm(),
-                OverlayRequest::DismissDaemonLost => self.app.dismiss_gui_daemon_lost(),
+                OverlayRequest::DaemonLost(modal) => {
+                    self.core.present_gui_daemon_lost(modal.clone());
+                }
+                OverlayRequest::DismissConfirm => self.core.dismiss_gui_confirm(),
+                OverlayRequest::DismissDaemonLost => self.core.dismiss_gui_daemon_lost(),
                 // A TUI overlay the GUI does not present (design D2): the
                 // save-playlist and confirm-family modals, the context menu
                 // and its dismissal, and the nested Settings popups (the
@@ -144,7 +147,7 @@ impl CoreThread {
         // The Settings id's stack membership follows the App's state (design
         // D2): the push and the pop are idempotent, so a tick that changed
         // nothing re-records the same membership.
-        if self.app.gui_settings_is_open() {
+        if self.core.gui_settings_is_open() {
             self.focus
                 .push_overlay(ComponentId::Overlay(OverlayId::Settings));
         } else {

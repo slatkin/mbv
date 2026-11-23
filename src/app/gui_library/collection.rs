@@ -132,7 +132,7 @@ impl GuiCollectionSet {
 /// store's set, the Podcasts and Feeds selections' halves, and the Emby
 /// feed-group map's value. The list's sort is not a collection fact, so it
 /// lives in the list-sort store beside the destination's own state
-/// (`App::gui_list_sorts`).
+/// (`App::list_sorts`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiCollectionSelection {
     /// The checked collections, or All. All is the default.

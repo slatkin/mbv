@@ -30,10 +30,10 @@ use crate::mouse::seekbar::{scrub_fraction, seek_fraction};
 use mbv_queue::PlaybackTitleParts;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
-use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::{PlaybackRenderContext, render_player_panel};
 use mbv_surfaces::gesture::PointerGesture;
 use mbv_theme as palette;
+use mbv_ui_model::playback::TransportAvailability;
 use mbv_ui_model::playback::{NowPlayingTitleSite, PlaybackState};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
@@ -305,6 +305,7 @@ impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
 mod tests {
     use super::*;
     use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole};
+    use mbv_tui_support::ToRatatui;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use rstest::rstest;

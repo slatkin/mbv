@@ -1,21 +1,14 @@
 use super::*;
-use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::{make_app_stub, make_remote_app_stub};
 use crate::app::{LibEvent, PlaylistEvent};
-use crossterm::event::{KeyCode, KeyModifiers};
+use mbv_ui_msg::{Key, KeyModifiers};
 
-fn key(code: KeyCode) -> KeyChord {
-    KeyChord::from_key(crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-        code,
-        KeyModifiers::NONE,
-    )))
+fn key(code: Key) -> KeyChord {
+    KeyChord::from_key(mbv_ui_msg::KeyEvent::new(code, KeyModifiers::NONE))
 }
 
-fn key_ctrl(code: KeyCode) -> KeyChord {
-    KeyChord::from_key(crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-        code,
-        KeyModifiers::CONTROL,
-    )))
+fn key_ctrl(code: Key) -> KeyChord {
+    KeyChord::from_key(mbv_ui_msg::KeyEvent::new(code, KeyModifiers::CONTROL))
 }
 /// Focus switches keep the queue card checkpoint: the checkpoint is the
 /// measured image geometry and focus does not change the artwork, so a
@@ -38,7 +31,7 @@ fn focus_panel_keeps_the_card_checkpoint() {
 
 #[test]
 fn o_opens_an_idle_feed_link_only_when_available() {
-    let o = key(KeyCode::Char('o'));
+    let o = key(Key::Char('o'));
     let context =
         |player_active, playback_panel_present_idle, link_available| IdleFeedLinkContext {
             player_active,
@@ -62,7 +55,7 @@ fn o_opens_an_idle_feed_link_only_when_available() {
         None
     );
     assert_eq!(
-        idle_feed_command_for_key(key_ctrl(KeyCode::Char('o')), &context(false, false, true)),
+        idle_feed_command_for_key(key_ctrl(Key::Char('o')), &context(false, false, true)),
         None
     );
 }
@@ -177,9 +170,12 @@ fn playlists_load_error_preserves_existing_list_and_flashes() {
     app.playlists = vec![make_item("Existing", "Playlist")];
     app.playlists_loading = true;
 
-    app.handle_lib_event(LibEvent::Playlist(PlaylistEvent::ListLoadError(
-        "connection refused".to_string(),
-    )));
+    app.handle_lib_event(
+        LibEvent::Playlist(PlaylistEvent::ListLoadError(
+            "connection refused".to_string(),
+        )),
+        None,
+    );
 
     assert!(!app.playlists_loading);
     assert_eq!(app.playlists.len(), 1);
@@ -201,10 +197,13 @@ fn playlist_items_load_error_preserves_existing_items_and_flashes() {
     app.playlists_open_items = vec![make_item("Track 1", "Audio")];
     app.playlists_open_loading = true;
 
-    app.handle_lib_event(LibEvent::Playlist(PlaylistEvent::ItemsLoadError {
-        playlist_id: "id".to_string(),
-        error: "timeout".to_string(),
-    }));
+    app.handle_lib_event(
+        LibEvent::Playlist(PlaylistEvent::ItemsLoadError {
+            playlist_id: "id".to_string(),
+            error: "timeout".to_string(),
+        }),
+        None,
+    );
 
     assert!(!app.playlists_open_loading);
     assert_eq!(app.playlists_open_items.len(), 1);

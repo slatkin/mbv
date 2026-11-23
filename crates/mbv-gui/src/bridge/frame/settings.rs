@@ -14,7 +14,7 @@ pub mod rows;
 pub mod services;
 pub mod sessions;
 
-use mbv::{App, GuiSettingsSection as CoreSettingsSection, QueuePlaybackProjection};
+use mbv::{GuiCore, GuiSettingsSection as CoreSettingsSection, QueuePlaybackProjection};
 
 use self::feeds::GuiSettingsFeed;
 use self::keys::{GuiSettingsKeyRefusal, GuiSettingsKeyRow};
@@ -42,15 +42,15 @@ impl GuiSettingsFrame {
     /// playback projection the same tick already read, so the Settings
     /// chooser's targets and the header's chooser targets are one read.
     #[must_use]
-    pub fn build(app: &App, playback: &QueuePlaybackProjection) -> Option<GuiSettingsFrame> {
-        let state = app.gui_settings()?;
+    pub fn build(core: &GuiCore, playback: &QueuePlaybackProjection) -> Option<GuiSettingsFrame> {
+        let state = core.gui_settings()?;
         Some(Self {
             section: state.section.into(),
             sections: CoreSettingsSection::shown_sections()
                 .into_iter()
                 .map(GuiSettingsSection::from)
                 .collect(),
-            content: GuiSettingsContent::for_section(app, playback, state.section),
+            content: GuiSettingsContent::for_section(core, playback, state.section),
         })
     }
 }
@@ -147,15 +147,15 @@ impl GuiSettingsContent {
     /// rows; the five sections with their own data carry theirs, and Sessions
     /// reads the tick's one playback projection.
     fn for_section(
-        app: &App,
+        core: &GuiCore,
         playback: &QueuePlaybackProjection,
         section: CoreSettingsSection,
     ) -> Self {
         match section {
-            CoreSettingsSection::Services => Self::services(app),
-            CoreSettingsSection::Library => Self::library(app),
-            CoreSettingsSection::Feeds => Self::feeds(app),
-            CoreSettingsSection::Keys => Self::keys(app),
+            CoreSettingsSection::Services => Self::services(core),
+            CoreSettingsSection::Library => Self::library(core),
+            CoreSettingsSection::Feeds => Self::feeds(core),
+            CoreSettingsSection::Keys => Self::keys(core),
             CoreSettingsSection::Sessions => Self::Sessions {
                 targets: sessions::targets(&playback.target_choices),
             },
@@ -165,7 +165,7 @@ impl GuiSettingsContent {
             | CoreSettingsSection::Queue
             | CoreSettingsSection::Mpv
             | CoreSettingsSection::Actions => Self::Rows {
-                rows: app
+                rows: core
                     .gui_settings_rows()
                     .iter()
                     .map(GuiSettingRow::from)
@@ -176,8 +176,8 @@ impl GuiSettingsContent {
 
     /// The Library section's content (design D9): the choice rows, the
     /// routable libraries, the selected library, and its candidate devices.
-    fn library(app: &App) -> Self {
-        let projection = app.gui_settings_library();
+    fn library(core: &GuiCore) -> Self {
+        let projection = core.gui_settings_library();
         Self::Library {
             rows: projection.rows.iter().map(GuiSettingRow::from).collect(),
             routes: projection
@@ -193,8 +193,8 @@ impl GuiSettingsContent {
     }
 
     /// The Services section's content (design D9).
-    fn services(app: &App) -> Self {
-        let projection = app.gui_settings_services();
+    fn services(core: &GuiCore) -> Self {
+        let projection = core.gui_settings_services();
         Self::Services {
             services: projection
                 .services
@@ -206,8 +206,8 @@ impl GuiSettingsContent {
     }
 
     /// The Feeds section's content (design D9).
-    fn feeds(app: &App) -> Self {
-        let projection = app.gui_settings_feeds();
+    fn feeds(core: &GuiCore) -> Self {
+        let projection = core.gui_settings_feeds();
         Self::Feeds {
             subscriptions: projection
                 .subscriptions
@@ -219,8 +219,8 @@ impl GuiSettingsContent {
     }
 
     /// The Keys section's content (design D9).
-    fn keys(app: &App) -> Self {
-        let projection = app.gui_settings_keys();
+    fn keys(core: &GuiCore) -> Self {
+        let projection = core.gui_settings_keys();
         Self::Keys {
             prefix: projection.prefix.clone(),
             rows: projection

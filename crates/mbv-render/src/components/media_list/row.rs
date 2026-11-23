@@ -4,6 +4,7 @@ use crate::components::media_list::{
     MediaSemanticState,
 };
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::ui_util::trunc_str;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};

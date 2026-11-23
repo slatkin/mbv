@@ -14,7 +14,6 @@ use mbv_queue::{QueueItem, QueueLineage, QueueSource};
 use super::RemotePlayer;
 
 impl RemotePlayer {
-    #[cfg(any(test, feature = "test"))]
     pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -22,6 +21,19 @@ impl RemotePlayer {
             active: true,
             ..Default::default()
         }
+    }
+
+    /// The stand-in a parked `App` starts on: the root package builds one in
+    /// every build (a Client wrapper moves its live `App` out of position while
+    /// it runs a core method), so this constructor carries no test gate. It
+    /// answers no event and reaches no daemon.
+    #[must_use]
+    pub fn stub_for_parked_app(
+        items: &[EmbyItem],
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>) {
+        let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx_inner(items, current_idx);
+        (remote, event_rx)
     }
 
     /// Test helper for root-crate integration tests that need a remote-player
@@ -40,8 +52,16 @@ impl RemotePlayer {
         items: impl AsRef<[EmbyItem]>,
         current_idx: usize,
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        Self::stub_with_command_rx_inner(items.as_ref(), current_idx)
+    }
+
+    /// The stub connection's construction, ungated: the test helper and the
+    /// parked `App`'s stand-in both start here.
+    fn stub_with_command_rx_inner(
+        items: &[EmbyItem],
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let slots: Vec<_> = items
-            .as_ref()
             .iter()
             .enumerate()
             .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {

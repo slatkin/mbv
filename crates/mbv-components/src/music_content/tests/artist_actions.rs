@@ -84,7 +84,6 @@ fn artist_action_ids(owner: &mut MusicContent, code: Key) -> Vec<String> {
         Some(Msg::Shell(shell_boxed)) => {
             let ShellRequest::MusicRowContextMenu(
                 mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                _,
             ) = *shell_boxed
             else {
                 panic!("expected an artist album action for {code:?}, got {shell_boxed:?}")

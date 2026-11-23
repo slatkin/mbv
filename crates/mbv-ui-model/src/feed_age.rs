@@ -1,4 +1,16 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+
+/// The wall clock in whole seconds since the Unix epoch, zero if the clock
+/// reads before it.
+#[must_use]
+pub fn current_time_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FeedAgeGroup {

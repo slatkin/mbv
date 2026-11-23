@@ -14,11 +14,9 @@ use mbv_emby_model::{
 };
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 
-use super::library_panel::HeroContentData;
 use super::library_panel::content::{
     HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
 };
-use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{
     MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
@@ -26,13 +24,15 @@ use super::media_list::{
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::components::tv_wide::HeroImageState;
-use mbv_render::current_time_secs;
 use mbv_ui_model::audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection, PodcastDisplayRow,
     podcast_display_rows,
 };
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
+use mbv_ui_model::feed_age::current_time_secs;
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::library_hero::producers::hero_content_abs_episode;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::ui_util::{row_date, trunc_str};
 use mbv_ui_msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
@@ -431,13 +431,13 @@ impl PodcastContent {
             Some(RowIntent::ContextSelection(targets)) => targets,
             _ => vec![target],
         };
-        Some(Self::episode_context_msg(targets, None))
+        Some(Self::episode_context_msg(targets))
     }
 
     /// The typed shell request one resolved context gesture emits (design
-    /// D1): provider-native episode targets, with the pointer anchor kept
-    /// for right-click openings.
-    fn episode_context_msg(targets: Vec<PodcastEpisodeTarget>, anchor: Option<(u16, u16)>) -> Msg {
+    /// D1): provider-native episode targets. The Client records its own
+    /// pointer cell (design D6).
+    fn episode_context_msg(targets: Vec<PodcastEpisodeTarget>) -> Msg {
         let targets = targets
             .into_iter()
             .map(|target| AudiobookshelfMenuTarget::Episode {
@@ -447,7 +447,6 @@ impl PodcastContent {
             .collect();
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Audiobookshelf(targets),
-            anchor,
         )))
     }
 

@@ -61,8 +61,8 @@ pub struct WorkspaceRelayout {
 /// ([`crate::app::client_drains`]); what stays in a host method is the
 /// Client's own: its projections, the lifecycle it alone acts on, and the
 /// phases only one Client can run (the TUI terminal poll, the TUI search and
-/// card surfaces, image resize). The TUI Client implements the trait for
-/// `Model` (see `shell::run::tick_host`).
+/// card surfaces, image resize). The TUI Client implements the trait for its
+/// shell `Model`.
 pub trait ClientTickHost {
     /// The shared runtime state the drains read and mutate.
     fn app_mut(&mut self) -> &mut App;
@@ -86,6 +86,12 @@ pub trait ClientTickHost {
     /// Drain pending library events and re-project the owners each event
     /// touches; `true` when any event arrived.
     fn drain_lib_events(&mut self) -> bool;
+
+    /// Drain the events this Client's own fetch workers report (design D5):
+    /// the GUI Client drains its own channel here, through `GuiCore`, after
+    /// `drain_lib_events`. `true` when any event arrived. The TUI Client starts
+    /// no such fetch and drains nothing.
+    fn drain_client_events(&mut self) -> bool;
 
     /// Drain search-worker results into the search surface; `true` when
     /// any arrived.
@@ -251,6 +257,7 @@ impl ClientCore {
 
             outcome.input_received |= host.app_mut().drain_notif_actions();
             outcome.input_received |= host.drain_lib_events();
+            outcome.input_received |= host.drain_client_events();
             outcome.input_received |= host.drain_search_results();
             // The search debounce is control-owned; the core fires the wall
             // clock once per iteration and routes an emitted request

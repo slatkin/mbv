@@ -7,7 +7,7 @@
 //! request leaves the process, and no live Owner, Service, or window runs
 //! (design D13).
 
-use mbv::ClientTickHost;
+use mbv::{ClientTickHost, GuiCore};
 use mbv_net::mock_http::MockHttp;
 
 use mbv_gui::bridge::frame::library::{
@@ -142,8 +142,7 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows_on_the_tick() {
     http.respond_when("/Shows/Upcoming", 200, NO_PREMIERES);
     let mut test = shows_core(&http);
 
-    let app = test.core.app_mut();
-    app.gui_tv_open(0);
+    open_shows(&mut test, 0);
     pump_until_root_rows(&mut test);
 
     assert_eq!(
@@ -300,4 +299,14 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
         },
     );
     pump_until_workspace(&mut test, "s2-b", "ep-b2", "the season command's Workspace");
+}
+
+/// Open one Shows library through the GUI core over the `App` the test holds.
+fn open_shows(test: &mut TestCore, lib_idx: usize) {
+    let mut core = GuiCore::new(std::mem::replace(
+        test.core.app_mut(),
+        mbv_gui::test_support::handoff_app(),
+    ));
+    core.gui_tv_open(lib_idx);
+    *test.core.app_mut() = core.into_app();
 }

@@ -13,7 +13,7 @@ use mbv_ui_model::settings::{
 };
 use mbv_ui_model::ui_util::{SUBTITLE_MODES, lang_cycle};
 
-use crate::app::App;
+use crate::gui::GuiCore;
 
 use super::{GuiSettingsState, GuiSetupService};
 
@@ -226,7 +226,7 @@ pub struct GuiSettingsKeyRefusalProjection {
     pub text: String,
 }
 
-impl App {
+impl GuiCore {
     /// The open section's F2 rows (design D9): the shown keys in paint order,
     /// each with its label, kind, value text, toggle flag, and — for a choice
     /// list — the choices the section's load cached. The `LibraryRoutes` row
@@ -237,8 +237,9 @@ impl App {
         let Some(state) = self.gui_settings() else {
             return Vec::new();
         };
-        let ui = self.ui_config_snapshot();
-        self.with_config(|cfg| {
+        let ui = self.app.ui_config_snapshot();
+        let app = &self.app;
+        app.with_config(|cfg| {
             state
                 .section
                 .shown_rows()
@@ -249,7 +250,7 @@ impl App {
                     label: setting_label(key).to_string(),
                     kind: gui_settings_row_kind(key),
                     value: if setting_kind(key) == SettingValueKind::Info {
-                        self.version_row_value(key)
+                        app.version_row_value(key)
                     } else {
                         setting_value(key, cfg, &ui)
                     },
@@ -273,10 +274,11 @@ impl App {
             .iter()
             .map(|&entry| GuiSettingsServiceProjection {
                 entry,
-                name: Self::service_entry_name(entry),
-                state: self.service_state_label(entry),
-                context: self.service_context(entry),
+                name: crate::app::App::service_entry_name(entry),
+                state: self.app.service_state_label(entry),
+                context: self.app.service_context(entry),
                 actions: self
+                    .app
                     .service_action_intents(entry)
                     .into_iter()
                     .map(|intent| (intent, intent.label()))
@@ -291,7 +293,7 @@ impl App {
 
     /// The open setup form's facts (design D9), whichever form holds it.
     fn gui_settings_setup(&self) -> Option<GuiSettingsSetupProjection> {
-        if let Some(form) = self.setup.emby_setup_form.as_ref() {
+        if let Some(form) = self.app.setup.emby_setup_form.as_ref() {
             return Some(GuiSettingsSetupProjection {
                 service: GuiSetupService::Emby,
                 server_url: form.fields[0].clone(),
@@ -299,7 +301,8 @@ impl App {
                 error: form.error.clone(),
             });
         }
-        self.setup
+        self.app
+            .setup
             .audiobookshelf_setup_form
             .as_ref()
             .map(|form| GuiSettingsSetupProjection {
@@ -314,7 +317,7 @@ impl App {
     /// config, and whether an add is in flight.
     #[must_use]
     pub fn gui_settings_feeds(&self) -> GuiSettingsFeedsProjection {
-        let subscriptions = self.with_config(|cfg| {
+        let subscriptions = self.app.with_config(|cfg| {
             cfg.feeds
                 .iter()
                 .map(|sub| GuiSettingsFeedProjection {
@@ -325,6 +328,7 @@ impl App {
                 .collect()
         });
         let adding = self
+            .app
             .feeds_manage
             .as_ref()
             .is_some_and(|popup| popup.pending_add.is_some());
@@ -340,7 +344,7 @@ impl App {
     /// (design D4).
     #[must_use]
     pub fn gui_settings_keys(&self) -> GuiSettingsKeysProjection {
-        self.with_config(|config| {
+        self.app.with_config(|config| {
             let keybinds = &config.keybinds;
             let rows = mbv_keybinds::KEY_SECTIONS
                 .iter()

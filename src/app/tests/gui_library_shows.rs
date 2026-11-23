@@ -7,11 +7,18 @@
 //! Service, worker, or mock transport runs.
 
 use super::*;
-use crate::app::gui_library::{GuiSectionRequest, GuiShowsNewEvent};
+
+use crate::app::gui_library::GuiSectionRequest;
 use crate::config::TestStateDirGuard;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use rstest::rstest;
+
+/// The Shows view a stub `App` holds beside it (`crate::app::tests::gui_shows_view`
+/// takes the Client's core, and these tests hold the state in the sidecar).
+fn view_of(lib_idx: usize) -> GuiShowsView {
+    crate::app::tests::stub_gui_state(|gui| crate::app::gui_library::shows_view(gui, lib_idx))
+}
 
 /// A series row of the series list, with its sort name.
 fn series_item(id: &str, name: &str, sort_name: &str) -> EmbyItem {
@@ -107,7 +114,7 @@ fn the_series_mode_projects_the_tree() {
     let _guard = TestStateDirGuard::new();
     let mut app = series_tree_app();
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection
         .series
@@ -163,8 +170,8 @@ fn presenting_an_empty_shows_root_starts_the_root_load_once_without_an_open_dest
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
 
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
 
     assert_eq!(app.libs[0].nav_stack.len(), 1, "one root level is started");
     let root = &app.libs[0].nav_stack[0];
@@ -188,7 +195,7 @@ fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
     let _guard = TestStateDirGuard::new();
     let mut app = series_tree_app();
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the series Hero paints");
     assert_eq!(hero.title, "Alfred");
@@ -244,9 +251,11 @@ fn a_stale_selection_falls_back_to_the_first_row() {
         series_item("series-a", "Alfred", "Alfred"),
         series_item("series-b", "Bridgerton", "Bridgerton"),
     ]);
-    app.gui_tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
+    });
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     assert_eq!(
         projection.selected.as_deref(),
@@ -282,13 +291,12 @@ fn the_series_heroes_art_box_follows_the_fetched_images_own_aspect() {
         mbv_images::CachedImage {
             source: Some(crate::app::queue_card_artwork::test_source(&still)),
             img: Some(still),
-            protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
         },
     );
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the series Hero paints");
     assert!(hero.art.is_some(), "the seeded image is the Hero's art");
@@ -332,12 +340,17 @@ fn one_shows_view_is_active_at_a_time() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
 
-    assert_eq!(app.gui_shows_view(0), GuiShowsView::All);
+    assert_eq!(view_of(0), GuiShowsView::All);
     for view in [GuiShowsView::New, GuiShowsView::Upcoming, GuiShowsView::All] {
-        app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView { lib_idx: 0, view });
-        assert_eq!(app.gui_shows_view(0), view);
+        apply_gui_library_command(
+            &mut app,
+            GuiLibraryCommand::ShowsSetView { lib_idx: 0, view },
+        );
+        assert_eq!(view_of(0), view);
     }
-    assert!(app.gui_shows_views.contains_key(&0));
+    assert!(crate::app::tests::stub_gui_state(|gui| gui
+        .shows_views
+        .contains_key(&0)));
 }
 
 /// Contract (design D9): New paints the merged latest episodes, newest first,
@@ -346,26 +359,31 @@ fn one_shows_view_is_active_at_a_time() {
 fn the_new_view_paints_the_merged_latest_episodes() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
-    app.gui_shows_new.insert(
-        "lib-a".into(),
-        GuiSectionRequest::Landed(vec![
-            new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
-            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ]),
-    );
-    app.gui_shows_new.insert(
-        "lib-b".into(),
-        GuiSectionRequest::Landed(vec![
-            new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
-            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ]),
-    );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::New,
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.shows_new.insert(
+            "lib-a".into(),
+            GuiSectionRequest::Landed(vec![
+                new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
+                new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+            ]),
+        );
+        gui.shows_new.insert(
+            "lib-b".into(),
+            GuiSectionRequest::Landed(vec![
+                new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
+                new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+            ]),
+        );
     });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::New,
+        },
+    );
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(ids, ["ep-new", "ep-mid", "ep-old"]);
@@ -388,12 +406,15 @@ fn the_upcoming_view_paints_display_only_premieres() {
         .insert("lib-a".into(), vec![later.clone()]);
     app.tv_upcoming_snapshots
         .insert("lib-b".into(), vec![sooner.clone()]);
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::Upcoming,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::Upcoming,
+        },
+    );
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(ids, [sooner.stable_key(), later.stable_key()]);
@@ -419,13 +440,23 @@ fn an_upcoming_row_resolves_no_playable_item() {
             "2026-11-20T00:00:00.0000000Z",
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::Upcoming,
-    });
-    let id = app.gui_shows_projection(0).rows[0].id.clone();
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::Upcoming,
+        },
+    );
+    let id = crate::app::tests::gui_shows_projection(&mut app, 0).rows[0]
+        .id
+        .clone();
 
-    assert_eq!(app.gui_shows_item(0, &id), None);
+    assert_eq!(
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::shows_projection::shows_item(&app, gui, 0, &id)
+        }),
+        None
+    );
 }
 
 /// PR 1021 regression: a New fetch that lands with no rows — whether the
@@ -439,16 +470,18 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
 ) {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::New,
-    });
-    app.handle_gui_shows_new(GuiShowsNewEvent {
-        library_id: "lib-tv".into(),
-        result,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::New,
+        },
+    );
+    let mut core = crate::app::tests::core_holding_stub_gui(&mut app);
+    handle_gui_shows_new(&mut core, "lib-tv", result);
+    core.into_app_keeping_gui(&mut app);
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     assert!(!projection.loading, "the landed fetch is not loading");
     assert!(projection.rows.is_empty(), "the list paints no rows");
@@ -473,10 +506,13 @@ fn an_upcoming_row_shows_its_series_image() {
             "2026-12-01T00:00:00.0000000Z",
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
-        lib_idx: 0,
-        view: GuiShowsView::Upcoming,
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::Upcoming,
+        },
+    );
     let still = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
         128,
         72,
@@ -484,7 +520,7 @@ fn an_upcoming_row_shows_its_series_image() {
     ));
     app.seed_card_image_for_test(key.clone(), still);
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     assert_eq!(
         projection.rows[0].art,

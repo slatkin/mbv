@@ -108,7 +108,6 @@ fn artist_workspace_track_context_menu_resolves_projected_groups() {
         Some(Msg::Shell(shell_boxed)) => {
             let ShellRequest::MusicRowContextMenu(
                 mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                None,
             ) = *shell_boxed
             else {
                 panic!("expected an artist track context menu, got {shell_boxed:?}")

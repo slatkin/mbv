@@ -32,8 +32,8 @@ fn legacy_home_section_preference_falls_back_to_continue_watching() {
 /// Opens the launch window `previous_age_secs` before the stub launch so
 /// markers have an interval to fire in (a first launch never marks).
 fn open_launch_window(model: &mut Model, previous_age_secs: u64) {
-    let current = model.app.home_latest_launch_window.current;
-    model.app.home_latest_launch_window.previous = Some(current - previous_age_secs);
+    let current = model.home_latest_launch_window.current;
+    model.home_latest_launch_window.previous = Some(current - previous_age_secs);
 }
 
 fn date_added_iso(secs: i64) -> String {
@@ -76,7 +76,7 @@ fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
 
     model.app.accept_home_recently_added(
@@ -100,7 +100,7 @@ fn acknowledging_the_source_clears_its_marker() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
     model.app.accept_home_recently_added(
         source.clone(),
@@ -122,7 +122,7 @@ fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 30 * 24 * 60 * 60);
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
 
     model.app.accept_home_recently_added(
@@ -145,7 +145,7 @@ fn an_item_dated_after_the_launch_instant_does_not_mark() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
 
     model.app.accept_home_recently_added(
@@ -169,7 +169,7 @@ fn a_podcast_library_marks_from_its_home_recently_added_rows() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into());
     let queue_episode = mbv_queue::AudiobookshelfQueueItem {
         library_item_id: "pod-lib".into(),
@@ -205,7 +205,7 @@ fn a_feed_entry_inside_the_launch_window_marks_the_feeds_destination() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     model.app.feed_tab.all_entries = vec![feed_entry(current - 60)];
 
     assert!(model.destination_latest_marker(&crate::app::DestinationLatestSource::Feeds));

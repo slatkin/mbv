@@ -11,6 +11,7 @@ use ratatui::widgets::Paragraph;
 use crate::mouse::hit::HitRegions;
 use mbv_render::{PillBar, PillBarWindow, render_pill_bar};
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 
 use super::content::SelectorRow;
 

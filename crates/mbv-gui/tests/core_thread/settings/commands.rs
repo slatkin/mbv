@@ -246,7 +246,7 @@ fn a_feed_edit_for_an_unknown_url_changes_nothing() {
         },
     );
 
-    let feeds = test.core.app_mut().gui_settings_feeds().subscriptions;
+    let feeds = test.core.gui_settings_feeds_for_test().subscriptions;
     assert_eq!(feeds.len(), 1, "no subscription was added");
     assert_eq!(feeds[0].name, "A", "the known subscription is untouched");
     assert_eq!(feeds[0].url, "https://a");
@@ -266,7 +266,7 @@ fn an_injected_feed_add_result_appends_the_subscription() {
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());
 
-    let feeds = test.core.app_mut().gui_settings_feeds().subscriptions;
+    let feeds = test.core.gui_settings_feeds_for_test().subscriptions;
     assert_eq!(feeds.len(), 1, "the applied add appended one subscription");
     assert_eq!(feeds[0].name, "Added");
     assert_eq!(feeds[0].url, "https://added");
@@ -406,7 +406,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
     let (app, cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
     send_playlists(&mut test, mbv::GuiPlaylistsCommand::Toggle);
-    assert!(test.core.app_mut().gui_playlists_is_open());
+    assert!(test.core.gui_playlists_open_for_test());
     let http = mbv_net::mock_http::MockHttp::new();
     http.respond_when(
         "/Playlists/pl/Items",
@@ -442,7 +442,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
         replaces[0].1
     );
     assert!(
-        !test.core.app_mut().gui_playlists_is_open(),
+        !test.core.gui_playlists_open_for_test(),
         "the drained dismissal closed the screen"
     );
 }
@@ -455,16 +455,19 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
 fn a_reset_returns_to_home_and_clears_the_launch_location() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut app = stub_app_with_queue(2);
+    app.set_client_capabilities_for_test(gui_client_capabilities());
     app.seed_gui_music_library_tab_for_test();
     app.seed_gui_library_groups_for_test(0, "grp-soul");
     mbv_config::save_gui_launch_state(&mbv_config::first_launch())
         .expect("the saved launch location is written");
-    let epoch_before = app.gui_ui_reset_epoch();
+    // A fresh `App` carries epoch 0, and the panel section reaches the window
+    // only through a build, so the reset's rise is what the frame shows.
+    let epoch_before = 0;
     let mut test = test_core_with(app);
     open_settings_at(&mut test, mbv::GuiSettingsSection::Actions);
     send_key(&mut test, Key::Char('z'), KeyModifiers::NONE);
     send_key(&mut test, Key::Char('q'), KeyModifiers::NONE);
-    let toggles = test.core.app_mut().panel_toggles_projection();
+    let toggles = test.core.gui_panel_toggles_for_test();
     assert!(
         toggles.collapsed && toggles.queue_folded,
         "the toggles were on before the reset"
@@ -494,7 +497,7 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
         app.gui_library_groups_for_test(0).is_none(),
         "no kept collection survives the reset"
     );
-    let toggles = app.panel_toggles_projection();
+    let toggles = test.core.gui_panel_toggles_for_test();
     assert!(
         !toggles.collapsed && !toggles.queue_folded,
         "the panel toggles are off"

@@ -12,13 +12,15 @@ use unicode_width::UnicodeWidthStr;
 use mbv_render::{WrappedHeroLine, paint_wide_hero_text, render_artwork_placeholder};
 use mbv_theme as palette;
 use mbv_theme::HERO_META_ROLES;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::meta::meta_row_text;
 use mbv_ui_model::ui_util::trunc_str;
 
-use super::super::content::{HeroContent, HeroFacts, HeroHeader};
+use super::super::content::{HeroContent, HeroHeader};
 use super::super::overview_box;
 use super::super::overview_box::OverviewPaint;
 use super::artwork_box::{ARTWORK_TEXT_GAP_ROWS, hero_artwork_box, landscape_grid_columns};
+use mbv_ui_model::library_hero::HeroFacts;
 
 /// Paints the Hero header and — when overview text exists — the overview
 /// Main content box below it (design D5). One title/meta painter for all
@@ -48,7 +50,7 @@ pub fn paint_hero_pane_content(
     );
     let image_ready = matches!(
         content.facts.artwork.image,
-        mbv_render::components::tv_wide::HeroImageState::Ready { .. }
+        mbv_ui_model::playback::HeroImageState::Ready { .. }
     );
     if artwork.width > 0 && artwork.height > 0 && !image_ready {
         // Placeholder at full box size while loading or imageless (spec: the

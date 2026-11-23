@@ -254,8 +254,8 @@ fn audiobookshelf_f5_commits_the_staged_replacement_on_completion() {
 
     app.refresh_current_view(false);
     let request = app.audiobookshelf_browse[0].catalog_request;
-    app.handle_lib_event(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::ShowsFetched {
+    app.handle_lib_event(
+        LibEvent::Audiobookshelf(AudiobookshelfEvent::ShowsFetched {
             generation: app.audiobookshelf_runtime.generation(),
             request,
             library_id: "abs-podcasts".into(),
@@ -272,8 +272,9 @@ fn audiobookshelf_f5_commits_the_staged_replacement_on_completion() {
                     cover_path: None,
                 }],
             }),
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = &app.audiobookshelf_browse[0];
     assert!(state.replacement.is_none(), "the completed batch commits");

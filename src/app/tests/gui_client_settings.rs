@@ -11,11 +11,14 @@ use crate::app::state::app_struct::LaunchRestore;
 #[test]
 fn the_gui_setting_disables_the_tui_panel_rules() {
     let mut app = make_app_stub();
-    app.enable_gui_client();
-    // A narrow terminal plus an empty queue arms both of the TUI's rules.
-    app.terminal_width = 60;
+    app.set_client_capabilities(gui_client_capabilities());
     app.panel_focus = PanelFocus::Queue;
     app.panel_mode = PanelMode::Both;
+    // A narrow terminal plus an empty queue arms both of the TUI's rules; the
+    // terminal size lives on the shell `Model`.
+    let mut model = Model::new(app);
+    crate::app::shell::test_support::set_terminal_width(&mut model, 60);
+    let app = &model.app;
 
     assert!(app.displayed_queue().slots().is_empty());
     assert!(!app.is_mini_view());
@@ -26,7 +29,9 @@ fn the_gui_setting_disables_the_tui_panel_rules() {
 
 /// The GUI setting drops the TUI launch restore (add-gui-library-panel design
 /// D9): the GUI keeps its own launch location, so a saved TUI launch state
-/// never moves the GUI's tab or Panel focus.
+/// never moves the GUI's tab or Panel focus. The GUI calls
+/// `skip_launch_restore` for that; the capabilities a GUI test sets decide
+/// nothing here (design D6a).
 #[test]
 fn the_gui_setting_starts_with_the_launch_restore_done() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -41,7 +46,7 @@ fn the_gui_setting_starts_with_the_launch_restore_done() {
     let mut app = make_app_stub();
     assert!(matches!(app.launch_restore, LaunchRestore::Pending(_)));
 
-    app.enable_gui_client();
+    app.skip_launch_restore();
 
     assert_eq!(app.launch_restore, LaunchRestore::Done);
 }
@@ -80,7 +85,7 @@ fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
     let mut gui = playing_movie_app();
     gui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     gui.visual_slot_hidden = true;
-    gui.enable_gui_client();
+    gui.set_client_capabilities(gui_client_capabilities());
     let mut tui = playing_movie_app();
     tui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     tui.visual_slot_hidden = true;
@@ -113,7 +118,7 @@ fn the_gui_client_leaves_the_tuis_visual_slot_controls_alone() {
     tui.set_visual_slot_hidden(true);
     let mut gui = playing_movie_app();
     gui.visual_slot_hidden = true;
-    gui.enable_gui_client();
+    gui.set_client_capabilities(gui_client_capabilities());
 
     gui.set_visual_slot_hidden(false);
     gui.set_visualizer(true);

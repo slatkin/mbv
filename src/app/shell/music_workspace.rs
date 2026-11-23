@@ -99,16 +99,17 @@ impl Model {
         {
             self.app.pending_track_selection = None;
             self.app
-                .handle_lib_event(super::LibEvent::Error(error.to_string()));
+                .handle_lib_event(super::LibEvent::Error(error.to_string()), None);
             return;
         }
         let library_id_lookup = library_id.clone();
-        self.app.handle_lib_event(super::LibEvent::Music(
-            MusicEvent::RecursiveAlbumActivated {
+        self.app.handle_lib_event(
+            super::LibEvent::Music(MusicEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
-            },
-        ));
+            }),
+            None,
+        );
         // The activated album: the resting cursor of the replaced nav stack.
         let activated_album_id = self
             .app
@@ -178,7 +179,7 @@ impl Model {
         let context = self.project_music_workspace_context(&key, index, cursor);
         self.fetch_music_workspace_album_tracks(&context);
         let reanchor = self.resolve_pending_music_reanchor(index);
-        let wide = self.app.is_right_panel_wide();
+        let wide = super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size());
         let request = self.music_track_focus_request.take();
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
         // Activation can outrun the album's track fetch (its tracks are not
@@ -259,7 +260,7 @@ impl Model {
         key: &LibraryKey,
         index: usize,
         cursor: Option<usize>,
-    ) -> mbv_render::MusicWideRenderCtx {
+    ) -> mbv_ui_model::music_wide::MusicWideRenderCtx {
         let base_context = self.app.wide_music_render_ctx(index, cursor);
         // The artist detail projection (design D7, tasks 6.1–6.3): read the
         // owner's component-resolved artist target, re-bind it to this push's
@@ -284,7 +285,10 @@ impl Model {
         }
     }
 
-    fn fetch_music_workspace_album_tracks(&mut self, context: &mbv_render::MusicWideRenderCtx) {
+    fn fetch_music_workspace_album_tracks(
+        &mut self,
+        context: &mbv_ui_model::music_wide::MusicWideRenderCtx,
+    ) {
         // Album fetch follows the tree owner's resolved album; an artist root
         // has no album and never starts an album-track fetch.
         let owner_selection_is_artist = self
@@ -302,7 +306,7 @@ impl Model {
 
     fn push_music_workspace_owner(
         &mut self,
-        context: mbv_render::MusicWideRenderCtx,
+        context: mbv_ui_model::music_wide::MusicWideRenderCtx,
         reanchor: Option<mbv_components::music_tree_target::MusicTreeTarget>,
         wide: bool,
         focused: bool,
@@ -528,8 +532,8 @@ mod tests {
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();
 
-        model.app.handle_lib_event(crate::app::LibEvent::Music(
-            MusicEvent::ArtistTracksFetched {
+        model.app.handle_lib_event(
+            crate::app::LibEvent::Music(MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
@@ -537,8 +541,9 @@ mod tests {
                 result: Ok(vec![mbv_emby_model::test_support::make_item(
                     "Stale", "Audio",
                 )]),
-            },
-        ));
+            }),
+            None,
+        );
         model.push_music_workspace_content();
         assert!(
             model.test_music_owner().track_list.rows().is_empty(),
@@ -548,15 +553,16 @@ mod tests {
         let mut track = mbv_emby_model::test_support::make_item("Song", "Audio");
         track.id = "track-1".into();
         track.album_id = "album-1".into();
-        model.app.handle_lib_event(crate::app::LibEvent::Music(
-            MusicEvent::ArtistTracksFetched {
+        model.app.handle_lib_event(
+            crate::app::LibEvent::Music(MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
                 revision: 7,
                 result: Ok(vec![track]),
-            },
-        ));
+            }),
+            None,
+        );
         model.push_music_workspace_content();
         let rows = model.test_music_owner().track_list.rows();
         assert!(

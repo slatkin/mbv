@@ -150,7 +150,7 @@ impl App {
     /// the existing idle gate (`fetch_list_card_image_when_idle`), so rapid
     /// navigation suppresses the whole window.
     pub(in crate::app) fn prefetch_neighbour_album_art(&mut self, targets: &[String]) {
-        if !self.images.images_enabled() {
+        if !self.images.protocol_enabled() {
             return;
         }
         for target in targets {
@@ -167,7 +167,7 @@ impl App {
                 format!("{album_id}:P"),
                 album_id.to_string(),
                 String::new(),
-                mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES,
+                mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES,
             );
         }
     }

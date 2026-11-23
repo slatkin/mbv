@@ -75,7 +75,7 @@ impl BookContent {
                     Some(RowIntent::ContextSelection(targets)) => targets,
                     _ => vec![target],
                 };
-                Some(Self::book_context_msg(targets, Some((at.x, at.y))))
+                Some(Self::book_context_msg(targets))
             }
             _ => None,
         }

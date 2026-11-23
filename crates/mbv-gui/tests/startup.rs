@@ -8,7 +8,7 @@
 use std::sync::mpsc;
 
 use mbv::{
-    App, ClientTickHost, Config, stub_app_with_cached_emby_client,
+    App, ClientTickHost, Config, GuiCore, stub_app_with_cached_emby_client,
     stub_app_with_completed_emby_startup,
 };
 use mbv_config::TestStateDirGuard;
@@ -41,7 +41,7 @@ fn core_over(app: App) -> CoreThread {
     let (_tx, rx) = mpsc::channel::<CoreInput>();
     let sink: SectionSink = Box::new(|_| {});
     let quit: QuitSink = Box::new(|| {});
-    CoreThread::new(app, rx, sink, quit)
+    CoreThread::new(GuiCore::new(app), rx, sink, quit)
 }
 
 /// Whether the catalog holds the Music library tab.

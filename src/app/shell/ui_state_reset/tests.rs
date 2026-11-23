@@ -120,7 +120,6 @@ fn seeded_reset_model() -> (
     app.queue_column_width = 62;
     app.list_pane_width = Some(54);
     app.visual_slot_hidden = true;
-    app.tab_scroll = 3;
     app.local_view.set_cursor(2);
     app.libs.push(second_movies_library());
     // A committed show pill whose owner reset returns to the state pill: the
@@ -161,6 +160,7 @@ fn seeded_reset_model() -> (
     .unwrap();
 
     let mut model = Model::new(app);
+    model.tab_scroll = 3;
     let acknowledged = DestinationLatestSource::Emby("lib-movies".into());
     model
         .acknowledged_home_latest_sources
@@ -199,7 +199,7 @@ fn assert_default_presentation(model: &Model, key1: &LibraryKey, key2: &LibraryK
     assert_eq!(model.app.queue_column_width, LEFT_WIDTH_DEFAULT);
     assert!(model.app.list_pane_width.is_none());
     assert!(!model.app.visual_slot_hidden);
-    assert_eq!(model.app.tab_scroll, 0);
+    assert_eq!(model.tab_scroll, 0);
     assert_eq!(model.app.settings_destination, SettingsDestination::Main);
     // Browse roots: deep levels dropped, root fields back to defaults,
     // fetched content retained.
@@ -300,13 +300,14 @@ fn late_root_browse_completion_after_reset_keeps_reset_defaults() {
     let mut model = Model::new(app);
 
     model.reset_ui_state();
-    model
-        .app
-        .handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+    model.app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Loaded {
             lib_idx: 0,
             parent_id: "lib-movies".into(),
             level: Box::new(stale_root_level()),
-        }));
+        }),
+        None,
+    );
 
     let root = &model.app.libs[0].nav_stack[0];
     assert_eq!(root.sort_by, "SortName");

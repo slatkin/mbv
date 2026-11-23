@@ -16,7 +16,7 @@ use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use mbv::ClientTickHost;
 use mbv::{
-    App, stub_app_with_completed_emby_startup_and_contents, stub_app_with_playing_queue,
+    App, GuiCore, stub_app_with_completed_emby_startup_and_contents, stub_app_with_playing_queue,
     stub_app_with_queue,
 };
 use mbv_config::TestStateDirGuard;
@@ -77,7 +77,7 @@ impl Harness {
         let quit: QuitSink = Box::new(move || {
             let _ = quit_tx.send(());
         });
-        let mut core = CoreThread::new(app, rx, sink, quit);
+        let mut core = CoreThread::new(GuiCore::new(app), rx, sink, quit);
         core.set_idle_cadence_for_test(Duration::ZERO);
         core.install_waker(tx.clone());
         Self {

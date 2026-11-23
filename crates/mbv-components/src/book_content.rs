@@ -15,22 +15,22 @@ use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
 
-use super::library_panel::HeroContentData;
 use super::library_panel::content::{
     HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
-use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::library_hero::producers::hero_content_queue;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 use mbv_ui_msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -269,7 +269,8 @@ impl BookContent {
     /// owner before view (design.md D6). An unchanged projection keeps the
     /// retained frame valid.
     fn set_book_rows(&mut self) {
-        let rows = mbv_render::book_rows(&self.state, self.selected_bucket);
+        let rows =
+            mbv_ui_model::audiobookshelf_browse::book_rows(&self.state, self.selected_bucket);
         if self.carrier.rows() != rows.as_slice() {
             self.carrier.set_content(rows);
         }
@@ -521,20 +522,19 @@ impl BookContent {
             Some(RowIntent::ContextSelection(targets)) => targets,
             _ => vec![target],
         };
-        Some(Self::book_context_msg(targets, None))
+        Some(Self::book_context_msg(targets))
     }
 
     /// The typed shell request one resolved context gesture emits (design
-    /// D1): provider-native book targets, with the pointer anchor kept for
-    /// right-click openings.
-    fn book_context_msg(targets: Vec<String>, anchor: Option<(u16, u16)>) -> Msg {
+    /// D1): provider-native book targets. The Client records its own pointer
+    /// cell (design D6).
+    fn book_context_msg(targets: Vec<String>) -> Msg {
         let targets = targets
             .into_iter()
             .map(|library_item_id| AudiobookshelfMenuTarget::Book { library_item_id })
             .collect();
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Audiobookshelf(targets),
-            anchor,
         )))
     }
 }

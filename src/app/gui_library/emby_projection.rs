@@ -13,24 +13,26 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use mbv_components::library_panel::content::ArtworkSource;
-use mbv_components::library_panel::hero::hero_content_emby;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-use mbv_render::effective_sort_str;
 use mbv_ui_model::feed::FeedHomeVideoTarget;
 use mbv_ui_model::home_latest::emby_date_added_secs;
+use mbv_ui_model::library_hero::ArtworkSource;
+use mbv_ui_model::library_hero::producers::hero_content_emby;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
 use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
-use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source};
+use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
+use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
+use mbv_ui_model::sort_filter::effective_sort_str;
 
 /// One row's kind (row 8.1): `Collection` when the row is a folder or a
 /// boxset — the container the folder-play rule expands — and `Media` on a
@@ -169,7 +171,7 @@ pub struct GuiEmbyProjection {
     pub hero: Option<GuiEmbyHero>,
 }
 
-impl App {
+impl GuiCore {
     /// The plain Emby-library projection the GUI Library panel paints (row
     /// 8.1): the feed pills, the active list's rows, the selected row, and
     /// its Hero. A `lib_idx` that names no plain Emby library projects the
@@ -177,15 +179,15 @@ impl App {
     /// anyway.
     #[must_use]
     pub fn gui_emby_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
-        if !self.gui_emby_library(lib_idx) {
+        if !super::emby::emby_library(&self.app, lib_idx) {
             return GuiEmbyProjection::default();
         }
-        let projection = if self.is_feed_home_video_library(lib_idx) {
-            self.gui_emby_feed_projection(lib_idx)
+        let projection = if self.app.is_feed_home_video_library(lib_idx) {
+            self.emby_feed_projection(lib_idx)
         } else {
-            self.gui_emby_plain_projection(lib_idx)
+            self.emby_plain_projection(lib_idx)
         };
-        self.warm_gui_emby_hero_neighbours(lib_idx, &projection);
+        self.warm_emby_hero_neighbours(lib_idx, &projection);
         projection
     }
 
@@ -194,7 +196,7 @@ impl App {
     /// cursor-neighbour rule, `App::fetch_nearby_movie_posters`, on the keys
     /// this Client's Hero paints instead of the list's). The pick's own art is
     /// the Hero's fetch, so the picked row is never warmed here.
-    fn warm_gui_emby_hero_neighbours(&mut self, lib_idx: usize, projection: &GuiEmbyProjection) {
+    fn warm_emby_hero_neighbours(&mut self, lib_idx: usize, projection: &GuiEmbyProjection) {
         let Some(picked) = projection.selected.as_deref() else {
             return;
         };
@@ -202,63 +204,26 @@ impl App {
         let Some(picked_index) = ids.iter().position(|id| *id == picked) else {
             return;
         };
-        self.warm_gui_hero_neighbours(&ids, picked_index, |app, id| {
-            app.gui_emby_hero_source(lib_idx, id)
+        let gui = &self.gui;
+        super::artwork::warm_hero_neighbours(&mut self.app, &ids, picked_index, |app, id| {
+            emby_hero_source(app, gui, lib_idx, id)
         });
-    }
-
-    /// The artwork source the Hero paints for `item_id`: the shared Emby hero
-    /// producer's policy source, and `None` for a row the Hero gate excludes —
-    /// a folder, or a non-`Movie` in a Movies library — or an id this App no
-    /// longer holds.
-    fn gui_emby_hero_source(&self, lib_idx: usize, item_id: &str) -> Option<ArtworkSource> {
-        let item = self.gui_emby_item(lib_idx, item_id)?;
-        if !self.gui_emby_hero_item(lib_idx, &item) {
-            return None;
-        }
-        hero_content_emby(&item).facts.artwork.source
-    }
-
-    /// The library's display name (row 8.1): the list header's title.
-    fn gui_emby_library_name(&self, lib_idx: usize) -> String {
-        self.libs
-            .get(lib_idx)
-            .map(|lib| lib.library.name.clone())
-            .unwrap_or_default()
-    }
-
-    /// The root listing's folders as borrowed `(id, name)` pairs (row 8.1):
-    /// the programme lookup's source, the pill row's catalog, and the checked
-    /// set's retention catalog — the listing the group view already holds.
-    /// Empty while the listing has not landed.
-    pub(in crate::app::gui_library) fn gui_root_folder_names(
-        &self,
-        lib_idx: usize,
-    ) -> Vec<(&str, &str)> {
-        self.libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.first())
-            .map(|root| {
-                root.items
-                    .iter()
-                    .filter(|item| item.is_folder)
-                    .map(|item| (item.id.as_str(), item.name.as_str()))
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 
     /// The plain mode's projection (row 8.1): the root-list store's rows —
     /// the server's `SortName` order under the Title sort, else the date
     /// order — each with its rail letter only while the sort is a name sort,
     /// and no pill, and the selected row's Hero.
-    fn gui_emby_plain_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
-        let (items, loading, failed) = match self.gui_emby_roots.get(&lib_idx) {
+    fn emby_plain_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
+        let app = &self.app;
+        let gui = &self.gui;
+        let (items, loading, failed) = match gui.emby_roots.get(&lib_idx) {
             Some(super::GuiEmbyRootItems::Loaded(items)) => (items.as_slice(), false, false),
             Some(super::GuiEmbyRootItems::Loading) | None => (&[][..], true, false),
             Some(super::GuiEmbyRootItems::Failed) => (&[][..], false, true),
         };
-        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Library(lib_idx));
+        let sort_frame =
+            super::list_sort::list_sort_frame(app, gui, GuiSortTarget::Library(lib_idx));
         let sort = sort_frame.active;
         let mut items: Vec<&EmbyItem> = items.iter().collect();
         // Under the Title sort the store's own `SortName` order stands
@@ -272,16 +237,12 @@ impl App {
         }
         let rows: Vec<GuiEmbyRow> = items
             .into_iter()
-            .map(|item| plain_row(self, item, sort.rail_letter(effective_sort_str(item))))
+            .map(|item| plain_row(app, item, sort.rail_letter(effective_sort_str(item))))
             .collect();
-        let selected = self.gui_emby_selected(lib_idx, &rows);
-        let hero = selected
-            .as_ref()
-            .and_then(|selected| self.gui_emby_item(lib_idx, selected))
-            .filter(|item| self.gui_emby_hero_item(lib_idx, item))
-            .map(|item| self.gui_emby_hero(&item));
+        let selected = self.emby_selected(lib_idx, &rows);
+        let hero = self.emby_hero_for(lib_idx, selected.as_deref());
         GuiEmbyProjection {
-            library_name: self.gui_emby_library_name(lib_idx),
+            library_name: self.emby_library_name(lib_idx),
             collections: None,
             collection_names: Vec::new(),
             feed_group: false,
@@ -301,21 +262,30 @@ impl App {
     /// effective set is the frame's one read — the items and the pill names
     /// read the set it borrows — and the programme lookup's id-to-name map is
     /// built once, so a row's programme is one hash probe.
-    fn gui_emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
-        let set = self.gui_emby_feed_effective_set(lib_idx);
-        let folders = self.gui_root_folder_names(lib_idx);
-        let collections = self.gui_collections(GuiCollectionTarget::EmbyFeed(lib_idx));
+    fn emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
+        let set = super::emby::emby_feed_effective_set(&self.app, &self.gui, lib_idx);
+        let folders = root_folder_names(&self.app, lib_idx);
+        let collections = super::collection_command::collections(
+            &self.app,
+            &self.gui,
+            GuiCollectionTarget::EmbyFeed(lib_idx),
+        );
         let collection_names = feed_collection_names(set.as_ref(), &folders);
         let programmes: HashMap<&str, &str> =
             folders.iter().map(|(id, name)| (*id, *name)).collect();
-        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Library(lib_idx));
+        let sort_frame = super::list_sort::list_sort_frame(
+            &self.app,
+            &self.gui,
+            GuiSortTarget::Library(lib_idx),
+        );
         let sort = sort_frame.active;
-        let (items, loading) = self.gui_emby_feed_items(lib_idx, set.as_ref(), sort);
+        let (items, loading) = feed_items(&self.app, lib_idx, set.as_ref(), sort);
+        let app = &self.app;
         let rows: Vec<GuiEmbyRow> = items
             .iter()
             .map(|item| {
                 feed_row(
-                    self,
+                    app,
                     item,
                     feed_row_date(item),
                     programme_of(item, &programmes),
@@ -323,14 +293,10 @@ impl App {
                 )
             })
             .collect();
-        let selected = self.gui_emby_selected(lib_idx, &rows);
-        let hero = selected
-            .as_ref()
-            .and_then(|selected| self.gui_emby_item(lib_idx, selected))
-            .filter(|item| self.gui_emby_hero_item(lib_idx, item))
-            .map(|item| self.gui_emby_hero(&item));
+        let selected = self.emby_selected(lib_idx, &rows);
+        let hero = self.emby_hero_for(lib_idx, selected.as_deref());
         GuiEmbyProjection {
-            library_name: self.gui_emby_library_name(lib_idx),
+            library_name: self.emby_library_name(lib_idx),
             collections: Some(collections),
             collection_names,
             feed_group: true,
@@ -343,112 +309,12 @@ impl App {
         }
     }
 
-    /// The GUI's feed-group list (design D3, D4, D6): the cached items of
-    /// `set`'s targets, merged and de-duplicated by item id, and ordered by
-    /// `sort` — the article-stripped sort name under the Title sort, else the
-    /// date added through the shared date order with undated items last in
-    /// both orders. Every sort's last tie-break is the item id. `set` is the
-    /// projection's one effective-set read. The second value is whether the
-    /// list is still landing: the root listing pending, or a target with no
-    /// cache entry yet, which is the fetch the ensure step starts. The items
-    /// are borrowed from the cache, so a frame clones no item.
-    pub(in crate::app) fn gui_emby_feed_items(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-        sort: GuiListSort,
-    ) -> (Vec<&EmbyItem>, bool) {
-        let (mut items, landing) = self.gui_emby_feed_gathered(lib_idx, set);
-        if sort.is_name_sort() {
-            items.sort_by_cached_key(|item| {
-                (
-                    gui_title_sort_key(effective_sort_str(item)),
-                    item.id.clone(),
-                )
-            });
-            return (items, landing);
-        }
-        items.sort_by(|left, right| {
-            sort.compare_date(emby_date_added_secs(left), emby_date_added_secs(right))
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        (items, landing)
-    }
-
-    /// The cached items of `set`'s targets, merged and de-duplicated by item
-    /// id in the targets' own order, without the date sort — the membership
-    /// walks read this form. The second value is whether a target has no
-    /// cache entry yet, which is the fetch the ensure step starts, or the
-    /// root listing is pending.
-    pub(in crate::app::gui_library) fn gui_emby_feed_gathered(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-    ) -> (Vec<&EmbyItem>, bool) {
-        let state = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_ref());
-        let mut items: Vec<&EmbyItem> = Vec::new();
-        let mut seen: HashSet<&str> = HashSet::new();
-        let mut landing = state.is_none();
-        if let Some(state) = state {
-            match set {
-                GuiCollectionSet::All => {
-                    landing |= Self::gather_feed_target(
-                        state.items_for(FeedHomeVideoTarget::All),
-                        &mut seen,
-                        &mut items,
-                    );
-                }
-                GuiCollectionSet::Checked(keys) => {
-                    for key in keys {
-                        landing |= Self::gather_feed_target(
-                            state.items_for(FeedHomeVideoTarget::Folder(key.as_str())),
-                            &mut seen,
-                            &mut items,
-                        );
-                    }
-                }
-            }
-        }
-        (items, landing || self.gui_emby_root_loading(lib_idx))
-    }
-
-    /// Merge one target's cached items into the de-duplicated gather: the
-    /// first occurrence of each item id is the one the list keeps, as the
-    /// owned merge did. `true` when the target has no cache entry yet — the
-    /// fetch the ensure step starts is owed.
-    fn gather_feed_target<'a>(
-        cached: Option<&'a Vec<EmbyItem>>,
-        seen: &mut HashSet<&'a str>,
-        items: &mut Vec<&'a EmbyItem>,
-    ) -> bool {
-        let Some(cached) = cached else {
-            return true;
-        };
-        for item in cached {
-            if seen.insert(item.id.as_str()) {
-                items.push(item);
-            }
-        }
-        false
-    }
-
-    /// Whether the feed-view library's root listing has not landed yet: the
-    /// folder catalog the checked set resolves against.
-    fn gui_emby_root_loading(&self, lib_idx: usize) -> bool {
-        self.libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.first())
-            .is_none_or(|root| root.loading)
-    }
-
     /// The core's selected row (design D2, row 8.1): the stored pick while
     /// the list still carries it, else the first row — the Hero default.
-    fn gui_emby_selected(&self, lib_idx: usize, rows: &[GuiEmbyRow]) -> Option<String> {
+    fn emby_selected(&self, lib_idx: usize, rows: &[GuiEmbyRow]) -> Option<String> {
         let stored = self
-            .gui_emby_libs
+            .gui
+            .emby_libs
             .get(&lib_idx)
             .and_then(|selection| selection.picked_row.clone());
         stored
@@ -456,50 +322,31 @@ impl App {
             .or_else(|| rows.first().map(|row| row.id.clone()))
     }
 
-    /// The Emby item a command names (row 8.1): the active list's rows — the
-    /// feed-group mode's merged checked-folder items, the root-list store's
-    /// rows in plain mode. `None` when no row carries the id, so a stale
-    /// command plays nothing. The feed-group arm walks the merged items
-    /// without the date sort and clones only the match, so a play names one
-    /// clone.
-    pub(in crate::app::gui_library) fn gui_emby_item(
-        &self,
-        lib_idx: usize,
-        item_id: &str,
-    ) -> Option<EmbyItem> {
-        if self.is_feed_home_video_library(lib_idx) {
-            let set = self.gui_emby_feed_effective_set(lib_idx);
-            let (items, _) = self.gui_emby_feed_gathered(lib_idx, set.as_ref());
-            return items.into_iter().find(|item| item.id == item_id).cloned();
-        }
-        self.gui_stored_emby_root_items(lib_idx)
-            .find(|item| item.id == item_id)
-            .cloned()
-    }
-
-    /// Whether the selected row paints a Hero (row 8.1): the TUI's own gate
-    /// (`hero_item`, `crates/mbv-components/src/emby_library_content.rs`). A
-    /// folder paints none, because the Hero describes an item and a folder is
-    /// a container; a Movies library additionally admits only a `Movie`, so a
-    /// `BoxSet` row — a collection — paints no Hero either.
-    fn gui_emby_hero_item(&self, lib_idx: usize, item: &EmbyItem) -> bool {
-        if item.is_folder {
-            return false;
-        }
-        let movies = self
+    /// The library's display name (row 8.1): the list header's title.
+    fn emby_library_name(&self, lib_idx: usize) -> String {
+        self.app
             .libs
             .get(lib_idx)
-            .is_some_and(|lib| lib.library.collection_type == "movies");
-        !movies || item.item_type == "Movie"
+            .map(|lib| lib.library.name.clone())
+            .unwrap_or_default()
+    }
+
+    /// The selected row's Hero, when the row paints one (row 8.1): the
+    /// resolved row's own Hero gate, and the artwork fetched through the image
+    /// cache at the producer's declared chain.
+    fn emby_hero_for(&mut self, lib_idx: usize, selected: Option<&str>) -> Option<GuiEmbyHero> {
+        let item = emby_item(&self.app, &self.gui, lib_idx, selected?)?;
+        hero_item(&self.app, lib_idx, &item).then(|| self.hero(&item))
     }
 
     /// The selected row's Hero facts (row 8.1): the shared Emby hero
     /// producer's facts, with the artwork fetched through the image cache at
     /// the artwork policy's declared chain — the same facts and fetch the
     /// TUI's hero paints. No Workspace rides a plain Emby-library Hero.
-    fn gui_emby_hero(&mut self, item: &EmbyItem) -> GuiEmbyHero {
+    fn hero(&mut self, item: &EmbyItem) -> GuiEmbyHero {
         let content = hero_content_emby(item);
-        let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
+        let art =
+            super::artwork::emby_hero_art(&mut self.app, content.facts.artwork.source.as_ref());
         GuiEmbyHero {
             kind: item.item_type.to_lowercase(),
             title: content.facts.title.clone(),
@@ -517,12 +364,194 @@ impl App {
                 })
                 .collect(),
             imdb_url: content.facts.links.first().map(|link| link.url.clone()),
-            art_shape: artwork_shape(
-                self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
-            ),
+            art_shape: artwork_shape(super::artwork::hero_shape(
+                &self.app,
+                content.facts.artwork.shape,
+                art.as_ref(),
+            )),
             art,
         }
     }
+}
+
+/// The Emby item a command names (row 8.1): the active list's rows — the
+/// feed-group mode's merged checked-folder items, the root-list store's rows in
+/// plain mode. `None` when no row carries the id, so a stale command plays
+/// nothing. The feed-group arm walks the merged items without the date sort and
+/// clones only the match, so a play names one clone. It reads only the core's
+/// Emby library state, so it is a core function the Hero's neighbour warm and
+/// the play and select paths reach through the App they already have.
+pub(in crate::app) fn emby_item(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+    item_id: &str,
+) -> Option<EmbyItem> {
+    if app.is_feed_home_video_library(lib_idx) {
+        let set = super::emby::emby_feed_effective_set(app, gui, lib_idx);
+        let (items, _) = feed_gathered(app, lib_idx, set.as_ref());
+        return items.into_iter().find(|item| item.id == item_id).cloned();
+    }
+    super::emby::stored_emby_root_items(gui, lib_idx)
+        .find(|item| item.id == item_id)
+        .cloned()
+}
+
+/// Whether the selected row paints a Hero (row 8.1): the TUI's own gate
+/// (`hero_item`, `crates/mbv-components/src/emby_library_content.rs`). A folder
+/// paints none, because the Hero describes an item and a folder is a
+/// container; a Movies library additionally admits only a `Movie`, so a
+/// `BoxSet` row — a collection — paints no Hero either. It reads only the
+/// core's Emby library state, so it is a core function the Hero's neighbour
+/// warm reaches through the App it already has.
+fn hero_item(app: &App, lib_idx: usize, item: &EmbyItem) -> bool {
+    if item.is_folder {
+        return false;
+    }
+    let movies = app
+        .libs
+        .get(lib_idx)
+        .is_some_and(|lib| lib.library.collection_type == "movies");
+    !movies || item.item_type == "Movie"
+}
+
+/// The artwork source the Hero paints for `item_id`: the shared Emby hero
+/// producer's policy source, and `None` for a row the Hero gate excludes — a
+/// folder, or a non-`Movie` in a Movies library — or an id the App no longer
+/// holds. It reads only the core's Emby library state, so it is a core
+/// function the Hero's neighbour warm reaches through the App it already has.
+fn emby_hero_source(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+    item_id: &str,
+) -> Option<ArtworkSource> {
+    let item = emby_item(app, gui, lib_idx, item_id)?;
+    if !hero_item(app, lib_idx, &item) {
+        return None;
+    }
+    hero_content_emby(&item).facts.artwork.source
+}
+
+/// The root listing's folders as borrowed `(id, name)` pairs (row 8.1): the
+/// programme lookup's source, the pill row's catalog, and the checked set's
+/// retention catalog — the listing the group view already holds. Empty while
+/// the listing has not landed. It reads only the core's Emby library state, so
+/// it is a core function the projection and the feed-group collection site
+/// share.
+pub(in crate::app) fn root_folder_names(app: &App, lib_idx: usize) -> Vec<(&str, &str)> {
+    app.libs
+        .get(lib_idx)
+        .and_then(|lib| lib.nav_stack.first())
+        .map(|root| {
+            root.items
+                .iter()
+                .filter(|item| item.is_folder)
+                .map(|item| (item.id.as_str(), item.name.as_str()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The GUI's feed-group list (design D3, D4, D6): the cached items of `set`'s
+/// targets, merged and de-duplicated by item id, and ordered by `sort` — the
+/// article-stripped sort name under the Title sort, else the date added
+/// through the shared date order with undated items last in both orders.
+/// Every sort's last tie-break is the item id. The second value is whether the
+/// list is still landing: the root listing pending, or a target with no cache
+/// entry yet, which is the fetch the ensure step starts. The items are
+/// borrowed from the cache, so a frame clones no item. It reads only the
+/// core's Emby library state, so it is a core function the projection and the
+/// feed-group collection site share.
+pub(in crate::app) fn feed_items<'a>(
+    app: &'a App,
+    lib_idx: usize,
+    set: &GuiCollectionSet,
+    sort: GuiListSort,
+) -> (Vec<&'a EmbyItem>, bool) {
+    let (mut items, landing) = feed_gathered(app, lib_idx, set);
+    if sort.is_name_sort() {
+        items.sort_by_cached_key(|item| {
+            (
+                gui_title_sort_key(effective_sort_str(item)),
+                item.id.clone(),
+            )
+        });
+        return (items, landing);
+    }
+    items.sort_by(|left, right| {
+        sort.compare_date(emby_date_added_secs(left), emby_date_added_secs(right))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    (items, landing)
+}
+
+/// The cached items of `set`'s targets, merged and de-duplicated by item id in
+/// the targets' own order, without the date sort — the membership walks read
+/// this form. The second value is whether a target has no cache entry yet,
+/// which is the fetch the ensure step starts, or the root listing is pending.
+pub(in crate::app) fn feed_gathered<'a>(
+    app: &'a App,
+    lib_idx: usize,
+    set: &GuiCollectionSet,
+) -> (Vec<&'a EmbyItem>, bool) {
+    let state = app
+        .libs
+        .get(lib_idx)
+        .and_then(|lib| lib.feed_home_video.as_ref());
+    let mut items: Vec<&EmbyItem> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut landing = state.is_none();
+    if let Some(state) = state {
+        match set {
+            GuiCollectionSet::All => {
+                landing |= gather_feed_target(
+                    state.items_for(FeedHomeVideoTarget::All),
+                    &mut seen,
+                    &mut items,
+                );
+            }
+            GuiCollectionSet::Checked(keys) => {
+                for key in keys {
+                    landing |= gather_feed_target(
+                        state.items_for(FeedHomeVideoTarget::Folder(key.as_str())),
+                        &mut seen,
+                        &mut items,
+                    );
+                }
+            }
+        }
+    }
+    (items, landing || emby_root_loading(app, lib_idx))
+}
+
+/// Whether the feed-view library's root listing has not landed yet: the folder
+/// catalog the checked set resolves against.
+fn emby_root_loading(app: &App, lib_idx: usize) -> bool {
+    app.libs
+        .get(lib_idx)
+        .and_then(|lib| lib.nav_stack.first())
+        .is_none_or(|root| root.loading)
+}
+
+/// Merge one target's cached items into the de-duplicated gather: the first
+/// occurrence of each item id is the one the list keeps, as the owned merge
+/// did. `true` when the target has no cache entry yet — the fetch the ensure
+/// step starts is owed.
+fn gather_feed_target<'a>(
+    cached: Option<&'a Vec<EmbyItem>>,
+    seen: &mut HashSet<&'a str>,
+    items: &mut Vec<&'a EmbyItem>,
+) -> bool {
+    let Some(cached) = cached else {
+        return true;
+    };
+    for item in cached {
+        if seen.insert(item.id.as_str()) {
+            items.push(item);
+        }
+    }
+    false
 }
 
 /// One row of the plain list (row 8.1): the TUI browse row's primary label
@@ -538,7 +567,7 @@ fn plain_row(app: &App, item: &EmbyItem, sort_letter: Option<char>) -> GuiEmbyRo
         date: None,
         sort_letter,
         kind: row_kind(item),
-        art: app.gui_row_art(emby_row_source(item).as_ref()),
+        art: row_art(app, emby_row_source(item).as_ref()),
         media: emby_media_kind(item),
     }
 }
@@ -564,7 +593,7 @@ fn feed_row(
         date,
         sort_letter,
         kind: row_kind(item),
-        art: app.gui_row_art(emby_row_source(item).as_ref()),
+        art: row_art(app, emby_row_source(item).as_ref()),
         media: emby_media_kind(item),
     }
 }

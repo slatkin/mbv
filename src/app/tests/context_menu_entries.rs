@@ -10,6 +10,7 @@ use mbv_ui_msg::{Msg, ShellRequest};
 use rstest::rstest;
 
 use crate::app::gui_client_state::GuiOverlay;
+use crate::gui::GuiCore;
 
 fn emby_library_app() -> App {
     let mut app = make_app_stub();
@@ -87,13 +88,7 @@ fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
     ];
     let capabilities: Vec<ItemCapabilities> = items.iter().map(emby_item_capabilities).collect();
 
-    app.open_context_menu_for_selection(
-        &items,
-        None,
-        PanelFocus::Library,
-        capabilities,
-        Vec::new(),
-    );
+    app.open_context_menu_for_selection(&items, PanelFocus::Library, capabilities, Vec::new());
 
     let labels = match app.pending_overlay.take() {
         Some(OverlayRequest::ContextMenu(menu)) => menu
@@ -236,9 +231,10 @@ fn the_gui_row_menu_offers_shuffle_before_the_removals() {
         Box::new(leaf_item("queued track", "Audio", "Audio", false)),
     )]));
 
-    app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
+    let mut core = GuiCore::new(app);
+    core.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
 
-    let labels = match app.gui_overlay.take() {
+    let labels = match core.gui.overlay.take() {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()
@@ -269,9 +265,10 @@ fn the_gui_row_menu_hides_shuffle_without_the_capability() {
         Box::new(leaf_item("queued movie", "Movie", "Video", false)),
     )]));
 
-    app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
+    let mut core = GuiCore::new(app);
+    core.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
 
-    let labels = match app.gui_overlay.take() {
+    let labels = match core.gui.overlay.take() {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()
@@ -319,7 +316,6 @@ fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
     model.handle_terminal_message(
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![latest_row]),
-            None,
         ))),
         &mut false,
         &mut false,
@@ -344,7 +340,7 @@ fn visual_slot_menu_names_the_other_content(
     let mut app = make_app_stub();
     app.visualizer_enabled = visualizer_enabled;
 
-    app.open_visual_slot_context_menu(10, 5);
+    app.open_visual_slot_context_menu();
 
     assert_eq!(pending_menu_labels(&mut app), expected);
 }
@@ -380,13 +376,13 @@ fn visual_slot_hide_entry_hides_the_slot() {
     assert!(app.visual_slot_hidden);
 }
 
-/// The queue multi-selection menu keeps its opening gesture's pointer anchor
-/// (the TUI's multi-selection right-click raises the menu at the pointer,
-/// exactly as its single-row right-click does); only the GUI's frame-carried
-/// menu, which the window anchors on the first selected slot, builds without
-/// one.
+/// The queue multi-selection menu anchors on the selected queue row: the
+/// core builder takes no pointer cell, so the TUI's multi-selection
+/// right-click sets its pointer anchor itself before the raise, and the
+/// GUI's frame-carried menu (which the window anchors on the first selected
+/// slot) is the same menu.
 #[test]
-fn the_queue_selection_menu_keeps_its_pointer_anchor() {
+fn the_queue_selection_menu_anchors_on_the_selected_queue_row() {
     let mut app = queue_shuffle_capable_app();
     app.panel_focus = PanelFocus::Queue;
     app.local_view = QueueView::from_snapshot(&queue_state(vec![
@@ -397,19 +393,11 @@ fn the_queue_selection_menu_keeps_its_pointer_anchor() {
         .filter_map(|index| app.local_view.slot_id_at(index))
         .collect();
 
-    let anchored = app
-        .build_queue_selection_menu_at(&slots, Some((12, 34)))
-        .expect("the anchored selection menu built");
-    assert!(matches!(
-        anchored.anchor,
-        mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x: 12, y: 34 }
-    ));
-
-    let unanchored = app
+    let menu = app
         .build_queue_selection_menu(&slots)
-        .expect("the unanchored selection menu built");
+        .expect("the selection menu built");
     assert!(matches!(
-        unanchored.anchor,
-        mbv_ui_model::context_menu::ContextMenuAnchor::SelectedItem(_)
+        menu.anchor,
+        mbv_ui_model::context_menu::ContextMenuAnchor::SelectedItem(PanelFocus::Queue)
     ));
 }

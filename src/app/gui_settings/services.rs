@@ -6,9 +6,9 @@
 use mbv_ui_model::settings::ServiceActionIntent;
 
 use super::{GuiSettingsSection, GuiSetupService};
-use crate::app::App;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// Row 5.2's `embySetup` arm: fill the Emby setup form with the command's
     /// fields and submit it through the shared validation.
     pub(super) fn apply_gui_settings_emby_setup(
@@ -17,8 +17,9 @@ impl App {
         username: String,
         password: String,
     ) {
-        self.fill_emby_setup_form(server_url, username, password);
-        self.submit_emby_setup();
+        self.app
+            .fill_emby_setup_form(server_url, username, password);
+        self.app.submit_emby_setup();
     }
 
     /// Row 5.2's `audiobookshelfSetup` arm: fill the Audiobookshelf setup form
@@ -28,8 +29,8 @@ impl App {
         server_url: String,
         api_key: String,
     ) {
-        self.fill_audiobookshelf_setup_form(server_url, api_key);
-        self.submit_audiobookshelf_setup();
+        self.app.fill_audiobookshelf_setup_form(server_url, api_key);
+        self.app.submit_audiobookshelf_setup();
     }
 
     /// Row 5.2's `serviceAction` arm: run one Service action through the
@@ -41,15 +42,15 @@ impl App {
             self.select_gui_settings_section(GuiSettingsSection::Feeds);
             return;
         }
-        self.route_service_action(action);
+        self.app.route_service_action(action);
     }
 
     /// Row 5.2's `cancelSetup` arm: abandon the named setup form, cancelling
     /// its generation as the TUI's Esc does.
     pub(super) fn apply_gui_settings_cancel_setup(&mut self, service: GuiSetupService) {
         match service {
-            GuiSetupService::Emby => self.cancel_emby_setup(),
-            GuiSetupService::Audiobookshelf => self.cancel_audiobookshelf_setup(),
+            GuiSetupService::Emby => self.app.cancel_emby_setup(),
+            GuiSetupService::Audiobookshelf => self.app.cancel_audiobookshelf_setup(),
         }
     }
 }

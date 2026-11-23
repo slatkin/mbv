@@ -1,6 +1,7 @@
 //! Shared search-row painting.
 
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;

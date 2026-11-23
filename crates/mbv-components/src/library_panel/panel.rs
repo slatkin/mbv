@@ -19,12 +19,11 @@ use mbv_render::arrangements::wide_hero::normalize_list_pane_width;
 use mbv_render::wide_hero_fits;
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::library_hero::PanelHeroImagePaint;
 use mbv_ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 use mbv_ui_msg::SelectionSummary;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
-use super::content::PanelHeroImagePaint;
-use super::hero::HeroContentData;
 use super::hero_composition::HeroCompositionGeometry;
 use super::narrow::render_narrow_skeleton;
 use super::owner::{LibraryContentOwner, LibraryOwners, LibrarySlotEvent};
@@ -33,7 +32,8 @@ use super::wide::{
     render_wide_skeleton,
 };
 use crate::inline_search::InlineSearchHost;
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::playback::HeroImageState;
 
 /// The painted split's pointer→width resolution inputs, shared by the drag
 /// gesture's arming and resolution (the same facts the old

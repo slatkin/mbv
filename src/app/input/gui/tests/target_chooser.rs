@@ -8,16 +8,28 @@ use std::sync::mpsc::Receiver;
 use mbv_ctrl::CtrlCmd;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, ShellRequest};
 
-use crate::app::App;
 use crate::app::gui_client_state::GuiOverlay;
 use crate::app::input::gui::GuiInput;
-use crate::app::tests::make_local_daemon_app_stub_with_cmd_rx_and_compat;
+use crate::app::tests::{
+    gui_client_capabilities, make_local_daemon_app_stub_with_cmd_rx_and_compat,
+};
+use crate::gui::GuiCore;
+
+/// One routed key, delivered through the GUI entry.
+fn gui_key(core: &mut GuiCore, input: GuiInput) -> bool {
+    core.route_gui_input(input, None)
+}
+
+/// One surface message, delivered through the GUI entry.
+fn gui_msg(core: &mut GuiCore, msg: Msg) {
+    core.handle_gui_surface_msg(msg);
+}
 
 /// An `App` stub whose Owner advertises the `playback-output` capability
 /// and offers one cast receiver (`receiver-1`) as a playback target: the
 /// `panel_targets` merge the chooser projects, with the command channel
 /// that records what a selection sends (add-tauri-gui-client row 6.4).
-fn cast_target_app() -> (App, Receiver<CtrlCmd>) {
+fn cast_target_core() -> (GuiCore, Receiver<CtrlCmd>) {
     let mut compat = mbv_ctrl::CtrlCompatibility::current();
     compat.supports_playback_output = true;
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx_and_compat(Vec::new(), compat);
@@ -29,7 +41,7 @@ fn cast_target_app() -> (App, Receiver<CtrlCmd>) {
     }];
     app.rebuild_panel_targets();
     while cmd_rx.try_recv().is_ok() {}
-    (app, cmd_rx)
+    (GuiCore::new(app), cmd_rx)
 }
 
 /// The `SelectPlaybackOutput` selections the Owner received, in arrival
@@ -50,16 +62,16 @@ fn output_selections(cmd_rx: &Receiver<CtrlCmd>) -> Vec<mbv_ctrl::OutputSelectio
 // toggles it as F3 toggles the sidebar.
 #[test]
 fn open_sessions_request_toggles_the_target_chooser() {
-    let (mut app, _cmd_rx) = cast_target_app();
+    let (mut core, _cmd_rx) = cast_target_core();
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
     assert!(matches!(
-        app.gui_overlay,
+        core.gui.overlay,
         Some(GuiOverlay::TargetChooser(_))
     ));
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
-    assert!(app.gui_overlay.is_none());
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    assert!(core.gui.overlay.is_none());
 }
 
 // The chooser's local row returns a remote output to this machine, asked
@@ -70,7 +82,7 @@ fn open_sessions_request_toggles_the_target_chooser() {
 // sends.
 #[test]
 fn the_local_chooser_row_returns_a_cast_output_to_local() {
-    let (mut app, cmd_rx) = cast_target_app();
+    let (mut core, cmd_rx) = cast_target_core();
     // The Owner's connection record reports the Cast output — the fact the
     // detach's gate and body read (the drained mirror lags it one tick);
     // the chooser's attach check still reads the mirror.
@@ -79,14 +91,18 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
         name: "Living Room".to_string(),
         connection: mbv_ctrl::OutputConnection::Connected,
     };
-    app.player
+    core.app
+        .player
         .remote()
         .update_playback_output_for_test(output.clone());
-    app.playback_output = Some(output);
+    core.app.playback_output = Some(output);
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(
-        mbv_ui_model::panel_targets::ChooserTargetKey::Local,
-    ))));
+    gui_msg(
+        &mut core,
+        Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(
+            mbv_ui_model::panel_targets::ChooserTargetKey::Local,
+        ))),
+    );
 
     assert!(
         output_selections(&cmd_rx).is_empty(),
@@ -94,17 +110,17 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
     );
     // The GUI drain presents the raised request as the canvas's own
     // blocking overlay.
-    super::present_pending_modal(&mut app);
-    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
-    app.route_gui_input(
+    super::present_pending_modal(&mut core);
+    assert!(matches!(core.gui.overlay, Some(GuiOverlay::Confirm(_))));
+    gui_key(
+        &mut core,
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
     );
 
     let selections = output_selections(&cmd_rx);
     assert_eq!(selections.len(), 1);
     assert!(matches!(selections[0], mbv_ctrl::OutputSelection::Local));
-    assert!(app.gui_overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // The GUI-only `r` chord opens the chooser (add-tauri-gui-client row 6.4):
@@ -112,23 +128,23 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
 // it.
 #[test]
 fn gui_context_r_opens_the_target_chooser() {
-    let (mut app, _cmd_rx) = cast_target_app();
-    app.enable_gui_client();
+    let (mut core, _cmd_rx) = cast_target_core();
+    core.app.set_client_capabilities(gui_client_capabilities());
 
-    app.route_gui_input(
+    gui_key(
+        &mut core,
         GuiInput::Key(KeyEvent::new(Key::Char('r'), KeyModifiers::NONE)),
-        None,
     );
     assert!(matches!(
-        app.gui_overlay,
+        core.gui.overlay,
         Some(GuiOverlay::TargetChooser(_))
     ));
 
-    app.route_gui_input(
+    gui_key(
+        &mut core,
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-        None,
     );
-    assert!(app.gui_overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // A chooser Enter selects the cursor choice's output through the same
@@ -140,16 +156,16 @@ fn gui_context_r_opens_the_target_chooser() {
 // moves it to the cast receiver first.
 #[test]
 fn target_chooser_enter_selects_the_cursor_choice() {
-    let (mut app, cmd_rx) = cast_target_app();
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
-    app.route_gui_input(
+    let (mut core, cmd_rx) = cast_target_core();
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    gui_key(
+        &mut core,
         GuiInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)),
-        None,
     );
 
-    app.route_gui_input(
+    gui_key(
+        &mut core,
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
     );
 
     assert!(
@@ -158,11 +174,11 @@ fn target_chooser_enter_selects_the_cursor_choice() {
     );
     // The GUI drain presents the raised request as the canvas's own
     // blocking overlay.
-    super::present_pending_modal(&mut app);
-    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
-    app.route_gui_input(
+    super::present_pending_modal(&mut core);
+    assert!(matches!(core.gui.overlay, Some(GuiOverlay::Confirm(_))));
+    gui_key(
+        &mut core,
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
     );
 
     let selections = output_selections(&cmd_rx);
@@ -171,7 +187,7 @@ fn target_chooser_enter_selects_the_cursor_choice() {
         selections[0],
         mbv_ctrl::OutputSelection::Cast { ref receiver_id, .. } if receiver_id == "receiver-1"
     ));
-    assert!(app.gui_overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // A chooser row's press emits the `SelectSession` request the TUI's
@@ -181,25 +197,28 @@ fn target_chooser_enter_selects_the_cursor_choice() {
 // (confirm-output-handoff).
 #[test]
 fn select_session_request_selects_the_output_and_closes() {
-    let (mut app, cmd_rx) = cast_target_app();
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    let (mut core, cmd_rx) = cast_target_core();
+    gui_msg(&mut core, Msg::Shell(Box::new(ShellRequest::OpenSessions)));
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectSession(
-        mbv_ui_model::panel_targets::SessionTargetKey::Cast("receiver-1".to_string()),
-    ))));
+    gui_msg(
+        &mut core,
+        Msg::Shell(Box::new(ShellRequest::SelectSession(
+            mbv_ui_model::panel_targets::SessionTargetKey::Cast("receiver-1".to_string()),
+        ))),
+    );
 
     assert!(
         output_selections(&cmd_rx).is_empty(),
         "the gate asks before anything is sent"
     );
-    super::present_pending_modal(&mut app);
-    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
-    app.route_gui_input(
+    super::present_pending_modal(&mut core);
+    assert!(matches!(core.gui.overlay, Some(GuiOverlay::Confirm(_))));
+    gui_key(
+        &mut core,
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
     );
 
     let selections = output_selections(&cmd_rx);
     assert_eq!(selections.len(), 1);
-    assert!(app.gui_overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }

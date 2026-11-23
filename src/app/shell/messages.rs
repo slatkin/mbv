@@ -159,14 +159,10 @@ impl Model {
             | ShellRequest::ResizeListPaneEnd(_)) => {
                 self.handle_pointer_and_layout_request(&request);
             }
-            // The queue visual slot's chrome menu: the panel reports the
-            // pointer anchor; the shell owns the menu build and the placement
-            // bounds. A blocking overlay already owns mouse input through the
-            // eligibility ladder; the guard is the spec's defensive rule.
-            ShellRequest::VisualSlotContextMenu { x, y } => {
-                if !self.blocking_overlay_active() {
-                    self.app.open_visual_slot_context_menu(x, y);
-                }
+            // The queue visual slot's chrome menu (see
+            // `handle_visual_slot_context_menu`).
+            ShellRequest::VisualSlotContextMenu { .. } => {
+                self.handle_visual_slot_context_menu();
             }
             request
             @ (ShellRequest::RowContextMenu(..) | ShellRequest::MusicRowContextMenu(..)) => {
@@ -194,6 +190,18 @@ impl Model {
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
             self.app.maybe_fetch_next_page(lib_idx, index);
         }
+    }
+
+    /// The queue visual slot's chrome menu: the shell owns the menu build, the
+    /// recorded pointer anchor, and the placement bounds. A blocking overlay
+    /// already owns mouse input through the eligibility ladder; the guard is
+    /// the spec's defensive rule.
+    fn handle_visual_slot_context_menu(&mut self) {
+        if self.blocking_overlay_active() {
+            return;
+        }
+        self.app.open_visual_slot_context_menu();
+        self.anchor_pending_menu_at_pointer();
     }
 
     fn handle_pointer_and_layout_request(&mut self, request: &ShellRequest) {
@@ -225,7 +233,7 @@ impl Model {
                             content_area.width,
                         );
                 }
-                self.app.save_prefs();
+                self.save_client_list_pane_width();
             }
             _ => unreachable!("request is a pointer or layout request"),
         }
@@ -240,23 +248,22 @@ impl Model {
         match request {
             ShellRequest::RowContextMenu(
                 mbv_ui_model::context_menu::ContextMenuTargets::Queue(slot_ids),
-                anchor,
             ) => {
-                self.handle_queue_row_context_menu(slot_ids, anchor);
+                self.handle_queue_row_context_menu(slot_ids);
                 false
             }
-            ShellRequest::MusicRowContextMenu(targets, anchor) => {
+            ShellRequest::MusicRowContextMenu(targets) => {
                 self.app
                     .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 // Keep Music's focus policy before reusing the generic resolver.
                 self.handle_shell_request(
-                    ShellRequest::RowContextMenu(targets, anchor),
+                    ShellRequest::RowContextMenu(targets),
                     music_resize,
                     tv_resize,
                 )
             }
-            ShellRequest::RowContextMenu(targets, anchor) => {
-                self.handle_library_row_context_menu(targets, anchor);
+            ShellRequest::RowContextMenu(targets) => {
+                self.handle_library_row_context_menu(targets);
                 false
             }
             _ => unreachable!("request is a row context-menu request"),
@@ -264,7 +271,7 @@ impl Model {
     }
 
     fn handle_open_url_request(&mut self, url: &str) {
-        if mbv_components::library_panel::sanitize_url(url).is_some()
+        if mbv_ui_model::ui_util::sanitize_url(url).is_some()
             && let Err(error) = crate::app::open_url(url)
         {
             tracing::warn!(name: "library_link.open.failed", target: "library_link", { url = %url, error = %error }, "failed to open provider link");
@@ -463,12 +470,10 @@ impl Model {
     }
 
     /// The Queue `RowContextMenu` arm: bulk selection menu or single-row
-    /// right-click/keyboard menu, then the queue re-projection.
-    fn handle_queue_row_context_menu(
-        &mut self,
-        slot_ids: Vec<mbv_queue::QueueSlotId>,
-        anchor: Option<(u16, u16)>,
-    ) {
+    /// right-click/keyboard menu, then the queue re-projection. Both use the
+    /// same core raise; the shell anchors the menu at its recorded pointer
+    /// only when this request came from a right-click (design D6).
+    fn handle_queue_row_context_menu(&mut self, slot_ids: Vec<mbv_queue::QueueSlotId>) {
         self.context_menu_origin = Some(mbv_ui_model::media_list::SelectionOrigin::Queue);
         self.context_action_snapshot = Some(mbv_ui_model::context_menu::ContextActionSnapshot {
             origin: mbv_ui_model::media_list::SelectionOrigin::Queue,
@@ -477,15 +482,19 @@ impl Model {
             )],
         });
         if slot_ids.len() > 1 {
-            if let Some(menu) = self.app.build_queue_selection_menu_at(&slot_ids, anchor) {
+            if let Some(mut menu) = self.app.build_queue_selection_menu(&slot_ids) {
+                if self.menu_pointer_current {
+                    menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
+                }
                 self.app.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
             }
         } else {
             let slot_id = slot_ids.into_iter().next();
             let cw_selected = Model::home_continue_watching_selected();
-            if let Some((x, y)) = anchor {
+            if self.menu_pointer_current {
                 self.app
-                    .handle_mouse_right_click_queue(slot_id, x, y, cw_selected);
+                    .handle_mouse_right_click_queue(slot_id, cw_selected);
+                self.anchor_pending_menu_at_pointer();
             } else {
                 self.app
                     .handle_keyboard_context_menu_queue(slot_id, cw_selected);
@@ -496,24 +505,32 @@ impl Model {
 
     /// The generic (non-Queue, non-Music) `RowContextMenu` arm: record the
     /// selection origin/snapshot, open the destination-appropriate menu, and
-    /// re-project all destination owners.
-    fn open_emby_context_item(
-        &mut self,
-        item: mbv_emby_model::EmbyItem,
-        anchor: Option<(u16, u16)>,
-    ) {
+    /// re-project all destination owners. A request that a right-click raised
+    /// in this tick anchors at the recorded pointer; a keyboard request keeps
+    /// the core's selected-item anchor (design D6).
+    fn open_emby_context_item(&mut self, item: mbv_emby_model::EmbyItem) {
         self.focus_emby_context_item(&item);
-        if let Some((x, y)) = anchor {
-            self.app.open_context_menu_for_at(item, x, y);
-        } else {
-            self.app.open_context_menu_for(item);
+        self.app.open_context_menu_for_at(item);
+        self.anchor_pending_menu_at_pointer();
+    }
+
+    /// Anchor the menu the core just raised at the pointer the shell recorded
+    /// (design D6). It runs only on a path a right-click raised in this tick,
+    /// so a keyboard raise keeps the core's selected-item anchor. A core raise
+    /// that produced no menu leaves the overlay queue untouched.
+    pub(in crate::app) fn anchor_pending_menu_at_pointer(&mut self) {
+        if !self.menu_pointer_current {
+            return;
         }
+        let Some(OverlayRequest::ContextMenu(menu)) = self.app.pending_overlay.as_mut() else {
+            return;
+        };
+        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
     }
 
     fn handle_library_row_context_menu(
         &mut self,
         targets: mbv_ui_model::context_menu::ContextMenuTargets,
-        anchor: Option<(u16, u16)>,
     ) {
         // The origin is the active library's stable identity
         // (design D6): a bulk clear routes to the list the menu
@@ -535,20 +552,22 @@ impl Model {
                         .collect();
                     self.app.open_context_menu_for_selection(
                         &items,
-                        anchor,
                         mbv_ui_model::settings::PanelFocus::Library,
                         capabilities,
                         Vec::new(),
                     );
+                    self.anchor_pending_menu_at_pointer();
                 } else if let Some(item) = items.pop() {
-                    self.open_emby_context_item(item, anchor);
+                    self.open_emby_context_item(item);
                 }
             }
             mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries) => {
-                self.app.open_feeds_context_menu(&entries, anchor);
+                self.app.open_feeds_context_menu(&entries);
+                self.anchor_pending_menu_at_pointer();
             }
             mbv_ui_model::context_menu::ContextMenuTargets::Audiobookshelf(targets) => {
-                self.app.open_audiobookshelf_context_menu(&targets, anchor);
+                self.app.open_audiobookshelf_context_menu(&targets);
+                self.anchor_pending_menu_at_pointer();
                 // Re-project the active Audiobookshelf owner (task 5.4): both
                 // pushes self-guard on the active tab being their owner.
                 self.push_audiobookshelf_podcast_content();

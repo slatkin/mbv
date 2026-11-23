@@ -4,12 +4,9 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::{
-    Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
+    App, Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
     restore_terminal, start_quit_watchdog,
 };
-// The run-loop tests reach `App` through this module's scope.
-#[cfg(test)]
-use super::App;
 
 /// Issue #940: a run-loop phase that takes at least this long gets a WARN
 /// naming the phase that consumed it, so a stalled input window names its
@@ -40,6 +37,10 @@ impl Model {
         self.sync_terminal_resize();
         self.app.resolve_launch_tab_on_sync();
         self.app.normalize_stale_browse_destination();
+        // Design D6b: a launch tab or overlay change raised this pass can
+        // request a reveal, and the tab panel projection below paints the
+        // anchor, so the request is taken before it.
+        self.reveal_requested_tab();
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted:
         // Home content/focus is projected event-driven by
@@ -111,7 +112,7 @@ impl Model {
         // A pinned width change is one `pinwin set-size` request; the new size
         // reaches mbv only as the terminal's own `Resize` observer event, which
         // this pass adopts like any other resize (invariant 17).
-        let size = (self.app.terminal_width, self.app.terminal_height);
+        let size = (self.terminal_width, self.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
         if self.handled_terminal_size == size && !resize_event {
             return;
@@ -128,8 +129,11 @@ impl Model {
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
             self.app.mini_view_focus = PanelFocus::Queue;
         }
-        if self.app.clamp_queue_column_width() {
-            self.app.save_prefs();
+        if self.clamp_queue_column_width() {
+            App::save_client_pref(
+                "queue_column_width",
+                serde_json::json!(self.app.queue_column_width),
+            );
         }
     }
 
@@ -146,12 +150,15 @@ impl Model {
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
-        self.app.compose_root_frame(f);
+        // Design D6b: a direct draw (startup, or a test fixture) takes any
+        // pending reveal request first, so the painted strip matches state.
+        self.reveal_requested_tab();
+        super::draw::compose_root_frame(self, f);
         // Root composition is data-driven: this is the sole panel paint loop.
         // The queue playback placement is deliberately handled by its panel
         // method; its transport geometry was projected during sync from the
         // prior-paint card checkpoint, so this draw path remains read-only.
-        for placement in self.app.layout.root_frame.placements() {
+        for placement in self.layout.root_frame.placements() {
             let Some(placement) = placement else { continue };
             match placement {
                 mbv_render::arrangements::chrome::PanelPlacement::Tab(area) => {
@@ -189,6 +196,9 @@ impl Model {
     /// arrived.
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let drain = self.app.drain_card_image_completions();
+        // Every completion stores its entry under its key, so the store's
+        // encodings are refreshed once the loop has run (invariant 38).
+        self.prune_image_protocols();
         if drain.series_key_changed {
             self.push_tv_workspace_content();
         }
@@ -205,7 +215,7 @@ impl Model {
             }) => *lib_idx,
             _ => unreachable!("restore handler called with a different library event"),
         };
-        self.app.handle_lib_event(ev);
+        self.app.handle_lib_event(ev, None);
         let latest = self.app.libs.get(lib_idx).and_then(|lib| {
             let level = lib.nav_stack.last()?;
             (lib.library.collection_type == "tvshows"

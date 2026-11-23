@@ -10,8 +10,8 @@
 //! window stack.
 
 mod app;
-mod client_kind;
 mod config;
+mod gui;
 mod launch;
 mod local_daemon;
 mod owner_link;
@@ -48,30 +48,59 @@ pub use self::app::{
     OverlayFocus, PanelIntent, PanelTogglesProjection, PlaybackIntent, PlaybackTargetChoice,
     PlayerEventDrain, QueueCardArtwork, QueueChooserEntryProjection, QueueChooserRenameProjection,
     QueueEndOffsets, QueueFooterProjection, QueueHeaderProjection, QueuePlaybackProjection,
-    QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget, RouterOutcome,
+    QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget, RouterNow, RouterOutcome,
     RouterOverlayState, RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SetupSecret,
     ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
     TrackChoice, TrackPopoverChoice, VisualIntent, WorkspaceRelayout, artist_rows_in_view_id,
-    compare_gui_date_order, gui_feeds_platform, resolve_router_outcome_with_focused,
+    compare_gui_date_order, gui_feeds_platform,
 };
-pub use self::client_kind::ClientKind;
+
+/// The GUI Client's own state (design D4 of `decouple-client-core`): the
+/// library stores, the open overlay, and the screens only the GUI presents. A
+/// Client names it here and seeds it through `GuiCore`; every other name stays
+/// inside the root package.
+pub use self::app::GuiClientState;
+pub use self::app::playing_track_id_for_shell;
 pub use self::config::{Config, load_config};
+/// The GUI Client's core state (design D4 of `decouple-client-core`): the
+/// shared `App` it owns, wrapped by composition. A Client outside `crate::app`
+/// names it here.
+pub use self::gui::GuiCore;
 pub use self::owner_link::{
     OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,
     refusal_text, start_owner,
 };
+pub use self::pin::claim_pin_swap_participant;
 pub use self::startup::run;
 pub use mbv_feed::FeedPlatform;
 pub use mbv_images::ImageDecode;
 pub use mbv_ui_model::toast::{ToastCard, ToastId};
 pub use mbv_ui_msg::TrackChipKind;
 
+/// The capabilities a Client builds at attach time and `attach_owner` takes
+/// in place of a Client kind (design D6a of `decouple-client-core`). A
+/// Client outside `crate::app` names them here.
+pub use crate::app::state::client_capabilities::{ClientCapabilities, ClientCapability};
+
+/// The parked `App` a Client wrapper moves out of position while it holds the
+/// live one in a `GuiCore` (design D4a of `decouple-client-core`). A stub
+/// construction with no live Owner, Service, or player event, so the wrapper
+/// drops it as soon as the real `App` comes back.
+pub use self::app::handoff_app;
+
+#[cfg(feature = "test")]
+pub use self::app::GuiClientEvent;
 /// The `App` stub construction a Client's own tests build their `App` from
 /// (`extract-client-core` design D11). Compiled only under the root package's
 /// `test` feature, which no shipped build enables.
+#[cfg(any(test, feature = "test"))]
+pub use self::app::gui_state_for_test;
+#[cfg(feature = "test")]
+pub use self::app::seeded_gui_state_for_test;
 #[cfg(feature = "test")]
 pub use self::app::{
-    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,
+    drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,
+    set_subtitle_tracks_for_test, stub_app_for_gui_client, stub_app_with_cached_emby_client,
     stub_app_with_cast_target, stub_app_with_completed_emby_startup,
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_failed_emby_setup,
     stub_app_with_local_daemon_events, stub_app_with_open_row_menu,

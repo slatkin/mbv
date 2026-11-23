@@ -1,9 +1,9 @@
 use super::*;
 use crate::config::TestStateDirGuard;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_config::EmbySetup;
 use mbv_core::service_runtime::ServiceState;
 use mbv_ui_model::settings::ServiceEntry;
+use mbv_ui_msg::{Key, KeyModifiers};
 
 #[test]
 fn unavailable_emby_retry_is_one_bounded_generation() {
@@ -90,10 +90,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     };
     app.apply_confirm_action(
         action,
-        crate::app::test_seams::crossterm_key_to_neutral(KeyEvent::new(
-            KeyCode::Esc,
-            KeyModifiers::NONE,
-        )),
+        mbv_ui_msg::KeyEvent::new(Key::Esc, KeyModifiers::NONE),
     );
     app.dismiss_confirm();
     assert!(app.setup.pending_emby_replacement.is_none());

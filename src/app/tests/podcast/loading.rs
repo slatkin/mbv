@@ -81,8 +81,8 @@ fn failed_fetch_consumes_the_session_request_instead_of_looping() {
     let mut app = unfetched_podcast_app(6);
     app.commit_audiobookshelf_podcast_state_scope();
 
-    app.handle_lib_event(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::DetailFetched {
+    app.handle_lib_event(
+        LibEvent::Audiobookshelf(AudiobookshelfEvent::DetailFetched {
             generation: app.audiobookshelf_runtime.generation(),
             request: app.audiobookshelf_browse[0].detail_loading_ids["show-0"],
             library_item_id: "show-0".into(),
@@ -90,8 +90,9 @@ fn failed_fetch_consumes_the_session_request_instead_of_looping() {
                 Err(error) => error,
                 Ok(_) => unreachable!("an empty server URL cannot build a client"),
             }),
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = &app.audiobookshelf_browse[0];
     assert_eq!(
@@ -113,14 +114,15 @@ fn stale_fetch_after_service_replacement_is_rejected() {
         app.audiobookshelf_runtime.generation().value() + 1,
     );
 
-    app.handle_lib_event(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::DetailFetched {
+    app.handle_lib_event(
+        LibEvent::Audiobookshelf(AudiobookshelfEvent::DetailFetched {
             generation: stale_generation,
             request: 0,
             library_item_id: "show-0".into(),
             result: Ok(Vec::new()),
-        },
-    ));
+        }),
+        None,
+    );
 
     let state = &app.audiobookshelf_browse[0];
     assert!(!state.detail_cache.contains_key("show-0"));
@@ -151,24 +153,26 @@ fn activation_with_a_fetch_in_flight_does_not_double_fetch_and_the_newer_result_
 
     // The still-running pre-activation fetch lands after the activation: it
     // is the show's one cache write.
-    app.handle_lib_event(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::DetailFetched {
+    app.handle_lib_event(
+        LibEvent::Audiobookshelf(AudiobookshelfEvent::DetailFetched {
             generation: app.audiobookshelf_runtime.generation(),
             request: in_flight,
             library_item_id: "show-2".into(),
             result: Ok(vec![episode("show-2", "fresh")]),
-        },
-    ));
+        }),
+        None,
+    );
 
     // A replay of the retired request cannot overwrite the newer result.
-    app.handle_lib_event(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::DetailFetched {
+    app.handle_lib_event(
+        LibEvent::Audiobookshelf(AudiobookshelfEvent::DetailFetched {
             generation: app.audiobookshelf_runtime.generation(),
             request: in_flight,
             library_item_id: "show-2".into(),
             result: Ok(vec![episode("show-2", "replayed")]),
-        },
-    ));
+        }),
+        None,
+    );
     let state = &app.audiobookshelf_browse[0];
     assert_eq!(
         state.detail_cache.get("show-2").map(|episodes| episodes
@@ -182,14 +186,15 @@ fn activation_with_a_fetch_in_flight_does_not_double_fetch_and_the_newer_result_
     // A superseded serial cannot retire a live request's mark either:
     // show-0's re-request keeps its own serial and its slot.
     let show0_serial = app.audiobookshelf_browse[0].detail_loading_ids["show-0"];
-    app.handle_lib_event(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::DetailFetched {
+    app.handle_lib_event(
+        LibEvent::Audiobookshelf(AudiobookshelfEvent::DetailFetched {
             generation: app.audiobookshelf_runtime.generation(),
             request: in_flight,
             library_item_id: "show-0".into(),
             result: Ok(vec![episode("show-0", "misdelivered")]),
-        },
-    ));
+        }),
+        None,
+    );
     let state = &app.audiobookshelf_browse[0];
     assert_eq!(
         state.detail_loading_ids.get("show-0"),

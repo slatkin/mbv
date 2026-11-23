@@ -7,9 +7,10 @@
 //! the paint-free breakpoint/area helpers the shell's mount/focus gates
 //! read.
 
-use crate::components::list_rows::LibraryListRenderCtx;
 use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use mbv_ui_model::browse::SeriesDetail;
+use mbv_ui_model::list_ctx::LibraryListRenderCtx;
+use mbv_ui_model::playback::HeroImageState;
 
 /// All App-derived data needed to paint the wide TV workspace.
 #[derive(Clone, Debug)]
@@ -75,24 +76,4 @@ impl TvWideRenderCtx {
             hero_image: HeroImageState::None,
         }
     }
-}
-/// The projection's image state for one hero (task 5.10, design D9): the
-/// fetch/encode runs in the shell projection; painting reads this state only.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum HeroImageState {
-    /// No image will arrive (no artwork source, images disabled, or a fetch
-    /// that resolved empty): the shared placeholder is final.
-    None,
-    /// A fetch/encode for the artwork source is in flight: the painters
-    /// reserve the box with the shared placeholder.
-    Loading,
-    /// The image is cached under `cache_key` (cover-fit keyed by the Wide
-    /// header's projected box); the painters reserve the box and the shell
-    /// paints the protocol into it after view, showing the placeholder at
-    /// most one frame while an encode completes. `decoded` is the cached
-    /// cached source image's pixel size for aspect-aware artwork placement.
-    Ready {
-        cache_key: String,
-        decoded: Option<(u32, u32)>,
-    },
 }

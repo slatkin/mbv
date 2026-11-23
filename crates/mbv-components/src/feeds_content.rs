@@ -28,10 +28,11 @@ use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransi
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::components::tv_wide::HeroImageState;
-use mbv_render::{FeedDisplayRow, current_time_secs, feed_display_rows};
+use mbv_render::{FeedDisplayRow, feed_display_rows};
+use mbv_ui_model::feed_age::current_time_secs;
 use mbv_ui_model::feed_tab::WatchedFilter;
 use mbv_ui_model::home_latest::provider_timestamp_secs;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::ui_util::{row_date, trunc_str};
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
@@ -337,7 +338,6 @@ impl FeedsContent {
         };
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries),
-            None,
         ))))
     }
 

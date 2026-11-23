@@ -24,6 +24,11 @@ impl App {
     /// Series item instead of an App browse cursor, along with the library
     /// index the wide/narrow gate should check.
     ///
+    /// The wide gate reads the Client's write-back fact
+    /// [`App::tv_workspace_wide`]: the breakpoint is terminal geometry, so the
+    /// core cannot compute it (design D2). A Client that paints no such
+    /// Workspace leaves the set empty, which keeps this branch narrow.
+    ///
     /// Keeps the non-Series guard (`enter_series_selection` also enforces
     /// `item_type == "Series"` and a non-empty id) and the wide-fetch vs
     /// narrow-modal branch.
@@ -35,7 +40,7 @@ impl App {
         if item.item_type != "Series" || item.id.is_empty() {
             return false;
         }
-        if self.wide_tv_show_area(lib_idx).is_some() {
+        if self.tv_workspace_wide.contains(&lib_idx) {
             self.enter_series_selection(lib_idx, item);
         }
         // Non-Wide activation is handled by the mounted Library panel, whose

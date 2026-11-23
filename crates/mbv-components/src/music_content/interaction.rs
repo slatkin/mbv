@@ -105,7 +105,6 @@ impl MusicContent {
                 };
                 Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                     mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                    Some((at.x, at.y)),
                 ))))
             }
             _ => None,
@@ -185,7 +184,6 @@ impl MusicContent {
                         search.item_for_target(&target).map(|item| {
                             Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                                 mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
-                                None,
                             )))
                         })
                     }
@@ -298,27 +296,26 @@ impl MusicContent {
         };
         self.browser.apply(TreeOperation::Select(target));
         if !marked.is_empty() && clicked_marked {
-            return self.tree_marked_context_menu(at);
+            return self.tree_marked_context_menu();
         }
 
         // A context click outside the marked set has the canonical list
         // semantics: clear only this tree selection and open the ordinary menu.
         self.browser.apply(TreeOperation::ClearMarks);
-        self.tree_single_context_menu(at)
+        self.tree_single_context_menu()
     }
 
-    fn tree_marked_context_menu(&self, at: ratatui::layout::Position) -> Option<Msg> {
+    fn tree_marked_context_menu(&self) -> Option<Msg> {
         let (items, unresolved_targets) = self.selected_tree_items()?;
         if items.is_empty() && unresolved_targets.is_empty() {
             return None;
         }
         Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-            Some((at.x, at.y)),
         ))))
     }
 
-    fn tree_single_context_menu(&self, at: ratatui::layout::Position) -> Option<Msg> {
+    fn tree_single_context_menu(&self) -> Option<Msg> {
         let items = if self.selected_is_artist() {
             self.selected_artist_items()?.0
         } else {
@@ -329,7 +326,6 @@ impl MusicContent {
         }
         Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-            Some((at.x, at.y)),
         ))))
     }
 }

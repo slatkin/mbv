@@ -12,7 +12,6 @@
 //! only owners that have migrated.
 
 pub mod content;
-pub mod hero;
 pub mod hero_composition;
 pub mod hero_header;
 pub mod narrow;
@@ -23,18 +22,8 @@ pub mod panel_list;
 pub mod slots;
 pub mod wide;
 
-#[cfg(test)]
 #[doc(inline)]
-pub use content::HeroLink;
-#[doc(inline)]
-pub use content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroSlot, LibraryPanelContent, ListSlot,
-    PanelHeroImagePaint, SelectorRow, Workspace,
-};
-#[doc(inline)]
-pub use hero::{HeroContentData, hero_content_emby, hero_content_series_with_episode};
-#[doc(inline)]
-pub use overview_box::sanitize_url;
+pub use content::{HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow, Workspace};
 #[doc(inline)]
 pub use owner::{LibraryContentOwner, LibrarySlotEvent};
 #[doc(inline)]

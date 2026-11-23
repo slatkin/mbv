@@ -1,15 +1,12 @@
-//! Image cache, loading, and terminal image protocol support.
+//! Image cache, loading, and pixel processing.
 //!
-//! The `ImageCache`, resize worker, title-overlay composition, and per-Service
-//! cache-key helpers live here. It prepares pixels; the Library and Queue panels
-//! own placement and painting.
+//! The `ImageCache` and per-Service cache-key helpers live here. It decodes and
+//! caches pixels; the terminal image protocol and its placement live in
+//! `mbv-tui-support`, and the Library and Queue panels own painting.
 
 pub mod cache;
-mod protocol;
-pub mod resize;
 pub mod row;
 pub mod title_overlay;
-pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
 pub const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 pub static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
     include_bytes!("../../../assets/power-card-placeholder.webp");
@@ -97,20 +94,17 @@ pub fn emby_queue_landscape_cache_key(item_id: &str) -> String {
 /// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
 /// No other cache-key namespace uses it, which is what lets the image-completion
 /// gate recognise the whole Series family from the key alone.
-pub const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
+///
+/// Owned by `mbv-ui-model` (the hero policy formats the same key), re-exported
+/// here so the shell's image layer keeps importing it from the image crate.
+pub use mbv_ui_model::library_hero::producers::SERIES_IMAGE_CACHE_KEY_INFIX;
 
 /// Cache key for Series artwork under the `{id}:ser:{types}` scheme.
 /// Shared by the panel's Emby artwork projection and shell-side
 /// prefetch/loading lookups so they cannot format the key differently and
 /// silently miss each other's cache entries. Formats only;
-/// chain ownership stays with the callers.
-#[must_use]
-pub fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
-    format!(
-        "{item_id}{SERIES_IMAGE_CACHE_KEY_INFIX}{}",
-        image_types.join(",")
-    )
-}
+/// chain ownership stays with the callers. Owned by `mbv-ui-model`.
+pub use mbv_ui_model::library_hero::producers::series_image_cache_key;
 pub struct CachedImage {
     /// The decoded image. `None` for a fetch that resolved without artwork,
     /// and for every fetch a [`ImageDecode::SourceOnly`] Client keeps (design
@@ -122,7 +116,6 @@ pub struct CachedImage {
     /// fetched image, `None` for an entry the app derived itself (a composed
     /// title overlay, the bundled placeholder) or a fetch with no artwork.
     pub source: Option<SourceImage>,
-    pub protocols: std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
     /// The hero artwork box (cells) the current protocols were built from
     /// (task 5.10, design D5's cover fit): the panel hero projection
     /// `resize_to_fill`s the source to the box's pixel size before encoding,
@@ -143,7 +136,6 @@ impl CachedImage {
         Self {
             img: None,
             source: None,
-            protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
         }

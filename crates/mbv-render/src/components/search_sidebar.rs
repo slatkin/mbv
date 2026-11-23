@@ -2,6 +2,7 @@ use crate::components::chrome;
 use crate::layout::SEARCH_PANEL_W;
 use mbv_emby_model::EmbyItem;
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::search_sidebar::SearchSidebar;
 use mbv_ui_model::ui_util::trunc_str;
 use ratatui::Frame;

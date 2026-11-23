@@ -23,7 +23,7 @@ fn feed_entry(guid: &str, played: bool) -> mbv_queue::FeedEntry {
 
 /// Open the Feeds menu for `entries` and return the ordered entry labels.
 fn feeds_menu_labels(app: &mut App, entries: &[mbv_queue::FeedEntry]) -> Vec<&'static str> {
-    app.open_feeds_context_menu(entries, None);
+    app.open_feeds_context_menu(entries);
     match app.pending_overlay.take() {
         Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) => {
             menu.entries.iter().map(|entry| entry.label).collect()

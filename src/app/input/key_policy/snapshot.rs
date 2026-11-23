@@ -2,6 +2,7 @@
 //! and Client facts the policy's gates read, split out of `key_policy.rs`
 //! along the type seam (the policy itself stays beside its ordered table).
 
+use crate::app::state::client_capabilities::ClientCapabilities;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 
 /// Which remote-control target currently owns transport shortcuts.
@@ -89,6 +90,12 @@ pub struct RouterOverlayState {
 }
 
 /// Plain-data state read by the central keyboard policy.
+///
+/// The fields are the policy's inputs only. Prefix mode is not one of them:
+/// the armed bit belongs to the Client that owns it, and the router reads it
+/// through the entry it is given ([`super::RouterNow`], design D6 of
+/// `decouple-client-core`), so a resolver takes the facts and a neutral access
+/// rather than a copy of a Client's field.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RouterSnapshot {
     pub playback: RouterPlaybackState,
@@ -99,17 +106,32 @@ pub struct RouterSnapshot {
     /// Space (`media-list-multi-select` spec) takes Space ahead of the global
     /// play/pause toggle.
     pub visual_selection_active: bool,
-    /// Whether prefix mode is armed: the mirror of the App-owned bit. While
-    /// true, the
-    /// next chord resolves against the prefix namespace only; arming is
-    /// suppressed while a text entry owns focus or a blocking overlay is
-    /// open (the `prefix_arm` layer's gate).
-    pub prefix_armed: bool,
-    /// Whether the resolving Client is the GUI Client (add-tauri-gui-client
-    /// row 6.2): the GUI-only key context's gate reads it, so the canvas's
-    /// `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) chords
-    /// route in the GUI Client and never in the TUI Client — a configured
-    /// TUI binding on those chords does not follow into the GUI, and the
-    /// TUI's default bindings stay unchanged.
-    pub gui_client: bool,
+    /// The capabilities of the resolving Client (design D6a of
+    /// `decouple-client-core`): the transport chips' key context
+    /// (add-tauri-gui-client row 6.2) reads
+    /// `ClientCapability::TransportChipKeys`, so the canvas's `z` (collapse),
+    /// `q` (queue fold), and `c` (cycle subtitle) chords route in a Client
+    /// that paints the chips and never in the TUI Client — a configured TUI
+    /// binding on those chords does not follow into the GUI, and the TUI's
+    /// default bindings stay unchanged.
+    pub client_capabilities: ClientCapabilities,
+}
+
+/// What the router needs to know about the input it is resolving, beyond the
+/// policy's [`RouterSnapshot`] facts: the neutral state that lives outside the
+/// snapshot and that the router reads through a method instead of a field
+/// (design D6 of `decouple-client-core`).
+///
+/// Two implementors carry the fact in production, so neither Client's routing
+/// site reads the other's state: the core `App` (its own `prefix_armed`
+/// field) and the GUI Client's `GuiCore` (the same method, one accessor down),
+/// and both Clients resolve through one router entry
+/// ([`super::resolve_router_outcome`]). The TUI Client's shell forwards it as
+/// well, because arming and disarming also hold `TuiRealm` focus off.
+pub trait RouterNow {
+    /// Whether prefix mode is armed: while true, the next chord resolves
+    /// against the prefix namespace only; arming is suppressed while a text
+    /// entry owns focus or a blocking overlay is open (the `prefix_arm`
+    /// layer's gate).
+    fn prefix_armed(&self) -> bool;
 }

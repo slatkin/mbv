@@ -5,6 +5,8 @@ use mbv_queue::{
 };
 use std::sync::Arc;
 
+use crate::app::App;
+
 /// The Client's adopt-only view of one Player owner's queue.
 #[derive(Clone, Debug)]
 pub struct QueueView {
@@ -18,6 +20,15 @@ pub struct QueueView {
     start_slot: Option<QueueSlotId>,
     pending_playback_slot: Option<QueueSlotId>,
     revision_mint: Arc<QueueRevisionMint>,
+}
+
+impl App {
+    /// Focus the queue header's filter text entry (the GUI-only `/`): the
+    /// filter text and its active fact are core queue-view state, so the
+    /// canvas header's control and the chord run this one path.
+    pub(in crate::app) fn activate_queue_filter(&mut self) {
+        self.queue_filter_active = true;
+    }
 }
 
 /// Why a Client is adopting an owner queue snapshot.

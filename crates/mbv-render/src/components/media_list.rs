@@ -13,6 +13,7 @@ pub use mbv_ui_model::media_list::{
 
 use mbv_theme as palette;
 use mbv_theme::Surface;
+use mbv_tui_support::ToRatatui;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 

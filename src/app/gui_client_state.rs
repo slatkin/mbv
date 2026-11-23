@@ -20,6 +20,7 @@ mod projection;
 mod queue_chooser;
 mod queue_controls;
 mod row_menu;
+mod state;
 mod target;
 
 pub(in crate::app) use self::overlay::GuiOverlay;
@@ -28,57 +29,27 @@ pub use self::projection::{
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
+pub use self::state::GuiClientState;
 
-use crate::app::App;
-use crate::app::state::app_struct::LaunchRestore;
+use crate::gui::GuiCore;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
-impl App {
-    /// Adopt the GUI Client's `App` rules (add-gui-library-panel design D4,
-    /// D9): the GUI arranges its own panels from its measured size and always
-    /// paints the Queue panel, so the TUI's terminal-width Mini check and its
-    /// hidden empty queue column do not apply, it paints no visualizer or
-    /// hide control for the visual slot, and the GUI's own launch location
-    /// replaces the TUI's, so this `App` starts with `LaunchRestore::Done`
-    /// and no TUI launch state moves its tab or Panel focus. The GUI Client
-    /// calls it before its first step; the TUI Client never does, so the
-    /// TUI's values do not change.
-    pub fn enable_gui_client(&mut self) {
-        self.gui_client = true;
-        self.launch_restore = LaunchRestore::Done;
-    }
-
-    /// Whether the Client arranges its own panels from its measured size and
-    /// always paints the Queue panel (design D4, D9): the GUI Client does, so
-    /// `terminal_width` has no meaning there and the terminal-cell rules do
-    /// not apply. The TUI Client keeps the terminal-cell rules.
-    pub(in crate::app) fn client_arranges_panels(&self) -> bool {
-        self.gui_client
-    }
-
-    /// Whether the Client paints the visualizer and a control for the visual
-    /// slot's hide: the TUI Client paints both, the GUI Client paints
-    /// neither, so the visualizer and hide setters and the persisted hide do
-    /// nothing for it. It is the inverse of `client_arranges_panels`.
-    pub(in crate::app) fn visual_slot_controls(&self) -> bool {
-        !self.gui_client
-    }
-
+impl GuiCore {
     /// Whether the player panel hides its transport controls until the
     /// pointer enters the stage (gui-art-player-overlay design D5): the
     /// preference the GUI Client's panel frame carries. The core owns it, so
     /// the section build reads it here rather than from the window.
     #[must_use]
     pub fn gui_player_auto_hide(&self) -> bool {
-        self.gui_player_auto_hide
+        self.gui.player_auto_hide
     }
 
     /// The canvas panel's collapse and queue-fold facts (design D10).
     #[must_use]
     pub fn panel_toggles_projection(&self) -> PanelTogglesProjection {
         PanelTogglesProjection {
-            collapsed: self.panel_collapsed,
-            queue_folded: self.queue_folded,
+            collapsed: self.gui.panel_toggles.collapsed,
+            queue_folded: self.gui.panel_toggles.queue_folded,
         }
     }
 
@@ -90,23 +61,23 @@ impl App {
     /// navigation keeps working while the filter is open. Returns whether
     /// the key was consumed.
     pub(in crate::app) fn apply_gui_filter_key(&mut self, key: KeyEvent) -> bool {
-        if !self.queue_filter_active {
+        if !self.app.queue_filter_active {
             return false;
         }
         match key.code {
             Key::Esc if key.modifiers.is_empty() => {
-                self.queue_filter_active = false;
-                self.queue_filter.clear();
+                self.app.queue_filter_active = false;
+                self.app.queue_filter.clear();
                 true
             }
             Key::Enter if key.modifiers.is_empty() => {
-                self.queue_filter_active = false;
+                self.app.queue_filter_active = false;
                 true
             }
             Key::Backspace if key.modifiers.is_empty() => {
-                if self.queue_filter.pop().is_none() {
-                    self.queue_filter_active = false;
-                    self.queue_filter.clear();
+                if self.app.queue_filter.pop().is_none() {
+                    self.app.queue_filter_active = false;
+                    self.app.queue_filter.clear();
                 }
                 true
             }
@@ -114,7 +85,7 @@ impl App {
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                self.queue_filter.push(c);
+                self.app.queue_filter.push(c);
                 true
             }
             _ => false,
@@ -123,16 +94,11 @@ impl App {
 
     /// The `z` toggle (design D10): collapse the panel to the rail.
     pub(in crate::app) fn toggle_panel_collapse(&mut self) {
-        self.panel_collapsed = !self.panel_collapsed;
+        self.gui.panel_toggles.collapsed = !self.gui.panel_toggles.collapsed;
     }
 
     /// The `q` toggle (design D10): fold the expanded panel's queue.
     pub(in crate::app) fn toggle_queue_fold(&mut self) {
-        self.queue_folded = !self.queue_folded;
-    }
-
-    /// Focus the queue header's filter text entry (the GUI-only `/`).
-    pub(in crate::app) fn activate_queue_filter(&mut self) {
-        self.queue_filter_active = true;
+        self.gui.panel_toggles.queue_folded = !self.gui.panel_toggles.queue_folded;
     }
 }

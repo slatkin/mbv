@@ -67,13 +67,14 @@ use crate::settings::PanelFocus;
 
 /// How a context menu's position is anchored. A keyboard-opened menu keeps a
 /// selected-item anchor resolved from each fresh frame's layout; a
-/// mouse-opened menu keeps its click point and is independent of selection.
+/// mouse-opened menu is independent of selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextMenuAnchor {
     /// Keyboard opening: anchor to the focused panel's selected item.
     SelectedItem(PanelFocus),
-    /// Mouse opening: anchor to the click point.
-    Pointer { x: u16, y: u16 },
+    /// Mouse opening: anchor to the pointer that the Client recorded. The
+    /// click cell is Client state (design D6): the core never carries it.
+    Pointer,
 }
 
 /// The containing panel a context menu is clamped inside. The library panel

@@ -2,7 +2,8 @@
 //! (issue #800). Behaviour-preserving extractions; `run` keeps the ordering.
 
 use super::super::{
-    Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages,
+    Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages, indexed,
+    right_press_cell,
 };
 use super::pin_swap::PinSwapLink;
 use super::{Duration, Instant, PollStrategy};
@@ -10,6 +11,7 @@ use crate::app::{
     BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, MusicEvent, PlayerEventDrain,
     SeriesEvent,
 };
+use mbv_ui_msg::{Msg, TerminalObserverEvent};
 
 impl Model {
     /// Drain the Emby startup and Emby setup worker channels through the
@@ -110,12 +112,14 @@ impl Model {
                         &parent_id,
                         &level,
                     );
-                    self.app
-                        .handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+                    self.app.handle_lib_event(
+                        LibEvent::Browse(BrowseEvent::Loaded {
                             lib_idx,
                             parent_id,
                             level,
-                        }));
+                        }),
+                        None,
+                    );
                     if let Some((library_id, mode, items)) = tv_snapshot {
                         self.apply_tv_root_completion(&library_id, mode.as_ref(), items);
                     }
@@ -145,7 +149,7 @@ impl Model {
                     self.push_inline_search_content();
                 }
                 LibEvent::Series(SeriesEvent::DetailFetched { .. }) => {
-                    self.app.handle_lib_event(ev);
+                    self.app.handle_lib_event(ev, None);
                     self.push_tv_workspace_content();
                 }
                 // Artist detail completions (tasks 6.1/6.2): the App arms
@@ -156,7 +160,7 @@ impl Model {
                     MusicEvent::ArtistTracksFetched { .. }
                     | MusicEvent::ArtistArtworkFetched { .. },
                 ) => {
-                    self.app.handle_lib_event(ev);
+                    self.app.handle_lib_event(ev, None);
                 }
                 ev => self.handle_inline_search_lib_event(ev),
             }
@@ -262,7 +266,7 @@ impl Model {
     pub(super) fn drain_resize_responses(&mut self) -> bool {
         let mut had_events = false;
         loop {
-            match self.app.images.try_recv_resize_response() {
+            match self.app.image_protocols.try_recv_resize_response() {
                 Ok((key, response)) => {
                     had_events = true;
                     // Responses are tagged with the per-suffix mem-key
@@ -271,22 +275,31 @@ impl Model {
                     let Some((bare_key, suffix)) = key.rsplit_once('@') else {
                         continue;
                     };
-                    let Some(entry) = self.app.images.image_mut(bare_key) else {
-                        continue;
-                    };
-                    if let Some(state) = entry.protocols.get_mut(suffix) {
+                    if let Some(state) =
+                        self.app
+                            .image_protocols
+                            .protocol_mut(&self.app.images, bare_key, suffix)
+                    {
                         state.update_resized_protocol(response);
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    self.app.images.respawn_resize_worker();
+                    self.app.image_protocols.respawn_resize_worker();
                     had_events = true;
                     break;
                 }
             }
         }
         had_events
+    }
+
+    /// Drop every stored image protocol whose cache entry the cache has since
+    /// replaced, evicted, or cleared (invariant 38). A completed fetch stores
+    /// its entry under its key, so a sync point after a drain keeps the store
+    /// from holding encodings of entries the cache no longer has.
+    pub(super) fn prune_image_protocols(&mut self) {
+        self.app.image_protocols.prune(&self.app.images);
     }
 
     /// Drain ctrl transport commands through the Client core's drain.
@@ -335,6 +348,52 @@ impl Model {
         self.app.run_periodic_maintenance();
     }
 
+    /// Record this tick's right-press cell as the context-menu pointer and
+    /// scope it to the right-click's own request (design D6), before any of
+    /// the tick's messages is drained.
+    ///
+    /// `Application::tick` returns the focused component's message first and
+    /// the `UiRoot` observer's second, and both folds keep that order. A
+    /// right-click on a row of the *focused* panel therefore raises its menu
+    /// request before the observer reports the press, so a shell that learned
+    /// the pointer only from the observer would open that menu at the
+    /// keyboard anchor. Reading the raw tick messages here makes every
+    /// right-click raise pointer-anchored regardless of delivery order.
+    ///
+    /// The flag is scoped to that request: it stays false for every message
+    /// that arrives before the right-press report, so a keyboard-raised menu
+    /// request dispatched earlier in the same tick keeps the selected-item
+    /// anchor. It stays false for a tick without a right press, so a keyboard
+    /// opening anchors as before.
+    pub(in crate::app) fn record_right_press(&mut self, messages: &[Msg]) {
+        let press = messages.iter().position(|msg| {
+            matches!(
+                msg,
+                Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { .. })
+            )
+        });
+        self.menu_pointer_press_at = press;
+        self.menu_pointer_current = false;
+        if let Some(press) = press
+            && let Some((column, row)) = messages.get(press).and_then(right_press_cell)
+        {
+            self.menu_pointer = Some((column, row));
+            self.menu_pointer_current = true;
+        }
+    }
+
+    /// Set whether the message now being dispatched counts as raised by this
+    /// tick's right-click (see [`Model::record_right_press`]). Both folds keep
+    /// the tick's message order, and the dispatcher indexes each message with
+    /// its position in the raw tick list, so a menu request dispatches as this
+    /// tick's pointer raise only when it arrived no earlier than the
+    /// right-press report.
+    pub(in crate::app) fn scope_menu_pointer(&mut self, index: usize) {
+        self.menu_pointer_current = self
+            .menu_pointer_press_at
+            .is_some_and(|press| index >= press);
+    }
+
     /// Poll the terminal, arbitrate the keyboard router, and dispatch the
     /// resulting messages. Returns whether the session asked to quit.
     pub(super) fn tick_terminal_messages(
@@ -368,11 +427,20 @@ impl Model {
         let Ok(messages) = ticked else {
             return true;
         };
+        // Design D6: record this tick's right press before any message is
+        // drained, so a menu request the focused panel raises is anchored at
+        // the pointer whatever order the tick delivered the messages in.
+        self.record_right_press(&messages);
+        // Design D6b: a tab change raised by this tick requests the reveal, and
+        // the tab strip is shell-presentation state, so the request is taken
+        // before a pointer press among these messages resolves against the
+        // painted tabs.
+        self.reveal_requested_tab();
         // ADR 0024: fold the mouse-derived messages (one per eligible
         // subscribed component) down to at most one before the keyboard
         // router fold and `handle_terminal_message` dispatch. A keyboard
         // tick passes through untouched.
-        let messages = fold_mouse_messages(messages);
+        let messages = indexed(fold_mouse_messages(messages));
         if messages.is_empty() {
             return false;
         }
@@ -396,8 +464,17 @@ impl Model {
         // semantic command and discards the leaf's message, `Swallow`
         // runs nothing and discards it, `FallThrough` lets the leaf's
         // own request stand.
-        let router = self.router_outcome(&messages);
-        let (messages, diagnostic) = arbitrate_key(messages, focused.as_ref(), &router);
+        let raw = messages
+            .iter()
+            .map(|(_, msg)| msg.clone())
+            .collect::<Vec<_>>();
+        let router = self.router_outcome(&raw);
+        let positions: Vec<usize> = messages.iter().map(|(index, _)| *index).collect();
+        let (messages, diagnostic) = arbitrate_key(
+            messages.into_iter().map(|(_, msg)| msg).collect(),
+            focused.as_ref(),
+            &router,
+        );
         // Issue #940: name every arbitrated key tick, so a swallowed or
         // deferred chord is visible in the log at debug level. Mouse-only
         // ticks (no chord) stay silent.
@@ -425,7 +502,13 @@ impl Model {
         // commands never quit, so it does not feed the loop's quit
         // flag.
         self.apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
-        for msg in messages {
+        // Design D6: `menu_pointer_current` is set per message, so only the
+        // request this tick's right-click raised anchors at the pointer; a
+        // keyboard request in the same tick keeps the selected-item anchor.
+        // Both folds keep the tick's order, so the raw positions stay aligned
+        // with the messages that survived them.
+        for (index, msg) in positions.into_iter().zip(messages) {
+            self.scope_menu_pointer(index);
             if self.handle_terminal_message(msg, music_resize, tv_resize) {
                 quit = true;
             }
@@ -467,6 +550,9 @@ impl Model {
         if self.app.visualizer.is_some() {
             self.app.sync_visualizer();
         }
+        // Design D6b: never paint a tab strip that a pending reveal request
+        // would move on the next pass.
+        self.reveal_requested_tab();
         let draw_started = Instant::now();
         if let Err(e) = terminal.draw(|f| self.draw_frame(f, music_resize, tv_resize)) {
             tracing::error!(

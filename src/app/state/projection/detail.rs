@@ -1,5 +1,5 @@
 use crate::app::App;
-use mbv_render::LibraryListRenderCtx;
+use mbv_ui_model::list_ctx::LibraryListRenderCtx;
 
 impl App {
     pub(crate) fn selected_series_item(

@@ -108,7 +108,7 @@ fn search_of(frame: &Held) -> GuiSearchFrame {
 fn pump_until_movies_destination(test: &mut TestCore) {
     loop {
         assert!(test.core.step(), "the core thread never quits mid-drain");
-        if test.core.app_mut().gui_active_destination()
+        if test.core.gui_active_destination_for_test()
             == Some(GuiDestinationKind::Library {
                 lib_idx: MOVIES_LIB,
             })
@@ -180,7 +180,7 @@ fn activating_a_result_opens_its_destination() {
     pump_until_movies_destination(&mut test);
 
     assert_eq!(
-        test.core.app_mut().gui_active_destination(),
+        test.core.gui_active_destination_for_test(),
         Some(GuiDestinationKind::Library {
             lib_idx: MOVIES_LIB,
         }),

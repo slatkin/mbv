@@ -42,10 +42,13 @@ const SECOND_FOLDER_BODY: &str = r#"{"Items":[{"Id":"vid-shared","Name":"Shared 
 
 /// Press one folder in the Emby feed-view destination's collection dropdown.
 fn toggle_folder(app: &mut App, folder_id: &str) {
-    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
-        target: GuiCollectionTarget::EmbyFeed(0),
-        key: folder_id.to_string(),
-    });
+    apply_gui_library_command(
+        app,
+        GuiLibraryCommand::CollectionToggle {
+            target: GuiCollectionTarget::EmbyFeed(0),
+            key: folder_id.to_string(),
+        },
+    );
 }
 
 /// A browse level over `items`, hanging off `parent_id`.
@@ -103,16 +106,33 @@ fn emby_app(http: &MockHttp, collection_type: &str, library_id: &str, name: &str
     app
 }
 
-/// Land one fetch completion the way the GUI core tick's drain applies it:
-/// the event rides the lib channel exactly as the fetch worker sends it, and
-/// `App::drain_lib_event`'s own handler applies the App-side half.
+/// Drain exactly one event from the lib channel, as the GUI core tick's drain
+/// does (`GuiCore::drain_lib_event`), through the GUI's own stores: the
+/// event's App-side half and its collected store effects apply before the next
+/// event (`decouple-client-core` design D4a (c)). The store half installs in
+/// the GUI state the tests keep beside the `App` (task 8.1). The TUI's
+/// `App::drain_lib_event` is this with no stores. One event per call keeps a
+/// pump from swallowing an event that the step it lands starts a fetch for.
+fn drain_one(app: &mut App) -> bool {
+    let Ok(event) = app.channels.lib_rx.try_recv() else {
+        return false;
+    };
+    crate::app::tests::stub_gui_state(|gui| app.handle_lib_event(event, Some(gui)));
+    true
+}
+
+/// Land one library event as the GUI tick's drain does.
 fn land(app: &mut App) {
+    if drain_one(app) {
+        return;
+    }
     let event = app
         .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("the fetch completed");
-    app.handle_lib_event(event);
+    let _ = app.channels.lib_tx.send(event);
+    assert!(drain_one(app), "the event the fetch completed is queued");
 }
 
 /// Land events until the root level's listing has landed: the open spawns
@@ -124,15 +144,11 @@ fn land_root_listing(app: &mut App) {
     }
 }
 
-/// Land events until the shown selection's items have landed: the count
-/// fan-out and the selection fetch race, so the selection's completion may
-/// follow the count's event.
+/// Land events until the shown selection's items have landed: the completion
+/// that runs the shown pass starting the selection's fetch, then that fetch's
+/// own completion.
 fn land_shown_selection(app: &mut App) {
-    while app.libs[0]
-        .feed_home_video
-        .as_ref()
-        .is_some_and(|state| state.selected_len() == 0)
-    {
+    while shown_selection_unloaded(app) {
         land(app);
     }
 }
@@ -140,13 +156,25 @@ fn land_shown_selection(app: &mut App) {
 /// Land events until no feed-group fetch is outstanding: the stale frame's
 /// event and the fetch's own completion both ride the channel.
 fn land_until_fetched(app: &mut App) {
-    while app.libs[0]
+    while shown_selection_fetching(app) {
+        land(app);
+    }
+}
+
+/// Whether the shown selection holds no items yet.
+fn shown_selection_unloaded(app: &App) -> bool {
+    app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .is_some_and(|state| state.selected_len() == 0)
+}
+
+/// Whether a feed-group target's fetch is outstanding.
+fn shown_selection_fetching(app: &App) -> bool {
+    app.libs[0]
         .feed_home_video
         .as_ref()
         .is_some_and(|state| state.fetching.is_some())
-    {
-        land(app);
-    }
 }
 
 /// The ids one checked folder's cached list holds, as the merged list reads
@@ -173,13 +201,16 @@ fn checked_folder_ids<'a>(app: &'a App, folder_id: &str) -> Vec<&'a str> {
 fn opening_a_movies_library_lands_its_root_rows_on_the_app() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
-    http.respond_repeated(200, MOVIES_BODY, 4);
+    // The open's listing and the store's paged fetch read the same catalog, so
+    // a path-keyed answer follows each request's own path: the concurrent
+    // workers' interleaving cannot script one wrongly.
+    http.respond_when("ParentId=lib-movies", 200, MOVIES_BODY);
     let mut app = emby_app(&http, "movies", MOVIES_ID, "Movies");
 
-    app.gui_emby_open(0);
+    gui_emby_open(&mut app, 0);
     land(&mut app);
-    land(&mut app);
-    while app.drain_lib_event() {}
+    crate::app::tests::wait_for_client_event(&mut app);
+    while drain_one(&mut app) {}
 
     assert_eq!(
         app.gui_emby_root_ids_for_test(0),
@@ -217,9 +248,9 @@ fn opening_a_feed_view_library_loads_its_default_selection() {
         .feed_view_libraries
         .push("youtube".into());
 
-    app.gui_emby_open(0);
+    gui_emby_open(&mut app, 0);
     land_root_listing(&mut app);
-    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     land_shown_selection(&mut app);
 
     let items = app.feed_home_video_selected_items(0);
@@ -330,7 +361,7 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
         None,
         "the first fetch retired its mark"
     );
-    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     assert_eq!(
         app.libs[0].feed_home_video.as_ref().unwrap().fetching,
         Some(FeedHomeVideoSelection::Folder("folder-2".into())),
@@ -338,7 +369,7 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
     );
     land(&mut app);
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,
@@ -385,22 +416,24 @@ fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
     app.tab = TabSelection::EmbyLibrary(0);
     let mut first = make_item("A Movie", "Movie");
     first.id = "m-1".into();
-    app.gui_emby_roots.insert(
-        0,
-        crate::app::gui_library::GuiEmbyRootItems::Loaded(vec![first]),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_roots.insert(
+            0,
+            crate::app::gui_library::GuiEmbyRootItems::Loaded(vec![first]),
+        );
+    });
 
-    app.gui_emby_select(0, "m-1");
+    gui_emby_select(&mut app, 0, "m-1");
     assert_eq!(
         app.gui_emby_picked_row_for_test(0),
-        Some("m-1"),
+        Some("m-1".to_string()),
         "the picked row is the select command's"
     );
 
-    app.gui_emby_select(0, "gone");
+    gui_emby_select(&mut app, 0, "gone");
     assert_eq!(
         app.gui_emby_picked_row_for_test(0),
-        Some("m-1"),
+        Some("m-1".to_string()),
         "a stale id changes nothing"
     );
 }
@@ -432,7 +465,7 @@ fn the_presented_tabs_include_the_plain_emby_libraries() {
     app.libs.push(LibraryTab::new(youtube));
     app.tab = TabSelection::EmbyLibrary(1);
 
-    let tabs = app.gui_library_tabs();
+    let tabs = gui_library_tabs(&app);
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
@@ -445,7 +478,7 @@ fn the_presented_tabs_include_the_plain_emby_libraries() {
         "the active Movies destination's tab is current"
     );
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Library { lib_idx: 1 }),
         "the Movies destination's kind is the plain Emby-library one"
     );
@@ -471,8 +504,10 @@ fn plain_movies_app(items: Vec<EmbyItem>) -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui_emby_roots
-        .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_roots
+            .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    });
     app
 }
 
@@ -515,7 +550,7 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
         movie_item("m-3", "9th Street", 0, 0),
     ]);
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(ids, ["m-1", "m-2", "m-3"], "the rows are the store's list");
@@ -633,7 +668,7 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
         ..FeedHomeVideoState::default()
     });
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     assert!(projection.feed_group, "the feed-group mode is named");
     let collections = projection
@@ -697,15 +732,17 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
     let mut boxset = make_item("Boxset", "BoxSet");
     boxset.id = "box-1".into();
     let mut app = plain_movies_app(vec![boxset]);
-    app.gui_emby_libs.insert(
-        0,
-        crate::app::gui_library::GuiEmbyLibrarySelection {
-            picked_row: Some("box-1".into()),
-            ..Default::default()
-        },
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_libs.insert(
+            0,
+            crate::app::gui_library::GuiEmbyLibrarySelection {
+                picked_row: Some("box-1".into()),
+                ..Default::default()
+            },
+        );
+    });
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     assert_eq!(
         projection.selected.as_deref(),
@@ -742,7 +779,7 @@ fn the_plain_mode_rows_paint_their_row_art() {
     let mut app = plain_movies_app(vec![tagged, untagged]);
     app.seed_card_image_for_test(key.clone(), row_image());
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     assert_eq!(
         projection.rows[0].art,

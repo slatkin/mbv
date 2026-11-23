@@ -2,7 +2,8 @@ use super::*;
 use crate::app::dispatch::library::browse::{
     build_album_index_with, recursive_album_search_eligible,
 };
-use crate::app::tests::{confirm_replace_queue, install_test_emby, make_app_stub};
+use crate::app::shell::test_support::confirm_replace_queue;
+use crate::app::tests::{install_test_emby, make_app_stub};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, BrowseLevel, LibEvent, LibraryTab, PanelFocus, TabSelection,
 };

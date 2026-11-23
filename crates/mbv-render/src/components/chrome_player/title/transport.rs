@@ -1,6 +1,7 @@
 use super::super::super::chrome::{pause_icon, play_icon};
 use super::super::PlaybackRenderContext;
 use super::palette;
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};

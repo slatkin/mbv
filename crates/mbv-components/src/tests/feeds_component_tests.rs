@@ -764,6 +764,5 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
         click(&mut panel, list.x, row, MouseEventKind::Down(MouseButton::Right)),
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries),
-            Some(_),
         ) if entries.len() == 1)));
 }

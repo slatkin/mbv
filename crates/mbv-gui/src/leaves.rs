@@ -168,7 +168,6 @@ impl<'a> QueueLeaf<'a> {
             RegionTarget::Queue(QueueTargetId::RowActions(raw)) => {
                 Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                     ContextMenuTargets::Queue(vec![QueueSlotId::from_raw(*raw)]),
-                    None,
                 ))))
             }
             // The hovered row's grip starts the drag and selects the row, as
@@ -272,8 +271,6 @@ impl<'a> QueueLeaf<'a> {
         };
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Queue(targets),
-            // The terminal cell anchor has no GUI counterpart.
-            None,
         ))))
     }
 

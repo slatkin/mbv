@@ -9,6 +9,7 @@
 //! own search drain and its component tests are untouched.
 
 use super::*;
+use crate::gui::GuiCore;
 use mbv_emby::EmbyError;
 
 /// A searchable test row: an Emby item of `item_type` with `id` and `name`.
@@ -20,25 +21,25 @@ fn searchable(id: &str, name: &str, item_type: &str) -> EmbyItem {
 
 /// A stub `App` whose Search field has sent `query`. The stub has no Emby
 /// Service attached, so the query stores and starts no worker.
-fn queried_app(query: &str) -> App {
-    let mut app = make_app_stub();
-    app.gui_search_query(query.to_string());
-    app
+fn queried_app(query: &str) -> GuiCore {
+    let mut core = GuiCore::new(make_app_stub());
+    core.gui_search_query(query.to_string());
+    core
 }
 
 /// A stub `App` whose live query has landed `items` through the GUI tick
 /// host's drain.
-fn landed_app(query: &str, items: Vec<EmbyItem>) -> App {
-    let mut app = queried_app(query);
-    app.send_gui_search_result_for_test(query, items);
-    assert!(app.drain_gui_search_results(), "the result applied");
-    app
+fn landed_app(query: &str, items: Vec<EmbyItem>) -> GuiCore {
+    let mut core = queried_app(query);
+    core.app_mut().send_gui_search_result_for_test(query, items);
+    assert!(core.drain_gui_search_results(), "the result applied");
+    core
 }
 
 /// The projection of a store that holds a query or rows. An empty store projects
 /// nothing, so a test that expects a projection reads it through here.
-fn projected(app: &App) -> GuiSearchProjection {
-    app.gui_search_projection()
+fn projected(core: &GuiCore) -> GuiSearchProjection {
+    core.gui_search_projection()
         .expect("the store holds a query or rows")
 }
 
@@ -47,7 +48,7 @@ fn projected(app: &App) -> GuiSearchProjection {
 /// item identity the activate command needs (row 12.1).
 #[test]
 fn a_landed_result_for_the_live_query_projects_its_rows() {
-    let app = landed_app(
+    let core = landed_app(
         "blue",
         vec![
             searchable("m-1", "Blue Train", "Movie"),
@@ -55,7 +56,7 @@ fn a_landed_result_for_the_live_query_projects_its_rows() {
         ],
     );
 
-    let projection = projected(&app);
+    let projection = projected(&core);
     assert_eq!(projection.query, "blue");
     assert!(!projection.loading);
     assert!(!projection.failed);
@@ -76,7 +77,7 @@ fn a_landed_result_for_the_live_query_projects_its_rows() {
 /// the two Clients list the same results (row 12.1).
 #[test]
 fn a_landed_result_keeps_only_navigable_rows() {
-    let app = landed_app(
+    let core = landed_app(
         "blue",
         vec![
             searchable("m-1", "Blue Train", "Movie"),
@@ -84,7 +85,7 @@ fn a_landed_result_keeps_only_navigable_rows() {
         ],
     );
 
-    let projection = projected(&app);
+    let projection = projected(&core);
     assert_eq!(projection.rows.len(), 1);
     assert_eq!(projection.rows[0].id, "m-1");
 }
@@ -93,12 +94,13 @@ fn a_landed_result_keeps_only_navigable_rows() {
 /// stale-query guard discards it, and the store keeps no row (row 12.1).
 #[test]
 fn a_stale_result_changes_nothing() {
-    let mut app = queried_app("jazz");
-    app.send_gui_search_result_for_test("blues", vec![searchable("m-9", "Rocks", "Movie")]);
+    let mut core = queried_app("jazz");
+    core.app_mut()
+        .send_gui_search_result_for_test("blues", vec![searchable("m-9", "Rocks", "Movie")]);
 
-    assert!(!app.drain_gui_search_results(), "the stale result applied");
+    assert!(!core.drain_gui_search_results(), "the stale result applied");
 
-    let projection = projected(&app);
+    let projection = projected(&core);
     assert_eq!(projection.query, "jazz");
     assert_eq!(projection.rows, vec![]);
 }
@@ -107,10 +109,10 @@ fn a_stale_result_changes_nothing() {
 /// channel holds and reports nothing after it (row 12.1).
 #[test]
 fn the_drain_reports_no_change_when_the_channel_is_empty() {
-    let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
+    let mut core = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
 
-    assert!(!app.drain_gui_search_results(), "the channel held nothing");
-    assert_eq!(projected(&app).rows.len(), 1);
+    assert!(!core.drain_gui_search_results(), "the channel held nothing");
+    assert_eq!(projected(&core).rows.len(), 1);
 }
 
 /// Contract: an activate navigates from the stored row and leaves no overlay
@@ -118,14 +120,20 @@ fn the_drain_reports_no_change_when_the_channel_is_empty() {
 /// 12.1, design D2).
 #[test]
 fn activating_a_result_navigates_and_leaves_the_overlay_request_unset() {
-    let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
-    assert!(app.pending_overlay.is_none(), "no overlay request before");
+    let mut core = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
+    assert!(
+        core.app().pending_overlay.is_none(),
+        "no overlay request before"
+    );
 
-    app.gui_search_activate("m-1".to_string(), "Movie".to_string());
+    core.gui_search_activate("m-1".to_string(), "Movie".to_string());
 
-    assert!(app.pending_overlay.is_none(), "no overlay request after");
+    assert!(
+        core.app().pending_overlay.is_none(),
+        "no overlay request after"
+    );
     assert_eq!(
-        app.gui_search_projection(),
+        core.gui_search_projection(),
         None,
         "the results close, as the TUI's dismiss unmounts them"
     );
@@ -135,36 +143,37 @@ fn activating_a_result_navigates_and_leaves_the_overlay_request_unset() {
 /// row — it navigates nowhere and leaves the results (row 12.1).
 #[test]
 fn activating_an_unknown_row_changes_nothing() {
-    let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
+    let mut core = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
 
-    app.gui_search_activate("m-404".to_string(), "Movie".to_string());
+    core.gui_search_activate("m-404".to_string(), "Movie".to_string());
 
-    assert!(app.pending_overlay.is_none(), "no overlay request");
-    assert_eq!(projected(&app).rows.len(), 1, "the rows stay");
+    assert!(core.app().pending_overlay.is_none(), "no overlay request");
+    assert_eq!(projected(&core).rows.len(), 1, "the rows stay");
 }
 
 /// Contract: an empty query closes the results, and a close clears the live
 /// query's rows (row 12.1).
 #[test]
 fn an_empty_query_and_a_close_both_clear_the_store() {
-    let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
-    app.gui_search_query(String::new());
-    assert_eq!(app.gui_search_projection(), None);
+    let mut core = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
+    core.gui_search_query(String::new());
+    assert_eq!(core.gui_search_projection(), None);
 
-    let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
-    app.gui_search_close();
-    assert_eq!(app.gui_search_projection(), None);
+    let mut core = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
+    core.gui_search_close();
+    assert_eq!(core.gui_search_projection(), None);
 }
 
 /// Contract: a failed result ends the load, records the failure, and keeps no
 /// row, so the frame never paints a stale list behind a failure (row 12.1).
 #[test]
 fn a_failed_result_records_the_failure_and_keeps_no_row() {
-    let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
-    app.send_gui_search_failure_for_test("blue", EmbyError::resolve("search failed"));
-    assert!(app.drain_gui_search_results(), "the failure applied");
+    let mut core = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
+    core.app_mut()
+        .send_gui_search_failure_for_test("blue", EmbyError::resolve("search failed"));
+    assert!(core.drain_gui_search_results(), "the failure applied");
 
-    let projection = projected(&app);
+    let projection = projected(&core);
     assert!(projection.failed);
     assert!(!projection.loading);
     assert_eq!(projection.rows, vec![]);

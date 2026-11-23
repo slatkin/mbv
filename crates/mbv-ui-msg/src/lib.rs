@@ -138,6 +138,14 @@ pub enum TerminalObserverEvent {
         column: u16,
         row: u16,
     },
+    /// A right mouse button press. The shell records the cell as the
+    /// context-menu pointer (`Model::menu_pointer`), so a right-click menu
+    /// anchors where the user clicked while the core carries no cell (design
+    /// D6). Like [`Self::MouseClick`] it is not a mouse-fold claim.
+    MouseRightClick {
+        column: u16,
+        row: u16,
+    },
     /// Any other mouse event (move, drag, release, scroll): the shell's
     /// silent prefix-mode disarm signal (change
     /// `add-configurable-keybinds`, design D6, task 6.1). It is a marker,

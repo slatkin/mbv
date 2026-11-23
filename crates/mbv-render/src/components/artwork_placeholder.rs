@@ -1,4 +1,5 @@
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use ratatui::widgets::Block;
 use ratatui::{Frame, layout::Rect};
 

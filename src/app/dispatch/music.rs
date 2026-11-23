@@ -2,6 +2,7 @@ use crate::app::dispatch::library::browse::align_level_to_tv_mode;
 use crate::app::state::app_struct::TvUpcomingFetchState;
 use crate::app::{App, BrowseLevel};
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
+use mbv_ui_model::sort_filter::LIBRARY_PILL_THRESHOLD;
 
 /// The shared eligibility gate for the grouped Music owner, consumed by
 /// `is_music_group_view` and grouped landing validation. Keep this in sync
@@ -274,7 +275,7 @@ impl App {
         }
         let large = self.libs[lib_idx]
             .library_total
-            .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
+            .is_some_and(|total| total > LIBRARY_PILL_THRESHOLD);
         let Some(mode) = Self::tv_mode_for_pill(pill_index, large) else {
             return;
         };
@@ -491,7 +492,7 @@ impl App {
             }
             let large = self.libs[lib_idx]
                 .library_total
-                .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
+                .is_some_and(|total| total > LIBRARY_PILL_THRESHOLD);
             let count = if large { 5 } else { 3 };
             let current = match self.libs[lib_idx].tv_content_mode.as_ref() {
                 Some(mbv_queue::TvContentMode::Latest) => 0,

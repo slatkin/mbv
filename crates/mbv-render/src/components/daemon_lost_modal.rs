@@ -1,5 +1,6 @@
 use crate::components::modal_frame::render_modal_frame;
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;

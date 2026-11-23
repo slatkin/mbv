@@ -5,8 +5,6 @@
 use std::sync::Mutex;
 use std::sync::mpsc;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::panel_targets::PanelTarget;
@@ -24,6 +22,7 @@ use mbv_remote_player::{DaemonEndpoint, RemotePlayer, RemotePlayerError};
 use mbv_ui_model::confirm::ConfirmAction;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::panel_targets::SessionTargetKey;
+use mbv_ui_msg::{Key, KeyModifiers};
 
 /// The peer link `staged_probe_connect` hands out, staged by the test that
 /// installed the override (nextest runs one test per process; the lock guard
@@ -114,8 +113,8 @@ pub(super) fn hand_off_key() -> SessionTargetKey {
     SessionTargetKey::Emby("peer-owner".to_string())
 }
 
-pub(super) fn confirm_key(code: KeyCode) -> mbv_ui_msg::KeyEvent {
-    crate::app::test_seams::crossterm_key_to_neutral(KeyEvent::new(code, KeyModifiers::NONE))
+pub(super) fn confirm_key(code: Key) -> mbv_ui_msg::KeyEvent {
+    mbv_ui_msg::KeyEvent::new(code, KeyModifiers::NONE)
 }
 
 /// A local-daemon app whose local Owner plays `items`, plus the local Owner's
@@ -228,7 +227,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
 
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
 
     // The peer link is attached (as by Connect) and carries the copy: the
@@ -310,7 +309,7 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
     );
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
-        confirm_key(KeyCode::Esc),
+        confirm_key(Key::Esc),
     );
 
     assert!(
@@ -608,7 +607,7 @@ fn a_peer_loss_during_the_hand_off_confirm_drops_the_prompt_and_sends_nothing() 
     // The prompt's answer is now inert: nothing reaches the local Owner.
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
 
     let sent = local_owner_commands(&local_cmd_rx);
@@ -657,7 +656,7 @@ fn a_confirmed_hand_off_without_a_peer_link_reports_and_sends_nothing() {
     });
     app.apply_confirm_action(
         ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
-        confirm_key(KeyCode::Enter),
+        confirm_key(Key::Enter),
     );
 
     assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);

@@ -1,9 +1,8 @@
 use super::*;
 use crate::app::LibraryTab;
 use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
-use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::{install_test_emby, make_app_stub, make_remote_app_stub_with_cmd_rx};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
@@ -11,13 +10,22 @@ use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_msg::{MusicTreeAction, ShellRequest};
 use std::sync::{Arc, Mutex};
 
+/// Record a terminal size on a test `Model` the way the shell records one,
+/// so its single-panel fact matches the width.
+fn set_test_terminal_size(model: &mut Model, width: u16, height: u16) {
+    model.terminal_width = width;
+    model.terminal_height = height;
+    let single_panel = single_panel_for_width(width);
+    model.app.set_single_panel(single_panel);
+}
+
 #[test]
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
-    let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
-        crossterm_key_to_neutral(key),
-    ))];
+    let neutral_key = super::neutral_edge::translate_key(tuirealm::event::KeyEvent::from(
+        KeyEvent::new(KeyCode::F(1), crossterm::event::KeyModifiers::NONE),
+    ));
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(neutral_key))];
     assert_eq!(
         model.router_outcome(&messages),
         RouterOutcome::Command(ShellCommand::OpenHelp.into())
@@ -49,9 +57,9 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     // A focused media list holding an active Visual selection consumes Space
     // for its row-local toggle; the shell sees the leaf's consumption only.
     model.visual_selection = Some((PanelFocus::Library, 2));
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
-        crossterm_key_to_neutral(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
-    ))];
+    let neutral_key =
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Char(' '), mbv_ui_msg::KeyModifiers::NONE);
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(neutral_key))];
 
     assert_eq!(
         model.router_outcome(&messages),
@@ -72,9 +80,11 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
 #[test]
 fn terminal_resize_observer_applies_new_size_before_paint() {
     let mut model = Model::new(make_app_stub());
-    model.app.terminal_width = 60;
-    model.app.terminal_height = 24;
-    assert!(!model.app.is_right_panel_wide());
+    set_test_terminal_size(&mut model, 60, 24);
+    assert!(!crate::app::shell::tv_wide::is_right_panel_wide(
+        &model.app,
+        model.terminal_size()
+    ));
     let mut music_resize = false;
     let mut tv_resize = false;
     apply_terminal_observer(
@@ -86,9 +96,12 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
         &mut music_resize,
         &mut tv_resize,
     );
-    assert_eq!(model.app.terminal_width, 150);
-    assert_eq!(model.app.terminal_height, 24);
-    assert!(model.app.is_right_panel_wide());
+    assert_eq!(model.terminal_width, 150);
+    assert_eq!(model.terminal_height, 24);
+    assert!(crate::app::shell::tv_wide::is_right_panel_wide(
+        &model.app,
+        model.terminal_size()
+    ));
 }
 
 /// Regression guard for an expanded pinned panel at 120 columns, the width
@@ -101,9 +114,11 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
 #[test]
 fn the_default_pinned_expanded_width_is_wide() {
     let mut model = Model::new(make_app_stub());
-    model.app.terminal_width = 120;
-    model.app.terminal_height = 40;
-    assert!(model.app.is_right_panel_wide());
+    set_test_terminal_size(&mut model, 120, 40);
+    assert!(crate::app::shell::tv_wide::is_right_panel_wide(
+        &model.app,
+        model.terminal_size()
+    ));
 }
 
 fn music_album(id: &str) -> EmbyItem {

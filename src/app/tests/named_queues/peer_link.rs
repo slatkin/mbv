@@ -18,7 +18,7 @@ fn a_gui_client_connected_to_a_peer_shows_a_local_queue() {
     let sess = make_session("peer-host", "mbv");
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
     assert!(app.suspended_local.is_some(), "the local link stays held");
-    app.enable_gui_client();
+    app.set_client_capabilities(gui_client_capabilities());
 
     app.show_named_queue(current());
 
@@ -35,7 +35,7 @@ fn the_tui_link_keeps_the_connection_rule() {
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
     let sess = make_session("peer-host", "mbv");
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
-    app.gui_shown_entry = Some(crate::app::state::playback::ShownEntry::Local(current()));
+    app.shown_entry = Some(crate::app::state::playback::ShownEntry::Local(current()));
 
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     assert_eq!(app.displayed_queue().slots().len(), 2);
@@ -61,7 +61,7 @@ pub(crate) fn gui_app_with_peer() -> (
     while home_cmd_rx.try_recv().is_ok() {}
     app.player
         .update_status(|status| status.position_ticks = HOME_POSITION);
-    app.enable_gui_client();
+    app.set_client_capabilities(gui_client_capabilities());
     app.adopt_named_queue_list(named_queue_list(), current());
 
     let (peer, peer_rx, peer_cmd_rx) =
@@ -410,10 +410,7 @@ fn the_tui_panel_and_transport_keep_the_connection_rule() {
         .update_status(|status| status.position_ticks = PEER_POSITION);
     while peer_cmd_rx.try_recv().is_ok() {}
 
-    assert!(
-        app.gui_shown_entry.is_none(),
-        "a TUI Client records no entry"
-    );
+    assert!(app.shown_entry.is_none(), "a TUI Client records no entry");
     assert_eq!(app.effective_playback_state().position_ticks, PEER_POSITION);
     LocalPlaybackTarget::toggle_play_pause(&mut app);
 
@@ -439,7 +436,7 @@ fn the_connection_is_lost_shows_the_current_queue() {
     app.restore_local_mode("lost");
 
     assert_eq!(
-        app.gui_shown_entry,
+        app.shown_entry,
         Some(ShownEntry::Local(current())),
         "the queue panel returns to the current local queue"
     );

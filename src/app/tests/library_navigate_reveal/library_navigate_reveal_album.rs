@@ -24,15 +24,18 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
-        lib_idx: 0,
-        landing: NavigateLanding::Album {
-            reveal: Box::new(album),
-            ancestors: vec![],
-            track_id: None,
-        },
-        switch_tab: true,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::NavigateTo {
+            lib_idx: 0,
+            landing: NavigateLanding::Album {
+                reveal: Box::new(album),
+                ancestors: vec![],
+                track_id: None,
+            },
+            switch_tab: true,
+        }),
+        None,
+    );
     // The landing is async: no tab change until the activation drains.
     assert_eq!(app.tab, TabSelection::Home, "switch deferred to the drain");
 
@@ -48,7 +51,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
         ),
         "expected RecursiveAlbumActivated"
     );
-    app.handle_lib_event(ev);
+    app.handle_lib_event(ev, None);
 
     assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
     assert_eq!(app.libs[0].nav_stack.len(), 1, "flat: single root level");
@@ -91,25 +94,28 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
-        lib_idx: 0,
-        landing: NavigateLanding::Album {
-            reveal: Box::new(album),
-            ancestors: vec![AlbumPathPart {
-                id: "art1".into(),
-                name: "The Artist".into(),
-            }],
-            track_id: None,
-        },
-        switch_tab: true,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::NavigateTo {
+            lib_idx: 0,
+            landing: NavigateLanding::Album {
+                reveal: Box::new(album),
+                ancestors: vec![AlbumPathPart {
+                    id: "art1".into(),
+                    name: "The Artist".into(),
+                }],
+                track_id: None,
+            },
+            switch_tab: true,
+        }),
+        None,
+    );
 
     let ev = app
         .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("album activated");
-    app.handle_lib_event(ev);
+    app.handle_lib_event(ev, None);
 
     assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
     assert_eq!(
@@ -144,15 +150,18 @@ fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
-        lib_idx: 0,
-        landing: NavigateLanding::Album {
-            reveal: Box::new(album),
-            ancestors: Vec::new(),
-            track_id: None,
-        },
-        switch_tab: true,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::NavigateTo {
+            lib_idx: 0,
+            landing: NavigateLanding::Album {
+                reveal: Box::new(album),
+                ancestors: Vec::new(),
+                track_id: None,
+            },
+            switch_tab: true,
+        }),
+        None,
+    );
     assert_eq!(app.pending_navigate_tab_switch, Some(0));
 
     // The user moves on before the activation drains.
@@ -167,7 +176,7 @@ fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("album activated");
-    app.handle_lib_event(ev);
+    app.handle_lib_event(ev, None);
 
     assert_eq!(
         app.tab,

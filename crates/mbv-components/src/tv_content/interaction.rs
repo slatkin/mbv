@@ -43,7 +43,6 @@ impl TvContent {
         };
         Some(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-            None,
         ))
     }
 
@@ -168,7 +167,6 @@ impl TvContent {
                 };
                 Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                     mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                    Some((at.x, at.y)),
                 ))))
             }
             _ => None,
@@ -285,7 +283,6 @@ impl TvContent {
         };
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-            Some((at.x, at.y)),
         ))))
     }
 
@@ -357,7 +354,6 @@ impl TvContent {
                         search.item_for_target(&target).map(|item| {
                             Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                                 mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
-                                None,
                             )))
                         })
                     }
@@ -446,7 +442,6 @@ impl TvContent {
         self.browser.apply(TreeOperation::Select(target));
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
-            Some((at.x, at.y)),
         ))))
     }
 

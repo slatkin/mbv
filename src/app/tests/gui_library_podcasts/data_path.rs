@@ -99,7 +99,7 @@ fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
-    app.gui_podcast_open(1);
+    gui_podcast_open(&mut app, 1);
     let request = podcast_state(&app).catalog_request;
     assert_eq!(request, 1, "the open began one catalog chain");
     assert!(
@@ -136,7 +136,7 @@ fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
     assert!(state.replacement.is_none(), "the completed batch published");
 
     let loaded_request = podcast_state(&app).catalog_request;
-    app.gui_podcast_open(1);
+    gui_podcast_open(&mut app, 1);
     assert_eq!(
         podcast_state(&app).catalog_request,
         loaded_request,
@@ -154,7 +154,10 @@ fn a_restored_podcasts_destination_starts_its_show_list_load() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
-    app.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx: 1 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Podcasts { lib_idx: 1 },
+    );
 
     let state = podcast_state(&app);
     assert_eq!(
@@ -170,7 +173,7 @@ fn a_restored_podcasts_destination_starts_its_show_list_load() {
 /// One frame's load pass for library 1's show catalog, as the catalog request
 /// serial it left: an armed replacement batch bumps the serial.
 fn pass_catalog_request(app: &mut App) -> u64 {
-    app.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx: 1 });
+    crate::app::tests::ensure_gui_destination(app, GuiDestinationKind::Podcasts { lib_idx: 1 });
     podcast_state(app).catalog_request
 }
 
@@ -218,7 +221,7 @@ fn a_failed_show_list_load_is_not_retried_by_a_repaint_but_an_open_retries_it() 
         "the repaint honoured the failed mark"
     );
 
-    app.gui_podcast_open(1);
+    gui_podcast_open(&mut app, 1);
     assert_eq!(
         podcast_state(&app).catalog_request,
         1,
@@ -241,8 +244,10 @@ fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
     select_all_shows(&mut app, 1);
 
     assert_eq!(
-        app.gui_podcast_effective_set(1).as_ref(),
-        &GuiCollectionSet::All
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_effective_set(&app, gui, 1).into_owned()
+        }),
+        GuiCollectionSet::All
     );
     assert_eq!(
         podcast_state(&app).committed_show_pill,
@@ -300,8 +305,10 @@ fn a_checked_show_lands_only_that_shows_episodes() {
     toggle_show(&mut app, 1, "show-b");
 
     assert_eq!(
-        app.gui_podcast_effective_set(1).as_ref(),
-        &GuiCollectionSet::Checked(vec!["show-b".into()])
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_effective_set(&app, gui, 1).into_owned()
+        }),
+        GuiCollectionSet::Checked(vec!["show-b".into()])
     );
     assert_eq!(
         podcast_state(&app).committed_show_pill.as_deref(),
@@ -347,20 +354,25 @@ fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
         .cache_detail("show-a".into(), vec![episode("show-a", "ep-1", None)]);
 
     let target = PodcastEpisodeTarget::new("show-a".into(), "ep-1".into());
-    app.gui_podcast_select(1, &target);
+    gui_podcast_select(&mut app, 1, &target);
     assert_eq!(
-        app.gui_podcast_picked_episode(1),
-        Some(&target),
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_picked_episode(gui, 1).cloned()
+        }),
+        Some(target.clone()),
         "the picked episode is the select command's"
     );
 
-    app.gui_podcast_select(
+    gui_podcast_select(
+        &mut app,
         1,
         &PodcastEpisodeTarget::new("show-a".into(), "gone".into()),
     );
     assert_eq!(
-        app.gui_podcast_picked_episode(1),
-        Some(&target),
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_picked_episode(gui, 1).cloned()
+        }),
+        Some(target),
         "a stale episode id changes nothing"
     );
 }
@@ -376,7 +388,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
-    let tabs = app.gui_library_tabs();
+    let tabs = gui_library_tabs(&app);
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
@@ -390,7 +402,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
     );
     assert_eq!(tabs.current, Some(2), "the active podcast tab is current");
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Podcasts { lib_idx: 1 }),
         "the active podcast destination's kind is the Podcasts one"
     );
@@ -406,16 +418,20 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
         shows_view: mbv_config::GuiLaunchShowsView::All,
         sorts: Vec::new(),
     };
-    let crate::app::GuiLaunchOpen::Opened(opened) = app.open_gui_launch_destination(&saved) else {
+    let crate::app::GuiLaunchOpen::Opened(opened) =
+        crate::app::tests::open_launch_destination(&mut app, &saved)
+    else {
         panic!("the catalog is presented, so the start has opened");
     };
     assert!(
-        app.restore_gui_launch_collections(&saved, &opened),
+        crate::app::tests::restore_launch_collections(&mut app, &saved, &opened),
         "the Podcasts destination applies no saved pill and needs no retry"
     );
     assert_eq!(
-        app.gui_podcast_effective_set(1).as_ref(),
-        &GuiCollectionSet::All,
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_effective_set(&app, gui, 1).into_owned()
+        }),
+        GuiCollectionSet::All,
         "the restored destination keeps the default All selection"
     );
 }

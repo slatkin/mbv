@@ -9,9 +9,9 @@ use mbv_ui_msg::TrackChipKind;
 use super::daemon_lost::daemon_lost_buttons;
 use super::overlay::GuiOverlay;
 use super::popover::track_popover_choices;
-use crate::app::App;
 use crate::app::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackProjection};
 use crate::app::state::playback::ShownEntry;
+use crate::gui::GuiCore;
 
 /// The Queue header's chooser facts for one read (spec `gui-queue-chooser`
 /// "The queue header holds the chooser and its controls"): the name the
@@ -200,7 +200,7 @@ pub enum GuiConfirmButtonTone {
     Cancel,
 }
 
-impl App {
+impl GuiCore {
     /// The Queue header's chooser facts (spec `gui-queue-chooser` "The queue
     /// header holds the chooser and its controls"): the shown entry's name and
     /// slot count, and whether the close control is disabled. Read-only, and
@@ -216,9 +216,9 @@ impl App {
                 .find(|entry| entry.shown)
                 .map(|entry| entry.label.clone())
                 .unwrap_or_default(),
-            shown_len: self.displayed_queue().total_queue_len(),
+            shown_len: self.app.displayed_queue().total_queue_len(),
             close_disabled: self.gui_close_disabled(),
-            rename_disabled: !matches!(self.gui_shown_entry, Some(ShownEntry::Local(_))),
+            rename_disabled: !matches!(self.app.shown_entry, Some(ShownEntry::Local(_))),
         }
     }
 
@@ -231,9 +231,9 @@ impl App {
     /// connected peer never disables the only local queue's close.
     #[must_use]
     fn gui_close_disabled(&self) -> bool {
-        match self.gui_shown_entry {
+        match self.app.shown_entry {
             Some(ShownEntry::Peer) => false,
-            Some(ShownEntry::Local(_)) => self.named_queues.entries().len() < 2,
+            Some(ShownEntry::Local(_)) => self.app.named_queues.entries().len() < 2,
             None => true,
         }
     }
@@ -248,7 +248,7 @@ impl App {
         &self,
         playback: &QueuePlaybackProjection,
     ) -> Option<GuiOverlayProjection> {
-        match &self.gui_overlay {
+        match &self.gui.overlay {
             Some(GuiOverlay::RowMenu(menu)) => Some(GuiOverlayProjection::RowMenu {
                 anchor_slot: menu.anchor_slot,
                 cursor: menu.cursor,

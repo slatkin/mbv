@@ -16,7 +16,7 @@ use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use mbv::{
-    App, ClientKind, Config, OwnerStartOptions, OwnerState, attach_owner,
+    App, ClientCapabilities, ClientCapability, Config, OwnerStartOptions, OwnerState, attach_owner,
     exclusive_owner_refusal_text, find_owner, start_owner,
 };
 use mbv_config::owner_lock_path;
@@ -544,11 +544,21 @@ impl OwnerSteps for LibraryOwnerSteps<'_> {
     }
 
     fn attach(&self, program: &Path) -> Result<App, RemotePlayerError> {
+        // The GUI Client takes no part in Pin swap (design D6a of
+        // `decouple-client-core`): it claims that before `attach_owner`, so
+        // its first Owner connection already advertises a plain Hello
+        // (design D9 of `extract-client-core`).
+        mbv::claim_pin_swap_participant(false);
         attach_owner(
             self.config,
             Some(program),
             mbv::ImageDecode::SourceOnly,
-            ClientKind::Gui,
+            // The GUI Client shows one queue entry at a time that the user
+            // picks, and paints the transport chips and their controls
+            // (design D6a).
+            ClientCapabilities::empty()
+                .with(ClientCapability::ShownQueueEntries)
+                .with(ClientCapability::TransportChipKeys),
         )
     }
 

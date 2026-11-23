@@ -1,10 +1,9 @@
 use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::playback::HomeContent;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use crate::app::{App, AppInit, spawn_resize_worker, spawn_waking_relay};
+use crate::app::{App, AppInit, spawn_waking_relay};
 use indexmap::IndexMap;
-use mbv_render::layout;
-use mbv_render::layout::LEFT_WIDTH_DEFAULT;
+use mbv_ui_model::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_model::tab_selection::TabSelection;
 use std::sync::mpsc;
@@ -22,7 +21,10 @@ fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
 }
 
-fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
+/// Whether the GUI player's controls auto-hide: the `gui_player_auto_hide`
+/// preference `GuiClientState` starts from (design D4 leaves the key a Client
+/// key, so its reader sits beside the state it fills).
+pub(crate) fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["gui_player_auto_hide"].as_bool().unwrap_or(false)
 }
 
@@ -87,7 +89,6 @@ impl App {
         let prefs = Self::load_prefs();
         let launch_restore =
             mbv_config::load_tui_launch_state().map_or(LaunchRestore::Done, LaunchRestore::Pending);
-        let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         // The Owner-snapshot link relays share this wake handle (design D7
         // of `extract-client-core`); `ClientCore` adopts it so a Client's
@@ -106,9 +107,6 @@ impl App {
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_shelf_cache: std::collections::HashMap::new(),
             audiobookshelf_shelf_requested: std::collections::HashSet::new(),
-            gui_shows_flat_selection: None,
-            gui_shows_views: std::collections::HashMap::new(),
-            gui_shows_new: std::collections::HashMap::new(),
             tv_upcoming_snapshots: std::collections::HashMap::new(),
             tv_upcoming_fetches: std::collections::HashMap::new(),
             audiobookshelf_browse: Vec::new(),
@@ -116,8 +114,10 @@ impl App {
             player: init.player,
             mpris: None,
             client_waker: client_waker.clone(),
+            gui_client_events: crate::app::state::gui_client_events::GuiClientEvents::new(
+                client_waker.clone(),
+            ),
             owner_exe: None,
-            client_kind: crate::ClientKind::default(),
             player_rx: spawn_waking_relay(init.player_rx, client_waker),
             deferred_player_events: std::collections::VecDeque::new(),
             deferred_home_events: std::collections::VecDeque::new(),
@@ -130,10 +130,11 @@ impl App {
             local_view: init.local_view,
             remote_view: init.remote_view,
             named_queues: crate::app::state::named_queues::NamedQueueList::default(),
-            gui_shown_entry: None,
+            shown_entry: None,
             shown_resting: None,
             pending_new_queue: None,
             pending_named_queue_ops: std::collections::HashSet::new(),
+            pending_queue_rename: None,
             system_notifications: init.system_notifications,
             images: mbv_images::cache::ImageCache::new(
                 init.image_cache_size,
@@ -141,35 +142,25 @@ impl App {
                 init.image_protocol_enabled,
                 init.card_image_tx,
                 init.card_image_rx,
-                resize_register_tx,
-                resize_response_rx,
             ),
+            image_protocols: mbv_tui_support::ImageProtocols::new(),
             image_decode: init.image_decode,
             library_position_state: load_position_state_without_pills(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
-            home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow {
-                previous: None,
-                current: 0,
-            },
             music_levels: init.music_levels,
             album_indexes: std::collections::HashMap::new(),
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             libs: Vec::new(),
             toasts: crate::app::state::toasts::ToastList::default(),
-            layout: layout::AppLayout::default(),
-            terminal_width: 80,
-            terminal_height: 24,
+            left_panel_area: mbv_ui_model::geom::Rect::default(),
+            single_panel: false,
             pinned_width: mbv_ui_model::settings::PinnedWidth::default(),
             pinned_request_pending: None,
             accent_custom: None,
-            resize_drag_activity: None,
 
             pending_overlay: None,
-            gui_settings: None,
-            gui_playlists_open: false,
-            gui_ui_reset_epoch: 0,
             pending_exit_message: None,
             pending_delete_slot: None,
             pending_delete_selection: None,
@@ -201,21 +192,12 @@ impl App {
                 }),
             list_pane_width: list_pane_width_from_prefs(&prefs),
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
-            gui_player_auto_hide: gui_player_auto_hide_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the terminal-cell panel rules and the visual-slot
             // controls.
-            gui_client: false,
-            // The GUI Library panel's Client-core state starts empty:
-            // the window content's first command selects a destination's
-            // collections and an item's detail (add-gui-library-panel
-            // design D2, D5).
-            gui_library_groups: std::collections::HashMap::new(),
-            gui_music_albums: std::collections::HashMap::new(),
-            gui_library_picks: std::collections::HashMap::new(),
-            gui_music_union_picks: std::collections::HashMap::new(),
-            gui_library_row_menu_target: None,
+            client_capabilities:
+                crate::app::state::client_capabilities::ClientCapabilities::default(),
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
             // Always start on Home until the saved launch tab settles.
@@ -237,20 +219,7 @@ impl App {
             visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
             visualizer_glyph: init.visualizer_glyph,
             queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
-            gui_rows_in_view: std::collections::HashMap::new(),
-            gui_home_selection: None,
-            gui_tv_shows: std::collections::HashMap::new(),
-            gui_emby_libs: std::collections::HashMap::new(),
-            gui_emby_roots: std::collections::HashMap::new(),
-            gui_emby_feed_sets: std::collections::HashMap::new(),
-            gui_abs_libs: std::collections::HashMap::new(),
-            gui_podcast_libs: std::collections::HashMap::new(),
-            gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection::default(),
-            // Every destination starts on its target's default sort until the
-            // window sends a choice or the launch file installs one.
-            gui_list_sorts: Vec::new(),
-            gui_search: crate::app::gui_library::GuiSearchStore::default(),
-            title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
+            title_log_gate: crate::app::state::projection::card::artwork::TitleLogGate::default(),
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
             settings_save_at: None,
@@ -285,12 +254,10 @@ impl App {
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
             prefix_armed: false,
-            panel_collapsed: false,
-            queue_folded: false,
             queue_filter: String::new(),
             queue_filter_active: false,
-            gui_overlay: None,
-            tab_scroll: 0,
+            tab_reveal_requested: false,
+            tv_workspace_wide: std::collections::HashSet::new(),
             last_nav_at: Instant::now()
                 .checked_sub(Duration::from_secs(1))
                 .unwrap_or_else(Instant::now),
@@ -329,9 +296,13 @@ impl App {
         app
     }
 
-    /// Initialize terminal image pickers before the TUI listener starts.
+    /// Initialize terminal image pickers before the TUI listener starts: the
+    /// configured protocol override (`ImageCache::protocol_override`) replaces
+    /// the detected one, and the pickers live in this Client's
+    /// [`ImageProtocols`](mbv_tui_support::ImageProtocols) store.
     pub(crate) fn init_image_pickers(&mut self) {
-        self.images.init_image_pickers();
+        self.image_protocols
+            .init_image_pickers(self.images.protocol_override());
     }
 }
 

@@ -5,8 +5,8 @@ use mbv_emby_model::test_support::make_item;
 #[test]
 fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     let mut model = mounted_tv_model();
-    model.app.terminal_width = 80;
-    model.app.terminal_height = 24;
+    model.terminal_width = 80;
+    model.terminal_height = 24;
     // The narrow TV layout needs the queue column: with the empty-queue
     // column hidden (change `hide-empty-queue-column`, D1) an empty
     // displayed queue would widen the library into the wide breakpoint.
@@ -44,8 +44,8 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
 
     // Narrow layout => the shell routes the resolved Series through the
     // mounted owner's Library Hero overlay.
-    model.app.terminal_width = 80;
-    model.app.terminal_height = 24;
+    model.terminal_width = 80;
+    model.terminal_height = 24;
     model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     let mut season = make_item("Season 1", "Season");
     season.id = "season-1".into();
@@ -96,13 +96,38 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert!(!model.app.activate_selected_series(0));
 }
 
+/// Wide TV layout: the generic browser's `EmbyLibraryActivate` for a Series
+/// enters the persistent Workspace through the shared gate. Regression for the
+/// row 2.7 review (commit 56878761d): routing that arm straight to
+/// `select_item` drilled into a flat browse list instead, because a Series is a
+/// folder.
+#[test]
+fn wide_emby_library_activate_enters_the_workspace_not_a_flat_drill_in() {
+    let mut model = mounted_tv_model();
+    model.sync_library_panel();
+    assert!(
+        !model.app.tv_workspace_wide.is_empty(),
+        "the wide fixture publishes the Client's write-back fact"
+    );
+    let item = model.app.libs[0].nav_stack[0].items[0].clone();
+    let depth_before = model.app.libs[0].nav_stack.len();
+
+    model.handle_emby_library_request(mbv_ui_msg::ShellRequest::EmbyLibraryActivate { item });
+
+    assert_eq!(
+        model.app.libs[0].nav_stack.len(),
+        depth_before,
+        "wide Series activation keeps the persistent Workspace, never a drill-in"
+    );
+}
+
 /// A tree-selected show opens its Hero even when the old flat carrier still
 /// points at another show.
 #[test]
 fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
     let mut model = mounted_tv_model();
-    model.app.terminal_width = 80;
-    model.app.terminal_height = 24;
+    model.terminal_width = 80;
+    model.terminal_height = 24;
     // The narrow TV layout needs the queue column: with the empty-queue
     // column hidden (change `hide-empty-queue-column`, D1) an empty
     // displayed queue would widen the library into the wide breakpoint.
@@ -170,14 +195,20 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     }
     app.libs.push(tv_lib);
     app.tab = TabSelection::EmbyLibrary(1);
-    app.terminal_width = 160;
-    app.terminal_height = 40;
     let mut model = Model::new(app);
+    model.terminal_width = 160;
+    model.terminal_height = 40;
     model.sync_tv_content();
     model.sync_active_destination();
 
-    assert!(model.app.wide_tv_show_area(0).is_none());
-    assert!(model.app.wide_tv_show_area(1).is_some());
+    assert!(
+        crate::app::shell::tv_wide::wide_tv_show_area(&model.app, 0, model.terminal_size())
+            .is_none()
+    );
+    assert!(
+        crate::app::shell::tv_wide::wide_tv_show_area(&model.app, 1, model.terminal_size())
+            .is_some()
+    );
 
     assert!(model.app.activate_selected_series(1));
     assert!(

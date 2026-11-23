@@ -4,26 +4,26 @@
 //!
 //! A row shows the same image as its item's Hero, at a size near the painted
 //! thumb (design D5). A projection never fetches: every frame reads the cache
-//! (`App::gui_row_art`), and only the in-view path (`super::super::rows_in_view`)
+//! (`row_art`), and only the in-view path (`super::super::rows_in_view`)
 //! queues a `Row` fetch.
 
 use mbv_audiobookshelf::{AudiobookshelfBook, AudiobookshelfShow};
-use mbv_components::library_panel::HeroArtwork;
-use mbv_components::library_panel::content::{
-    ArtworkShape, ArtworkSource, painted_shape_for_pixels,
-};
-use mbv_components::library_panel::hero::{
-    abs_book_artwork_policy, abs_episode_artwork_policy, emby_artwork_policy, feed_artwork_policy,
-};
 use mbv_emby_model::{EmbyImageTags, EmbyItem, UpcomingPremiere};
 use mbv_images::ImageFetchReq;
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, FeedKind,
     QueueItem,
 };
+use mbv_ui_model::library_hero::producers::{
+    abs_book_artwork_policy, abs_episode_artwork_policy, emby_artwork_policy, feed_artwork_policy,
+};
+use mbv_ui_model::library_hero::{
+    ArtworkShape, ArtworkSource, HeroArtwork, painted_shape_for_pixels,
+};
 use mbv_ui_model::music_grouping::ArtistKey;
 
 use crate::app::App;
+use crate::gui::GuiCore;
 
 #[cfg(test)]
 mod tests;
@@ -266,129 +266,127 @@ pub(in crate::app::gui_library) fn queue_item_media_kind(item: &QueueItem) -> Gu
     }
 }
 
-impl App {
+impl GuiCore {
     /// The art `source` resolves to for one row (design D4, D7): the cache
     /// read alone, so a cached row out of view still shows its image. A source
     /// with no row cache key — the Service setup the key needs is absent —
     /// shows no image, and a source that declares none is the no-source state.
     #[must_use]
     pub fn gui_row_art(&self, source: Option<&GuiRowSource>) -> GuiRowArt {
-        let Some(source) = source else {
-            return GuiRowArt::NoSource;
-        };
-        let Some(key) = self.gui_row_cache_key(source) else {
-            return GuiRowArt::Missing;
-        };
-        let Some(entry) = self.images.image(&key) else {
-            return GuiRowArt::Loading;
-        };
-        if !entry.has_art() {
-            return GuiRowArt::Missing;
-        }
-        GuiRowArt::Image {
-            square: entry.dimensions().is_some_and(|(width, height)| {
-                painted_shape_for_pixels(width, height) == ArtworkShape::Square
-            }),
-            key,
-        }
-    }
-
-    /// The row cache key `source` names (design D6), or `None` when the Service
-    /// setup the key needs is absent.
-    fn gui_row_cache_key(&self, source: &GuiRowSource) -> Option<String> {
-        match source {
-            GuiRowSource::Emby {
-                item_id,
-                series_id,
-                tags,
-                square,
-            } => Some(
-                mbv_images::row::emby_row_request_for(item_id, series_id, tags, *square).cache_key,
-            ),
-            GuiRowSource::EmbyPrimary { item_id } => {
-                Some(mbv_images::row::emby_row_primary_request(item_id).cache_key)
-            }
-            GuiRowSource::Audiobookshelf {
-                library_item_id,
-                updated_at_ms,
-                ..
-            } => self
-                .audiobookshelf_server_url()
-                .map(|url| mbv_images::abs_row_cache_key(&url, library_item_id, *updated_at_ms)),
-        }
-    }
-
-    /// The `Row` request that fills `source` (design D5, D6), or `None` when the
-    /// Service setup it needs is absent.
-    pub(in crate::app::gui_library) fn gui_row_fetch_req(
-        &self,
-        source: &GuiRowSource,
-    ) -> Option<ImageFetchReq> {
-        match source {
-            GuiRowSource::Emby {
-                item_id,
-                series_id,
-                tags,
-                square,
-            } => Some(mbv_images::row::emby_row_request_for(
-                item_id, series_id, tags, *square,
-            )),
-            GuiRowSource::EmbyPrimary { item_id } => {
-                Some(mbv_images::row::emby_row_primary_request(item_id))
-            }
-            GuiRowSource::Audiobookshelf {
-                library_item_id,
-                book,
-                updated_at_ms,
-            } => self.audiobookshelf_row_request(library_item_id, *book, *updated_at_ms),
-        }
+        row_art(&self.app, source)
     }
 }
 
-impl App {
-    /// The row art source of a queue item's row (design D5): its provider's
-    /// Hero artwork policy, with the catalog's update time for an
-    /// Audiobookshelf cover.
-    #[must_use]
-    pub(in crate::app::gui_library) fn queue_item_row_source(
-        &self,
-        item: &QueueItem,
-    ) -> Option<GuiRowSource> {
-        match item {
-            QueueItem::Emby(emby) => emby_row_source(emby),
-            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(episode)) => {
-                let updated_at = self.audiobookshelf_updated_at_ms(&episode.library_item_id);
-                episode_row_source(episode, updated_at)
-            }
-            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
-                let updated_at = self.audiobookshelf_updated_at_ms(&book.library_item_id);
-                book_row_source(book, updated_at)
-            }
-            QueueItem::Feed(entry) => feed_row_source(entry),
-            QueueItem::Twitch(_) => None,
-        }
+/// The art `source` resolves to for one row (design D4, D7), over the `App`
+/// the GUI core owns: the cache read alone, so a cached row out of view still
+/// shows its image. A source with no row cache key — the Service setup the key
+/// needs is absent — shows no image, and a source that declares none is the
+/// no-source state.
+#[must_use]
+pub(in crate::app) fn row_art(app: &App, source: Option<&GuiRowSource>) -> GuiRowArt {
+    let Some(source) = source else {
+        return GuiRowArt::NoSource;
+    };
+    let Some(key) = row_cache_key(app, source) else {
+        return GuiRowArt::Missing;
+    };
+    let Some(entry) = app.images.image(&key) else {
+        return GuiRowArt::Loading;
+    };
+    if !entry.has_art() {
+        return GuiRowArt::Missing;
     }
+    GuiRowArt::Image {
+        square: entry.dimensions().is_some_and(|(width, height)| {
+            painted_shape_for_pixels(width, height) == ArtworkShape::Square
+        }),
+        key,
+    }
+}
 
-    /// The last update time the browse catalogs hold for a library item (design
-    /// D6), or `0` when no catalog carries it — the row key's unknown arm.
-    pub(in crate::app::gui_library) fn audiobookshelf_updated_at_ms(
-        &self,
-        library_item_id: &str,
-    ) -> u64 {
-        self.audiobookshelf_browse
-            .iter()
-            .flat_map(|state| state.shows.iter())
-            .find(|show| show.library_item_id == library_item_id)
-            .map(|show| show.updated_at_ms)
-            .or_else(|| {
-                self.audiobookshelf_book_browse
-                    .iter()
-                    .flat_map(|state| state.books.iter())
-                    .find(|book| book.library_item_id == library_item_id)
-                    .map(|book| book.updated_at_ms)
-            })
-            .unwrap_or(0)
+/// The row cache key `source` names (design D6), or `None` when the Service
+/// setup the key needs is absent.
+fn row_cache_key(app: &App, source: &GuiRowSource) -> Option<String> {
+    match source {
+        GuiRowSource::Emby {
+            item_id,
+            series_id,
+            tags,
+            square,
+        } => {
+            Some(mbv_images::row::emby_row_request_for(item_id, series_id, tags, *square).cache_key)
+        }
+        GuiRowSource::EmbyPrimary { item_id } => {
+            Some(mbv_images::row::emby_row_primary_request(item_id).cache_key)
+        }
+        GuiRowSource::Audiobookshelf {
+            library_item_id,
+            updated_at_ms,
+            ..
+        } => app
+            .audiobookshelf_server_url()
+            .map(|url| mbv_images::abs_row_cache_key(&url, library_item_id, *updated_at_ms)),
     }
+}
+
+/// The `Row` request that fills `source` (design D5, D6), or `None` when the
+/// Service setup it needs is absent.
+pub(in crate::app) fn row_fetch_req(app: &App, source: &GuiRowSource) -> Option<ImageFetchReq> {
+    match source {
+        GuiRowSource::Emby {
+            item_id,
+            series_id,
+            tags,
+            square,
+        } => Some(mbv_images::row::emby_row_request_for(
+            item_id, series_id, tags, *square,
+        )),
+        GuiRowSource::EmbyPrimary { item_id } => {
+            Some(mbv_images::row::emby_row_primary_request(item_id))
+        }
+        GuiRowSource::Audiobookshelf {
+            library_item_id,
+            book,
+            updated_at_ms,
+        } => app.audiobookshelf_row_request(library_item_id, *book, *updated_at_ms),
+    }
+}
+
+/// The row art source of a queue item's row (design D5): its provider's Hero
+/// artwork policy, with the catalog's update time for an Audiobookshelf cover.
+#[must_use]
+pub(in crate::app) fn queue_item_row_source(app: &App, item: &QueueItem) -> Option<GuiRowSource> {
+    match item {
+        QueueItem::Emby(emby) => emby_row_source(emby),
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(episode)) => {
+            let updated_at = audiobookshelf_updated_at_ms(app, &episode.library_item_id);
+            episode_row_source(episode, updated_at)
+        }
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
+            let updated_at = audiobookshelf_updated_at_ms(app, &book.library_item_id);
+            book_row_source(book, updated_at)
+        }
+        QueueItem::Feed(entry) => feed_row_source(entry),
+        QueueItem::Twitch(_) => None,
+    }
+}
+
+/// The last update time the browse catalogs hold for a library item (design
+/// D6), or `0` when no catalog carries it — the row key's unknown arm.
+pub(in crate::app) fn audiobookshelf_updated_at_ms(app: &App, library_item_id: &str) -> u64 {
+    app.audiobookshelf_browse
+        .iter()
+        .flat_map(|state| state.shows.iter())
+        .find(|show| show.library_item_id == library_item_id)
+        .map(|show| show.updated_at_ms)
+        .or_else(|| {
+            app.audiobookshelf_book_browse
+                .iter()
+                .flat_map(|state| state.books.iter())
+                .find(|book| book.library_item_id == library_item_id)
+                .map(|book| book.updated_at_ms)
+        })
+        .unwrap_or(0)
 }
 
 /// One Emby row source, from the item's address and the tags it declares.

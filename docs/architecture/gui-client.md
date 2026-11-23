@@ -29,9 +29,19 @@ the event loop ends so a quit's exit teardown completes before the process
 exits.
 
 `src/core_thread.rs` runs one dedicated, synchronous thread. It loads the
-configuration, declares the GUI Client (`declare_gui_client`), runs the Owner
-attach campaign (`src/attach.rs`), and then runs `ClientCore::tick` in a
-loop. The thread waits on a `std::sync::mpsc` channel of `CoreInput` values
+configuration, runs the Owner attach campaign (`src/attach.rs`) — before
+`attach_owner` the GUI claims its `ClientCapabilities` (`ShownQueueEntries`
+and `TransportChipKeys`) and its no-Pin-swap participation itself, and
+`CoreThread::new` calls `skip_launch_restore` on the attached `App` — and
+then runs `ClientCore::tick` in a loop over a `GuiCore { app, gui }`
+(ADR 0042). `GuiCore` wraps the attached `App` by composition and owns the
+`GuiClientState` beside it: every GUI-only field, the library stores the
+GUI's projections read and write, the open overlay, the Settings and
+Playlists screens, and the panel toggles. The core never names a field of
+`GuiClientState`; the state is its own `ClientLibraryStores` implementor, so
+the core's library-event drain applies each event's collected
+`ClientLibraryEffect`s through it, after that event and before the next.
+The thread waits on a `std::sync::mpsc` channel of `CoreInput` values
 (`Key`, `Pointer`, `Layout`, `Library`, `Settings`, `Sync`, `Art`, `Wake`,
 `Close`) with a timeout of `CLIENT_IDLE_CADENCE`. `Art` carries one image load
 that the `mbv-art` scheme raised: an `ArtRequest` with the request path and a
@@ -39,7 +49,13 @@ reply callback that answers it once. The installed `ClientWaker` sends
 `Wake` into the same channel, so Owner events and timers wake the core as
 they wake the TUI. `CoreThread` implements `ClientTickHost` over the slice's
 Surface state; the drains for surfaces the first slice does not present are
-documented no-ops. The card-image completion drain
+documented no-ops. The GUI's Client-only fetch results (a group's albums, a
+plain Emby library's root list, a Shows library's New episodes) do not ride
+the shared library event enum (ADR 0042): their workers send a
+`GuiClientEvent` on a channel the `App` owns, and the shared tick drains it
+through `ClientTickHost::drain_client_events` (`GuiCore::drain_client_event`,
+looping) after the library drain; a landed fetch wakes the tick through the
+same `ClientWaker` the other channels use. The card-image completion drain
 (`App::drain_card_image_completions`, the shell drain without the
 TV-workspace re-push) runs because the Queue playback visual slot paints: it
 lands the slot's artwork fetches in the image cache the `mbv-art` scheme
@@ -102,7 +118,8 @@ chooser facts the header's controls read, the filter text with its caret
 fact, and the totals the footer shows, beside the folded strip's remaining
 count, next item title, and finish tail (`summary`, `GuiQueueSummary`), the collapse and queue-fold
 toggles the
-Client core holds, with the UI-reset counter `ui_reset_epoch` beside them
+GUI Client holds in its `GuiClientState`, with the UI-reset counter
+`ui_reset_epoch` beside them
 (`panel`, `GuiPanelToggles`), the open menu or popover (`overlay`,
 `Option<GuiOverlayFrame>`: the row menu with its entries, key hints, and
 destructive flags, the track popover, the playback-target chooser, the
@@ -945,13 +962,14 @@ beside the Queue panel in the column at the right window edge
 (`src/window/components/library_panel.rs`). It follows the design canvas's Library artboard, not
 the TUI: the GUI does not keep parity with the TUI, and the TUI does not change
 (ADR 0036). The panel's interaction state lives in the window content, and the
-Client core holds the data selection and the actions (design D1).
+Client holds the data selection and the actions (design D1): the shared core
+state on `App`, the GUI's own stores on `GuiClientState`.
 
-| Window content (`src/window/library/`) | Client core (`App`) |
+| Window content (`src/window/library/`) | Client (`App` / `GuiCore`) |
 | --- | --- |
 | Hover (the pointer target), scroll, open tree nodes | The active destination (`App::tab`) |
 | Filter text, the collection dropdown's open state and filter text, and Search query text | The selected collections of each destination |
-| The open Hero overlay, item menu, and row menu | The album each collection last showed in the Hero (`App::gui_library_picks`) |
+| The open Hero overlay, item menu, and row menu | The album each collection last showed in the Hero (`GuiClientState::library_picks`) |
 | The Library's keys, sent to their pointer target | Service data, its loading, and the artwork |
 | No cursor and no focus inside the panel | Panel focus (`FocusStack`) and the actions |
 
@@ -1407,7 +1425,8 @@ Hero keeps its Service-scoped cover key and is not warmed.
 `library(GuiLibraryCommand)` is the fourth `CoreLink` method (`src/window/channel.rs`). It
 only pushes `CoreInput::Library` into the core channel, as the other commands
 do. `src/bridge/library.rs` translates the wire variants and
-`App::apply_gui_library_command` (`src/app/gui_library.rs`) applies each one
+`GuiCore::apply_gui_library_command` (`src/app/gui_library.rs`) applies each
+one
 through the existing `App` action, so the TUI's own paths do not change. The
 variants are `openDestination` (`position`), `collectionToggle` (`target`,
 `key`), `collectionAll` (`target`), `listSort` (`target`, `sort`),
@@ -1769,7 +1788,7 @@ album (design D13).
 `settings(GuiSettingsCommand)` is the fifth `CoreLink` method (`src/window/channel.rs`). It
 only pushes `CoreInput::Settings` into the core channel, as the other commands
 do. `src/bridge/settings.rs` translates the wire variants and
-`App::apply_gui_settings_command` (`src/app/gui_settings/command.rs`) applies
+`GuiCore::apply_gui_settings_command` (`src/app/gui_settings/command.rs`) applies
 each one through the existing `App` method, so the TUI's own paths do not
 change. The variants are `open`, `close`, `selectSection` (`section`), `activate`
 (`setting`, the `SettingKey` name), `setValue` (`setting`, `value`), `applyChoices` (`kind`, `selected`),
@@ -1792,7 +1811,7 @@ The saved playlists paint as a tree (one open playlist at a time, as the core ho
 one), and the hero beside the tree is the picked row's control set — Play, Shuffle,
 Add, Rename, Refresh, and Delete for a playlist; Play, Shuffle, and Add for an
 item. A right-click on a row opens the same actions as a menu. The core owns
-whether it is open (`App::gui_playlists`, `src/app/gui_playlists.rs`) and sends
+whether it is open (`GuiCore::gui_playlists`, `src/app/gui_playlists.rs`) and sends
 the `playlists` section (`GuiPlaylistsFrame`); the window owns the pick, the
 menu, and the rename draft. Its `playlists` command carries `toggle`, `close`,
 `open` (`id`), `collapse`, `refresh` (`id` or none), `action` (`id` and `play`,

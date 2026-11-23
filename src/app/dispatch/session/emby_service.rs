@@ -65,6 +65,7 @@ impl App {
         self.series_season_loading.clear();
         self.pending_series_season_expansions.clear();
         self.images.clear_session_image_work();
+        self.image_protocols.prune(&self.images);
         self.library_position_state = mbv_queue::LibraryPositionState::default();
         self.active_route = None;
         self.direct_remote_connected = false;

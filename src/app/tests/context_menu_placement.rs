@@ -8,10 +8,14 @@
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::podcast::add_emby_movie_library;
 use super::*;
+use crate::app::shell::test_support::{Terminal, TestBackend};
+use crate::app::tests::tick_integration::harness::TickHarness;
 use mbv_components::ContextMenuComponent;
 use mbv_components::library_panel::LibraryPanel;
-use mbv_ui_msg::{ComponentId, Msg, OverlayId};
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, TerminalObserverEvent};
 use ratatui::layout::Rect;
+use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 /// Convert a render-layer rectangle to the neutral presentation `Rect`
 /// (`extract-client-core` task 1.2): the tests read painted geometry as
@@ -40,25 +44,55 @@ fn mounted_context_menu_rect(model: &Model) -> Rect {
         .menu_rect()
 }
 
+/// Record a right-click at `cell` the way the `UiRoot` observer does: the
+/// shell keeps the cell in `menu_pointer`, and the pointer-anchored menu in
+/// `pending_overlay` carries no cell of its own (design D6).
+fn right_click_at(model: &mut Model, cell: (u16, u16)) {
+    model.menu_pointer = Some(cell);
+    model.menu_pointer_current = true;
+    if let Some(OverlayRequest::ContextMenu(menu)) = model.app.pending_overlay.as_mut() {
+        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
+    }
+}
+
+fn menu_anchor(model: &Model) -> ContextMenuAnchor {
+    let id = ComponentId::Overlay(OverlayId::ContextMenu);
+    model
+        .application
+        .get_component(&id)
+        .expect("context menu mounted")
+        .as_any()
+        .downcast_ref::<ContextMenuComponent>()
+        .expect("context menu type")
+        .anchor()
+}
+
 fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
+    let cell = std::cell::RefCell::new(model);
     term.draw(|f| {
-        model.app.compose_root_frame(f);
-        model.render_context_menu_overlay(f);
+        let mut borrowed = cell.borrow_mut();
+        crate::app::shell::draw::compose_root_frame(&mut borrowed, f);
+        borrowed.render_context_menu_overlay(f);
     })
     .unwrap();
-    let rect = mounted_context_menu_rect(model);
+    let rect = mounted_context_menu_rect(cell.into_inner());
     (rect.x, rect.y)
 }
 
 #[test]
 fn pointer_placement_stays_click_anchored_not_following_selection() {
     let mut app = library_app();
-    app.open_context_menu_at(70, 20, false, None);
+    app.open_context_menu_at(false, None);
 
     let mut model = Model::new(app);
+    right_click_at(&mut model, (70, 20));
     model.sync_modal_requests();
+    assert!(
+        matches!(menu_anchor(&model), ContextMenuAnchor::Pointer),
+        "placement follows `menu_pointer` only; the menu keeps its neutral anchor"
+    );
 
     // Render once and capture the rect placed from the click point.
     let a = render_at(&mut model, 100, 40);
@@ -98,10 +132,9 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
-            mbv_ui_msg::HomeRequest::ContextMenu(
-                vec![mbv_ui_model::targets::HomeItemTarget::continue_item("id0")],
-                None,
-            ),
+            mbv_ui_msg::HomeRequest::ContextMenu(vec![
+                mbv_ui_model::targets::HomeItemTarget::continue_item("id0"),
+            ]),
         ))),
         &mut false,
         &mut false,
@@ -119,7 +152,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     // The panel paints from `RootFrame.library` (task 5.9); publish it
     // directly, wide enough for the Wide skeleton's split.
     let library_area = Rect::new(0, 0, 100, 30);
-    model.app.layout.root_frame.library = Some(library_area);
+    model.layout.root_frame.library = Some(library_area);
     // The mounted panel only paints its active owner's surface; the shell's
     // sync pass points it at the Home owner (`sync_library_panel`), which
     // this test drives directly rather than through `sync_mounted_surfaces`.
@@ -129,7 +162,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     let mut term = Terminal::new(backend).unwrap();
     // Paint only the panel so its `view()` produces the authoritative placed
     // geometry while the legacy `AppLayout` copies stay untouched.
-    let area = model.app.layout.root_frame.library.unwrap();
+    let area = model.layout.root_frame.library.unwrap();
     term.draw(|f| model.render_library_panel_at(f, area))
         .unwrap();
 
@@ -143,7 +176,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
         .menu_geometry()
         .expect("panel painted geometry");
     let (panel, selected) = painted;
-    model.app.layout.left_area = Rect::new(0, 0, 200, 200);
+    model.layout.left_area = Rect::new(0, 0, 200, 200);
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -204,10 +237,9 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.app.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
-            mbv_ui_msg::HomeRequest::ContextMenu(
-                vec![mbv_ui_model::targets::HomeItemTarget::continue_item("id0")],
-                None,
-            ),
+            mbv_ui_msg::HomeRequest::ContextMenu(vec![
+                mbv_ui_model::targets::HomeItemTarget::continue_item("id0"),
+            ]),
         ))),
         &mut false,
         &mut false,
@@ -225,14 +257,14 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     // Narrow enough (below `TWO_COLUMN_THRESHOLD`) to force the Narrow
     // skeleton instead of the Wide split.
     let library_area = Rect::new(0, 0, 60, 30);
-    model.app.layout.root_frame.library = Some(library_area);
+    model.layout.root_frame.library = Some(library_area);
     model.sync_library_panel();
 
     let backend = TestBackend::new(60, 30);
     let mut term = Terminal::new(backend).unwrap();
     // Paint only the panel so its `view()` produces the authoritative placed
     // geometry while the legacy `AppLayout` copies stay untouched.
-    let area = model.app.layout.root_frame.library.unwrap();
+    let area = model.layout.root_frame.library.unwrap();
     term.draw(|f| model.render_library_panel_at(f, area))
         .unwrap();
 
@@ -263,7 +295,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         panel, narrow.list_area,
         "the anchor is the pane, not the row-flow inset"
     );
-    model.app.layout.left_area = Rect::new(0, 0, 200, 200);
+    model.layout.left_area = Rect::new(0, 0, 200, 200);
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -325,18 +357,15 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
     // Publish the frame layout first: the live loop always has a painted
     // frame before the slot can be clicked, and the menu resolves its
     // queue-column bounds from that published layout.
-    term.draw(|f| model.app.compose_root_frame(f)).unwrap();
-    model.app.open_visual_slot_context_menu(2, 20);
+    term.draw(|f| crate::app::shell::draw::compose_root_frame(&mut model, f))
+        .unwrap();
+    model.app.open_visual_slot_context_menu();
+    right_click_at(&mut model, (2, 20));
     model.sync_modal_requests();
 
     term.draw(|f| {
-        model.app.compose_root_frame(f);
-        let library_area = model
-            .app
-            .layout
-            .root_frame
-            .library
-            .expect("library placement");
+        crate::app::shell::draw::compose_root_frame(&mut model, f);
+        let library_area = model.layout.root_frame.library.expect("library placement");
         model.render_library_panel_at(f, library_area);
         model.render_context_menu_overlay(f);
     })
@@ -348,9 +377,98 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
         "the visual slot right-click menu must be mounted"
     );
     let rect = mounted_context_menu_rect(&model);
-    let column = model.app.layout.left_area;
+    let column = model.layout.left_area;
     assert!(
         rect.right() <= column.right() && rect.bottom() <= column.bottom(),
         "the slot menu must clamp inside the queue column {column:?}: {rect:?}"
     );
+}
+
+/// Regression guard for the 1-decouple-client-core review (design D6): a
+/// right-click on a row of the *focused* panel must open a pointer-anchored
+/// menu.
+///
+/// `Application::tick` returns the focused component's message before the
+/// `UiRoot` observer's, and both folds keep that order, so this tick delivers
+/// the queue's `RowContextMenu` first and `MouseRightClick` second. Learning
+/// the pointer only from the observer left this, the common case, anchored at
+/// the keyboard's selected item.
+#[test]
+fn focused_panel_right_click_opens_a_pointer_anchored_menu() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let app = crate::app::tests::render_fixtures::make_queue_app(2);
+    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+
+    let row = queue_selected_row(&mut harness);
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: row.x,
+        row: row.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+
+    // Pin the delivery order this regression is about: the focused panel's
+    // request first, the observer's right-press report second.
+    let request = message_index(&outcome.messages, |msg| {
+        matches!(
+            msg,
+            Msg::Shell(shell) if matches!(shell.as_ref(), ShellRequest::RowContextMenu(_))
+        )
+    });
+    let observed = message_index(&outcome.messages, |msg| {
+        matches!(
+            msg,
+            Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { .. })
+        )
+    });
+    let (Some(request), Some(observed)) = (request, observed) else {
+        panic!(
+            "a focused-panel right-click must raise a menu request and an observer report: {:?}",
+            outcome.messages
+        );
+    };
+    assert!(
+        request < observed,
+        "the focused panel's request must arrive before the observer's report"
+    );
+
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        menu_anchor(harness.model()),
+        ContextMenuAnchor::Pointer,
+        "a right-click in the focused panel must anchor the menu at the pointer"
+    );
+}
+
+/// The painted rect of the Queue panel's selected row.
+fn queue_selected_row(harness: &mut TickHarness) -> Rect {
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Queue)
+        .expect("queue mounted")
+        .as_any_mut()
+        .downcast_mut::<mbv_components::QueueComponent>()
+        .expect("queue component type")
+        .selected_row_rect()
+        .expect("queue painted selected row")
+}
+
+/// The index of the first message `matches` accepts.
+fn message_index(messages: &[Msg], matches: impl Fn(&Msg) -> bool) -> Option<usize> {
+    messages.iter().position(matches)
 }

@@ -298,7 +298,7 @@ impl Model {
         ) {
             self.dismiss_active_inline_search();
         }
-        self.app.handle_lib_event(ev);
+        self.app.handle_lib_event(ev, None);
         if pushes_inline_search {
             self.push_inline_search_content();
         }

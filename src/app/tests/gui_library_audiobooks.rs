@@ -87,7 +87,7 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
     // The open's load ran: its worker reported one completion. The no-setup
     // stub's worker reports the failure class; the event is dropped raw, so
     // the failure mark never applies and the page below carries the catalog.
@@ -122,7 +122,7 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
 
     // A loaded catalog's open starts no second load: no replacement batch
     // arms, so no worker runs and the chain stays single-flight.
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
     assert!(
         book_state(&app).replacement.is_none(),
         "the loaded catalog's open started no refresh batch"
@@ -143,10 +143,10 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
     let mut app = abs_app();
     app.audiobookshelf_book_browse[0].books = vec![book("book-a", "A Book")];
 
-    app.gui_abs_select(0, "book-a");
+    gui_abs_select(&mut app, 0, "book-a");
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
-        Some("book-a"),
+        Some("book-a".to_string()),
         "the picked book is the select command's"
     );
     // The select started the TUI's detail loader: its worker reported one
@@ -184,10 +184,10 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
         "the chapters landed in the detail cache"
     );
 
-    app.gui_abs_select(0, "gone");
+    gui_abs_select(&mut app, 0, "gone");
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
-        Some("book-a"),
+        Some("book-a".to_string()),
         "a stale id changes nothing"
     );
 }
@@ -202,7 +202,10 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     let mut app = abs_app();
     app.audiobookshelf_book_browse[0].books = vec![book("book-a", "A Book")];
 
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Audiobooks { lib_idx: 0 },
+    );
     let _ = app
         .channels
         .lib_rx
@@ -220,7 +223,10 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     while app.drain_lib_event() {}
     assert!(book_state(&app).detail_cache.contains_key("book-a"));
 
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Audiobooks { lib_idx: 0 },
+    );
     assert_eq!(
         book_state(&app).next_detail_request,
         request,
@@ -251,7 +257,7 @@ fn the_open_entry_on_another_book_library_starts_no_load() {
     let mut app = abs_app();
     add_second_book_library(&mut app);
 
-    app.gui_abs_open(2);
+    gui_abs_open(&mut app, 2);
 
     let stale = &app.audiobookshelf_book_browse[2];
     assert_eq!(
@@ -279,7 +285,10 @@ fn a_restored_audiobooks_destination_starts_its_catalog_load() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Audiobooks { lib_idx: 0 },
+    );
 
     let state = book_state(&app);
     assert_eq!(
@@ -299,7 +308,7 @@ fn a_restored_audiobooks_destination_starts_its_catalog_load() {
 /// One frame's load pass for library 0's book catalog, as the catalog request
 /// serial it left: an armed replacement batch bumps the serial.
 fn pass_catalog_request(app: &mut App) -> u64 {
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(app, GuiDestinationKind::Audiobooks { lib_idx: 0 });
     app.audiobookshelf_book_browse[0].catalog_request
 }
 
@@ -347,7 +356,7 @@ fn a_failed_catalog_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
         "the repaint honoured the failed mark"
     );
 
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
     assert_eq!(
         book_state(&app).catalog_request,
         1,
@@ -368,7 +377,7 @@ fn opening_a_catalog_with_a_page_in_flight_starts_no_second_chain() {
     let mut app = abs_app();
     app.audiobookshelf_book_browse[0].loading_pages.insert(0);
 
-    app.gui_abs_open(0);
+    gui_abs_open(&mut app, 0);
 
     let state = book_state(&app);
     assert!(
@@ -391,7 +400,7 @@ fn the_presented_tabs_include_a_book_library_and_a_podcast_library() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
-    let tabs = app.gui_library_tabs();
+    let tabs = gui_library_tabs(&app);
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
@@ -399,20 +408,20 @@ fn the_presented_tabs_include_a_book_library_and_a_podcast_library() {
         "the book library presents Audiobooks and the podcast library Podcasts"
     );
     assert_eq!(
-        app.gui_active_destination()
+        gui_active_destination(&app)
             .and_then(crate::app::gui_library::GuiDestinationKind::library_index),
         Some(0),
         "the active book destination is the seeded one"
     );
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Audiobooks { lib_idx: 0 }),
         "the active book destination's kind is the Audiobooks one"
     );
 
     app.tab = TabSelection::AudiobookshelfLibrary(1);
     assert_eq!(
-        app.gui_active_destination(),
+        gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Podcasts { lib_idx: 1 }),
         "the podcast destination presents its own kind"
     );

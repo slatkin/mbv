@@ -75,7 +75,7 @@ impl App {
             // above all — changes nothing.
             ConfirmAction::CloseNamedQueue(queue) => {
                 if key.code == Key::Enter {
-                    self.send_named_queue_close(queue);
+                    let _ = self.send_named_queue_close(queue);
                 }
             }
         }

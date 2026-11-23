@@ -390,18 +390,6 @@ pub enum LibEvent {
     Audiobookshelf(AudiobookshelfEvent),
     Playlist(PlaylistEvent),
     ModelContent(ModelContentEvent),
-    /// The GUI Library's group album fetch completed (add-gui-library-panel
-    /// design D5). Only the GUI Client's collection store starts one, so the
-    /// TUI never receives it.
-    GuiGroupAlbums(crate::app::gui_library::GuiGroupAlbumsEvent),
-    /// The GUI Library's plain Emby library's root-list fetch completed
-    /// (add-gui-library-panel design D12, row 8.1). Only the GUI Client's
-    /// root-list store starts one, so the TUI never receives it.
-    GuiEmbyRootItems(crate::app::gui_library::GuiEmbyRootItemsEvent),
-    /// The GUI Shows New list's fetch completed for one Emby TV library
-    /// (gui-collection-dropdown design D9). Only the GUI Client's launch
-    /// starts one, so the TUI never receives it.
-    GuiShowsNew(crate::app::gui_library::GuiShowsNewEvent),
     /// One feed-group target's items fetch failed (gui-collection-dropdown
     /// design D3). Both Clients' fetch paths send it, and the GUI's store
     /// owns the terminal failure mark it records.

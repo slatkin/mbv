@@ -35,15 +35,21 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
     ));
     app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
 
-    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     assert!(
-        app.gui_emby_libs
+        crate::app::tests::stub_gui_state(|gui| gui
+            .emby_libs
             .get(&0)
-            .is_some_and(|stored| stored.feed_claim.is_some()),
+            .is_some_and(|stored| stored.feed_claim.is_some())),
         "the shown pass claims the library's fetched results"
     );
 
-    let mut state = app.gui_launch_state();
+    let core = crate::gui::GuiCore::new(std::mem::replace(
+        &mut app,
+        crate::app::app_stub::handoff_app(),
+    ));
+    let mut state = core.gui_launch_state();
+    app = core.into_app();
     let destination = state.destination.clone();
     state.collections = vec![mbv_config::GuiDestinationCollections {
         destination: destination.clone(),
@@ -53,12 +59,18 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
         picks: Vec::new(),
     }];
 
-    assert!(app.restore_gui_launch_collections(&state, &destination));
+    assert!(crate::app::tests::restore_launch_collections(
+        &mut app,
+        &state,
+        &destination
+    ));
 
-    let stored = app
-        .gui_emby_feed_sets
-        .get(&0)
-        .expect("the saved folder set installed over the painted frame");
+    let stored = crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_feed_sets
+            .get(&0)
+            .cloned()
+            .expect("the saved folder set installed over the painted frame")
+    });
     assert_eq!(
         stored.set.checked_keys(),
         ["folder-2".to_string()].as_slice(),
@@ -106,7 +118,7 @@ fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
         "the failed fetch retired its in-flight mark"
     );
 
-    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     assert_eq!(
         http.request_count(),
         fetched,

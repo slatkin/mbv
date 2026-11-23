@@ -13,6 +13,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Tabs};
 
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 
 /// Plain-data paint model for one tab bar (task 2.1). The shell projects the
 /// tab titles, the selected tab's position and the scroll anchor; the

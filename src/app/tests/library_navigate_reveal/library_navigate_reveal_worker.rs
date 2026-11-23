@@ -143,7 +143,7 @@ fn resolve_failure_drains_the_error_event_and_flashes_without_a_tab_change() {
     assert!(matches!(ev, LibEvent::Error(_)), "expected LibEvent::Error");
     // The drain feeds every lib event through `handle_lib_event`; the error
     // arm flashes without touching the tab.
-    app.handle_lib_event(ev);
+    app.handle_lib_event(ev, None);
     assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
     assert!(
         app.newest_toast_text().contains("Library error"),

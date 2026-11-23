@@ -32,7 +32,7 @@ impl KeyChord {
     ///   so it is dropped here.
     /// * The modifier lowercase rule (the TUI translation edge applies it to
     ///   pressed keys; the keybind registry stores configured chords in
-    ///   crossterm-case, `Shift+N` as `Char('N')` + SHIFT): an uppercase
+    ///   terminal key-event case, `Shift+N` as `Char('N')` + SHIFT): an uppercase
     ///   ASCII character under SHIFT is folded to its lowercase letter with
     ///   SHIFT kept, so the pressed and configured chords compare equal.
     ///   Other non-Char codes keep SHIFT: literal bindings such as the

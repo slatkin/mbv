@@ -18,9 +18,6 @@ pub mod screens;
 #[doc(inline)]
 pub use components::artwork_placeholder::render_artwork_placeholder;
 #[doc(inline)]
-pub use components::audiobookshelf_book::book_rows;
-
-#[doc(inline)]
 pub use components::chrome_player::{
     HeaderTitle, PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, render_header_title,
     render_player_panel, target_icon,
@@ -54,18 +51,9 @@ pub use components::hero::render_search_box;
 #[doc(inline)]
 pub use components::library_routes::{LibraryRoutesRenderModel, render_library_routes_content};
 #[doc(inline)]
-pub use components::list_rows::LibraryListRenderCtx;
-#[doc(inline)]
-pub use screens::album_plan::group_album_plan;
-#[doc(inline)]
-pub use screens::feeds_model::{FeedDisplayRow, current_time_secs, feed_display_rows};
-// `LetterFilter` is already `pub(crate)` re-exported below (ui_model::sort_filter).
-#[doc(inline)]
 pub use components::media_list::render_wide_media_list_component;
 #[doc(inline)]
 pub use components::multiselect::{MultiSelectRenderModel, render_multiselect_content};
-#[doc(inline)]
-pub use components::music_wide::MusicWideRenderCtx;
 #[doc(inline)]
 pub use components::playlists::{
     PlaylistsRenderGeometry, PlaylistsViewState, render_playlists_content,
@@ -89,6 +77,8 @@ pub use components::tv_wide::TvWideRenderCtx;
 pub use components::twitch_url::{TwitchUrlRenderGeometry, render_twitch_url_content};
 #[doc(inline)]
 pub use components::widgets::{PillBar, PillBarWindow, render_pill_bar, render_placeholder};
+#[doc(inline)]
+pub use screens::feeds_model::{FeedDisplayRow, feed_display_rows};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
 // Interactive Components in `mbv_ui_model::components` (task 3.2+).
@@ -104,14 +94,6 @@ pub use components::chrome::{render_panel_shell_at, render_sidebar_scrollbar};
 #[doc(inline)]
 pub use components::indicators;
 use components::widgets::render_right_scrollbar;
-#[doc(inline)]
-pub use mbv_ui_model::music_grouping::sorted_group_album_order;
-pub use mbv_ui_model::sort_filter::{
-    LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, initial_group_artist_sort_key,
-};
-pub use mbv_ui_model::sort_filter::{
-    effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
-};
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.

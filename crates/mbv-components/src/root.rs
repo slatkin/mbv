@@ -216,6 +216,15 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
                     row: mouse.row,
                 }
             }
+            // A right press carries its cell so the shell can record the
+            // context-menu pointer (design D6); the components that open the
+            // menu send no cell of their own.
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Right) => {
+                TerminalObserverEvent::MouseRightClick {
+                    column: mouse.column,
+                    row: mouse.row,
+                }
+            }
             Event::Mouse(_) => TerminalObserverEvent::Mouse,
             Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
                 TerminalObserverEvent::NoOp

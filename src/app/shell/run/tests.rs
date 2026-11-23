@@ -12,8 +12,8 @@ use mbv_audiobookshelf::{
 };
 use mbv_core::service_runtime::ServiceState;
 use mbv_images::series_image_cache_key;
-use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use mbv_ui_model::browse::ServerRows;
+use mbv_ui_model::library_hero::SERIES_LANDSCAPE_IMAGE_TYPES;
 use rstest::rstest;
 use std::collections::HashMap;
 
@@ -26,9 +26,9 @@ fn mounted_wide_tv_model() -> Model {
     }
     // Wide breakpoint is now driven synchronously by terminal size
     // (`wide_tv_show_area`), not this previous-frame paint rect.
-    app.terminal_width = 160;
-    app.terminal_height = 40;
     let mut model = Model::new(app);
+    model.terminal_width = 160;
+    model.terminal_height = 40;
     model.sync_tv_content();
     model.sync_active_destination();
     model
@@ -565,28 +565,21 @@ fn music_owner_artist_survives_a_stale_restore_after_a_tab_round_trip() {
 /// caught panic closes the shared response channel — the only owner-visible
 /// sign. The drain must respawn the worker (a live channel again) instead of
 /// leaving image resizing silently dead for the rest of the session. The
-/// protocol-clearing half of the respawn is owned by the `mbv-images` test
-/// (`respawn_replaces_a_dead_worker_and_clears_cached_protocols`).
+/// protocol-clearing half of the respawn is owned by the `mbv-tui-support`
+/// test (`respawn_replaces_a_dead_worker_and_clears_cached_protocols`).
 #[test]
 fn drain_resize_responses_respawns_the_worker_after_it_exits() {
     let mut model = Model::new(make_app_stub());
-    // A cache whose response sender was dropped at construction stands in
-    // for the worker having exited: the drain observes Disconnected
-    // immediately, without any cross-thread waiting.
-    let (card_tx, card_rx) = std::sync::mpsc::channel();
-    let (register_tx, _) = std::sync::mpsc::channel();
+    // Dropping the register receiver and the response sender stands in for
+    // the worker having exited: the drain observes Disconnected immediately,
+    // without any cross-thread waiting.
+    let (register_tx, register_rx) = std::sync::mpsc::channel();
     let (_, response_rx) = std::sync::mpsc::channel();
-    model.app.images = mbv_images::cache::ImageCache::new(
-        50,
-        None,
-        true,
-        card_tx,
-        card_rx,
-        register_tx,
-        response_rx,
-    );
+    drop(register_rx);
+    model.app.image_protocols =
+        mbv_tui_support::ImageProtocols::with_resize_worker_for_test(register_tx, response_rx);
     assert!(matches!(
-        model.app.images.try_recv_resize_response(),
+        model.app.image_protocols.try_recv_resize_response(),
         Err(std::sync::mpsc::TryRecvError::Disconnected)
     ));
 
@@ -596,7 +589,7 @@ fn drain_resize_responses_respawns_the_worker_after_it_exits() {
     );
     assert!(
         matches!(
-            model.app.images.try_recv_resize_response(),
+            model.app.image_protocols.try_recv_resize_response(),
             Err(std::sync::mpsc::TryRecvError::Empty)
         ),
         "the drain must respawn a live worker after the old one exited"
@@ -651,7 +644,7 @@ fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
 #[test]
 fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
     let mut model = Model::new(make_app_stub());
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     let day = 24 * 60 * 60;
     model
         .app
@@ -686,7 +679,7 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
 #[test]
 fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain() {
     let mut model = Model::new(make_app_stub());
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     model
         .app
         .channels
@@ -717,7 +710,7 @@ fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain()
 #[test]
 fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
     let mut model = Model::new(make_app_stub());
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     model
         .app
         .channels

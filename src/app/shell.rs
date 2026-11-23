@@ -1,17 +1,15 @@
 use mbv_theme as palette;
 use std::time::Duration;
+#[cfg(test)]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{
     AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, LibEvent, PanelFocus,
     PanelMode, QueueLink, SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection,
     ToastSeverity,
 };
-use super::{
-    QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
-};
+use super::{QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog};
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
-#[cfg(test)]
-use crate::app::state::home_latest::current_launch_secs;
 use crate::app::state::playback::{DestinationLatestSnapshot, DestinationLatestSource};
 use mbv_components::{QueueBoundaryComponent, UiRootComponent};
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
@@ -24,21 +22,26 @@ use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
 mod arbitration;
-pub(in crate::app) type ArbitrationDiagnostic = arbitration::ArbitrationDiagnostic;
 #[cfg(test)]
 pub(in crate::app) use arbitration::fold_keyboard_messages;
-pub(in crate::app) use arbitration::{arbitrate_key, fold_mouse_messages};
+pub(in crate::app) type ArbitrationDiagnostic = arbitration::ArbitrationDiagnostic;
+pub(in crate::app) use arbitration::{
+    arbitrate_key, fold_mouse_messages, indexed, right_press_cell,
+};
 mod audiobookshelf_book;
 mod audiobookshelf_podcast;
 mod chrome_panels;
-mod draw;
+mod chrome_status;
+pub(in crate::app) mod draw;
 mod emby_library;
 mod emby_library_content;
 mod feeds;
 mod feeds_manage;
 mod focus;
+mod hero_image_projection;
 mod home;
 mod home_content;
+pub(in crate::app) mod image_protocol;
 mod inline_search;
 mod input_port;
 mod library;
@@ -46,17 +49,28 @@ mod library_panel;
 mod messages;
 mod modal_actions;
 mod music_workspace;
+/// The TUI input edge: terminal keys and mouse events cross into the neutral
+/// vocabulary here, before any core module reads them.
+pub(in crate::app) mod neutral_edge;
 pub(in crate::app) mod now_playing;
 mod overlays;
 mod playback;
 mod playlists;
 mod queue;
+pub(in crate::app) mod queue_card;
 mod root;
 mod run;
 mod settings;
+mod tab_strip;
+pub(in crate::app) mod teardown;
+mod terminal;
+pub(in crate::app) mod tv_wide;
+pub(crate) use terminal::set_mouse_capture;
+pub(in crate::app) use terminal::{init_terminal, restore_terminal};
 mod tv_workspace;
 mod twitch_url;
 mod ui_state_reset;
+mod visualizer;
 
 /// How often the ``TuiRealm`` crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is
@@ -181,6 +195,25 @@ pub struct Model {
     /// Shell-owned projection of the focused list's Visual selection.
     pub(in crate::app) visual_selection: Option<(mbv_ui_model::settings::PanelFocus, usize)>,
     pub(in crate::app) context_menu_origin: Option<mbv_ui_model::media_list::SelectionOrigin>,
+    /// The cell the last right-click landed on, in terminal cells. The core
+    /// builds every menu with the neutral `ContextMenuAnchor::Pointer` and no
+    /// cell (design D6); the shell records the one `MouseRightClick` observer
+    /// signal and places a pointer-anchored menu here. `None` leaves a pointer
+    /// menu at its panel's top-left corner, as an unset anchor always did.
+    pub(in crate::app) menu_pointer: Option<(u16, u16)>,
+    /// Whether the message now being dispatched is the one this tick's
+    /// right-click raised, so it anchors at `menu_pointer` instead of the
+    /// core's selected-item anchor. A right-click and the component request it
+    /// raises reach the shell in one tick, delivered in either order; the
+    /// shell records the right-press position from the tick's raw messages
+    /// (`Model::record_right_press`) and sets this per message as it dispatches
+    /// them (`Model::scope_menu_pointer`), so a keyboard request arriving
+    /// earlier in the same tick keeps the selected-item anchor.
+    pub(in crate::app) menu_pointer_current: bool,
+    /// The position in the tick's raw message list where the `MouseRightClick`
+    /// observer report arrived; `None` for a tick without a right press. Menu
+    /// requests at or after it are the ones this tick's right-click raised.
+    pub(in crate::app) menu_pointer_press_at: Option<usize>,
     pub(in crate::app) context_action_snapshot: Option<
         mbv_ui_model::context_menu::ContextActionSnapshot<
             mbv_ui_model::context_menu::ContextMenuTargets,
@@ -214,9 +247,59 @@ pub struct Model {
     /// Shared with the terminal input port (issue #940). The run loop releases
     /// it after each terminal tick so the port forwards the next mouse move.
     move_gate: input_port::MoveGate,
+    /// The tab bar's scroll anchor (design D6b): TUI presentation, driven by
+    /// [`Model::reveal_requested_tab`] from the core's `tab_reveal_requested`
+    /// request and painted by `sync_tab_panel`.
+    pub(in crate::app) tab_scroll: usize,
+    /// The terminal size the shell last recorded, on the resize observer and
+    /// on the draw path's per-frame size (design D2/D6a). Terminal geometry
+    /// never reaches the core: the shell derives the single-panel fact
+    /// (`App::set_single_panel`) and the queue-column clamp from these.
+    pub(in crate::app) terminal_width: u16,
+    pub(in crate::app) terminal_height: u16,
+    /// The last fully composed frame's layout geometry (design D2/D13 Rule
+    /// B): `left_area`, the queue card checkpoint, and the root panel
+    /// placements. Shell presentation data built from ratatui `Rect`s, so it
+    /// lives here. The core reads only the neutral copy the draw path pushes
+    /// (`App::set_left_panel_area`).
+    pub(in crate::app) layout: mbv_render::layout::AppLayout,
+    /// The Home "new content" launch window (row 4.4 of design D2): the launch
+    /// instant and the previous launch, read by the shell's destination-latest
+    /// markers. Set once at `Model` construction.
+    pub(in crate::app) home_latest_launch_window: HomeLatestLaunchWindow,
+    /// The last sync pass that saw a live resize drag; starts the settle
+    /// window (invariant 20). The live bit stays with the gesture components.
+    pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
+}
+
+/// The single-panel fact the TUI derives from its terminal width: the width
+/// is below the mini-view breakpoint (row 4.4 of design D2, from the row
+/// 4.1-4.3 review). The TUI owns the threshold; the core only receives the
+/// fact through `App::set_single_panel`.
+pub(in crate::app) fn single_panel_for_width(width: u16) -> bool {
+    width < mbv_render::layout::MINI_VIEW_THRESHOLD
+}
+
+/// The current launch instant in Unix seconds: the upper bound of the Home
+/// "new content" launch window (row 4.4 of design D2). The window is shell
+/// presentation state, so the clock read lives here too.
+#[cfg(test)]
+#[must_use]
+fn current_launch_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 impl Model {
+    /// The terminal size the shell last recorded (row 4.3 of design D2):
+    /// terminal geometry is TUI presentation, so it lives on the shell and
+    /// never reaches the core.
+    pub(in crate::app) fn terminal_size(&self) -> (u16, u16) {
+        (self.terminal_width, self.terminal_height)
+    }
+
     /// Construct the model, starting the ``TuiRealm`` crossterm listener and
     /// mounting the permanent root observer.
     #[cfg(test)]
@@ -272,16 +355,15 @@ impl Model {
     }
 
     fn new_with_listener_and_window(
-        mut app: App,
+        app: App,
         listener_cfg: EventListenerCfg<UserEvent>,
         move_gate: input_port::MoveGate,
         home_latest_launch_window: HomeLatestLaunchWindow,
     ) -> Self {
         let application = Application::init(listener_cfg);
-        app.home_latest_launch_window = home_latest_launch_window;
         // Legacy Home Latest selector snapshots are reanchored to Continue
         // Watching by the Home owner's launch-state restoration.
-        let initial_terminal_size = (app.terminal_width, app.terminal_height);
+        let initial_terminal_size = (80, 24);
         // The compiled `[keys]` configuration is read once, here, from the
         // config the App was built with; later config saves never rewrite it
         // for the running session.
@@ -310,12 +392,21 @@ impl Model {
             pending_terminal_resize: false,
             visual_selection: None,
             context_menu_origin: None,
+            menu_pointer: None,
+            menu_pointer_current: false,
+            menu_pointer_press_at: None,
             context_action_snapshot: None,
             keybinds,
             focus_stack,
             swapped_out_exit: false,
             workspace_now_playing: None,
             move_gate,
+            tab_scroll: 0,
+            terminal_width: initial_terminal_size.0,
+            terminal_height: initial_terminal_size.1,
+            layout: mbv_render::layout::AppLayout::default(),
+            home_latest_launch_window,
+            resize_drag_activity: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
@@ -385,8 +476,10 @@ fn apply_terminal_observer(
             // pass consumes the armed flag and compares it against the size
             // it last handled.
             model.pending_terminal_resize = true;
-            model.app.terminal_width = *width;
-            model.app.terminal_height = *height;
+            model.terminal_width = *width;
+            model.terminal_height = *height;
+            let single_panel = single_panel_for_width(*width);
+            model.app.set_single_panel(single_panel);
             // Invariant 17: a resize neither blanks the terminal nor wipes
             // the image cache. A `force_clear` here blanked the panel in the
             // middle of pinwin's width tween, and wiping the cache made every
@@ -407,6 +500,19 @@ fn apply_terminal_observer(
         // disarms prefix mode (design D6, task 6.1) — a shell-side flag
         // clear plus focus restore; the mouse event's own delivery and
         // handling are unchanged.
+        // A right press on any surface records the context-menu pointer the
+        // shell places a pointer-anchored menu against (design D6). The tick
+        // already recorded it before draining any message
+        // (`Model::record_right_press`), because the focused panel's own
+        // request arrives first; this repeats the record for a tick that
+        // reaches the observer by another route. It does not mark it current:
+        // `Model::scope_menu_pointer` derives that per message, so the report
+        // itself never rescues a keyboard request in the same tick. It is also
+        // a mouse event, so it disarms prefix mode like every other.
+        TerminalObserverEvent::MouseRightClick { column, row } => {
+            model.menu_pointer = Some((*column, *row));
+            model.disarm_prefix_mode();
+        }
         TerminalObserverEvent::MouseClick { .. } | TerminalObserverEvent::Mouse => {
             model.disarm_prefix_mode();
         }
@@ -417,5 +523,7 @@ fn apply_terminal_observer(
     }
 }
 
+#[cfg(test)]
+pub(crate) mod test_support;
 #[cfg(test)]
 mod tests;

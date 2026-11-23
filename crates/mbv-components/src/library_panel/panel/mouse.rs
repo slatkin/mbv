@@ -208,10 +208,11 @@ impl LibraryPanel {
         }
         if let PointerGesture::Click { .. } = gesture
             && let Some(&index) = self.hits.links.resolve(at)
-            && let Some(url) =
-                self.painted_link_urls.get(index).cloned().and_then(|url| {
-                    super::super::overview_box::sanitize_url(&url).map(str::to_owned)
-                })
+            && let Some(url) = self
+                .painted_link_urls
+                .get(index)
+                .cloned()
+                .and_then(|url| mbv_ui_model::ui_util::sanitize_url(&url).map(str::to_owned))
         {
             return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
         }
@@ -304,10 +305,11 @@ impl LibraryPanel {
         }
         if let PointerGesture::Click { .. } = gesture
             && let Some(&index) = self.hits.links.resolve(at)
-            && let Some(url) =
-                self.painted_link_urls.get(index).cloned().and_then(|url| {
-                    super::super::overview_box::sanitize_url(&url).map(str::to_owned)
-                })
+            && let Some(url) = self
+                .painted_link_urls
+                .get(index)
+                .cloned()
+                .and_then(|url| mbv_ui_model::ui_util::sanitize_url(&url).map(str::to_owned))
         {
             return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
         }

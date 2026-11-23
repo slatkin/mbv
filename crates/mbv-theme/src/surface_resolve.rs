@@ -13,8 +13,8 @@ use super::surface::Surface;
 use super::surface_table::slots;
 
 /// The resolved colour of one rendered surface for one frame. The fill is
-/// the neutral [`Rgb`]; the render toolkit converts under the crate's
-/// `ratatui` feature.
+/// the neutral [`Rgb`]; `mbv_tui_support::ToRatatui` converts it for a TUI
+/// painter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SurfaceColors {
     pub fill: Rgb,

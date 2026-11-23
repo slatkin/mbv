@@ -79,6 +79,13 @@ num-traits = { version = "0.2", default-features = false }
 # the window's own zone.
 time = { workspace = true, features = ["local-offset"] }
 
+[features]
+# The Client's test sidecar (row 8.1 of `decouple-client-core`): a dependent
+# Client's test build keeps the GUI state beside the `App` its seams write, so
+# a seed, the step that adopts it, and the test's `*_for_test` reads share one
+# state. `cfg(test)` covers this crate's own tests; nothing else enables it.
+test = ["mbv/test"]
+
 [dev-dependencies]
 mbv = { path = "../..", features = ["test"] }
 # The painted svg tree the headless tests read: Blitz parses an inline `svg`

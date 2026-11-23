@@ -16,22 +16,23 @@
 //! `ShellRequest::TvHit*` messages the deleted component emitted.
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::{
-    HeroContent, HeroContentData, HeroSlot, LibraryContentOwner, LibraryPanelContent,
-    LibrarySlotEvent, ListSlot, SelectorRow, Workspace, hero_content_emby,
-    hero_content_series_with_episode,
+    HeroContent, HeroSlot, LibraryContentOwner, LibraryPanelContent, LibrarySlotEvent, ListSlot,
+    SelectorRow, Workspace,
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, UpcomingPremiere};
 use mbv_queue::QueueItem;
+use mbv_render::TvWideRenderCtx;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::{
-    LetterFilter, LetterFilterKind, TvWideRenderCtx, effective_sort_str, letter_bucket,
-};
+#[cfg(test)]
+use mbv_ui_model::library_hero::producers::hero_content_emby;
+use mbv_ui_model::list_ctx::LibraryListRenderCtx;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+use mbv_ui_model::sort_filter::{effective_sort_str, letter_bucket};
 use mbv_ui_model::ui_util::{fmt_duration_gutter, natural_sort_key, row_date};
 use mbv_ui_msg::TvTreeTarget;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
@@ -48,7 +49,6 @@ mod tree_projection;
 
 #[cfg(test)]
 use episode_rows::build_episode_rows;
-pub use episode_rows::premiere_number_label;
 use episode_rows::{build_latest_episode_rows, upcoming_premiere_rows};
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 enum Pane {
@@ -121,7 +121,7 @@ impl TvContent {
     #[must_use]
     pub fn new() -> Self {
         let mut context = TvWideRenderCtx::new(
-            mbv_render::LibraryListRenderCtx::from_items(Vec::new(), 0),
+            LibraryListRenderCtx::from_items(Vec::new(), 0),
             None,
             None,
             0,

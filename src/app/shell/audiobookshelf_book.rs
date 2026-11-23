@@ -46,7 +46,7 @@ impl Model {
             return;
         };
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        let images_enabled = self.app.images.images_enabled();
+        let images_enabled = self.app.images.protocol_enabled();
         self.update_abs_book_owner(|owner| {
             owner.set_content(&snapshot, images_enabled);
             owner.set_focused(focused);
@@ -93,7 +93,7 @@ impl Model {
                     }
                 }
                 AudiobookshelfBookIntent::Activate => {
-                    if self.app.is_right_panel_wide() {
+                    if super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size()) {
                         if let Some(index) = self.app.tab.audiobookshelf_index() {
                             self.app.play_selected_audiobookshelf_book(index);
                         }
@@ -102,7 +102,7 @@ impl Model {
                     }
                 }
                 AudiobookshelfBookIntent::FocusChapters => {
-                    if self.app.is_right_panel_wide() {
+                    if super::tv_wide::is_right_panel_wide(&self.app, self.terminal_size()) {
                         self.update_abs_book_owner(
                             mbv_components::book_content::BookContent::enter_chapter_focus,
                         );

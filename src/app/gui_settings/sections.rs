@@ -11,9 +11,9 @@ use super::projection::{
     GuiSettingsChoiceProjection, GuiSettingsRouteDeviceProjection, gui_settings_values,
 };
 use super::{GuiSettingsRouteProjection, GuiSettingsSection};
-use crate::app::App;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// Start the open section's load (design D9): the section's data lands in
     /// the screen state's caches, which live until the screen closes. A
     /// section with no load of its own changes nothing.
@@ -22,14 +22,14 @@ impl App {
             // The Library section lists the routable libraries with their
             // assigned devices, and its two choice lists.
             GuiSettingsSection::Library => {
-                let routes = self.route_libraries().map(|rows| {
+                let routes = self.app.route_libraries().map(|rows| {
                     rows.into_iter()
                         .map(GuiSettingsRouteProjection::from)
                         .collect()
                 });
                 let hidden = self.gui_settings_choice_rows(MultiSelectKind::HiddenLibraries);
                 let feed_view = self.gui_settings_choice_rows(MultiSelectKind::FeedViewLibraries);
-                let Some(state) = self.gui_settings.as_mut() else {
+                let Some(state) = self.gui.settings_screen.as_mut() else {
                     return;
                 };
                 state.routes = routes;
@@ -45,7 +45,7 @@ impl App {
             // The Playback section's My Languages list needs no Emby client.
             GuiSettingsSection::Playback => {
                 if let Some(rows) = self.gui_settings_choice_rows(MultiSelectKind::MyLanguages)
-                    && let Some(state) = self.gui_settings.as_mut()
+                    && let Some(state) = self.gui.settings_screen.as_mut()
                 {
                     state.set_choices(MultiSelectKind::MyLanguages, rows);
                 }
@@ -69,7 +69,7 @@ impl App {
         &self,
         kind: MultiSelectKind,
     ) -> Option<Vec<GuiSettingsChoiceProjection>> {
-        self.settings_choices(kind).map(|rows| {
+        self.app.settings_choices(kind).map(|rows| {
             rows.into_iter()
                 .map(|(id, label, selected)| GuiSettingsChoiceProjection {
                     id,
@@ -86,7 +86,7 @@ impl App {
         let Some(rows) = self.gui_settings_choice_rows(kind) else {
             return;
         };
-        if let Some(state) = self.gui_settings.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.set_choices(kind, rows);
         }
     }
@@ -103,7 +103,7 @@ impl App {
             );
             return;
         }
-        self.handle_settings_activate(setting);
+        self.app.handle_settings_activate(setting);
     }
 
     /// Row 9.2's `setValue` arm (design D5, design D13): pick one value for a
@@ -118,7 +118,7 @@ impl App {
             );
             return;
         }
-        let my_languages = self.config.lock().unwrap().my_languages.clone();
+        let my_languages = self.app.config.lock().unwrap().my_languages.clone();
         let listed = gui_settings_values(setting, &my_languages)
             .is_some_and(|values| values.iter().any(|listed| listed == value));
         if !listed {
@@ -128,7 +128,7 @@ impl App {
             );
             return;
         }
-        self.set_settings_value(setting, value);
+        self.app.set_settings_value(setting, value);
     }
 
     /// Row 5.1's `applyChoices` arm (design D5, design D7): run the shared
@@ -141,7 +141,7 @@ impl App {
         kind: MultiSelectKind,
         selected: &[String],
     ) {
-        let Some(rows) = self.settings_choices(kind) else {
+        let Some(rows) = self.app.settings_choices(kind) else {
             Self::log_ignored_gui_settings_command(
                 "applyChoices",
                 "the kind has no library list to mark",
@@ -155,8 +155,8 @@ impl App {
                 (id, label, marked)
             })
             .collect();
-        if let Some(content) = self.commit_settings_choices(kind, &marked) {
-            self.apply_home_content(Some(content));
+        if let Some(content) = self.app.commit_settings_choices(kind, &marked) {
+            self.app.apply_home_content(Some(content));
         }
         self.reload_gui_settings_choices(kind);
     }
@@ -170,13 +170,14 @@ impl App {
         // The picked device row names the library's display name, which the
         // shared refusal prints; the loaded route rows hold it.
         let name = self
-            .gui_settings
+            .gui
+            .settings_screen
             .as_ref()
             .and_then(|state| state.routes.as_ref())
             .and_then(|rows| rows.iter().find(|row| row.library == library))
             .map_or_else(|| library.clone(), |row| row.name.clone());
         let device = endpoint.map(|endpoint| (name, Some(endpoint)));
-        let refreshed = self.assign_library_route(&library, device.as_ref());
+        let refreshed = self.app.assign_library_route(&library, device.as_ref());
         let Some((rows, _cursor)) = refreshed else {
             return;
         };
@@ -184,7 +185,7 @@ impl App {
             .into_iter()
             .map(GuiSettingsRouteProjection::from)
             .collect();
-        if let Some(state) = self.gui_settings.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.routes = Some(rows);
         }
     }
@@ -197,7 +198,8 @@ impl App {
     pub(super) fn apply_gui_settings_route_devices(&mut self, library: &str) {
         let library = library.to_lowercase();
         let loaded = self
-            .gui_settings
+            .gui
+            .settings_screen
             .as_ref()
             .and_then(|state| state.routes.as_ref())
             .is_some_and(|rows| rows.iter().any(|row| row.library == library));
@@ -208,13 +210,13 @@ impl App {
             );
             return;
         }
-        let devices = self.route_devices(&library).map(|(devices, _cursor)| {
+        let devices = self.app.route_devices(&library).map(|(devices, _cursor)| {
             devices
                 .into_iter()
                 .map(GuiSettingsRouteDeviceProjection::from)
                 .collect::<Vec<_>>()
         });
-        if let Some(state) = self.gui_settings.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.route_selection = Some(library);
             state.route_devices = devices;
         }

@@ -10,14 +10,14 @@ use mbv_ui_model::library_tab::LibraryTab;
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
-use crate::app::App;
 use crate::app::input::gui::GuiInput;
-use crate::app::tests::make_app_stub;
+use crate::app::tests::{gui_client_capabilities, make_app_stub};
+use crate::gui::GuiCore;
 
 /// A catalog with a Grouped Music library at position 1 and a Shows library
 /// at position 2, Music active: the shortest catalog in which a tab step has
 /// a presented destination to land on.
-fn music_and_shows_app() -> App {
+fn music_and_shows_core() -> GuiCore {
     let mut app = make_app_stub();
     app.music_levels = vec!["group".to_string(), "album".to_string()];
     let mut music = make_item("Music", "CollectionFolder");
@@ -31,14 +31,14 @@ fn music_and_shows_app() -> App {
     shows_tab.library_total = Some(0);
     app.libs.push(shows_tab);
     app.tab = TabSelection::EmbyLibrary(0);
-    app
+    GuiCore::new(app)
 }
 
 /// Press one key through the GUI's routing entry with no focused leaf, as the
 /// window's forwarder does for a key no surface takes.
-fn press(app: &mut App, key: Key) {
+fn press(core: &mut GuiCore, key: Key) {
     assert!(
-        !app.route_gui_input(GuiInput::Key(KeyEvent::new(key, KeyModifiers::NONE)), None),
+        !core.route_gui_input(GuiInput::Key(KeyEvent::new(key, KeyModifiers::NONE)), None),
         "{key:?} asked to quit"
     );
 }
@@ -48,19 +48,19 @@ fn press(app: &mut App, key: Key) {
 // and starts its root load, as a press on its tab does.
 #[test]
 fn tab_from_music_opens_shows_and_starts_its_root_load() {
-    let mut app = music_and_shows_app();
-    app.enable_gui_client();
+    let mut core = music_and_shows_core();
+    core.app.set_client_capabilities(gui_client_capabilities());
 
-    press(&mut app, Key::Tab);
+    press(&mut core, Key::Tab);
 
-    assert_eq!(app.tab, TabSelection::EmbyLibrary(1));
+    assert_eq!(core.app.tab, TabSelection::EmbyLibrary(1));
     assert_eq!(
-        app.libs[1].tv_content_mode.as_ref(),
+        core.app.libs[1].tv_content_mode.as_ref(),
         Some(&mbv_queue::TvContentMode::All),
         "the open forces the Show destination's one view mode, the series list"
     );
     assert!(
-        app.libs[1]
+        core.app.libs[1]
             .nav_stack
             .first()
             .is_some_and(|level| level.loading),
@@ -76,15 +76,15 @@ fn tab_from_music_opens_shows_and_starts_its_root_load() {
 // window's open-destination command guards.
 #[test]
 fn a_router_step_opens_no_destination_the_gui_does_not_present() {
-    let mut app = music_and_shows_app();
-    app.enable_gui_client();
+    let mut core = music_and_shows_core();
+    core.app.set_client_capabilities(gui_client_capabilities());
 
     // Position 3 names no tab: Home is 0 and the two libraries take 1 and 2.
-    press(&mut app, Key::Char('4'));
+    press(&mut core, Key::Char('4'));
 
-    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
+    assert_eq!(core.app.tab, TabSelection::EmbyLibrary(0));
     assert!(
-        app.libs[1].nav_stack.is_empty(),
+        core.app.libs[1].nav_stack.is_empty(),
         "the unpresented position started no load"
     );
 }

@@ -395,12 +395,15 @@ fn tv_series_root_refresh_re_arms_completion_pagination() {
     lvl.tv_content_mode = Some(mbv_queue::TvContentMode::All);
     lvl.rows = ServerRows::loaded(3, 5);
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
-        lib_idx: 0,
-        parent_id: "lib-1".into(),
-        items: make_items(3),
-        total_count: 5,
-    }));
+    app.handle_lib_event(
+        LibEvent::Browse(BrowseEvent::Refreshed {
+            lib_idx: 0,
+            parent_id: "lib-1".into(),
+            items: make_items(3),
+            total_count: 5,
+        }),
+        None,
+    );
 
     assert!(
         app.libs[0].nav_stack.last().unwrap().loading,

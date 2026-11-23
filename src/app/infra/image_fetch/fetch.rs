@@ -1,17 +1,22 @@
-use super::{
-    App, Instant, LevelFillAction, LevelFillState, LibEvent, MAX_IMAGE_FETCHES, NAV_IDLE_DELAY,
-    PAGE_SIZE,
-};
-use crate::app::{MusicEvent, SeriesEvent};
+use super::{App, MAX_IMAGE_FETCHES, NAV_IDLE_DELAY, PAGE_SIZE};
+use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
+use crate::app::{LibEvent, MusicEvent, SeriesEvent};
 use mbv_images::{ImageFetchReq, ImageSource};
 use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key};
+use std::time::Instant;
 
 mod card_images;
+mod completions;
+mod emby;
 mod level_artists;
 mod level_warmup;
+pub(in crate::app) mod transport;
 
 #[cfg(test)]
 mod batch_tests;
+
+#[cfg(test)]
+mod emby_tests;
 
 impl App {
     /// Proactively fetches the full track list for `album_id` so the view's

@@ -1,10 +1,18 @@
 use super::Model;
 use crate::app::dispatch::action::Command;
 use crate::app::dispatch::action::ShellCommand;
-use crate::app::input::router::{
-    RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
-};
+use crate::app::input::router::{RouterNow, RouterOutcome, RouterSnapshot};
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
+
+impl RouterNow for Model {
+    /// The App-owned armed bit, read through the router's neutral access
+    /// rather than handed to it as a snapshot field (design D6): the TUI
+    /// shell keeps the owner too, because arming also holds focus off and
+    /// disarming releases it (`self::prefix_mode`).
+    fn prefix_armed(&self) -> bool {
+        self.app.prefix_armed
+    }
+}
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
 /// tick's message list and return the messages that survive.
@@ -164,6 +172,24 @@ fn arbitration_diagnostic(
     }
 }
 
+/// Attach each message's position in its own list, so a later fold that keeps
+/// the order still names where a message arrived (design D6 scopes the
+/// context-menu pointer to the request the tick's right-click raised, which
+/// sits at or after the right-press report's position).
+pub(in crate::app) fn indexed(messages: Vec<Msg>) -> Vec<(usize, Msg)> {
+    messages.into_iter().enumerate().collect()
+}
+
+/// The cell of a `UiRoot` right-press report.
+pub(in crate::app) fn right_press_cell(msg: &Msg) -> Option<(u16, u16)> {
+    match msg {
+        Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { column, row }) => {
+            Some((*column, *row))
+        }
+        _ => None,
+    }
+}
+
 /// ADR 0024: the mouse fold, applied to a `tick()` message list beside the
 /// ADR 0023 keyboard router fold.
 ///
@@ -208,6 +234,7 @@ pub(in crate::app) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
                         | TerminalObserverEvent::FocusLost
                         | TerminalObserverEvent::Mouse
                         | TerminalObserverEvent::MouseClick { .. }
+                        | TerminalObserverEvent::MouseRightClick { .. }
                         | TerminalObserverEvent::MouseClaimed
                         | TerminalObserverEvent::KeyClaimed
                 )
@@ -236,14 +263,16 @@ impl Model {
     /// Build the router snapshot and resolve the terminal chord. The router
     /// reads a plain-data snapshot, never component attributes (ADR 0023).
     pub(in crate::app) fn router_outcome(&mut self, messages: &[Msg]) -> RouterOutcome {
-        let Some(tui_key) = messages.iter().find_map(|msg| match msg {
+        let Some(neutral_key) = messages.iter().find_map(|msg| match msg {
             Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(*key),
             _ => None,
         }) else {
             return RouterOutcome::FallThrough;
         };
-        // The router resolves the neutral chord the TUI edge translated
-        // (`extract-client-core` design D4); no back-conversion exists.
+        // The TUI edge translates the terminal key into the neutral
+        // vocabulary (`super::neutral_edge`) and the router normalizes the
+        // neutral chord (`extract-client-core` design D4); the core never
+        // names a terminal type, and no back-conversion exists.
         // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
         // initializers below call `effective_playback_state()`, which locks it
         // again. A temporary created anywhere inside the struct literal lives
@@ -287,17 +316,18 @@ impl Model {
             },
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
-            prefix_armed: self.app.prefix_armed,
             visual_selection_active: self.visual_selection.is_some(),
-            // The Client-kind fact keeps the GUI-only key context's layers
-            // (add-tauri-gui-client row 6.2) inert here, so the TUI's
-            // default bindings on the canvas chords keep their own actions.
-            gui_client: self.app.gui_client,
+            // The TUI Client holds no `TransportChipKeys`, so the transport
+            // chips' key layers (add-tauri-gui-client row 6.2) stay inert
+            // here and the TUI's default bindings on the canvas chords keep
+            // their own actions.
+            client_capabilities: self.app.client_capabilities,
         };
 
-        let outcome = resolve_router_outcome_with_focused(
-            tui_key,
+        let outcome = super::neutral_edge::resolve_tui_key(
+            neutral_key,
             &snapshot,
+            self,
             self.application.focus(),
             &self.keybinds,
         );

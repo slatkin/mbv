@@ -5,8 +5,7 @@
 
 use std::sync::mpsc;
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 
 use super::harness::TickHarness;
 use crate::app::QueueLink;
@@ -19,8 +18,15 @@ const HEIGHT: u16 = 40;
 
 /// Draw one real shell frame and return the queue footer row's text.
 fn footer_row_text(harness: &mut TickHarness) -> String {
-    let footer = queue_footer_row(harness.model().app.queue_panel_placement().panel_area)
-        .expect("queue footer row in a queue-visible layout");
+    let footer = queue_footer_row(
+        crate::app::shell::draw::queue_panel_placement(
+            &harness.model().app,
+            harness.model().layout.card.height,
+            harness.model().terminal_size(),
+        )
+        .panel_area,
+    )
+    .expect("queue footer row in a queue-visible layout");
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
@@ -39,10 +45,9 @@ fn footer_row_text(harness: &mut TickHarness) -> String {
 // ("The name SHALL change in the same frame in which the shown queue changes").
 #[test]
 fn the_footer_owner_label_flips_in_the_frame_that_first_shows_the_peer_queue() {
-    let mut app = make_local_daemon_app_stub(make_items(2));
-    app.terminal_width = WIDTH;
-    app.terminal_height = HEIGHT;
+    let app = make_local_daemon_app_stub(make_items(2));
     let mut harness = TickHarness::new(app);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), WIDTH, HEIGHT);
     harness.model_mut().sync_mounted_surfaces();
 
     let local_row = footer_row_text(&mut harness);

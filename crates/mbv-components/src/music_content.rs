@@ -13,23 +13,23 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use self::workspace::WorkspaceOwner;
 use super::inline_search::{InlineSearch, InlineSearchHost};
-use super::library_panel::HeroContentData;
 use super::library_panel::content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroSlot, LibraryPanelContent, ListSlot,
-    SelectorRow, Workspace, WorkspaceHeader,
+    HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow, Workspace, WorkspaceHeader,
 };
-use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::music_tree_target::MusicTreeTarget;
 use crate::list::tree_browser::{TreeBrowser, TreeOperation};
-use mbv_render::MusicWideRenderCtx;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::library_hero::{ArtworkShape, HeroArtwork, HeroFacts};
+use mbv_ui_model::list_ctx::LibraryListRenderCtx;
 use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::music_wide::MusicWideRenderCtx;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::targets::MusicArtistTarget;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
 use mbv_ui_msg::LeafKeyResult;
@@ -46,7 +46,7 @@ use mbv_ui_msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
 pub fn wide_album_metadata(album: &EmbyItem, artist: &str) -> (String, u32) {
     let display_name = album.display_name();
     if let Some((parsed_artist, parsed_year, title)) =
-        mbv_render::parse_album_folder_name(&display_name)
+        mbv_ui_model::sort_filter::parse_album_folder_name(&display_name)
     {
         let year_matches = album.production_year == 0 || album.production_year == parsed_year;
         if parsed_artist == artist && year_matches {
@@ -144,7 +144,7 @@ impl MusicContent {
     pub fn new() -> Self {
         Self {
             context: MusicWideRenderCtx::new(
-                mbv_render::LibraryListRenderCtx::from_items(Vec::new(), 0),
+                LibraryListRenderCtx::from_items(Vec::new(), 0),
                 None,
                 String::new(),
                 Vec::new(),

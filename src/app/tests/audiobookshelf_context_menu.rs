@@ -18,7 +18,7 @@ fn episode_target(episode_id: &str) -> AudiobookshelfMenuTarget {
 /// Open the Audiobookshelf menu for `targets` and return the ordered entry
 /// labels.
 fn menu_labels(app: &mut App, targets: &[AudiobookshelfMenuTarget]) -> Vec<&'static str> {
-    app.open_audiobookshelf_context_menu(targets, None);
+    app.open_audiobookshelf_context_menu(targets);
     match app.pending_overlay.take() {
         Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) => {
             menu.entries.iter().map(|entry| entry.label).collect()

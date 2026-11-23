@@ -4,9 +4,9 @@ use super::{
     row_date,
 };
 use crate::now_playing::apply_emby_now_playing;
-use mbv_render::effective_sort_str;
 use mbv_ui_model::home_latest::provider_timestamp_secs;
-use mbv_ui_model::ui_util::natural_sort_key;
+use mbv_ui_model::sort_filter::effective_sort_str;
+use mbv_ui_model::ui_util::{natural_sort_key, premiere_number_label};
 
 pub fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
@@ -73,19 +73,6 @@ fn upcoming_date_heading(date: Date, today: Date) -> String {
         0 => "Today".into(),
         1 => "Yesterday".into(),
         _ => format!("{}, {} {}", date.weekday(), date.month(), date.day()),
-    }
-}
-
-/// "S02:E07", "S02" or "E07"; "no number" when the notice carries neither.
-/// The one owner of the premiere number's text: the TUI's upcoming rows and
-/// the GUI Client's Home `Upcoming` rows both paint it.
-#[must_use]
-pub fn premiere_number_label(premiere: &UpcomingPremiere) -> String {
-    match (premiere.season, premiere.episode) {
-        (Some(season), Some(episode)) => format!("S{season:02}:E{episode:02}"),
-        (Some(season), None) => format!("S{season:02}"),
-        (None, Some(episode)) => format!("E{episode:02}"),
-        (None, None) => "no number".into(),
     }
 }
 

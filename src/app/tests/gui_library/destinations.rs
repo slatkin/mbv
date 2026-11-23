@@ -37,7 +37,7 @@ fn app_with_two_music_libraries() -> App {
 fn the_tabs_present_every_emby_library_in_catalog_order() {
     let app = app_with_two_music_libraries();
 
-    let tabs = app.gui_library_tabs().tabs;
+    let tabs = gui_library_tabs(&app).tabs;
 
     assert_eq!(
         tabs,
@@ -66,7 +66,7 @@ fn the_current_tab_names_the_active_presented_destination() {
     let mut app = app_with_two_music_libraries();
     app.tab = TabSelection::EmbyLibrary(2);
 
-    assert_eq!(app.gui_library_tabs().current, Some(3));
+    assert_eq!(gui_library_tabs(&app).current, Some(3));
 }
 
 /// The current tab names the plain Emby-library destination the row 8.1
@@ -77,7 +77,7 @@ fn the_current_tab_names_the_movies_destination() {
     let mut app = app_with_two_music_libraries();
     app.tab = TabSelection::EmbyLibrary(1);
 
-    assert_eq!(app.gui_library_tabs().current, Some(2));
+    assert_eq!(gui_library_tabs(&app).current, Some(2));
 }
 
 /// A Music item's right-click item menu offers the played-state entries no
@@ -100,11 +100,14 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
     );
     let mut app = app;
     app.set_panel_focus(PanelFocus::Library);
-    app.apply_gui_library_command(GuiLibraryCommand::RowMenu {
-        row: GuiLibraryMenuRow::Item("alb-ill".into()),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowMenu {
+            row: GuiLibraryMenuRow::Item("alb-ill".into()),
+        },
+    );
 
-    let menu = app.gui_library_row_menu().expect("the album has a menu");
+    let menu = gui_library_row_menu(&mut app).expect("the album has a menu");
     let labels: Vec<&str> = menu
         .entries
         .iter()
@@ -130,12 +133,18 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
     let _guard = crate::app::OPEN_URL_TEST_LOCK.lock().unwrap();
     *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = Some(record_open);
     let mut app = make_app_stub();
-    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
-        url: "https://www.imdb.com/title/tt0088763/".to_string(),
-    });
-    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
-        url: "javascript:alert(1)".to_string(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::OpenUrl {
+            url: "https://www.imdb.com/title/tt0088763/".to_string(),
+        },
+    );
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::OpenUrl {
+            url: "javascript:alert(1)".to_string(),
+        },
+    );
     *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = None;
 
     assert_eq!(
@@ -158,11 +167,11 @@ fn an_interrupted_art_retry_comes_due_in_the_window_that_holds_it() {
     let later = start + hour;
 
     assert!(
-        app.gui_art_retry_due(start, later),
+        gui_art_retry_due(&app, start, later),
         "the window holds the retry time"
     );
     assert!(
-        !app.gui_art_retry_due(later, later + hour),
+        !gui_art_retry_due(&app, later, later + hour),
         "the next window starts after the retry time"
     );
 }

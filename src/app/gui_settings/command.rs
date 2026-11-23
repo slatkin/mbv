@@ -11,7 +11,7 @@ use mbv_ui_model::settings::ServiceActionIntent;
 use mbv_ui_msg::KeyEvent;
 
 use super::GuiSettingsSection;
-use crate::app::App;
+use crate::gui::GuiCore;
 
 /// One setup form a Services section can show (design D5's `cancelSetup`
 /// carries it): the Emby form, or the Audiobookshelf form.
@@ -136,14 +136,14 @@ pub enum GuiSettingsCommand {
     ResetUiState,
 }
 
-impl App {
+impl GuiCore {
     /// Apply one GUI Settings command (design D5): each variant runs through
     /// the shared `App` method for its intent, and a command built from a
     /// stale frame logs its receipt at debug level and changes nothing.
     pub fn apply_gui_settings_command(&mut self, command: GuiSettingsCommand) {
         tracing::debug!(
-            name: "gui_settings.command",
-            target: "gui_settings",
+            name: "settings.command",
+            target: "settings",
             command = ?command,
             "the GUI Settings screen sent a command"
         );
@@ -219,8 +219,8 @@ impl App {
             }
             // The reset's steps span the App and the core thread (design D10):
             // the GUI's tick host applies the whole reset through
-            // `CoreThread::reset_gui_ui_state`, so the App-side arm starts it
-            // by running the App-owned steps in their order.
+            // `CoreThread::reset_gui_ui_state`, so the Client core's arm starts
+            // it by running the App-owned steps in their order.
             GuiSettingsCommand::ResetUiState => self.reset_gui_ui_state(),
         }
     }

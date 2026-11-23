@@ -355,11 +355,11 @@ impl App {
             }
             PlaybackIntent::CycleAudio => self.cycle_audio(),
             // The track chips' popover toggle (add-tauri-gui-client row
-            // 6.4): only the GUI-only popover actions and the GUI Client's
-            // chip press reach this arm; the TUI paints no track chip.
-            PlaybackIntent::ToggleTrackPopover(chip) => {
-                self.toggle_gui_track_popover(chip);
-            }
+            // 6.4). The popover is GUI presentation, so the core half is the
+            // documented no-op of design D4a (a): the GUI Client applies the
+            // toggle after the core, at its own entry (`input/gui.rs`). The
+            // TUI paints no track chip and never dispatches this arm.
+            PlaybackIntent::ToggleTrackPopover(_) => {}
         }
     }
 
@@ -399,24 +399,29 @@ impl App {
                 // shrank between image and seekbar.
             }
             PanelIntent::CyclePanelMode => self.cycle_panel_mode(),
-            // The GUI-only canvas panel's actions (add-tauri-gui-client row
-            // 6.2): only the GUI-only key context resolves them, so the TUI
-            // Client never dispatches these arms.
-            PanelIntent::TogglePanelCollapse => self.toggle_panel_collapse(),
-            PanelIntent::ToggleQueueFold => self.toggle_queue_fold(),
             PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
-            PanelIntent::ToggleQueueChooser => self.toggle_gui_queue_chooser(),
-            PanelIntent::ToggleTargetChooser => self.toggle_gui_target_chooser(),
             // The new-queue and close controls (design D8): the header's presses
-            // and their GUI-only chords reach the one core path each. The row
-            // move's own seam is empty because the GUI router delivers it to the
-            // focused Queue leaf (`input/gui.rs`), which addresses the selection
-            // its surface paints, and the App holds no cursor-free selection to
-            // move here.
-            PanelIntent::RequestNewQueue => self.request_new_gui_queue(),
+            // and their GUI-only chords reach the one core path each.
+            PanelIntent::RequestNewQueue => {
+                let _ = self.request_new_queue();
+            }
             PanelIntent::RequestCloseQueue => self.request_close_shown_queue(),
             PanelIntent::RequestRenameQueue => self.request_rename_shown_queue(),
-            PanelIntent::MoveQueueRow(_) => {}
+            // The GUI no-ops, listed one by one (design D4a (a)). The four
+            // panel actions above: the collapse and queue-fold toggles, the
+            // queue chooser, and the playback-target chooser are GUI
+            // presentation, so their core halves are documented no-ops and the
+            // GUI Client applies each toggle after the core, at its own entry
+            // (`input/gui.rs`). Only the GUI-only key context resolves them, so
+            // the TUI Client never dispatches them. The row move's own seam is
+            // empty because the GUI router delivers it to the focused Queue
+            // leaf (`input/gui.rs`), which addresses the selection its surface
+            // paints, and the App holds no cursor-free selection to move here.
+            PanelIntent::TogglePanelCollapse
+            | PanelIntent::ToggleQueueFold
+            | PanelIntent::ToggleQueueChooser
+            | PanelIntent::ToggleTargetChooser
+            | PanelIntent::MoveQueueRow(_) => {}
         }
     }
 
@@ -473,10 +478,11 @@ impl App {
     /// Take an accepted target width and assign the matching pinned view, or
     /// flash a refused request's reason and touch nothing.
     ///
-    /// The view fields are written directly: at dispatch time `terminal_width`
-    /// still holds the pre-toggle width (the terminal's `Resize` event arrives
-    /// later), so on expand `set_panel_focus` would take its mini-view early
-    /// return and leave the stored `panel_focus` stale.
+    /// The view fields are written directly: at dispatch time the shell's
+    /// recorded terminal width still holds the pre-toggle width (the
+    /// terminal's `Resize` event arrives later), so on expand
+    /// `set_panel_focus` would take its mini-view early return and leave the
+    /// stored `panel_focus` stale.
     pub(in crate::app) fn apply_pinned_view(
         &mut self,
         width: mbv_ui_model::settings::PinnedWidth,
@@ -513,9 +519,9 @@ impl App {
             self.pinned_view_toggle();
             return;
         }
-        // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view toggles
+        // Mini view (a narrow terminal, pushed by the TUI): it toggles
         // exactly two states, library-only ⇄ queue-only.
-        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
+        if self.is_mini_view() {
             self.mini_view_focus = match self.mini_view_focus {
                 mbv_ui_model::settings::PanelFocus::Library => {
                     mbv_ui_model::settings::PanelFocus::Queue

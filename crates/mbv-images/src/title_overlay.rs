@@ -2,9 +2,10 @@ use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 
 use ab_glyph::{Font, FontArc, PxScale, ScaleFont, point};
+use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, RgbaImage};
+use mbv_ui_model::geom::CellSize;
 use num_traits::ToPrimitive;
-use ratatui_image::FontSize;
 
 static FONT: LazyLock<FontArc> = LazyLock::new(|| {
     FontArc::try_from_slice(include_bytes!(
@@ -15,6 +16,11 @@ static FONT: LazyLock<FontArc> = LazyLock::new(|| {
 
 /// Separates a base cache identity from its derived-variant suffix.
 pub const DERIVED_SEP: &str = ":t:";
+
+/// The filter the overlay resamples its logo with: the same one the terminal
+/// protocols resample with (`mbv_tui_support::RENDER_FILTER`), so a logo is
+/// never resampled twice by two different filters.
+const RESAMPLE_FILTER: FilterType = FilterType::Triangle;
 
 const SCRIM_ALPHA: f32 = 0.50;
 const SHADOW_ALPHA: f32 = 0.55;
@@ -83,7 +89,7 @@ pub fn covers(text: &str) -> bool {
 pub fn compose_title_overlay(
     base: &DynamicImage,
     logo: Option<&DynamicImage>,
-    cell: FontSize,
+    cell: CellSize,
     text: TitleOverlayText<'_>,
     colours: TitleOverlayColours,
 ) -> DynamicImage {
@@ -153,7 +159,7 @@ fn paint_logo(image: &mut RgbaImage, logo: &DynamicImage, cell_height: u16) {
     let box_height = (u32::from(cell_height) * 2)
         .min(height.saturating_sub(padding * 2))
         .max(1);
-    let fitted = logo.resize(box_width, box_height, crate::RENDER_FILTER);
+    let fitted = logo.resize(box_width, box_height, RESAMPLE_FILTER);
     let (logo_width, logo_height) = fitted.dimensions();
     if logo_width == 0 || logo_height == 0 {
         return;

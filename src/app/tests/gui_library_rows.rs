@@ -38,8 +38,10 @@ fn app_with_rows(items: Vec<EmbyItem>) -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui_emby_roots
-        .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_roots
+            .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    });
     app
 }
 
@@ -50,6 +52,25 @@ fn idle_at() -> Instant {
         .expect("a past instant")
 }
 
+/// A stub `App` on a grouped Music library, with the image cache enabled and
+/// no Emby client: a reserved fetch stays visible. The GUI's capabilities are
+/// the ones that present the artist-name search.
+fn app_with_grouped_music() -> App {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.set_client_capabilities(app_stub::gui_client_capabilities());
+    app.emby_runtime = EmbyRuntime::default();
+    app.images
+        .configure_protocol(Some("kitty".to_owned()), true);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".to_owned();
+    library.collection_type = "music".to_owned();
+    app.music_levels = vec!["group".to_string(), "album".to_string()];
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::EmbyLibrary(0);
+    app
+}
+
 /// A set sent during navigation queues nothing; the idle pass then fetches only
 /// the rows the set names, and the out-of-view row stays unfetched.
 #[test]
@@ -58,17 +79,20 @@ fn a_set_sent_during_navigation_fetches_only_its_rows_once_idle() {
     let hidden = tagged_movie("m-2", "t2");
     let mut app = app_with_rows(vec![shown.clone(), hidden.clone()]);
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![shown.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![shown.id.clone()],
+        },
+    );
     assert!(
         !app.images.is_loading(&row_key(&shown)),
         "a set sent during navigation queues nothing"
     );
 
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
 
     assert!(
         app.images.is_loading(&row_key(&shown)),
@@ -88,17 +112,20 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
     let mut app = app_with_rows(vec![row.clone()]);
     let key = row_key(&row);
     app.last_nav_at = idle_at();
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![row.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![row.id.clone()],
+        },
+    );
     app.images.fetch_interrupted(key.clone());
     let checked = Instant::now();
 
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
     assert!(
-        app.gui_art_retry_due(checked, checked + Duration::from_secs(3600)),
+        gui_art_retry_due(&app, checked, checked + Duration::from_secs(3600)),
         "the interrupted key holds a retry time"
     );
     assert!(
@@ -108,20 +135,23 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
 
     app.images.pass_interrupted_fetch_retries_for_test();
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
     assert!(
         app.images.is_loading(&key),
         "the passed retry queues the in-view key again"
     );
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: Vec::new(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: Vec::new(),
+        },
+    );
     app.images.fetch_interrupted(key.clone());
     app.images.pass_interrupted_fetch_retries_for_test();
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
     assert!(
         !app.images.is_loading(&key),
         "a key whose row left the set is not queued again"
@@ -137,10 +167,13 @@ fn an_in_view_row_without_a_source_queues_nothing() {
     let mut app = app_with_rows(vec![row.clone()]);
     app.last_nav_at = idle_at();
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![row.id.clone(), "absent".to_owned()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![row.id.clone(), "absent".to_owned()],
+        },
+    );
 
     assert_eq!(
         app.images.card_image_fetch_calls(),
@@ -157,12 +190,15 @@ fn a_set_of_another_list_queues_nothing() {
     let mut app = app_with_rows(vec![row.clone()]);
     app.last_nav_at = idle_at();
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Feeds,
-        ids: vec![row.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Feeds,
+            ids: vec![row.id.clone()],
+        },
+    );
     app.last_nav_at = idle_at();
-    app.gui_queue_in_view_row_fetches();
+    gui_queue_in_view_row_fetches(&mut app);
 
     assert!(
         !app.images.is_loading(&row_key(&row)),
@@ -177,7 +213,6 @@ fn cached_pixel() -> mbv_images::CachedImage {
             image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])),
         )),
         source: None,
-        protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,
     }
@@ -197,10 +232,13 @@ fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
             .complete_fetch(format!("row:filler:{index}"), cached_pixel());
     }
 
-    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
-        scope: GuiRowArtScope::Emby,
-        ids: vec![painted.id.clone()],
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Emby,
+            ids: vec![painted.id.clone()],
+        },
+    );
     app.images
         .complete_fetch("row:filler:overflow".to_owned(), cached_pixel());
 
@@ -208,5 +246,44 @@ fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
     assert!(
         !app.images.is_cached("row:filler:0"),
         "the oldest untouched row is evicted instead"
+    );
+}
+
+/// dcc-5.1-5.6 review P1: an artist-name search's answer re-queues the row art
+/// it unblocks. The answer records the Service id the folder-named artist row
+/// resolves through, so the Client's stores re-queue the in-view rows and the
+/// row's `Primary` fetch starts; before the fix the answer recorded the id and
+/// the row waited for the next navigation.
+#[test]
+fn an_artist_search_answer_queues_the_row_art_it_unblocks() {
+    let mut app = app_with_grouped_music();
+    let name = "The Smiths";
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::RowsInView {
+            scope: GuiRowArtScope::Music,
+            ids: vec![format!("artist-name:{name}")],
+        },
+    );
+    app.last_nav_at = idle_at();
+    let key = mbv_images::row::emby_row_primary_request("artist-9").cache_key;
+    assert!(
+        !app.images.is_loading(&key),
+        "the row has no source until its name resolves"
+    );
+
+    crate::app::tests::stub_gui_state(|gui| {
+        app.handle_lib_event(
+            LibEvent::Music(MusicEvent::ArtistNameSearched {
+                name: name.to_owned(),
+                candidates: Some(vec![(name.to_owned(), "artist-9".to_owned())]),
+            }),
+            Some(gui),
+        );
+    });
+
+    assert!(
+        app.images.is_loading(&key),
+        "the answer re-queues the in-view row art"
     );
 }

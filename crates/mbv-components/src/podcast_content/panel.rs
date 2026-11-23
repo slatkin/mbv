@@ -4,9 +4,9 @@ use super::{
     MediaListSurfaceInput, Msg, PillSelection, PodcastContent, PodcastEpisodeIntent,
     STATE_PILL_COUNT, SelectorIdentity, ShellRequest, TerminalObserverEvent,
 };
-use crate::library_panel::HeroContentData;
 use crate::media_list::RowIntent;
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::playback::HeroImageState;
 use tuirealm::event::{Key, KeyEvent};
 
 impl LibraryContentOwner for PodcastContent {
@@ -161,7 +161,7 @@ impl LibraryContentOwner for PodcastContent {
                         Some(RowIntent::ContextSelection(targets)) => targets,
                         _ => vec![target],
                     };
-                    Some(Self::episode_context_msg(targets, Some((at.x, at.y))))
+                    Some(Self::episode_context_msg(targets))
                 }
                 MediaListSurfaceInput::DoubleClick(at) => {
                     // Resolve once, then delegate the target-bearing activation.

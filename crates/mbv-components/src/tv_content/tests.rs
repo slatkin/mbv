@@ -1,6 +1,7 @@
 use super::*;
 use mbv_emby_model::test_support::make_item;
-use mbv_render::{LibraryListRenderCtx, TvWideRenderCtx};
+use mbv_render::TvWideRenderCtx;
+use mbv_ui_model::list_ctx::LibraryListRenderCtx;
 
 mod episode_rows_tests;
 mod flat_latest_activation_tests;

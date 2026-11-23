@@ -1,7 +1,6 @@
 use std::time::{Duration, Instant};
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use ratatui::layout::Rect;
 use tuirealm::application::PollStrategy;
 use tuirealm::component::AppComponent;
@@ -199,8 +198,8 @@ fn tick_delivers_seekbar_double_click_to_unfocused_playback_as_a_fraction() {
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
-    app.layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
     let mut harness = TickHarness::new(app);
+    harness.model_mut().layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
     harness.model_mut().sync_mounted_surfaces();
 
     let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
@@ -489,9 +488,9 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
 /// would close it. The sync passes must yield focus while an overlay is up.
 #[test]
 fn esc_closes_a_sidebar_in_mini_view() {
-    let mut app = make_app_stub();
-    app.terminal_width = 70;
+    let app = make_app_stub();
     let mut harness = TickHarness::new(app);
+    crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().mount_sidebar(SidebarId::Sessions);
     let id = ComponentId::Overlay(OverlayId::Sessions);
 

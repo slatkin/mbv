@@ -133,7 +133,7 @@ impl LibraryContentOwner for FixtureOwner {
                 HeroSlot::Absent
             } else {
                 HeroSlot::pane(Some(HeroContent {
-                    facts: crate::library_panel::HeroFacts {
+                    facts: mbv_ui_model::library_hero::HeroFacts {
                         title: "Dune".into(),
                         meta_rows: if self.link {
                             vec![
@@ -144,7 +144,7 @@ impl LibraryContentOwner for FixtureOwner {
                             vec![vec![mbv_ui_model::meta::MetaSegment::plain("2021")]]
                         },
                         links: if self.link {
-                            vec![crate::library_panel::HeroLink {
+                            vec![mbv_ui_model::library_hero::HeroLink {
                                 name: "IMDb".into(),
                                 url: "https://imdb.test/dune".into(),
                             }]
@@ -153,11 +153,11 @@ impl LibraryContentOwner for FixtureOwner {
                         },
                         duration_row: None,
                         progress_row: None,
-                        artwork: crate::library_panel::HeroArtwork {
-                            shape: crate::library_panel::ArtworkShape::Landscape,
+                        artwork: mbv_ui_model::library_hero::HeroArtwork {
+                            shape: mbv_ui_model::library_hero::ArtworkShape::Landscape,
                             source: None,
                             decoration: None,
-                            image: mbv_render::components::tv_wide::HeroImageState::None,
+                            image: mbv_ui_model::playback::HeroImageState::None,
                         },
                     },
                     overview: self.overview.clone(),

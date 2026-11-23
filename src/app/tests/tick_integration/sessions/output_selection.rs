@@ -14,11 +14,10 @@ use super::*;
 #[test]
 fn tick_sessions_cast_row_activation_sends_the_owner_output_selection() {
     let (mut app, cmd_rx) = playback_output_owner_app();
-    app.terminal_width = 100;
-    app.terminal_height = 14;
     app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
     app.panel_targets = vec![cast_target("r-1")];
     let mut harness = TickHarness::new(app);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);
@@ -81,14 +80,13 @@ fn tick_sessions_cast_row_activation_sends_the_owner_output_selection() {
 #[test]
 fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
     let (mut app, cmd_rx) = both_output_capabilities_owner_app();
-    app.terminal_width = 100;
-    app.terminal_height = 14;
     app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
     let mut session = mbv_emby::test_support::make_session("Living Room TV", "Emby");
     session.id = "sess-tv".into();
     session.device_id = "device-tv".into();
     app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
     let mut harness = TickHarness::new(app);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);
@@ -152,8 +150,6 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
     let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(failed_direct_connect);
     let (mut app, cmd_rx) = both_output_capabilities_owner_app();
-    app.terminal_width = 100;
-    app.terminal_height = 14;
     app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
     let mut session = mbv_emby::test_support::make_session("remote-host", "mbv");
     session.device_id = "device-direct".into();
@@ -161,6 +157,7 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
     session.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
     app.panel_targets = vec![PanelTarget::Emby(Box::new(session.clone()))];
     let mut harness = TickHarness::new(app);
+    crate::app::shell::test_support::set_terminal_size(harness.model_mut(), 100, 14);
     open_sessions(&mut harness);
 
     let request = enter_request(&mut harness);

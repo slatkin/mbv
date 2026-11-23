@@ -81,7 +81,7 @@ fn land(app: &mut App) {
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("the fetch completed");
-    app.handle_lib_event(event);
+    app.handle_lib_event(event, None);
 }
 
 /// The root level's item ids, in order.
@@ -111,7 +111,7 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows() {
     );
     let mut app = tv_app(&http);
 
-    app.gui_tv_open(0);
+    gui_tv_open(&mut app, 0);
     land(&mut app);
 
     assert_eq!(
@@ -152,9 +152,9 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
     // The series list is already the library's mode, so the open asks for no
     // load and the scripted answers belong to the detail fetch alone.
     app.libs[0].tv_content_mode = Some(TvContentMode::All);
-    app.gui_tv_open(0);
+    gui_tv_open(&mut app, 0);
 
-    app.gui_tv_select_series(0, "series-a");
+    gui_tv_select_series(&mut app, 0, "series-a");
     // The detail completion, then its own first-season fetch: drained in
     // order, so the selected season's fetch alone answers the next response.
     land(&mut app);
@@ -170,14 +170,17 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
         .map(|season| season.id.as_str())
         .collect();
     assert_eq!(seasons, ["season-1", "season-2"]);
-    let selection = &app.gui_tv_shows[&0];
-    assert_eq!(selection.series_id.as_deref(), Some("series-a"));
+    let (series_id, season_id) = crate::app::tests::stub_gui_state(|gui| {
+        let selection = &gui.tv_shows[&0];
+        (selection.series_id.clone(), selection.season_id.clone())
+    });
+    assert_eq!(series_id.as_deref(), Some("series-a"));
     assert_eq!(
-        selection.season_id, None,
+        season_id, None,
         "the season pills start on the first season"
     );
 
-    app.gui_tv_select_season(0, "season-2");
+    gui_tv_select_season(&mut app, 0, "season-2");
     land(&mut app);
 
     let detail = app
@@ -189,7 +192,10 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
         .map(|episode| episode.id.as_str())
         .collect();
     assert_eq!(episodes, ["ep-2a", "ep-2b"]);
-    assert_eq!(app.gui_tv_shows[&0].season_id.as_deref(), Some("season-2"));
+    assert_eq!(
+        crate::app::tests::stub_gui_state(|gui| gui.tv_shows[&0].season_id.clone()).as_deref(),
+        Some("season-2")
+    );
 }
 
 /// The frame path's ensure loads the selected series' first season without a
@@ -211,13 +217,15 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
     // any frame pass runs, so the frame ensure starts no root reload here.
     app.libs[0].tv_content_mode = Some(TvContentMode::All);
     app.libs[0].nav_stack[0].items = vec![series_item("series-a", "Alfred")];
-    app.gui_tv_shows.insert(
-        0,
-        crate::app::gui_library::GuiTvShowsSelection {
-            series_id: Some("series-a".into()),
-            ..Default::default()
-        },
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.tv_shows.insert(
+            0,
+            crate::app::gui_library::GuiTvShowsSelection {
+                series_id: Some("series-a".into()),
+                ..Default::default()
+            },
+        );
+    });
     let mut season = make_item("Season 1", "Season");
     season.id = "season-1".into();
     app.series_detail_cache.insert(
@@ -228,7 +236,7 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
         },
     );
 
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
     land(&mut app);
 
     let episodes = &app.series_detail_cache["series-a"].episodes["season-1"];
@@ -315,19 +323,19 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
     );
     land(&mut app);
     assert_eq!(
-        app.gui_shows_projection(0).series,
+        crate::app::tests::gui_shows_projection(&mut app, 0).series,
         Vec::new(),
         "a settled Latest root projects no series row, the blank tree"
     );
 
     // The frame ensure reloads the root as the All series list, once: the
     // second pass finds the All list and starts no second request.
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
     land(&mut app);
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
 
     assert_eq!(
-        app.gui_shows_projection(0)
+        crate::app::tests::gui_shows_projection(&mut app, 0)
             .series
             .iter()
             .map(|series| series.id.as_str())

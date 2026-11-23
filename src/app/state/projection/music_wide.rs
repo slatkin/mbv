@@ -1,5 +1,6 @@
 use crate::app::App;
-use mbv_render::MusicWideRenderCtx;
+use mbv_ui_model::music_grouping::{group_album_plan, sorted_group_album_order};
+use mbv_ui_model::music_wide::MusicWideRenderCtx;
 
 impl App {
     pub(in crate::app) fn wide_music_render_ctx(
@@ -25,9 +26,9 @@ impl App {
             .and_then(|level| level.music_grouping.as_ref())
             .and_then(|state| state.settled.clone());
         let (album_info, album_artist_keys) =
-            mbv_render::group_album_plan(&self.album_artist_cache, &albums, catalog.as_ref());
+            group_album_plan(&self.album_artist_cache, &albums, catalog.as_ref());
         let album_order = catalog.as_ref().map_or_else(
-            || mbv_render::sorted_group_album_order(&album_info),
+            || sorted_group_album_order(&album_info),
             |catalog| {
                 catalog
                     .entries

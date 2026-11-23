@@ -20,8 +20,9 @@ use mbv_components::library_panel::owner::LaunchSelector;
 use mbv_components::library_panel::{LibraryContentOwner, LibraryPanel};
 use mbv_components::podcast_content::PodcastContent;
 use mbv_queue::ServiceKind;
-use mbv_render::components::tv_wide::HeroImageState;
+use mbv_tui_support::ToRatatui;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_msg::ComponentId;
 
 /// How long after the last drag event the image hold stays on (invariant
@@ -458,7 +459,7 @@ impl Model {
         panel.set_active(active);
         panel.sync_overlay_state();
         panel.set_list_pane_width(list_pane_width);
-        panel.set_terminal_height(self.app.terminal_height);
+        panel.set_terminal_height(self.terminal_height);
         panel.set_mini_view(self.app.is_mini_view());
         // The same appearance-focus projection the panel's own body fill
         // (`library_body_fill`) reads, so the skeleton's palette bit and the
@@ -469,7 +470,7 @@ impl Model {
 
     /// The library content rect painted by the mounted panel.
     pub(in crate::app) fn library_panel_content_area(&self) -> Option<Rect> {
-        let area = self.app.layout.root_frame.library?;
+        let area = self.layout.root_frame.library?;
         let collapsed = self.app.effective_panel_mode() != PanelMode::Both;
         Some(mbv_render::components::widgets::right_panel_content_area(
             area, collapsed,
@@ -537,16 +538,15 @@ impl Model {
     /// Whether image work keyed on panel geometry must hold (invariant 20): a
     /// resize drag (queue-column boundary or Library wide split) is live, or
     /// its settle window has not elapsed. A live drag refreshes
-    /// `App::resize_drag_activity`, so the window runs from the last drag
+    /// `Model::resize_drag_activity`, so the window runs from the last drag
     /// event. Every geometry-keyed image projection (queue card, hero) takes
     /// the result as an input.
     pub(in crate::app) fn refresh_resize_drag_hold(&mut self) -> bool {
         let live = self.resize_drag_live();
         if live {
-            self.app.resize_drag_activity = Some(Instant::now());
+            self.resize_drag_activity = Some(Instant::now());
         }
         live || self
-            .app
             .resize_drag_activity
             .is_some_and(|at| at.elapsed() < RESIZE_DRAG_SETTLE)
     }
@@ -622,6 +622,7 @@ impl Model {
             area,
             list_pane_width,
             overlay_box,
+            self.terminal_height,
             resizing,
         );
         if let Some(panel) = self

@@ -65,7 +65,7 @@ impl App {
         source: DestinationLatestSource,
         items: Vec<QueueItem>,
     ) {
-        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        let now_secs = mbv_ui_model::feed_age::current_time_secs();
         let items = items
             .into_iter()
             .filter(|item| {
@@ -155,7 +155,7 @@ impl App {
         &self,
         content_id: &mbv_queue::QueueItemContentId,
     ) -> Option<QueueItem> {
-        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        let now_secs = mbv_ui_model::feed_age::current_time_secs();
         self.feed_tab
             .all_entries
             .iter()

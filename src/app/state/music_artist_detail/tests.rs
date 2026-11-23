@@ -245,10 +245,13 @@ fn fallback_artist_scope_arms_only_the_bounded_fetch_window() {
         "the rest of the scope waits for a slot"
     );
 
-    app.handle_lib_event(LibEvent::Music(MusicEvent::AlbumTracksFetched {
-        album_id: "album-1".into(),
-        tracks: Vec::new(),
-    }));
+    app.handle_lib_event(
+        LibEvent::Music(MusicEvent::AlbumTracksFetched {
+            album_id: "album-1".into(),
+            tracks: Vec::new(),
+        }),
+        None,
+    );
 
     assert!(app.album_tracks_cache.contains_key("album-1"));
     assert_eq!(
@@ -299,7 +302,6 @@ fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
                 image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])),
             )),
             source: None,
-            protocols: HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
         },

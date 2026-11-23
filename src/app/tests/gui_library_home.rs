@@ -66,7 +66,7 @@ fn recent_feed_entry(guid: &str, pub_date_secs: u64) -> mbv_queue::FeedEntry {
 /// cutoff at seeding time (`SystemTime::now`-relative, as the store
 /// accepts at land time).
 fn seed_recently_added(app: &mut App) {
-    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let now = mbv_ui_model::feed_age::current_time_secs();
     app.home_recently_added.insert(
         DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
         vec![recent_episode("recent-episode", now - 3600)],
@@ -118,13 +118,15 @@ fn row_labels(row: &GuiHomeRow) -> (&str, Option<&str>) {
 /// Seed both TV list sources, which now belong to Shows, so the Home
 /// projection's two-section contract is checked against populated sources.
 fn seed_relocated_tv_lists(app: &mut App) {
-    app.gui_shows_new.insert(
-        "lib-tv".into(),
-        crate::app::gui_library::GuiSectionRequest::Landed(vec![make_item(
-            "An episode",
-            "Episode",
-        )]),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.shows_new.insert(
+            "lib-tv".into(),
+            crate::app::gui_library::GuiSectionRequest::Landed(vec![make_item(
+                "An episode",
+                "Episode",
+            )]),
+        );
+    });
     app.tv_upcoming_snapshots.insert(
         "lib-tv".into(),
         vec![UpcomingPremiere {
@@ -153,7 +155,7 @@ fn the_seeded_sections_project_as_heading_rows_in_order() {
     seed_recently_added(&mut app);
     seed_relocated_tv_lists(&mut app);
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     let headings: Vec<String> = projection
         .rows
@@ -250,7 +252,7 @@ fn an_empty_home_projects_no_rows_and_no_hero() {
     let _guard = TestStateDirGuard::new();
     let mut app = home_app(Vec::new());
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     assert!(projection.rows.is_empty(), "no rows without sections");
     assert_eq!(projection.selected, None);
@@ -264,11 +266,13 @@ fn a_stale_selection_falls_back_to_the_first_item_row() {
         continue_item("cw-first", "Movie One", 0, 0),
         continue_item("cw-second", "Movie Two", 0, 0),
     ]);
-    app.gui_home_selection = Some(GuiHomeRowId::Recent(QueueItemContentId::Feed(
-        "gone".into(),
-    )));
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.home_selection = Some(GuiHomeRowId::Recent(QueueItemContentId::Feed(
+            "gone".into(),
+        )));
+    });
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     assert_eq!(
         projection.selected,
@@ -325,7 +329,7 @@ fn square_row_image() -> image::DynamicImage {
 fn home_rows_paint_their_row_art_and_fetch_nothing_before_rows_in_view() {
     let _guard = TestStateDirGuard::new();
     let server = "http://127.0.0.1:1";
-    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let now = mbv_ui_model::feed_age::current_time_secs();
     let mut movie = continue_item(
         "cw-first",
         "Movie One",
@@ -351,7 +355,7 @@ fn home_rows_paint_their_row_art_and_fetch_nothing_before_rows_in_view() {
     let episode_key = mbv_images::abs_row_cache_key(server, "pod-lib", 0);
     app.seed_card_image_for_test(episode_key.clone(), square_row_image());
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     let items: Vec<&GuiHomeItemRow> = projection
         .rows
@@ -413,7 +417,7 @@ fn a_continue_row_shows_the_time_left(
         runtime_secs * mbv_emby_model::TICKS_PER_SECOND,
     )]);
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     assert_eq!(
         item_of(&projection.rows[1]).trailing.as_deref(),
@@ -427,14 +431,14 @@ fn a_continue_row_shows_the_time_left(
 #[test]
 fn a_recently_added_row_keeps_its_date() {
     let _guard = TestStateDirGuard::new();
-    let now = mbv_render::screens::feeds_model::current_time_secs();
+    let now = mbv_ui_model::feed_age::current_time_secs();
     let mut app = home_app(Vec::new());
     app.home_recently_added.insert(
         DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
         vec![recent_episode("recent-episode", now - 3600)],
     );
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     let date = mbv_ui_model::ui_util::row_date(Some(now - 3600)).expect("the instant formats");
     assert_eq!(

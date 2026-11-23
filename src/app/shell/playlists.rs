@@ -8,7 +8,8 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        let panel = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
+        let panel =
+            crate::app::shell::chrome_panels::sync_panel_area(&self.app, self.terminal_size());
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>()
         {

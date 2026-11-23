@@ -1,3 +1,4 @@
+use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::events::{BrowseEvent, FeedHomeVideoSelectionFailed, LibEvent};
 use crate::app::{App, BrowseLevel, FeedHomeVideoSelection, FeedHomeVideoState, PAGE_SIZE};
@@ -505,24 +506,30 @@ impl App {
         parent_id: &str,
         selection: FeedHomeVideoSelection,
         items: Vec<EmbyItem>,
+        stores: Option<&mut dyn ClientLibraryStores>,
     ) {
         let current = self
             .libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
             .is_some_and(|state| state.selection == selection);
-        let stale = !self.feed_home_video_selection_wanted(lib_idx, &selection)
+        let wanted = self.feed_home_video_selection_wanted(lib_idx, &selection, stores.as_deref());
+        let stale = !wanted
             || matches!(selection, FeedHomeVideoSelection::All)
                 && !self.feed_home_video_root_matches(lib_idx, parent_id);
-        // The fetch returned, so the target's terminal failure mark retires:
-        // a later cache miss can fetch it again.
-        if let Some(claim) = self
-            .gui_emby_libs
-            .get_mut(&lib_idx)
-            .and_then(|stored| stored.feed_claim.as_mut())
-        {
-            claim.failed.remove(&selection);
-        }
+        // The event's store work keeps the order of the direct calls this
+        // arm made: the target's terminal failure mark retires first (the
+        // fetch returned, so a later cache miss can fetch it again), then the
+        // items land. The retirement is applied through `stores` here, at the
+        // position it held in the core before the split; the arm asked a
+        // Client for nothing else, so no row re-queue follows.
+        self.apply_library_effects(
+            stores,
+            &[ClientLibraryEffect::FeedTargetLanded {
+                lib_idx,
+                selection: selection.clone(),
+            }],
+        );
         if let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -559,13 +566,14 @@ impl App {
         &self,
         lib_idx: usize,
         target: &FeedHomeVideoSelection,
+        stores: Option<&dyn ClientLibraryStores>,
     ) -> bool {
         let current = self
             .libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
             .is_some_and(|state| state.selection == *target);
-        current || self.gui_emby_feed_wants_target(lib_idx, target)
+        current || stores.is_some_and(|stores| stores.wants_feed_target(self, lib_idx, target))
     }
 
     /// Rule 5: when the folder listing completes (open, restore), the

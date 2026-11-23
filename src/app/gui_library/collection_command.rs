@@ -15,6 +15,8 @@ use super::{
     GuiPodcastsCollectionSite,
 };
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
+use crate::gui::GuiCore;
 
 /// The op one collection command carries (gui-collection-dropdown design D5):
 /// the three dropdown commands, destination-neutral.
@@ -72,24 +74,24 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     /// The destination's stored set (design D1): the raw entry the effective
     /// set retains against the catalog. All's site borrows
     /// [`GuiCollectionSet::ALL`], so a library without a stored entry never
-    /// clones a default.
-    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet;
+    /// clones a default. The set lives in the Client's own state.
+    fn stored_set<'a>(&self, gui: &'a GuiClientState) -> &'a GuiCollectionSet;
 
     /// Whether the session has changed this destination's collection state
     /// (design D10): a launch restore never overwrites a choice the session
     /// made before the saved file's collections landed.
-    fn has_stored_selection(&self, app: &App) -> bool;
+    fn has_stored_selection(&self, gui: &GuiClientState) -> bool;
 
     /// The collection album picks the session holds (design D13): only a
     /// Music destination keeps one, so the other sites save none.
-    fn saved_picks(&self, _app: &App) -> Vec<GuiGroupPick> {
+    fn saved_picks(&self, _gui: &GuiClientState) -> Vec<GuiGroupPick> {
         Vec::new()
     }
 
     /// Restore the saved album picks whose collections the landed catalog
     /// holds (design D13): the shared restore filters them with the same
     /// predicate that retains the saved set's keys.
-    fn install_picks(&self, _app: &mut App, _picks: &[GuiGroupPick]) {}
+    fn install_picks(&self, _app: &mut App, _gui: &mut GuiClientState, _picks: &[GuiGroupPick]) {}
 
     /// Why the destination cannot serve a collection command at all (design
     /// D5, D6).
@@ -105,18 +107,22 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
 
     /// Write the set back, starting the destination's own loads (design D2,
     /// D5).
-    fn install_set(&self, app: &mut App, set: GuiCollectionSet);
+    fn install_set(&self, app: &mut App, gui: &mut GuiClientState, set: GuiCollectionSet);
 
     /// The effective selection the destination paints (design D1): the stored
     /// set retained against the catalog. A set nothing drops is returned
     /// borrowed, so a per-frame reader clones nothing. The borrow is the
     /// `App`'s alone, so the caller's site value need not outlive it.
-    fn effective_set<'a>(&self, app: &'a App) -> Cow<'a, GuiCollectionSet> {
-        self.stored_set(app).effective(self.present(app))
+    fn effective_set<'a>(
+        &self,
+        app: &'a App,
+        gui: &'a GuiClientState,
+    ) -> Cow<'a, GuiCollectionSet> {
+        self.stored_set(gui).effective(self.present(app))
     }
 }
 
-impl App {
+impl GuiCore {
     /// Apply one collection command for `target` (gui-collection-dropdown
     /// design D5): the one shared path — reject, stale check, toggle/All over
     /// the effective set, and the destination's own install — that the four
@@ -128,93 +134,111 @@ impl App {
         target: &GuiCollectionTarget,
         op: CollectionOp,
     ) {
-        match target {
-            GuiCollectionTarget::Music(lib_idx) => {
-                self.apply_collection_at(&GuiMusicCollectionSite(*lib_idx), op);
-            }
-            GuiCollectionTarget::Podcasts(lib_idx) => {
-                self.apply_collection_at(&GuiPodcastsCollectionSite(*lib_idx), op);
-            }
-            GuiCollectionTarget::Feeds => self.apply_collection_at(&GuiFeedsCollectionSite, op),
-            GuiCollectionTarget::EmbyFeed(lib_idx) => {
-                self.apply_collection_at(&GuiEmbyFeedCollectionSite(*lib_idx), op);
-            }
-        }
+        apply_collection(&mut self.app, &mut self.gui, target, op);
     }
+}
 
-    /// The one collection path over one destination's site (design D5): the
-    /// op's reject rule names the log line; a toggle reads the effective set
-    /// and installs the change, and All and the restore install their set.
-    pub(in crate::app::gui_library) fn apply_collection_at(
-        &mut self,
-        site: &impl GuiCollectionSite,
-        op: CollectionOp,
-    ) {
-        let log_name = op.name();
-        let rejection = match &op {
-            CollectionOp::Toggle { key } => match site.reject_destination(self) {
-                Some(rejection) => Some(rejection),
-                None => site.reject_key(self, key),
-            },
-            CollectionOp::All | CollectionOp::Restore { .. } => site.reject_destination(self),
-        };
-        if let Some(rejection) = rejection {
-            match rejection {
-                CollectionRejection::Ignored(reason) => {
-                    Self::log_ignored_library_command(log_name, format_args!("{reason}"));
-                }
-                CollectionRejection::Stale(key) => {
-                    Self::log_stale_library_item(log_name, &key);
-                }
-            }
-            return;
+/// Apply one collection command for `target` over the `App` the GUI core owns
+/// (gui-collection-dropdown design D5): the one shared path — reject, stale
+/// check, toggle/All over the effective set, and the destination's own install
+/// — that the four destinations' sites plug into, so the toggle and All steps
+/// cannot drift. The match names each destination's site; everything else is
+/// shared.
+pub(in crate::app::gui_library) fn apply_collection(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    target: &GuiCollectionTarget,
+    op: CollectionOp,
+) {
+    match target {
+        GuiCollectionTarget::Music(lib_idx) => {
+            apply_collection_at(app, gui, &GuiMusicCollectionSite(*lib_idx), op);
         }
-        match op {
-            CollectionOp::Toggle { key } => {
-                site.log_toggle(&key);
-                let next = site.effective_set(self).into_owned().toggle(&key);
-                site.install_set(self, next);
-            }
-            CollectionOp::All => site.install_set(self, GuiCollectionSet::All),
-            CollectionOp::Restore { set } => {
-                // An All entry leaves the default unset, as a destination
-                // the session never touched does.
-                if !set.is_all() {
-                    site.install_set(self, set);
-                }
-            }
+        GuiCollectionTarget::Podcasts(lib_idx) => {
+            apply_collection_at(app, gui, &GuiPodcastsCollectionSite(*lib_idx), op);
+        }
+        GuiCollectionTarget::Feeds => apply_collection_at(app, gui, &GuiFeedsCollectionSite, op),
+        GuiCollectionTarget::EmbyFeed(lib_idx) => {
+            apply_collection_at(app, gui, &GuiEmbyFeedCollectionSite(*lib_idx), op);
         }
     }
+}
 
-    /// The destination's collection selector (gui-collection-dropdown design
-    /// D6): the one build every projection reads, so the four frames cannot
-    /// drift.
-    pub(in crate::app::gui_library) fn gui_collections(
-        &self,
-        target: GuiCollectionTarget,
-    ) -> GuiCollections {
-        match &target {
-            GuiCollectionTarget::Music(lib_idx) => {
-                self.site_collections(&GuiMusicCollectionSite(*lib_idx), target)
+/// The one collection path over one destination's site (design D5): the op's
+/// reject rule names the log line; a toggle reads the effective set and
+/// installs the change, and All and the restore install their set.
+pub(in crate::app::gui_library) fn apply_collection_at(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    site: &impl GuiCollectionSite,
+    op: CollectionOp,
+) {
+    let log_name = op.name();
+    let rejection = match &op {
+        CollectionOp::Toggle { key } => match site.reject_destination(app) {
+            Some(rejection) => Some(rejection),
+            None => site.reject_key(app, key),
+        },
+        CollectionOp::All | CollectionOp::Restore { .. } => site.reject_destination(app),
+    };
+    if let Some(rejection) = rejection {
+        match rejection {
+            CollectionRejection::Ignored(reason) => {
+                super::log_ignored_library_command(log_name, format_args!("{reason}"));
             }
-            GuiCollectionTarget::Podcasts(lib_idx) => {
-                self.site_collections(&GuiPodcastsCollectionSite(*lib_idx), target)
+            CollectionRejection::Stale(key) => {
+                super::log_stale_library_item(log_name, &key);
             }
-            GuiCollectionTarget::Feeds => self.site_collections(&GuiFeedsCollectionSite, target),
-            GuiCollectionTarget::EmbyFeed(lib_idx) => {
-                self.site_collections(&GuiEmbyFeedCollectionSite(*lib_idx), target)
+        }
+        return;
+    }
+    match op {
+        CollectionOp::Toggle { key } => {
+            site.log_toggle(&key);
+            let next = site.effective_set(app, gui).into_owned().toggle(&key);
+            site.install_set(app, gui, next);
+        }
+        CollectionOp::All => site.install_set(app, gui, GuiCollectionSet::All),
+        CollectionOp::Restore { set } => {
+            // An All entry leaves the default unset, as a destination the
+            // session never touched does.
+            if !set.is_all() {
+                site.install_set(app, gui, set);
             }
         }
     }
+}
 
-    /// The selector one site builds (design D6): the effective set over the
-    /// destination's catalog, its noun, and its scopes in catalog order.
-    fn site_collections(
-        &self,
-        site: &impl GuiCollectionSite,
-        target: GuiCollectionTarget,
-    ) -> GuiCollections {
-        let set = site.effective_set(self);
-        GuiCollections::new(target, set.as_ref(), site.noun(), site.scopes(self))
+/// The destination's collection selector (gui-collection-dropdown design D6),
+/// over the `App` the GUI core owns: the one build every projection reads, so
+/// the four frames cannot drift.
+pub(in crate::app::gui_library) fn collections(
+    app: &App,
+    gui: &GuiClientState,
+    target: GuiCollectionTarget,
+) -> GuiCollections {
+    match &target {
+        GuiCollectionTarget::Music(lib_idx) => {
+            site_collections(app, gui, &GuiMusicCollectionSite(*lib_idx), target)
+        }
+        GuiCollectionTarget::Podcasts(lib_idx) => {
+            site_collections(app, gui, &GuiPodcastsCollectionSite(*lib_idx), target)
+        }
+        GuiCollectionTarget::Feeds => site_collections(app, gui, &GuiFeedsCollectionSite, target),
+        GuiCollectionTarget::EmbyFeed(lib_idx) => {
+            site_collections(app, gui, &GuiEmbyFeedCollectionSite(*lib_idx), target)
+        }
     }
+}
+
+/// The selector one site builds (design D6): the effective set over the
+/// destination's catalog, its noun, and its scopes in catalog order.
+fn site_collections(
+    app: &App,
+    gui: &GuiClientState,
+    site: &impl GuiCollectionSite,
+    target: GuiCollectionTarget,
+) -> GuiCollections {
+    let set = site.effective_set(app, gui);
+    GuiCollections::new(target, set.as_ref(), site.noun(), site.scopes(app))
 }

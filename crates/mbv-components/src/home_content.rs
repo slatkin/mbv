@@ -13,16 +13,16 @@
 
 use tuirealm::event::KeyEvent;
 
-use super::library_panel::HeroContentData;
 use super::library_panel::content::{HeroContent, HeroSlot, LibraryPanelContent, ListSlot};
-use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::MediaListCarrier;
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
-use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::home_latest::HomeRecentRow;
+use mbv_ui_model::library_hero::producers::HeroContentData;
+use mbv_ui_model::library_hero::producers::hero_content_queue;
 use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::playback::HeroImageState;
 use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_msg::{LeafKeyResult, Msg};
 

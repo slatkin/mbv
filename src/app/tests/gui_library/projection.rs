@@ -8,10 +8,11 @@
 //! that file stays within its line ceiling.
 
 use super::*;
+use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use mbv_ui_model::music_grouping::ArtistKey;
 /// The album the Hero shows, by Service id (add-gui-library-panel design D13).
 fn hero_album_id(app: &mut App) -> Option<String> {
-    app.gui_music_projection(0)
+    gui_music_projection(app, 0)
         .hero
         .map(|hero| hero.album.album_id)
 }
@@ -28,7 +29,7 @@ fn a_group_with_no_pick_heroes_its_first_album() {
         ],
         Vec::new(),
     );
-    let first = app.gui_music_projection(0).artists[0].albums[0]
+    let first = gui_music_projection(&mut app, 0).artists[0].albums[0]
         .album_id
         .clone();
 
@@ -53,9 +54,12 @@ fn each_pill_reopens_on_its_own_last_pick() {
             1989,
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-paul".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-paul".into(),
+        },
+    );
 
     select_group(&mut app, SOUL);
     assert_eq!(hero_album_id(&mut app), Some("alb-3ft".to_string()));
@@ -98,15 +102,18 @@ fn six_warm_albums() -> Vec<mbv_emby_model::EmbyItem> {
 fn the_picked_albums_neighbours_are_warmed() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_warm_albums(six_warm_albums());
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-3".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-3".into(),
+        },
+    );
     // The pick's own move closed the warm gate; the next idle pass opens it.
     app.last_nav_at = std::time::Instant::now()
         .checked_sub(std::time::Duration::from_secs(1))
         .unwrap();
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert_eq!(
         projection
@@ -138,10 +145,13 @@ fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
         .checked_sub(std::time::Duration::from_secs(1))
         .unwrap();
 
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-3".into(),
-    });
-    let projection = app.gui_music_projection(0);
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-3".into(),
+        },
+    );
+    let projection = gui_music_projection(&mut app, 0);
 
     assert!(projection.hero.is_some(), "the pick still heroes its album");
     let warmed: Vec<String> = (0..6)
@@ -177,12 +187,14 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
         "alb-paul".to_string(),
         vec![cached_track("trk-3", "Shake Your Rump", 1, 195)],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-ill".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-ill".into(),
+        },
+    );
 
-    let hero = app
-        .gui_music_projection(0)
+    let hero = gui_music_projection(&mut app, 0)
         .hero
         .expect("the picked album has a Hero");
 
@@ -238,12 +250,14 @@ fn the_artist_total_waits_for_every_albums_tracklist() {
         "alb-ill".to_string(),
         vec![cached_track("trk-1", "Rhymin & Stealin", 1, 248)],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-ill".into(),
-    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-ill".into(),
+        },
+    );
 
-    let hero = app
-        .gui_music_projection(0)
+    let hero = gui_music_projection(&mut app, 0)
         .hero
         .expect("the picked album has a Hero");
 
@@ -278,14 +292,21 @@ fn a_second_group_keeps_the_hero() {
             1989,
         )],
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-paul".into(),
-    });
-
-    app.install_gui_library_collection(
-        0,
-        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-paul".into(),
+        },
     );
+
+    crate::app::tests::stub_gui_state(|gui| {
+        install_library_collection(
+            &mut app,
+            gui,
+            0,
+            GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+        );
+    });
 
     assert_eq!(
         hero_album_id(&mut app),
@@ -298,7 +319,7 @@ fn a_second_group_keeps_the_hero() {
 /// (gui-collection-dropdown "Each Music group keeps its last picked album",
 /// review P2): the pick rule reads the effective set the projection paints,
 /// so a stored set the catalog trimmed to one group still saves the pick to
-/// `gui_library_picks`, which the launch file persists — never to the
+/// `library_picks`, which the launch file persists — never to the
 /// session-only union pick.
 #[test]
 fn a_pick_under_the_effectively_single_group_is_kept() {
@@ -317,24 +338,29 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
     app.libs[0].nav_stack[0]
         .items
         .retain(|group| group.id == HIPHOP);
-    app.gui_library_groups.insert(
-        0,
-        GuiCollectionSelection {
-            set: GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.library_groups.insert(
+            0,
+            GuiCollectionSelection {
+                set: GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+            },
+        );
+    });
+
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-paul".into(),
         },
     );
 
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-paul".into(),
-    });
-
     assert_eq!(
         app.gui_library_pick_for_test(0, HIPHOP),
-        Some("alb-paul"),
+        Some("alb-paul".to_string()),
         "the pick lands in the kept per-group pick"
     );
     assert!(
-        !app.gui_music_union_picks.contains_key(&0),
+        !crate::app::tests::stub_gui_state(|gui| gui.music_union_picks.contains_key(&0)),
         "the session-only union pick stays empty"
     );
 }
@@ -350,15 +376,19 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
         vec![stored_album("alb-zeb", "Zebra Album", "Zebra", 1990)],
         vec![stored_album("alb-aar", "Aardvark Album", "Aardvark", 1989)],
     );
-    app.gui_library_groups.remove(&0);
+    crate::app::tests::stub_gui_state(|gui| gui.library_groups.remove(&0));
 
-    app.install_gui_library_collection(
-        0,
-        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        install_library_collection(
+            &mut app,
+            gui,
+            0,
+            GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+        );
+    });
 
     assert!(
-        !app.gui_music_union_picks.contains_key(&0),
+        !crate::app::tests::stub_gui_state(|gui| gui.music_union_picks.contains_key(&0)),
         "no union pick is seeded from a list-order first album"
     );
     assert_eq!(
@@ -375,10 +405,10 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
 fn a_fallback_artist_row_requests_the_artist_item_its_tracks_named() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
-    app.record_artist_item_id("Beastie Boys", "artist-7".into());
+    ArtistNameLookup::record(&mut app, "Beastie Boys", "artist-7".into());
 
     assert_eq!(
-        app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),
+        music_artist_row_art(&app, &ArtistKey::Fallback("Beastie Boys".into())),
         GuiRowArt::Loading
     );
 }
@@ -414,7 +444,7 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
     ));
     app.seed_card_image_for_test(key.clone(), cover);
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert_eq!(
         projection.artists[0].art,
@@ -423,7 +453,7 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
     );
     assert_eq!(projection.artists[0].media, GuiRowMediaKind::Audio);
     assert_eq!(
-        app.music_artist_row_art(&ArtistKey::Service("artist-1".into())),
+        music_artist_row_art(&app, &ArtistKey::Service("artist-1".into())),
         GuiRowArt::Image {
             key: key.clone(),
             square: true
@@ -431,7 +461,7 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
         "a Service-named artist shows its own cached image"
     );
     assert_eq!(
-        app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),
+        music_artist_row_art(&app, &ArtistKey::Fallback("Beastie Boys".into())),
         GuiRowArt::NoSource
     );
 }

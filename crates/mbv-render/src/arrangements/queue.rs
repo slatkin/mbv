@@ -7,7 +7,7 @@ pub const QUEUE_FOOTER_BAND: u16 = 3;
 
 #[must_use]
 pub fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u16 {
-    use crate::layout::LEFT_WIDTH_DEFAULT;
+    use mbv_ui_model::layout::LEFT_WIDTH_DEFAULT;
 
     width.clamp(
         LEFT_WIDTH_DEFAULT,

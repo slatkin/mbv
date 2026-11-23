@@ -6,7 +6,8 @@
 
 use ratatui::layout::Rect;
 
-use super::super::content::{HeroFacts, HeroHeader, HeroHeaderArm};
+use super::super::content::{HeroHeader, HeroHeaderArm};
+use mbv_ui_model::library_hero::HeroFacts;
 
 /// Blank rows between the artwork box and the text block (the shared
 /// `wide_hero_slots` convention: metadata starts at `img_area.bottom() + 1`).

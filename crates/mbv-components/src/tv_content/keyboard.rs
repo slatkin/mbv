@@ -331,7 +331,6 @@ impl TvContent {
             .collect();
         (!items.is_empty()).then_some(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-            None,
         ))
     }
 

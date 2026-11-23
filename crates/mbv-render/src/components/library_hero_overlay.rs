@@ -5,6 +5,7 @@ use ratatui::widgets::{Block, Clear};
 
 use super::backdrop::dim_backdrop_in;
 use mbv_theme as palette;
+use mbv_tui_support::ToRatatui;
 
 /// The overlay sheet's fill surface. Shared with the sheet's hint pill row so
 /// the rectangle and its hints read as one surface, and handed to the shared

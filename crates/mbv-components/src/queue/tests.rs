@@ -6,6 +6,7 @@ use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use mbv_queue::QueueItem;
 use mbv_theme::surface_colors;
+use mbv_tui_support::ToRatatui;
 
 fn feed_slot(id: u64, title: &str) -> QueueSlot {
     QueueSlot {

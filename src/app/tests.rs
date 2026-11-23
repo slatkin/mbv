@@ -1,5 +1,318 @@
 use super::*;
 
+pub(in crate::app) use crate::app::GuiClientState;
+
+/// The GUI Client's own state beside the stub `App` a test holds. The state
+/// lives in `GuiCore` (design D4), and these helpers drive the `App` alone, so
+/// the state a test seeds is held here beside it and never inside the `App`.
+/// Every test runs on its own thread with a stub `App` of its own, so one
+/// thread's state reaches no other test.
+///
+/// The slot starts empty: the core call a helper makes ([`core_holding_stub_gui`],
+/// [`with_stub_gui`]) takes the seeded state out and hands the state it leaves
+/// back, so the slot holds a state only while a test seeds one or after a core
+/// call published one. A read of an empty slot sees a fresh state.
+pub(crate) fn stub_gui_state<R>(run: impl FnOnce(&mut crate::app::GuiClientState) -> R) -> R {
+    STUB_GUI_STATE.with(|slot| {
+        let default = crate::app::GuiClientState::new(false);
+        run(slot.borrow_mut().get_or_insert_with(|| default))
+    })
+}
+
+thread_local! {
+    static STUB_GUI_STATE: std::cell::RefCell<Option<crate::app::GuiClientState>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run one GUI core call over a stub `App`, with the state a test seeded
+/// beside it: the call's state installs for its length, and the state it
+/// leaves installs back beside the `App`.
+fn with_stub_gui<T>(
+    app: &mut crate::app::App,
+    run: impl FnOnce(&mut crate::gui::GuiCore) -> T,
+) -> T {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = stub_gui_state(std::mem::take);
+    let value = run(&mut core);
+    core.into_app_keeping_gui(app);
+    value
+}
+
+/// Wait for one Client-only fetch result and install it through the GUI's own
+/// client-event drain (task 8.3 of `decouple-client-core`): a worker's send
+/// lands on the `App`'s channel. Production wakes the tick with the
+/// `ClientWaker`; a test has no tick to wake, so it waits on the channel and
+/// fails when the worker never reports.
+pub(in crate::app) fn wait_for_client_event(app: &mut crate::app::App) {
+    let event = app
+        .wait_for_one_gui_client_event_for_test(std::time::Duration::from_secs(2))
+        .expect("the Client-only fetch reported its result");
+    stub_gui_state(|gui| crate::app::install_client_event(gui, event));
+}
+
+/// A `GuiCore` over a stub `App` a test holds, with the state a test seeded
+/// beside it: the test takes the `App` back with `into_app_keeping_gui`.
+pub(in crate::app) fn core_holding_stub_gui(app: &mut crate::app::App) -> crate::gui::GuiCore {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = stub_gui_state(std::mem::take);
+    core
+}
+/// Apply one GUI Library command to a stub `App` a test holds: the test
+/// helper for the command tests, which run the command through the GUI core
+/// over the `App`, as a client does.
+pub(in crate::app) fn apply_gui_library_command(
+    app: &mut crate::app::App,
+    command: crate::app::GuiLibraryCommand,
+) {
+    with_stub_gui(app, |core| core.apply_gui_library_command(command));
+}
+
+/// One GUI core step over a stub `App` a test holds: the test helper for the
+/// launch tests, which run the launch location's phases through the GUI core
+/// over the `App`, as a client does.
+pub(in crate::app) fn restore_launch_collections(
+    app: &mut crate::app::App,
+    state: &mbv_config::GuiLaunchState,
+    destination: &mbv_config::TabIdentity,
+) -> bool {
+    with_stub_gui(app, |core| {
+        core.restore_gui_launch_collections(state, destination)
+    })
+}
+
+/// The launch location's first phase over a stub `App` a test holds.
+pub(in crate::app) fn open_launch_destination(
+    app: &mut crate::app::App,
+    state: &mbv_config::GuiLaunchState,
+) -> crate::app::GuiLaunchOpen {
+    with_stub_gui(app, |core| core.open_gui_launch_destination(state))
+}
+
+/// Run one GUI Library destination's ordered load pass over a stub `App` a
+/// test holds: the test helper for the destination load tests, which run the
+/// pass through the GUI core over the `App`, as a client does.
+pub(in crate::app) fn ensure_gui_destination(
+    app: &mut crate::app::App,
+    kind: crate::app::GuiDestinationKind,
+) {
+    with_stub_gui(app, |core| core.ensure_gui_destination(kind));
+}
+
+/// One destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_audiobooks_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiAudiobooksProjection {
+    with_stub_gui(app, |core| core.gui_audiobooks_projection(lib_idx))
+}
+
+/// One destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_emby_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiEmbyProjection {
+    with_stub_gui(app, |core| core.gui_emby_projection(lib_idx))
+}
+
+/// One destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_shows_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiShowsProjection {
+    with_stub_gui(app, |core| core.gui_shows_projection(lib_idx))
+}
+
+/// One destination's Podcasts projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_podcasts_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiPodcastsProjection {
+    with_stub_gui(app, |core| core.gui_podcasts_projection(lib_idx))
+}
+
+/// Select one Feeds entry over a stub `App` a test holds.
+pub(in crate::app) fn gui_feeds_select(app: &mut crate::app::App, entry: &str) {
+    with_stub_gui(app, |core| core.gui_feeds_select(entry));
+}
+
+/// One destination's Feeds projection over a stub `App` a test holds, over the
+/// Client state the tests seeded beside it.
+pub(in crate::app) fn gui_feeds_projection_seeded(
+    app: &crate::app::App,
+) -> crate::app::GuiFeedsProjection {
+    crate::app::tests::stub_gui_state(|gui| crate::app::gui_library::feeds_projection(app, gui))
+}
+
+/// The entries the Feeds selection lists over the state a test seeded beside
+/// the stub `App` it holds.
+pub(in crate::app) fn gui_feeds_entries_seeded(app: &crate::app::App) -> Vec<mbv_queue::FeedEntry> {
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::feeds_entries(app, gui)
+            .into_iter()
+            .cloned()
+            .collect()
+    })
+}
+
+/// The Feeds effective set over the state a test seeded beside the stub `App`
+/// it holds.
+pub(in crate::app) fn gui_feeds_effective_set_seeded(
+    app: &crate::app::App,
+) -> crate::app::GuiCollectionSet {
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::feeds_effective_set(app, gui).into_owned()
+    })
+}
+
+/// The entry the Feeds Hero shows over the state a test seeded beside the stub
+/// `App` it holds.
+pub(in crate::app) fn gui_feeds_picked_entry_seeded() -> Option<String> {
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::feeds_picked_entry(gui).map(str::to_string)
+    })
+}
+
+/// Open one Shows library over a stub `App` a test holds.
+pub(in crate::app) fn gui_tv_open(app: &mut crate::app::App, lib_idx: usize) {
+    with_stub_gui(app, |core| core.gui_tv_open(lib_idx));
+}
+
+/// Select one Shows series over a stub `App` a test holds.
+pub(in crate::app) fn gui_tv_select_series(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    with_stub_gui(app, |core| core.gui_tv_select_series(lib_idx, id));
+}
+
+/// Select one Shows season over a stub `App` a test holds.
+pub(in crate::app) fn gui_tv_select_season(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    with_stub_gui(app, |core| core.gui_tv_select_season(lib_idx, id));
+}
+
+/// Land one Shows New fetch over a stub `App` a test holds: the result
+/// installs in the Client's own stores through the one drain the GUI tick runs
+/// (design D5 of `decouple-client-core`), as the worker's send would.
+pub(in crate::app) fn handle_gui_shows_new(
+    core: &mut crate::gui::GuiCore,
+    library_id: &str,
+    result: Result<Vec<mbv_emby_model::EmbyItem>, mbv_emby::EmbyError>,
+) {
+    crate::app::gui_library::client_events::install_client_event(
+        core.gui_state_mut(),
+        crate::app::gui_library::client_events::GuiClientEvent::ShowsNew {
+            library_id: library_id.to_string(),
+            result,
+        },
+    );
+}
+
+/// The Music destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_music_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiMusicProjection {
+    with_stub_gui(app, |core| core.gui_music_projection(lib_idx))
+}
+
+/// The Home destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_home_projection(
+    app: &mut crate::app::App,
+) -> crate::app::GuiHomeProjection {
+    with_stub_gui(app, crate::gui::GuiCore::gui_home_projection)
+}
+
+/// One music artist row's art over a stub `App` a test holds.
+pub(in crate::app) fn music_artist_row_art(
+    app: &crate::app::App,
+    key: &mbv_ui_model::music_grouping::ArtistKey,
+) -> crate::app::GuiRowArt {
+    crate::app::gui_library::music_artist_row_art(app, key)
+}
+
+/// One flat list's active sort over a stub `App` a test holds, read from the
+/// Client state the tests keep beside it.
+pub(in crate::app) fn gui_list_sort(
+    app: &crate::app::App,
+    target: crate::app::GuiSortTarget,
+) -> crate::app::GuiListSort {
+    crate::app::tests::stub_gui_state(|gui| crate::app::gui_library::list_sort(app, gui, target))
+}
+
+/// Set one flat list's sort over a stub `App` a test holds, in the Client
+/// state the tests keep beside it.
+pub(in crate::app) fn set_gui_list_sort(
+    app: &mut crate::app::App,
+    target: crate::app::GuiSortTarget,
+    sort: crate::app::GuiListSort,
+) {
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::set_list_sort(app, gui, target, sort);
+    });
+}
+
+/// Open one plain Emby library over a stub `App` a test holds.
+pub(in crate::app) fn gui_emby_open(app: &mut crate::app::App, lib_idx: usize) {
+    with_stub_gui(app, |core| core.gui_emby_open(lib_idx));
+}
+
+/// Select one plain Emby library row over a stub `App` a test holds.
+pub(in crate::app) fn gui_emby_select(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    with_stub_gui(app, |core| core.gui_emby_select(lib_idx, id));
+}
+
+/// Open one Audiobooks library over a stub `App` a test holds.
+pub(in crate::app) fn gui_abs_open(app: &mut crate::app::App, lib_idx: usize) {
+    with_stub_gui(app, |core| core.gui_abs_open(lib_idx));
+}
+
+/// Select one Audiobooks book over a stub `App` a test holds.
+pub(in crate::app) fn gui_abs_select(app: &mut crate::app::App, lib_idx: usize, id: &str) {
+    with_stub_gui(app, |core| core.gui_abs_select(lib_idx, id));
+}
+
+/// Open one Podcasts destination over a stub `App` a test holds.
+pub(in crate::app) fn gui_podcast_open(app: &mut crate::app::App, lib_idx: usize) {
+    with_stub_gui(app, |core| core.gui_podcast_open(lib_idx));
+}
+
+/// Select one Podcasts episode over a stub `App` a test holds.
+pub(in crate::app) fn gui_podcast_select(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+    target: &mbv_ui_msg::PodcastEpisodeTarget,
+) {
+    let row = crate::app::gui_library::GuiPodcastEpisodeId::from(target).encode();
+    apply_gui_library_command(
+        app,
+        crate::app::GuiLibraryCommand::PodcastsSelect { lib_idx, row },
+    );
+}
+
+/// The right-click row menu over a stub `App` a test holds.
+pub(in crate::app) fn gui_library_row_menu(
+    app: &mut crate::app::App,
+) -> Option<crate::app::GuiLibraryRowMenu> {
+    with_stub_gui(app, crate::gui::GuiCore::gui_library_row_menu)
+}
+
+/// Queue the in-view row fetches over a stub `App` a test holds.
+pub(in crate::app) fn gui_queue_in_view_row_fetches(app: &mut crate::app::App) {
+    with_stub_gui(app, crate::gui::GuiCore::gui_queue_in_view_row_fetches);
+}
+
+/// Whether an interrupted art retry came due, over a stub `App` a test holds.
+pub(in crate::app) fn gui_art_retry_due(
+    app: &crate::app::App,
+    after: std::time::Instant,
+    until: std::time::Instant,
+) -> bool {
+    crate::app::gui_library::marks::art_retry_due(app, after, until)
+}
+
+// The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
+// to `crate::app::shell::test_support` (task 4.7): they write the shell
+// `Model`'s size and push the single-panel fact the core reads.
+
 mod audiobookshelf_book_activation_tests;
 mod audiobookshelf_browse_actions_sibling_tests;
 mod audiobookshelf_context_menu;
@@ -52,28 +365,16 @@ pub(crate) mod tick_integration;
 mod twitch_url;
 
 use mbv_emby::test_support::make_session;
+// `TestBackend`, `Terminal`, and `confirm_replace_queue` moved to
+// `crate::app::shell::test_support` (task 4.6c): they name the toolkit.
 use mbv_emby_model::test_support::make_item;
-use ratatui::backend::TestBackend;
-
-use ratatui::Terminal;
 
 // The App stub construction moved to `app_stub` so the Clients' own tests
 // can build it too; the `crate::app::tests::*` paths stay working.
-pub(crate) use super::app_stub::{make_app_stub, make_built_app};
+pub(crate) use super::app_stub::built::make_built_app;
+pub(crate) use super::app_stub::{gui_client_capabilities, make_app_stub};
 
 // ── test helpers ─────────────────────────────────────────────────────────
-
-/// Confirm the populated-queue replacement gate the way the shell's confirm
-/// modal does, so a gated replacement executes.
-pub(crate) fn confirm_replace_queue(app: &mut App) {
-    app.apply_confirm_action(
-        crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Enter,
-            crossterm::event::KeyModifiers::NONE,
-        )),
-    );
-}
 
 pub(crate) trait QueueViewTestExt {
     fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize);

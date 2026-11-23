@@ -31,7 +31,7 @@ pub use self::projection::{
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::{SETTING_SECTIONS, SettingKey, SettingScope, SettingsDestination};
 
-use super::App;
+use crate::gui::GuiCore;
 
 /// The one Settings screen's sections (design D3): the closed list in the
 /// spec's sidebar order. `Sessions` is the GUI's own sidebar
@@ -215,27 +215,27 @@ impl GuiSettingsState {
     }
 }
 
-impl App {
+impl GuiCore {
     /// The open Settings screen's state, `None` while the screen is closed
     /// (design D2). A caller borrows the state; it is not cloned (design D10).
     #[must_use]
     pub fn gui_settings(&self) -> Option<&GuiSettingsState> {
-        self.gui_settings.as_ref()
+        self.gui.settings_screen.as_ref()
     }
 
     /// Whether the Settings screen is open (design D2): the fact the router
     /// snapshot's queue-scoped gates read and the core's focus sync mirrors.
     #[must_use]
     pub fn gui_settings_is_open(&self) -> bool {
-        self.gui_settings.is_some()
+        self.gui.settings_screen.is_some()
     }
 
-    /// The Settings destination the App-side openers recorded (design D2):
+    /// The Settings destination the core's openers recorded (design D2):
     /// the `OpenSidebar(Settings)` drain arm reads it to pick the section.
     /// The TUI shell reads the same field for its own sidebar.
     #[must_use]
     pub fn gui_settings_destination(&self) -> SettingsDestination {
-        self.settings_destination
+        self.app.settings_destination
     }
 
     /// The `open` command's rule (design D5, design D11 *Mouse-centric*):
@@ -254,8 +254,8 @@ impl App {
     /// The toggle rule of design D2: with the screen closed, open it at the
     /// group's section; with the screen showing a section of the same group,
     /// close it; otherwise show the group's section and stay open.
-    pub fn toggle_gui_settings(&mut self, group: GuiSettingsGroup) {
-        match self.gui_settings.as_ref() {
+    pub(in crate::app) fn toggle_gui_settings(&mut self, group: GuiSettingsGroup) {
+        match self.gui.settings_screen.as_ref() {
             Some(state) if group.contains(state.section) => self.close_gui_settings(),
             Some(_) => self.show_gui_settings_section(group.section()),
             None => self.open_gui_settings_at(group.section()),
@@ -266,8 +266,10 @@ impl App {
     /// drain arm's open, and the open half of the toggle rule. The section's
     /// load starts here (design D9).
     pub fn open_gui_settings_at(&mut self, section: GuiSettingsSection) {
+        // The Settings and Playlists screens never show together, so opening
+        // Settings closes the Playlists screen.
         self.close_gui_playlists();
-        self.gui_settings = Some(GuiSettingsState::at(section));
+        self.gui.settings_screen = Some(GuiSettingsState::at(section));
         self.load_gui_settings_section(section);
     }
 
@@ -275,7 +277,59 @@ impl App {
     /// with it (design D9) — and the core's focus sync pops
     /// `ComponentId::Overlay(OverlayId::Settings)` so the Panel focus returns.
     pub fn close_gui_settings(&mut self) {
-        self.gui_settings = None;
+        self.gui.settings_screen = None;
+    }
+
+    /// The Settings steps an overlay request names (design D2, D5): the TUI
+    /// Client and the GUI Client both apply their pending shell request here,
+    /// so one entry owns the F2 and F3 toggles and the open. The open maps the
+    /// `settings_destination` the App recorded to a section, because the
+    /// request names a sidebar and the screen names a section.
+    pub fn apply_gui_settings_overlay(&mut self, request: &mbv_ui_model::overlay::OverlayRequest) {
+        use mbv_ui_model::overlay::{OverlayRequest, SidebarId};
+
+        match request {
+            OverlayRequest::OpenSidebar(SidebarId::Settings) => {
+                // The captured destination is right for a TUI key and its
+                // section rows; this entry is the GUI's, and the Panel page is
+                // TUI state (design D4), so every destination opens Services
+                // except Keys.
+                let section = match self.gui_settings_destination() {
+                    mbv_ui_model::settings::SettingsDestination::Keys => GuiSettingsSection::Keys,
+                    mbv_ui_model::settings::SettingsDestination::Services
+                    | mbv_ui_model::settings::SettingsDestination::Main
+                    | mbv_ui_model::settings::SettingsDestination::Panel => {
+                        GuiSettingsSection::Services
+                    }
+                };
+                self.open_gui_settings_at(section);
+            }
+            OverlayRequest::ToggleSidebar(SidebarId::Settings) => {
+                self.toggle_gui_settings(GuiSettingsGroup::F2);
+            }
+            OverlayRequest::ToggleSidebar(SidebarId::Sessions) => {
+                self.toggle_gui_settings(GuiSettingsGroup::Sessions);
+            }
+            // Every other request is a shell or TUI overlay the GUI Client does
+            // not paint, so this entry has no step for it: the GUI's Settings
+            // surface owns only the F2 and F3 toggles and the open. Each is
+            // named, so a new variant is a compile error here, and it never
+            // falls into a silent no-op by accident.
+            OverlayRequest::OpenSidebar(_)
+            | OverlayRequest::DismissSidebar(_)
+            | OverlayRequest::ToggleSidebar(_)
+            | OverlayRequest::Confirm(_)
+            | OverlayRequest::DaemonLost(_)
+            | OverlayRequest::SavePlaylist(_)
+            | OverlayRequest::ContextMenu(_)
+            | OverlayRequest::DismissContextMenu
+            | OverlayRequest::OpenMultiselect(_)
+            | OverlayRequest::OpenLibraryRoutes
+            | OverlayRequest::OpenFeedsManage
+            | OverlayRequest::DismissConfirm
+            | OverlayRequest::DismissDaemonLost
+            | OverlayRequest::DismissSavePlaylist => {}
+        }
     }
 
     /// Show a section of the open screen and start its load (design D5's
@@ -295,7 +349,7 @@ impl App {
     /// Switch the open screen to `section`, keeping the caches the screen owns
     /// and starting the new section's load (design D9).
     fn show_gui_settings_section(&mut self, section: GuiSettingsSection) {
-        if let Some(state) = self.gui_settings.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.section = section;
         }
         self.load_gui_settings_section(section);
@@ -306,15 +360,15 @@ impl App {
     /// it.
     #[must_use]
     pub fn gui_ui_reset_epoch(&self) -> u64 {
-        self.gui_ui_reset_epoch
+        self.gui.ui_reset_epoch
     }
 
     /// Log the Settings command whose frame is stale: the screen it addresses
     /// is closed, so the command changes nothing.
     fn log_ignored_gui_settings_command(command: &str, reason: impl std::fmt::Display) {
         tracing::debug!(
-            name: "gui_settings.command.ignored",
-            target: "gui_settings",
+            name: "settings.command.ignored",
+            target: "settings",
             command,
             reason = %reason,
             "the Settings command changed nothing"

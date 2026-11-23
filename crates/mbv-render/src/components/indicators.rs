@@ -1,159 +1,32 @@
 //! Status-indicator cluster treatments (resolution · audio · subtitles).
 //!
-//! Six interchangeable looks selected by config; the default is reverse-video
+//! The cluster's data — its style, the resolved facts, and the plain text
+//! items — lives in `mbv_ui_model::indicators`; this module paints it. Six
+//! interchangeable looks selected by config; the default is reverse-video
 //! chips. Colors map onto the mbv palette: resolution = orange,
 //! audio = blue (FOAM), subtitles = yellow (YELLOW) when on / dim when off.
 
 use mbv_theme as palette;
-use mbv_theme::Role;
+use mbv_tui_support::ToRatatui;
+use mbv_ui_model::indicators::{IndicatorData, IndicatorStyle};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
 const ARROW: &str = "\u{E0B0}"; // powerline separator (needs a Nerd/Powerline font)
 
-/// Which visual treatment to use for the status-indicator cluster.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum IndicatorStyle {
-    Brackets,
-    Chips,
-    Outlined,
-    Dots,
-    Pipes,
-    #[default]
-    KeyValue,
-    Powerline,
+/// The render toolkit colour of the role the resolution label paints in.
+fn res_color(d: &IndicatorData) -> Color {
+    d.res_role().color().to_ratatui()
 }
 
-impl std::str::FromStr for IndicatorStyle {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.trim().to_lowercase().as_str() {
-            "brackets" => IndicatorStyle::Brackets,
-            "chips" => IndicatorStyle::Chips,
-            "outlined" => IndicatorStyle::Outlined,
-            "dots" => IndicatorStyle::Dots,
-            "pipes" => IndicatorStyle::Pipes,
-            "" | "keyvalue" | "key_value" | "key-value" => IndicatorStyle::KeyValue,
-            "powerline" => IndicatorStyle::Powerline,
-            _ => return Err(()),
-        })
-    }
+/// The render toolkit colour of the role the audio label paints in.
+fn audio_color(d: &IndicatorData) -> Color {
+    d.audio_role().color().to_ratatui()
 }
 
-/// Compact booleans for resolved indicator semantics.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "four independent resolved indicator facts (resolution, audio-language dimming, audio-only, subtitle state) driving four separate render decisions, sourced from two different backends (design analysis, issue #804)"
-)]
-#[derive(Clone, Copy, Debug)]
-pub struct IndicatorFlags {
-    pub res_dim: bool,
-    pub audio_dim: bool,
-    pub audio_only: bool,
-    pub sub_on: bool,
-}
-
-/// Already-resolved indicator values for the currently playing item.
-#[derive(Debug)]
-pub struct IndicatorData {
-    pub res_label: String,
-    pub audio_label: String,
-    /// Display label for subtitles: the lang/CC abbreviation when on, "CC" when off.
-    pub sub_label: String,
-    pub flags: IndicatorFlags,
-}
-
-impl IndicatorData {
-    /// The role the resolution label paints in: muted while unresolved.
-    fn res_role(&self) -> Role {
-        if self.flags.res_dim {
-            Role::TextMuted
-        } else {
-            Role::IndicatorResolutionFg
-        }
-    }
-
-    fn res_color(&self) -> Color {
-        self.res_role().color().to_ratatui()
-    }
-
-    /// The role the audio label paints in: muted while unresolved.
-    fn audio_role(&self) -> Role {
-        if self.flags.audio_dim {
-            Role::TextMuted
-        } else {
-            Role::IndicatorAudioFg
-        }
-    }
-
-    fn audio_color(&self) -> Color {
-        self.audio_role().color().to_ratatui()
-    }
-
-    /// The role the subtitle label paints in: muted while subtitles are off.
-    fn sub_role(&self) -> Role {
-        if self.flags.sub_on {
-            Role::TextMetadata
-        } else {
-            Role::TextMuted
-        }
-    }
-
-    fn sub_color(&self) -> Color {
-        self.sub_role().color().to_ratatui()
-    }
-}
-
-/// Short resolution pill: 2160+ -> 4K, 1440+ -> QHD, 1080+ -> FHD,
-/// 720+ -> HD, anything lower -> SD.
-#[must_use]
-pub fn short_resolution_label(height: u64) -> &'static str {
-    if height >= 2160 {
-        "4K"
-    } else if height >= 1440 {
-        "QHD"
-    } else if height >= 1080 {
-        "FHD"
-    } else if height >= 720 {
-        "HD"
-    } else {
-        "SD"
-    }
-}
-
-/// One status indicator of the queue band's plain text cluster: its
-/// uppercased label and the foreground role its text paints in.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StatusIndicator {
-    pub label: String,
-    pub role: Role,
-}
-
-/// The queue band's status-indicator cluster for `d`: the resolution, audio,
-/// and subtitle labels the queue playback panel paints as plain text on its
-/// controls row, uppercased, each in the role its state resolves — a dimmed
-/// fact in `TextMuted`, the live subtitle label in `TextMetadata`. Audio-only
-/// playback paints the resolution alone. The TUI's per-style treatments
-/// (chips, brackets, dots, pipes) are terminal presentation the Clients share
-/// through their own painters; the labels and their colour roles are the
-/// content every Client paints from.
-#[must_use]
-pub fn status_indicator_items(d: &IndicatorData) -> Vec<StatusIndicator> {
-    let mut items = vec![StatusIndicator {
-        label: d.res_label.to_uppercase(),
-        role: d.res_role(),
-    }];
-    if !d.flags.audio_only {
-        items.push(StatusIndicator {
-            label: d.audio_label.to_uppercase(),
-            role: d.audio_role(),
-        });
-        items.push(StatusIndicator {
-            label: d.sub_label.to_uppercase(),
-            role: d.sub_role(),
-        });
-    }
-    items
+/// The render toolkit colour of the role the subtitle label paints in.
+fn sub_color(d: &IndicatorData) -> Color {
+    d.sub_role().color().to_ratatui()
 }
 
 /// Build the fully-styled indicator spans for the chosen treatment.
@@ -199,13 +72,13 @@ fn chip(label: &str, bg: Color) -> Span<'static> {
 }
 
 fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
-    let mut out = vec![chip(&d.res_label, d.res_color())];
+    let mut out = vec![chip(&d.res_label, res_color(d))];
     if !d.flags.audio_only {
         out.push(Span::raw(" "));
-        out.push(chip(&d.audio_label, d.audio_color()));
+        out.push(chip(&d.audio_label, audio_color(d)));
         out.push(Span::raw(" "));
         if d.flags.sub_on {
-            out.push(chip(&d.sub_label, d.sub_color()));
+            out.push(chip(&d.sub_label, sub_color(d)));
         } else {
             // Off: hollow/dim — no fill, dim text.
             out.push(Span::styled(
@@ -227,12 +100,12 @@ fn bracket_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
 
 fn brackets(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
-    bracket_group(&d.res_label, d.res_color(), &mut out);
+    bracket_group(&d.res_label, res_color(d), &mut out);
     if !d.flags.audio_only {
         out.push(Span::raw(" "));
-        bracket_group(&d.audio_label, d.audio_color(), &mut out);
+        bracket_group(&d.audio_label, audio_color(d), &mut out);
         out.push(Span::raw(" "));
-        bracket_group(&d.sub_label, d.sub_color(), &mut out);
+        bracket_group(&d.sub_label, sub_color(d), &mut out);
     }
     out
 }
@@ -247,12 +120,12 @@ fn outlined_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
 
 fn outlined(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
-    outlined_group(&d.res_label, d.res_color(), &mut out);
+    outlined_group(&d.res_label, res_color(d), &mut out);
     if !d.flags.audio_only {
         out.push(Span::raw(" "));
-        outlined_group(&d.audio_label, d.audio_color(), &mut out);
+        outlined_group(&d.audio_label, audio_color(d), &mut out);
         out.push(Span::raw(" "));
-        outlined_group(&d.sub_label, d.sub_color(), &mut out);
+        outlined_group(&d.sub_label, sub_color(d), &mut out);
     }
     out
 }
@@ -268,17 +141,17 @@ fn dot_group(dot: &str, color: Color, label: &str, out: &mut Vec<Span<'static>>)
 
 fn dots(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
-    dot_group("\u{25CF}", d.res_color(), &d.res_label, &mut out);
+    dot_group("\u{25CF}", res_color(d), &d.res_label, &mut out);
     if !d.flags.audio_only {
         out.push(Span::raw("  "));
-        dot_group("\u{25CF}", d.audio_color(), &d.audio_label, &mut out);
+        dot_group("\u{25CF}", audio_color(d), &d.audio_label, &mut out);
         out.push(Span::raw("  "));
         let dot = if d.flags.sub_on {
             "\u{25CF}"
         } else {
             "\u{25CB}"
         };
-        dot_group(dot, d.sub_color(), &d.sub_label, &mut out);
+        dot_group(dot, sub_color(d), &d.sub_label, &mut out);
     }
     out
 }
@@ -293,18 +166,18 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
     };
     let mut out = vec![Span::styled(
         d.res_label.clone(),
-        Style::default().fg(d.res_color()),
+        Style::default().fg(res_color(d)),
     )];
     if !d.flags.audio_only {
         out.push(sep());
         out.push(Span::styled(
             d.audio_label.clone(),
-            Style::default().fg(d.audio_color()),
+            Style::default().fg(audio_color(d)),
         ));
         out.push(sep());
         out.push(Span::styled(
             d.sub_label.clone(),
-            Style::default().fg(d.sub_color()),
+            Style::default().fg(sub_color(d)),
         ));
     }
     out
@@ -317,28 +190,28 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
 fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
     // res_label already reads as a resolution (FHD/HD/SD/QHD/4K) — no suffix.
-    out.push(Span::styled(d.res_label.clone(), bold(d.res_color())));
+    out.push(Span::styled(d.res_label.clone(), bold(res_color(d))));
     if !d.flags.audio_only {
         out.push(Span::styled(
             " ⧸ ",
             Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         ));
-        out.push(Span::styled(d.audio_label.clone(), bold(d.audio_color())));
+        out.push(Span::styled(d.audio_label.clone(), bold(audio_color(d))));
         out.push(Span::styled(
             " ⧸ ",
             Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         ));
-        out.push(Span::styled(d.sub_label.clone(), bold(d.sub_color())));
+        out.push(Span::styled(d.sub_label.clone(), bold(sub_color(d))));
     }
     out
 }
 
 // --- Powerline segments (needs a patched font) ---------------------------
 fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
-    let mut segs: Vec<(String, Color)> = vec![(d.res_label.clone(), d.res_color())];
+    let mut segs: Vec<(String, Color)> = vec![(d.res_label.clone(), res_color(d))];
     if !d.flags.audio_only {
-        segs.push((d.audio_label.clone(), d.audio_color()));
-        segs.push((d.sub_label.clone(), d.sub_color()));
+        segs.push((d.audio_label.clone(), audio_color(d)));
+        segs.push((d.sub_label.clone(), sub_color(d)));
     }
     let mut out = Vec::new();
     for i in 0..segs.len() {

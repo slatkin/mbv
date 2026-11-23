@@ -48,6 +48,12 @@ impl ClientTickHost for Model {
         self.drain_lib_events()
     }
 
+    fn drain_client_events(&mut self) -> bool {
+        // A documented no-op (design D5): the Client-only fetches are the GUI
+        // Client's, and the TUI starts none, so it has no channel to drain.
+        false
+    }
+
     fn drain_search_results(&mut self) -> bool {
         self.drain_search_results()
     }
