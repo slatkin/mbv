@@ -33,6 +33,7 @@ mod shows;
 mod shows_projection;
 mod shows_view;
 mod store;
+mod stores;
 mod tabs;
 mod tv;
 
@@ -89,6 +90,7 @@ pub use self::shows_projection::{
 pub use self::shows_view::GuiShowsView;
 use self::store::GuiMusicCollectionSite;
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
+pub use self::stores::GuiLibraryStores;
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 pub use self::tv::GuiTvShowsSelection;
 

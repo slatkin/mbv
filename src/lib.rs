@@ -53,6 +53,12 @@ pub use self::app::{
     TrackChoice, TrackPopoverChoice, VisualIntent, WorkspaceRelayout, artist_rows_in_view_id,
     compare_gui_date_order, gui_feeds_platform,
 };
+
+/// The GUI Client's transitional library stores (`decouple-client-core` design
+/// D4a (c)): the GUI's library event drain hands them to every event, so each
+/// event's collected effects apply through the same implementor as production.
+/// The TUI keeps no library stores and passes `None`.
+pub use self::app::{ClientLibraryEffect, ClientLibraryStores, GuiLibraryStores};
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{
     OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,

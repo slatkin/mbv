@@ -103,63 +103,33 @@ fn emby_app(http: &MockHttp, collection_type: &str, library_id: &str, name: &str
     app
 }
 
-/// The GUI's library stores as the core's library event seam takes them: the
-/// same answers the GUI's own store reader gives, and the same claim writes the
-/// GUI's own effect implementor makes, so a simulated GUI tick applies the App
-/// half and the GUI half together.
-#[derive(Debug)]
-pub(super) struct TestGuiLibraryStores;
-
-impl ClientLibraryStores for TestGuiLibraryStores {
-    fn wants_feed_target(
-        &self,
-        app: &App,
-        lib_idx: usize,
-        target: &FeedHomeVideoSelection,
-    ) -> bool {
-        app.gui_emby_feed_wants_target(lib_idx, target)
-    }
-
-    fn apply(&mut self, app: &mut App, effect: ClientLibraryEffect) {
-        match effect {
-            // The rows in view are the GUI's own window state, which a
-            // simulated tick has already settled; nothing to drain here.
-            ClientLibraryEffect::RowArtSourcesChanged => {}
-            // A landed target retires its terminal failure mark.
-            ClientLibraryEffect::FeedTargetLanded { lib_idx, selection } => {
-                if let Some(claim) = app
-                    .gui_emby_libs
-                    .get_mut(&lib_idx)
-                    .and_then(|stored| stored.feed_claim.as_mut())
-                {
-                    claim.failed.remove(&selection);
-                }
-            }
-            // A failed target records it, so the shown pass skips it until a
-            // user press clears it.
-            ClientLibraryEffect::FeedTargetFailed { lib_idx, selection } => {
-                if let Some(claim) = app
-                    .gui_emby_libs
-                    .get_mut(&lib_idx)
-                    .and_then(|stored| stored.feed_claim.as_mut())
-                {
-                    claim.failed.insert(selection);
-                }
-            }
-        }
-    }
+/// Drain exactly one event from the lib channel, as the GUI core tick's drain
+/// does (`drain_lib_event_with_stores`), through the GUI's own stores: the
+/// event's App-side half and its collected store effects apply before the next
+/// event (`decouple-client-core` design D4a (c)). The TUI's
+/// `App::drain_lib_event` is this with no stores. One event per call keeps a
+/// pump from swallowing an event that the step it lands starts a fetch for.
+fn drain_one(app: &mut App) -> bool {
+    let Ok(event) = app.channels.lib_rx.try_recv() else {
+        return false;
+    };
+    let mut stores = GuiLibraryStores;
+    app.handle_lib_event(event, Some(&mut stores));
+    true
 }
 
-/// Land one fetch completion the way the GUI core tick's drain applies it:
-/// the event rides the lib channel exactly as the fetch worker sends it, and
-/// `App::drain_lib_event`'s own handler applies the App-side half.
+/// Land one fetch completion the way the GUI core tick's drain applies it
+/// (`drain_lib_event_with_stores`, which `drain_one` mirrors): wait for the
+/// next event, put it back as a worker leaves it, and drain that one event. A
+/// count fan-out event may land before the completion and lands first.
 fn land(app: &mut App) {
     let event = app
         .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("the fetch completed");
-    app.handle_lib_event(event, Some(&mut TestGuiLibraryStores));
+    let _ = app.channels.lib_tx.send(event);
+    assert!(drain_one(app), "the event the fetch completed is queued");
 }
 
 /// Land events until the root level's listing has landed: the open spawns
@@ -171,15 +141,11 @@ fn land_root_listing(app: &mut App) {
     }
 }
 
-/// Land events until the shown selection's items have landed: the count
-/// fan-out and the selection fetch race, so the selection's completion may
-/// follow the count's event.
+/// Land events until the shown selection's items have landed: the completion
+/// that runs the shown pass starting the selection's fetch, then that fetch's
+/// own completion.
 fn land_shown_selection(app: &mut App) {
-    while app.libs[0]
-        .feed_home_video
-        .as_ref()
-        .is_some_and(|state| state.selected_len() == 0)
-    {
+    while shown_selection_unloaded(app) {
         land(app);
     }
 }
@@ -187,13 +153,25 @@ fn land_shown_selection(app: &mut App) {
 /// Land events until no feed-group fetch is outstanding: the stale frame's
 /// event and the fetch's own completion both ride the channel.
 fn land_until_fetched(app: &mut App) {
-    while app.libs[0]
+    while shown_selection_fetching(app) {
+        land(app);
+    }
+}
+
+/// Whether the shown selection holds no items yet.
+fn shown_selection_unloaded(app: &App) -> bool {
+    app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .is_some_and(|state| state.selected_len() == 0)
+}
+
+/// Whether a feed-group target's fetch is outstanding.
+fn shown_selection_fetching(app: &App) -> bool {
+    app.libs[0]
         .feed_home_video
         .as_ref()
         .is_some_and(|state| state.fetching.is_some())
-    {
-        land(app);
-    }
 }
 
 /// The ids one checked folder's cached list holds, as the merged list reads
@@ -220,13 +198,18 @@ fn checked_folder_ids<'a>(app: &'a App, folder_id: &str) -> Vec<&'a str> {
 fn opening_a_movies_library_lands_its_root_rows_on_the_app() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
-    http.respond_repeated(200, MOVIES_BODY, 4);
+    // The open's listing and the store's paged fetch read the same catalog,
+    // and the pump's second `land` may wake on an event that was already on
+    // the channel, after which the store's next page request arrives on its
+    // own. A path-keyed answer follows each request's own path, so the
+    // concurrent workers' interleaving cannot script one wrongly.
+    http.respond_when("ParentId=lib-movies", 200, MOVIES_BODY);
     let mut app = emby_app(&http, "movies", MOVIES_ID, "Movies");
 
     app.gui_emby_open(0);
     land(&mut app);
     land(&mut app);
-    while app.drain_lib_event() {}
+    while drain_one(&mut app) {}
 
     assert_eq!(
         app.gui_emby_root_ids_for_test(0),

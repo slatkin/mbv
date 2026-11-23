@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
+use crate::app::gui_library::GuiLibraryStores;
 
 // The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
 // to `crate::app::shell::test_support` (task 4.7): they write the shell

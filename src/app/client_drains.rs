@@ -20,6 +20,7 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_ui_model::playback::QueueLink;
 
 use crate::app::App;
+use crate::app::dispatch::library::stores::ClientLibraryStores;
 use crate::app::dispatch::session::player_event::PlayerEventFlow;
 use crate::app::state::playback::HomeContent;
 
@@ -247,10 +248,22 @@ impl App {
     /// that reads the events is the Client's, and the App half is this one
     /// handler for both.
     pub fn drain_lib_event(&mut self) -> bool {
+        self.drain_lib_event_with_stores(None)
+    }
+
+    /// Take one pending library event and apply it through `stores`, the
+    /// Client's own library stores (`decouple-client-core` design D4a (c)):
+    /// each event applies its collected effects through `stores` after the
+    /// event and before the next one. A Client that keeps no such stores
+    /// passes `None`, which is what [`Self::drain_lib_event`] does.
+    pub fn drain_lib_event_with_stores(
+        &mut self,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) -> bool {
         let Ok(event) = self.channels.lib_rx.try_recv() else {
             return false;
         };
-        self.handle_lib_event(event, None);
+        self.handle_lib_event(event, stores);
         true
     }
 
