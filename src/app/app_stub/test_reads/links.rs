@@ -56,6 +56,14 @@ impl App {
         ACTIVE_COMMANDS.with(|slot| *slot.borrow_mut() = Some(cmd_rx));
     }
 
+    /// Hold `player` as the Player on the active connection: the stub a test
+    /// built over its own advertised compatibility, whose command channel the
+    /// stub recorded as that connection's.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_active_player_for_test(&mut self, player: mbv_player::PlayerProxy) {
+        self.player = player;
+    }
+
     /// Suspend a stub home link, and keep what it receives. The active
     /// connection keeps answering for the peer link beside it.
     #[cfg(any(test, feature = "test"))]

@@ -2,8 +2,8 @@
 //! keyboard placement must follow the *fresh* frame layout after a resize,
 //! and mouse (pointer) placement must remain anchored to the click point.
 //!
-//! The menu is now an Interactive Component mounted by the shell from
-//! `app.pending_overlay`; the shell recomputes its rect from `AppLayout`
+//! The menu is now an Interactive Component mounted by the shell from the
+//! core's pending overlay; the shell recomputes its rect from `AppLayout`
 //! each frame (task 5.3c). These tests drive `Model::render_context_menu_overlay`,
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::podcast::add_emby_movie_library;
@@ -24,12 +24,52 @@ fn neutral(rect: Rect) -> mbv_ui_model::geom::Rect {
     mbv_ui_model::geom::Rect::new(rect.x, rect.y, rect.width, rect.height)
 }
 
+/// The queue items these tests seed from `items`: the Emby slots the
+/// adoption takes.
+fn queue_items(items: Vec<EmbyItem>) -> Vec<mbv_queue::QueueItem> {
+    items
+        .into_iter()
+        .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+        .collect()
+}
+
 fn library_app() -> App {
     let mut app = make_app_stub();
     add_emby_movie_library(&mut app);
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Library);
     app
+}
+
+/// The Home-tab app the painted-geometry tests start from: Home active with
+/// Library focus, its Continue Watching column holding five rows.
+fn home_library_app() -> App {
+    let mut app = make_app_stub();
+    app.seed_active_tab_for_test(TabSelection::Home);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_home_content_for_test(make_items(5));
+    app
+}
+
+/// Open a context menu on Home's first Continue Watching row through the one
+/// keyboard entry the shell dispatches, and assert it is the pending overlay.
+fn open_home_context_menu(model: &mut crate::app::shell::Model) {
+    model.handle_terminal_message(
+        Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
+            mbv_ui_msg::HomeRequest::ContextMenu(vec![
+                mbv_ui_model::targets::HomeItemTarget::continue_item("id0"),
+            ]),
+        ))),
+        &mut false,
+        &mut false,
+    );
+    assert!(
+        matches!(
+            model.app.pending_overlay(),
+            Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(_))
+        ),
+        "'.' should open the context menu"
+    );
 }
 
 fn mounted_context_menu_rect(model: &Model) -> Rect {
@@ -50,8 +90,12 @@ fn mounted_context_menu_rect(model: &Model) -> Rect {
 fn right_click_at(model: &mut Model, cell: (u16, u16)) {
     model.menu_pointer = Some(cell);
     model.menu_pointer_current = true;
-    if let Some(OverlayRequest::ContextMenu(menu)) = model.app.pending_overlay.as_mut() {
+    if let Some(OverlayRequest::ContextMenu(menu)) = model.app.take_pending_overlay_for_test() {
+        let mut menu = menu;
         menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
+        model
+            .app
+            .seed_pending_overlay_for_test(OverlayRequest::ContextMenu(menu));
     }
 }
 
@@ -99,9 +143,7 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
 
     // Move the underlying selection so the keyboard anchor (selected-item
     // rect) would sit elsewhere; the pointer anchor must not chase it.
-    if let Some(ref mut level) = model.app.libs[0].nav_stack.last_mut() {
-        level.set_resting_cursor(level.items.len().saturating_sub(1));
-    }
+    model.app.set_library_level_cursor_for_test(0, 0, 0);
     let b = render_at(&mut model, 100, 40);
 
     // Same fresh frame size, same click point: the pointer menu does not move
@@ -126,26 +168,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     use mbv_ui_model::context_menu::ContextMenu;
     let _guard = crate::app::config::TestStateDirGuard::new();
 
-    let mut model = crate::app::shell::Model::new(make_app_stub());
-    model.app.tab = TabSelection::Home;
-    model.app.panel_focus = PanelFocus::Library;
-    model.app.home_content.continue_items = make_items(5);
-    model.handle_terminal_message(
-        Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
-            mbv_ui_msg::HomeRequest::ContextMenu(vec![
-                mbv_ui_model::targets::HomeItemTarget::continue_item("id0"),
-            ]),
-        ))),
-        &mut false,
-        &mut false,
-    );
-    assert!(
-        matches!(
-            model.app.pending_overlay,
-            Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(_))
-        ),
-        "'.' should open the context menu"
-    );
+    let mut model = crate::app::shell::Model::new(home_library_app());
+    open_home_context_menu(&mut model);
 
     model.sync_modal_requests();
     model.push_home_content();
@@ -231,26 +255,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     use mbv_ui_model::context_menu::ContextMenu;
     let _guard = crate::app::config::TestStateDirGuard::new();
 
-    let mut model = crate::app::shell::Model::new(make_app_stub());
-    model.app.tab = TabSelection::Home;
-    model.app.panel_focus = PanelFocus::Library;
-    model.app.home_content.continue_items = make_items(5);
-    model.handle_terminal_message(
-        Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
-            mbv_ui_msg::HomeRequest::ContextMenu(vec![
-                mbv_ui_model::targets::HomeItemTarget::continue_item("id0"),
-            ]),
-        ))),
-        &mut false,
-        &mut false,
-    );
-    assert!(
-        matches!(
-            model.app.pending_overlay,
-            Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(_))
-        ),
-        "'.' should open the context menu"
-    );
+    let mut model = crate::app::shell::Model::new(home_library_app());
+    open_home_context_menu(&mut model);
 
     model.sync_modal_requests();
     model.push_home_content();
@@ -347,8 +353,7 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = library_app();
     // The two-panel layout needs a non-empty queue (hide-empty-queue-column D1).
-    app.local_view
-        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
+    app.seed_local_queue_items_for_test(queue_items(vec![make_item("Queue Item", "Movie")]), 0);
     let mut model = Model::new(app);
     model.sync_library_panel();
 
@@ -397,7 +402,7 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
 fn focused_panel_right_click_opens_a_pointer_anchored_menu() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let app = crate::app::tests::render_fixtures::make_queue_app(2);
-    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    assert_eq!(app.stored_panel_focus(), PanelFocus::Queue);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();

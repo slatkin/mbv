@@ -30,6 +30,37 @@ impl App {
         self.local_view = crate::app::QueueView::from_snapshot(state);
     }
 
+    /// Hold `items` as the local queue's slots, cursor at `cursor`, as the
+    /// Owner's queue adoption leaves them.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_local_queue_items_for_test(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+    ) {
+        let state = mbv_ctrl::UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
+            status: mbv_ctrl::player::PlayerStatus::default(),
+            active_slot: None,
+            slots: items
+                .into_iter()
+                .enumerate()
+                .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+                    slot_id: u64::try_from(index).unwrap_or(u64::MAX) + 1,
+                    item,
+                })
+                .collect(),
+            revision: 1,
+            source: mbv_queue::QueueSource::Unknown,
+            lineage: mbv_queue::QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        };
+        self.local_view = crate::app::QueueView::from_snapshot(&state);
+        self.local_view.set_cursor(cursor);
+    }
+
     /// Hold `site` as where the now-playing title paints, as the projection
     /// pass leaves it once the artwork can carry it.
     #[cfg(any(test, feature = "test"))]

@@ -9,26 +9,25 @@ use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{Msg, ShellRequest};
 use rstest::rstest;
 
-use crate::app::gui_client_state::GuiOverlay;
 use crate::gui::GuiCore;
 
 fn emby_library_app() -> App {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_active_tab_for_test(mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0));
     app
 }
 
 /// Open the menu for `item` on an Emby library tab and return the ordered
 /// entry labels.
 fn menu_labels_for(app: &mut App, item: EmbyItem) -> Vec<&'static str> {
-    app.open_context_menu_for(item);
+    app.open_row_context_menu_for_test(item);
     pending_menu_labels(app)
 }
 
 /// The ordered entry labels of the context menu waiting in the pending overlay.
 fn pending_menu_labels(app: &mut App) -> Vec<&'static str> {
-    match app.pending_overlay.take() {
+    match app.take_pending_overlay_for_test() {
         Some(OverlayRequest::ContextMenu(menu)) => {
             menu.entries.iter().map(|entry| entry.label).collect()
         }
@@ -79,6 +78,48 @@ fn emby_menu_follows_the_standard_action_set_for(
     assert_eq!(menu_labels_for(&mut app, item), expected);
 }
 
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle": the GUI
+/// Client's per-row right-click menu offers the same Queue list Shuffle entry
+/// the TUI offers, after the play entries and before the removals (a music
+/// row, which takes no mark or go-to entries, shows the full order).
+#[test]
+fn the_gui_row_menu_offers_shuffle_before_the_removals() {
+    let app = queue_menu_app(true, leaf_item("queued track", "Audio", "Audio", false));
+
+    let labels: Vec<_> = gui_row_menu(app, mbv_queue::QueueSlotId::from_raw(1))
+        .entries
+        .iter()
+        .map(|entry| entry.label)
+        .collect();
+
+    assert_eq!(
+        labels,
+        vec![
+            "Play now",
+            "Play next",
+            "Shuffle",
+            "Remove from queue",
+            "Clear queue"
+        ]
+    );
+}
+
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner
+/// without the capability): the GUI row menu hides the entry when the owner
+/// does not advertise the `queue-shuffle` ctrl capability.
+#[test]
+fn the_gui_row_menu_hides_shuffle_without_the_capability() {
+    let app = queue_menu_app(false, leaf_item("queued movie", "Movie", "Video", false));
+
+    let labels: Vec<_> = gui_row_menu(app, mbv_queue::QueueSlotId::from_raw(1))
+        .entries
+        .iter()
+        .map(|entry| entry.label)
+        .collect();
+
+    assert!(!labels.contains(&"Shuffle"));
+}
+
 #[test]
 fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
     let mut app = emby_library_app();
@@ -90,7 +131,7 @@ fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
 
     app.open_context_menu_for_selection(&items, PanelFocus::Library, capabilities, Vec::new());
 
-    let labels = match app.pending_overlay.take() {
+    let labels = match app.take_pending_overlay_for_test() {
         Some(OverlayRequest::ContextMenu(menu)) => menu
             .entries
             .iter()
@@ -104,16 +145,28 @@ fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
     );
 }
 
-/// A stub app whose owner advertises the `queue-shuffle` ctrl capability, so
-/// the Queue list Shuffle entry is offered (queue-content-shuffle design D6).
-fn queue_shuffle_capable_app() -> App {
+/// A stub app whose owner advertises or hides the `queue-shuffle` ctrl
+/// capability, so the Queue list Shuffle entry is offered or hidden
+/// (queue-content-shuffle design D6).
+fn queue_shuffle_capable_app(shuffle_capable: bool) -> App {
     let (mut remote, _events, _cmd) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     let mut compat = mbv_ctrl::CtrlCompatibility::current();
-    compat.supports_queue_shuffle = true;
+    compat.supports_queue_shuffle = shuffle_capable;
     remote.set_ctrl_compatibility_for_test(compat);
     let mut app = make_app_stub();
-    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+    app.seed_active_player_for_test(mbv_player::PlayerProxy::from_remote(remote, false));
+    app
+}
+
+/// A stub app over the shuffle-capable or plain owner, with Queue focused and
+/// `item` as the one displayed slot.
+fn queue_menu_app(shuffle_capable: bool, item: EmbyItem) -> App {
+    let mut app = queue_shuffle_capable_app(shuffle_capable);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_local_queue_snapshot_for_test(&queue_state(vec![mbv_queue::QueueItem::Emby(
+        Box::new(item),
+    )]));
     app
 }
 
@@ -140,23 +193,46 @@ fn queue_state(items: Vec<mbv_queue::QueueItem>) -> mbv_ctrl::UnifiedQueueStateD
 }
 
 fn opened_menu_labels(app: &mut App) -> Vec<&'static str> {
-    app.open_context_menu(false, None);
+    app.open_focused_context_menu_for_test();
     pending_menu_labels(app)
+}
+
+/// The ordered entries of the GUI row menu the GUI Client opens on `slot`:
+/// what the frame carries to the window content.
+fn gui_row_menu(
+    app: App,
+    slot: mbv_queue::QueueSlotId,
+) -> crate::app::gui_client_state::GuiRowMenu {
+    let mut core = GuiCore::new(app);
+    core.open_gui_row_menu(&[slot]);
+    match core.gui.take_overlay_for_test() {
+        Some(crate::app::gui_client_state::GuiOverlay::RowMenu(menu)) => menu,
+        None => panic!("expected a row menu overlay, got none"),
+        Some(_) => panic!("expected a row menu overlay, got another overlay"),
+    }
 }
 
 /// queue-content-shuffle spec, "The Queue list menu offers Shuffle": an Emby
 /// Queue row keeps its usual entries and the Shuffle entry is the last one.
 #[test]
 fn an_emby_queue_row_menu_ends_with_the_shuffle_entry() {
-    let mut app = queue_shuffle_capable_app();
-    app.panel_focus = PanelFocus::Queue;
-    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
-        Box::new(leaf_item("queued movie", "Movie", "Video", false)),
-    )]));
+    let mut app = queue_menu_app(true, leaf_item("queued movie", "Movie", "Video", false));
 
     let labels = opened_menu_labels(&mut app);
 
     assert_eq!(labels.last(), Some(&"Shuffle"));
+}
+
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner
+/// without the capability): the entry hides when the owner does not advertise
+/// the `queue-shuffle` ctrl capability, leaving the row's other entries.
+#[test]
+fn a_queue_row_menu_hides_shuffle_without_the_capability() {
+    let mut app = queue_menu_app(false, leaf_item("queued movie", "Movie", "Video", false));
+
+    let labels = opened_menu_labels(&mut app);
+
+    assert!(!labels.contains(&"Shuffle"));
 }
 
 /// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Non-Emby
@@ -181,9 +257,9 @@ fn an_emby_queue_row_menu_ends_with_the_shuffle_entry() {
     }),
 ))]
 fn a_non_emby_queue_row_menu_offers_only_the_shuffle_entry(#[case] item: mbv_queue::QueueItem) {
-    let mut app = queue_shuffle_capable_app();
-    app.panel_focus = PanelFocus::Queue;
-    app.local_view = QueueView::from_snapshot(&queue_state(vec![item]));
+    let mut app = queue_shuffle_capable_app(true);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_local_queue_snapshot_for_test(&queue_state(vec![item]));
 
     let labels = opened_menu_labels(&mut app);
 
@@ -195,88 +271,12 @@ fn a_non_emby_queue_row_menu_offers_only_the_shuffle_entry(#[case] item: mbv_que
 /// even when the owner advertises the capability.
 #[test]
 fn a_library_row_menu_has_no_queue_shuffle_entry() {
-    let mut app = queue_shuffle_capable_app();
-    app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::EmbyLibrary(0);
+    let mut app = queue_shuffle_capable_app(true);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
 
     let labels = menu_labels_for(&mut app, leaf_item("movie", "Movie", "Video", false));
 
-    assert!(!labels.contains(&"Shuffle"));
-}
-
-/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner
-/// without the capability): the entry hides when the owner does not advertise
-/// the `queue-shuffle` ctrl capability, leaving the row's other entries.
-#[test]
-fn a_queue_row_menu_hides_shuffle_without_the_capability() {
-    let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
-    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
-        Box::new(leaf_item("queued movie", "Movie", "Video", false)),
-    )]));
-
-    let labels = opened_menu_labels(&mut app);
-
-    assert!(!labels.contains(&"Shuffle"));
-}
-
-/// queue-content-shuffle spec, "The Queue list menu offers Shuffle": the GUI
-/// Client's per-row right-click menu offers the same Queue list Shuffle entry
-/// the TUI offers, after the play entries and before the removals (a music
-/// row, which takes no mark or go-to entries, shows the full order).
-#[test]
-fn the_gui_row_menu_offers_shuffle_before_the_removals() {
-    let mut app = queue_shuffle_capable_app();
-    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
-        Box::new(leaf_item("queued track", "Audio", "Audio", false)),
-    )]));
-
-    let mut core = GuiCore::new(app);
-    core.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
-
-    let labels = match core.gui.overlay.take() {
-        Some(GuiOverlay::RowMenu(menu)) => menu
-            .entries
-            .iter()
-            .map(|entry| entry.label)
-            .collect::<Vec<_>>(),
-        None => panic!("expected a row menu overlay, got none"),
-        Some(_) => panic!("expected a row menu overlay, got another overlay"),
-    };
-    assert_eq!(
-        labels,
-        vec![
-            "Play now",
-            "Play next",
-            "Shuffle",
-            "Remove from queue",
-            "Clear queue"
-        ]
-    );
-}
-
-/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner
-/// without the capability): the GUI row menu hides the entry when the owner
-/// does not advertise the `queue-shuffle` ctrl capability, leaving the rest.
-#[test]
-fn the_gui_row_menu_hides_shuffle_without_the_capability() {
-    let mut app = make_app_stub();
-    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
-        Box::new(leaf_item("queued movie", "Movie", "Video", false)),
-    )]));
-
-    let mut core = GuiCore::new(app);
-    core.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
-
-    let labels = match core.gui.overlay.take() {
-        Some(GuiOverlay::RowMenu(menu)) => menu
-            .entries
-            .iter()
-            .map(|entry| entry.label)
-            .collect::<Vec<_>>(),
-        None => panic!("expected a row menu overlay, got none"),
-        Some(_) => panic!("expected a row menu overlay, got another overlay"),
-    };
     assert!(!labels.contains(&"Shuffle"));
 }
 
@@ -307,8 +307,8 @@ fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     add_emby_movie_library(&mut app);
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Library);
 
     let mut latest_row = make_item("Latest row", "Movie");
     latest_row.id = "latest-row".into();
@@ -322,7 +322,7 @@ fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
     );
 
     assert!(matches!(
-        model.app.pending_overlay,
+        model.app.pending_overlay(),
         Some(OverlayRequest::ContextMenu(_))
     ));
 }
@@ -338,11 +338,25 @@ fn visual_slot_menu_names_the_other_content(
     #[case] expected: &[&str],
 ) {
     let mut app = make_app_stub();
-    app.visualizer_enabled = visualizer_enabled;
+    set_visualizer_selection(&mut app, visualizer_enabled);
 
     app.open_visual_slot_context_menu();
 
     assert_eq!(pending_menu_labels(&mut app), expected);
+}
+
+/// A stub app resting on the visual slot `enabled` selects, over an idle
+/// player: the slot's own menu entry names the other content.
+fn set_visualizer_selection(app: &mut App, enabled: bool) {
+    app.execute_context_action(
+        Some(if enabled {
+            ContextAction::ShowVisualizer
+        } else {
+            ContextAction::ShowMediaArt
+        }),
+        None,
+    );
+    assert_eq!(app.visualizer_owns_the_slot_for_test(), enabled);
 }
 
 /// Queue visual slot menu: each content entry selects the content it names.
@@ -356,12 +370,9 @@ fn visual_slot_content_entry_selects_the_named_content(
     #[case] expected: bool,
 ) {
     let mut app = make_app_stub();
-    app.player.update_status(|status| status.active = false);
-    app.visualizer_enabled = !expected;
-
     app.execute_context_action(Some(action), None);
 
-    assert_eq!(app.visualizer_enabled, expected);
+    assert_eq!(app.visualizer_owns_the_slot_for_test(), expected);
 }
 
 /// Queue visual slot menu: the Hide entry sets the same persisted
@@ -369,11 +380,14 @@ fn visual_slot_content_entry_selects_the_named_content(
 #[test]
 fn visual_slot_hide_entry_hides_the_slot() {
     let mut app = make_app_stub();
-    app.player.update_status(|status| status.active = false);
+    app.seed_idle_player_for_test();
 
     app.execute_context_action(Some(ContextAction::HideVisualSlot), None);
 
-    assert!(app.visual_slot_hidden);
+    assert!(
+        app.presentation_facts_for_test().visual_slot_hidden,
+        "the Hide entry leaves the slot hidden"
+    );
 }
 
 /// The queue multi-selection menu anchors on the selected queue row: the
@@ -383,14 +397,14 @@ fn visual_slot_hide_entry_hides_the_slot() {
 /// slot) is the same menu.
 #[test]
 fn the_queue_selection_menu_anchors_on_the_selected_queue_row() {
-    let mut app = queue_shuffle_capable_app();
-    app.panel_focus = PanelFocus::Queue;
-    app.local_view = QueueView::from_snapshot(&queue_state(vec![
+    let mut app = queue_shuffle_capable_app(true);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_local_queue_snapshot_for_test(&queue_state(vec![
         mbv_queue::QueueItem::Emby(Box::new(leaf_item("one", "Movie", "Video", false))),
         mbv_queue::QueueItem::Emby(Box::new(leaf_item("two", "Movie", "Video", false))),
     ]));
     let slots: Vec<mbv_queue::QueueSlotId> = (0..2)
-        .filter_map(|index| app.local_view.slot_id_at(index))
+        .filter_map(|index| app.local_queue_view_for_test().slot_id_at(index))
         .collect();
 
     let menu = app

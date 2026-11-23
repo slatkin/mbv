@@ -172,6 +172,15 @@ impl GuiClientState {
         self.overlay.is_some()
     }
 
+    /// Take the overlay this Client's state holds, clearing it: a test of the
+    /// entries a right-click opened reads them once. `cfg(test)` only, because
+    /// the root package's own tests are their only caller.
+    #[cfg(test)]
+    #[must_use]
+    pub(in crate::app) fn take_overlay_for_test(&mut self) -> Option<GuiOverlay> {
+        self.overlay.take()
+    }
+
     /// Write the auto-hide preference (design D4): the GUI owns the
     /// `gui_player_auto_hide` key, so it persists it through the core's
     /// Client-key writer.

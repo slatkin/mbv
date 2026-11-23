@@ -24,6 +24,8 @@ mod state;
 mod target;
 
 pub(in crate::app) use self::overlay::GuiOverlay;
+#[cfg(test)]
+pub(in crate::app) use self::overlay::GuiRowMenu;
 pub use self::projection::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,

@@ -46,6 +46,10 @@ mod search;
 /// 3.3) sit in their own child module for the same reason.
 mod settings;
 
+/// The visual slot's test facts and seeds (`split-tui-gui-clients` design
+/// D4b rule 5) sit in their own child module for the same reason.
+mod visualizer;
+
 /// The GUI Client's own state a test seam reads or seeds (`decouple-client-core`
 /// design D4). The state lives in `GuiCore` now, and these `App` seams drive an
 /// `App` alone, so the state is held beside it: the root package's own tests
@@ -550,6 +554,31 @@ impl App {
     #[must_use]
     pub fn pending_overlay_is_none_for_test(&self) -> bool {
         self.pending_overlay.is_none()
+    }
+
+    /// Take the overlay request the core raised and has not handed to its
+    /// Client yet: what a menu builder left there, read once.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn take_pending_overlay_for_test(
+        &mut self,
+    ) -> Option<mbv_ui_model::overlay::OverlayRequest> {
+        self.pending_overlay.take()
+    }
+
+    /// Open the context menu of the focused row through the production
+    /// builder's row entry, as a Client's context-menu chord does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn open_row_context_menu_for_test(&mut self, item: mbv_emby_model::EmbyItem) {
+        self.open_context_menu_for(item);
+    }
+
+    /// Open the context menu the focused panel owns through the production
+    /// builder's keyboard entry, with no Home Continue Watching row selected,
+    /// as a Client without one dispatches it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn open_focused_context_menu_for_test(&mut self) {
+        self.open_context_menu(false, None);
     }
 
     /// Queue a Home `Recently added` fetch result for the Client tests' next

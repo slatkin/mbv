@@ -7,6 +7,15 @@ use mbv_ui_msg::{Msg, TerminalObserverEvent};
 use rstest::rstest;
 use tuirealm::event::Event;
 
+/// The queue items these tests seed from `items`: the Emby slots the
+/// adoption takes.
+fn queue_items(items: Vec<EmbyItem>) -> Vec<mbv_queue::QueueItem> {
+    items
+        .into_iter()
+        .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+        .collect()
+}
+
 /// The appearance-focus contract: unpinned mini view always rests; pinned
 /// mini view follows the window focus and the effective focus; wide view
 /// ignores the window focus and the focus bit selects the palette per panel.
@@ -48,7 +57,7 @@ fn panel_appearance_focus_for_library(
 #[test]
 fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
     let mut app = make_app_stub();
-    app.mini_view_focus = PanelFocus::Library;
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
     let mut mini = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_width(mini.model_mut(), 60);
     assert_eq!(
@@ -59,7 +68,7 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
     );
 
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
+    app.set_panel_focus_for_test(PanelFocus::Library);
     let mut wide_harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_width(wide_harness.model_mut(), 100);
     assert_eq!(
@@ -79,8 +88,8 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
 #[test]
 fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     let mut app = make_app_stub();
-    app.mini_view_focus = PanelFocus::Queue;
-    app.local_view.adopt_items(make_items(3), 0);
+    app.set_mini_view_focus_for_test(PanelFocus::Queue);
+    app.seed_local_queue_items_for_test(queue_items(make_items(3)), 0);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 60);
     harness.model_mut().sync_mounted_surfaces();
@@ -167,8 +176,8 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
 #[test]
 fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.mini_view_focus = PanelFocus::Library;
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
     let mut harness = TickHarness::new(app);
     crate::app::shell::test_support::set_terminal_width(harness.model_mut(), 100);
 
@@ -209,7 +218,7 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
         "crossing into mini view selects Queue"
     );
     assert_eq!(
-        harness.model().app.panel_focus,
+        harness.model().app.stored_panel_focus(),
         PanelFocus::Library,
         "mini-view focus must not replace the stored wide focus"
     );
@@ -223,7 +232,10 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
         PanelFocus::Library,
         "widening restores the prior wide focus"
     );
-    assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
+    assert_eq!(
+        harness.model().app.stored_panel_focus(),
+        PanelFocus::Library
+    );
 }
 
 /// The mini-view threshold crossing is a sync-pass side effect now.
@@ -244,7 +256,7 @@ fn build_restores_panel_focus_from_prefs_for_both_values() {
 
         let app = make_built_app();
 
-        assert_eq!(app.panel_focus, expected);
+        assert_eq!(app.stored_panel_focus(), expected);
     }
 }
 
@@ -259,9 +271,9 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
 
     let app = make_built_app();
 
-    assert!(app.tab.is_home());
+    assert!(app.tab_for_test().is_home());
     assert_eq!(
-        app.local_view.emby_items(),
+        app.local_queue_view_for_test().emby_items(),
         [] as [mbv_emby_model::EmbyItem; 0]
     );
 }
@@ -290,32 +302,27 @@ fn panel_focus_changes_do_not_write_legacy_launch_prefs() {
 fn entering_queue_focus_selects_now_playing_item() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.local_view.adopt_items(make_items(3), 0);
-    app.local_view.set_cursor(2);
-    {
-        app.player.update_status(|status| {
-            status.active = true;
-            status.current_idx = 1;
-        });
-    };
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_local_queue_items_for_test(queue_items(make_items(3)), 0);
+    app.move_local_queue_cursor_for_test(2);
+    app.seed_playing_status_for_test(1, 3);
 
     app.set_panel_focus(PanelFocus::Queue);
 
-    assert_eq!(app.local_view.cursor(), 1);
+    assert_eq!(app.local_queue_cursor_for_test(), 1);
 }
 
 #[test]
 fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.local_view.adopt_items(make_items(3), 0);
-    app.local_view.set_cursor(99);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_local_queue_items_for_test(queue_items(make_items(3)), 0);
+    app.move_local_queue_cursor_for_test(99);
 
     app.set_panel_focus(PanelFocus::Queue);
 
-    assert_eq!(app.local_view.cursor(), 0);
+    assert_eq!(app.local_queue_cursor_for_test(), 0);
 }
 
 /// Contract: "Two-panel layout hides an empty queue column". At 80+ columns
@@ -326,13 +333,13 @@ fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
 #[test]
 fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::Both;
+    app.set_panel_mode_for_test(PanelMode::Both);
     let mut model = Model::new(app);
     crate::app::shell::test_support::set_terminal_width(&mut model, 100);
     let app = &model.app;
 
     assert_eq!(app.effective_panel_mode(), PanelMode::LibraryOnly);
-    assert_eq!(app.panel_mode, PanelMode::Both);
+    assert_eq!(app.stored_panel_mode(), PanelMode::Both);
 }
 
 /// Contract: "Cycle continues from both". With the queue column hidden because
@@ -341,14 +348,14 @@ fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
 #[test]
 fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::Both;
+    app.set_panel_mode_for_test(PanelMode::Both);
     let mut model = Model::new(app);
     crate::app::shell::test_support::set_terminal_width(&mut model, 100);
     let app = &mut model.app;
 
     app.dispatch(&AppCommand::Panel(PanelIntent::CyclePanelMode));
 
-    assert_eq!(app.panel_mode, PanelMode::QueueOnly);
+    assert_eq!(app.stored_panel_mode(), PanelMode::QueueOnly);
 }
 
 /// Contract: "Hidden empty queue moves focus to the library" and "Focus
@@ -358,27 +365,27 @@ fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
 #[test]
 fn emptied_queue_moves_stored_focus_to_library_and_refill_leaves_it_there() {
     let mut app = make_app_stub();
-    app.panel_mode = PanelMode::Both;
-    app.panel_focus = PanelFocus::Queue;
-    app.local_view.adopt_items(make_items(2), 0);
+    app.set_panel_mode_for_test(PanelMode::Both);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_local_queue_items_for_test(queue_items(make_items(2)), 0);
     let mut model = Model::new(app);
     crate::app::shell::test_support::set_terminal_width(&mut model, 100);
     model.sync_queue();
-    assert_eq!(model.app.panel_focus, PanelFocus::Queue);
+    assert_eq!(model.app.stored_panel_focus(), PanelFocus::Queue);
 
     let empty = emby_unified_state(&[], 0);
-    model.app.local_view.adopt(
+    model.app.readopt_local_queue_for_test(
         &empty,
         crate::app::state::queue_view::AdoptCause::Replacement,
     );
     model.sync_queue();
-    assert_eq!(model.app.panel_focus, PanelFocus::Library);
+    assert_eq!(model.app.stored_panel_focus(), PanelFocus::Library);
 
     let refilled = emby_unified_state(&make_items(1), 0);
-    model.app.local_view.adopt(
+    model.app.readopt_local_queue_for_test(
         &refilled,
         crate::app::state::queue_view::AdoptCause::Replacement,
     );
     model.sync_queue();
-    assert_eq!(model.app.panel_focus, PanelFocus::Library);
+    assert_eq!(model.app.stored_panel_focus(), PanelFocus::Library);
 }
