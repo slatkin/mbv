@@ -110,7 +110,10 @@ impl GuiCore {
         self.close_orphaned_track_popover();
         // A new queue the local Owner made opens the Queue chooser on its name
         // here (design D8): the core made the queue and left the hand-off, and
-        // the overlay is this Client's own presentation.
+        // the overlay is this Client's own presentation, so the draft shows
+        // before this key resolves against the chooser it would paint. A
+        // pointer pass sets no hand-off; the GUI core thread takes it after
+        // the pass's dispatch instead.
         self.present_pending_gui_overlay();
         let keybinds = self
             .app

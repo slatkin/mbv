@@ -74,6 +74,52 @@ pub fn stub_app_with_queue(n: usize) -> App {
     app
 }
 
+/// The `App` a GUI Client's test drives with `n` queue slots, holding the
+/// [`gui_client_capabilities`] a real GUI attach records (design D6a of
+/// `decouple-client-core`), over a player whose command channel stays open and
+/// the sender of its Owner-event channel. The stub capabilities are the TUI's
+/// preset, which gates every GUI-only control, and the plain stub's player
+/// channel is already dropped, so a test of a control takes this App, the
+/// receiver of the Owner commands it sends, and the events it injects. The
+/// Owner's two-queue list is adopted and its current queue shown, so the header
+/// controls act on a named entry (design D7 of `gui-named-queues`).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_for_gui_client(
+    n: usize,
+) -> (
+    App,
+    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+    std::sync::mpsc::Sender<mbv_ctrl::player::PlayerEvent>,
+) {
+    let mut app = stub_app_with_queue(n);
+    app.set_client_capabilities(gui_client_capabilities());
+    let (remote, _player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.update_status(|status| status.volume_max = 100);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.player_rx = rx;
+    let current = mbv_queue::NamedQueueId::from_raw(1);
+    app.adopt_named_queue_list(
+        vec![
+            mbv_ctrl::NamedQueueEntry {
+                id: current,
+                name: "Default".to_string(),
+                len: n,
+            },
+            mbv_ctrl::NamedQueueEntry {
+                id: mbv_queue::NamedQueueId::from_raw(2),
+                name: "Kids".to_string(),
+                len: 1,
+            },
+        ],
+        current,
+    );
+    app.show_local_current_entry();
+    (app, cmd_rx, tx)
+}
+
 /// The `App` a GUI Client's test drives with `n` queue slots over a player
 /// whose command channel records what the actions send (add-tauri-gui-client
 /// row 6.5): a drag's release or a key move lands one slot move the test

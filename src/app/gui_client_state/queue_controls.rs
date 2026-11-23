@@ -36,11 +36,17 @@ impl GuiCore {
     /// Present the overlays the core handed off for this Client's input pass
     /// (design D8): a new queue the local Owner made opens the Queue chooser
     /// on its name. A Client with no chooser sets no hand-off, so this costs it
-    /// nothing.
-    pub(in crate::app) fn present_pending_gui_overlay(&mut self) {
-        if let Some((queue, text)) = self.app.pending_queue_rename.take() {
-            self.present_gui_queue_rename(queue, text);
-        }
+    /// nothing. The GUI core thread takes the hand-off after each routed input,
+    /// so the chooser's draft opens in the pass that raised it, whether a key
+    /// chord or a pointer press raised it; `route_gui_input` takes it before a
+    /// key resolves too. Returns whether it presented one, so the tick that
+    /// took the hand-off marks its input.
+    pub fn present_pending_gui_overlay(&mut self) -> bool {
+        let Some((queue, text)) = self.app.pending_queue_rename.take() else {
+            return false;
+        };
+        self.present_gui_queue_rename(queue, text);
+        true
     }
 
     /// Record a Named-queue command whose answer the Client does not pump for,

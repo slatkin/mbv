@@ -402,6 +402,14 @@ impl ClientTickHost for CoreThread {
             // would replace it.
             self.apply_pending_overlay_request(&mut outcome.input_received);
         }
+        // The Queue chooser's hand-off presents here, in the tick that raised
+        // it (design D8 of `gui-named-queues`): the overlay is this Client's
+        // presentation and the core leaves it for the Client, so a key chord,
+        // a pointer press, and an Owner answer this tick drained all open the
+        // name draft before the tick's frame builds. The step runs after the
+        // input loop, because an Owner answer arrives on a tick that routes no
+        // input at all.
+        self.present_pending_overlay(&mut outcome.input_received);
         // The sidebar requests' drain (`add-gui-settings-screen` design D2):
         // once per tick, after input routing — a request the routing raised
         // drives the Settings screen this tick, and the Settings id's stack

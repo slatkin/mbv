@@ -4,11 +4,13 @@
 //! release, none on a cancel), and the row menu (its actions button, and an
 //! entry press executing through the Client core).
 
-use mbv::{gui_client_capabilities, stub_app_with_queue_and_cmd_rx};
+use mbv::{gui_client_capabilities, stub_app_for_gui_client, stub_app_with_queue_and_cmd_rx};
+use mbv_ctrl::player::PlayerEvent;
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::queue::{GuiQueueInsertion, GuiQueueRow};
 use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
 use mbv_gui::core_thread::CoreInput;
+use mbv_queue::NamedQueueId;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 use crate::{measured_layout, move_at, press_at, queue_key, region_at, test_core, test_core_with};
@@ -479,4 +481,88 @@ fn a_new_press_discards_the_stale_drag_review_u65_p1_2() {
     assert!(test.core.step());
     test.held();
     assert_eq!(slot_moves(&cmd_rx), vec![]);
+}
+
+/// The Owner's answer presents the Queue chooser's name draft in its own tick
+/// (review of `decouple-client-core` rows 6.1–6.5, finding P1): the new-queue
+/// control's press asks the Owner for a queue, and the Owner's answer opens
+/// the draft. The answer arrives as a wake, so that tick routes no key and no
+/// pointer event, and only the tick's own hand-off step presents the draft
+/// before the frame it sends. Without that step the hand-off waits for a later
+/// key press, so a Client driven by the pointer alone never shows the draft.
+#[test]
+fn an_owner_answer_presents_its_chooser_in_its_own_tick() {
+    let (app, cmd_rx, owner) = stub_app_for_gui_client(3);
+    let mut test = test_core_with(app);
+    assert!(test.core.step());
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::Queue(QueueTargetId::NewQueue),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.held();
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    let op = cmd_rx
+        .try_iter()
+        .find_map(|cmd| match cmd {
+            mbv_ctrl::CtrlCmd::NamedQueueCreate { op } => Some(op),
+            _ => None,
+        })
+        .expect("the control asks the local Owner for a new queue");
+
+    owner
+        .send(PlayerEvent::NamedQueue(mbv_ctrl::NamedQueueEvent::List {
+            queues: [
+                ("Default", NamedQueueId::from_raw(1), 3),
+                ("Queue 2", NamedQueueId::from_raw(3), 0),
+            ]
+            .into_iter()
+            .map(|(name, id, len)| mbv_ctrl::NamedQueueEntry {
+                id,
+                name: name.to_string(),
+                len,
+            })
+            .collect(),
+            current: NamedQueueId::from_raw(1),
+        }))
+        .unwrap();
+    owner
+        .send(PlayerEvent::QueueOpResult {
+            op,
+            outcome: mbv_ctrl::QueueOpOutcome::Applied(Box::new(named_queue_snapshot(
+                NamedQueueId::from_raw(3),
+            ))),
+        })
+        .unwrap();
+    assert!(test.core.step());
+    assert!(test.core.step());
+
+    let overlay = test.held().overlay().cloned();
+    assert!(
+        matches!(overlay, Some(GuiOverlayFrame::QueueChooser { .. })),
+        "the tick presents the draft: {overlay:?}"
+    );
+}
+
+/// The Owner's snapshot of `queue` with no slots: the answer a create carries.
+fn named_queue_snapshot(queue: NamedQueueId) -> mbv_ctrl::UnifiedQueueStateData {
+    mbv_ctrl::UnifiedQueueStateData {
+        queue: Some(queue),
+        start_slot: None,
+        status: mbv_ctrl::player::PlayerStatus::default(),
+        active_slot: None,
+        slots: Vec::new(),
+        revision: 1,
+        source: mbv_queue::QueueSource::Remote,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    }
 }

@@ -174,11 +174,18 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
         0,
         "the new queue is empty"
     );
-    // The overlay is the GUI Client's, so its core takes the hand-off on the
-    // next input pass, as a real GUI Client's tick does.
+    // The overlay is the GUI Client's presentation: the answer leaves the
+    // one-shot hand-off, and the Client's tick takes it in the same tick it
+    // drained the answer (`mbv-gui`'s core-thread tests own that sequencing).
+    // Here the answer must leave exactly that hand-off.
     let mut core = GuiCore::new(app);
-    core.present_pending_gui_overlay();
+    assert!(
+        core.app().pending_queue_rename.is_some(),
+        "the answer leaves the new queue's name for the Client to present"
+    );
+    let presented = core.present_pending_gui_overlay();
     let app = core.into_app();
+    assert!(presented, "the answer left the name draft to present");
     let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
         panic!("the new queue's name is open for edit in the chooser");
     };

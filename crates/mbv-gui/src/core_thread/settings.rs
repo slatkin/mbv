@@ -48,6 +48,18 @@ impl CoreThread {
         self.core.app_mut().clear_gui_launch_state();
         self.core.app_mut().bump_gui_ui_reset_epoch();
     }
+    /// Present the overlays the core handed off for this tick (design D8 of
+    /// `gui-named-queues`): a new queue the local Owner made opens the Queue
+    /// chooser on its name. The core sets the one-shot hand-off, because the
+    /// overlay is this Client's presentation, so the tick takes it here and
+    /// its frame paints the open draft — whether the tick routed an input or
+    /// only drained the Owner's answer.
+    pub(super) fn present_pending_overlay(&mut self, input_received: &mut bool) {
+        if self.core.present_pending_gui_overlay() {
+            *input_received = true;
+        }
+    }
+
     /// Drain the App's pending shell request once per tick (design D2), then
     /// mirror the Settings screen's state onto the core `FocusStack`: opening
     /// pushes `ComponentId::Overlay(OverlayId::Settings)`, closing pops it, so
