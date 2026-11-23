@@ -16,13 +16,12 @@ use crate::window::truncate::TextStyle;
 /// the window, painted and measured.
 pub const TREE_ROW_FONT_PX: f32 = 14.0;
 
-/// The tree rows' title weight (a selected row may raise it, as a Shows season
-/// does; the size never changes).
-pub const TREE_ROW_TITLE_WEIGHT: f32 = 400.0;
-
-/// The text style a tree row's title `Truncate` box measures at: exactly the
-/// size and weight the row paints.
+/// The text style a Library row title's `Truncate` box measures at: exactly
+/// the size and weight the row paints, at the Library-wide title weight.
 #[must_use]
 pub fn tree_row_text() -> TextStyle {
-    TextStyle::sans(TREE_ROW_FONT_PX, TREE_ROW_TITLE_WEIGHT)
+    TextStyle::sans(
+        TREE_ROW_FONT_PX,
+        crate::window::library::LIBRARY_ROW_TITLE_WEIGHT,
+    )
 }

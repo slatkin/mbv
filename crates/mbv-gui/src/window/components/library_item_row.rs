@@ -41,15 +41,12 @@ use crate::window::components::tree_hint::TreeHint;
 use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
 use crate::window::icons::{EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
+use crate::window::library::LIBRARY_ROW_TITLE_WEIGHT;
 use crate::window::library::episode::episode_progress;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
 pub use crate::window::library::list::LIBRARY_ROW_HEIGHT;
-
-/// The top-level row's title weight (design D2): 400 at every selection state,
-/// as the canvas paints it.
-pub const FLAT_ROW_TITLE_WEIGHT: f32 = 400.0;
 
 /// The top-level row's left and right padding, in logical pixels
 /// (gui-delineated-rows design D2; `gui-tree-indent-guides` design D2): the
@@ -299,7 +296,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 Truncate {
                     text: props.title.clone(),
                     css: format!(
-                        "color: {}; font-weight: {FLAT_ROW_TITLE_WEIGHT};",
+                        "color: {}; font-weight: {LIBRARY_ROW_TITLE_WEIGHT};",
                         props.title_color
                     ),
                     style: tree_row_text(),

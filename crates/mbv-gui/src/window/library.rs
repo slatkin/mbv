@@ -32,3 +32,7 @@ pub mod shows_list;
 pub mod shows_workspace;
 pub mod state;
 pub mod status;
+
+/// The Library row-title weight, in CSS font-weight units: one value for
+/// every Library row title, tree and flat, painted and measured.
+pub const LIBRARY_ROW_TITLE_WEIGHT: f32 = 500.0;
