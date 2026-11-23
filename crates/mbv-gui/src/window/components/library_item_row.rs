@@ -38,12 +38,12 @@ use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_attr::library_attr;
 use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
 use crate::window::components::tree_hint::TreeHint;
-use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
-use crate::window::icons::{EighthNotes, MonitorPlay};
+use crate::window::components::tree_row::TREE_ROW_FONT_PX;
+use crate::window::icons::{Check, EighthNotes, MonitorPlay};
 use crate::window::input::f32_from_f64;
 use crate::window::library::LIBRARY_ROW_TITLE_WEIGHT;
 use crate::window::library::episode::episode_progress;
-use crate::window::theme::canvas_var;
+use crate::window::theme::{EfToken, canvas_var, ef_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
 pub use crate::window::library::list::LIBRARY_ROW_HEIGHT;
@@ -78,6 +78,100 @@ pub const THUMB_ICON_PX: u16 = 16;
 /// The thumb's progress track and fill height, along the box's bottom edge
 /// (design D2).
 pub const THUMB_PROGRESS_PX: f32 = 3.0;
+
+/// The unplayed mark's filled circle, in logical pixels.
+const PLAYED_DOT_PX: f32 = 8.0;
+
+/// The played mark's check icon, in logical pixels.
+const PLAYED_CHECK_PX: u16 = 12;
+
+/// The mark slot's width and height: the larger of the two marks, so the date
+/// stays at one place whatever the row's state.
+const PLAYED_MARK_SLOT_PX: u16 = PLAYED_CHECK_PX;
+
+/// The gap between the mark slot and the date.
+const PLAYED_MARK_GAP_PX: f32 = 6.0;
+
+/// A played row's thumb opacity. Blitz's renderer drops `grayscale()`, so the
+/// thumb dims by opacity alone.
+const PLAYED_THUMB_OPACITY: f32 = 0.35;
+
+/// The played treatment a row paints (the `Recently added` rows, user request
+/// 2026-11-23): the title, subtitle, and date tones, the dimmed thumb, and the
+/// mark before the date. A partly played row paints [`Self::Unplayed`] and keeps
+/// its resume run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowPlayedMark {
+    /// Not played, or partly played.
+    Unplayed,
+    /// Played.
+    Played,
+}
+
+impl RowPlayedMark {
+    /// The mark's accessible label and its hook value.
+    fn label(self) -> &'static str {
+        match self {
+            RowPlayedMark::Unplayed => "Unplayed",
+            RowPlayedMark::Played => "Played",
+        }
+    }
+
+    /// The title's tone and weight.
+    fn title(self) -> (&'static str, f32) {
+        match self {
+            RowPlayedMark::Unplayed => (ef_var(EfToken::Fg), 600.0),
+            RowPlayedMark::Played => (ef_var(EfToken::Grey1), 400.0),
+        }
+    }
+
+    /// The subtitle's tone.
+    fn subtitle_color(self) -> &'static str {
+        match self {
+            RowPlayedMark::Unplayed => ef_var(EfToken::Grey2),
+            RowPlayedMark::Played => ef_var(EfToken::Grey1),
+        }
+    }
+
+    /// The date's tone.
+    fn date_color(self) -> &'static str {
+        match self {
+            RowPlayedMark::Unplayed => ef_var(EfToken::Fg),
+            RowPlayedMark::Played => ef_var(EfToken::Grey1),
+        }
+    }
+}
+
+/// The mark before the date: the green dot of an unplayed row or the grey
+/// check of a played one, in one fixed slot so the dates stay aligned.
+fn paint_played_mark(attr: &'static str, mark: RowPlayedMark) -> Element {
+    let attrs = vec![Attribute::new(
+        library_attr(attr, "played-mark"),
+        mark.label(),
+        None,
+        false,
+    )];
+    let glyph = match mark {
+        RowPlayedMark::Unplayed => rsx! {
+            span {
+                style: "width: {PLAYED_DOT_PX}px; height: {PLAYED_DOT_PX}px; border-radius: 9999px; background: {ef_var(EfToken::Green)};",
+            }
+        },
+        RowPlayedMark::Played => rsx! {
+            Check { size: PLAYED_CHECK_PX, color: ef_var(EfToken::Grey1).to_owned() }
+        },
+    };
+    rsx! {
+        span {
+            class: "flex flex-none items-center justify-center",
+            style: "width: {PLAYED_MARK_SLOT_PX}px; height: {PLAYED_MARK_SLOT_PX}px;",
+            role: "img",
+            "aria-label": mark.label(),
+            ..attrs,
+            {glyph}
+        }
+    }
+}
 
 /// The art one top-level row's thumb paints (gui-delineated-rows design D1):
 /// the frame's art state and the media kind its icon names while it holds no
@@ -156,6 +250,11 @@ pub struct LibraryItemRowProps {
     /// top-level tree parent and on a parent that shows none of its children.
     #[props(default)]
     pub tree_guide: bool,
+    /// The row's played treatment (the `Recently added` rows), `None` on every
+    /// other row: it then overrides [`Self::title_color`] and the muted tones,
+    /// dims a played thumb, and paints its mark before the date.
+    #[props(default)]
+    pub played_mark: Option<RowPlayedMark>,
     /// A press on the row: it picks the row's item.
     pub on_press: Callback<()>,
     /// A double-click on the row.
@@ -246,10 +345,37 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             false,
         )]
     });
+    let dimmed = props.played_mark == Some(RowPlayedMark::Played);
     let thumb = props
         .thumb
         .as_ref()
-        .map(|thumb| paint_thumb(props.attr, thumb, props.progress));
+        .map(|thumb| paint_thumb(props.attr, thumb, props.progress, dimmed));
+    let muted = canvas_var("muted");
+    let (title_color, title_weight): (&str, f32) = match props.played_mark {
+        Some(mark) => mark.title(),
+        None => (&props.title_color, LIBRARY_ROW_TITLE_WEIGHT),
+    };
+    let title_css = format!("color: {title_color}; font-weight: {title_weight};");
+    let subtitle_color: &str = match props.played_mark {
+        Some(mark) => mark.subtitle_color(),
+        None => &muted,
+    };
+    let subtitle_css = format!("font-size: 12px; color: {subtitle_color};");
+    let date_color: &str = match props.played_mark {
+        Some(mark) => mark.date_color(),
+        None => &muted,
+    };
+    let mut trail_style = format!("font-size: 12px; color: {date_color};");
+    if props.played_mark.is_some() {
+        let _ = write!(
+            trail_style,
+            " display: flex; align-items: center; gap: {PLAYED_MARK_GAP_PX}px;"
+        );
+    }
+    let trail_text = props.trail.clone().filter(|trail| !trail.is_empty());
+    let paints_trail = trail_text.is_some() || props.played_mark.is_some();
+    let played_mark = props.played_mark;
+    let attr = props.attr;
     // A tree parent's row look (gui-tree-double-click design D2, D4): the hover
     // hint and its trailing-text swap ride the `tree-parent` class, and the
     // double-click toggles the node in place of playing it.
@@ -295,28 +421,30 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 style: "gap: 2px;",
                 Truncate {
                     text: props.title.clone(),
-                    css: format!(
-                        "color: {}; font-weight: {LIBRARY_ROW_TITLE_WEIGHT};",
-                        props.title_color
-                    ),
-                    style: tree_row_text(),
+                    css: title_css,
+                    style: TextStyle::sans(TREE_ROW_FONT_PX, title_weight),
                     attrs: title_attrs,
                 }
                 if let Some(subtitle) = props.subtitle.clone() {
                     Truncate {
                         text: subtitle,
-                        css: "font-size: 12px; color: var(--canvas-muted);".to_owned(),
+                        css: subtitle_css,
                         style: TextStyle::sans(12.0, 400.0),
                         attrs: subtitle_attrs,
                     }
                 }
             }
-            if let Some(trail) = props.trail.clone().filter(|trail| !trail.is_empty()) {
+            if paints_trail {
                 span {
                     class: "{trail_class}",
-                    style: "font-size: 12px; color: var(--canvas-muted);",
+                    style: "{trail_style}",
                     ..trail_attrs,
-                    "{trail}"
+                    if let Some(mark) = played_mark {
+                        {paint_played_mark(attr, mark)}
+                    }
+                    if let Some(trail) = trail_text {
+                        "{trail}"
+                    }
                 }
             }
             if props.tree_guide {
@@ -366,12 +494,21 @@ fn thumb_image(art: GuiArtRef, class: &str, style: &str) -> Element {
 /// One row's art thumb (design D1, D2): the 64 × 36 box on the recessed fill,
 /// the image or the media kind's icon inside it, and the row's resume run along
 /// the box's bottom edge.
-fn paint_thumb(attr: &'static str, thumb: &LibraryRowThumb, progress: Option<f32>) -> Element {
-    // The box: one fixed landscape shape every top-level row shares.
-    let box_style = format!(
+fn paint_thumb(
+    attr: &'static str,
+    thumb: &LibraryRowThumb,
+    progress: Option<f32>,
+    dimmed: bool,
+) -> Element {
+    // The box: one fixed landscape shape every top-level row shares. A played
+    // row's thumb dims.
+    let mut box_style = format!(
         "width: {THUMB_WIDTH_PX}px; height: {THUMB_HEIGHT_PX}px; border-radius: {THUMB_RADIUS_PX}px; background: {};",
         canvas_var("well")
     );
+    if dimmed {
+        let _ = write!(box_style, " opacity: {PLAYED_THUMB_OPACITY};");
+    }
     let box_attrs = vec![Attribute::new(
         library_attr(attr, "thumb"),
         thumb_state(&thumb.art),

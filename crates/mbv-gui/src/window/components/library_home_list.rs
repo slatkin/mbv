@@ -21,7 +21,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowStateFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, name_color,
+    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, RowPlayedMark, name_color,
 };
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
@@ -54,6 +54,20 @@ fn row_progress(state: &GuiHomeRowStateFrame) -> Option<f32> {
     match state {
         GuiHomeRowStateFrame::Active { progress } => progress.map(f32::from),
         _ => None,
+    }
+}
+
+/// The played treatment a `Recently added` row paints: played, or unplayed
+/// (which a partly played row also paints, with its resume run). A `Continue
+/// watching` row paints none.
+fn recent_played_mark(item: &HomeItemRow) -> Option<RowPlayedMark> {
+    match (&item.row_id, &item.state) {
+        (GuiHomeRowIdFrame::Continue(_), _) => None,
+        (GuiHomeRowIdFrame::Recent(_), GuiHomeRowStateFrame::Played) => Some(RowPlayedMark::Played),
+        (
+            GuiHomeRowIdFrame::Recent(_),
+            GuiHomeRowStateFrame::Ordinary | GuiHomeRowStateFrame::Active { .. },
+        ) => Some(RowPlayedMark::Unplayed),
     }
 }
 
@@ -125,6 +139,7 @@ fn paint_home_item_row(
             background: selected_row.then(|| canvas_var("library-raise")),
             selected: selected_row,
             progress: row_progress(&item.state),
+            played_mark: recent_played_mark(item),
             thumb: Some(LibraryRowThumb {
                 art: item.art.clone(),
                 media: item.media,
