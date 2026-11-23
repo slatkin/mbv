@@ -96,6 +96,31 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert!(!model.app.activate_selected_series(0));
 }
 
+/// Wide TV layout: the generic browser's `EmbyLibraryActivate` for a Series
+/// enters the persistent Workspace through the shared gate. Regression for the
+/// row 2.7 review (commit 56878761d): routing that arm straight to
+/// `select_item` drilled into a flat browse list instead, because a Series is a
+/// folder.
+#[test]
+fn wide_emby_library_activate_enters_the_workspace_not_a_flat_drill_in() {
+    let mut model = mounted_tv_model();
+    model.sync_library_panel();
+    assert!(
+        !model.app.tv_workspace_wide.is_empty(),
+        "the wide fixture publishes the Client's write-back fact"
+    );
+    let item = model.app.libs[0].nav_stack[0].items[0].clone();
+    let depth_before = model.app.libs[0].nav_stack.len();
+
+    model.handle_emby_library_request(mbv_ui_msg::ShellRequest::EmbyLibraryActivate { item });
+
+    assert_eq!(
+        model.app.libs[0].nav_stack.len(),
+        depth_before,
+        "wide Series activation keeps the persistent Workspace, never a drill-in"
+    );
+}
+
 /// A tree-selected show opens its Hero even when the old flat carrier still
 /// points at another show.
 #[test]
