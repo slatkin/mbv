@@ -138,8 +138,12 @@ pub enum GuiSettingsContent {
         rows: Vec<GuiSettingsKeyRow>,
         refusal: Option<GuiSettingsKeyRefusal>,
     },
-    /// The playback targets the chooser lists.
-    Sessions { targets: Vec<GuiTargetChoice> },
+    /// The playback targets the chooser lists, and whether a refresh of them
+    /// is in flight.
+    Sessions {
+        targets: Vec<GuiTargetChoice>,
+        refreshing: bool,
+    },
 }
 
 impl GuiSettingsContent {
@@ -158,6 +162,7 @@ impl GuiSettingsContent {
             CoreSettingsSection::Keys => Self::keys(core),
             CoreSettingsSection::Sessions => Self::Sessions {
                 targets: sessions::targets(&playback.target_choices),
+                refreshing: core.gui_playback_target_refresh_busy(),
             },
             CoreSettingsSection::Playback
             | CoreSettingsSection::Display

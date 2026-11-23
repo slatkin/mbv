@@ -36,9 +36,8 @@ pub(super) const LIST_TOP_GAP_PX: u16 = 8;
 /// The distance from one row's top edge to the next's: the row plus its gap.
 const ROW_STRIDE_PX: u16 = ROW_HEIGHT_PX + ROW_GAP_PX;
 
-/// The row's inset from its leading and trailing edges at rest, in logical
-/// pixels (design D3). The hovered row narrows its leading inset to the grip's
-/// slot.
+/// The row's inset from its leading and trailing edges, in logical
+/// pixels (design D3).
 pub(super) const ROW_INSET_PX: u16 = 10;
 
 /// The gap between a row's cells, in logical pixels (design D3): the ordinal,
@@ -73,19 +72,6 @@ pub(in crate::window::components) const MENU_DROP_PX: u16 = 4;
 /// The canvas's row-menu overlap into its anchor row, in logical pixels (the
 /// `Menus.dc.html` menu sits over the row's bottom edge, not under it).
 pub(super) const MENU_OVERLAP_PX: u16 = 6;
-
-/// The row height as the capacity divides by, in logical pixels.
-const ROW_HEIGHT: f32 = ROW_HEIGHT_PX as f32;
-
-/// The hovered row's six-dot grip: the icon's size in logical pixels, and the
-/// row offset that centres it in the row. The centring is a layout offset,
-/// not a `-translate-y-1/2` (task 11.1): Blitz lays out without the
-/// `translate` property and applies it at paint only, so a translated grip
-/// would paint centred while the `rowGrip` region its parent reports — the
-/// region the core's hit map holds — stayed half a grip low. The layout box
-/// is the box the grip paints, so the region is the control.
-pub(super) const GRIP_SIZE_PX: u16 = 14;
-pub(super) const GRIP_TOP_PX: f32 = (ROW_HEIGHT - GRIP_SIZE_PX as f32) / 2.0;
 
 /// The painted index of the item row holding `slot`, if it is a painted row.
 fn slot_index(queue: &GuiQueue, slot: u64) -> Option<usize> {

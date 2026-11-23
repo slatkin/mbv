@@ -6,9 +6,15 @@ impl App {
         self.queue_epoch.advance();
     }
 
-    pub fn spawn_sessions_load(&mut self) {
+    pub(in crate::app) fn spawn_sessions_load(&mut self) {
+        if self.sessions_loading {
+            return;
+        }
         self.sessions_loading = true;
         let Some(client) = self.emby_snapshot() else {
+            // Nothing is in flight without a client: the flag must not stay
+            // set, or every later load would be skipped as a duplicate.
+            self.sessions_loading = false;
             return;
         };
         let tx = self.channels.sessions_tx.clone();

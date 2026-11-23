@@ -111,6 +111,9 @@ pub enum GuiOverlayProjection {
     TargetChooser {
         cursor: usize,
         choices: Vec<PlaybackTargetChoice>,
+        /// Whether a target refresh is in flight, so the chooser's Refresh
+        /// row paints busy.
+        refreshing: bool,
     },
     /// The Queue chooser (gui-named-queues design D8): the cursor, the local
     /// queues in queue order followed by the connected peer, and the rename
@@ -287,6 +290,7 @@ impl GuiCore {
             Some(GuiOverlay::TargetChooser(chooser)) => Some(GuiOverlayProjection::TargetChooser {
                 cursor: chooser.cursor,
                 choices: playback.target_choices.clone(),
+                refreshing: self.gui_playback_target_refresh_busy(),
             }),
             // The Queue chooser's entries are the same live list its keys
             // resolve against, so the rows it paints and the rows a press or

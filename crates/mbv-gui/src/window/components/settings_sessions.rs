@@ -12,6 +12,7 @@ use crate::window::components::settings_entry_row::SettingsEntryRow;
 use crate::window::components::settings_screen::{
     SETTINGS_PANES_GRID_STYLE, SettingsPaneScaffold, settings_pane,
 };
+use crate::window::icons::RefreshCcwDot;
 use crate::window::settings::entries::entry_id;
 
 /// The one Sessions pane.
@@ -26,9 +27,14 @@ pub fn SettingsSessions() -> Element {
     else {
         return rsx! {};
     };
-    let GuiSettingsContent::Sessions { targets } = &frame.content else {
+    let GuiSettingsContent::Sessions {
+        targets,
+        refreshing,
+    } = &frame.content
+    else {
         return rsx! {};
     };
+    let refreshing = *refreshing;
 
     rsx! {
         div {
@@ -51,6 +57,31 @@ pub fn SettingsSessions() -> Element {
                                 label: target.label.clone(),
                                 trailing: target.is_active.then(|| "● Active".to_owned()),
                             }
+                        }
+                    }
+                }
+                {
+                    // The Refresh control: the Sessions section's own button,
+                    // below the targets. It sends the header chooser's Refresh
+                    // command, so a press starts one discovery; while one runs
+                    // the label says so and the button dims.
+                    let id = entry_id::targets_refresh();
+                    let row_press = onpress;
+                    rsx! {
+                        SettingsEntryRow {
+                            key: "{id}",
+                            id: id.clone(),
+                            cursor: cursor_id.as_deref() == Some(id.as_str()),
+                            onpress: row_press,
+                            label: if refreshing { "Refreshing…" } else { "Refresh" },
+                            trailing: None,
+                            // The refresh glyph spins while a discovery runs.
+                            leading: rsx! {
+                                RefreshCcwDot {
+                                    size: 14,
+                                    class: if refreshing { "animate-spin" } else { "" },
+                                }
+                            },
                         }
                     }
                 }

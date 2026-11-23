@@ -1,8 +1,8 @@
 //! Headless tests of the Queue panel (D16): the contracts of
 //! `QueuePanel.test.ts` the window's port keeps — the frame's viewport rows
 //! with their watched, active, and partial-progress states, the progress ring,
-//! the right column's duration, the empty-queue state, the hovered row's grip
-//! and actions button, the open row menu's chrome and hints, the drag's ghost
+//! the right column's duration, the empty-queue state, the hovered row's
+//! hover fill, the open row menu's chrome and hints, the drag's ghost
 //! and insertion line, and the capacity and region targets the panel reports —
 //! plus the two region-order
 //! contracts

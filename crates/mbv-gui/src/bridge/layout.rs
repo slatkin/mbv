@@ -100,11 +100,12 @@ impl RegionTarget {
     #[must_use]
     pub(crate) fn owns_gui_overlay(&self) -> bool {
         match self {
-            // A chooser, popover, or row-menu row; the row menu's opener; and
-            // the chips and the playback-target control whose presses toggle
+            // A chooser, popover, or row-menu row; the chips and the
+            // playback-target control whose presses toggle
             // their overlay (a sibling chip's press swaps the open popover).
             Self::QueuePlayback(
                 QueuePlaybackTargetId::TargetChoice(_)
+                | QueuePlaybackTargetId::RefreshTargets
                 | QueuePlaybackTargetId::TrackPopoverChoice(_)
                 | QueuePlaybackTargetId::AudioChip
                 | QueuePlaybackTargetId::SubtitleChip
@@ -113,7 +114,6 @@ impl RegionTarget {
             )
             | Self::Queue(
                 QueueTargetId::RowMenuEntry(_)
-                | QueueTargetId::RowActions(_)
                 | QueueTargetId::QueueChooser
                 | QueueTargetId::QueueChooserEntry(_)
                 | QueueTargetId::QueueChooserPeer,
@@ -179,12 +179,6 @@ pub enum QueueTargetId {
     Slot(u64),
     /// The playlist pill in the queue footer.
     PlaylistPill,
-    /// The row's drag grip, which the window paints on the hovered row. A
-    /// press starts the row drag; the number is the row's `QueueSlotId::raw`.
-    RowGrip(u64),
-    /// The row's actions button, which the window paints on the hovered row.
-    /// A press opens the row menu for that slot.
-    RowActions(u64),
     /// One entry of the open row menu: the entry's index in the section's
     /// overlay `entries` list. A press executes the entry.
     RowMenuEntry(usize),
@@ -253,6 +247,10 @@ pub enum QueuePlaybackTargetId {
     /// One row of the open playback-target chooser: the choice's index in
     /// the `targetChoices` list.
     TargetChoice(usize),
+    /// The open playback-target chooser's Refresh row, below the choices: a
+    /// press starts the same session and cast discovery the TUI's F3 refresh
+    /// starts, and the chooser stays open.
+    RefreshTargets,
     /// The audio chip: a press toggles its track popover.
     AudioChip,
     /// The subtitle chip: a press toggles its track popover. The video

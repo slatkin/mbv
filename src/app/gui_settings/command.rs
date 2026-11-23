@@ -132,6 +132,9 @@ pub enum GuiSettingsCommand {
     KeysClear { target: String },
     /// Select a playback target (row 5.5).
     SelectTarget { target: ChooserTargetKey },
+    /// Refresh the playback targets the Sessions section lists — the session
+    /// list and the cast receivers — as the header chooser's Refresh row does.
+    RefreshSessions,
     /// Reset the GUI's UI state (row 5.6, design D10).
     ResetUiState,
 }
@@ -217,6 +220,7 @@ impl GuiCore {
             GuiSettingsCommand::SelectTarget { target } => {
                 self.apply_gui_settings_select_target(&target);
             }
+            GuiSettingsCommand::RefreshSessions => self.refresh_playback_targets(),
             // The reset's steps span the App and the core thread (design D10):
             // the GUI's tick host applies the whole reset through
             // `CoreThread::reset_gui_ui_state`, so the Client core's arm starts

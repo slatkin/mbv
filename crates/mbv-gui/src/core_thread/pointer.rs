@@ -23,9 +23,7 @@ use super::CoreThread;
 
 impl CoreThread {
     /// The Queue row the pointer rests on, the shared region rule the leaf's
-    /// click path resolves with too: the row's own region or the chrome
-    /// painted over it (its grip and actions button), so moving onto the
-    /// chrome keeps the row hovered.
+    /// click path resolves with too: the row's own region.
     pub(super) fn queue_row_at(&self, at: Position) -> Option<QueueSlotId> {
         row_slot_at(&self.regions, at)
     }
@@ -76,8 +74,7 @@ impl CoreThread {
             .and_then(|bar| self.playback.seek_target(bar, event.position.x));
         self.playback.set_scrubber_hover(hover);
         // The canvas queue's row hover (add-tauri-gui-client row 6.5): the row
-        // the pointer rests on, its chrome regions included. The window paints
-        // the hovered row's grip and actions button.
+        // the pointer rests on. The window paints that row's hover fill.
         let row_hover = self.queue_row_at(event.position);
         self.queue.set_hover(row_hover);
         // An open overlay owns the keyboard and the window's presses: a press
@@ -200,10 +197,23 @@ impl CoreThread {
     /// the drop and the release sends the move request, both through the leaf
     /// entry so a message the drag arm returns is dispatched, never dropped.
     /// Returns whether the drag owned the gesture; `false` leaves it to the
-    /// generic region path (a drag that started off a grip is no row drag).
+    /// generic region path (a drag whose press anchor landed off the rows is
+    /// no row drag — the seekbar's scrub keeps the generic path).
     fn route_row_drag_gesture(&mut self, gesture: PointerGesture<Position>) -> bool {
         if self.queue.row_drag().is_none() {
-            return false;
+            // A drag begins on the first motion after a press on a row (user
+            // request 2026-11-23: the rows carry no grip): the gesture's press
+            // anchor names the row the press landed on. A press with no
+            // motion arms no drag, so a plain click paints no drag chrome.
+            let PointerGesture::Drag { from, .. } = gesture else {
+                return false;
+            };
+            let Some(slot) = row_slot_at(&self.regions, from) else {
+                return false;
+            };
+            if !self.queue.begin_row_drag(slot) {
+                return false;
+            }
         }
         let Self {
             core,

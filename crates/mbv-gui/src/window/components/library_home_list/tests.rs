@@ -20,6 +20,7 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use mbv_queue::QueueItemContentId;
+use rstest::rstest;
 
 use super::LibraryHomeList;
 use crate::bridge::frame::library::{
@@ -631,5 +632,36 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
             row: mbv::GuiLibraryMenuRow::Home(mbv::GuiHomeRowId::Continue("e1".to_owned())),
         }],
         "the row-menu command names the row's item id"
+    );
+}
+
+/// Contract (user request 2026-11-23): a `Recently added` row paints its
+/// played mark before the date, labelled by the row's played state, and a
+/// `Continue watching` row paints none.
+#[rstest]
+#[case::played(GuiHomeRowStateFrame::Played, "Played")]
+#[case::unplayed(GuiHomeRowStateFrame::Ordinary, "Unplayed")]
+fn a_recent_row_paints_its_played_mark_and_a_continue_row_none(
+    #[case] state: GuiHomeRowStateFrame,
+    #[case] label: &str,
+) {
+    let mut frame = home_frame();
+    frame.rows[5] = GuiHomeRowFrame::Item(GuiHomeItemRowFrame { state, ..added() });
+    let mut fixture = built(frame, home_detail());
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-home-row-id=\"home-recent:Feed:f1\"] [data-library-home-date] [aria-label]",
+            "aria-label"
+        ),
+        [label.to_owned()],
+        "the recent row's mark names its played state"
+    );
+    assert!(
+        !fixture.presents(
+            "[data-library-home-row-id^=\"home-continue:\"] [data-library-home-played-mark]"
+        ),
+        "a continue row paints no played mark"
     );
 }

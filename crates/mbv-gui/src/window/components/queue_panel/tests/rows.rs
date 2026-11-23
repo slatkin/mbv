@@ -88,7 +88,8 @@ fn durations(fixture: &Fixture) -> Vec<Option<String>> {
 }
 
 /// Contract (spec `gui-client` "Rows show their state", design D3): the row's
-/// progress ring paints after the title — on a partial row and on the
+/// progress ring paints in the right column, directly before the duration —
+/// on a partial row and on the
 /// now-playing row, which follows the playhead — and a new or watched row
 /// carries none. The `data-progress` value is the percent the ring fills to.
 #[test]
@@ -112,6 +113,45 @@ fn only_a_row_with_progress_paints_the_ring() {
     assert_eq!(
         ring_percents(&fixture),
         vec![None, Some("42".to_owned()), None, Some("30".to_owned())]
+    );
+
+    // The ring and the duration paint as one cluster in the right column
+    // (user request 2026-11-23): the ring's parent carries the column's fixed
+    // width, and the ring paints before the duration in it.
+    let dom = fixture.doc.inner.borrow();
+    let ring_id = *fixture
+        .all("[data-slot=\"2\"] [data-progress]")
+        .first()
+        .expect("the partial row paints its ring");
+    let duration_id = *fixture
+        .all("[data-slot=\"2\"] [data-duration]")
+        .first()
+        .expect("the partial row paints its duration");
+    let ring = dom.get_node(ring_id).expect("the ring node paints");
+    let column = dom
+        .get_node(ring.parent.expect("the ring paints in the column"))
+        .expect("the column paints");
+    assert!(
+        column
+            .attr(local_name!("style"))
+            .unwrap_or_default()
+            .contains("width: 96px"),
+        "{}",
+        column.attr(local_name!("style")).unwrap_or_default()
+    );
+    let ring_position = column
+        .children
+        .iter()
+        .position(|id| *id == ring_id)
+        .expect("the ring paints in the column");
+    let duration_position = column
+        .children
+        .iter()
+        .position(|id| *id == duration_id)
+        .expect("the duration paints in the column");
+    assert!(
+        ring_position < duration_position,
+        "the ring leads the duration"
     );
 }
 
@@ -230,7 +270,9 @@ fn only_a_marked_row_paints_the_raised_fill() {
 
 /// Contract (`gui-queue-panel-redesign` design D9): a hovered row paints the
 /// hover fill, while a marked row keeps its raised fill under the pointer
-/// resting on its neighbour.
+/// resting on its neighbour. The hover paints no chrome of its own (user
+/// request 2026-11-23): the hovered row keeps its ordinal, its cells, and its
+/// own insets, and the row's drag starts on motion after a press.
 #[test]
 fn the_hovered_row_paints_the_hover_fill() {
     let mut rows_frame = queue(vec![item(1), item(2)]);
@@ -249,60 +291,8 @@ fn the_hovered_row_paints_the_hover_fill() {
             .contains(&format!("background: {}", ef_var(EfToken::Bg3))),
         "the marked row keeps its fill"
     );
-}
-
-/// Contract (`QueuePanel.test.ts`, the Menus artboard B.3): the hovered row
-/// alone paints the grip and the actions button — the grip's six dots in the
-/// leading slot, the row-height actions box in the canvas's fill and radius over
-/// the empty space at the row's trailing end, the row filled with the hover
-/// colour, and its title ellipsised in the hover text.
-#[test]
-fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
-    let rows = vec![item(1), item(2), item(3)];
-    let mut rows_frame = queue(rows);
-    rows_frame.hover = Some(2);
-    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
-
-    assert_eq!(fixture.all("[data-grip]").len(), 1);
-    assert_eq!(fixture.all("[data-actions]").len(), 1);
-    assert_eq!(fixture.all("[data-row=\"2\"] [data-grip] circle").len(), 6);
-    assert!(!fixture.presents("[data-row=\"2\"] [data-ordinal]"));
-    assert!(fixture.presents("[data-row=\"1\"] [data-ordinal]"));
-    assert_eq!(
-        fixture
-            .attr_of("[data-actions]", local_name!("aria-label"))
-            .as_deref(),
-        Some("Row actions")
-    );
-    let actions_style = fixture.style_of("[data-actions]");
-    assert!(actions_style.contains("width: 40px"), "{actions_style}");
-    assert!(actions_style.contains("height: 40px"), "{actions_style}");
-    assert!(
-        actions_style.contains("border-radius: 6px"),
-        "{actions_style}"
-    );
-    assert!(
-        actions_style.contains("background: var(--canvas-action)"),
-        "{actions_style}"
-    );
-
-    // The hovered row reserves the button's width at its trailing end and
-    // paints the hover fill (design D9).
-    let row_style = fixture.style_of("[data-slot=\"2\"]");
-    assert!(
-        row_style.contains("padding-inline: 4px 42px"),
-        "{row_style}"
-    );
-    assert!(
-        row_style.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
-        "{row_style}"
-    );
-    assert!(row_style.contains("border-radius: 0px"), "{row_style}");
-    let title = fixture.style_of("[data-slot=\"2\"] .truncate");
-    assert!(
-        title.contains(&format!("color: {}", ef_var(EfToken::Fg))),
-        "{title}"
-    );
+    assert!(fixture.presents("[data-row=\"2\"] [data-ordinal]"));
+    assert!(hovered.contains("padding-inline: 10px"), "{hovered}");
 }
 
 /// Contract (user request 2026-11-17): a list longer than its viewport paints

@@ -426,7 +426,7 @@ A pointer press, drag, or wheel step on the player panel SHALL resolve to the se
 #### Scenario: The slice gestures
 
 - **WHEN** the user uses the pointer on the panel
-- **THEN** the panel supports row selection, row activation, the row-actions button and menu, row drag, wheel scrolling, the transport controls, the scrubber, the track chips and their popovers, the playback-target chooser, and the collapse and fold controls
+- **THEN** the panel supports row selection, row activation, the row menu, row drag, wheel scrolling, the transport controls, the scrubber, the track chips and their popovers, the playback-target chooser, and the collapse and fold controls
 
 #### Scenario: A queue row is clicked
 
@@ -523,12 +523,12 @@ The panel SHALL show one chip each for the video stream, the audio track, and th
 
 ### Requirement: The queue shows a row menu and drag reorder
 
-The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Every row SHALL have the same fixed height and SHALL carry its queue ordinal, its title, and a right column. The right column SHALL show the item's duration in every row state. A row with progress (partly played, or now playing) SHALL show a progress ring after its title; the ring SHALL be the row's only progress mark and SHALL NOT add height to the row. The now-playing row's ring SHALL follow the playhead. Music is a no-progress media type: a music row SHALL show no ring, whether it is playing or not. A row SHALL show no time-left text, no start mark, and no state glyph in the right column. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
+The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Every row SHALL have the same fixed height and SHALL carry its queue ordinal, its title, and a right column. The right column SHALL show the item's duration in every row state. A row with progress (partly played, or now playing) SHALL show a progress ring in its right column, directly before the duration, so the ring and the duration read as one cluster; the ring SHALL be the row's only progress mark and SHALL NOT add height to the row. The now-playing row's ring SHALL follow the playhead. Music is a no-progress media type: a music row SHALL show no ring, whether it is playing or not. A row SHALL show no time-left text, no start mark, and no state glyph in the right column. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
 
 #### Scenario: Rows show their state
 
 - **WHEN** the queue holds a watched row, the active row, and a row with partial progress
-- **THEN** the watched row is struck through, the active row is filled, and the partial row shows a progress ring after its title
+- **THEN** the watched row is struck through, the active row is filled, and the partial row shows a progress ring in its right column, directly before the duration
 - **AND** every row has the same height, the partial row included
 - **AND** each row carries its 1-based queue ordinal as the canvas paints it
 
@@ -575,11 +575,11 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 #### Scenario: A row is hovered
 
 - **WHEN** the pointer is over a queue row
-- **THEN** the row paints the canvas's hovered row: the grip replaces the row's ordinal and the row-actions button shows at the row's end
+- **THEN** the row paints the canvas's hovered row: the hover fill, with the row's ordinal and cells unchanged
 
 #### Scenario: The row menu opens
 
-- **WHEN** the row-actions button is pressed
+- **WHEN** the user right-clicks the row
 - **THEN** the menu opens with Play now (`⏎`), Play next (`n`), Mark watched (`w`), Go to episode (`g`), and Remove from queue (`dd`)
 
 #### Scenario: The destructive entry is distinct
@@ -594,7 +594,7 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 
 #### Scenario: A row is dragged
 
-- **WHEN** the user drags a row to a new position and releases
+- **WHEN** the user presses a row and drags it to a new position and releases
 - **THEN** the queue shows an insertion line and a drag ghost during the drag
 - **AND** the Player owner of the shown queue moves the slot to the new position
 

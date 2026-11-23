@@ -93,6 +93,7 @@ impl Fixture {
 /// A Sessions content: the local output and one Emby session.
 fn sessions_content() -> GuiSettingsContent {
     GuiSettingsContent::Sessions {
+        refreshing: false,
         targets: vec![
             crate::bridge::frame::playback::GuiTargetChoice {
                 key: crate::bridge::frame::playback::GuiTargetKey::Local,

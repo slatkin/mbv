@@ -33,19 +33,39 @@ impl GuiCore {
     /// Sessions sidebar applies (`request_sidebar_toggle`). The chooser
     /// opens even with no remote targets to list, as the sidebar does. The
     /// cursor starts on the Owner's attached output, as the popover's
-    /// starts on the chosen track.
+    /// starts on the chosen track. Opening refreshes the chooser's list — the
+    /// session list and the cast receivers — exactly as the TUI's F3 open
+    /// does; closing refreshes nothing.
     pub(in crate::app) fn toggle_gui_target_chooser(&mut self) {
-        self.gui.overlay = if let Some(GuiOverlay::TargetChooser(_)) = &self.gui.overlay {
-            None
-        } else {
-            let cursor = self
-                .app
-                .playback_target_choices()
-                .iter()
-                .position(|choice| choice.is_active)
-                .unwrap_or(0);
-            Some(GuiOverlay::TargetChooser(TargetChooserState { cursor }))
-        };
+        if let Some(GuiOverlay::TargetChooser(_)) = &self.gui.overlay {
+            self.gui.overlay = None;
+            return;
+        }
+        let cursor = self
+            .app
+            .playback_target_choices()
+            .iter()
+            .position(|choice| choice.is_active)
+            .unwrap_or(0);
+        self.gui.overlay = Some(GuiOverlay::TargetChooser(TargetChooserState { cursor }));
+        self.refresh_playback_targets();
+    }
+
+    /// Refresh the playback-target list a chooser and the Settings Sessions
+    /// section paint: the session load and the cast browse, through the
+    /// startup entry that retries until an Emby client exists. A refresh while
+    /// either half runs starts no second one (each half holds its in-flight
+    /// guard), and an open chooser stays open.
+    pub(in crate::app) fn refresh_playback_targets(&mut self) {
+        self.app.request_playback_target_refresh();
+    }
+
+    /// Whether a playback-target refresh is in flight, for the GUI's busy
+    /// paint. The refresh half the list needs is the cast browse even with no
+    /// Emby client, so a cast browse counts on its own.
+    #[must_use]
+    pub fn gui_playback_target_refresh_busy(&self) -> bool {
+        self.app.playback_target_discovery_busy()
     }
 
     /// Select the playback target a stable `SessionTargetKey` names,
