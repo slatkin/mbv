@@ -10,6 +10,7 @@ use crate::app::{
     BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, MusicEvent, PlayerEventDrain,
     SeriesEvent,
 };
+use mbv_ui_msg::{Msg, TerminalObserverEvent};
 
 impl Model {
     /// Drain the Emby startup and Emby setup worker channels through the
@@ -344,6 +345,33 @@ impl Model {
         self.app.run_periodic_maintenance();
     }
 
+    /// Record this tick's right-press cell as the context-menu pointer and
+    /// mark it current (design D6), before any of the tick's messages is
+    /// drained.
+    ///
+    /// `Application::tick` returns the focused component's message first and
+    /// the `UiRoot` observer's second, and both folds keep that order. A
+    /// right-click on a row of the *focused* panel therefore raises its menu
+    /// request before the observer reports the press, so a shell that learned
+    /// the pointer only from the observer would open that menu at the
+    /// keyboard anchor. Reading the raw tick messages here makes every
+    /// right-click raise pointer-anchored regardless of delivery order. The
+    /// flag still resets every tick, so a keyboard opening keeps the
+    /// selected-item anchor.
+    pub(in crate::app) fn record_right_press(&mut self, messages: &[Msg]) {
+        self.menu_pointer_current = false;
+        let cell = messages.iter().find_map(|msg| match msg {
+            Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { column, row }) => {
+                Some((*column, *row))
+            }
+            _ => None,
+        });
+        if let Some(cell) = cell {
+            self.menu_pointer = Some(cell);
+            self.menu_pointer_current = true;
+        }
+    }
+
     /// Poll the terminal, arbitrate the keyboard router, and dispatch the
     /// resulting messages. Returns whether the session asked to quit.
     pub(super) fn tick_terminal_messages(
@@ -377,6 +405,10 @@ impl Model {
         let Ok(messages) = ticked else {
             return true;
         };
+        // Design D6: record this tick's right press before any message is
+        // drained, so a menu request the focused panel raises is anchored at
+        // the pointer whatever order the tick delivered the messages in.
+        self.record_right_press(&messages);
         // ADR 0024: fold the mouse-derived messages (one per eligible
         // subscribed component) down to at most one before the keyboard
         // router fold and `handle_terminal_message` dispatch. A keyboard
@@ -386,9 +418,6 @@ impl Model {
             return false;
         }
         *had_events = true;
-        // This tick's dispatch starts fresh: a right-click in this tick sets
-        // `menu_pointer_current` again before any menu request is handled.
-        self.menu_pointer_current = false;
         // `PollStrategy::Once` delivers at most one terminal event per
         // tick, so this runs 0 or 1 times; `quit` handles the legacy
         // `handle_key`-returns-true loop break without a labelled

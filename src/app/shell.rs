@@ -199,7 +199,9 @@ pub struct Model {
     /// being dispatched. A right-click and the component request it raises
     /// reach the shell in one tick, so this is what separates a pointer
     /// opening (anchor at `menu_pointer`) from a keyboard opening (keep the
-    /// core's selected-item anchor). Reset at the start of every tick.
+    /// core's selected-item anchor). Recorded from the tick's raw messages
+    /// before any is drained (`Model::record_right_press`) and reset every
+    /// tick.
     pub(in crate::app) menu_pointer_current: bool,
     pub(in crate::app) context_action_snapshot: Option<
         mbv_ui_model::context_menu::ContextActionSnapshot<
@@ -430,8 +432,12 @@ fn apply_terminal_observer(
         // clear plus focus restore; the mouse event's own delivery and
         // handling are unchanged.
         // A right press on any surface records the context-menu pointer the
-        // shell places a pointer-anchored menu against (design D6). It is
-        // also a mouse event, so it disarms prefix mode like every other.
+        // shell places a pointer-anchored menu against (design D6). The tick
+        // already recorded it before draining any message
+        // (`Model::record_right_press`), because the focused panel's own
+        // request arrives first; this repeats the record for a tick that
+        // reaches the observer by another route. It is also a mouse event, so
+        // it disarms prefix mode like every other.
         TerminalObserverEvent::MouseRightClick { column, row } => {
             model.menu_pointer = Some((*column, *row));
             model.menu_pointer_current = true;

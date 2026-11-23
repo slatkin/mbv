@@ -8,11 +8,13 @@
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::podcast::add_emby_movie_library;
 use super::*;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use mbv_components::ContextMenuComponent;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_model::overlay::OverlayRequest;
-use mbv_ui_msg::{ComponentId, Msg, OverlayId};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, TerminalObserverEvent};
 use ratatui::layout::Rect;
+use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 /// Convert a render-layer rectangle to the neutral presentation `Rect`
 /// (`extract-client-core` task 1.2): the tests read painted geometry as
@@ -382,4 +384,93 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
         rect.right() <= column.right() && rect.bottom() <= column.bottom(),
         "the slot menu must clamp inside the queue column {column:?}: {rect:?}"
     );
+}
+
+/// Regression guard for the 1-decouple-client-core review (design D6): a
+/// right-click on a row of the *focused* panel must open a pointer-anchored
+/// menu.
+///
+/// `Application::tick` returns the focused component's message before the
+/// `UiRoot` observer's, and both folds keep that order, so this tick delivers
+/// the queue's `RowContextMenu` first and `MouseRightClick` second. Learning
+/// the pointer only from the observer left this, the common case, anchored at
+/// the keyboard's selected item.
+#[test]
+fn focused_panel_right_click_opens_a_pointer_anchored_menu() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let app = crate::app::tests::render_fixtures::make_queue_app(2);
+    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+
+    let row = queue_selected_row(&mut harness);
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: row.x,
+        row: row.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+
+    // Pin the delivery order this regression is about: the focused panel's
+    // request first, the observer's right-press report second.
+    let request = message_index(&outcome.messages, |msg| {
+        matches!(
+            msg,
+            Msg::Shell(shell) if matches!(shell.as_ref(), ShellRequest::RowContextMenu(_))
+        )
+    });
+    let observed = message_index(&outcome.messages, |msg| {
+        matches!(
+            msg,
+            Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { .. })
+        )
+    });
+    let (Some(request), Some(observed)) = (request, observed) else {
+        panic!(
+            "a focused-panel right-click must raise a menu request and an observer report: {:?}",
+            outcome.messages
+        );
+    };
+    assert!(
+        request < observed,
+        "the focused panel's request must arrive before the observer's report"
+    );
+
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        menu_anchor(harness.model()),
+        ContextMenuAnchor::Pointer,
+        "a right-click in the focused panel must anchor the menu at the pointer"
+    );
+}
+
+/// The painted rect of the Queue panel's selected row.
+fn queue_selected_row(harness: &mut TickHarness) -> Rect {
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Queue)
+        .expect("queue mounted")
+        .as_any_mut()
+        .downcast_mut::<mbv_components::QueueComponent>()
+        .expect("queue component type")
+        .selected_row_rect()
+        .expect("queue painted selected row")
+}
+
+/// The index of the first message `matches` accepts.
+fn message_index(messages: &[Msg], matches: impl Fn(&Msg) -> bool) -> Option<usize> {
+    messages.iter().position(matches)
 }
