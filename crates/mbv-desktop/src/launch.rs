@@ -12,7 +12,6 @@
 //! and the core pass the claimed one.
 
 use std::fmt;
-use std::io::IsTerminal;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -247,13 +246,6 @@ pub fn notify(message: &str) {
             "notify-send could not run"
         ),
     }
-}
-
-/// Whether this process has an interactive stdin. A panel host reads it to
-/// tell a terminal launch from a desktop launch before it reports a failure.
-#[must_use]
-pub fn stdin_is_terminal() -> bool {
-    std::io::stdin().is_terminal()
 }
 
 #[cfg(test)]
