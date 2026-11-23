@@ -3,16 +3,17 @@
 //! entry a thin `main` calls.
 //!
 //! Everything here is the terminal program's own policy. The Owner link's
-//! find, start, and attach steps live in [`crate::owner_link`], shared with
+//! find, start, and attach steps live in [`crate::app::owner_link`], shared with
 //! the GUI Client.
 
 use std::io::IsTerminal;
 
+use crate::app::config::{self, Config, load_config};
+use crate::app::dispatch::session::owner_restart as owner_restart_follow_up;
+use crate::app::owner_link::{self, OwnerStartOptions, OwnerState};
 use crate::app::state::home_latest::capture_launch_window;
 use crate::app::{App, Model};
-use crate::config::{self, Config, load_config};
 use crate::local_daemon;
-use crate::owner_link::{self, OwnerStartOptions, OwnerState};
 use crate::owner_restart;
 use crate::pin;
 use crate::{ClientCapabilities, ClientCapability};
@@ -382,11 +383,11 @@ fn run_local_instance(config: &Config, log_level: Option<&applog::LogSpec>) {
                 run_tui(app);
                 return;
             }
-            Err(error) => match owner_restart::follow_up(&error, restart_requested) {
-                owner_restart::FollowUp::WaitForOwnerExit => {
+            Err(error) => match owner_restart_follow_up::follow_up(&error, restart_requested) {
+                owner_restart_follow_up::FollowUp::WaitForOwnerExit => {
                     state = wait_for_owner_exit();
                 }
-                owner_restart::FollowUp::Prompt => {
+                owner_restart_follow_up::FollowUp::Prompt => {
                     if !std::io::stdin().is_terminal() {
                         pin::fatal(format!("mbv: {error}"));
                     }
@@ -411,10 +412,10 @@ fn run_local_instance(config: &Config, log_level: Option<&applog::LogSpec>) {
                         }
                     }
                 }
-                owner_restart::FollowUp::RefuseSecondTerminal => {
+                owner_restart_follow_up::FollowUp::RefuseSecondTerminal => {
                     pin::fatal(owner_link::exclusive_owner_refusal_text(&error));
                 }
-                owner_restart::FollowUp::Other => {
+                owner_restart_follow_up::FollowUp::Other => {
                     pin::fatal(format!("mbv: failed to attach to Owner process: {error}"));
                 }
             },
@@ -465,7 +466,7 @@ mod tests {
     /// (`crates/mbv-config/src/tests/paths_env.rs`).
     #[test]
     fn crash_log_path_sits_in_mbv_config_state_dir_for_system_instances() {
-        let _sys_env = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+        let _sys_env = crate::app::config::tests::SYS_ENV_LOCK.lock().unwrap();
         mbv_config::set_test_env_var("MBV_SYSTEM", "1");
         let log_dir = crash_log_path().parent().map(std::path::Path::to_path_buf);
         let state_dir = mbv_config::state_dir();

@@ -22,7 +22,7 @@ pub(in crate::app) struct AudiobookshelfSetupForm {
 }
 
 impl EmbySetupForm {
-    fn new(config: &crate::config::Config, previous_state: ServiceState) -> Self {
+    fn new(config: &crate::app::config::Config, previous_state: ServiceState) -> Self {
         Self {
             fields: [
                 config.emby_setup.as_ref().map_or_else(

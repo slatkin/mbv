@@ -78,7 +78,7 @@ fn first_folder_selection_triggers_its_fetch_and_the_result_fills_the_cache(
     // The fetch decision needs a Service client; the stub client's fetch
     // fails against the default config and the assertion reads only the
     // synchronous decision mark.
-    install_test_emby(&mut app, crate::config::Config::default());
+    install_test_emby(&mut app, crate::app::config::Config::default());
     let active = seed_home_video_root_loaded(&mut app);
     seed_folder_counts(&mut app, &active.id, 2);
 
@@ -196,7 +196,7 @@ fn refresh_drops_caches_refetches_only_the_current_selection(make_home_video_app
 #[rstest]
 fn stale_selection_result_is_dropped(make_home_video_app: App) {
     let mut app = make_home_video_app;
-    install_test_emby(&mut app, crate::config::Config::default());
+    install_test_emby(&mut app, crate::app::config::Config::default());
     let active = seed_home_video_root_loaded(&mut app);
     seed_folder_counts(&mut app, &active.id, 2);
     app.select_feed_folder_group(0, 1);
@@ -480,7 +480,7 @@ fn selecting_an_uncached_pill_while_a_fetch_is_in_flight_hands_loading_over(
     make_home_video_app: App,
 ) {
     let mut app = make_home_video_app;
-    install_test_emby(&mut app, crate::config::Config::default());
+    install_test_emby(&mut app, crate::app::config::Config::default());
     let active = seed_home_video_root_loaded(&mut app);
     seed_folder_counts(&mut app, &active.id, 2);
 

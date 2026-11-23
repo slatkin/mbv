@@ -131,7 +131,7 @@ fn failed_album_index_becomes_unavailable() {
 
 #[test]
 fn recursive_activation_keeps_panel_focus_and_installs_path() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = recursive_music_app();
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;

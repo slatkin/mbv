@@ -86,7 +86,7 @@ impl App {
             .update_subtitle_prefs(|prefs| prefs.mode.clone_from(&new_mode));
         self.push_subtitle_prefs();
         if let Err(e) =
-            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
+            crate::app::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
         {
             tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }

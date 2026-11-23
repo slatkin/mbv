@@ -30,7 +30,7 @@ fn key(code: Key) -> Event<UserEvent> {
 #[test]
 fn configured_rebind_fires_through_tick() {
     let app = make_app_stub();
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
             sections: vec![(
@@ -113,7 +113,7 @@ fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
 #[test]
 fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
     let app = make_app_stub();
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
             sections: vec![(

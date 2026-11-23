@@ -199,7 +199,7 @@ fn checked_folder_ids<'a>(app: &'a App, folder_id: &str) -> Vec<&'a str> {
 /// `nav_stack`.
 #[test]
 fn opening_a_movies_library_lands_its_root_rows_on_the_app() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     // The open's listing and the store's paged fetch read the same catalog, so
     // a path-keyed answer follows each request's own path: the concurrent
@@ -233,7 +233,7 @@ fn opening_a_movies_library_lands_its_root_rows_on_the_app() {
 /// reads.
 #[test]
 fn opening_a_feed_view_library_loads_its_default_selection() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     // Every request this open path makes — the folder listing, the
     // destination Latest snapshot, and the default selection's fetch — reads
@@ -271,7 +271,7 @@ fn opening_a_feed_view_library_loads_its_default_selection() {
 /// what the TUI set.
 #[test]
 fn checking_a_feed_folder_loads_its_items_without_moving_the_tui_selection() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond_repeated(200, VIDEO_BODY, 4);
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
@@ -325,7 +325,7 @@ fn checking_a_feed_folder_loads_its_items_without_moving_the_tui_selection() {
 /// de-duplicated by id and sorted by date added, newest first.
 #[test]
 fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     // One answer per folder, so the two fetches cannot mis-script each other:
     // the shared item rides both folders' lists.
@@ -407,7 +407,7 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
 /// loaded list does not hold changes nothing.
 #[test]
 fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = MOVIES_ID.into();
@@ -445,7 +445,7 @@ fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
 /// the plain Emby-library one the open step reads.
 #[test]
 fn the_presented_tabs_include_the_plain_emby_libraries() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.music_levels = vec!["group".to_string(), "album".to_string()];
     let mut music = make_item("Music", "CollectionFolder");
@@ -518,7 +518,7 @@ fn plain_movies_app(items: Vec<EmbyItem>) -> App {
 /// facts with no Workspace, and the mode carries no pill at all.
 #[test]
 fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = plain_movies_app(vec![
         {
             let mut item = movie_item(
@@ -630,7 +630,7 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
 /// with the year gutter and no rail letter, and the mode's flag is set.
 #[test]
 fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = FEED_ID.into();
@@ -728,7 +728,7 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
 /// `hero_item` is the TUI's own rule.
 #[test]
 fn a_folder_or_a_boxset_row_paints_no_hero() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut boxset = make_item("Boxset", "BoxSet");
     boxset.id = "box-1".into();
     let mut app = plain_movies_app(vec![boxset]);
@@ -771,7 +771,7 @@ fn row_image() -> image::DynamicImage {
 /// declares none is the no-source state.
 #[test]
 fn the_plain_mode_rows_paint_their_row_art() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut tagged = movie_item("m-1", "A Movie", 1999, 0);
     tagged.image_tags.thumb = "t1".into();
     let key = mbv_images::row::emby_row_request(&tagged, false).cache_key;

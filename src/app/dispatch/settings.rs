@@ -113,7 +113,7 @@ impl App {
     pub(crate) fn flush_settings_save(&mut self) {
         if self.settings_save_at.take().is_some() {
             let cfg = self.config.lock().unwrap().clone();
-            crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
+            crate::app::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
     }
 
@@ -661,7 +661,7 @@ impl App {
             p.audio_lang.clone_from(&cfg.audio_lang);
         });
         if let Err(e) =
-            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
+            crate::app::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
         {
             tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }
@@ -699,7 +699,8 @@ impl App {
             MultiSelectKind::MyLanguages => unreachable!(),
         }
         let cfg = self.config.lock().unwrap().clone();
-        if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
+        if let Err(e) =
+            crate::app::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
         {
             tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }

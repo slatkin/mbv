@@ -58,7 +58,7 @@ impl App {
     }
 
     pub(crate) fn load_prefs() -> serde_json::Value {
-        let path = crate::config::prefs_path();
+        let path = crate::app::config::prefs_path();
         std::fs::read_to_string(path)
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
@@ -69,14 +69,14 @@ impl App {
     /// key, write it back (design D4). Each Client persists its own keys this
     /// way; the core never writes them from `save_prefs`.
     pub fn save_client_pref(key: &str, value: serde_json::Value) {
-        let path = crate::config::prefs_path();
+        let path = crate::app::config::prefs_path();
         let mut v = read_prefs_object(&path);
         v[key] = value;
         write_prefs_object(&path, &v);
     }
 
     pub(in crate::app) fn save_prefs(&self) {
-        let path = crate::config::prefs_path();
+        let path = crate::app::config::prefs_path();
         // Launch state is written only by the exit snapshot path; these
         // writes are for unrelated preferences.
         let mut v = read_prefs_object(&path);
@@ -112,8 +112,8 @@ mod prefs_tests {
 
     /// Each prefs test writes its own prefs file, so the tests never race on
     /// one shared file.
-    fn stub() -> (App, crate::config::TestStateDirGuard) {
-        let guard = crate::config::TestStateDirGuard::new();
+    fn stub() -> (App, crate::app::config::TestStateDirGuard) {
+        let guard = crate::app::config::TestStateDirGuard::new();
         (crate::app::tests::make_app_stub(), guard)
     }
 

@@ -68,7 +68,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
 /// gate).
 #[test]
 fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let http = mbv_net::mock_http::MockHttp::new();
     let mut config = app.config.lock().unwrap().clone();

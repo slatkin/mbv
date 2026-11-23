@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn teardown_flushes_pending_settings_save() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.config.lock().unwrap().consume_audio = true;
     app.settings_save_at = Some(Instant::now());
@@ -12,12 +12,12 @@ fn teardown_flushes_pending_settings_save() {
         crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
     );
 
-    assert!(crate::config::load_config().unwrap().consume_audio);
+    assert!(crate::app::config::load_config().unwrap().consume_audio);
 }
 
 #[test]
 fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.config.lock().unwrap().auto_reconnect = true;
     app.active_route = Some("music".to_string());
@@ -28,8 +28,8 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
     );
 
     assert_eq!(
-        crate::config::load_last_remote_connection().unwrap(),
-        Some(crate::config::LastRemoteConnection::LibraryRoute {
+        crate::app::config::load_last_remote_connection().unwrap(),
+        Some(crate::app::config::LastRemoteConnection::LibraryRoute {
             library: "music".to_string()
         })
     );
@@ -37,9 +37,9 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
 
 #[test]
 fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _ = crate::config::save_last_remote_connection(Some(
-        &crate::config::LastRemoteConnection::LibraryRoute {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _ = crate::app::config::save_last_remote_connection(Some(
+        &crate::app::config::LastRemoteConnection::LibraryRoute {
             library: "music".to_string(),
         },
     ));
@@ -56,8 +56,8 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     // existed must be left exactly as it was, not cleared just because
     // `active_route` is currently `None`.
     assert_eq!(
-        crate::config::load_last_remote_connection().unwrap(),
-        Some(crate::config::LastRemoteConnection::LibraryRoute {
+        crate::app::config::load_last_remote_connection().unwrap(),
+        Some(crate::app::config::LastRemoteConnection::LibraryRoute {
             library: "music".to_string()
         })
     );
@@ -70,9 +70,9 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
 // changed the connection this run must not clear it.
 #[test]
 fn teardown_without_a_remote_keeps_the_saved_target() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _ = crate::config::save_last_remote_connection(Some(
-        &crate::config::LastRemoteConnection::DirectSession {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _ = crate::app::config::save_last_remote_connection(Some(
+        &crate::app::config::LastRemoteConnection::DirectSession {
             device_name: "music".to_string(),
         },
     ));
@@ -85,8 +85,8 @@ fn teardown_without_a_remote_keeps_the_saved_target() {
     );
 
     assert_eq!(
-        crate::config::load_last_remote_connection().unwrap(),
-        Some(crate::config::LastRemoteConnection::DirectSession {
+        crate::app::config::load_last_remote_connection().unwrap(),
+        Some(crate::app::config::LastRemoteConnection::DirectSession {
             device_name: "music".to_string(),
         })
     );
@@ -97,9 +97,9 @@ fn teardown_without_a_remote_keeps_the_saved_target() {
 // the record the previous run saved and the next launch stays local.
 #[test]
 fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _ = crate::config::save_last_remote_connection(Some(
-        &crate::config::LastRemoteConnection::DirectSession {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _ = crate::app::config::save_last_remote_connection(Some(
+        &crate::app::config::LastRemoteConnection::DirectSession {
             device_name: "music".to_string(),
         },
     ));
@@ -117,7 +117,10 @@ fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
         crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
     );
 
-    assert_eq!(crate::config::load_last_remote_connection().unwrap(), None);
+    assert_eq!(
+        crate::app::config::load_last_remote_connection().unwrap(),
+        None
+    );
 }
 
 // Owns daemon-lifecycle "Swapped-out TUI with Stay Alive off" (tray-pin-swap
@@ -129,7 +132,7 @@ fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
 // (dispatch/run_loop/teardown.rs), which observes the attempted request.
 #[test]
 fn swapped_out_teardown_sends_no_shutdown_request() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_app_stub();
     app.config.lock().unwrap().stay_alive = false;

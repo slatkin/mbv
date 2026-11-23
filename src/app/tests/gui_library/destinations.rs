@@ -88,7 +88,7 @@ fn the_current_tab_names_the_movies_destination() {
 /// nothing else.
 #[test]
 fn a_music_items_row_menu_leaves_out_the_played_toggle() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let app = app_with_stored_groups(
         vec![stored_album(
             "alb-ill",
@@ -159,7 +159,7 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
 /// start, so the next window does not report it again.
 #[test]
 fn an_interrupted_art_retry_comes_due_in_the_window_that_holds_it() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let start = std::time::Instant::now();
     app.images.fetch_interrupted("alb-1:P".to_owned());

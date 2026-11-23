@@ -20,7 +20,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     // ambient queue_state (real home in isolation, another test's leftovers
     // in-suite), arms a phantom adoption that fails against the stub's
     // dropped command channel, and pays ~1s of disconnect-failure handling.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     // Create a local daemon app with no Emby remote items so the live queue
     // starts empty — we inject an ABS slot directly below.
     let mut app = make_local_daemon_app_stub(Vec::new());

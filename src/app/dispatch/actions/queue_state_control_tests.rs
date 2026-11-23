@@ -1,8 +1,8 @@
-use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
+use crate::app::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
 struct XdgHomeGuard {
     dir: std::path::PathBuf,
-    _state_dir: crate::config::TestStateDirGuard,
+    _state_dir: crate::app::config::TestStateDirGuard,
 }
 
 impl XdgHomeGuard {
@@ -12,7 +12,7 @@ impl XdgHomeGuard {
         mbv_config::set_test_env_var("XDG_CONFIG_HOME", &dir);
         mbv_config::remove_test_env_var("MBV_SYSTEM");
         Self {
-            _state_dir: crate::config::TestStateDirGuard::new_at(dir.join("mbv")),
+            _state_dir: crate::app::config::TestStateDirGuard::new_at(dir.join("mbv")),
             dir,
         }
     }

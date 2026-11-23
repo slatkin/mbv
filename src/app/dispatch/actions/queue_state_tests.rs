@@ -4,14 +4,14 @@ use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
 };
 
-use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
+use crate::app::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
 /// RAII guard that points `XDG_CONFIG_HOME` (subtitle-mode saves) and
 /// test-only state-dir lookups (prefs/queue saves) at a fresh tempdir,
 /// restoring and cleaning up on drop -- including on panic.
 pub(super) struct XdgHomeGuard {
     dir: std::path::PathBuf,
-    _state_dir: crate::config::TestStateDirGuard,
+    _state_dir: crate::app::config::TestStateDirGuard,
 }
 
 impl XdgHomeGuard {
@@ -20,7 +20,7 @@ impl XdgHomeGuard {
         std::fs::create_dir_all(&dir).unwrap();
         mbv_config::set_test_env_var("XDG_CONFIG_HOME", &dir);
         mbv_config::remove_test_env_var("MBV_SYSTEM");
-        let state_dir = crate::config::TestStateDirGuard::new_at(dir.join("mbv"));
+        let state_dir = crate::app::config::TestStateDirGuard::new_at(dir.join("mbv"));
         Self {
             dir,
             _state_dir: state_dir,

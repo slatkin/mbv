@@ -34,7 +34,7 @@ pub(crate) fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool
 /// would otherwise resurrect a pill from an old run forever. Pill choices
 /// are session memory; restart always resolves the destination's default.
 fn load_position_state_without_pills() -> mbv_queue::LibraryPositionState {
-    let mut state = crate::config::load_library_position_state();
+    let mut state = crate::app::config::load_library_position_state();
     for position in state.libraries.values_mut() {
         position.feed_selected_group = 0;
         for level in &mut position.levels {
@@ -85,7 +85,7 @@ impl App {
         // feature installs it too: a dependent crate's test build (a GUI
         // Client program) compiles this crate without `cfg(test)`.
         #[cfg(any(test, feature = "test"))]
-        let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
+        let test_state_dir_guard = crate::app::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let launch_restore =
             mbv_config::load_tui_launch_state().map_or(LaunchRestore::Done, LaunchRestore::Pending);
@@ -319,7 +319,7 @@ mod tests {
     /// are cleared at load, while the rest of the position survives.
     #[test]
     fn loading_the_legacy_position_document_clears_its_pill_fields() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         mbv_config::save_library_position_state(&LibraryPositionState {
             libraries: HashMap::from([(
                 "lib-movies".to_string(),

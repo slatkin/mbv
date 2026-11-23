@@ -14,7 +14,7 @@ use crate::app::state::events::PendingSeriesLanding;
 /// the saved folders over the painted frame instead of opening on All.
 #[test]
 fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
     app.config
@@ -85,7 +85,7 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
 /// it while a press clears the mark and requests it again.
 #[test]
 fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     // The first checked folder's fetch fails, so the press's retry is the one
     // request the count can see; the second folder answers.
@@ -141,7 +141,7 @@ fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
 /// switches tabs after the library error.
 #[test]
 fn a_failed_feed_folder_fetch_disarms_deferred_navigation() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond_when("ParentId=folder-1", 500, "");
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");

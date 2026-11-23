@@ -65,20 +65,20 @@ fn o_opens_an_idle_feed_link_only_when_available() {
 // `MBV_SYSTEM` is a process-global env var, so tests that touch it must
 // not run concurrently with other env-mutating tests. Reuse config.rs's
 // `SYS_ENV_LOCK` rather than defining a second, independent mutex here.
-use crate::config::tests::SYS_ENV_LOCK as ENV_LOCK;
+use crate::app::config::tests::SYS_ENV_LOCK as ENV_LOCK;
 
 /// RAII guard that points state-dir lookups at a fresh tempdir and
 /// cleans up on drop -- including on panic.
 struct XdgStateHomeGuard {
     dir: std::path::PathBuf,
-    _state_dir: crate::config::TestStateDirGuard,
+    _state_dir: crate::app::config::TestStateDirGuard,
 }
 
 impl XdgStateHomeGuard {
     fn new() -> Self {
         let dir = tempfile_dir();
         mbv_config::remove_test_env_var("MBV_SYSTEM");
-        let state_dir = crate::config::TestStateDirGuard::new_at(dir.join("mbv"));
+        let state_dir = crate::app::config::TestStateDirGuard::new_at(dir.join("mbv"));
         Self {
             dir,
             _state_dir: state_dir,
@@ -102,7 +102,7 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
     app.dispatch(&AppCommand::Playback(PlaybackIntent::ToggleMute));
     assert!(app.mute_on);
 
-    let prefs_path = crate::config::prefs_path();
+    let prefs_path = crate::app::config::prefs_path();
     let saved = std::fs::read_to_string(&prefs_path).expect("prefs written");
     let v: serde_json::Value = serde_json::from_str(&saved).unwrap();
     assert_eq!(v["mute_on"], serde_json::json!(true));
@@ -135,14 +135,14 @@ fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {
 
 #[test]
 fn remote_app_without_service_setup_opens_services_settings() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
     let app = crate::app::App::new_remote_optional_with_config(
         None,
         remote,
         player_rx,
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
-        crate::config::Config::default(),
+        crate::app::config::Config::default(),
         mbv_images::ImageDecode::Pixels,
     );
 

@@ -282,7 +282,7 @@ fn save_default_library_position_persists_focused_item() {
 
 #[test]
 fn trigger_lib_rescan_clears_only_active_scope() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -331,7 +331,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
     app.trigger_lib_rescan(0);
 
     assert!(
-        !crate::config::load_library_position_state()
+        !crate::app::config::load_library_position_state()
             .libraries
             .contains_key("lib-movies")
     );

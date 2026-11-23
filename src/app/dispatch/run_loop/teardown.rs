@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn quitting_with_stay_alive_off_stops_this_machines_local_daemon() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         app.config.lock().unwrap().stay_alive = false;
 

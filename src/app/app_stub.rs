@@ -594,7 +594,7 @@ pub fn stub_app_with_completed_emby_startup_and_contents(
     let _ = tx.send(crate::app::dispatch::session::service_startup::Completion {
         generation,
         result: Ok(crate::app::dispatch::session::service_startup::Startup {
-            client: mbv_emby::EmbyClient::new(crate::config::Config::default()),
+            client: mbv_emby::EmbyClient::new(crate::app::config::Config::default()),
             bootstrap: mbv_emby::EmbyBootstrap {
                 continue_items,
                 views,

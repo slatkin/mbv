@@ -20,7 +20,7 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
         mbv_remote_player::RemotePlayer::stub(Vec::new(), 0)
     }
 
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(counting_connect);

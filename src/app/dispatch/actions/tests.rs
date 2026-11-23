@@ -21,7 +21,7 @@ fn folder(id: &str, name: &str) -> EmbyItem {
 /// `play_album_track`'s Emby-availability gate passes and the resulting queue
 /// is observable.
 fn remote_playback_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    let config = crate::config::Config::default();
+    let config = crate::app::config::Config::default();
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     (

@@ -304,7 +304,7 @@ fn feed_episode() -> mbv_queue::FeedEntry {
 /// on the nav-level lookup.
 #[test]
 fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     add_emby_movie_library(&mut app);
     app.tab = TabSelection::EmbyLibrary(0);

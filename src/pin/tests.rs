@@ -72,7 +72,7 @@ fn panel_identity_is_pinned_only_for_a_panel_name_and_the_launch_flag(
 /// the panel identity.
 #[test]
 fn panel_environment_without_the_flag_is_scrubbed_and_unpinned() {
-    let _env = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+    let _env = crate::app::config::tests::SYS_ENV_LOCK.lock().unwrap();
     mbv_config::set_test_env_var("PINWIN_PANEL", "mbv");
     mbv_config::set_test_env_var("PINWIN_SOCKET", "/run/user/1000/pinwin/wayland-0.sock");
 

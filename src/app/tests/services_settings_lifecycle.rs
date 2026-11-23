@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::TestStateDirGuard;
+use crate::app::config::TestStateDirGuard;
 use mbv_config::EmbySetup;
 use mbv_core::service_runtime::ServiceState;
 use mbv_ui_model::settings::ServiceEntry;
@@ -41,7 +41,7 @@ fn unavailable_emby_without_secret_offers_setup_instead_of_placeholder_auth() {
 fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     let _guard = TestStateDirGuard::new();
     let old_setup = EmbySetup::new("https://old.example", "old-user");
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         emby_setup: Some(old_setup.clone()),
         ..Default::default()
     };

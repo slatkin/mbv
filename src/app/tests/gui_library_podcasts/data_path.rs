@@ -96,7 +96,7 @@ fn consume_detail_completions(app: &mut App, count: usize) {
 /// of the loaded catalog starts no second chain.
 #[test]
 fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
     gui_podcast_open(&mut app, 1);
@@ -151,7 +151,7 @@ fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
 /// pass ends there, so the selection's loads wait for the catalog to land.
 #[test]
 fn a_restored_podcasts_destination_starts_its_show_list_load() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
     crate::app::tests::ensure_gui_destination(
@@ -185,7 +185,7 @@ fn pass_catalog_request(app: &mut App) -> u64 {
 /// refresh collects — arms nothing beside them.
 #[test]
 fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
     app.audiobookshelf_browse[1].loading_pages.insert(0);
 
@@ -211,7 +211,7 @@ fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
 /// honours that mark, and the open clears it.
 #[test]
 fn a_failed_show_list_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
     app.audiobookshelf_browse[1].error = Some("the show list failed to load".into());
 
@@ -236,7 +236,7 @@ fn a_failed_show_list_load_is_not_retried_by_a_repaint_but_an_open_retries_it() 
 /// data the list's merged order is projected from.
 #[test]
 fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
     app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
     app.audiobookshelf_browse[1].total = 2;
@@ -297,7 +297,7 @@ fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
 /// other show's cache stays empty.
 #[test]
 fn a_checked_show_lands_only_that_shows_episodes() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
     app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
     app.audiobookshelf_browse[1].total = 2;
@@ -347,7 +347,7 @@ fn a_checked_show_lands_only_that_shows_episodes() {
 /// cache does not carry changes nothing.
 #[test]
 fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
     app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A")];
     app.audiobookshelf_browse[1]
@@ -385,7 +385,7 @@ fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
 /// Podcasts destination saves nothing (the spec's persistence rule).
 #[test]
 fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_selection() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
     let tabs = gui_library_tabs(&app);
@@ -441,7 +441,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
 /// the same method, and the request set makes the second call load nothing.
 #[test]
 fn the_latest_shelfs_shared_guard_requests_once() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
     assert!(

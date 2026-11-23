@@ -74,7 +74,7 @@ pub(super) fn assert_expired_launch_restores_saved_focus(app: App) {
 #[test]
 fn emby_service_outcome_expiry_restores_saved_focus() {
     fn expire(trigger: impl FnOnce(&mut App)) {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         let mut app = pending_emby_launch();
         trigger(&mut app);
         assert_expired_launch_restores_saved_focus(app);

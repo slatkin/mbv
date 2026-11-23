@@ -615,7 +615,7 @@ fn seeded_entry(
 /// entry is video.
 #[test]
 fn a_feed_row_paints_no_art_and_its_declared_media_kind() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
     app.feed_tab.all_entries = vec![

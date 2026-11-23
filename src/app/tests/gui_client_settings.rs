@@ -34,7 +34,7 @@ fn the_gui_setting_disables_the_tui_panel_rules() {
 /// nothing here (design D6a).
 #[test]
 fn the_gui_setting_starts_with_the_launch_restore_done() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     mbv_config::save_tui_launch_state(&mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_config::TabIdentity::Home,
@@ -113,7 +113,7 @@ fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
 /// painted in its place.
 #[test]
 fn the_gui_client_leaves_the_tuis_visual_slot_controls_alone() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut tui = playing_movie_app();
     tui.set_visual_slot_hidden(true);
     let mut gui = playing_movie_app();

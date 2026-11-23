@@ -197,7 +197,8 @@ impl App {
     /// A failed config save flashes a toast and ends the route change
     /// with `false`; the override itself stays written.
     fn save_library_routes(&mut self, cfg: &mbv_config::Config) -> bool {
-        match crate::config::save_config_section(cfg, mbv_config::ConfigSection::LibraryRoutes) {
+        match crate::app::config::save_config_section(cfg, mbv_config::ConfigSection::LibraryRoutes)
+        {
             Ok(()) => {
                 tracing::info!(name: "library_route.config_save.succeeded", target: "library_route", "config save succeeded");
                 true

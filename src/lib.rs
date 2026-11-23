@@ -10,10 +10,8 @@
 //! window stack.
 
 mod app;
-mod config;
 mod gui;
 mod local_daemon;
-mod owner_link;
 mod owner_restart;
 mod pin;
 mod startup;
@@ -58,16 +56,16 @@ pub use self::app::{
 /// Client names it here and seeds it through `GuiCore`; every other name stays
 /// inside the root package.
 pub use self::app::GuiClientState;
+pub use self::app::config::{Config, load_config};
+pub use self::app::owner_link::{
+    OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,
+    refusal_text, start_owner,
+};
 pub use self::app::playing_track_id_for_shell;
-pub use self::config::{Config, load_config};
 /// The GUI Client's core state (design D4 of `decouple-client-core`): the
 /// shared `App` it owns, wrapped by composition. A Client outside `crate::app`
 /// names it here.
 pub use self::gui::GuiCore;
-pub use self::owner_link::{
-    OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,
-    refusal_text, start_owner,
-};
 pub use self::pin::claim_pin_swap_participant;
 pub use self::startup::run;
 pub use mbv_feed::FeedPlatform;

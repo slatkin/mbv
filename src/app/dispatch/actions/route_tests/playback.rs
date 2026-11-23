@@ -26,7 +26,7 @@ fn playback_eligibility_classifies_owner_and_selection(
 
 #[test]
 fn stay_alive_single_item_play_does_not_reuse_the_previous_queue_source() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, commands) =
         crate::app::tests::make_local_daemon_app_stub_with_cmd_rx(make_items(1));
     app.local_view
@@ -70,9 +70,9 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
 fn make_home_audio_only_owner() -> (App, std::sync::mpsc::Receiver<CtrlCmd>) {
     let (remote, player_rx, commands) =
         mbv_remote_player::RemotePlayer::stub_audio_only_with_command_rx(Vec::new(), 0);
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         stay_alive: true,
-        ..crate::config::Config::default()
+        ..crate::app::config::Config::default()
     };
     let app = App::new_remote_with_config(
         mbv_emby::EmbyClient::new(config.clone()),

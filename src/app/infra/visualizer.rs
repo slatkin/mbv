@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn selecting_artwork_stops_capture() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
         app.visualizer_window.samples = vec![mbv_visualizer::StereoSample {

@@ -61,7 +61,7 @@ fn play_item_submits_selected_item_to_direct_remote_owner() {
 /// activation is not a user-initiated queue replacement.
 #[test]
 fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let http = MockHttp::new();
     let mut config = app.config.lock().unwrap().clone();
@@ -222,7 +222,7 @@ fn tv_episode_app(
 /// on, the episode's cached season fills the queue from that episode.
 #[test]
 fn tv_episode_play_queues_the_cached_season_when_autoload_is_on() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let (mut app, command_rx) = tv_episode_app(&http, true);
     http.respond(
@@ -249,7 +249,7 @@ fn tv_episode_play_queues_the_cached_season_when_autoload_is_on() {
 /// alone, so the policy alone decides the TV episode queue.
 #[test]
 fn tv_episode_play_queues_only_that_episode_when_autoload_is_off() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let (mut app, command_rx) = tv_episode_app(&http, false);
 

@@ -231,13 +231,13 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
 /// focus has moved to Queue while the stored wide focus is untouched.
 #[test]
 fn build_restores_panel_focus_from_prefs_for_both_values() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     for (pref, expected) in [
         ("queue_side", PanelFocus::Queue),
         ("library_side", PanelFocus::Library),
     ] {
         std::fs::write(
-            crate::config::prefs_path(),
+            crate::app::config::prefs_path(),
             serde_json::json!({ "panel_focus": pref }).to_string(),
         )
         .expect("write prefs");
@@ -250,9 +250,9 @@ fn build_restores_panel_focus_from_prefs_for_both_values() {
 
 #[test]
 fn build_always_starts_on_home_without_affecting_saved_queue_state() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     std::fs::write(
-        crate::config::prefs_path(),
+        crate::app::config::prefs_path(),
         serde_json::json!({ "library_tab": 3 }).to_string(),
     )
     .expect("write prefs");
@@ -268,9 +268,9 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
 
 #[test]
 fn panel_focus_changes_do_not_write_legacy_launch_prefs() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     std::fs::write(
-        crate::config::prefs_path(),
+        crate::app::config::prefs_path(),
         serde_json::json!({ "panel_focus": "queue_side", "library_tab": 3 }).to_string(),
     )
     .expect("write legacy prefs");
@@ -279,7 +279,7 @@ fn panel_focus_changes_do_not_write_legacy_launch_prefs() {
     app.set_panel_focus(PanelFocus::Library);
 
     let prefs: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs retained"),
+        &std::fs::read_to_string(crate::app::config::prefs_path()).expect("prefs retained"),
     )
     .expect("prefs json");
     assert_eq!(prefs["panel_focus"].as_str(), Some("queue_side"));
@@ -288,7 +288,7 @@ fn panel_focus_changes_do_not_write_legacy_launch_prefs() {
 
 #[test]
 fn entering_queue_focus_selects_now_playing_item() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.local_view.adopt_items(make_items(3), 0);
@@ -307,7 +307,7 @@ fn entering_queue_focus_selects_now_playing_item() {
 
 #[test]
 fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.local_view.adopt_items(make_items(3), 0);

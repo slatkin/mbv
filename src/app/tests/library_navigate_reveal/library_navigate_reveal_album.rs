@@ -7,7 +7,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
     // folder chain) lands as a single root level whose cursor rests on the
     // album; the tab switch is deferred to the `RecursiveAlbumActivated`
     // drain, after the landing replaced the saved position (D4).
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_mock_emby(&http);
     let mut library = make_item("Music", "CollectionFolder");
@@ -72,7 +72,7 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
     // as the recursive activation's two-level stack — the group root level
     // with the cursor on the artist, then the artist level with the cursor
     // on the album.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_mock_emby(&http);
     let mut library = make_item("Music", "CollectionFolder");
@@ -135,7 +135,7 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
 fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
     // U2 correction (finding 4b): a manual tab change clears the deferred
     // navigation, so the later activation drain cannot switch back.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_mock_emby(&http);
     let mut library = make_item("Music", "CollectionFolder");

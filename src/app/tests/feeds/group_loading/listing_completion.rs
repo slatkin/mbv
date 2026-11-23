@@ -138,7 +138,7 @@ fn a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts(make_ho
     let mut app = make_home_video_app;
     // The stub client's count queries fail into the unprocessed event
     // channel, so the synchronous accounting mark stays observable.
-    install_test_emby(&mut app, crate::config::Config::default());
+    install_test_emby(&mut app, crate::app::config::Config::default());
     app.libs[0].nav_stack[0] = youtube_root_level(
         ServerRows::loaded(3, 3),
         vec![
@@ -189,7 +189,7 @@ fn the_listing_completion_after_a_partial_refresh_requeries_every_folder(make_ho
     let mut app = make_home_video_app;
     // The stub client's count queries fail into the unprocessed event
     // channel, so the synchronous accounting mark stays observable.
-    install_test_emby(&mut app, crate::config::Config::default());
+    install_test_emby(&mut app, crate::app::config::Config::default());
     app.libs[0].nav_stack[0] = youtube_root_level(
         ServerRows::loaded(3, 3),
         vec![

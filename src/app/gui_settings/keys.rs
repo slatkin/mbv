@@ -144,7 +144,7 @@ impl GuiCore {
             config.clone()
         };
         if let Err(error) =
-            crate::config::save_config_section(&config, mbv_config::ConfigSection::Keys)
+            crate::app::config::save_config_section(&config, mbv_config::ConfigSection::Keys)
         {
             tracing::warn!(name: "config.save.failed", target: "config", error = %error, "config save failed");
             self.app.flash_error(format!(

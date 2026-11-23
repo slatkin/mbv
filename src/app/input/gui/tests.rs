@@ -421,7 +421,7 @@ fn open_overlay_owns_the_keyboard() {
 // past the Off entry, Enter on the track, and the popover closes.
 #[test]
 fn track_popover_choose_sends_the_track_switch() {
-    let _state_dir = crate::config::TestStateDirGuard::new();
+    let _state_dir = crate::app::config::TestStateDirGuard::new();
     let (mut core, cmd_rx) = core_with_cmd_rx();
     core.app.set_client_capabilities(gui_client_capabilities());
     core.app.player.update_status(|status| {

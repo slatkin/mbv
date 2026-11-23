@@ -1,5 +1,5 @@
 use super::Model;
-use crate::config::{Config, UiConfig};
+use crate::app::config::{Config, UiConfig};
 use mbv_components::{SettingsComponent, SettingsSnapshot};
 use mbv_keybinds::{KEY_SECTIONS, KEYBIND_ACTIONS, KeybindAction};
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};

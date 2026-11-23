@@ -549,9 +549,9 @@ mod tv_latest_tests {
     #[case::latest(mbv_queue::TvContentMode::Latest)]
     fn refresh_after_stop_reloads_selected_tv_mode(#[case] mode: mbv_queue::TvContentMode) {
         let mut app = crate::app::tests::make_app_stub();
-        let config = crate::config::Config {
+        let config = crate::app::config::Config {
             server_url: "http://127.0.0.1:1".into(),
-            ..crate::config::Config::default()
+            ..crate::app::config::Config::default()
         };
         let http = mbv_net::mock_http::MockHttp::new();
         let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
@@ -722,9 +722,9 @@ mod tv_pill_stale_key_tests {
     #[test]
     fn pill_response_arriving_after_pill_spawn_is_not_dropped_as_stale() {
         let mut app = crate::app::tests::make_app_stub();
-        let config = crate::config::Config {
+        let config = crate::app::config::Config {
             server_url: "http://127.0.0.1:1".into(),
-            ..crate::config::Config::default()
+            ..crate::app::config::Config::default()
         };
         let http = mbv_net::mock_http::MockHttp::new();
         let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());

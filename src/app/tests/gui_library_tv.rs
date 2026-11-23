@@ -103,7 +103,7 @@ fn root_ids(app: &App) -> Vec<String> {
 /// its refresh.
 #[test]
 fn opening_shows_in_all_mode_lands_the_series_root_rows() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(
         200,
@@ -134,7 +134,7 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows() {
 /// App-side, and the season reset starts every series on its first season.
 #[test]
 fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(
         200,
@@ -206,7 +206,7 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
 /// episodes.
 #[test]
 fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(
         200,
@@ -256,7 +256,7 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
 /// the GUI's drain runs applies it.
 #[test]
 fn a_failed_upcoming_fetch_clears_the_waiting_levels_loading_mark() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = tv_app(&MockHttp::new());
     let root = &mut app.libs[0].nav_stack[0];
     root.tv_content_mode = Some(TvContentMode::Upcoming);
@@ -290,7 +290,7 @@ fn a_failed_upcoming_fetch_clears_the_waiting_levels_loading_mark() {
 /// any other mode as the All series list, once.
 #[test]
 fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(
         200,

@@ -720,7 +720,7 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
 /// hit geometry, not a recomputed expectation.
 #[test]
 fn tick_visual_slot_right_click_opens_the_menu_and_hide_hides_the_slot() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
     // The two-panel layout needs a non-empty queue (hide-empty-queue-column D1).

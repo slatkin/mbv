@@ -1,12 +1,11 @@
-//! Owner build-mismatch handling at startup (issue #559): prompt, then wait
-//! for the old Owner process to exit.
+//! Owner build-mismatch handling at startup (issue #559): the terminal prompt,
+//! and the wait for the old Owner process to exit.
 //!
 //! A local Client refuses an Owner built from a different version before
-//! sending its control credential. This module turns that refusal into the
-//! terminal prompt and decides what to do next. [`follow_up`] is pure over
-//! `(error, restart_requested)` so the "do not prompt again while the old
-//! Owner winds down" rule is unit-testable without `process::exit`
-//! (design D6).
+//! sending its control credential. What that refusal means — prompt, wait for
+//! the old Owner, refuse, or report — is the core's pure decision
+//! ([`crate::app::dispatch::session::owner_restart::follow_up`]). This module
+//! turns it into the terminal prompt and reads the answer.
 
 use std::io::{BufRead, Write};
 
@@ -16,14 +15,6 @@ use mbv_remote_player::RemotePlayerError;
 pub(super) enum Choice {
     Restart,
     Quit,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(super) enum FollowUp {
-    Prompt,
-    WaitForOwnerExit,
-    RefuseSecondTerminal,
-    Other,
 }
 
 /// Prints the mismatch and reads one line, restarting only on `r`/`R`
@@ -45,23 +36,6 @@ pub(super) fn ask(
     } else {
         Choice::Quit
     }
-}
-
-pub(super) fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp {
-    if error.is_owner_shutting_down() {
-        return FollowUp::WaitForOwnerExit;
-    }
-    if error.is_owner_mismatch() {
-        return if restart_requested {
-            FollowUp::WaitForOwnerExit
-        } else {
-            FollowUp::Prompt
-        };
-    }
-    if error.is_exclusive_owner() {
-        return FollowUp::RefuseSecondTerminal;
-    }
-    FollowUp::Other
 }
 
 #[cfg(test)]

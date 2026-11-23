@@ -181,7 +181,7 @@ mod tests {
     /// every playlist item under `QueueSource::Shuffle`, never the playlist.
     #[test]
     fn shuffle_replaces_the_queue_with_a_shuffle_source() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         let (mut model, cmd_rx) = open_playlist_model();
 
         model.handle_playlists_request(&open_action(1, MusicTreeAction::Shuffle));
@@ -202,7 +202,7 @@ mod tests {
     /// cursor item, and no replace.
     #[test]
     fn open_view_enqueue_appends_only_the_cursor_item() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         let (mut model, cmd_rx) = open_playlist_model();
 
         model.handle_playlists_request(&open_action(1, MusicTreeAction::Enqueue));

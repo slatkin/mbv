@@ -8,7 +8,7 @@ fn series_landing_applies_the_searched_series_activation_on_the_root_level() {
     // (letter pill included), then replaces the saved Library position with
     // the landed state before the tab switch (D4). Root-level-only: no new
     // browse level is pushed.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_loaded_tv_library();
     app.tab = TabSelection::Home;
 
@@ -93,7 +93,7 @@ fn series_landing_waits_for_the_whole_library_prefetch_on_a_paginated_root() {
     // U2 correction (finding 1): a series outside the loaded page needs the
     // whole-library `all_items` corpus; the pending landing retries on its
     // `AllItemsPrefetched` drain.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_paginated_tv_library();
     app.tab = TabSelection::Home;
     let mut show = series_item("ser1", "The Show");
@@ -147,7 +147,7 @@ fn series_landing_miss_after_the_whole_library_load_flashes_and_clears() {
     // U2 correction (finding 1): the miss rule is reserved for a genuinely
     // absent item. Once the whole-library corpus is in hand and still lacks
     // the show, the pending landing flashes and leaves the tab unchanged.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_paginated_tv_library();
     app.tab = TabSelection::Home;
 

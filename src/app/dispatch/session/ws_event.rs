@@ -154,9 +154,9 @@ mod tests {
     /// server, per the mocks-only test policy).
     fn app_with_mock_emby(http: &mbv_net::mock_http::MockHttp) -> crate::app::App {
         let mut app = make_app_stub();
-        let config = crate::config::Config {
+        let config = crate::app::config::Config {
             server_url: "http://127.0.0.1:1".into(),
-            ..crate::config::Config::default()
+            ..crate::app::config::Config::default()
         };
         let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
         app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(

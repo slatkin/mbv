@@ -8,7 +8,7 @@ use std::sync::mpsc;
 
 /// A Service's config and generation queued for a startup attempt.
 pub(in crate::app) struct StartupRequest {
-    pub(in crate::app) config: crate::config::Config,
+    pub(in crate::app) config: crate::app::config::Config,
     pub(in crate::app) generation: mbv_core::service_runtime::SetupGeneration,
 }
 

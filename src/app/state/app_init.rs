@@ -7,7 +7,7 @@ use mbv_ws::WsEvent;
 use std::sync::{Arc, Mutex, mpsc};
 
 pub(in crate::app) struct AppInit {
-    pub(in crate::app) config: Arc<Mutex<crate::config::Config>>,
+    pub(in crate::app) config: Arc<Mutex<crate::app::config::Config>>,
     pub(in crate::app) emby_runtime: EmbyRuntime,
     pub(in crate::app) audiobookshelf_runtime: AudiobookshelfRuntime,
     pub(in crate::app) player: PlayerProxy,

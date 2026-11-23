@@ -44,7 +44,7 @@ pub(in crate::app) use self::launch_restore::LaunchRestore;
 pub struct App {
     /// General application configuration is independent of the optional Emby
     /// runtime. Feed management reads and mutates this context directly.
-    pub(in crate::app) config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    pub(in crate::app) config: std::sync::Arc<std::sync::Mutex<crate::app::config::Config>>,
     pub(in crate::app) emby_runtime: EmbyRuntime,
     pub(in crate::app) audiobookshelf_runtime: AudiobookshelfRuntime,
     pub(in crate::app) setup: crate::app::state::service_setup::ServiceSetup,
@@ -574,7 +574,7 @@ pub struct App {
     /// (issue #875). Cleared each time Settings mounts; never persisted.
     pub(in crate::app) accent_custom: Option<mbv_config::PanelAccentColor>,
     #[cfg(any(test, feature = "test"))]
-    pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
+    pub(in crate::app) _test_state_dir_guard: Option<crate::app::config::TestStateDirGuard>,
     /// How many cast discovery browses this `App` started. Only the Clients'
     /// tests read it: the GUI Client's startup regression asserts that the
     /// discovery began without waiting on a real browse.

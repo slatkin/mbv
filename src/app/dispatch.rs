@@ -16,5 +16,5 @@ pub(in crate::app) mod notify;
 pub(in crate::app) mod playlists;
 pub(in crate::app) mod queue;
 pub(in crate::app) mod run_loop;
-pub(in crate::app) mod session;
+pub mod session;
 pub(in crate::app) mod settings;

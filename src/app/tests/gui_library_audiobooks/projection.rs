@@ -55,7 +55,7 @@ fn projection_app(
 /// Hero default.
 #[test]
 fn the_projection_carries_the_rows_letters_and_the_default_pick() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[
             authored_book(
@@ -120,7 +120,7 @@ fn the_projection_carries_the_rows_letters_and_the_default_pick() {
 /// in the TUI's order with their durations.
 #[test]
 fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
             "book-a",
@@ -195,7 +195,7 @@ fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
 /// zero paints its 20-minute span, not the 2h20m end position.
 #[test]
 fn a_chapter_row_paints_its_own_span_not_its_absolute_end() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
             "book-a",
@@ -229,7 +229,7 @@ fn a_chapter_row_paints_its_own_span_not_its_absolute_end() {
 /// ever carries the current mark.
 #[test]
 fn the_workspace_falls_back_to_part_rows_without_chapters() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
             "book-a",
@@ -277,7 +277,7 @@ fn the_workspace_falls_back_to_part_rows_without_chapters() {
 /// position while the Hero's book is that one.
 #[test]
 fn the_playing_book_rides_the_projection() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
             "book-a",
@@ -330,7 +330,7 @@ fn the_playing_book_rides_the_projection() {
 /// Owner's admission is honoured.
 #[test]
 fn the_play_command_replaces_the_queue_with_the_book_at_its_saved_position() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.seed_gui_abs_books_for_test(
         0,
@@ -373,7 +373,7 @@ fn the_play_command_replaces_the_queue_with_the_book_at_its_saved_position() {
 /// The queue command appends the book at the tail (row 9.1, contract b).
 #[test]
 fn the_queue_command_appends_the_book() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.seed_gui_abs_books_for_test(
         0,
@@ -415,7 +415,7 @@ fn the_queue_command_appends_the_book() {
 /// start on the merged timeline, and no queue replacement is submitted.
 #[test]
 fn the_chapter_command_seeks_on_the_active_book() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.seed_gui_abs_books_for_test(
         0,
@@ -487,7 +487,7 @@ fn the_chapter_command_seeks_on_the_active_book() {
 /// change and the same toast the TUI paints.
 #[test]
 fn a_denied_owner_flashes_the_owner_unavailable_toast_and_submits_nothing() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.seed_gui_abs_books_for_test(
         0,
@@ -533,7 +533,7 @@ fn a_denied_owner_flashes_the_owner_unavailable_toast_and_submits_nothing() {
 /// holds resolves through the TUI's activation rule's own refusal arm.
 #[test]
 fn stale_book_and_chapter_ids_change_nothing() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.seed_gui_abs_books_for_test(
         0,
@@ -592,7 +592,7 @@ fn stale_book_and_chapter_ids_change_nothing() {
 /// path's test owns.
 #[test]
 fn the_select_command_stores_the_pick() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.seed_gui_abs_books_for_test(
         0,
@@ -626,7 +626,7 @@ fn the_select_command_stores_the_pick() {
 /// class of deviation as the Shows Hero's wrong producer in D14.
 #[test]
 fn the_book_hero_restores_the_narrator_year_and_description() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
             "book-a",
@@ -664,7 +664,7 @@ fn the_book_hero_restores_the_narrator_year_and_description() {
 /// catalog record's last update time, and paints the audio media kind.
 #[test]
 fn a_book_row_shows_its_cover() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[(
             "book-a",

@@ -515,7 +515,7 @@ pub(crate) fn live_owner_channel(app: &mut App) -> std::sync::mpsc::Receiver<mbv
 #[test]
 fn emby_completion_applies_bootstrap_and_ready_state() {
     let mut app = make_app_stub();
-    let client = mbv_emby::EmbyClient::new(crate::config::Config::default());
+    let client = mbv_emby::EmbyClient::new(crate::app::config::Config::default());
     let item = make_item("Ready item", "Audio");
     // Completion computes the Continue Watching snapshot; the shell assigns it.
     let content = app
@@ -552,7 +552,7 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
         app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
             generation: stale_generation,
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
-                client: mbv_emby::EmbyClient::new(crate::config::Config::default()),
+                client: mbv_emby::EmbyClient::new(crate::app::config::Config::default()),
                 bootstrap: mbv_emby::EmbyBootstrap::default(),
                 setup: mbv_config::EmbySetup::default(),
             }),
@@ -568,14 +568,14 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
     );
 }
 
-pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
+pub(crate) fn install_test_emby(app: &mut App, config: crate::app::config::Config) {
     app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(mbv_emby::EmbyClient::new(config)),
     ));
 }
 
-fn remote_stub_config() -> crate::config::Config {
-    crate::config::Config::default()
+fn remote_stub_config() -> crate::app::config::Config {
+    crate::app::config::Config::default()
 }
 
 fn close_initial_services(app: &mut App) {
@@ -686,7 +686,7 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx_and_compat(
     remote_items: Vec<EmbyItem>,
     compat: mbv_ctrl::CtrlCompatibility,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    use crate::config::Config;
+    use crate::app::config::Config;
     use mbv_emby::EmbyClient;
 
     let (mut remote, player_rx, cmd_rx) =

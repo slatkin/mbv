@@ -6,9 +6,9 @@ use mbv_queue::QueueItem;
 
 #[test]
 fn legacy_home_section_preference_falls_back_to_continue_watching() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     std::fs::write(
-        crate::config::prefs_path(),
+        crate::app::config::prefs_path(),
         serde_json::json!({ "home_section": "abs:book-lib" }).to_string(),
     )
     .expect("write legacy prefs");
@@ -73,7 +73,7 @@ fn feed_entry(pub_date_secs: u64) -> mbv_queue::FeedEntry {
 /// shows the marker from its Home fetch alone.
 #[test]
 fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
@@ -97,7 +97,7 @@ fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
 /// and the marker stays cleared for the rest of the run.
 #[test]
 fn acknowledging_the_source_clears_its_marker() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
@@ -119,7 +119,7 @@ fn acknowledging_the_source_clears_its_marker() {
 /// cutoff, so it is never stored as a Home row and never marks.
 #[test]
 fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 30 * 24 * 60 * 60);
     let current = model.home_latest_launch_window.current;
@@ -142,7 +142,7 @@ fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
 /// NOT mark during that run").
 #[test]
 fn an_item_dated_after_the_launch_instant_does_not_mark() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
@@ -166,7 +166,7 @@ fn an_item_dated_after_the_launch_instant_does_not_mark() {
 /// the rows is Home's, and the Latest list itself may not have loaded.
 #[test]
 fn a_podcast_library_marks_from_its_home_recently_added_rows() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
@@ -202,7 +202,7 @@ fn a_podcast_library_marks_from_its_home_recently_added_rows() {
 /// 14-day cutoff.
 #[test]
 fn a_feed_entry_inside_the_launch_window_marks_the_feeds_destination() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;

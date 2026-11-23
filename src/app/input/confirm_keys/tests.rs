@@ -112,7 +112,7 @@ fn successful_save_completion(app: &mut App, mutation_id: u64) {
 /// immediately, with no confirmation and no stored payload.
 #[test]
 fn empty_local_target_queue_executes_the_replacement_immediately() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = gate_app();
     assert_eq!(app.playback_queue().total_queue_len(), 0);
 
@@ -131,7 +131,7 @@ fn empty_local_target_queue_executes_the_replacement_immediately() {
 /// immediately, staging the replacement in that owner's canonical queue.
 #[test]
 fn populated_local_target_queue_stores_the_action_and_prompts() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.local_view.adopt_items(vec![audio("existing")], 0);
 
@@ -157,7 +157,7 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
 /// canonical queue is not staged before the confirmation.
 #[test]
 fn confirming_a_populated_local_queue_executes_the_stored_action() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = gate_app();
     app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
@@ -176,7 +176,7 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
 /// playback and leaves no executable payload behind.
 #[test]
 fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player.update_status(|status| status.active = false);
     app.local_view.adopt_items(vec![audio("existing")], 0);
@@ -201,7 +201,7 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
 /// payload, so no later pass can fire it.
 #[test]
 fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
@@ -224,7 +224,7 @@ fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
 /// stored replacement.
 #[test]
 fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = dirty_saved_playlist_app();
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
@@ -248,7 +248,7 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
 /// save completes; the payload survives and the queue is unchanged.
 #[test]
 fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = dirty_saved_playlist_app();
 
     // First activation: confirmed at the populated-queue gate, then deferred
@@ -325,7 +325,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
 /// queue needs the gate; a bare clear owns its own confirmation flow.
 #[test]
 fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player.update_status(|status| status.active = false);
     app.local_view.adopt_items(vec![audio("existing")], 0);
@@ -365,7 +365,7 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
 /// immediately, with no confirmation and no stored payload.
 #[test]
 fn empty_queue_runs_a_shuffle_and_a_playlist_replace_without_a_modal() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
 
     let (mut app, cmd_rx) = gate_app();
     assert_eq!(app.playback_queue().total_queue_len(), 0);
@@ -411,7 +411,7 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_replace_without_a_modal() {
 /// confirmation does `play_items_routed` raise the local fall-through prompt.
 #[test]
 fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     // The audio-only owner cannot play a Video item; its queue is populated so
     // the gate must ask before the routed executor can defer to local play.
     let (mut app, _cmd_rx) =
@@ -451,7 +451,7 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
 /// path, not a user-initiated replacement, so it never asks.
 #[test]
 fn play_item_on_a_populated_queue_does_not_raise_the_replace_modal() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = gate_app();
     app.local_view.adopt_items(vec![audio("existing")], 0);
 
@@ -470,7 +470,7 @@ fn play_item_on_a_populated_queue_does_not_raise_the_replace_modal() {
 
 #[test]
 fn save_deferral_ignores_a_save_after_the_prompt_was_dismissed_unanswered() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.replace_queue_or_prompt(play_action(&["track-1"]));
     app.pending_overlay = None;
@@ -485,7 +485,7 @@ fn save_deferral_ignores_a_save_after_the_prompt_was_dismissed_unanswered() {
 
 #[test]
 fn save_deferral_ignores_a_different_save_for_the_same_playlist() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.replace_queue_or_prompt(play_action(&["track-1"]));
     mount_confirmation(&mut app);
@@ -501,7 +501,7 @@ fn save_deferral_ignores_a_different_save_for_the_same_playlist() {
 
 #[test]
 fn failed_bound_save_drops_the_deferred_replacement() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.replace_queue_or_prompt(play_action(&["track-1"]));
     mount_confirmation(&mut app);

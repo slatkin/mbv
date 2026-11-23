@@ -89,7 +89,7 @@ pub fn make_queue_app(item_count: usize) -> App {
 /// immediately after the sync call without waiting on (or requiring)
 /// the doomed connection to resolve.
 pub(in crate::app) fn ready_emby_runtime() -> EmbyRuntime {
-    let mut client = EmbyClient::new(crate::config::Config::default());
+    let mut client = EmbyClient::new(crate::app::config::Config::default());
     client.apply_credential_exchange(&EmbyCredentialExchange {
         server_url: "http://127.0.0.1:1".into(),
         user_id: "user-id".into(),

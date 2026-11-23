@@ -96,7 +96,7 @@ impl App {
 
         mbv_remote_player::RemotePlayer::connect_endpoint(
             endpoint,
-            &crate::owner_link::hello_claims(self.client_capabilities, endpoint),
+            &crate::app::owner_link::hello_claims(self.client_capabilities, endpoint),
         )
     }
 
@@ -125,7 +125,7 @@ impl App {
         tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", endpoint = %endpoint, "connecting to daemon route; existing clients are retained");
         mbv_remote_player::RemotePlayer::connect_endpoint(
             endpoint,
-            &crate::owner_link::hello_claims(self.client_capabilities, endpoint),
+            &crate::app::owner_link::hello_claims(self.client_capabilities, endpoint),
         )
     }
 

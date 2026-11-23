@@ -17,7 +17,7 @@ use std::io;
 use std::path::Path;
 
 use crate::app::App;
-use crate::config::Config;
+use crate::app::config::Config;
 use crate::local_daemon;
 use crate::{ClientCapabilities, ClientCapability};
 use mbv_emby::EmbyClient;

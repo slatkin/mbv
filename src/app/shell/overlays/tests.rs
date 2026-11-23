@@ -248,7 +248,7 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
 /// `settings_popup_multiselect_shell_syncs_and_commits_component_choices`.
 #[test]
 fn my_languages_commit_writes_prefs_through_to_player() {
-    let _state_dir = crate::config::TestStateDirGuard::new();
+    let _state_dir = crate::app::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     model.app.config.lock().unwrap().subtitle_lang = "English".into(); // selected: stays
     model.app.config.lock().unwrap().audio_lang = "jpn".into(); // not selected: cleared

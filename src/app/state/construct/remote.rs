@@ -111,7 +111,7 @@ struct RemoteServices {
 }
 
 fn remote_services(
-    app_config: &crate::config::Config,
+    app_config: &crate::app::config::Config,
     client_arc: Option<&Arc<Mutex<EmbyClient>>>,
 ) -> RemoteServices {
     let emby_configured = app_config.emby_setup.is_some();
@@ -178,7 +178,7 @@ impl App {
         remote: mbv_remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &DaemonEndpoint,
-        config: crate::config::Config,
+        config: crate::app::config::Config,
     ) -> Self {
         Self::new_remote_optional_with_config(
             Some(client),
@@ -198,7 +198,7 @@ impl App {
         remote: mbv_remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &DaemonEndpoint,
-        app_config: crate::config::Config,
+        app_config: crate::app::config::Config,
         image_decode: mbv_images::ImageDecode,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
@@ -206,7 +206,7 @@ impl App {
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, mbv_images::ImageFetchOutcome)>();
         let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
-        let ui_config = crate::config::load_ui_config().unwrap_or_default();
+        let ui_config = crate::app::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = app_config.hidden_libraries.clone();
         let library_routes = app_config.library_routes.clone();
         let music_levels = app_config.music_levels.clone();
@@ -291,7 +291,7 @@ impl App {
 mod tests {
     use super::*;
 
-    fn construct(config: crate::config::Config) -> App {
+    fn construct(config: crate::app::config::Config) -> App {
         let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
         App::new_remote_optional_with_config(
             None,
@@ -307,8 +307,8 @@ mod tests {
     // the setting is followed through unchanged whatever stay-alive is.
     #[test]
     fn system_notifications_follow_config_when_stay_alive_is_on() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let config = crate::config::Config {
+        let _guard = crate::app::config::TestStateDirGuard::new();
+        let config = crate::app::config::Config {
             stay_alive: true,
             system_notifications: true,
             ..Default::default()
@@ -321,8 +321,8 @@ mod tests {
     #[test]
     fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_requests_startup_when_configured_without_client()
      {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let config = crate::config::Config {
+        let _guard = crate::app::config::TestStateDirGuard::new();
+        let config = crate::app::config::Config {
             emby_setup: Some(mbv_config::EmbySetup::new("https://emby.example", "user")),
             ..Default::default()
         };

@@ -233,7 +233,7 @@ pub fn run_local_daemon_main() -> ! {
     mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), &log_spec);
     tracing::info!(name: "local_daemon.process.starting", target: "local_daemon", "local daemon starting");
 
-    let config = match crate::config::load_config() {
+    let config = match crate::app::config::load_config() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("mbv: local daemon: {e}");

@@ -7,7 +7,7 @@ fn episode_navigation_emits_the_series_landing_without_extra_round_trips() {
     // ancestors round trip in the resolution); the landing carries the full
     // Series reveal item, fetched and type-verified. No chain build, no
     // level fetch.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let app = app_with_mock_emby(&http);
     http.respond(
@@ -62,7 +62,7 @@ fn track_navigation_emits_the_album_landing_with_its_folder_chain() {
     // landing carries the full album reveal item plus the root→album folder
     // chain the recursive activation walks (nearest→root ancestors, minus
     // the library folder + AggregateFolder, reversed).
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let app = app_with_mock_emby(&http);
     http.respond(
@@ -123,7 +123,7 @@ fn resolve_failure_drains_the_error_event_and_flashes_without_a_tab_change() {
     // Task 4.2: a resolve failure (here: the item fetch fails server-side)
     // drains as `LibEvent::Error`, which flashes and leaves the active tab
     // unchanged.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_mock_emby(&http);
     app.tab = TabSelection::Home;

@@ -114,7 +114,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
 
 #[test]
 fn stale_restore_is_ignored_after_saved_position_is_cleared() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -167,7 +167,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
 
     assert!(app.libs[0].nav_stack.is_empty());
     assert!(
-        !crate::config::load_library_position_state()
+        !crate::app::config::load_library_position_state()
             .libraries
             .contains_key("lib-movies")
     );

@@ -49,7 +49,7 @@ fn episode(show_id: &str) -> AudiobookshelfQueueItem {
 /// An `App` whose Audiobookshelf setup names `server`, with the image cache
 /// holding no entry for the row keys the tests read.
 fn app_with_audiobookshelf(server: &str) -> App {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let app = make_app_stub();
     app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup {
         server_url: server.to_owned(),

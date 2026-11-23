@@ -170,7 +170,7 @@ fn land_one_group(app: &mut App) {
 
 #[test]
 fn selecting_a_group_lands_its_albums_in_the_store_without_touching_the_nav_stack() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(200, ALBUMS);
     let mut app = app_with_music_groups(&http);
@@ -198,7 +198,7 @@ fn selecting_a_group_lands_its_albums_in_the_store_without_touching_the_nav_stac
 
 #[test]
 fn reselecting_a_loaded_group_starts_no_fetch() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(200, ALBUMS);
     http.respond(200, ALBUMS);
@@ -221,7 +221,7 @@ fn reselecting_a_loaded_group_starts_no_fetch() {
 
 #[test]
 fn one_failing_group_keeps_the_other_groups_albums() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(200, ALBUMS);
     let mut app = app_with_music_groups(&http);
@@ -250,7 +250,7 @@ fn one_failing_group_keeps_the_other_groups_albums() {
 /// and the ensure step starts their fetches again, one at a time.
 #[test]
 fn pressing_all_refetches_a_failed_group() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.fail(ErrorKind::ConnectionRefused);
     let mut app = app_with_music_groups(&http);
@@ -299,7 +299,7 @@ fn pressing_all_refetches_a_failed_group() {
 /// never re-issues the fetch.
 #[test]
 fn an_ensure_call_does_not_refetch_a_failed_group() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.fail(ErrorKind::ConnectionRefused);
     let mut app = app_with_music_groups(&http);
@@ -320,7 +320,7 @@ fn an_ensure_call_does_not_refetch_a_failed_group() {
 /// dropdown "The selection is All or checked collections").
 #[test]
 fn checking_one_group_then_pressing_all_unions_every_group() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(200, ALBUMS);
     let mut app = app_with_music_groups(&http);
@@ -353,7 +353,7 @@ fn checking_one_group_then_pressing_all_unions_every_group() {
 /// D6).
 #[test]
 fn the_selected_group_alone_fills_the_list() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
             "alb-ill",
@@ -409,7 +409,7 @@ fn the_selected_group_alone_fills_the_list() {
 /// check both and the list unions their albums.
 #[test]
 fn a_collection_toggle_checks_two_groups() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
             "alb-ill",
@@ -471,7 +471,7 @@ fn a_collection_toggle_checks_two_groups() {
 /// design D1): no group stays checked, so the list is every group's.
 #[test]
 fn a_stored_group_the_library_lost_falls_back_to_all() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
     crate::app::tests::stub_gui_state(|state| {
         state.library_groups.insert(
@@ -501,7 +501,7 @@ fn a_stored_group_the_library_lost_falls_back_to_all() {
 /// union is every group's.
 #[test]
 fn no_stored_choice_selects_all() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
             "alb-ill",
@@ -549,7 +549,7 @@ fn checked_names(projection: &GuiMusicProjection) -> Vec<&str> {
 /// in the projection's failure line (add-gui-library-panel design D5).
 #[test]
 fn a_failed_selected_group_shows_a_failure_line() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
     crate::app::tests::stub_gui_state(|state| {
@@ -590,7 +590,7 @@ fn a_failed_selected_group_shows_a_failure_line() {
 /// fetches, and the union shows every group's albums.
 #[test]
 fn all_fetches_once_the_client_appears() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
     let ready = std::mem::replace(

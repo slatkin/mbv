@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use rstest::rstest;
 
-use super::{Choice, FollowUp, ask, follow_up};
+use super::{Choice, ask};
 use mbv_remote_player::RemotePlayerError;
 
 fn mismatch_error(owner_app_version: &str) -> RemotePlayerError {
@@ -31,20 +31,6 @@ fn only_explicit_restart_input_restarts(#[case] input: &[u8], #[case] expected: 
             &mut Cursor::new(input),
             &mut Vec::new()
         ),
-        expected
-    );
-}
-
-// #559 (design D6): prompt once, then wait after requesting restart.
-#[rstest]
-#[case::before_restart(false, FollowUp::Prompt)]
-#[case::after_restart(true, FollowUp::WaitForOwnerExit)]
-fn mismatch_after_restart_waits_instead_of_reprompting(
-    #[case] restart_requested: bool,
-    #[case] expected: FollowUp,
-) {
-    assert_eq!(
-        follow_up(&mismatch_error("1.0.0"), restart_requested),
         expected
     );
 }

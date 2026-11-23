@@ -12,9 +12,9 @@ fn library_of(id: &str, name: &str, collection_type: &str) -> LibraryTab {
 
 fn ready_emby_app(http: &MockHttp) -> crate::app::App {
     let mut app = crate::app::tests::make_app_stub();
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         server_url: "http://127.0.0.1:1".into(),
-        ..crate::config::Config::default()
+        ..crate::app::config::Config::default()
     };
     let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
     app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(

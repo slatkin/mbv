@@ -21,7 +21,7 @@ fn image_protocol_activation_cycles_through_supported_values(
     assert_eq!(app.images.protocol_enabled(), expected.is_some());
 }
 
-fn owner_setting_value(config: &crate::config::Config, key: SettingKey) -> bool {
+fn owner_setting_value(config: &crate::app::config::Config, key: SettingKey) -> bool {
     match key {
         SettingKey::StayAlive => config.stay_alive,
         SettingKey::ConsumeVideos => config.consume_videos,
@@ -35,13 +35,13 @@ fn owner_setting_value(config: &crate::config::Config, key: SettingKey) -> bool 
 #[case(SettingKey::ConsumeVideos)]
 #[case(SettingKey::ConsumeAudio)]
 fn owner_settings_are_persisted_to_disk_before_toggle_returns(#[case] key: SettingKey) {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let expected = !owner_setting_value(&app.config.lock().unwrap(), key);
 
     app.handle_settings_activate(key);
 
-    let saved = crate::config::load_config().unwrap();
+    let saved = crate::app::config::load_config().unwrap();
     assert_eq!(owner_setting_value(&saved, key), expected);
 }
 

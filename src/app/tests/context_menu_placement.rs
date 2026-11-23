@@ -124,7 +124,7 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
 #[test]
 fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     use mbv_ui_model::context_menu::ContextMenu;
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
 
     let mut model = crate::app::shell::Model::new(make_app_stub());
     model.app.tab = TabSelection::Home;
@@ -229,7 +229,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
 #[test]
 fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow() {
     use mbv_ui_model::context_menu::ContextMenu;
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
 
     let mut model = crate::app::shell::Model::new(make_app_stub());
     model.app.tab = TabSelection::Home;
@@ -344,7 +344,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
 /// to the destination-derived Library side.
 #[test]
 fn visual_slot_menu_clamps_inside_the_queue_column() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = library_app();
     // The two-panel layout needs a non-empty queue (hide-empty-queue-column D1).
     app.local_view
@@ -395,7 +395,7 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
 /// the keyboard's selected item.
 #[test]
 fn focused_panel_right_click_opens_a_pointer_anchored_menu() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let app = crate::app::tests::render_fixtures::make_queue_app(2);
     assert_eq!(app.panel_focus, PanelFocus::Queue);
     let mut harness = TickHarness::new(app);

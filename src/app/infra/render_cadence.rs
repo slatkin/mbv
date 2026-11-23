@@ -13,12 +13,12 @@ impl App {
     /// held the lock, which no projection path expects.
     pub(in crate::app) fn with_config<R>(
         &self,
-        read: impl FnOnce(&crate::config::Config) -> R,
+        read: impl FnOnce(&crate::app::config::Config) -> R,
     ) -> R {
         read(&self.config.lock().unwrap())
     }
 
-    pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
+    pub(in crate::app) fn ui_config_snapshot(&self) -> crate::app::config::UiConfig {
         let indicator_style = match self.indicator_style {
             mbv_ui_model::indicators::IndicatorStyle::Brackets => "brackets",
             mbv_ui_model::indicators::IndicatorStyle::Chips => "chips",
@@ -28,7 +28,7 @@ impl App {
             mbv_ui_model::indicators::IndicatorStyle::KeyValue => "keyvalue",
             mbv_ui_model::indicators::IndicatorStyle::Powerline => "powerline",
         };
-        crate::config::UiConfig {
+        crate::app::config::UiConfig {
             image_protocol: self.images.protocol_override().map(str::to_owned),
             image_cache_size: self.images.cache_size(),
             use_nerd_fonts: self.use_nerd_fonts,

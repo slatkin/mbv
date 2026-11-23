@@ -8,8 +8,8 @@
 
 use super::*;
 
+use crate::app::config::TestStateDirGuard;
 use crate::app::gui_library::GuiSectionRequest;
-use crate::config::TestStateDirGuard;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use rstest::rstest;

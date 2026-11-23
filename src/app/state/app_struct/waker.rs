@@ -103,7 +103,7 @@ impl App {
     pub(in crate::app) fn start_local_daemon(
         &self,
     ) -> Result<(), mbv_remote_player::RemotePlayerError> {
-        crate::owner_link::start_owner(&crate::owner_link::OwnerStartOptions {
+        crate::app::owner_link::start_owner(&crate::app::owner_link::OwnerStartOptions {
             owner_exe: self.owner_exe.as_deref(),
             log_level: None,
         })

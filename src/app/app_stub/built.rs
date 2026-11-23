@@ -85,7 +85,7 @@ pub(in crate::app) fn built_app(
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
     let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
 
-    let config = crate::config::Config::default();
+    let config = crate::app::config::Config::default();
 
     App::build(AppInit {
         config: Arc::new(Mutex::new(config)),
@@ -116,7 +116,7 @@ pub(in crate::app) fn built_app(
         indicator_style: mbv_ui_model::indicators::IndicatorStyle::default(),
         image_cache_size: 50,
         image_decode: mbv_images::ImageDecode::Pixels,
-        visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
+        visualizer_glyph: crate::app::config::DEFAULT_VISUALIZER_GLYPH.into(),
         card_image_tx,
         card_image_rx,
         channels,

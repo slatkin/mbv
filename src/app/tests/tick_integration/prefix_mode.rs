@@ -30,7 +30,7 @@ fn key(code: Key) -> Event<UserEvent> {
 /// A `[keys]` configuration with prefix `Ctrl+b` and the given
 /// prefix-namespace assignments, grouped by each action's declared section
 /// and validated through the registry loader.
-fn prefix_config(assignments: &[(&str, &str)]) -> crate::config::Config {
+fn prefix_config(assignments: &[(&str, &str)]) -> crate::app::config::Config {
     let mut sections: Vec<(String, RawSection)> = Vec::new();
     for (id, chord) in assignments {
         let section = mbv_keybinds::action_by_id(id)
@@ -50,7 +50,7 @@ fn prefix_config(assignments: &[(&str, &str)]) -> crate::config::Config {
             .prefix
             .push(((*id).into(), (*chord).into()));
     }
-    crate::config::Config {
+    crate::app::config::Config {
         keybinds: mbv_keybinds::load(&RawKeybinds {
             prefix: Some("Ctrl+b".into()),
             sections,
@@ -60,7 +60,7 @@ fn prefix_config(assignments: &[(&str, &str)]) -> crate::config::Config {
     }
 }
 
-fn harness_with(config: crate::config::Config) -> TickHarness {
+fn harness_with(config: crate::app::config::Config) -> TickHarness {
     let app = make_app_stub();
     *app.config.lock().unwrap() = config;
     TickHarness::new(app)
@@ -82,7 +82,7 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
         .expect("Home owner installed")
 }
 
-fn home_harness(count: usize, config: crate::config::Config) -> TickHarness {
+fn home_harness(count: usize, config: crate::app::config::Config) -> TickHarness {
     let mut app = make_app_stub();
     *app.config.lock().unwrap() = config;
     app.tab = TabSelection::Home;

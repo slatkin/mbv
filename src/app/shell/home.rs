@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn continue_watching_effects_use_the_resolved_item_target() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         // Row 5.3: the enqueue is an Append owner op, so the resolved item is
         // observed on the wire rather than in an optimistic Client write.
@@ -439,11 +439,11 @@ mod tests {
     /// marker) appeared (#930 follow-up).
     #[test]
     fn home_load_at_launch_with_a_cached_emby_client_arms_the_emby_recently_added_fetch() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = crate::app::config::TestStateDirGuard::new();
         let http = mbv_net::mock_http::MockHttp::new();
-        let mut config = crate::config::Config {
+        let mut config = crate::app::config::Config {
             server_url: "http://127.0.0.1:1".into(),
-            ..crate::config::Config::default()
+            ..crate::app::config::Config::default()
         };
         let client = mbv_emby::EmbyClient::new(config.clone()).with_test_agent(http.agent());
         config.emby_setup = Some(mbv_config::EmbySetup::new("http://127.0.0.1:1", "user"));

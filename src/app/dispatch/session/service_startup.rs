@@ -87,7 +87,7 @@ pub(in crate::app) struct AudiobookshelfMarkReceiver {
 /// `start_audiobookshelf`'s established precedent (`Protocol` /
 /// `Unavailable`).
 pub(in crate::app) fn audiobookshelf_client(
-    config: &crate::config::Config,
+    config: &crate::app::config::Config,
 ) -> Result<(AudiobookshelfClient, String), mbv_audiobookshelf::AudiobookshelfError> {
     let setup = config.audiobookshelf_setup.as_ref().ok_or(
         mbv_audiobookshelf::AudiobookshelfError::from_class(
@@ -107,7 +107,7 @@ pub(in crate::app) fn audiobookshelf_client(
 /// without constructing a client, for call sites that early-return silently
 /// on missing setup/credentials rather than surfacing a typed error.
 pub(in crate::app) fn audiobookshelf_setup_and_key(
-    config: &crate::config::Config,
+    config: &crate::app::config::Config,
 ) -> Option<(mbv_config::AudiobookshelfSetup, String)> {
     let setup = config.audiobookshelf_setup.clone()?;
     let key = load_service_secret(ServiceKind::Audiobookshelf)?;
@@ -115,7 +115,7 @@ pub(in crate::app) fn audiobookshelf_setup_and_key(
 }
 
 pub(in crate::app) fn start_audiobookshelf_catalog(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     generation: SetupGeneration,
 ) -> AudiobookshelfCatalogReceiver {
     let (tx, rx) = mpsc::channel();
@@ -208,7 +208,7 @@ pub(in crate::app) fn start_audiobookshelf_mark(
 }
 
 pub(in crate::app) fn start_audiobookshelf_shows(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     generation: SetupGeneration,
     request: u64,
     library_id: String,
@@ -240,7 +240,7 @@ pub(in crate::app) fn start_audiobookshelf_shows(
 /// Book-shaped sibling of `start_audiobookshelf_shows`: pages a book library's
 /// catalog through `books_bounded` and reports `LibEvent::Audiobookshelf(AudiobookshelfEvent::BooksFetched)`.
 pub(in crate::app) fn start_audiobookshelf_books(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     generation: SetupGeneration,
     request: u64,
     library_id: String,
@@ -273,7 +273,7 @@ pub(in crate::app) fn start_audiobookshelf_books(
 /// `LibEvent::Audiobookshelf(AudiobookshelfEvent::ShelfFetched)`. The Podcasts destination's Latest
 /// snapshot is built from the `Newest Episodes` shelf in the result.
 pub(in crate::app) fn start_audiobookshelf_shelves(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     generation: SetupGeneration,
     library_id: String,
     tx: mpsc::Sender<crate::app::state::events::LibEvent>,
@@ -293,7 +293,7 @@ pub(in crate::app) fn start_audiobookshelf_shelves(
 }
 
 pub(in crate::app) fn start_audiobookshelf(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     generation: SetupGeneration,
     kind: AudiobookshelfCompletionKind,
 ) -> AudiobookshelfStartupReceiver {
@@ -386,7 +386,7 @@ pub(in crate::app) struct SetupCompletion {
 }
 
 pub(in crate::app) fn start_setup(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     server_url: String,
     username: String,
     password: String,
@@ -436,7 +436,7 @@ pub(in crate::app) struct StartupReceiver {
 }
 
 pub(in crate::app) fn start(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     generation: SetupGeneration,
 ) -> StartupReceiver {
     let (tx, rx) = mpsc::channel();
@@ -465,7 +465,7 @@ pub(in crate::app) fn initial_state(configured: bool, credential_present: bool) 
 
 /// Initial routing uses only validated setup and local feed subscriptions.
 /// Legacy `[server]` data is intentionally not consulted.
-pub(in crate::app) fn should_open_services(config: &crate::config::Config) -> bool {
+pub(in crate::app) fn should_open_services(config: &crate::app::config::Config) -> bool {
     config.emby_setup.is_none() && config.audiobookshelf_setup.is_none() && config.feeds.is_empty()
 }
 
@@ -488,7 +488,7 @@ pub(in crate::app) fn startup_status(state: ServiceState) -> &'static str {
 }
 
 fn authenticate(
-    config: crate::config::Config,
+    config: crate::app::config::Config,
     setup: EmbySetup,
     token: String,
 ) -> Result<Startup, EmbyFailure> {
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn empty_setup_is_the_only_initial_services_route() {
-        let mut config = crate::config::Config::default();
+        let mut config = crate::app::config::Config::default();
         assert!(should_open_services(&config));
 
         config.server_url = "https://legacy.example.test".into();

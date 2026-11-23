@@ -18,9 +18,9 @@ fn lib_tab(collection_type: &str) -> LibraryTab {
 
 /// Installs an Emby runtime whose client answers from the returned `MockHttp`.
 fn install_mock_emby(app: &mut App) -> mbv_net::mock_http::MockHttp {
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         server_url: "http://127.0.0.1:1".into(),
-        ..crate::config::Config::default()
+        ..crate::app::config::Config::default()
     };
     let http = mbv_net::mock_http::MockHttp::new();
     let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());

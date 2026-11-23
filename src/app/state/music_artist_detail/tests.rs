@@ -19,7 +19,7 @@ fn destination() -> LibraryKey {
 /// before the doomed network attempt, so it is observable immediately
 /// without a live server.
 fn unroutable_emby_runtime() -> crate::app::state::service_runtime::EmbyRuntime {
-    let mut client = mbv_emby::EmbyClient::new(crate::config::Config::default());
+    let mut client = mbv_emby::EmbyClient::new(crate::app::config::Config::default());
     client.apply_credential_exchange(&mbv_emby::EmbyCredentialExchange {
         server_url: "http://127.0.0.1:1".into(),
         user_id: "user-id".into(),

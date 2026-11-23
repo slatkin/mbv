@@ -24,7 +24,7 @@ fn session_direct_endpoint_prefers_advertised_tcp_port() {
 #[test]
 fn the_own_row_has_no_direct_endpoint_even_when_the_local_daemon_advertises_a_port() {
     let mut app = make_app_stub();
-    let mut client = mbv_emby::EmbyClient::new(crate::config::Config::default());
+    let mut client = mbv_emby::EmbyClient::new(crate::app::config::Config::default());
     client.device_name = "this-host".into();
     app.emby_runtime.client = Some(std::sync::Arc::new(std::sync::Mutex::new(client)));
 

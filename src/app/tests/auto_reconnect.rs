@@ -7,13 +7,13 @@ fn new_remote_does_not_auto_reconnect_for_a_non_local_endpoint() {
     // belongs to the local-Owner attach path (issue #972 removed the explicit
     // endpoint launch mode; the constructor guard keeps a non-local
     // construction from attempting real connections).
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _ = crate::config::save_last_remote_connection(Some(
-        &crate::config::LastRemoteConnection::LibraryRoute {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _ = crate::app::config::save_last_remote_connection(Some(
+        &crate::app::config::LastRemoteConnection::LibraryRoute {
             library: "music".to_string(),
         },
     ));
-    let mut config = crate::config::Config {
+    let mut config = crate::app::config::Config {
         auto_reconnect: true,
         ..Default::default()
     };
@@ -43,9 +43,9 @@ fn new_remote_does_not_auto_reconnect_for_a_non_local_endpoint() {
 fn saved_plain_session_record_stays_local_without_an_output_selection() {
     use mbv_net::mock_http::MockHttp;
 
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _ = crate::config::save_last_remote_connection(Some(
-        &crate::config::LastRemoteConnection::DirectSession {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _ = crate::app::config::save_last_remote_connection(Some(
+        &crate::app::config::LastRemoteConnection::DirectSession {
             device_name: "plain-tv".to_string(),
         },
     ));

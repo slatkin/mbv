@@ -7,7 +7,8 @@ pub use self::app_stub::handoff_app;
 
 mod client_core;
 mod client_drains;
-mod dispatch;
+pub mod config;
+pub mod dispatch;
 pub mod gui_client_state;
 mod gui_library;
 mod gui_playlists;
@@ -31,6 +32,7 @@ pub use self::app_stub::{
 };
 mod infra;
 mod input;
+pub mod owner_link;
 mod queue_card_artwork;
 mod queue_footer_projection;
 mod queue_playback_projection;

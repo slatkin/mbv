@@ -27,7 +27,7 @@ fn row_key(item: &EmbyItem) -> String {
 /// A stub `App` on a plain Emby library whose root list holds `items`, with the
 /// image cache enabled and no Emby client: a reserved fetch stays visible.
 fn app_with_rows(items: Vec<EmbyItem>) -> App {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.emby_runtime = EmbyRuntime::default();
     app.images
@@ -56,7 +56,7 @@ fn idle_at() -> Instant {
 /// no Emby client: a reserved fetch stays visible. The GUI's capabilities are
 /// the ones that present the artist-name search.
 fn app_with_grouped_music() -> App {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.set_client_capabilities(app_stub::gui_client_capabilities());
     app.emby_runtime = EmbyRuntime::default();

@@ -120,7 +120,7 @@ fn queue_with_start(items: &[EmbyItem], start_index: usize) -> UnifiedQueueState
 pub(crate) fn gui_app_with_named_queues() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(3), 0);
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         stay_alive: true,
         ..remote_stub_config()
     };
@@ -142,7 +142,7 @@ pub(crate) fn gui_app_with_named_queues() -> (App, std::sync::mpsc::Receiver<mbv
 fn answered_local_daemon_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(3), 0);
-    let config = crate::config::Config {
+    let config = crate::app::config::Config {
         stay_alive: true,
         ..remote_stub_config()
     };

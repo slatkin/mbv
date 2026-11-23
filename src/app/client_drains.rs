@@ -344,7 +344,7 @@ impl App {
             && Instant::now() >= at
         {
             let cfg = self.config.lock().unwrap().clone();
-            crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
+            crate::app::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
             self.settings_save_at = None;
         }
 
