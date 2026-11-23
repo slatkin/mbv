@@ -419,11 +419,11 @@ impl App {
     /// design D3): the fetch has returned, so retire the shared
     /// outstanding-fetch mark when it names this target. Retiring the mark and
     /// the log stay here, in the core. Recording the terminal failure beside
-    /// the Client's claim is the last thing the event asks of its Client, so
-    /// it is collected as `FeedTargetFailed` and applied through `stores`: the
-    /// shown pass then skips the target, so an automatic repaint never retries
-    /// it; a user press clears the mark. A library the Client has not claimed
-    /// keeps no mark, so the TUI's own rules alone govern its fetches.
+    /// the Client's claim is `FeedTargetFailed`, applied through `stores` at
+    /// the position the direct claim write held — before the log: the shown
+    /// pass then skips the target, so an automatic repaint never retries it; a
+    /// user press clears the mark. A library the Client has not claimed keeps
+    /// no mark, so the TUI's own rules alone govern its fetches.
     pub(in crate::app) fn handle_feed_home_video_selection_failed(
         &mut self,
         event: FeedHomeVideoSelectionFailed,
@@ -442,6 +442,14 @@ impl App {
         {
             state.fetching = None;
         }
+        // The Client's terminal failure mark is recorded where the direct
+        // claim write used to sit — after the outstanding-fetch mark retires
+        // and before the log — so it is applied through `stores` here and not
+        // collected to the end of the arm.
+        self.apply_library_effects(
+            stores,
+            &[ClientLibraryEffect::FeedTargetFailed { lib_idx, selection }],
+        );
         tracing::info!(
             name: "feed.home_video.selection_fetch_failed",
             target: "gui_library",
@@ -450,13 +458,6 @@ impl App {
             "the feed-group target's items failed to load"
         );
         self.log_feed_home_video_state(lib_idx, "selection_fetch_failed");
-        // The Client's terminal failure mark is the last thing this arm does,
-        // exactly as the direct claim write that used to sit above was, so it
-        // is the event's one collected effect.
-        self.apply_library_effects(
-            stores,
-            &[ClientLibraryEffect::FeedTargetFailed { lib_idx, selection }],
-        );
     }
 
     /// Start `lib_idx`'s root-list fetch when the store holds no list (row

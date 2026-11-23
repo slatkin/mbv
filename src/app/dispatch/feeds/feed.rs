@@ -520,16 +520,16 @@ impl App {
         // The event's store work keeps the order of the direct calls this
         // arm made: the target's terminal failure mark retires first (the
         // fetch returned, so a later cache miss can fetch it again), then the
-        // items land, and the target's rows changed, so its Client re-queues
-        // the artwork they lack. The effects are collected here and applied
-        // through `stores` before the next event runs.
-        let effects = [
-            ClientLibraryEffect::FeedTargetLanded {
+        // items land. The retirement is applied through `stores` here, at the
+        // position it held in the core before the split; the arm asked a
+        // Client for nothing else, so no row re-queue follows.
+        self.apply_library_effects(
+            stores,
+            &[ClientLibraryEffect::FeedTargetLanded {
                 lib_idx,
                 selection: selection.clone(),
-            },
-            ClientLibraryEffect::RowArtSourcesChanged,
-        ];
+            }],
+        );
         if let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -552,12 +552,10 @@ impl App {
         }
         if stale {
             self.log_feed_home_video_state(lib_idx, "selection_loaded_dropped_stale");
-            self.apply_library_effects(stores, &effects);
             return;
         }
         self.clamp_feed_home_video_state(lib_idx);
         self.log_feed_home_video_state(lib_idx, "selection_loaded");
-        self.apply_library_effects(stores, &effects);
     }
 
     /// Whether a landed target's list still serves the library (design D3):

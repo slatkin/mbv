@@ -632,10 +632,11 @@ pub struct App {
     /// `Primary` image; never an artist key. Cleared on Service swap.
     pub(in crate::app) artist_name_item_ids: std::collections::HashMap<String, String>,
     /// Normalized artist name -> its artist search state while the name has no
-    /// resolved id (`gui_library::artist_lookup`). Cleared on Service swap.
+    /// resolved id (`dispatch::library::artist_lookup`). Cleared on Service
+    /// swap.
     pub(in crate::app) artist_name_lookups: std::collections::HashMap<
         String,
-        crate::app::gui_library::artist_lookup::ArtistNameLookupEntry,
+        crate::app::dispatch::library::artist_lookup::ArtistNameLookupEntry,
     >,
     /// Per-level album-artist fill lifecycle: one background request fills
     /// every album bucket in a level, so the fill state is keyed by level id

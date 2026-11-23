@@ -9,10 +9,29 @@
 //! Named queues.
 
 use mbv_ctrl::QueueOpId;
+use mbv_queue::NamedQueueId;
 
 use crate::app::App;
+use crate::app::gui_client_state::overlay::{GuiOverlay, QueueChooserState, QueueRenameDraft};
 
 impl App {
+    /// Present the Queue chooser with `queue`'s name open for edit (design D8):
+    /// the GUI Client's half of a new queue's or the rename control's request.
+    /// The core computes the entry's cursor and draft text, because both read
+    /// core-owned queue state; the overlay itself is GUI presentation, so its
+    /// construction stays here rather than in the core's Named-queue state.
+    pub(in crate::app) fn present_gui_queue_rename(
+        &mut self,
+        queue: NamedQueueId,
+        cursor: usize,
+        text: String,
+    ) {
+        self.gui_overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
+            cursor,
+            renaming: Some(QueueRenameDraft::selecting(queue, text)),
+        }));
+    }
+
     /// Record a Named-queue command whose answer the Client does not pump for,
     /// so a rejection can find it (design D8).
     pub(in crate::app) fn note_named_queue_op(&mut self, op: QueueOpId) {

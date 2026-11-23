@@ -11,15 +11,6 @@
 use crate::app::App;
 use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 
-/// What a name's artist search knows while it has no resolved id.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::app) enum ArtistNameLookupEntry {
-    /// The search is in flight.
-    Loading,
-    /// The Service answered and no artist name matched. Final.
-    Unmatched,
-}
-
 impl App {
     /// The Service artist item id known for an artist name, if any.
     pub(in crate::app) fn gui_artist_item_id(&self, name: &str) -> Option<&str> {

@@ -11,7 +11,6 @@ use mbv_queue::NamedQueueId;
 use mbv_ui_model::confirm::ConfirmAction;
 
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::gui_client_state::{GuiOverlay, QueueChooserState, QueueRenameDraft};
 use crate::app::state::client_capabilities::ClientCapability;
 use crate::app::state::playback::ShownEntry;
 use crate::app::state::queue_view::{AdoptCause, QueueView};
@@ -166,6 +165,12 @@ impl App {
     /// draft a new queue's name opens in. The peer entry has no name to edit,
     /// so it does nothing there, as the disabled control does.
     pub(in crate::app) fn request_rename_shown_queue(&mut self) {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::TransportChipKeys)
+        {
+            return;
+        }
         if let Some(ShownEntry::Local(queue)) = self.shown_entry {
             self.open_new_queue_rename(queue);
         }
@@ -244,10 +249,7 @@ impl App {
             .position(|entry| entry.queue == Some(queue))
             .unwrap_or_default();
         let text = self.named_queues.name_of(queue).unwrap_or_default();
-        self.gui_overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
-            cursor,
-            renaming: Some(QueueRenameDraft::selecting(queue, text)),
-        }));
+        self.present_gui_queue_rename(queue, cursor, text);
     }
 
     /// Whether `op` is the new-queue request the control sent, which this
