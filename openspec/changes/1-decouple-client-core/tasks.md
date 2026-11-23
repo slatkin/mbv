@@ -68,7 +68,7 @@ In the conversion rows of groups 6 and 7, convert the `impl App` blocks of the n
 - [x] 6.2 Add `GuiCore { app: App }` in `src/gui.rs` (outside `crate::app`) and export it from `src/lib.rs`. Make the GUI's `CoreThread` (`crates/mbv-gui/src/core_thread.rs`, `attach.rs`) hold it in place of `App`. Then, as a sweep, make the `mbv-gui` tests and benches that build an `App` stub (`tests/**`, `benches/sections.rs`) wrap it in `GuiCore`.
 - [x] 6.3 Convert `input/gui.rs`, `gui_client_state.rs`, and `gui_client_state/{overlay,popover,player_menu,queue_chooser}.rs`.
 - [x] 6.4 Convert `gui_client_state/{target,row_menu,confirm,daemon_lost,queue_controls,projection}.rs`.
-- [x] 6.5 **Gate.** nextest `-p mbv -p mbv-gui`. `rg -n "\b(self|app)\.gui_[a-z]|\b(self|app)\.(panel_collapsed|queue_folded)\b" src crates/mbv-gui/src` finds nothing.
+- [x] 6.5 **Gate.** nextest `-p mbv -p mbv-gui`. `rg -n "\b(self|app)\.gui_[a-z]|\b(self|app)\.(panel_collapsed|queue_folded)\b" src crates/mbv-gui/src` finds nothing (field accesses only: the pattern also matches method calls named `gui_*`, which keep their names; checked with `rg -nP "\b(self|app)\.gui_[a-z_0-9]+\b(?!\s*[(:])"`).
 
 ## 7. `GuiCore`, settings, playlists, and the library
 
