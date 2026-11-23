@@ -313,15 +313,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a89cbf775b137e9b968e67227ef7f775587cde3fd31b0d8599dbd0f598a48340"
-dependencies = [
- "bytemuck",
-]
-
-[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2155,9 +2146,9 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.2"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
+checksum = "afa489199eaffb1211795df1c6236ce1ad0d41a6fa45250add73e3b02420f06e"
 dependencies = [
  "percent-encoding",
 ]
@@ -3549,9 +3540,9 @@ dependencies = [
  "mbv-visualizer",
  "mbv-ws",
  "mimalloc",
- "nix 0.31.3",
+ "nix 0.32.0",
  "openssl",
- "rand 0.10.3",
+ "rand 0.10.4",
  "ratatui",
  "ratatui-image",
  "rstest",
@@ -3633,7 +3624,7 @@ version = "0.28.3"
 dependencies = [
  "mbv-keybinds",
  "mbv-queue",
- "nix 0.31.3",
+ "nix 0.32.0",
  "rstest",
  "serde",
  "serde_json",
@@ -3692,9 +3683,9 @@ dependencies = [
  "mbv-player",
  "mbv-queue",
  "mbv-ws",
- "nix 0.31.3",
+ "nix 0.32.0",
  "num-traits",
- "rand 0.10.3",
+ "rand 0.10.4",
  "rstest",
  "serde_json",
  "tracing",
@@ -3730,7 +3721,7 @@ dependencies = [
  "mbv-queue",
  "mbv-text",
  "mbv-ws",
- "rand 0.10.3",
+ "rand 0.10.4",
  "rstest",
  "serde",
  "serde_json",
@@ -3842,7 +3833,7 @@ version = "0.28.3"
 dependencies = [
  "mbv-core",
  "percent-encoding",
- "rand 0.10.3",
+ "rand 0.10.4",
  "tracing",
  "tracing-subscriber",
  "ureq",
@@ -3876,7 +3867,7 @@ name = "mbv-queue"
 version = "0.28.3"
 dependencies = [
  "mbv-emby-model",
- "rand 0.10.3",
+ "rand 0.10.4",
  "rstest",
  "schemars",
  "serde",
@@ -4018,7 +4009,7 @@ dependencies = [
  "mbv-emby",
  "mbv-queue",
  "mimalloc",
- "nix 0.31.3",
+ "nix 0.32.0",
  "openssl",
  "serde_json",
  "tracing",
@@ -4026,9 +4017,9 @@ dependencies = [
 
 [[package]]
 name = "mdns-sd"
-version = "0.21.7"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6743ed743ff2bada2b8651ef298d3f98addb0b74844f19cdd57137d8bd0219e"
+checksum = "9aaf7ecb589a3bb5e9642c3e5f79e1e54a8ea8c1c48bc9975c39d77fa640764c"
 dependencies = [
  "fastrand",
  "flume",
@@ -4275,9 +4266,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.31.3"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+checksum = "77730ed34f01f4990cb2ea67fec715ecebc6fab9a6396cf83c5529b13f581bdc"
 dependencies = [
  "bitflags 2.13.2",
  "cfg-if",
@@ -5423,9 +5414,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af"
+checksum = "8f6fa277c67e6ea590466f04c3fe82cb509f0864fe470643e5570de9514a9b11"
 dependencies = [
  "chacha20",
  "getrandom 0.4.2",
@@ -6756,7 +6747,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
@@ -7228,7 +7219,7 @@ dependencies = [
  "httparse",
  "log",
  "native-tls",
- "rand 0.10.3",
+ "rand 0.10.4",
  "sha1",
  "thiserror 2.0.18",
 ]
@@ -7373,9 +7364,9 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.5.8"
+version = "2.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
+checksum = "f00cd2407bb42c0ef17be88d4cf020f5cceffd121665bac9b8b9493a369b3b1a"
 dependencies = [
  "form_urlencoded",
  "idna",
@@ -7432,14 +7423,13 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.29.2"
+version = "1.29.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bed99139f7dac9b5cfe5f17be4d66dc7079a34dee1d74bcc77217119240e267c"
+checksum = "3c14b15dffa2f4bd712103e857140aa04a4f2ff6e955c77d7eb8e53ee02a3b64"
 dependencies = [
- "atomic",
  "getrandom 0.4.2",
  "js-sys",
- "rand 0.10.3",
+ "rand 0.10.4",
  "serde_core",
  "wasm-bindgen",
 ]

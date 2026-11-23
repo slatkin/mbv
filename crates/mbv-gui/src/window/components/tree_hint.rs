@@ -7,13 +7,13 @@
 //! so the hint hides no information.
 //!
 //! The span holds no hover state and no open state: the row owns the open
-//! state and passes it in, and `assets/app.css` shows the tooltip only while
-//! the pointer rests on the row, so Blitz sets and clears the hover. The row
+//! state and passes it in, and `assets/app.css` shows the tooltip only after
+//! the pointer rests on the row past the browsers' own rest delay, so Blitz
+//! sets and clears the hover. The card inverts the menu card's colours — the
+//! heading fill behind the menu text — so it stands off the canvas. The row
 //! is the tooltip's positioning box and does not clip it.
 
 use dioxus_native::prelude::*;
-
-use crate::window::components::menu_card::MENU_CARD_STYLE;
 
 /// The props of the hint.
 #[derive(Props, Debug, Clone, PartialEq)]
@@ -37,7 +37,7 @@ pub fn TreeHint(props: TreeHintProps) -> Element {
     rsx! {
         span {
             class: "tree-hint pointer-events-none absolute z-30 whitespace-nowrap",
-            style: "top: 100%; right: 8px; margin-top: 2px; padding: 4px 8px; font-size: 12px; color: var(--canvas-heading); {MENU_CARD_STYLE}",
+            style: "top: 100%; right: 8px; margin-top: 2px; padding: 4px 8px; font-size: 12px; background: var(--canvas-heading); color: var(--canvas-menu); border: 1px solid var(--canvas-menu-border); border-radius: 8px; box-shadow: var(--canvas-menu-shadow);",
             "data-tree-hint": "",
             "{hint_text(props.open)}"
         }
