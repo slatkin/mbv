@@ -63,13 +63,13 @@ fn build_count(model: &Model) -> u32 {
 }
 
 fn ensure_title_overlay_protocol(
-    app: &mut Model,
+    model: &mut Model,
     cache_key: &str,
     available: (u16, u16),
     parts: &mbv_queue::PlaybackTitleParts,
     logo_cache_key: Option<&str>,
 ) -> Option<String> {
-    app.ensure_title_overlay_protocol(cache_key, available, parts, logo_cache_key, "Movie")
+    model.ensure_title_overlay_protocol(cache_key, available, parts, logo_cache_key, "Movie")
 }
 
 fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
@@ -89,68 +89,72 @@ fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
 /// it. Catches stale titles after track changes and recompose storms.
 #[test]
 fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks() {
-    let mut app = app_with_base();
-    app.app.set_dim_backdrop_active_for_test(true);
-    app.cached_image_protocol_mut(BASE_KEY)
+    let mut model = app_with_base();
+    model.app.set_dim_backdrop_active_for_test(true);
+    model
+        .cached_image_protocol_mut(BASE_KEY)
         .expect("base protocol is available under the dimmed suffix");
-    app.app.set_dim_backdrop_active_for_test(false);
-    app.cached_image_protocol_mut(BASE_KEY)
+    model.app.set_dim_backdrop_active_for_test(false);
+    model
+        .cached_image_protocol_mut(BASE_KEY)
         .expect("base protocol is available under the configured suffix");
-    let baseline = build_count(&app);
-    let ensure = |app: &mut Model, title: &str| {
-        ensure_title_overlay_protocol(app, BASE_KEY, (8, 4), &title_parts(title), Some(LOGO_KEY))
+    let baseline = build_count(&model);
+    let ensure = |model: &mut Model, title: &str| {
+        ensure_title_overlay_protocol(model, BASE_KEY, (8, 4), &title_parts(title), Some(LOGO_KEY))
     };
 
     let text_variant =
-        ensure(&mut app, "a title").expect("the text variant builds while the logo is absent");
-    assert_eq!(build_count(&app), baseline + 1);
-    assert_eq!(ensure(&mut app, "a title"), Some(text_variant.clone()));
+        ensure(&mut model, "a title").expect("the text variant builds while the logo is absent");
+    assert_eq!(build_count(&model), baseline + 1);
+    assert_eq!(ensure(&mut model, "a title"), Some(text_variant.clone()));
     assert_eq!(
-        build_count(&app),
+        build_count(&model),
         baseline + 1,
         "playback ticks reuse the text variant"
     );
 
-    app.app
+    model
+        .app
         .insert_cached_image_for_test(LOGO_KEY, CachedImage::empty());
     assert_eq!(
-        ensure(&mut app, "a title"),
+        ensure(&mut model, "a title"),
         Some(text_variant.clone()),
         "a failed logo reuses the text variant"
     );
-    assert_eq!(build_count(&app), baseline + 1);
+    assert_eq!(build_count(&model), baseline + 1);
 
-    app.app
+    model
+        .app
         .insert_cached_image_for_test(LOGO_KEY, cached(Some(image(2, 1))));
-    let logo_variant = ensure(&mut app, "a title").expect("a ready logo builds the logo variant");
+    let logo_variant = ensure(&mut model, "a title").expect("a ready logo builds the logo variant");
     assert_ne!(logo_variant, text_variant);
     assert_eq!(
-        build_count(&app),
+        build_count(&model),
         baseline + 2,
         "logo arrival builds one new variant"
     );
-    assert_eq!(ensure(&mut app, "a title"), Some(logo_variant.clone()));
+    assert_eq!(ensure(&mut model, "a title"), Some(logo_variant.clone()));
     assert_eq!(
-        build_count(&app),
+        build_count(&model),
         baseline + 2,
         "a ready logo is reused on later ticks"
     );
 
-    let changed = ensure(&mut app, "second").expect("a track change builds a distinct variant");
+    let changed = ensure(&mut model, "second").expect("a track change builds a distinct variant");
     assert_ne!(changed, logo_variant);
-    assert!(app.app.cached_image_for_test(&logo_variant).is_none());
+    assert!(model.app.cached_image_for_test(&logo_variant).is_none());
     assert_eq!(
-        build_count(&app),
+        build_count(&model),
         baseline + 3,
         "a track change builds one protocol"
     );
 
-    let changed_composed = app.app.cached_image_pixels_for_test(&changed);
-    app.app.drop_cached_pixels_for_test(BASE_KEY);
-    app.app.set_dim_backdrop_active_for_test(true);
-    assert_eq!(ensure(&mut app, "second"), Some(changed.clone()));
+    let changed_composed = model.app.cached_image_pixels_for_test(&changed);
+    model.app.drop_cached_pixels_for_test(BASE_KEY);
+    model.app.set_dim_backdrop_active_for_test(true);
+    assert_eq!(ensure(&mut model, "second"), Some(changed.clone()));
     assert_eq!(
-        build_count(&app),
+        build_count(&model),
         baseline + 3,
         "the dimmed backdrop's sizing keeps the configured variant key and builds nothing"
     );
@@ -158,15 +162,16 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
     // the overlay is measured on the configured grid (stable key above), and
     // the slot painter lazily re-encodes the variant for the fallback suffix
     // when it resolves the protocol to paint.
-    app.cached_image_protocol_mut(&changed)
+    model
+        .cached_image_protocol_mut(&changed)
         .expect("the painter resolves the variant under the fallback suffix");
     assert_eq!(
-        build_count(&app),
+        build_count(&model),
         baseline + 4,
         "suffix flip re-encodes without recomposing"
     );
     assert_eq!(
-        app.app.cached_image_pixels_for_test(&changed),
+        model.app.cached_image_pixels_for_test(&changed),
         changed_composed
     );
 }
@@ -175,11 +180,12 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
 fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
     // Regression guard for the shared-key flash documented by
     // `audiobookshelf_hero_cover_cache_key`: the `{id}:P` bitmap stays plain.
-    let mut app = app_with_base();
+    let mut model = app_with_base();
     let plain_key = "item:P";
-    app.app
+    model
+        .app
         .insert_cached_image_for_test(plain_key, fetched(image(4, 2)));
-    let plain_before = app.app.cached_image_pixels_for_test(plain_key);
+    let plain_before = model.app.cached_image_pixels_for_test(plain_key);
     let parts = mbv_queue::PlaybackTitleParts {
         title: mbv_queue::PlaybackTitlePart {
             role: mbv_queue::PlaybackTitlePartRole::Title,
@@ -188,12 +194,12 @@ fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
         context: None,
     };
 
-    let variant = ensure_title_overlay_protocol(&mut app, plain_key, (32, 16), &parts, None)
+    let variant = ensure_title_overlay_protocol(&mut model, plain_key, (32, 16), &parts, None)
         .expect("measurable plain art builds an overlay variant");
 
     assert_ne!(variant, plain_key);
     assert_eq!(
-        app.app.cached_image_pixels_for_test(plain_key),
+        model.app.cached_image_pixels_for_test(plain_key),
         plain_before
     );
 }
@@ -203,33 +209,33 @@ fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
 /// re-encodes once after the hold lifts.
 #[test]
 fn resize_drag_holds_the_placeholder_and_reencodes_once_after_it_settles() {
-    let mut app = app_with_base();
-    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, false));
-    let baseline = build_count(&app);
+    let mut model = app_with_base();
+    assert!(model.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, false));
+    let baseline = build_count(&model);
 
     assert!(
-        !app.ensure_hero_cover_protocol(BASE_KEY, (13, 6), None, true),
+        !model.ensure_hero_cover_protocol(BASE_KEY, (13, 6), None, true),
         "the hold reports not ready so the drag shows the placeholder"
     );
-    assert_eq!(build_count(&app), baseline, "the hold builds nothing");
+    assert_eq!(build_count(&model), baseline, "the hold builds nothing");
 
-    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (13, 6), None, false));
+    assert!(model.ensure_hero_cover_protocol(BASE_KEY, (13, 6), None, false));
     assert_eq!(
-        build_count(&app),
+        build_count(&model),
         baseline + 1,
         "the settled box re-encodes once"
     );
-    assert!(app.app.cached_cover_box_is_for_test(BASE_KEY, (13, 6)));
+    assert!(model.app.cached_cover_box_is_for_test(BASE_KEY, (13, 6)));
 }
 
 /// Invariant 20: a box that matches the kept encoding still paints during
 /// the hold, so a drag back to the encoded size shows art.
 #[test]
 fn resize_drag_hold_paints_a_box_matching_the_kept_encoding() {
-    let mut app = app_with_base();
-    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, false));
-    let baseline = build_count(&app);
+    let mut model = app_with_base();
+    assert!(model.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, false));
+    let baseline = build_count(&model);
 
-    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, true));
-    assert_eq!(build_count(&app), baseline);
+    assert!(model.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, true));
+    assert_eq!(build_count(&model), baseline);
 }

@@ -62,15 +62,15 @@ fn app_with_card_image() -> Model {
     model
 }
 
-fn paint_slot(app: &mut Model) {
-    paint_slot_in(app, Rect::new(0, 0, 40, 24));
+fn paint_slot(model: &mut Model) {
+    paint_slot_in(model, Rect::new(0, 0, 40, 24));
 }
 
-fn paint_slot_in(app: &mut Model, area: Rect) {
+fn paint_slot_in(model: &mut Model, area: Rect) {
     let mut terminal = Terminal::new(TestBackend::new(48, 30)).unwrap();
     terminal
         .draw(|frame| {
-            super::render_queue_playback_slot(app, 50, frame, area, true);
+            super::render_queue_playback_slot(model, 50, frame, area, true);
         })
         .unwrap();
 }
@@ -79,14 +79,15 @@ fn paint_slot_in(app: &mut Model, area: Rect) {
 /// art, so the slot must not show the final no-image placeholder (invariant 27).
 #[test]
 fn an_interrupted_fetch_does_not_paint_the_no_image_placeholder() {
-    let mut app = app_with_card_image();
-    app.app.remove_cached_image_for_test(CARD_KEY);
-    app.app.interrupt_card_image_fetch_for_test(CARD_KEY);
+    let mut model = app_with_card_image();
+    model.app.remove_cached_image_for_test(CARD_KEY);
+    model.app.interrupt_card_image_fetch_for_test(CARD_KEY);
 
-    paint_slot(&mut app);
+    paint_slot(&mut model);
 
     assert!(
-        app.app
+        model
+            .app
             .cached_image(mbv_images::QUEUE_CARD_PLACEHOLDER_KEY)
             .is_none()
     );
@@ -95,10 +96,11 @@ fn an_interrupted_fetch_does_not_paint_the_no_image_placeholder() {
 /// Same slot, but square artwork: its fitted size is the tier cap bounded by
 /// half the slot width, so the arithmetic is easy to reason about.
 fn app_with_square_card_image() -> Model {
-    let mut app = app_with_card_image();
-    app.app
+    let mut model = app_with_card_image();
+    model
+        .app
         .insert_cached_image_for_test(CARD_KEY, cached(Some(card_image(100, 100))));
-    app
+    model
 }
 
 /// The recorded card size must not depend on the slot region's height -- the
@@ -126,22 +128,22 @@ fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
 /// for the configured protocol's paint once the backdrop lifts.
 #[test]
 fn dimmed_backdrop_paint_does_not_move_the_queue_card_checkpoint() {
-    let mut app = app_with_card_image();
+    let mut model = app_with_card_image();
     // The configured protocol's last paint before any modal opened.
-    app.app.record_card_size_for_test(16, 32);
+    model.app.record_card_size_for_test(16, 32);
 
-    app.app.set_dim_backdrop_active_for_test(true);
-    paint_slot(&mut app);
+    model.app.set_dim_backdrop_active_for_test(true);
+    paint_slot(&mut model);
     assert_eq!(
-        app.app.last_card_size(),
+        model.app.last_card_size(),
         (16, 32),
         "the dimmed backdrop's fallback paint must not move the checkpoint"
     );
 
-    app.app.set_dim_backdrop_active_for_test(false);
-    paint_slot(&mut app);
+    model.app.set_dim_backdrop_active_for_test(false);
+    paint_slot(&mut model);
     assert_ne!(
-        app.app.last_card_size(),
+        model.app.last_card_size(),
         (16, 32),
         "recording resumes for the configured protocol's paint"
     );
