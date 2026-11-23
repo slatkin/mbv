@@ -257,20 +257,18 @@ pub struct App {
     /// The one Client-kind fact (add-gui-library-panel design D4, D9):
     /// `true` for a GUI Client, `false` for a TUI Client. The GUI Client
     /// sets it before its first step (`App::mark_gui_client`); the TUI
-    /// Client never does. It decides both facts the Clients differ on,
-    /// exposed as `App::client_arranges_panels` and
-    /// `App::visual_slot_controls`: the GUI Client arranges its own panels
-    /// from its measured size and always paints the Queue panel, so
-    /// `terminal_width` has no meaning there and the terminal-width Mini
-    /// check and the hidden empty queue column do not apply; and only the
-    /// TUI Client paints the visualizer and a control for the visual slot's
-    /// hide, so the visualizer and hide setters and the persisted hide do
-    /// nothing for the GUI Client.
+    /// Client never does. The panel-shape and visual-slot differences the
+    /// Clients have moved to `client_capabilities` (design D6a); what
+    /// remains on this flag is the shown-queue and keyboard-reader axis that
+    /// rows 3.4 and 3.5 delete.
     pub(in crate::app) gui_client: bool,
     /// The neutral facts this Client differs on (design D6a): each capability
     /// stands for one thing a Client presents, so the core reads a fact and
-    /// never names a Client. Each Client builds its own value; it defaults to
-    /// empty, and no reader uses it yet.
+    /// never names a Client. Each Client builds its own value: `App::build`
+    /// starts empty and the Owner attach records the Client's own set before
+    /// its first step. The terminal-panel rules and the visual-slot controls
+    /// gate the mini view, the hidden empty queue column, and the visualizer
+    /// and visual-slot hide setters.
     pub(in crate::app) client_capabilities: ClientCapabilities,
     /// The GUI Library panel's selected collections per destination
     /// (add-gui-library-panel design D2, D5; gui-collection-dropdown design

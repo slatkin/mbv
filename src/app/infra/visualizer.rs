@@ -1,4 +1,5 @@
 use super::super::App;
+use crate::app::state::client_capabilities::ClientCapability;
 use mbv_visualizer::PipeWireWorker;
 
 impl App {
@@ -79,9 +80,13 @@ impl App {
     /// The GUI Client paints no visualizer surface, and its slot paints the
     /// item's art (`App::queue_card_artwork` answers `Hidden` while the
     /// visualizer owns the slot), so enabling it there would blank the art with
-    /// nothing in its place: a GUI Client's selection is a no-op.
+    /// nothing in its place: a Client without `VisualSlotControls` makes this
+    /// selection a no-op.
     pub(in crate::app) fn set_visualizer(&mut self, enabled: bool) {
-        if !self.visual_slot_controls() {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::VisualSlotControls)
+        {
             return;
         }
         self.visualizer_enabled = enabled;
@@ -96,11 +101,15 @@ impl App {
 
     /// Set the persisted visual-slot hidden state, reconcile capture, and
     /// persist. Shared by the `h` keyboard action and the visual slot menu's
-    /// Hide entry. The GUI Client neither acts on the hide nor writes it
+    /// Hide entry. A Client without the `VisualSlotControls` capability
+    /// neither acts on the hide nor writes it
     /// (`App::visual_slot_hide_in_effect`), so the state and the stored
     /// preference stay the TUI's.
     pub(in crate::app) fn set_visual_slot_hidden(&mut self, hidden: bool) {
-        if !self.visual_slot_controls() {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::VisualSlotControls)
+        {
             return;
         }
         self.visual_slot_hidden = hidden;

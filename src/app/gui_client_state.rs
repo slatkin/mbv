@@ -30,33 +30,25 @@ pub use self::projection::{
 };
 
 use crate::app::App;
+use crate::app::state::client_capabilities::ClientCapability;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 impl App {
-    /// Mark this `App` as the GUI Client's (design D6a): the sole reader of
-    /// `gui_client` that remains until rows 3.3 and 3.4 delete the field and
-    /// its readers. The GUI Client calls it before its first step; nothing
-    /// else sets the flag. It decides no launch rule of its own: the GUI
-    /// adopts its launch location through `App::skip_launch_restore`.
+    /// Mark this `App` as the GUI Client's (design D6a). The GUI Client calls
+    /// it before its first step; nothing else sets the flag. A test's stub
+    /// starts with the TUI Client's capabilities, so this drops the two the
+    /// GUI does not present (`TerminalPanelRules`,
+    /// `VisualSlotControls`); a real GUI Client records its own set through
+    /// `App::set_client_capabilities` at attach. It decides no launch rule of
+    /// its own: the GUI adopts its launch location through
+    /// `App::skip_launch_restore`.
     #[doc(hidden)]
     pub fn mark_gui_client(&mut self) {
         self.gui_client = true;
-    }
-
-    /// Whether the Client arranges its own panels from its measured size and
-    /// always paints the Queue panel (design D4, D9): the GUI Client does, so
-    /// `terminal_width` has no meaning there and the terminal-cell rules do
-    /// not apply. The TUI Client keeps the terminal-cell rules.
-    pub(in crate::app) fn client_arranges_panels(&self) -> bool {
-        self.gui_client
-    }
-
-    /// Whether the Client paints the visualizer and a control for the visual
-    /// slot's hide: the TUI Client paints both, the GUI Client paints
-    /// neither, so the visualizer and hide setters and the persisted hide do
-    /// nothing for it. It is the inverse of `client_arranges_panels`.
-    pub(in crate::app) fn visual_slot_controls(&self) -> bool {
-        !self.gui_client
+        self.client_capabilities = self
+            .client_capabilities
+            .without(ClientCapability::TerminalPanelRules)
+            .without(ClientCapability::VisualSlotControls);
     }
 
     /// Whether the player panel hides its transport controls until the

@@ -1,6 +1,7 @@
 mod local;
 
 use crate::app::App;
+use crate::app::state::client_capabilities::ClientCapability;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
 #[derive(Clone, Copy)]
@@ -64,15 +65,18 @@ impl App {
 
     /// Whether the persisted visual-slot hide applies to this Client.
     ///
-    /// The TUI Client owns the hide: the `hide_visual_slot` chord and the
-    /// visual slot's context menu both write it, and it persists across
-    /// launches. The GUI Client's window content paints no control for it and
-    /// no menu entry reaches it, so a hide saved from a TUI run would leave
-    /// every now-playing surface (the still slot, the compact strip, and the
-    /// rail) painting none of the item's art with no way to show it again.
-    /// The GUI therefore neither acts on the hide nor writes it.
+    /// The TUI Client holds the `VisualSlotControls` capability and owns the
+    /// hide: the `hide_visual_slot` chord and the visual slot's context menu
+    /// both write it, and it persists across launches. A Client without the
+    /// capability paints no control for it and no menu entry reaches it, so a
+    /// hide saved from a TUI run would leave every now-playing surface (the
+    /// still slot, the compact strip, and the rail) painting none of the
+    /// item's art with no way to show it again. Such a Client therefore
+    /// neither acts on the hide nor writes it.
     pub(in crate::app) fn visual_slot_hide_in_effect(&self) -> bool {
-        self.visual_slot_controls() && self.visual_slot_hidden
+        self.client_capabilities
+            .has(ClientCapability::VisualSlotControls)
+            && self.visual_slot_hidden
     }
 
     /// Whether the `QueueColumn`'s visual slot should be reserved and painted.

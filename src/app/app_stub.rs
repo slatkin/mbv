@@ -30,6 +30,14 @@ fn apply_app_stub_defaults(app: &mut App) {
     // `build` doubles the configured image cache size; the stub keeps its
     // original (undoubled) budget so eviction behaviour is unchanged.
     app.images.set_cache_capacity_for_test(50);
+    // The stub stands in for a TUI Client without an Owner attach (design
+    // D6a of `decouple-client-core`): it holds the capabilities the TUI
+    // presents, which `App::build` leaves empty until a Client sets them.
+    app.set_client_capabilities(
+        crate::ClientCapabilities::empty()
+            .with(crate::ClientCapability::TerminalPanelRules)
+            .with(crate::ClientCapability::VisualSlotControls),
+    );
     // Ignore any on-disk feed entry state; a stub starts empty.
     app.feed_entry_state = mbv_feed::FeedEntryStore::default();
     // Default to a focused window that reported focus in the past, so

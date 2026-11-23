@@ -1,3 +1,4 @@
+use crate::app::state::client_capabilities::ClientCapability;
 use crate::app::{App, PanelFocus, PanelMode};
 use std::time::Instant;
 
@@ -29,10 +30,12 @@ pub(in crate::app) fn panel_appearance_focus_decision(
 impl App {
     /// Whether the terminal is below `MINI_VIEW_THRESHOLD` columns, i.e. the
     /// Power View is in mini view: a single displayed panel, no sibling to
-    /// contrast a focused palette against. The GUI Client arranges its own
-    /// panels from its measured size, so its geometry fact keeps this false.
+    /// contrast a focused palette against. A Client that does not follow the
+    /// terminal-panel rules arranges its own panels from its measured size,
+    /// so its capability keeps this false.
     pub(in crate::app) fn is_mini_view(&self) -> bool {
-        !self.client_arranges_panels()
+        self.client_capabilities
+            .has(ClientCapability::TerminalPanelRules)
             && self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
     }
 
@@ -40,12 +43,13 @@ impl App {
     /// because the displayed queue has no slots. Mini view and queue-only keep
     /// the
     /// empty-queue placeholder, so only the wide two-panel layout hides.
-    /// A Client that arranges its own panels always paints the Queue panel, so
-    /// its geometry fact keeps this false too.
+    /// A Client without the terminal-panel rules always paints the Queue
+    /// panel, so its capability keeps this false too.
     /// The stored `panel_mode` is never written: the `x` cycle reads the
     /// stored mode and still advances `both -> queue-only` while hidden.
     pub(in crate::app) fn queue_column_hidden_empty(&self) -> bool {
-        !self.client_arranges_panels()
+        self.client_capabilities
+            .has(ClientCapability::TerminalPanelRules)
             && !self.is_mini_view()
             && self.panel_mode == PanelMode::Both
             && self.displayed_queue().slots().is_empty()
