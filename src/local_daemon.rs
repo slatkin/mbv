@@ -7,95 +7,22 @@
 //! any other `DaemonEndpoint::Local` client does.
 //!
 //! Roles:
-//! - The **launcher** (bare `mbv` with `stay_alive` set) calls
-//!   [`spawn_detached`] to fork+detach a local daemon, then attaches to it
-//!   as an ordinary client (`App::new_remote`).
+//! - The **launcher** (a Client with `stay_alive` set) starts a local daemon
+//!   through `crate::app::owner_link::start_owner`, then attaches to it as an
+//!   ordinary client (`App::new_remote`).
 //! - The **local daemon** is `mbv --__local-daemon`, entered via
 //!   [`run_local_daemon_main`], which never returns.
+//!
+//! Only the Owner's own half stays here (design D3 of
+//! `split-tui-gui-clients`): the swap launch, the tray hooks, and the run
+//! loop. The Client half — the argv, the display environment, and the
+//! detached spawn that waits for the control socket — lives beside the Owner
+//! link in `crate::app::owner_link`, because a Client starts the Owner.
 
 use std::ffi::OsStr;
-use std::io::{self, Read};
-use std::os::unix::net::UnixStream;
-use std::path::Path;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
 
 use mbv_desktop::launch::{detach, launch_exe, terminal_prefix, toggle_panel};
-
-const READY_TIMEOUT: Duration = Duration::from_secs(5);
-const READY_POLL_INTERVAL: Duration = Duration::from_millis(20);
-
-/// Fork+detach a local daemon (`mbv --__local-daemon`) and wait until its
-/// control socket is ready. On failure -- including the daemon exiting
-/// early because the cached token is missing/invalid -- returns the reason
-/// so the still-live launching terminal can report it, rather than the
-/// daemon failing silently in the background.
-fn local_daemon_args(log_level: Option<mbv_core::applog::LogSpec>) -> Vec<String> {
-    let mut args = vec!["--__local-daemon".to_string()];
-    if let Some(spec) = log_level {
-        args.extend(["--log-level".to_string(), spec.to_string()]);
-    }
-    args
-}
-
-const DISPLAY_VARS: [&str; 3] = ["WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY"];
-
-/// Display variables from `systemctl --user show-environment` output; `None`
-/// unless it names a Wayland or X11 display.
-fn display_env_from(show_environment: &str) -> Option<Vec<(&'static str, String)>> {
-    let vars: Vec<_> = DISPLAY_VARS
-        .into_iter()
-        .filter_map(|name| {
-            show_environment
-                .lines()
-                .find_map(|line| line.strip_prefix(name)?.strip_prefix('='))
-                .map(|value| (name, value.to_string()))
-        })
-        .collect();
-    vars.iter()
-        .any(|(name, _)| *name != "XAUTHORITY")
-        .then_some(vars)
-}
-
-/// The graphical session's display, as exported to the systemd user manager.
-/// The launcher's own env can't be trusted: an SSH login has no display (or a
-/// forwarded one), and every later client attaches to this daemon's mpv.
-fn session_display_env() -> Option<Vec<(&'static str, String)>> {
-    let output = match Command::new("systemctl")
-        .args(["--user", "show-environment"])
-        .stderr(Stdio::null())
-        .output()
-    {
-        Ok(output) if output.status.success() => output,
-        Ok(output) => {
-            tracing::warn!(
-                name: "local_daemon.environment.query_failed",
-                target: "local_daemon",
-                status = %output.status,
-                "systemctl --user show-environment failed"
-            );
-            return None;
-        }
-        Err(e) => {
-            tracing::warn!(
-                name: "local_daemon.environment.query_failed",
-                target: "local_daemon",
-                error = %e,
-                "cannot run systemctl --user show-environment"
-            );
-            return None;
-        }
-    };
-    let env = display_env_from(&String::from_utf8_lossy(&output.stdout));
-    if env.is_none() {
-        tracing::warn!(
-            name: "local_daemon.environment.display_missing",
-            target: "local_daemon",
-            "systemd user manager exports no display; inheriting launcher's"
-        );
-    }
-    env
-}
 
 /// Pure argv resolution for the swap-launch command.
 ///
@@ -123,66 +50,14 @@ fn swap_argv(
 }
 
 /// Detached launch of the replacement Client: stdin,
-/// stdout and stderr null, and `setsid` in `pre_exec`, the same as
-/// [`spawn_detached`]. The Owner's environment already carries the session
-/// display variables.
+/// stdout and stderr null, and `setsid` in `pre_exec`, the same as the
+/// Client's Owner spawn (`crate::app::owner_link::start_owner`). The Owner's
+/// environment already carries the session display variables.
 fn detached_swap_command(argv: &[String]) -> Command {
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..]);
     detach(&mut cmd, Stdio::null());
     cmd
-}
-
-/// Fork+detach a local daemon (`mbv --__local-daemon`) and wait until its
-/// control socket is ready. `exe` is the `mbv` program that becomes the
-/// Owner; the TUI Client passes its own executable and the GUI Client passes
-/// the `mbv` program it resolved. On failure -- including the daemon exiting
-/// early because the cached token is missing/invalid -- returns the reason
-/// so the still-live launching Client can report it, rather than the daemon
-/// failing silently in the background.
-pub(crate) fn spawn_detached(
-    exe: &Path,
-    socket_path: &str,
-    log_level: Option<mbv_core::applog::LogSpec>,
-) -> Result<(), mbv_remote_player::RemotePlayerError> {
-    let mut cmd = Command::new(exe);
-    cmd.args(local_daemon_args(log_level));
-    if let Some(display_env) = session_display_env() {
-        for name in DISPLAY_VARS {
-            cmd.env_remove(name);
-        }
-        cmd.envs(display_env);
-    }
-    // Detach into its own session (equivalent to `setsid <cmd>`), and
-    // ignore SIGHUP so closing the launching terminal can't kill it --
-    // belt-and-suspenders with the daemon's own SIGHUP-ignore below.
-    detach(&mut cmd, Stdio::piped());
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| io::Error::new(e.kind(), format!("failed to start local daemon: {e}")))?;
-    let mut stderr = child.stderr.take().expect("piped stderr");
-
-    let deadline = Instant::now() + READY_TIMEOUT;
-    loop {
-        if UnixStream::connect(socket_path).is_ok() {
-            return Ok(());
-        }
-        if let Ok(Some(status)) = child.try_wait() {
-            let mut captured = String::new();
-            let _ = stderr.read_to_string(&mut captured);
-            let captured = captured.trim();
-            return Err(io::Error::other(if captured.is_empty() {
-                format!("local daemon exited before starting (status {status})")
-            } else {
-                captured.to_string()
-            })
-            .into());
-        }
-        if Instant::now() >= deadline {
-            return Err(io::Error::other("local daemon did not become ready in time").into());
-        }
-        std::thread::sleep(READY_POLL_INTERVAL);
-    }
 }
 
 /// The Local role's Player-ready hook: starts the Owner's MPRIS publisher for
@@ -217,7 +92,7 @@ pub fn run_local_daemon_main() -> ! {
 
     // The daemon IS the SIGHUP firewall: closing the launching terminal
     // must not kill it (belt-and-suspenders with the setsid() done at
-    // spawn time in `spawn_detached`).
+    // spawn time in the Client's Owner spawn).
     // SAFETY: Installing SIGHUP ignore is valid for this daemon process and
     // the action uses no handler pointer or uninitialized state.
     unsafe {
@@ -337,35 +212,6 @@ pub fn run_local_daemon_main() -> ! {
 mod tests {
     use super::*;
     use rstest::rstest;
-
-    #[rstest]
-    #[case::wayland_and_x11(
-        "HOME=/h\nWAYLAND_DISPLAY=wayland-1\nDISPLAY=:0\nXAUTHORITY=/run/xauth\n",
-        Some(vec![("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0"), ("XAUTHORITY", "/run/xauth")])
-    )]
-    #[case::no_graphical_session("HOME=/h\nPATH=/bin\n", None)]
-    fn display_env_is_read_from_the_user_manager(
-        #[case] show_environment: &str,
-        #[case] expected: Option<Vec<(&'static str, &str)>>,
-    ) {
-        let expected = expected.map(|vars| {
-            vars.into_iter()
-                .map(|(name, value)| (name, value.to_string()))
-                .collect::<Vec<_>>()
-        });
-        assert_eq!(display_env_from(show_environment), expected);
-    }
-
-    #[test]
-    fn spawn_args_forward_only_an_explicit_log_level() {
-        assert_eq!(local_daemon_args(None), ["--__local-daemon"]);
-        assert_eq!(
-            local_daemon_args(Some(
-                mbv_core::applog::LogSpec::parse("debug,player=trace").expect("valid spec"),
-            )),
-            ["--__local-daemon", "--log-level", "debug,player=trace"]
-        );
-    }
 
     /// tray-pin-swap spec pin-swap "Config value set" / "Only TERMINAL set" /
     /// "Neither set", and the Pin direction: the replacement-Client argv is

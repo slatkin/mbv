@@ -12,16 +12,23 @@
 //! A Client never holds the Owner lock and never becomes a Player owner. The
 //! Owner the Client starts is always `mbv`: the TUI Client's own executable,
 //! or the `mbv` program the GUI Client resolved ([`OwnerStartOptions`]).
+//!
+//! The start step itself — the Owner's argv, the graphical session's display
+//! environment, and the detached spawn that waits for the control socket —
+//! sits in the [`start`] child module, so both Clients start the Owner from
+//! one place (design D3 of `split-tui-gui-clients`).
+
+mod start;
 
 use std::io;
 use std::path::Path;
 
 use crate::app::App;
 use crate::app::config::Config;
-use crate::local_daemon;
 use crate::{ClientCapabilities, ClientCapability};
 use mbv_emby::EmbyClient;
 use mbv_remote_player::{ClientHelloClaims, DaemonEndpoint, RemotePlayer, RemotePlayerError};
+use start::spawn_detached;
 
 /// What the local Owner process is doing, as a Client sees it: the step the
 /// Client runs next.
@@ -74,7 +81,7 @@ pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerEr
             .map_err(|e| io::Error::new(e.kind(), format!("cannot locate binary: {e}")))?,
     };
     let socket = mbv_daemon::socket_path();
-    local_daemon::spawn_detached(&exe, &socket.to_string_lossy(), options.log_level.cloned())
+    spawn_detached(&exe, &socket.to_string_lossy(), options.log_level.cloned())
 }
 
 /// Attach to this machine's Owner as a Client and return the `App` the Client
