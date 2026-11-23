@@ -30,7 +30,7 @@ fn pin_swap_participant() -> bool {
 /// (tray-pin-swap design D2): the claimed panel state and swap token behind
 /// the `pin-swap` capability for the TUI Client, `None` — a plain Client
 /// Hello — for the GUI Client, so the Owner never picks it as a swap target.
-pub(crate) fn pin_swap_hello() -> Option<mbv_remote_player::PinSwapHello> {
+pub(in crate::app) fn pin_swap_hello() -> Option<mbv_remote_player::PinSwapHello> {
     pin_swap_participant().then(|| mbv_remote_player::PinSwapHello {
         pinned: is_pinned(),
         swap_token: swap_token(),
