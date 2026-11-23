@@ -39,6 +39,19 @@ impl App {
         self.client_capabilities = capabilities;
     }
 
+    /// Record a Client's capabilities from a dependent crate's tests
+    /// (`decouple-client-core` design D6a): the GUI Client's headless tests
+    /// drive an `App` without an Owner attach, so they set the set the
+    /// attach would record.
+    #[cfg(feature = "test")]
+    #[doc(hidden)]
+    pub fn set_client_capabilities_for_test(
+        &mut self,
+        capabilities: crate::app::state::client_capabilities::ClientCapabilities,
+    ) {
+        self.client_capabilities = capabilities;
+    }
+
     /// Start this machine's Owner process from the Client's `mbv` program and
     /// wait until its control socket accepts connections. Every App-side
     /// Owner start goes through here so a GUI Client never starts itself as

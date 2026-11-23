@@ -5,7 +5,10 @@
 //! emits (`client-interaction-core`: pointer targets resolve from a
 //! semantic hit map).
 
-use mbv::{stub_app_with_cast_target, stub_app_with_prefix_and_toast, stub_app_with_track_choices};
+use mbv::{
+    gui_client_capabilities, stub_app_with_cast_target, stub_app_with_prefix_and_toast,
+    stub_app_with_track_choices,
+};
 use mbv_config::TestStateDirGuard;
 use mbv_gui::bridge::frame::chrome::GuiStatusBar;
 use mbv_gui::bridge::frame::overlay::{GuiOverlayFrame, GuiTrackChipKind};
@@ -286,7 +289,8 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
 /// same work).
 #[test]
 fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
-    let (app, cmd_rx) = stub_app_with_cast_target();
+    let (mut app, cmd_rx) = stub_app_with_cast_target();
+    app.set_client_capabilities_for_test(gui_client_capabilities());
     let mut test = test_core_with(app);
     test.tx
         .send(measured_layout(

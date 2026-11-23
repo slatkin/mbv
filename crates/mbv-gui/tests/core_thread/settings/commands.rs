@@ -455,6 +455,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
 fn a_reset_returns_to_home_and_clears_the_launch_location() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut app = stub_app_with_queue(2);
+    app.set_client_capabilities_for_test(gui_client_capabilities());
     app.seed_gui_music_library_tab_for_test();
     app.seed_gui_library_groups_for_test(0, "grp-soul");
     mbv_config::save_gui_launch_state(&mbv_config::first_launch())

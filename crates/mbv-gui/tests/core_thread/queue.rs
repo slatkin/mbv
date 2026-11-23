@@ -4,7 +4,7 @@
 //! release, none on a cancel), and the row menu (its actions button, and an
 //! entry press executing through the Client core).
 
-use mbv::stub_app_with_queue_and_cmd_rx;
+use mbv::{gui_client_capabilities, stub_app_with_queue_and_cmd_rx};
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::queue::{GuiQueueInsertion, GuiQueueRow};
 use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
@@ -349,7 +349,8 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
 /// the moved selection's stable slot.
 #[test]
 fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
-    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(3);
+    let (mut app, cmd_rx) = stub_app_with_queue_and_cmd_rx(3);
+    app.set_client_capabilities_for_test(gui_client_capabilities());
     let mut test = test_core_with(app);
     test.tx.send(measured_layout(3, vec![])).unwrap();
     assert!(test.core.step());

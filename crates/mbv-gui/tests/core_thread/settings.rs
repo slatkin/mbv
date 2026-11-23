@@ -10,7 +10,7 @@
 //! `tests/core_thread/settings/` (one binary per crate; no `mod.rs`).
 
 use mbv::ClientTickHost;
-use mbv::{stub_app_with_playing_queue, stub_app_with_queue};
+use mbv::{gui_client_capabilities, stub_app_with_playing_queue, stub_app_with_queue};
 use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
 use mbv_gui::core_thread::CoreInput;
