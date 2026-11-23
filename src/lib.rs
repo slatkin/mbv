@@ -82,6 +82,12 @@ pub use mbv_ui_msg::TrackChipKind;
 /// Client outside `crate::app` names them here.
 pub use crate::app::state::client_capabilities::{ClientCapabilities, ClientCapability};
 
+/// The parked `App` a Client wrapper moves out of position while it holds the
+/// live one in a `GuiCore` (design D4a of `decouple-client-core`). A stub
+/// construction with no live Owner, Service, or player event, so the wrapper
+/// drops it as soon as the real `App` comes back.
+pub use self::app::handoff_app;
+
 /// The `App` stub construction a Client's own tests build their `App` from
 /// (`extract-client-core` design D11). Compiled only under the root package's
 /// `test` feature, which no shipped build enables.

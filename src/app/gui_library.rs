@@ -405,8 +405,38 @@ impl GuiCore {
                 self.app.gui.library_row_menu_target = Some(row);
             }
             // The Home rows and every command after them are the second
-            // pass's arms.
-            _ => self.dispatch_gui_library_destination_command(command),
+            // pass's arms: the dispatch names them here, one per variant, so
+            // a new variant is a compile error rather than a silent handover.
+            GuiLibraryCommand::HomeSelect { .. }
+            | GuiLibraryCommand::HomePlay { .. }
+            | GuiLibraryCommand::HomePlayNext { .. }
+            | GuiLibraryCommand::HomeQueue { .. }
+            | GuiLibraryCommand::ShowsSelect { .. }
+            | GuiLibraryCommand::ShowsSelectSeason { .. }
+            | GuiLibraryCommand::ShowsPlay { .. }
+            | GuiLibraryCommand::ShowsPlayNext { .. }
+            | GuiLibraryCommand::ShowsQueue { .. }
+            | GuiLibraryCommand::EmbySelect { .. }
+            | GuiLibraryCommand::EmbyPlay { .. }
+            | GuiLibraryCommand::EmbyPlayNext { .. }
+            | GuiLibraryCommand::EmbyQueue { .. }
+            | GuiLibraryCommand::AbsSelect { .. }
+            | GuiLibraryCommand::AbsPlay { .. }
+            | GuiLibraryCommand::AbsPlayChapter { .. }
+            | GuiLibraryCommand::AbsQueue { .. }
+            | GuiLibraryCommand::PodcastsSelect { .. }
+            | GuiLibraryCommand::PodcastsPlay { .. }
+            | GuiLibraryCommand::PodcastsQueue { .. }
+            | GuiLibraryCommand::FeedsSelect { .. }
+            | GuiLibraryCommand::FeedsPlay { .. }
+            | GuiLibraryCommand::FeedsQueue { .. }
+            | GuiLibraryCommand::SearchQuery { .. }
+            | GuiLibraryCommand::SearchActivate { .. }
+            | GuiLibraryCommand::SearchClose
+            | GuiLibraryCommand::RowsInView { .. }
+            | GuiLibraryCommand::OpenUrl { .. } => {
+                self.dispatch_gui_library_destination_command(command);
+            }
         }
     }
 
@@ -490,11 +520,25 @@ impl GuiCore {
             }
             GuiLibraryCommand::OpenUrl { url } => Self::open_gui_library_url(&url),
             // The first pass's arms, which this pass never receives: the
-            // dispatch routes them before it hands the command over, so this
-            // trailing arm is the routing mistake's own no-op.
-            other => log_ignored_library_command(
+            // dispatch routes them before it hands the command over. Each is
+            // named, so a new variant is a compile error in both passes, and
+            // the one that reaches here is the routing mistake the log
+            // reports rather than a silent drop.
+            GuiLibraryCommand::OpenDestination { .. }
+            | GuiLibraryCommand::CollectionToggle { .. }
+            | GuiLibraryCommand::CollectionAll { .. }
+            | GuiLibraryCommand::ListSort { .. }
+            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::ShowDetail { .. }
+            | GuiLibraryCommand::OpenAlbum { .. }
+            | GuiLibraryCommand::Play { .. }
+            | GuiLibraryCommand::PlayNext { .. }
+            | GuiLibraryCommand::AddToQueue { .. }
+            | GuiLibraryCommand::ShuffleArtist { .. }
+            | GuiLibraryCommand::MenuEntry { .. }
+            | GuiLibraryCommand::RowMenu { .. } => log_ignored_library_command(
                 "dispatch",
-                format_args!("{other:?} is no destination command of the second pass"),
+                format_args!("{command:?} is no destination command of the second pass"),
             ),
         }
     }

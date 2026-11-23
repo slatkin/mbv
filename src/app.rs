@@ -1,4 +1,10 @@
 mod app_stub;
+
+/// The parked `App` a Client wrapper moves out of position while it holds the
+/// live one in a `GuiCore` (design D4a of `decouple-client-core`). It is a stub
+/// construction, so it compiles in every build: shipped wrappers park it too.
+pub use self::app_stub::handoff_app;
+
 mod client_core;
 mod client_drains;
 mod dispatch;

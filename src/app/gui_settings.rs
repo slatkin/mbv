@@ -310,7 +310,25 @@ impl GuiCore {
             OverlayRequest::ToggleSidebar(SidebarId::Sessions) => {
                 self.toggle_gui_settings(GuiSettingsGroup::Sessions);
             }
-            _ => {}
+            // Every other request is a shell or TUI overlay the GUI Client does
+            // not paint, so this entry has no step for it: the GUI's Settings
+            // surface owns only the F2 and F3 toggles and the open. Each is
+            // named, so a new variant is a compile error here, and it never
+            // falls into a silent no-op by accident.
+            OverlayRequest::OpenSidebar(_)
+            | OverlayRequest::DismissSidebar(_)
+            | OverlayRequest::ToggleSidebar(_)
+            | OverlayRequest::Confirm(_)
+            | OverlayRequest::DaemonLost(_)
+            | OverlayRequest::SavePlaylist(_)
+            | OverlayRequest::ContextMenu(_)
+            | OverlayRequest::DismissContextMenu
+            | OverlayRequest::OpenMultiselect(_)
+            | OverlayRequest::OpenLibraryRoutes
+            | OverlayRequest::OpenFeedsManage
+            | OverlayRequest::DismissConfirm
+            | OverlayRequest::DismissDaemonLost
+            | OverlayRequest::DismissSavePlaylist => {}
         }
     }
 
