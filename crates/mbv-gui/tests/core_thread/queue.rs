@@ -1,8 +1,8 @@
 //! The canvas queue's row contracts (add-tauri-gui-client row 6.5, design
 //! D5): the hover that paints the row chrome, the grip's drag (the drop index
 //! from a pointer move, the ghost and insertion line, one move request on
-//! release, none on a cancel), and the row menu (its actions button, and an
-//! entry press executing through the Client core).
+//! release, none on a cancel), and the row menu (a right-click opener, and
+//! an entry press executing through the Client core).
 
 use mbv::{gui_client_capabilities, stub_app_for_gui_client, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::player::PlayerEvent;
@@ -13,7 +13,10 @@ use mbv_gui::core_thread::CoreInput;
 use mbv_queue::NamedQueueId;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
-use crate::{measured_layout, move_at, press_at, queue_key, region_at, test_core, test_core_with};
+use crate::{
+    measured_layout, move_at, press_at, queue_key, region_at, right_press_at, test_core,
+    test_core_with,
+};
 
 /// A pointer move with the primary button held (the neutral drag), as the
 /// translated `pointer` command carries it.
@@ -201,7 +204,7 @@ fn a_cancelled_drag_sends_no_move_request() {
 }
 
 /// A row-menu entry's press executes the painted entry through the Client
-/// core: the menu the actions button opened, Remove from queue, sends the
+/// core: the menu the row's right-click opened, Remove from queue, sends the
 /// Owner the pressed row's slot removal (add-tauri-gui-client row 6.5's row
 /// menu). The menu's entries and its anchor are the frame test's contract.
 #[test]
@@ -214,14 +217,14 @@ fn a_row_menu_entry_press_removes_its_row() {
             vec![region_at(
                 80.0,
                 24.0,
-                RegionTarget::Queue(QueueTargetId::RowActions(2)),
+                RegionTarget::Queue(QueueTargetId::Slot(2)),
             )],
         ))
         .unwrap();
     assert!(test.core.step());
     test.held();
 
-    test.tx.send(press_at(90.0, 30.0)).unwrap();
+    test.tx.send(right_press_at(90.0, 30.0)).unwrap();
     assert!(test.core.step());
     assert!(test.held().overlay().is_some());
 
@@ -296,8 +299,8 @@ fn a_filter_press_focuses_the_filter_text_entry() {
 }
 
 /// The row menu's frame names the row it opened on (add-tauri-gui-client row
-/// 6.5): the context-menu chord opens it over the cursor row, and the
-/// hovered row's actions button opens it over that row, so the window never
+/// 6.5): the context-menu chord opens it over the cursor row, and a
+/// right-click opens it over the row it landed on, so the window never
 /// guesses the anchor.
 #[test]
 fn the_row_menu_frame_carries_the_row_it_opened_on() {
@@ -308,7 +311,7 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
             vec![region_at(
                 80.0,
                 48.0,
-                RegionTarget::Queue(QueueTargetId::RowActions(3)),
+                RegionTarget::Queue(QueueTargetId::Slot(3)),
             )],
         ))
         .unwrap();
@@ -326,21 +329,18 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
     };
     assert_eq!(*anchor_slot, 1);
 
-    // Esc dismisses it; the actions button then opens it over its own row.
+    // Esc dismisses it; a right-click on the row then opens it over that row.
     test.tx
         .send(queue_key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     assert!(test.held().overlay().is_none());
 
-    test.tx.send(press_at(90.0, 60.0)).unwrap();
+    test.tx.send(right_press_at(90.0, 60.0)).unwrap();
     assert!(test.core.step());
     let frame = test.held();
     let Some(GuiOverlayFrame::RowMenu { anchor_slot, .. }) = frame.overlay() else {
-        panic!(
-            "the actions button opened the row menu: {:?}",
-            frame.overlay()
-        );
+        panic!("the right-click opened the row menu: {:?}", frame.overlay());
     };
     assert_eq!(*anchor_slot, 3);
 }

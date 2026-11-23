@@ -23,9 +23,9 @@ use super::CoreThread;
 
 impl CoreThread {
     /// The Queue row the pointer rests on, the shared region rule the leaf's
-    /// click path resolves with too: the row's own region or the chrome
-    /// painted over it (its grip and actions button), so moving onto the
-    /// chrome keeps the row hovered.
+    /// click path resolves with too: the row's own region or the grip
+    /// painted over it, so moving onto the
+    /// grip keeps the row hovered.
     pub(super) fn queue_row_at(&self, at: Position) -> Option<QueueSlotId> {
         row_slot_at(&self.regions, at)
     }
@@ -76,8 +76,8 @@ impl CoreThread {
             .and_then(|bar| self.playback.seek_target(bar, event.position.x));
         self.playback.set_scrubber_hover(hover);
         // The canvas queue's row hover (add-tauri-gui-client row 6.5): the row
-        // the pointer rests on, its chrome regions included. The window paints
-        // the hovered row's grip and actions button.
+        // the pointer rests on, its chrome region included. The window paints
+        // the hovered row's grip.
         let row_hover = self.queue_row_at(event.position);
         self.queue.set_hover(row_hover);
         // An open overlay owns the keyboard and the window's presses: a press

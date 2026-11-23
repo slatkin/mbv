@@ -232,9 +232,8 @@ pub(super) struct RowCellsProps {
 
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
 /// ordinal, the one title line with its progress ring, and the right column's
-/// duration. The hovered row reserves the leading slot its sibling grip covers
-/// and the trailing space its sibling actions button paints over, and the drag
-/// ghost paints the title, the ring, and the percent only.
+/// duration. The hovered row reserves the leading slot its sibling grip covers,
+/// and the drag ghost paints the title, the ring, and the percent only.
 #[component]
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
@@ -305,20 +304,11 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
             && let Some(duration) = duration
         {
             // The right column: the item's duration in every row state
-            // (design D3). The hovered row paints it under the actions button
-            // its sibling places over this column.
-            // The hovered row's column shrinks to its text, so the title
-            // grows into the room the fixed column left empty (user request
-            // 2026-11-20); the sibling actions button still bounds the row.
+            // (design D3).
             span {
                 class: "shrink-0 text-right font-mono tabular-nums",
                 style: format!(
-                    "{} font-size: 12px; color: {};",
-                    if chrome == RowChrome::Hover {
-                        String::new()
-                    } else {
-                        format!("width: {RIGHT_COL_PX}px;")
-                    },
+                    "width: {RIGHT_COL_PX}px; font-size: 12px; color: {};",
                     ef_var(EfToken::Grey1)
                 ),
                 "data-duration": "",

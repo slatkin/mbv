@@ -15,7 +15,8 @@ use mbv_config::TestStateDirGuard;
 use mbv_gui::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 use rstest::rstest;
 
-use crate::{measured_layout, press_at, region_at, test_core, test_core_with};
+use crate::{measured_layout, press_at, region_at, right_press_at, test_core, test_core_with};
+use mbv_gui::core_thread::CoreInput;
 
 /// Which overlay a dismissal case opens.
 #[derive(Debug, Clone, Copy)]
@@ -34,14 +35,25 @@ fn overlay_core(kind: Overlay) -> crate::TestCore {
     }
 }
 
-/// The region whose press opens the case's overlay.
+/// The region whose press opens the case's overlay. The row menu opens on a
+/// right-click over a row (the window paints no actions button); the popover
+/// and the chooser open on a left press over their controls.
 fn opener_region(kind: Overlay) -> RegionTarget {
     match kind {
-        Overlay::RowMenu => RegionTarget::Queue(QueueTargetId::RowActions(2)),
+        Overlay::RowMenu => RegionTarget::Queue(QueueTargetId::Slot(2)),
         Overlay::TrackPopover => RegionTarget::QueuePlayback(QueuePlaybackTargetId::AudioChip),
         Overlay::TargetChooser => {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget)
         }
+    }
+}
+
+/// The opener press for `kind`: the row menu's right-click, every other
+/// overlay's left press.
+fn opener_press(kind: Overlay, x: f32, y: f32) -> CoreInput {
+    match kind {
+        Overlay::RowMenu => right_press_at(x, y),
+        Overlay::TrackPopover | Overlay::TargetChooser => press_at(x, y),
     }
 }
 
@@ -66,7 +78,7 @@ fn an_outside_press_dismisses_the_open_overlay(#[case] kind: Overlay) {
     assert!(test.core.step());
     test.held();
 
-    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    test.tx.send(opener_press(kind, 10.0, 10.0)).unwrap();
     assert!(test.core.step());
     let opened = test.held();
     assert!(opened.overlay().is_some(), "the opener opened its overlay");
@@ -89,7 +101,7 @@ fn the_dismissing_press_does_not_activate_the_row_beneath() {
         .send(measured_layout(
             4,
             vec![
-                region_at(0.0, 0.0, RegionTarget::Queue(QueueTargetId::RowActions(2))),
+                region_at(0.0, 0.0, RegionTarget::Queue(QueueTargetId::Slot(2))),
                 region_at(0.0, 100.0, RegionTarget::Queue(QueueTargetId::Slot(3))),
             ],
         ))
@@ -97,7 +109,7 @@ fn the_dismissing_press_does_not_activate_the_row_beneath() {
     assert!(test.core.step());
     test.held();
 
-    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    test.tx.send(right_press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
     assert!(test.held().overlay().is_some());
 

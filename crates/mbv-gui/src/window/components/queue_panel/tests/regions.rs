@@ -6,13 +6,13 @@ use super::harness::*;
 use crate::bridge::layout::{ListId, ListRows, QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 
 /// Contract (`QueuePanel.test.ts`): the regions carry the header, slot,
-/// grip, actions, and menu-entry ids, menu last — the header's controls lead in
+/// grip, and menu-entry ids, menu last — the header's controls lead in
 /// paint order (the switcher, the new-queue control, and the filter, with one
 /// local queue so no acting close control), the rows follow, the hovered row's
-/// chrome trails them, and the
+/// grip trails them, and the
 /// menu's entries report last.
 #[test]
-fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last() {
+fn the_regions_carry_the_header_slot_grip_and_menu_entry_ids_menu_last() {
     let rows = vec![item(1), item(2)];
     let mut rows_frame = queue(rows);
     rows_frame.hover = Some(2);
@@ -27,7 +27,6 @@ fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last()
             RegionTarget::Queue(QueueTargetId::Slot(1)),
             RegionTarget::Queue(QueueTargetId::Slot(2)),
             RegionTarget::Queue(QueueTargetId::RowGrip(2)),
-            RegionTarget::Queue(QueueTargetId::RowActions(2)),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(0)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(1)),

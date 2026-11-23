@@ -125,6 +125,16 @@ pub(crate) fn press_at(x: f32, y: f32) -> CoreInput {
     ))
 }
 
+/// A secondary press with no modifier held, as the translated `pointer`
+/// command carries it.
+pub(crate) fn right_press_at(x: f32, y: f32) -> CoreInput {
+    CoreInput::Pointer(PointerEvent::new(
+        PointerKind::RightPress,
+        Position { x, y },
+        KeyModifiers::NONE,
+    ))
+}
+
 /// A wheel notch downwards, as the translated `pointer` command carries it.
 pub(crate) fn wheel_down_at(x: f32, y: f32) -> CoreInput {
     CoreInput::Pointer(PointerEvent::new(

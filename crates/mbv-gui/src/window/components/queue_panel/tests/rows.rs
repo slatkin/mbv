@@ -252,45 +252,28 @@ fn the_hovered_row_paints_the_hover_fill() {
 }
 
 /// Contract (`QueuePanel.test.ts`, the Menus artboard B.3): the hovered row
-/// alone paints the grip and the actions button — the grip's six dots in the
-/// leading slot, the row-height actions box in the canvas's fill and radius over
-/// the empty space at the row's trailing end, the row filled with the hover
-/// colour, and its title ellipsised in the hover text.
+/// alone paints the grip — its six dots in the leading slot, the row filled
+/// with the hover colour, and its title ellipsised in the hover text. The
+/// window paints no actions button: the row's context menu opens on a
+/// right-click (user request 2026-11-23).
 #[test]
-fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
+fn the_hovered_row_alone_paints_the_grip() {
     let rows = vec![item(1), item(2), item(3)];
     let mut rows_frame = queue(rows);
     rows_frame.hover = Some(2);
     let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
 
     assert_eq!(fixture.all("[data-grip]").len(), 1);
-    assert_eq!(fixture.all("[data-actions]").len(), 1);
     assert_eq!(fixture.all("[data-row=\"2\"] [data-grip] circle").len(), 6);
     assert!(!fixture.presents("[data-row=\"2\"] [data-ordinal]"));
     assert!(fixture.presents("[data-row=\"1\"] [data-ordinal]"));
-    assert_eq!(
-        fixture
-            .attr_of("[data-actions]", local_name!("aria-label"))
-            .as_deref(),
-        Some("Row actions")
-    );
-    let actions_style = fixture.style_of("[data-actions]");
-    assert!(actions_style.contains("width: 40px"), "{actions_style}");
-    assert!(actions_style.contains("height: 40px"), "{actions_style}");
-    assert!(
-        actions_style.contains("border-radius: 6px"),
-        "{actions_style}"
-    );
-    assert!(
-        actions_style.contains("background: var(--canvas-action)"),
-        "{actions_style}"
-    );
 
-    // The hovered row reserves the button's width at its trailing end and
-    // paints the hover fill (design D9).
+    // The hovered row narrows its leading inset to the grip's slot and
+    // paints the hover fill (design D9); its trailing inset stays the row's
+    // own (user request 2026-11-23).
     let row_style = fixture.style_of("[data-slot=\"2\"]");
     assert!(
-        row_style.contains("padding-inline: 4px 42px"),
+        row_style.contains("padding-inline: 4px 10px"),
         "{row_style}"
     );
     assert!(

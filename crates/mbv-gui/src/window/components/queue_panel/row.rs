@@ -1,14 +1,14 @@
 //! One painted queue row's card (the row `QueuePanel` paints per slot): the row
 //! button with its canvas cells, the 1 px divider under it, the drag's
-//! insertion line, and the hover chrome — the six-dot grip and the row-height
-//! actions button — as siblings of the row's one button, over slots the row
-//! reserves, so no control nests in it. The structural rows (a group heading
+//! insertion line, and the hover chrome — the six-dot grip — as a sibling of
+//! the row's one button, over the slot the row reserves, so no control nests
+//! in it. The structural rows (a group heading
 //! and the plain spacer) paint here too.
 //!
 //! The panel owns every mark and hands the row's closures down (design D1 of
 //! `gui-tech-debt-simplification`): the `slot` mark the row attaches to its
-//! button, and the hovered row's grip and actions marks, which report after
-//! every slot so the chrome wins the hit map where it paints over the row. A
+//! button, and the hovered row's grip mark, which reports after
+//! every slot so the grip wins the hit map where it paints over the row. A
 //! plain function assembles each row, not a component: the panel's marks run
 //! in the panel's own render, and the paint must stay the same element tree
 //! with no extra wrapper.
@@ -19,7 +19,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
-use crate::window::icons::{Ellipsis, GripVertical};
+use crate::window::icons::GripVertical;
 use crate::window::layout::region_set::MarkHandler;
 use crate::window::theme::{canvas_var, role_var};
 
@@ -31,11 +31,6 @@ use super::row_cells::{ItemRow, RowCells, RowChrome, row_look};
 /// The row's corner radius in logical pixels (design D3; user request
 /// 2026-11-20): every row is square, the now-playing row included.
 const ROW_RADIUS_PX: u16 = 0;
-
-/// The hovered row's trailing inset: the actions button's width plus the 2 px
-/// gap it leaves at the row's edge, so the title measures into the room the
-/// button does not cover.
-const HOVERED_TRAILING_PAD_PX: u16 = ROW_HEIGHT_PX + 2;
 
 /// The empty-queue text, as the TUI's local queue shows it. The frame
 /// carries no queue link, so the remote-queue text cannot be selected; the
@@ -56,18 +51,18 @@ pub(super) struct RowPaint<'a> {
     pub(super) insertion: Option<&'a Insertion>,
     /// The row button's `slot` mark.
     pub(super) slot_mark: MarkHandler,
-    /// The hovered row's grip and actions marks, `None` for every other row.
-    pub(super) hover_marks: Option<(MarkHandler, MarkHandler)>,
+    /// The hovered row's grip mark, `None` for every other row.
+    pub(super) hover_marks: Option<MarkHandler>,
 }
 
 /// The row's inline size: the fixed row height, the square corners the canvas
-/// draws, and the trailing room the hovered row's actions button needs, plus
-/// the row's own fill where it paints one.
+/// draws, and the row's own fill where it paints one. The hovered row narrows
+/// its leading inset to the grip's slot.
 fn row_button_style(hovered: bool, background: Option<&'static str>) -> String {
     let mut style = format!(
         "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: {ROW_RADIUS_PX}px;",
         if hovered {
-            format!("4px {HOVERED_TRAILING_PAD_PX}px")
+            format!("4px {ROW_INSET_PX}px")
         } else {
             format!("{ROW_INSET_PX}px")
         }
@@ -147,34 +142,21 @@ pub(super) fn queue_row_card(paint: RowPaint<'_>) -> Element {
                 }
             }
             if hovered
-                && let Some((grip_mark, actions_mark)) = hover_marks
+                && let Some(grip_mark) = hover_marks
             {
                 // The hover chrome (the Menus artboard): the six-dot grip over
-                // the leading slot the row reserves in place of its ordinal,
-                // and the row-height actions button over the empty space at the
-                // row's trailing end — the space the row reserves in its
-                // trailing padding. Each is its own region, pushed after the
-                // row's `slot` region so the press resolves to the chrome. They
-                // stay siblings of the row's button, so no control nests in it.
+                // the leading slot the row reserves in place of its ordinal. It
+                // is its own region, pushed after the row's `slot` region so
+                // the press resolves to the grip. It stays a sibling of the
+                // row's button, so no control nests in it. The row's context
+                // menu opens on a right-click (user request 2026-11-23); the
+                // former hover actions button is gone.
                 span {
                     class: "absolute flex items-center",
                     style: "left: 4px; width: {GRIP_SIZE_PX}px; top: {GRIP_TOP_PX}px;",
                     "data-grip": "{slot}",
                     onmounted: grip_mark,
                     GripVertical { size: GRIP_SIZE_PX, color: canvas_var("muted") }
-                }
-                button {
-                    "type": "button",
-                    class: "absolute flex items-center justify-center",
-                    style: "top: 0; right: 2px; width: {ROW_HEIGHT_PX}px; height: {ROW_HEIGHT_PX}px; border-radius: 6px; background: var(--canvas-action);",
-                    "data-actions": "{slot}",
-                    "aria-label": "Row actions",
-                    onmounted: actions_mark,
-                    Ellipsis {
-                        size: 14,
-                        fill: canvas_var("heading"),
-                        color: canvas_var("heading"),
-                    }
                 }
             }
         }
@@ -220,7 +202,7 @@ pub(super) fn queue_rows(
     queue: &GuiQueue,
     insertion: Option<&Insertion>,
     slot_marks: &[(u64, MarkHandler)],
-    hover_marks: Option<(MarkHandler, MarkHandler)>,
+    hover_marks: Option<MarkHandler>,
 ) -> Element {
     if queue.rows.is_empty() {
         // The empty-queue placeholder (design D15's missing-visual rule): the

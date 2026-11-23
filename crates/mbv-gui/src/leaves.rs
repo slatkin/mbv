@@ -50,13 +50,12 @@ pub(crate) fn gesture_point(gesture: &PointerGesture<Position>) -> Option<Positi
 }
 
 /// The queue row a region names, if it names a row: the row's own region or
-/// the chrome painted over it (its grip and actions button), so moving onto
-/// the chrome keeps the row hovered.
+/// the grip painted over it, so moving onto the grip keeps the row hovered.
 pub(crate) fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
     match target {
-        RegionTarget::Queue(
-            QueueTargetId::Slot(raw) | QueueTargetId::RowGrip(raw) | QueueTargetId::RowActions(raw),
-        ) => Some(QueueSlotId::from_raw(*raw)),
+        RegionTarget::Queue(QueueTargetId::Slot(raw) | QueueTargetId::RowGrip(raw)) => {
+            Some(QueueSlotId::from_raw(*raw))
+        }
         RegionTarget::Queue(_)
         | RegionTarget::QueuePlayback(_)
         | RegionTarget::StatusBar(_)
@@ -94,7 +93,7 @@ pub(crate) fn seekbar_region(regions: &HitMap<RegionTarget>, at: Position) -> Op
 /// TUI Queue component's pointer path (`mbv-components` `queue/pointer.rs`)
 /// with the reported regions in place of its retained paint geometry, plus
 /// the canvas queue's row chrome (add-tauri-gui-client row 6.5): the hovered
-/// row's grip starts the drag, its actions button opens the row menu, and an
+/// row's grip starts the drag, a right-click opens the row menu, and an
 /// open menu's entry executes. The playlist pill's click opens the TUI's
 /// playlists overlay, which the first slice does not present, so it resolves
 /// to nothing here — the same documented absence the GUI dispatch records for
@@ -163,13 +162,6 @@ impl<'a> QueueLeaf<'a> {
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(index)) => Some(Msg::Shell(Box::new(
                 ShellRequest::ContextMenuSelect(*index),
             ))),
-            // The hovered row's actions button opens the row menu over that
-            // row (the canvas row menu).
-            RegionTarget::Queue(QueueTargetId::RowActions(raw)) => {
-                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    ContextMenuTargets::Queue(vec![QueueSlotId::from_raw(*raw)]),
-                ))))
-            }
             // The hovered row's grip starts the drag and selects the row, as
             // a press on the row does; motion previews the drop and the
             // release sends the one move request.
@@ -237,9 +229,9 @@ impl<'a> QueueLeaf<'a> {
     fn double_click(&mut self, at: Position) -> Option<Msg> {
         // The TUI's double click re-selects the row (the first press already
         // did) and lets the dispatched activation play it. Only the row's own
-        // region plays: the hover chrome's grip and actions button swallow a
+        // region plays: the hover chrome's grip swallows a
         // double click (review of row 6.5, finding P2-2), so a fast second
-        // press on either control never opens playback.
+        // press on the grip never opens playback.
         let Some(RegionTarget::Queue(QueueTargetId::Slot(raw))) = self.regions.resolve(at) else {
             return None;
         };
@@ -669,13 +661,12 @@ mod tests {
         queue
     }
 
-    /// A double click on the row chrome — the grip or the actions button —
-    /// plays nothing (review of add-tauri-gui-client row 6.5, finding P2-2):
-    /// the chrome regions swallow the gesture, so a fast second press on the
-    /// control never activates the row beneath it.
+    /// A double click on the row chrome — the grip — plays nothing (review of
+    /// add-tauri-gui-client row 6.5, finding P2-2): the chrome region swallows
+    /// the gesture, so a fast second press on the grip never activates the row
+    /// beneath it.
     #[rstest]
     #[case(QueueTargetId::RowGrip(1))]
-    #[case(QueueTargetId::RowActions(1))]
     fn a_double_click_on_the_row_chrome_plays_nothing_review_u65_p2_2(
         #[case] target: QueueTargetId,
     ) {

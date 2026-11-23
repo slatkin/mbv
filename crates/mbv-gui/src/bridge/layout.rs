@@ -100,8 +100,8 @@ impl RegionTarget {
     #[must_use]
     pub(crate) fn owns_gui_overlay(&self) -> bool {
         match self {
-            // A chooser, popover, or row-menu row; the row menu's opener; and
-            // the chips and the playback-target control whose presses toggle
+            // A chooser, popover, or row-menu row; the chips and the
+            // playback-target control whose presses toggle
             // their overlay (a sibling chip's press swaps the open popover).
             Self::QueuePlayback(
                 QueuePlaybackTargetId::TargetChoice(_)
@@ -114,7 +114,6 @@ impl RegionTarget {
             )
             | Self::Queue(
                 QueueTargetId::RowMenuEntry(_)
-                | QueueTargetId::RowActions(_)
                 | QueueTargetId::QueueChooser
                 | QueueTargetId::QueueChooserEntry(_)
                 | QueueTargetId::QueueChooserPeer,
@@ -183,9 +182,6 @@ pub enum QueueTargetId {
     /// The row's drag grip, which the window paints on the hovered row. A
     /// press starts the row drag; the number is the row's `QueueSlotId::raw`.
     RowGrip(u64),
-    /// The row's actions button, which the window paints on the hovered row.
-    /// A press opens the row menu for that slot.
-    RowActions(u64),
     /// One entry of the open row menu: the entry's index in the section's
     /// overlay `entries` list. A press executes the entry.
     RowMenuEntry(usize),

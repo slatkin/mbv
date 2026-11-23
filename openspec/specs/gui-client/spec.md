@@ -426,7 +426,7 @@ A pointer press, drag, or wheel step on the player panel SHALL resolve to the se
 #### Scenario: The slice gestures
 
 - **WHEN** the user uses the pointer on the panel
-- **THEN** the panel supports row selection, row activation, the row-actions button and menu, row drag, wheel scrolling, the transport controls, the scrubber, the track chips and their popovers, the playback-target chooser, and the collapse and fold controls
+- **THEN** the panel supports row selection, row activation, the row menu, row drag, wheel scrolling, the transport controls, the scrubber, the track chips and their popovers, the playback-target chooser, and the collapse and fold controls
 
 #### Scenario: A queue row is clicked
 
@@ -575,11 +575,11 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 #### Scenario: A row is hovered
 
 - **WHEN** the pointer is over a queue row
-- **THEN** the row paints the canvas's hovered row: the grip replaces the row's ordinal and the row-actions button shows at the row's end
+- **THEN** the row paints the canvas's hovered row: the grip replaces the row's ordinal
 
 #### Scenario: The row menu opens
 
-- **WHEN** the row-actions button is pressed
+- **WHEN** the user right-clicks the row
 - **THEN** the menu opens with Play now (`⏎`), Play next (`n`), Mark watched (`w`), Go to episode (`g`), and Remove from queue (`dd`)
 
 #### Scenario: The destructive entry is distinct

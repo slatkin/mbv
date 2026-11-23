@@ -26,10 +26,11 @@
 //!
 //! The row hover and the drag paint from the frame too — the window holds
 //! neither (the `gui-client` spec): `queue.hover` names the row that shows
-//! the six-dot grip in its ordinal's slot and the row-height actions button
-//! over the row's trailing end — the two chrome pieces stay siblings
-//! of the row's one button, over slots the row reserves, so no control nests
-//! in it — and `queue.drag` carries the drag ghost's content and the insertion
+//! the six-dot grip in its ordinal's slot — the grip stays a sibling
+//! of the row's one button, over the slot the row reserves, so no control
+//! nests in it; the row's context menu opens on a right-click (user request
+//! 2026-11-23), so the window paints no actions button — and `queue.drag`
+//! carries the drag ghost's content and the insertion
 //! line's stable-slot anchor. The ghost floats at the line the drop would
 //! insert at, with no ordinal, no right column, and the dragged row's ring and
 //! percent when it has progress; the dragged row no longer dims in place (the
@@ -41,8 +42,8 @@
 //! The regions report in paint order: the header's controls resolve to their
 //! `queueChooser`, `newQueue`, `closeQueue`, and `filter` targets, then the
 //! rows resolve to their stable slots, then
-//! the hovered row's `rowGrip` and `rowActions`
-//! — pushed after the row's `slot` region so the chrome wins where it paints
+//! the hovered row's `rowGrip`
+//! — pushed after the row's `slot` region so the grip wins where it paints
 //! over the row (the hit map's last push wins). The switcher always paints and
 //! so always claims a pointer; the close control claims one only while it acts,
 //! so the panel marks it only then. The open row menu's entries
@@ -179,7 +180,7 @@ pub fn QueuePanel() -> Element {
         .then(|| region_set.mark(RegionTarget::Queue(QueueTargetId::RenameQueue)));
     let filter_mark = region_set.mark(RegionTarget::Queue(QueueTargetId::Filter));
     // The painted rows' slot marks, in paint order, and then the hovered row's
-    // grip and actions: chrome that paints over a row marks after every slot,
+    // grip: chrome that paints over a row marks after every slot,
     // so it wins the hit map (the hit map's last push wins).
     let slot_marks: Vec<(u64, MarkHandler)> = queue
         .rows
@@ -191,12 +192,9 @@ pub fn QueuePanel() -> Element {
             (slot, mark)
         })
         .collect();
-    let hover_marks = queue.hover.map(|hover| {
-        (
-            region_set.mark(RegionTarget::Queue(QueueTargetId::RowGrip(hover))),
-            region_set.mark(RegionTarget::Queue(QueueTargetId::RowActions(hover))),
-        )
-    });
+    let hover_marks = queue
+        .hover
+        .map(|hover| region_set.mark(RegionTarget::Queue(QueueTargetId::RowGrip(hover))));
     // The open row menu's entries mark overlay 0, one per painted row in row
     // order, and the open Queue chooser's entries mark overlay 1 the same way,
     // each naming the identity the window paints — a local queue's own, or the

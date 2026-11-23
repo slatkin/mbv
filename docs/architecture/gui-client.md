@@ -425,8 +425,8 @@ properties — the player backdrop, the recessed list, the header bar, the
 row and hover fills, the row states, the seek bar's greys, and the text
 colours — and the column's components read those tokens, never a literal
 hex. The `--canvas-*` tokens remain where components still read them: the
-drag chrome the rows paint — the insertion line, the ghost, and the
-actions button — the row menu, popover, and modal chrome, the Library
+drag chrome the rows paint — the insertion line and the ghost — the row
+menu, popover, and modal chrome, the Library
 column's panels, and the typed-text colour tokens. A
 `--canvas-*` token no component reads any more is deleted. No `theme.rs`
 remap rides along: `mbv-theme` stays the TUI's palette
@@ -841,8 +841,10 @@ reserves one only while the list is focused and overflows.
 
 The row hover and the drag paint from the frame, and the window holds
 neither. `GuiQueue.hover` names the row the pointer rests on: that row shows
-the grip in its ordinal's slot and the row-actions button at the row's end. The button opens the `rowMenu` overlay,
-whose entries — Play now, Play next, Mark watched, Go to episode, Remove
+the grip in its ordinal's slot. The `rowMenu` overlay opens on a right-click
+over the row (user request 2026-11-23 retired the hover actions button) and
+on the context-menu chord, and its
+entries — Play now, Play next, Mark watched, Go to episode, Remove
 from queue, and Clear queue — carry their key hints; the menu paints the
 canvas's return glyph `⏎` where the core's hint chord is `Enter`, at paint
 time only, so `direct_select` and the key routes keep matching the raw
