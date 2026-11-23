@@ -119,6 +119,13 @@ impl App {
         self.start_pending_playback_target_refresh();
     }
 
+    /// Whether a playback-target refresh waits for a tick that has an Emby
+    /// client.
+    #[must_use]
+    pub fn playback_target_refresh_pending(&self) -> bool {
+        self.pending_playback_target_refresh
+    }
+
     /// Start a requested discovery now that an Emby client exists, and clear
     /// the request. Called each tick; a request with no client stays pending.
     pub(in crate::app) fn start_pending_playback_target_refresh(&mut self) {
