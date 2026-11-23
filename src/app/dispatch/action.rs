@@ -402,7 +402,7 @@ impl App {
             PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
             // The new-queue and close controls (design D8): the header's presses
             // and their GUI-only chords reach the one core path each.
-            PanelIntent::RequestNewQueue => self.request_new_gui_queue(),
+            PanelIntent::RequestNewQueue => self.request_new_queue(),
             PanelIntent::RequestCloseQueue => self.request_close_shown_queue(),
             PanelIntent::RequestRenameQueue => self.request_rename_shown_queue(),
             // The GUI no-ops, listed one by one (design D4a (a)). The four
