@@ -26,6 +26,7 @@ use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 use mbv_ui_model::sort_filter::effective_sort_str;
@@ -232,7 +233,7 @@ impl GuiCore {
         if !super::tv::tv_library(&self.app, lib_idx) {
             return GuiShowsProjection::default();
         }
-        let view = super::shows::shows_view(&self.app, lib_idx);
+        let view = super::shows::shows_view(&self.gui, lib_idx);
         let mut sort_frame = None;
         let (series, rows, selected, hero, workspace_loading, loading) = match view {
             GuiShowsView::All => {
@@ -243,7 +244,7 @@ impl GuiCore {
                     .get(lib_idx)
                     .and_then(|lib| lib.nav_stack.last())
                     .is_none_or(|level| level.loading);
-                let selected = shows_default_series(&self.app, lib_idx);
+                let selected = shows_default_series(&self.app, &self.gui, lib_idx);
                 let hero = selected
                     .as_ref()
                     .and_then(|selected| self.shows_hero(lib_idx, selected));
@@ -260,12 +261,14 @@ impl GuiCore {
                 )
             }
             GuiShowsView::New => {
-                let frame =
-                    super::list_sort::list_sort_frame(&self.app, GuiSortTarget::ShowsNew(lib_idx));
+                let frame = super::list_sort::list_sort_frame(
+                    &self.app,
+                    &self.gui,
+                    GuiSortTarget::ShowsNew(lib_idx),
+                );
                 let rows = self.gui_shows_new_rows(frame.active);
                 sort_frame = Some(frame);
                 let selected = self
-                    .app
                     .gui
                     .shows_flat_selection
                     .clone()
@@ -273,11 +276,10 @@ impl GuiCore {
                     .or_else(|| rows.first().map(|row| row.id.clone()));
                 let hero = selected
                     .as_ref()
-                    .and_then(|id| super::shows::shows_new_item(&self.app, id))
+                    .and_then(|id| super::shows::shows_new_item(&self.gui, id))
                     .map(|item| super::shows::shows_flat_hero(&mut self.app, &item));
                 let loading = self.app.libs.get(lib_idx).is_some_and(|lib| {
                     !self
-                        .app
                         .gui
                         .shows_new
                         .get(&lib.library.id)
@@ -288,7 +290,7 @@ impl GuiCore {
             GuiShowsView::Upcoming => {
                 // An Upcoming row is display-only: the Hero keeps the series
                 // the All view showed, so the detail part stays meaningful.
-                let selected = shows_default_series(&self.app, lib_idx);
+                let selected = shows_default_series(&self.app, &self.gui, lib_idx);
                 let hero = selected
                     .as_ref()
                     .and_then(|selected| self.shows_hero(lib_idx, selected));
@@ -328,7 +330,6 @@ impl GuiCore {
     /// episodes` section's.
     fn gui_shows_new_rows(&self, sort: GuiListSort) -> Vec<GuiShowsRow> {
         let mut items: Vec<EmbyItem> = self
-            .app
             .gui
             .shows_new
             .values()
@@ -481,7 +482,11 @@ impl GuiCore {
 /// while the root list holds no series. It reads only the core's library state
 /// and the destination's stored selection, so it is a core function the
 /// projection and the destination's load site share.
-pub(in crate::app) fn shows_default_series(app: &App, lib_idx: usize) -> Option<String> {
+pub(in crate::app) fn shows_default_series(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+) -> Option<String> {
     let in_root = |series_id: &str| {
         app.libs
             .get(lib_idx)
@@ -493,8 +498,7 @@ pub(in crate::app) fn shows_default_series(app: &App, lib_idx: usize) -> Option<
                     .any(|item| item.id == series_id && item.item_type == "Series")
             })
     };
-    app.gui
-        .tv_shows
+    gui.tv_shows
         .get(&lib_idx)
         .and_then(|selection| selection.series_id.clone())
         .filter(|stored| in_root(stored))
@@ -540,9 +544,14 @@ pub(in crate::app) fn shows_root_needs_load(app: &App, lib_idx: usize) -> bool {
 /// episode rows. A stale command plays nothing. It reads only the core's
 /// library state and the destination's cached episodes, so it is a core
 /// function the Hero, the row art, and the play paths share.
-pub(in crate::app) fn shows_item(app: &App, lib_idx: usize, item_id: &str) -> Option<EmbyItem> {
-    match super::shows::shows_view(app, lib_idx) {
-        GuiShowsView::New => return super::shows::shows_new_item(app, item_id),
+pub(in crate::app) fn shows_item(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+    item_id: &str,
+) -> Option<EmbyItem> {
+    match super::shows::shows_view(gui, lib_idx) {
+        GuiShowsView::New => return super::shows::shows_new_item(gui, item_id),
         GuiShowsView::Upcoming => return None,
         GuiShowsView::All => {}
     }

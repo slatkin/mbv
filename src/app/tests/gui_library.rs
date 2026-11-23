@@ -101,11 +101,14 @@ fn app_with_music_groups(http: &MockHttp) -> App {
 /// directly, so these store tests read the one-group rule the collection
 /// commands build on.
 fn select_group(app: &mut App, group_id: &str) {
-    install_library_collection(
-        app,
-        0,
-        GuiCollectionSet::Checked(vec![group_id.to_string()]),
-    );
+    crate::app::tests::stub_gui_state(|state| {
+        install_library_collection(
+            app,
+            state,
+            0,
+            GuiCollectionSet::Checked(vec![group_id.to_string()]),
+        );
+    });
 }
 
 /// One album as the store holds it, with the display artist and year the
@@ -135,35 +138,38 @@ fn app_with_stored_groups(
     soul: Vec<mbv_emby_model::EmbyItem>,
 ) -> App {
     let http = MockHttp::new();
-    let mut app = app_with_music_groups(&http);
-    app.gui.library_groups.insert(
-        0,
-        GuiCollectionSelection {
-            set: GuiCollectionSet::Checked(vec![HIPHOP.to_string()]),
-        },
-    );
-    app.gui
-        .music_albums
-        .entry(0)
-        .or_default()
-        .insert(HIPHOP.to_string(), GuiGroupAlbums::Loaded(hiphop));
-    app.gui
-        .music_albums
-        .entry(0)
-        .or_default()
-        .insert(SOUL.to_string(), GuiGroupAlbums::Loaded(soul));
+    let app = app_with_music_groups(&http);
+    crate::app::tests::stub_gui_state(|state| {
+        state.library_groups.insert(
+            0,
+            GuiCollectionSelection {
+                set: GuiCollectionSet::Checked(vec![HIPHOP.to_string()]),
+            },
+        );
+        state
+            .music_albums
+            .entry(0)
+            .or_default()
+            .insert(HIPHOP.to_string(), GuiGroupAlbums::Loaded(hiphop));
+        state
+            .music_albums
+            .entry(0)
+            .or_default()
+            .insert(SOUL.to_string(), GuiGroupAlbums::Loaded(soul));
+    });
     app
 }
 
 /// Drain one started group's fetch completion, the Client tick's library
-/// drain over the mocked transport's answer.
+/// drain over the mocked transport's answer: the event's store half installs
+/// in the GUI state the tests keep beside the `App` (task 8.1).
 fn land_one_group(app: &mut App) {
     let event = app
         .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("the group's album fetch completed");
-    app.handle_lib_event(event, None);
+    crate::app::tests::stub_gui_state(|gui| app.handle_lib_event(event, Some(gui)));
 }
 
 #[test]
@@ -422,7 +428,7 @@ fn a_collection_toggle_checks_two_groups() {
             1989,
         )],
     );
-    app.gui.library_groups.remove(&0);
+    crate::app::tests::stub_gui_state(|state| state.library_groups.remove(&0));
 
     apply_gui_library_command(
         &mut app,
@@ -440,8 +446,13 @@ fn a_collection_toggle_checks_two_groups() {
     );
 
     assert_eq!(
-        app.gui.library_groups.get(&0).map(|stored| &stored.set),
-        Some(&GuiCollectionSet::Checked(vec![
+        crate::app::tests::stub_gui_state(|state| {
+            state
+                .library_groups
+                .get(&0)
+                .map(|stored| stored.set.clone())
+        }),
+        Some(GuiCollectionSet::Checked(vec![
             HIPHOP.to_string(),
             SOUL.to_string(),
         ])),
@@ -466,12 +477,14 @@ fn a_collection_toggle_checks_two_groups() {
 fn a_stored_group_the_library_lost_falls_back_to_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
-    app.gui.library_groups.insert(
-        0,
-        GuiCollectionSelection {
-            set: GuiCollectionSet::Checked(vec!["grp-gone".to_string()]),
-        },
-    );
+    crate::app::tests::stub_gui_state(|state| {
+        state.library_groups.insert(
+            0,
+            GuiCollectionSelection {
+                set: GuiCollectionSet::Checked(vec!["grp-gone".to_string()]),
+            },
+        );
+    });
 
     let projection = gui_music_projection(&mut app, 0);
 
@@ -502,7 +515,7 @@ fn no_stored_choice_selects_all() {
         )],
         Vec::new(),
     );
-    app.gui.library_groups.remove(&0);
+    crate::app::tests::stub_gui_state(|state| state.library_groups.remove(&0));
 
     let projection = gui_music_projection(&mut app, 0);
 
@@ -543,17 +556,19 @@ fn a_failed_selected_group_shows_a_failure_line() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui.library_groups.insert(
-        0,
-        GuiCollectionSelection {
-            set: GuiCollectionSet::Checked(vec![SOUL.to_string()]),
-        },
-    );
-    app.gui
-        .music_albums
-        .entry(0)
-        .or_default()
-        .insert(SOUL.to_string(), GuiGroupAlbums::Failed);
+    crate::app::tests::stub_gui_state(|state| {
+        state.library_groups.insert(
+            0,
+            GuiCollectionSelection {
+                set: GuiCollectionSet::Checked(vec![SOUL.to_string()]),
+            },
+        );
+        state
+            .music_albums
+            .entry(0)
+            .or_default()
+            .insert(SOUL.to_string(), GuiGroupAlbums::Failed);
+    });
 
     let projection = gui_music_projection(&mut app, 0);
 
@@ -586,7 +601,9 @@ fn all_fetches_once_the_client_appears() {
         &mut app.emby_runtime,
         crate::app::state::service_runtime::EmbyRuntime::new(true),
     );
-    install_library_collection(&mut app, 0, GuiCollectionSet::All);
+    crate::app::tests::stub_gui_state(|state| {
+        install_library_collection(&mut app, state, 0, GuiCollectionSet::All);
+    });
 
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     assert!(

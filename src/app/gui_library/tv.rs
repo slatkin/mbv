@@ -17,6 +17,7 @@ use mbv_queue::TvContentMode;
 
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// The GUI Library's Shows selection (design D12, D8): per Shows library, the
@@ -39,18 +40,18 @@ impl GuiCore {
     /// destination's load pass root step settles, so the open has no
     /// user-action work beyond its guard.
     pub fn gui_tv_open(&mut self, lib_idx: usize) {
-        open_tv(&mut self.app, lib_idx);
+        open_tv(&mut self.app, &mut self.gui, lib_idx);
     }
 
     /// Select the series the Hero shows (design D12).
     pub fn gui_tv_select_series(&mut self, lib_idx: usize, series_id: &str) {
-        select_tv_series(&mut self.app, lib_idx, series_id);
+        select_tv_series(&mut self.app, &mut self.gui, lib_idx, series_id);
     }
 
     /// Select the season whose episodes the Hero's Workspace shows (design
     /// D12).
     pub fn gui_tv_select_season(&mut self, lib_idx: usize, season_id: &str) {
-        select_tv_season(&mut self.app, lib_idx, season_id);
+        select_tv_season(&mut self.app, &mut self.gui, lib_idx, season_id);
     }
 }
 
@@ -68,7 +69,11 @@ pub(in crate::app::gui_library) fn tv_library(app: &App, lib_idx: usize) -> bool
 /// work beyond its guard. The TUI's own activation, which an empty stack needs,
 /// is that root step too. A `lib_idx` that names no Shows library is an
 /// ignored command.
-pub(in crate::app::gui_library) fn open_tv(app: &mut App, lib_idx: usize) {
+pub(in crate::app::gui_library) fn open_tv(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+) {
     if !tv_library(app, lib_idx) {
         super::log_ignored_library_command(
             "tvOpen",
@@ -79,7 +84,9 @@ pub(in crate::app::gui_library) fn open_tv(app: &mut App, lib_idx: usize) {
     // The ordered load pass is the GUI core's, so the open step hands the
     // core the App it holds.
     let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
+    *gui = std::mem::take(core.gui_state_mut());
     *app = core.into_app();
 }
 
@@ -103,6 +110,7 @@ pub(in crate::app::gui_library) fn load_shows_root(app: &mut App, lib_idx: usize
 /// root list, or a row that is no Series — is an ignored command.
 pub(in crate::app::gui_library) fn select_tv_series(
     app: &mut App,
+    gui: &mut GuiClientState,
     lib_idx: usize,
     series_id: &str,
 ) {
@@ -123,7 +131,7 @@ pub(in crate::app::gui_library) fn select_tv_series(
         super::log_stale_library_item("tvSelectSeries", series_id);
         return;
     }
-    let entry = app.gui.tv_shows.entry(lib_idx).or_default();
+    let entry = gui.tv_shows.entry(lib_idx).or_default();
     if entry.series_id.as_deref() != Some(series_id) {
         entry.season_id = None;
     }
@@ -139,6 +147,7 @@ pub(in crate::app::gui_library) fn select_tv_series(
 /// that names no Shows library.
 pub(in crate::app::gui_library) fn select_tv_season(
     app: &mut App,
+    gui: &mut GuiClientState,
     lib_idx: usize,
     season_id: &str,
 ) {
@@ -149,7 +158,7 @@ pub(in crate::app::gui_library) fn select_tv_season(
         );
         return;
     }
-    let entry = app.gui.tv_shows.entry(lib_idx).or_default();
+    let entry = gui.tv_shows.entry(lib_idx).or_default();
     let Some(series_id) = entry.series_id.clone() else {
         super::log_ignored_library_command("tvSelectSeason", format_args!("no series is selected"));
         return;

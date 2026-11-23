@@ -23,6 +23,7 @@ use super::podcasts_projection::GuiPodcastEpisodeId;
 use super::tabs::GuiDestinationKind;
 
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// The GUI Library's Podcasts selection (row 10.1): per podcast library, the
@@ -84,15 +85,14 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
         super::podcasts_projection::podcast_shows(app, self.0)
     }
 
-    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
-        app.gui
-            .podcast_libs
+    fn stored_set<'a>(&self, gui: &'a GuiClientState) -> &'a GuiCollectionSet {
+        gui.podcast_libs
             .get(&self.0)
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.selection.set)
     }
 
-    fn has_stored_selection(&self, app: &App) -> bool {
-        app.gui.podcast_libs.contains_key(&self.0)
+    fn has_stored_selection(&self, gui: &GuiClientState) -> bool {
+        gui.podcast_libs.contains_key(&self.0)
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -113,8 +113,8 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
         }
     }
 
-    fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
-        install_podcast_set(app, self.0, set);
+    fn install_set(&self, app: &mut App, gui: &mut GuiClientState, set: GuiCollectionSet) {
+        install_podcast_set(app, gui, self.0, set);
     }
 }
 
@@ -137,7 +137,7 @@ impl GuiCore {
     /// destination's load pass. A `lib_idx` that names no podcast library is an
     /// ignored command.
     pub fn gui_podcast_open(&mut self, lib_idx: usize) {
-        open_podcast(&mut self.app, lib_idx);
+        open_podcast(&mut self.app, &mut self.gui, lib_idx);
     }
 
     /// Select the Podcasts episode a row id names (design D12, row 10.1): the
@@ -152,7 +152,7 @@ impl GuiCore {
             super::log_stale_library_item("podcastSelect", row);
             return;
         };
-        select_podcast(&mut self.app, lib_idx, &episode.target());
+        select_podcast(&mut self.app, &mut self.gui, lib_idx, &episode.target());
     }
 
     /// Play the Podcasts episode a row id names (design D12, row 10.1): Enter
@@ -189,7 +189,11 @@ impl GuiCore {
 
 /// Open the Podcasts destination `lib_idx` (row 10.1): the open clears a failed
 /// catalog mark, then runs the destination's one load pass.
-pub(in crate::app::gui_library) fn open_podcast(app: &mut App, lib_idx: usize) {
+pub(in crate::app::gui_library) fn open_podcast(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+) {
     if !podcast_library(app, lib_idx) {
         super::log_ignored_library_command(
             "podcastOpen",
@@ -198,7 +202,7 @@ pub(in crate::app::gui_library) fn open_podcast(app: &mut App, lib_idx: usize) {
         return;
     }
     clear_podcast_catalog_failed(app, lib_idx);
-    run_podcast_loads(app, lib_idx);
+    run_podcast_loads(app, gui, lib_idx);
 }
 
 /// The one write the toggle and the All press take: the shared collection
@@ -206,30 +210,33 @@ pub(in crate::app::gui_library) fn open_podcast(app: &mut App, lib_idx: usize) {
 /// selection needs start (gui-collection-dropdown design D2, D5).
 pub(in crate::app::gui_library) fn install_podcast_set(
     app: &mut App,
+    gui: &mut GuiClientState,
     lib_idx: usize,
     set: GuiCollectionSet,
 ) {
-    app.gui
-        .podcast_libs
-        .entry(lib_idx)
-        .or_default()
-        .selection
-        .set = set;
-    run_podcast_loads(app, lib_idx);
+    gui.podcast_libs.entry(lib_idx).or_default().selection.set = set;
+    run_podcast_loads(app, gui, lib_idx);
 }
 
 /// Run the Podcasts destination's one ordered load pass (gui-one-
 /// destination-ensure design D1): the GUI core owns the pass, so a step that
 /// holds an `App` hands it to the core.
-fn run_podcast_loads(app: &mut App, lib_idx: usize) {
+fn run_podcast_loads(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
     let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
+    *gui = std::mem::take(core.gui_state_mut());
     *app = core.into_app();
 }
 
 /// Select the episode the Hero shows (row 10.1): the episode's own fields and
 /// its show's facts are already cached, so no load starts.
-fn select_podcast(app: &mut App, lib_idx: usize, target: &PodcastEpisodeTarget) {
+fn select_podcast(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+    target: &PodcastEpisodeTarget,
+) {
     if !podcast_library(app, lib_idx) {
         super::log_ignored_library_command(
             "podcastSelect",
@@ -241,11 +248,7 @@ fn select_podcast(app: &mut App, lib_idx: usize, target: &PodcastEpisodeTarget) 
         super::log_stale_library_item("podcastSelect", target.episode_id());
         return;
     }
-    app.gui
-        .podcast_libs
-        .entry(lib_idx)
-        .or_default()
-        .picked_episode = Some(target.clone());
+    gui.podcast_libs.entry(lib_idx).or_default().picked_episode = Some(target.clone());
 }
 
 /// Whether `lib_idx`'s show catalog is unloaded in a shape a show-list load
@@ -272,8 +275,12 @@ pub(in crate::app::gui_library) fn clear_podcast_catalog_failed(app: &mut App, l
 
 /// Commit the checked shows' scope the bounded fan-out reads (gui-one-
 /// destination-ensure design D3; gui-collection-dropdown design D2).
-pub(in crate::app) fn commit_podcast_effective_scope(app: &mut App, lib_idx: usize) {
-    let set = podcast_effective_set(app, lib_idx);
+pub(in crate::app) fn commit_podcast_effective_scope(
+    app: &mut App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+) {
+    let set = podcast_effective_set(app, gui, lib_idx);
     let single_show = match set.as_ref() {
         GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.first().cloned(),
         _ => None,
@@ -284,8 +291,12 @@ pub(in crate::app) fn commit_podcast_effective_scope(app: &mut App, lib_idx: usi
 /// Start the loads the committed selection depends on (gui-one-destination-
 /// ensure design D3, row 10.1): All's one-shot shelf fetch, then every required
 /// show's episodes through the bounded fan-out, or the one checked show's.
-pub(in crate::app) fn ensure_podcast_dependents(app: &mut App, lib_idx: usize) {
-    if podcast_effective_set(app, lib_idx).is_all()
+pub(in crate::app) fn ensure_podcast_dependents(
+    app: &mut App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+) {
+    if podcast_effective_set(app, gui, lib_idx).is_all()
         && let Some(library_id) = app
             .audiobookshelf_libraries
             .get(lib_idx)
@@ -331,17 +342,21 @@ pub(in crate::app::gui_library) fn enqueue_podcast_episode(
 
 /// The effective selection the list and the pill row paint (row 10.1;
 /// gui-collection-dropdown design D1).
-pub(in crate::app) fn podcast_effective_set(
-    app: &App,
+pub(in crate::app) fn podcast_effective_set<'a>(
+    app: &'a App,
+    gui: &'a GuiClientState,
     lib_idx: usize,
-) -> Cow<'_, GuiCollectionSet> {
-    GuiPodcastsCollectionSite(lib_idx).effective_set(app)
+) -> Cow<'a, GuiCollectionSet> {
+    GuiPodcastsCollectionSite(lib_idx).effective_set(app, gui)
 }
 
 /// The episode the Hero shows (row 10.1): the stored pick.
 #[must_use]
-pub fn podcast_picked_episode(app: &App, lib_idx: usize) -> Option<&PodcastEpisodeTarget> {
-    app.gui.podcast_libs.get(&lib_idx)?.picked_episode.as_ref()
+pub fn podcast_picked_episode(
+    gui: &GuiClientState,
+    lib_idx: usize,
+) -> Option<&PodcastEpisodeTarget> {
+    gui.podcast_libs.get(&lib_idx)?.picked_episode.as_ref()
 }
 
 /// Commit the checked shows' scope to the browse state the bounded fan-out

@@ -21,7 +21,7 @@ impl GuiCore {
         if !matches!(
             command,
             GuiPlaylistsCommand::Toggle | GuiPlaylistsCommand::Close
-        ) && !self.app.gui.playlists_screen_open
+        ) && !self.gui.playlists_screen_open
         {
             Self::log_ignored_gui_playlists_command("stale", "the Playlists screen is closed");
             return;

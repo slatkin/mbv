@@ -35,7 +35,7 @@ impl GuiCore {
     /// cursor starts on the Owner's attached output, as the popover's
     /// starts on the chosen track.
     pub(in crate::app) fn toggle_gui_target_chooser(&mut self) {
-        self.app.gui.overlay = if let Some(GuiOverlay::TargetChooser(_)) = &self.app.gui.overlay {
+        self.gui.overlay = if let Some(GuiOverlay::TargetChooser(_)) = &self.gui.overlay {
             None
         } else {
             let cursor = self

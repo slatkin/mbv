@@ -84,7 +84,7 @@ impl GuiCore {
     /// the dismissal read.
     #[must_use]
     pub fn gui_playlists_is_open(&self) -> bool {
-        self.app.gui.playlists_screen_open
+        self.gui.playlists_screen_open
     }
 
     /// Open the screen and load the saved playlists. The Settings screen and
@@ -93,13 +93,13 @@ impl GuiCore {
         // The Settings and Playlists screens never show together, so the open
         // closes Settings through the Settings screen's own entry.
         self.close_gui_settings();
-        self.app.gui.playlists_screen_open = true;
+        self.gui.playlists_screen_open = true;
         self.app.spawn_load_playlists();
     }
 
     /// Close the screen and drop the open playlist.
     pub fn close_gui_playlists(&mut self) {
-        self.app.gui.playlists_screen_open = false;
+        self.gui.playlists_screen_open = false;
         self.app.playlists_open = None;
         self.app.playlists_open_items.clear();
     }
@@ -114,7 +114,7 @@ impl GuiCore {
 
     /// Open the screen when closed, close it when open.
     pub fn toggle_gui_playlists(&mut self) {
-        if self.app.gui.playlists_screen_open {
+        if self.gui.playlists_screen_open {
             self.close_gui_playlists();
         } else {
             self.open_gui_playlists();
@@ -124,8 +124,7 @@ impl GuiCore {
     /// The screen's content, `None` while the screen is closed.
     #[must_use]
     pub fn gui_playlists(&self) -> Option<GuiPlaylistsProjection> {
-        self.app
-            .gui
+        self.gui
             .playlists_screen_open
             .then(|| GuiPlaylistsProjection {
                 playlists: self.app.playlists.iter().map(playlist_row).collect(),

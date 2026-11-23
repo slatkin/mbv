@@ -244,8 +244,10 @@ fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
     select_all_shows(&mut app, 1);
 
     assert_eq!(
-        crate::app::gui_library::podcasts::podcast_effective_set(&app, 1).as_ref(),
-        &GuiCollectionSet::All
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_effective_set(&app, gui, 1).into_owned()
+        }),
+        GuiCollectionSet::All
     );
     assert_eq!(
         podcast_state(&app).committed_show_pill,
@@ -303,8 +305,10 @@ fn a_checked_show_lands_only_that_shows_episodes() {
     toggle_show(&mut app, 1, "show-b");
 
     assert_eq!(
-        crate::app::gui_library::podcasts::podcast_effective_set(&app, 1).as_ref(),
-        &GuiCollectionSet::Checked(vec!["show-b".into()])
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_effective_set(&app, gui, 1).into_owned()
+        }),
+        GuiCollectionSet::Checked(vec!["show-b".into()])
     );
     assert_eq!(
         podcast_state(&app).committed_show_pill.as_deref(),
@@ -352,8 +356,10 @@ fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
     let target = PodcastEpisodeTarget::new("show-a".into(), "ep-1".into());
     gui_podcast_select(&mut app, 1, &target);
     assert_eq!(
-        crate::app::gui_library::podcasts::podcast_picked_episode(&app, 1),
-        Some(&target),
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_picked_episode(gui, 1).cloned()
+        }),
+        Some(target.clone()),
         "the picked episode is the select command's"
     );
 
@@ -363,8 +369,10 @@ fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
         &PodcastEpisodeTarget::new("show-a".into(), "gone".into()),
     );
     assert_eq!(
-        crate::app::gui_library::podcasts::podcast_picked_episode(&app, 1),
-        Some(&target),
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_picked_episode(gui, 1).cloned()
+        }),
+        Some(target),
         "a stale episode id changes nothing"
     );
 }
@@ -420,8 +428,10 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
         "the Podcasts destination applies no saved pill and needs no retry"
     );
     assert_eq!(
-        crate::app::gui_library::podcasts::podcast_effective_set(&app, 1).as_ref(),
-        &GuiCollectionSet::All,
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_effective_set(&app, gui, 1).into_owned()
+        }),
+        GuiCollectionSet::All,
         "the restored destination keeps the default All selection"
     );
 }

@@ -13,6 +13,12 @@ use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use rstest::rstest;
 
+/// The Shows view a stub `App` holds beside it (`crate::app::tests::gui_shows_view`
+/// takes the Client's core, and these tests hold the state in the sidecar).
+fn view_of(lib_idx: usize) -> GuiShowsView {
+    crate::app::tests::stub_gui_state(|gui| crate::app::gui_library::shows_view(gui, lib_idx))
+}
+
 /// A series row of the series list, with its sort name.
 fn series_item(id: &str, name: &str, sort_name: &str) -> EmbyItem {
     let mut item = make_item(name, "Series");
@@ -244,7 +250,9 @@ fn a_stale_selection_falls_back_to_the_first_row() {
         series_item("series-a", "Alfred", "Alfred"),
         series_item("series-b", "Bridgerton", "Bridgerton"),
     ]);
-    app.gui.tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
+    });
 
     let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
@@ -331,15 +339,17 @@ fn one_shows_view_is_active_at_a_time() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
 
-    assert_eq!(gui_shows_view(&app, 0), GuiShowsView::All);
+    assert_eq!(view_of(0), GuiShowsView::All);
     for view in [GuiShowsView::New, GuiShowsView::Upcoming, GuiShowsView::All] {
         apply_gui_library_command(
             &mut app,
             GuiLibraryCommand::ShowsSetView { lib_idx: 0, view },
         );
-        assert_eq!(gui_shows_view(&app, 0), view);
+        assert_eq!(view_of(0), view);
     }
-    assert!(app.gui.shows_views.contains_key(&0));
+    assert!(crate::app::tests::stub_gui_state(|gui| gui
+        .shows_views
+        .contains_key(&0)));
 }
 
 /// Contract (design D9): New paints the merged latest episodes, newest first,
@@ -348,20 +358,22 @@ fn one_shows_view_is_active_at_a_time() {
 fn the_new_view_paints_the_merged_latest_episodes() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
-    app.gui.shows_new.insert(
-        "lib-a".into(),
-        GuiSectionRequest::Landed(vec![
-            new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
-            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ]),
-    );
-    app.gui.shows_new.insert(
-        "lib-b".into(),
-        GuiSectionRequest::Landed(vec![
-            new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
-            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ]),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.shows_new.insert(
+            "lib-a".into(),
+            GuiSectionRequest::Landed(vec![
+                new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
+                new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+            ]),
+        );
+        gui.shows_new.insert(
+            "lib-b".into(),
+            GuiSectionRequest::Landed(vec![
+                new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
+                new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+            ]),
+        );
+    });
     apply_gui_library_command(
         &mut app,
         GuiLibraryCommand::ShowsSetView {
@@ -439,7 +451,9 @@ fn an_upcoming_row_resolves_no_playable_item() {
         .clone();
 
     assert_eq!(
-        crate::app::gui_library::shows_projection::shows_item(&app, 0, &id),
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::shows_projection::shows_item(&app, gui, 0, &id)
+        }),
         None
     );
 }
@@ -462,13 +476,15 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
             view: GuiShowsView::New,
         },
     );
+    let mut core = crate::app::tests::core_holding_stub_gui(&mut app);
     handle_gui_shows_new(
-        &mut app,
+        &mut core,
         GuiShowsNewEvent {
             library_id: "lib-tv".into(),
             result,
         },
     );
+    core.into_app_keeping_gui(&mut app);
 
     let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 

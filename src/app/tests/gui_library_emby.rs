@@ -107,17 +107,17 @@ fn emby_app(http: &MockHttp, collection_type: &str, library_id: &str, name: &str
 }
 
 /// Drain exactly one event from the lib channel, as the GUI core tick's drain
-/// does (`drain_lib_event_with_stores`), through the GUI's own stores: the
+/// does (`GuiCore::drain_lib_event`), through the GUI's own stores: the
 /// event's App-side half and its collected store effects apply before the next
-/// event (`decouple-client-core` design D4a (c)). The TUI's
+/// event (`decouple-client-core` design D4a (c)). The store half installs in
+/// the GUI state the tests keep beside the `App` (task 8.1). The TUI's
 /// `App::drain_lib_event` is this with no stores. One event per call keeps a
 /// pump from swallowing an event that the step it lands starts a fetch for.
 fn drain_one(app: &mut App) -> bool {
     let Ok(event) = app.channels.lib_rx.try_recv() else {
         return false;
     };
-    let mut stores = GuiLibraryStores;
-    app.handle_lib_event(event, Some(&mut stores));
+    crate::app::tests::stub_gui_state(|gui| app.handle_lib_event(event, Some(gui)));
     true
 }
 
@@ -418,22 +418,24 @@ fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
     app.tab = TabSelection::EmbyLibrary(0);
     let mut first = make_item("A Movie", "Movie");
     first.id = "m-1".into();
-    app.gui.emby_roots.insert(
-        0,
-        crate::app::gui_library::GuiEmbyRootItems::Loaded(vec![first]),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_roots.insert(
+            0,
+            crate::app::gui_library::GuiEmbyRootItems::Loaded(vec![first]),
+        );
+    });
 
     gui_emby_select(&mut app, 0, "m-1");
     assert_eq!(
         app.gui_emby_picked_row_for_test(0),
-        Some("m-1"),
+        Some("m-1".to_string()),
         "the picked row is the select command's"
     );
 
     gui_emby_select(&mut app, 0, "gone");
     assert_eq!(
         app.gui_emby_picked_row_for_test(0),
-        Some("m-1"),
+        Some("m-1".to_string()),
         "a stale id changes nothing"
     );
 }
@@ -504,9 +506,10 @@ fn plain_movies_app(items: Vec<EmbyItem>) -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui
-        .emby_roots
-        .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_roots
+            .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    });
     app
 }
 
@@ -731,13 +734,15 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
     let mut boxset = make_item("Boxset", "BoxSet");
     boxset.id = "box-1".into();
     let mut app = plain_movies_app(vec![boxset]);
-    app.gui.emby_libs.insert(
-        0,
-        crate::app::gui_library::GuiEmbyLibrarySelection {
-            picked_row: Some("box-1".into()),
-            ..Default::default()
-        },
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_libs.insert(
+            0,
+            crate::app::gui_library::GuiEmbyLibrarySelection {
+                picked_row: Some("box-1".into()),
+                ..Default::default()
+            },
+        );
+    });
 
     let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 

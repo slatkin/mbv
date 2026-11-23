@@ -19,9 +19,9 @@ impl GuiCore {
     /// so an inactive player or a remote output has nothing to list. The
     /// cursor starts on the chosen choice.
     pub(in crate::app) fn toggle_gui_track_popover(&mut self, chip: TrackChipKind) {
-        if matches!(&self.app.gui.overlay, Some(GuiOverlay::TrackPopover(popover)) if popover.chip == chip)
+        if matches!(&self.gui.overlay, Some(GuiOverlay::TrackPopover(popover)) if popover.chip == chip)
         {
-            self.app.gui.overlay = None;
+            self.gui.overlay = None;
             return;
         }
         let Some(chips) = self.app.track_chips() else {
@@ -29,7 +29,7 @@ impl GuiCore {
         };
         let choices = track_popover_choices(chip, &chips);
         let cursor = choices.iter().position(|choice| choice.chosen).unwrap_or(0);
-        self.app.gui.overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
+        self.gui.overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
     }
 
     /// Activate the open track popover's painted choice by its track id (the
@@ -41,7 +41,7 @@ impl GuiCore {
     /// popover — a stale row press while another overlay or none holds the
     /// slot executes nothing.
     pub(in crate::app) fn select_gui_track_popover_track(&mut self, track_id: i64) {
-        let Some(GuiOverlay::TrackPopover(popover)) = &self.app.gui.overlay else {
+        let Some(GuiOverlay::TrackPopover(popover)) = &self.gui.overlay else {
             return;
         };
         let chip = popover.chip;
@@ -52,7 +52,7 @@ impl GuiCore {
             return;
         }
         self.apply_track_choice(chip, track_id);
-        self.app.gui.overlay = None;
+        self.gui.overlay = None;
     }
 
     /// Switch the chip's track to `track_id`: the one switch a track popover's
@@ -72,10 +72,10 @@ impl GuiCore {
     /// overlay's key rules keep consuming input the window does not paint.
     /// The GUI input entry reconciles before it builds the snapshot.
     pub(in crate::app) fn close_orphaned_track_popover(&mut self) {
-        if matches!(self.app.gui.overlay, Some(GuiOverlay::TrackPopover(_)))
+        if matches!(self.gui.overlay, Some(GuiOverlay::TrackPopover(_)))
             && self.app.track_chips().is_none()
         {
-            self.app.gui.overlay = None;
+            self.gui.overlay = None;
         }
     }
 

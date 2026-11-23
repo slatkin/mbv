@@ -28,6 +28,7 @@ use super::home::GuiHomeRowId;
 use super::podcasts_projection::GuiPodcastEpisodeId;
 use crate::app::App;
 use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 impl GuiCore {
@@ -42,11 +43,12 @@ impl GuiCore {
         ids: Vec<String>,
     ) {
         let app = &mut self.app;
-        touch_in_view_row_images(app, scope, &ids);
-        app.gui.rows_in_view.insert(scope, ids);
+        let gui = &mut self.gui;
+        touch_in_view_row_images(app, gui, scope, &ids);
+        gui.rows_in_view.insert(scope, ids);
         app.stamp_navigation();
         app.drop_pending_row_fetches();
-        queue_in_view_row_fetches(app);
+        queue_in_view_row_fetches(app, gui);
     }
 
     /// Queue a `Row` fetch for every in-view row of the active list (design D7):
@@ -54,19 +56,19 @@ impl GuiCore {
     /// Nothing queues while navigation is in flight, and a row whose artwork
     /// policy declares no source makes no request.
     pub fn gui_queue_in_view_row_fetches(&mut self) {
-        queue_in_view_row_fetches(&mut self.app);
+        queue_in_view_row_fetches(&mut self.app, &mut self.gui);
     }
 }
 
 /// Queue a `Row` fetch for every in-view row of the active list (design D7).
-pub(in crate::app) fn queue_in_view_row_fetches(app: &mut App) {
+pub(in crate::app) fn queue_in_view_row_fetches(app: &mut App, gui: &mut GuiClientState) {
     if !app.navigation_idle() || !app.images.protocol_enabled() {
         return;
     }
-    let Some(scope) = row_art_scope(app) else {
+    let Some(scope) = row_art_scope(app, gui) else {
         return;
     };
-    let Some(ids) = app.gui.rows_in_view.get(&scope).cloned() else {
+    let Some(ids) = gui.rows_in_view.get(&scope).cloned() else {
         return;
     };
     if scope == GuiRowArtScope::Music {
@@ -79,7 +81,7 @@ pub(in crate::app) fn queue_in_view_row_fetches(app: &mut App) {
     }
     let requests: Vec<ImageFetchReq> = ids
         .iter()
-        .filter_map(|id| row_source(app, scope, id))
+        .filter_map(|id| row_source(app, gui, scope, id))
         .filter_map(|source| row_fetch_req(app, &source))
         .collect();
     app.fetch_row_images(requests);
@@ -89,10 +91,15 @@ pub(in crate::app) fn queue_in_view_row_fetches(app: &mut App) {
 /// evicts rows the window scrolled past before rows it still paints. It
 /// runs on every set, ahead of the idle gate, because a scroll is the
 /// moment the cache fills.
-fn touch_in_view_row_images(app: &mut App, scope: GuiRowArtScope, ids: &[String]) {
+fn touch_in_view_row_images(
+    app: &mut App,
+    gui: &GuiClientState,
+    scope: GuiRowArtScope,
+    ids: &[String],
+) {
     let keys: Vec<String> = ids
         .iter()
-        .filter_map(|id| row_source(app, scope, id))
+        .filter_map(|id| row_source(app, gui, scope, id))
         .filter_map(|source| row_fetch_req(app, &source))
         .map(|req| req.cache_key)
         .collect();
@@ -104,12 +111,12 @@ fn touch_in_view_row_images(app: &mut App, scope: GuiRowArtScope, ids: &[String]
 /// The scope whose rows the active destination paints (design D7): the one
 /// list that reports rows in view, so a stored set of another list queues
 /// nothing.
-fn row_art_scope(app: &App) -> Option<GuiRowArtScope> {
+fn row_art_scope(app: &App, gui: &GuiClientState) -> Option<GuiRowArtScope> {
     match super::tabs::active_destination(app)? {
         super::GuiDestinationKind::Home => Some(GuiRowArtScope::Home),
         super::GuiDestinationKind::Music { .. } => Some(GuiRowArtScope::Music),
         super::GuiDestinationKind::Shows { lib_idx } => {
-            Some(match super::shows::shows_view(app, lib_idx) {
+            Some(match super::shows::shows_view(gui, lib_idx) {
                 super::GuiShowsView::All => GuiRowArtScope::ShowsSeries,
                 super::GuiShowsView::New => GuiRowArtScope::ShowsNew,
                 super::GuiShowsView::Upcoming => GuiRowArtScope::ShowsUpcoming,
@@ -124,18 +131,23 @@ fn row_art_scope(app: &App) -> Option<GuiRowArtScope> {
 
 /// The row art source an in-view row's stable id names in `scope` (design
 /// D5): the App's own data resolves the id, so the window sends no source.
-fn row_source(app: &App, scope: GuiRowArtScope, id: &str) -> Option<GuiRowSource> {
+fn row_source(
+    app: &App,
+    gui: &GuiClientState,
+    scope: GuiRowArtScope,
+    id: &str,
+) -> Option<GuiRowSource> {
     match scope {
         GuiRowArtScope::Home => home_row_source(app, id),
         GuiRowArtScope::Emby => {
             let lib_idx = active_library_index(app)?;
-            emby_row_source(&super::emby_projection::emby_item(app, lib_idx, id)?)
+            emby_row_source(&super::emby_projection::emby_item(app, gui, lib_idx, id)?)
         }
         GuiRowArtScope::Music => music_row_source(app, id),
         GuiRowArtScope::ShowsSeries => emby_row_source(&shows_series_item(app, id)?),
         GuiRowArtScope::ShowsNew => {
             let lib_idx = active_shows_library_index(app)?;
-            emby_row_source(&super::shows_projection::shows_item(app, lib_idx, id)?)
+            emby_row_source(&super::shows_projection::shows_item(app, gui, lib_idx, id)?)
         }
         GuiRowArtScope::ShowsUpcoming => upcoming_row_source(app, id),
         GuiRowArtScope::Podcasts => podcast_row_source(app, id),

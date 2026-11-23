@@ -69,54 +69,50 @@ fn launch_roundtrip_app(target: &GuiCollectionTarget) -> App {
 
 /// Seed one destination's session selection as the user's presses leave it.
 fn seed_launch_selection(app: &mut App, target: &GuiCollectionTarget, keys: &[&str]) {
+    let _ = app;
     let set = GuiCollectionSet::Checked(keys.iter().map(ToString::to_string).collect());
     let selection = GuiCollectionSelection { set };
-    match target {
+    crate::app::tests::stub_gui_state(|state| match target {
         GuiCollectionTarget::Music(lib_idx) => {
-            app.gui.library_groups.insert(*lib_idx, selection);
+            state.library_groups.insert(*lib_idx, selection);
         }
         GuiCollectionTarget::Podcasts(lib_idx) => {
-            app.gui.podcast_libs.entry(*lib_idx).or_default().selection = selection;
+            state.podcast_libs.entry(*lib_idx).or_default().selection = selection;
         }
         GuiCollectionTarget::Feeds => {
-            app.gui.feeds_selection.selection = selection;
+            state.feeds_selection.selection = selection;
         }
         GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            app.gui.emby_feed_sets.insert(*lib_idx, selection);
+            state.emby_feed_sets.insert(*lib_idx, selection);
         }
-    }
+    });
 }
 
 /// The stored set one destination holds after the restore.
-fn restored_launch_selection<'a>(
-    app: &'a App,
-    target: &GuiCollectionTarget,
-) -> &'a GuiCollectionSet {
-    match target {
-        GuiCollectionTarget::Music(lib_idx) => {
-            &app.gui
-                .library_groups
-                .get(lib_idx)
-                .expect("the set was restored")
-                .set
-        }
-        GuiCollectionTarget::Podcasts(lib_idx) => {
-            &app.gui
-                .podcast_libs
-                .get(lib_idx)
-                .expect("the set was restored")
-                .selection
-                .set
-        }
-        GuiCollectionTarget::Feeds => &app.gui.feeds_selection.selection.set,
-        GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            &app.gui
-                .emby_feed_sets
-                .get(lib_idx)
-                .expect("the set was restored")
-                .set
-        }
-    }
+fn restored_launch_selection(app: &App, target: &GuiCollectionTarget) -> GuiCollectionSet {
+    let _ = app;
+    crate::app::tests::stub_gui_state(|state| match target {
+        GuiCollectionTarget::Music(lib_idx) => state
+            .library_groups
+            .get(lib_idx)
+            .expect("the set was restored")
+            .set
+            .clone(),
+        GuiCollectionTarget::Podcasts(lib_idx) => state
+            .podcast_libs
+            .get(lib_idx)
+            .expect("the set was restored")
+            .selection
+            .set
+            .clone(),
+        GuiCollectionTarget::Feeds => state.feeds_selection.selection.set.clone(),
+        GuiCollectionTarget::EmbyFeed(lib_idx) => state
+            .emby_feed_sets
+            .get(lib_idx)
+            .expect("the set was restored")
+            .set
+            .clone(),
+    })
 }
 
 /// Seed one destination's sort as the user's press leaves it (gui-flat-list-sort
@@ -261,13 +257,16 @@ fn a_saved_resting_music_set_installs_without_a_group_list() {
         "a resting destination's entry needs no retry"
     );
 
-    let stored = app
-        .gui
-        .library_groups
-        .get(&0)
-        .expect("the saved resting set installs with no group list to retain against");
+    let stored = crate::app::tests::stub_gui_state(|state| {
+        state
+            .library_groups
+            .get(&0)
+            .expect("the saved resting set installs with no group list to retain against")
+            .set
+            .clone()
+    });
     assert_eq!(
-        stored.set.checked_keys(),
+        stored.checked_keys(),
         [SOUL.to_string()].as_slice(),
         "the saved group installs as saved"
     );
@@ -320,7 +319,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
         "the switch abandons the restore"
     );
     assert!(
-        !app.gui.podcast_libs.contains_key(&1),
+        !crate::app::tests::stub_gui_state(|state| state.podcast_libs.contains_key(&1)),
         "the saved show never installs under the destination the user moved to"
     );
 }
@@ -355,7 +354,7 @@ fn a_saved_group_no_longer_held_restores_as_all() {
     ));
 
     assert!(
-        !app.gui.library_groups.contains_key(&0),
+        !crate::app::tests::stub_gui_state(|state| state.library_groups.contains_key(&0)),
         "the vanished group restores as All: no entry is stored"
     );
     assert!(
@@ -375,9 +374,9 @@ fn the_shows_view_survives_a_restart() {
     library.collection_type = "tvshows".into();
     app.libs.push(crate::app::LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui.shows_views.insert(0, GuiShowsView::Upcoming);
+    crate::app::tests::stub_gui_state(|state| state.shows_views.insert(0, GuiShowsView::Upcoming));
 
-    let saved = crate::gui::GuiCore::new(app).gui_launch_state();
+    let saved = crate::app::tests::with_stub_gui(&mut app, |core| core.gui_launch_state());
     assert_eq!(saved.shows_view, mbv_config::GuiLaunchShowsView::Upcoming);
     mbv_config::save_gui_launch_state(&saved).expect("the snapshot is written");
     let loaded = mbv_config::load_gui_launch_state().expect("the snapshot is read");
@@ -391,20 +390,40 @@ fn the_shows_view_survives_a_restart() {
         crate::app::tests::open_launch_destination(&mut restored, &loaded),
         GuiLaunchOpen::Opened(_)
     ));
-    assert_eq!(gui_shows_view(&restored, 0), GuiShowsView::Upcoming);
+    assert_eq!(
+        crate::app::tests::stub_gui_state(|state| state.shows_views.get(&0).copied()),
+        Some(GuiShowsView::Upcoming),
+        "the restored launch installs the saved Shows view"
+    );
+    // The Client state belongs to one Client, so the fresh start begins with a
+    // fresh one (task 8.1): the state the old file restores into carries no
+    // view from the start before it.
+    crate::app::tests::stub_gui_state(|state| *state = crate::app::GuiClientState::new(false));
 
     let old = mbv_config::GuiLaunchState {
         version: mbv_config::GUI_LAUNCH_STATE_VERSION,
-        destination: loaded.destination,
+        destination: mbv_config::TabIdentity::ServiceLibrary {
+            kind: mbv_queue::ServiceKind::Emby,
+            library_id: "lib-tv".to_string(),
+        },
         collections: Vec::new(),
         shows_view: mbv_config::GuiLaunchShowsView::All,
         sorts: Vec::new(),
     };
+    // The Client state belongs to one Client, so the fresh start begins with a
+    // fresh one (task 8.1): the state the old file restores into carries no
+    // view from the start before it.
+    crate::app::tests::stub_gui_state(|state| *state = crate::app::GuiClientState::new(false));
     let mut fresh = make_app_stub();
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-tv".into();
     library.collection_type = "tvshows".into();
+    library.is_folder = true;
     fresh.libs.push(crate::app::LibraryTab::new(library));
     crate::app::tests::open_launch_destination(&mut fresh, &old);
-    assert_eq!(gui_shows_view(&fresh, 0), GuiShowsView::All);
+    assert_eq!(
+        crate::app::tests::stub_gui_state(|state| state.shows_views.get(&0).copied()),
+        Some(GuiShowsView::All),
+        "an old file with no view opens on All"
+    );
 }

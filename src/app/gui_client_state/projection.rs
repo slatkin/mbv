@@ -248,7 +248,7 @@ impl GuiCore {
         &self,
         playback: &QueuePlaybackProjection,
     ) -> Option<GuiOverlayProjection> {
-        match &self.app.gui.overlay {
+        match &self.gui.overlay {
             Some(GuiOverlay::RowMenu(menu)) => Some(GuiOverlayProjection::RowMenu {
                 anchor_slot: menu.anchor_slot,
                 cursor: menu.cursor,

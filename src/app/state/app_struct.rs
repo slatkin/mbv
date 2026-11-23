@@ -1,6 +1,5 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
-use crate::app::gui_client_state::GuiClientState;
 use crate::app::state::client_capabilities::ClientCapabilities;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{
@@ -266,10 +265,6 @@ pub struct App {
     /// gate the mini view, the hidden empty queue column, and the visualizer
     /// and visual-slot hide setters.
     pub(in crate::app) client_capabilities: ClientCapabilities,
-    /// The GUI Client's own state (design D4 of `decouple-client-core`):
-    /// every field only the GUI Client reads or writes. Transitional — row
-    /// 8.1 moves it to `GuiCore`. No core code reads a field of it.
-    pub(in crate::app) gui: GuiClientState,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the

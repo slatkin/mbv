@@ -9,10 +9,7 @@
 
 use std::time::Instant;
 
-use mbv::{
-    App, ClientLifecycle, ClientTickHost, GuiLibraryStores, HomeEventDrain, PlayerEventDrain,
-    TickOutcome,
-};
+use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
 use mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
@@ -153,16 +150,11 @@ impl ClientTickHost for CoreThread {
         // next tick reads them from the App like the TUI shell does. The GUI
         // keeps no library content state, so no surface re-projection joins
         // the drain. Its own library stores do keep state
-        // (`decouple-client-core` design D4a (c)), so every event applies its
-        // collected effects through that implementor after the event and
-        // before the next one.
-        let mut stores = GuiLibraryStores;
+        // (`decouple-client-core` design D4a (c)): every event applies its
+        // collected effects through them after the event and before the next
+        // one, from `GuiCore`'s own `GuiClientState`.
         let mut had_events = false;
-        while self
-            .core
-            .app_mut()
-            .drain_lib_event_with_stores(Some(&mut stores))
-        {
+        while self.core.drain_lib_event() {
             had_events = true;
         }
         if had_events {

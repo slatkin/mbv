@@ -32,6 +32,7 @@ use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -163,7 +164,7 @@ impl GuiCore {
     /// order, the selected entry, and its Hero.
     #[must_use]
     pub fn gui_feeds_projection(&self) -> GuiFeedsProjection {
-        feeds_projection(&self.app)
+        feeds_projection(&self.app, &self.gui)
     }
 }
 
@@ -175,14 +176,14 @@ impl GuiCore {
 /// once; the rows and the Hero lookup read the sorted list, so the frame never
 /// rebuilds it.
 #[must_use]
-pub(in crate::app) fn feeds_projection(app: &App) -> GuiFeedsProjection {
+pub(in crate::app) fn feeds_projection(app: &App, gui: &GuiClientState) -> GuiFeedsProjection {
     if !super::feeds::feeds_present(app) {
         return GuiFeedsProjection::default();
     }
-    let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Feeds);
+    let sort_frame = super::list_sort::list_sort_frame(app, gui, GuiSortTarget::Feeds);
     let sort = sort_frame.active;
-    let collections = super::collection_command::collections(app, GuiCollectionTarget::Feeds);
-    let mut entries = super::feeds::feeds_entries(app);
+    let collections = super::collection_command::collections(app, gui, GuiCollectionTarget::Feeds);
+    let mut entries = super::feeds::feeds_entries(app, gui);
     if sort.is_name_sort() {
         // The entry title leads under Title, and the date newest follows it,
         // so two entries of one title keep the newest first (design D6).
@@ -211,7 +212,7 @@ pub(in crate::app) fn feeds_projection(app: &App) -> GuiFeedsProjection {
         });
     }
     let rows = feeds_rows(app, &entries, sort);
-    let selected = feeds_selected(app, &rows);
+    let selected = feeds_selected(gui, &rows);
     let hero = selected
         .as_deref()
         .and_then(GuiFeedEntryId::decode)
@@ -273,9 +274,9 @@ fn feeds_row(app: &App, entry: &FeedEntry, sort: GuiListSort) -> GuiFeedsRow {
 
 /// The entry the Hero shows (row 11.1): the core's pick while the active
 /// list still carries it, else that list's first row — the Hero default.
-fn feeds_selected(app: &App, rows: &[GuiFeedsRow]) -> Option<String> {
+fn feeds_selected(gui: &GuiClientState, rows: &[GuiFeedsRow]) -> Option<String> {
     picked_or_first(
-        super::feeds::feeds_picked_entry(app).map(str::to_string),
+        super::feeds::feeds_picked_entry(gui).map(str::to_string),
         |picked| rows.iter().any(|row| row.id == picked),
         || rows.first().map(|row| row.id.clone()),
     )

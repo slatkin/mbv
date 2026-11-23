@@ -148,9 +148,9 @@ impl GuiCore {
                 // The Settings screen is the non-blocking situation the
                 // queue-scoped gates read closed (`add-gui-settings-screen`
                 // design D2), while the global and transport actions fire.
-                focus: if self.app.gui.overlay.is_some() {
+                focus: if self.gui.overlay.is_some() {
                     OverlayFocus::ContextMenu
-                } else if self.app.gui.settings_screen.is_some() {
+                } else if self.gui.settings_screen.is_some() {
                     OverlayFocus::SettingsScreen
                 } else {
                     OverlayFocus::Free
@@ -177,7 +177,7 @@ impl GuiCore {
         // router arbitrates against: the chord's focused leaf is the overlay,
         // not the panel beneath it, so a FallThrough reaches the overlay's
         // key rules and not the queue surface's.
-        let focused = if self.app.gui.overlay.is_some() {
+        let focused = if self.gui.overlay.is_some() {
             Some(ComponentId::Overlay(OverlayId::ContextMenu))
         } else {
             leaf.as_ref().map(|surface| surface.id())
@@ -208,7 +208,7 @@ impl GuiCore {
                 // panel beneath it. The daemon-lost dialog's quit choice
                 // returns the Client's quit decision, which ends the run
                 // exactly as a routed quit key does.
-                if self.app.gui.overlay.is_some() {
+                if self.gui.overlay.is_some() {
                     return self.apply_gui_overlay_key(key);
                 }
                 // The queue filter's text entry: its key rules run here, and
@@ -433,12 +433,12 @@ impl GuiCore {
             // chooser on the selection the sidebar's dismiss carries.
             ShellRequest::SelectSession(key) => {
                 if self.select_target_for_key(&key) {
-                    self.app.gui.overlay = None;
+                    self.gui.overlay = None;
                 }
             }
             ShellRequest::SelectChooserTarget(key) => {
                 if self.select_chooser_target(&key) {
-                    self.app.gui.overlay = None;
+                    self.gui.overlay = None;
                 }
             }
             request => {

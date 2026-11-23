@@ -299,11 +299,14 @@ fn a_second_group_keeps_the_hero() {
         },
     );
 
-    install_library_collection(
-        &mut app,
-        0,
-        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        install_library_collection(
+            &mut app,
+            gui,
+            0,
+            GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+        );
+    });
 
     assert_eq!(
         hero_album_id(&mut app),
@@ -335,12 +338,14 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
     app.libs[0].nav_stack[0]
         .items
         .retain(|group| group.id == HIPHOP);
-    app.gui.library_groups.insert(
-        0,
-        GuiCollectionSelection {
-            set: GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
-        },
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.library_groups.insert(
+            0,
+            GuiCollectionSelection {
+                set: GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+            },
+        );
+    });
 
     apply_gui_library_command(
         &mut app,
@@ -351,11 +356,11 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
 
     assert_eq!(
         app.gui_library_pick_for_test(0, HIPHOP),
-        Some("alb-paul"),
+        Some("alb-paul".to_string()),
         "the pick lands in the kept per-group pick"
     );
     assert!(
-        !app.gui.music_union_picks.contains_key(&0),
+        !crate::app::tests::stub_gui_state(|gui| gui.music_union_picks.contains_key(&0)),
         "the session-only union pick stays empty"
     );
 }
@@ -371,16 +376,19 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
         vec![stored_album("alb-zeb", "Zebra Album", "Zebra", 1990)],
         vec![stored_album("alb-aar", "Aardvark Album", "Aardvark", 1989)],
     );
-    app.gui.library_groups.remove(&0);
+    crate::app::tests::stub_gui_state(|gui| gui.library_groups.remove(&0));
 
-    install_library_collection(
-        &mut app,
-        0,
-        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        install_library_collection(
+            &mut app,
+            gui,
+            0,
+            GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+        );
+    });
 
     assert!(
-        !app.gui.music_union_picks.contains_key(&0),
+        !crate::app::tests::stub_gui_state(|gui| gui.music_union_picks.contains_key(&0)),
         "no union pick is seeded from a list-order first album"
     );
     assert_eq!(

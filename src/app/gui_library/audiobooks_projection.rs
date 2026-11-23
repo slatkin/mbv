@@ -181,8 +181,11 @@ impl GuiCore {
         };
         let loading = !state.loading_pages.is_empty();
         let failed = state.error.is_some();
-        let sort_frame =
-            super::list_sort::list_sort_frame(&self.app, GuiSortTarget::Audiobooks(lib_idx));
+        let sort_frame = super::list_sort::list_sort_frame(
+            &self.app,
+            &self.gui,
+            GuiSortTarget::Audiobooks(lib_idx),
+        );
         let sort = sort_frame.active;
         let mut books: Vec<&mbv_audiobookshelf::AudiobookshelfBook> = state.books.iter().collect();
         // Under Author the catalog's own order stands: it is already the
@@ -208,7 +211,7 @@ impl GuiCore {
             .into_iter()
             .map(|book| book_row(&self.app, book, sort))
             .collect();
-        let selected = super::audiobooks::abs_effective_pick(&self.app, lib_idx)
+        let selected = super::audiobooks::abs_effective_pick(&self.app, &self.gui, lib_idx)
             .filter(|pick| rows.iter().any(|row| &row.id == pick));
         let workspace_loading = selected
             .as_deref()

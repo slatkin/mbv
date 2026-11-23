@@ -1,10 +1,10 @@
 //! The GUI Library panel's item actions: the detail, album, shuffle, play,
 //! and enqueue entries the commands call, and the item lookups they share.
 //!
-//! Each step reads no GUI state beyond the picks it writes, so it runs as a
-//! free function over the `App` it is handed and the GUI core's `impl GuiCore`
-//! block calls it (design D4, task 7.4): the item lookups the projections also
-//! read stay free functions, so no caller needs a GUI core for a plain read.
+//! Each step reads and writes the GUI Client's own state, so it takes the
+//! `App` and that state explicitly and the GUI core's `impl GuiCore` block
+//! hands it both (design D4): the item lookups the projections also read stay
+//! free functions, so no caller needs a GUI core for a plain read.
 
 use mbv_emby_model::EmbyItem;
 use mbv_queue::FeedEntry;
@@ -16,6 +16,7 @@ use super::collection::GuiCollectionSet;
 use super::podcasts_projection::GuiPodcastEpisodeId;
 use super::request::GuiSectionRequest;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// One GUI Library row's resolved menu target (add-gui-library-panel design
@@ -46,7 +47,7 @@ impl GuiCore {
     /// are checked. An id the current Service data does not hold leaves the
     /// Hero's item as it was, because the frame that carried the id is stale.
     pub(super) fn show_gui_library_detail(&mut self, item_id: &str) {
-        show_library_detail(&mut self.app, item_id);
+        show_library_detail(&mut self.app, &mut self.gui, item_id);
     }
 
     /// Open an album node (design D5, D7): the shared album-track fetch fills
@@ -64,7 +65,7 @@ impl GuiCore {
     /// replacement). Ids the store and the navigation state no longer hold
     /// are skipped.
     pub(super) fn shuffle_gui_artist(&mut self, album_ids: &[String]) {
-        shuffle_artist(&mut self.app, album_ids);
+        shuffle_artist(&mut self.app, &self.gui, album_ids);
     }
 
     /// Play the item (design D8), as the GUI Library's explicit play: the
@@ -78,7 +79,7 @@ impl GuiCore {
     /// rule, through the same cache the add path reads), and otherwise takes
     /// the shared select-item path.
     pub(super) fn play_gui_library_item(&mut self, lib_idx: usize, item: EmbyItem) {
-        play_library_item(&mut self.app, lib_idx, item);
+        play_library_item(&mut self.app, &self.gui, lib_idx, item);
     }
 
     /// Add the item to the queue (design D8), with the library playback
@@ -90,33 +91,33 @@ impl GuiCore {
     /// add path unchanged. The TUI's own add paths keep their per-item
     /// appends; only the GUI Library's add applies the rule.
     pub(super) fn add_gui_library_item_to_queue(&mut self, item_id: &str) {
-        add_library_item(&mut self.app, item_id);
+        add_library_item(&mut self.app, &self.gui, item_id);
     }
 }
 
 /// Show `item_id` in the Hero (design D2, D13; gui-collection-dropdown design
 /// D11): one checked group's kept pick, or the session's union pick while All
 /// or several groups are checked.
-fn show_library_detail(app: &mut App, item_id: &str) {
-    let Some((lib_idx, item)) = library_item(app, item_id) else {
+fn show_library_detail(app: &mut App, gui: &mut GuiClientState, item_id: &str) {
+    let Some((lib_idx, item)) = library_item(app, gui, item_id) else {
         super::log_stale_library_item("showDetail", item_id);
         return;
     };
-    let single_group = match super::projection::effective_music_set(app, lib_idx).as_ref() {
+    let single_group = match super::projection::effective_music_set(app, gui, lib_idx).as_ref() {
         GuiCollectionSet::Checked(keys) if keys.len() == 1 => Some(keys[0].clone()),
         _ => None,
     };
     if let Some(group_id) = single_group {
         let key = (lib_idx, group_id);
-        if app.gui.library_picks.get(&key) == Some(&item.id) {
+        if gui.library_picks.get(&key) == Some(&item.id) {
             return;
         }
-        app.gui.library_picks.insert(key, item.id);
+        gui.library_picks.insert(key, item.id);
     } else {
-        if app.gui.music_union_picks.get(&lib_idx) == Some(&item.id) {
+        if gui.music_union_picks.get(&lib_idx) == Some(&item.id) {
             return;
         }
-        app.gui.music_union_picks.insert(lib_idx, item.id);
+        gui.music_union_picks.insert(lib_idx, item.id);
     }
     // A pick move is library navigation: it closes the image warm gate, so
     // fast arrow traffic warms no neighbour art (the TUI's own rule).
@@ -124,10 +125,10 @@ fn show_library_detail(app: &mut App, item_id: &str) {
 }
 
 /// Shuffle the artist whose albums are `album_ids` (design D8).
-fn shuffle_artist(app: &mut App, album_ids: &[String]) {
+fn shuffle_artist(app: &mut App, gui: &GuiClientState, album_ids: &[String]) {
     let albums: Vec<EmbyItem> = album_ids
         .iter()
-        .filter_map(|album_id| library_item(app, album_id))
+        .filter_map(|album_id| library_item(app, gui, album_id))
         .map(|(_lib_idx, album)| album)
         .collect();
     if albums.is_empty() {
@@ -144,6 +145,7 @@ fn shuffle_artist(app: &mut App, album_ids: &[String]) {
 /// bare Play entry reaches it through the row's own destination path.
 pub(in crate::app::gui_library) fn play_library_item(
     app: &mut App,
+    _gui: &GuiClientState,
     lib_idx: usize,
     item: EmbyItem,
 ) {
@@ -167,8 +169,12 @@ pub(in crate::app::gui_library) fn play_library_item(
 }
 
 /// Add the item to the queue with the Library's autoload rule (design D8).
-pub(in crate::app::gui_library) fn add_library_item(app: &mut App, item_id: &str) {
-    let Some((lib_idx, item)) = library_item(app, item_id) else {
+pub(in crate::app::gui_library) fn add_library_item(
+    app: &mut App,
+    gui: &GuiClientState,
+    item_id: &str,
+) {
+    let Some((lib_idx, item)) = library_item(app, gui, item_id) else {
         super::log_stale_library_item("addToQueue", item_id);
         return;
     };
@@ -213,12 +219,13 @@ pub(in crate::app::gui_library) fn track_album_id(app: &App, track_id: &str) -> 
 /// row 8.1, D9).
 pub(in crate::app::gui_library) fn library_item(
     app: &App,
+    gui: &GuiClientState,
     item_id: &str,
 ) -> Option<(usize, EmbyItem)> {
     for (lib_idx, lib) in app.libs.iter().enumerate() {
-        let stored = stored_albums(app, lib_idx).find(|album| album.id == item_id);
+        let stored = stored_albums(gui, lib_idx).find(|album| album.id == item_id);
         let emby_root =
-            || super::emby::stored_emby_root_items(app, lib_idx).find(|item| item.id == item_id);
+            || super::emby::stored_emby_root_items(gui, lib_idx).find(|item| item.id == item_id);
         let browsed = || {
             lib.nav_stack
                 .iter()
@@ -228,8 +235,7 @@ pub(in crate::app::gui_library) fn library_item(
         // A Shows New row names one of the library's latest episodes, and
         // only its own fetch's landed rows hold that list (design D9).
         let shows_new = || {
-            app.gui
-                .shows_new
+            gui.shows_new
                 .get(&lib.library.id)
                 .into_iter()
                 .flat_map(GuiSectionRequest::items)
@@ -304,11 +310,10 @@ pub(in crate::app::gui_library) fn shows_tree_item(app: &App, item_id: &str) -> 
 
 /// The albums the GUI store loaded for `lib_idx`'s selected groups.
 pub(in crate::app::gui_library) fn stored_albums(
-    app: &App,
+    gui: &GuiClientState,
     lib_idx: usize,
 ) -> impl Iterator<Item = &EmbyItem> {
-    app.gui
-        .music_albums
+    gui.music_albums
         .get(&lib_idx)
         .into_iter()
         .flat_map(|groups| groups.values())

@@ -3,7 +3,7 @@ pub(in crate::app) mod app_init;
 pub(in crate::app) mod app_struct;
 pub(in crate::app) mod bootstrap;
 pub mod client_capabilities;
-pub(in crate::app) mod construct;
+pub(crate) mod construct;
 pub(in crate::app) mod context_menu_capabilities;
 pub(in crate::app) mod library_position;
 pub(in crate::app) mod library_route;

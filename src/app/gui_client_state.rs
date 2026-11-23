@@ -29,7 +29,7 @@ pub use self::projection::{
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
-pub(in crate::app) use self::state::GuiClientState;
+pub use self::state::GuiClientState;
 
 use crate::gui::GuiCore;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
@@ -41,15 +41,15 @@ impl GuiCore {
     /// the section build reads it here rather than from the window.
     #[must_use]
     pub fn gui_player_auto_hide(&self) -> bool {
-        self.app.gui.player_auto_hide
+        self.gui.player_auto_hide
     }
 
     /// The canvas panel's collapse and queue-fold facts (design D10).
     #[must_use]
     pub fn panel_toggles_projection(&self) -> PanelTogglesProjection {
         PanelTogglesProjection {
-            collapsed: self.app.gui.panel_toggles.collapsed,
-            queue_folded: self.app.gui.panel_toggles.queue_folded,
+            collapsed: self.gui.panel_toggles.collapsed,
+            queue_folded: self.gui.panel_toggles.queue_folded,
         }
     }
 
@@ -94,11 +94,11 @@ impl GuiCore {
 
     /// The `z` toggle (design D10): collapse the panel to the rail.
     pub(in crate::app) fn toggle_panel_collapse(&mut self) {
-        self.app.gui.panel_toggles.collapsed = !self.app.gui.panel_toggles.collapsed;
+        self.gui.panel_toggles.collapsed = !self.gui.panel_toggles.collapsed;
     }
 
     /// The `q` toggle (design D10): fold the expanded panel's queue.
     pub(in crate::app) fn toggle_queue_fold(&mut self) {
-        self.app.gui.panel_toggles.queue_folded = !self.app.gui.panel_toggles.queue_folded;
+        self.gui.panel_toggles.queue_folded = !self.gui.panel_toggles.queue_folded;
     }
 }

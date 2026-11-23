@@ -19,6 +19,7 @@
 use std::collections::HashSet;
 
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 use super::GuiDestinationKind;
@@ -42,20 +43,20 @@ pub(in crate::app) enum GuiStepOutcome {
 pub(in crate::app) trait GuiDestinationLoads {
     /// Start the destination's root list load, or do nothing when the root is
     /// already loaded, in flight, or owned by another path.
-    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+    fn ensure_root(&self, _app: &mut App, _gui: &mut GuiClientState) -> GuiStepOutcome {
         GuiStepOutcome::Continue
     }
 
     /// Start the load the root list's selection needs, or do nothing when the
     /// selection is already loaded or in flight.
-    fn ensure_selection(&self, _app: &mut App) -> GuiStepOutcome {
+    fn ensure_selection(&self, _app: &mut App, _gui: &mut GuiClientState) -> GuiStepOutcome {
         GuiStepOutcome::Continue
     }
 
     /// Start the content that depends on the selection, or do nothing when the
     /// dependency is already loaded or in flight. It is the last step, so it
     /// reports nothing.
-    fn ensure_dependents(&self, _app: &mut App) {}
+    fn ensure_dependents(&self, _app: &mut App, _gui: &mut GuiClientState) {}
 }
 
 impl GuiCore {
@@ -68,32 +69,34 @@ impl GuiCore {
     /// those two kinds run only for a library of their kind that is the active
     /// tab.
     pub(in crate::app) fn ensure_gui_destination(&mut self, kind: GuiDestinationKind) {
+        let app = &mut self.app;
+        let gui = &mut self.gui;
         match kind {
-            GuiDestinationKind::Home => run_gui_destination_loads(&mut self.app, &HomeLoads),
+            GuiDestinationKind::Home => run_gui_destination_loads(app, gui, &HomeLoads),
             GuiDestinationKind::Music { lib_idx } => {
-                run_gui_destination_loads(&mut self.app, &MusicLoads { lib_idx });
+                run_gui_destination_loads(app, gui, &MusicLoads { lib_idx });
             }
             GuiDestinationKind::Shows { lib_idx } => {
-                run_gui_destination_loads(&mut self.app, &ShowsLoads { lib_idx });
+                run_gui_destination_loads(app, gui, &ShowsLoads { lib_idx });
             }
             GuiDestinationKind::Library { lib_idx } => {
-                run_gui_destination_loads(&mut self.app, &EmbyLoads { lib_idx });
+                run_gui_destination_loads(app, gui, &EmbyLoads { lib_idx });
             }
             GuiDestinationKind::Audiobooks { lib_idx } => {
-                if self.app.tab.audiobookshelf_index() == Some(lib_idx)
-                    && super::audiobooks::abs_book_library(&self.app, lib_idx)
+                if app.tab.audiobookshelf_index() == Some(lib_idx)
+                    && super::audiobooks::abs_book_library(app, lib_idx)
                 {
-                    run_gui_destination_loads(&mut self.app, &AudiobooksLoads { lib_idx });
+                    run_gui_destination_loads(app, gui, &AudiobooksLoads { lib_idx });
                 }
             }
             GuiDestinationKind::Podcasts { lib_idx } => {
-                if self.app.tab.audiobookshelf_index() == Some(lib_idx)
-                    && super::podcasts::podcast_library(&self.app, lib_idx)
+                if app.tab.audiobookshelf_index() == Some(lib_idx)
+                    && super::podcasts::podcast_library(app, lib_idx)
                 {
-                    run_gui_destination_loads(&mut self.app, &PodcastsLoads { lib_idx });
+                    run_gui_destination_loads(app, gui, &PodcastsLoads { lib_idx });
                 }
             }
-            GuiDestinationKind::Feeds => run_gui_destination_loads(&mut self.app, &FeedsLoads),
+            GuiDestinationKind::Feeds => run_gui_destination_loads(app, gui, &FeedsLoads),
         }
     }
 
@@ -115,14 +118,18 @@ impl GuiCore {
 /// D3). This is the only place the order lives; every destination reaches it
 /// through [`GuiCore::ensure_gui_destination`]. It takes the `App` the sites
 /// step over, so it stays a core driver and never a GUI-core method.
-pub(in crate::app) fn run_gui_destination_loads<L: GuiDestinationLoads>(app: &mut App, loads: &L) {
-    if loads.ensure_root(app) == GuiStepOutcome::LoadStarted {
+pub(in crate::app) fn run_gui_destination_loads<L: GuiDestinationLoads>(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    loads: &L,
+) {
+    if loads.ensure_root(app, gui) == GuiStepOutcome::LoadStarted {
         return;
     }
-    if loads.ensure_selection(app) == GuiStepOutcome::LoadStarted {
+    if loads.ensure_selection(app, gui) == GuiStepOutcome::LoadStarted {
         return;
     }
-    loads.ensure_dependents(app);
+    loads.ensure_dependents(app, gui);
 }
 
 /// Whether an Audiobookshelf catalog (book or show list) is unloaded in a shape
@@ -174,16 +181,15 @@ impl GuiDestinationLoads for MusicLoads {
     /// selection change through [`GuiCore::install_gui_library_collection`] drops
     /// the selection's failed marks, so the next pass starts their fetches
     /// again.
-    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        let set = super::projection::effective_music_set(app, self.lib_idx).into_owned();
-        let group_ids = super::projection::selected_groups(app, self.lib_idx, &set)
+    fn ensure_selection(&self, app: &mut App, gui: &mut GuiClientState) -> GuiStepOutcome {
+        let set = super::projection::effective_music_set(app, gui, self.lib_idx).into_owned();
+        let group_ids = super::projection::selected_groups(app, gui, self.lib_idx, &set)
             .into_iter()
             .map(str::to_owned)
             .collect::<Vec<_>>();
         if group_ids.iter().any(|group_id| {
             matches!(
-                app.gui
-                    .music_albums
+                gui.music_albums
                     .get(&self.lib_idx)
                     .and_then(|groups| groups.get(group_id)),
                 Some(GuiGroupAlbums::Loading)
@@ -192,14 +198,13 @@ impl GuiDestinationLoads for MusicLoads {
             return GuiStepOutcome::Continue;
         }
         let Some(group_id) = group_ids.into_iter().find(|group_id| {
-            !app.gui
-                .music_albums
+            !gui.music_albums
                 .get(&self.lib_idx)
                 .is_some_and(|groups| groups.contains_key(group_id))
         }) else {
             return GuiStepOutcome::Continue;
         };
-        super::store::fetch_group_albums(app, self.lib_idx, group_id);
+        super::store::fetch_group_albums(app, gui, self.lib_idx, group_id);
         GuiStepOutcome::LoadStarted
     }
 }
@@ -214,7 +219,7 @@ struct ShowsLoads {
 }
 
 impl GuiDestinationLoads for ShowsLoads {
-    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+    fn ensure_root(&self, app: &mut App, _gui: &mut GuiClientState) -> GuiStepOutcome {
         if super::shows_projection::shows_root_needs_load(app, self.lib_idx) {
             super::tv::load_shows_root(app, self.lib_idx);
             return GuiStepOutcome::LoadStarted;
@@ -222,8 +227,8 @@ impl GuiDestinationLoads for ShowsLoads {
         GuiStepOutcome::Continue
     }
 
-    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        let Some(series_id) = super::shows_projection::shows_default_series(app, self.lib_idx)
+    fn ensure_selection(&self, app: &mut App, gui: &mut GuiClientState) -> GuiStepOutcome {
+        let Some(series_id) = super::shows_projection::shows_default_series(app, gui, self.lib_idx)
         else {
             return GuiStepOutcome::Continue;
         };
@@ -234,14 +239,17 @@ impl GuiDestinationLoads for ShowsLoads {
         GuiStepOutcome::LoadStarted
     }
 
-    fn ensure_dependents(&self, app: &mut App) {
-        let Some(series_id) = super::shows_projection::shows_default_series(app, self.lib_idx)
+    fn ensure_dependents(&self, app: &mut App, gui: &mut GuiClientState) {
+        let Some(series_id) = super::shows_projection::shows_default_series(app, gui, self.lib_idx)
         else {
             return;
         };
-        let Some(season_id) =
-            super::shows_projection::hero::shows_selected_season(app, self.lib_idx, &series_id)
-        else {
+        let Some(season_id) = super::shows_projection::hero::shows_selected_season(
+            app,
+            gui,
+            self.lib_idx,
+            &series_id,
+        ) else {
             return;
         };
         app.fetch_series_season_episodes(series_id, season_id);
@@ -258,23 +266,23 @@ struct EmbyLoads {
 }
 
 impl GuiDestinationLoads for EmbyLoads {
-    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+    fn ensure_root(&self, app: &mut App, gui: &mut GuiClientState) -> GuiStepOutcome {
         if !super::emby::emby_library(app, self.lib_idx)
             || app.is_feed_home_video_library(self.lib_idx)
         {
             return GuiStepOutcome::Continue;
         }
-        super::emby::fetch_emby_root_items(app, self.lib_idx);
+        super::emby::fetch_emby_root_items(app, gui, self.lib_idx);
         GuiStepOutcome::LoadStarted
     }
 
-    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
+    fn ensure_selection(&self, app: &mut App, gui: &mut GuiClientState) -> GuiStepOutcome {
         if !super::emby::emby_library(app, self.lib_idx)
             || !app.is_feed_home_video_library(self.lib_idx)
         {
             return GuiStepOutcome::Continue;
         }
-        super::emby::ensure_emby_feed_fetch(app, self.lib_idx);
+        super::emby::ensure_emby_feed_fetch(app, gui, self.lib_idx);
         GuiStepOutcome::LoadStarted
     }
 }
@@ -289,7 +297,7 @@ struct AudiobooksLoads {
 }
 
 impl GuiDestinationLoads for AudiobooksLoads {
-    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+    fn ensure_root(&self, app: &mut App, _gui: &mut GuiClientState) -> GuiStepOutcome {
         if !super::audiobooks::abs_catalog_needs_load(app, self.lib_idx) {
             return GuiStepOutcome::Continue;
         }
@@ -297,8 +305,8 @@ impl GuiDestinationLoads for AudiobooksLoads {
         GuiStepOutcome::LoadStarted
     }
 
-    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        if let Some(book_id) = super::audiobooks::abs_effective_pick(app, self.lib_idx) {
+    fn ensure_selection(&self, app: &mut App, gui: &mut GuiClientState) -> GuiStepOutcome {
+        if let Some(book_id) = super::audiobooks::abs_effective_pick(app, gui, self.lib_idx) {
             app.start_audiobookshelf_book_detail(book_id);
         }
         GuiStepOutcome::Continue
@@ -315,7 +323,7 @@ struct PodcastsLoads {
 }
 
 impl GuiDestinationLoads for PodcastsLoads {
-    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+    fn ensure_root(&self, app: &mut App, _gui: &mut GuiClientState) -> GuiStepOutcome {
         if !super::podcasts::podcast_catalog_needs_load(app, self.lib_idx) {
             return GuiStepOutcome::Continue;
         }
@@ -323,13 +331,13 @@ impl GuiDestinationLoads for PodcastsLoads {
         GuiStepOutcome::LoadStarted
     }
 
-    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        super::podcasts::commit_podcast_effective_scope(app, self.lib_idx);
+    fn ensure_selection(&self, app: &mut App, gui: &mut GuiClientState) -> GuiStepOutcome {
+        super::podcasts::commit_podcast_effective_scope(app, gui, self.lib_idx);
         GuiStepOutcome::Continue
     }
 
-    fn ensure_dependents(&self, app: &mut App) {
-        super::podcasts::ensure_podcast_dependents(app, self.lib_idx);
+    fn ensure_dependents(&self, app: &mut App, gui: &mut GuiClientState) {
+        super::podcasts::ensure_podcast_dependents(app, gui, self.lib_idx);
     }
 }
 

@@ -36,6 +36,7 @@ use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -178,24 +179,28 @@ impl GuiCore {
     /// excludes that destination anyway.
     #[must_use]
     pub fn gui_podcasts_projection(&mut self, lib_idx: usize) -> GuiPodcastsProjection {
-        podcasts_projection(&mut self.app, lib_idx)
+        podcasts_projection(&mut self.app, &self.gui, lib_idx)
     }
 }
 
 /// The Podcasts projection the GUI Library panel paints (row 10.1).
-fn podcasts_projection(app: &mut App, lib_idx: usize) -> GuiPodcastsProjection {
+fn podcasts_projection(
+    app: &mut App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+) -> GuiPodcastsProjection {
     if !super::podcasts::podcast_library(app, lib_idx) {
         return GuiPodcastsProjection::default();
     }
     // The one effective-set read the frame takes: the rows read the set
     // it borrows, so the frame never recomputes the retention.
-    let set = super::podcasts::podcast_effective_set(app, lib_idx);
-    let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Podcasts(lib_idx));
+    let set = super::podcasts::podcast_effective_set(app, gui, lib_idx);
+    let sort_frame = super::list_sort::list_sort_frame(app, gui, GuiSortTarget::Podcasts(lib_idx));
     let sort = sort_frame.active;
     let collections =
-        super::collection_command::collections(app, GuiCollectionTarget::Podcasts(lib_idx));
+        super::collection_command::collections(app, gui, GuiCollectionTarget::Podcasts(lib_idx));
     let (rows, loading, failed) = podcast_rows(app, lib_idx, set.as_ref(), sort);
-    let selected = podcast_selected(app, lib_idx, &rows);
+    let selected = podcast_selected(gui, lib_idx, &rows);
     let hero = selected
         .as_deref()
         .and_then(GuiPodcastEpisodeId::decode)
@@ -310,9 +315,13 @@ fn podcast_rows(
 
 /// The episode the Hero shows (row 10.1): the core's pick while the active
 /// list still carries it, else that list's first row — the Hero default.
-fn podcast_selected(app: &App, lib_idx: usize, rows: &[GuiPodcastsRow]) -> Option<String> {
+fn podcast_selected(
+    gui: &GuiClientState,
+    lib_idx: usize,
+    rows: &[GuiPodcastsRow],
+) -> Option<String> {
     picked_or_first(
-        super::podcasts::podcast_picked_episode(app, lib_idx)
+        super::podcasts::podcast_picked_episode(gui, lib_idx)
             .map(GuiPodcastEpisodeId::from)
             .map(|episode| episode.encode()),
         |picked| rows.iter().any(|row| row.id == picked),

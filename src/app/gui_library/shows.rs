@@ -17,6 +17,7 @@ use mbv_ui_model::library_hero::producers::hero_content_queue;
 use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::app::state::events::LibEvent;
 use crate::gui::GuiCore;
 
@@ -36,12 +37,12 @@ impl GuiCore {
         lib_idx: usize,
         view: GuiShowsView,
     ) {
-        set_shows_view(&mut self.app, lib_idx, view);
+        set_shows_view(&mut self.app, &mut self.gui, lib_idx, view);
     }
 
     /// Select a Shows row (design D12, D8, D9).
     pub(in crate::app::gui_library) fn select_gui_shows_row(&mut self, lib_idx: usize, row: &str) {
-        select_shows_row(&mut self.app, lib_idx, row);
+        select_shows_row(&mut self.app, &mut self.gui, lib_idx, row);
     }
 }
 
@@ -49,12 +50,8 @@ impl GuiCore {
 /// shows All, the default. It reads only the core's Shows store, so it is a
 /// core function the projection, the row art, and the launch reach through the
 /// `App` they hold.
-pub(in crate::app) fn shows_view(app: &App, lib_idx: usize) -> GuiShowsView {
-    app.gui
-        .shows_views
-        .get(&lib_idx)
-        .copied()
-        .unwrap_or_default()
+pub(in crate::app) fn shows_view(gui: &GuiClientState, lib_idx: usize) -> GuiShowsView {
+    gui.shows_views.get(&lib_idx).copied().unwrap_or_default()
 }
 
 /// Install one Shows view (design D8): a press replaces the active view, and
@@ -62,6 +59,7 @@ pub(in crate::app) fn shows_view(app: &App, lib_idx: usize) -> GuiShowsView {
 /// sources. A stale library index changes nothing.
 pub(in crate::app::gui_library) fn set_shows_view(
     app: &mut App,
+    gui: &mut GuiClientState,
     lib_idx: usize,
     view: GuiShowsView,
 ) {
@@ -72,17 +70,14 @@ pub(in crate::app::gui_library) fn set_shows_view(
         );
         return;
     }
-    if shows_view(app, lib_idx) == view {
-        return;
-    }
-    app.gui.shows_views.insert(lib_idx, view);
+    gui.shows_views.insert(lib_idx, view);
     match view {
         GuiShowsView::All | GuiShowsView::Upcoming => {
             app.maybe_spawn_tv_upcoming_snapshot(lib_idx);
         }
         GuiShowsView::New => {
             let library_id = app.libs[lib_idx].library.id.clone();
-            spawn_shows_new(app, library_id);
+            spawn_shows_new(app, gui, library_id);
         }
     }
 }
@@ -91,13 +86,13 @@ pub(in crate::app::gui_library) fn set_shows_view(
 /// library's New episodes through one worker fetch, and its eager Upcoming
 /// snapshot through the once-per-session guard the TV tab already uses. Both
 /// requests are idempotent, so a repeated catalog landing re-requests nothing.
-pub(in crate::app) fn spawn_shows_sections(app: &mut App) {
+pub(in crate::app) fn spawn_shows_sections(app: &mut App, gui: &mut GuiClientState) {
     let tv_libraries: Vec<(usize, String)> = (0..app.libs.len())
         .filter(|lib_idx| app.libs[*lib_idx].library.collection_type == "tvshows")
         .map(|lib_idx| (lib_idx, app.libs[lib_idx].library.id.clone()))
         .collect();
     for (lib_idx, library_id) in tv_libraries {
-        spawn_shows_new(app, library_id);
+        spawn_shows_new(app, gui, library_id);
         app.maybe_spawn_tv_upcoming_snapshot(lib_idx);
     }
 }
@@ -106,8 +101,8 @@ pub(in crate::app) fn spawn_shows_sections(app: &mut App) {
 /// `get_latest_episodes(parent_id, 30)` call the TUI's Latest level makes, on
 /// a worker thread, landing in `shows_new` through its own event. It never
 /// touches `nav_stack`, so the TUI's levels are the TUI's.
-fn spawn_shows_new(app: &mut App, library_id: String) {
-    if app.gui.shows_new.contains_key(&library_id) {
+fn spawn_shows_new(app: &mut App, gui: &mut GuiClientState, library_id: String) {
+    if gui.shows_new.contains_key(&library_id) {
         return;
     }
     let Some(client) = app.emby_snapshot() else {
@@ -115,8 +110,7 @@ fn spawn_shows_new(app: &mut App, library_id: String) {
     };
     // The requesting mark blocks a second fetch; the completion replaces it
     // with landed rows, empty when the fetch fails.
-    app.gui
-        .shows_new
+    gui.shows_new
         .insert(library_id.clone(), GuiSectionRequest::Requesting);
     let tx = app.channels.lib_tx.clone();
     std::thread::spawn(move || {
@@ -131,14 +125,12 @@ fn spawn_shows_new(app: &mut App, library_id: String) {
 /// Land one TV library's New fetch (design D9): success and failure both land
 /// the request, so an empty or failed list paints the empty state and no later
 /// launch step or frame starts the same fetch again.
-pub(in crate::app) fn handle_shows_new(app: &mut App, event: GuiShowsNewEvent) {
+pub(in crate::app) fn handle_shows_new(
+    event: GuiShowsNewEvent,
+) -> (String, GuiSectionRequest<EmbyItem>) {
     let GuiShowsNewEvent { library_id, result } = event;
     match result {
-        Ok(items) => {
-            app.gui
-                .shows_new
-                .insert(library_id, GuiSectionRequest::landed(items));
-        }
+        Ok(items) => (library_id.clone(), GuiSectionRequest::landed(items)),
         Err(error) => {
             tracing::info!(
                 name: "gui_library.shows_new.failed",
@@ -147,9 +139,7 @@ pub(in crate::app) fn handle_shows_new(app: &mut App, event: GuiShowsNewEvent) {
                 error = %error,
                 "the library's latest episodes failed to load"
             );
-            app.gui
-                .shows_new
-                .insert(library_id, GuiSectionRequest::landed(Vec::new()));
+            (library_id.clone(), GuiSectionRequest::landed(Vec::new()))
         }
     }
 }
@@ -157,9 +147,11 @@ pub(in crate::app) fn handle_shows_new(app: &mut App, event: GuiShowsNewEvent) {
 /// The Emby item a New row names (design D9): the merged per-library episodes
 /// hold the stable item id, so a select names the same item the projection
 /// painted.
-pub(in crate::app::gui_library) fn shows_new_item(app: &App, item_id: &str) -> Option<EmbyItem> {
-    app.gui
-        .shows_new
+pub(in crate::app::gui_library) fn shows_new_item(
+    gui: &GuiClientState,
+    item_id: &str,
+) -> Option<EmbyItem> {
+    gui.shows_new
         .values()
         .flat_map(GuiSectionRequest::items)
         .find(|item| item.id == item_id)
@@ -198,7 +190,12 @@ pub(in crate::app::gui_library) fn shows_flat_hero(
 /// in New the flat episode, and in Upcoming nothing — an Upcoming row is
 /// display-only and the Hero keeps its item. A stale frame's row changes
 /// nothing.
-pub(in crate::app::gui_library) fn select_shows_row(app: &mut App, lib_idx: usize, row: &str) {
+pub(in crate::app::gui_library) fn select_shows_row(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+    row: &str,
+) {
     if !super::tv::tv_library(app, lib_idx) {
         super::log_ignored_library_command(
             "showsSelect",
@@ -206,10 +203,9 @@ pub(in crate::app::gui_library) fn select_shows_row(app: &mut App, lib_idx: usiz
         );
         return;
     }
-    match shows_view(app, lib_idx) {
+    match shows_view(gui, lib_idx) {
         GuiShowsView::All => {
-            let unchanged = app
-                .gui
+            let unchanged = gui
                 .tv_shows
                 .get(&lib_idx)
                 .and_then(|selection| selection.series_id.as_deref())
@@ -219,12 +215,12 @@ pub(in crate::app::gui_library) fn select_shows_row(app: &mut App, lib_idx: usiz
                 // gate, so fast arrow traffic warms no neighbour art.
                 app.stamp_navigation();
             }
-            super::tv::select_tv_series(app, lib_idx, row);
+            super::tv::select_tv_series(app, gui, lib_idx, row);
         }
         GuiShowsView::New => {
-            if shows_new_item(app, row).is_some() {
+            if shows_new_item(gui, row).is_some() {
                 app.stamp_navigation();
-                app.gui.shows_flat_selection = Some(row.to_owned());
+                gui.shows_flat_selection = Some(row.to_owned());
             } else {
                 super::log_stale_library_item("showsSelect", row);
             }
@@ -236,8 +232,13 @@ pub(in crate::app::gui_library) fn select_shows_row(app: &mut App, lib_idx: usiz
 /// Play the Shows episode a command names (design D12): the shared library play
 /// path, whose admission and route checks are the Owner's queue's own. An
 /// Upcoming row plays nothing and a stale id plays nothing.
-pub(in crate::app::gui_library) fn play_shows_item(app: &mut App, lib_idx: usize, item_id: &str) {
-    match super::shows_projection::shows_item(app, lib_idx, item_id) {
+pub(in crate::app::gui_library) fn play_shows_item(
+    app: &mut App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+    item_id: &str,
+) {
+    match super::shows_projection::shows_item(app, gui, lib_idx, item_id) {
         Some(item) => app.play_or_activate_lib_item(lib_idx, item),
         None => super::log_stale_library_item("showsPlay", item_id),
     }
@@ -247,10 +248,11 @@ pub(in crate::app::gui_library) fn play_shows_item(app: &mut App, lib_idx: usize
 /// the episode enters directly after the active slot.
 pub(in crate::app::gui_library) fn play_next_shows_item(
     app: &mut App,
+    gui: &GuiClientState,
     lib_idx: usize,
     item_id: &str,
 ) {
-    match super::shows_projection::shows_item(app, lib_idx, item_id) {
+    match super::shows_projection::shows_item(app, gui, lib_idx, item_id) {
         Some(item) => app.play_lib_item_next(lib_idx, item),
         None => super::log_stale_library_item("showsPlayNext", item_id),
     }
@@ -259,10 +261,11 @@ pub(in crate::app::gui_library) fn play_next_shows_item(
 /// Add the Shows episode to the queue (design D12): the shared add path.
 pub(in crate::app::gui_library) fn enqueue_shows_item(
     app: &mut App,
+    gui: &GuiClientState,
     lib_idx: usize,
     item_id: &str,
 ) {
-    match super::shows_projection::shows_item(app, lib_idx, item_id) {
+    match super::shows_projection::shows_item(app, gui, lib_idx, item_id) {
         Some(item) => app.enqueue_lib_item(lib_idx, item),
         None => super::log_stale_library_item("showsQueue", item_id),
     }

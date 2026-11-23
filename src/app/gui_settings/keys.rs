@@ -151,7 +151,7 @@ impl GuiCore {
                 "Key bindings changed but the save failed ({error})"
             ));
         }
-        if let Some(state) = self.app.gui.settings_screen.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.refusal = None;
         }
     }
@@ -166,7 +166,7 @@ impl GuiCore {
             reason = %text,
             "the Keys edit was refused"
         );
-        if let Some(state) = self.app.gui.settings_screen.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.refusal = Some(GuiSettingsKeyRefusalProjection {
                 action: action.unwrap_or("prefix").to_string(),
                 text: text.to_string(),

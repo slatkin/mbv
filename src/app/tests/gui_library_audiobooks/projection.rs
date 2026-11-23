@@ -615,7 +615,7 @@ fn the_select_command_stores_the_pick() {
 
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
-        Some("book-a"),
+        Some("book-a".to_string()),
         "the select command stored the pick"
     );
 }

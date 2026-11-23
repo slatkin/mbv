@@ -537,11 +537,12 @@ fn stale_podcast_ids_change_nothing() {
         "a stale id flashes no toast"
     );
     assert_eq!(
-        crate::app::gui_library::podcasts::podcast_picked_episode(&app, 1)
-            .map(GuiPodcastEpisodeId::from)
-            .map(|episode| episode.encode())
-            .as_deref(),
-        Some(picked.as_str()),
+        crate::app::tests::stub_gui_state(|gui| {
+            crate::app::gui_library::podcasts::podcast_picked_episode(gui, 1)
+                .map(GuiPodcastEpisodeId::from)
+                .map(|episode| episode.encode())
+        }),
+        Some(picked.clone()),
         "a stale select leaves the pick as it was"
     );
 }

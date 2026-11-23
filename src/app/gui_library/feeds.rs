@@ -28,6 +28,7 @@ use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// The GUI Library's Feeds selection (row 11.1).
@@ -90,12 +91,12 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
         super::feeds_projection::feeds_subscriptions(app)
     }
 
-    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
-        &app.gui.feeds_selection.selection.set
+    fn stored_set<'a>(&self, gui: &'a GuiClientState) -> &'a GuiCollectionSet {
+        &gui.feeds_selection.selection.set
     }
 
-    fn has_stored_selection(&self, app: &App) -> bool {
-        app.gui.feeds_selection.selection != GuiCollectionSelection::default()
+    fn has_stored_selection(&self, gui: &GuiClientState) -> bool {
+        gui.feeds_selection.selection != GuiCollectionSelection::default()
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -116,8 +117,8 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
         }
     }
 
-    fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
-        app.gui.feeds_selection.selection.set = set;
+    fn install_set(&self, _app: &mut App, gui: &mut GuiClientState, set: GuiCollectionSet) {
+        gui.feeds_selection.selection.set = set;
     }
 }
 
@@ -129,7 +130,7 @@ impl GuiCore {
     /// checked set against the subscription set the tab holds wherever it is
     /// read, and the destination's load pass is a no-op for every step.
     pub fn gui_feeds_open(&mut self) {
-        open_feeds(&mut self.app);
+        open_feeds(&mut self.app, &mut self.gui);
     }
 
     /// Select the entry the Hero shows (row 11.1).
@@ -140,7 +141,7 @@ impl GuiCore {
     /// of it, and an entry the checked subscriptions' list does not carry,
     /// are both a stale frame's pick and change nothing.
     pub fn gui_feeds_select(&mut self, entry: &str) {
-        select_feed(&mut self.app, entry);
+        select_feed(&mut self.app, &mut self.gui, entry);
     }
 
     /// Play the entry a row id names (row 11.1): Enter on the row, or the
@@ -150,41 +151,47 @@ impl GuiCore {
     /// no encoding of a row id, and an entry the App's data no longer holds,
     /// are a stale frame's row and play nothing.
     pub(in crate::app::gui_library) fn play_gui_feed_row(&mut self, item_id: &str) {
-        play_feed_row(&mut self.app, item_id);
+        play_feed_row(&mut self.app, &self.gui, item_id);
     }
 
     /// Add the entry a row id names to the queue (row 11.1): `a` on the row,
     /// through the TUI's own enqueue path, whose no-playable-source guard
     /// flashes the TUI's toast. A stale row id queues nothing.
     pub(in crate::app::gui_library) fn enqueue_gui_feed_row(&mut self, item_id: &str) {
-        enqueue_feed_row(&mut self.app, item_id);
+        enqueue_feed_row(&mut self.app, &self.gui, item_id);
     }
 
     /// The entries the selection lists (row 11.1), in App order.
     #[must_use]
     pub fn gui_feeds_entries(&self) -> Vec<&FeedEntry> {
-        feeds_entries(&self.app)
+        feeds_entries(&self.app, &self.gui)
     }
 }
 
 /// Open the Feeds destination (row 11.1; gui-one-destination-ensure design
 /// D4): an open starts no load and touches no network, so it only reports an
 /// absent tab, and the destination's load pass runs for it as a no-op.
-pub(in crate::app::gui_library) fn open_feeds(app: &mut App) {
+pub(in crate::app::gui_library) fn open_feeds(app: &mut App, gui: &mut GuiClientState) {
     if !feeds_present(app) {
         super::log_ignored_library_command("feedsOpen", format_args!("the feed tab is absent"));
     }
     // The ordered load pass is the GUI core's, so the open step hands the
     // core the App it holds.
     let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Feeds);
+    *gui = std::mem::take(core.gui_state_mut());
     *app = core.into_app();
 }
 
 /// Select the entry the Hero shows (row 11.1): the pick the frame carries
 /// back, which the entry named by its composite identity must still be in the
 /// checked subscriptions' list to change.
-pub(in crate::app::gui_library) fn select_feed(app: &mut App, entry: &str) {
+pub(in crate::app::gui_library) fn select_feed(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    entry: &str,
+) {
     if !feeds_present(app) {
         super::log_ignored_library_command("feedsSelect", format_args!("the feed tab is absent"));
         return;
@@ -193,16 +200,20 @@ pub(in crate::app::gui_library) fn select_feed(app: &mut App, entry: &str) {
         super::log_stale_library_item("feedsSelect", entry);
         return;
     };
-    if !feeds_entry_known(app, &entry) {
+    if !feeds_entry_known(app, gui, &entry) {
         super::log_stale_library_item("feedsSelect", &entry.encode());
         return;
     }
-    app.gui.feeds_selection.picked_entry = Some(entry.encode());
+    gui.feeds_selection.picked_entry = Some(entry.encode());
 }
 
 /// Play the entry a row id names (row 11.1).
-pub(in crate::app::gui_library) fn play_feed_row(app: &mut App, item_id: &str) {
-    let Some(entry) = feed_entry(app, item_id) else {
+pub(in crate::app::gui_library) fn play_feed_row(
+    app: &mut App,
+    gui: &GuiClientState,
+    item_id: &str,
+) {
+    let Some(entry) = feed_entry(app, gui, item_id) else {
         super::log_stale_library_item("feedsPlay", item_id);
         return;
     };
@@ -210,8 +221,12 @@ pub(in crate::app::gui_library) fn play_feed_row(app: &mut App, item_id: &str) {
 }
 
 /// Add the entry a row id names to the queue (row 11.1).
-pub(in crate::app::gui_library) fn enqueue_feed_row(app: &mut App, item_id: &str) {
-    let Some(entry) = feed_entry(app, item_id) else {
+pub(in crate::app::gui_library) fn enqueue_feed_row(
+    app: &mut App,
+    gui: &GuiClientState,
+    item_id: &str,
+) {
+    let Some(entry) = feed_entry(app, gui, item_id) else {
         super::log_stale_library_item("feedsQueue", item_id);
         return;
     };
@@ -228,19 +243,25 @@ pub(in crate::app) fn feeds_present(app: &App) -> bool {
 /// stored set with every checked subscription the tab no longer holds
 /// dropped. A set nothing drops is returned borrowed, so a per-frame reader
 /// clones nothing.
-pub(in crate::app) fn feeds_effective_set(app: &App) -> Cow<'_, GuiCollectionSet> {
-    GuiFeedsCollectionSite.effective_set(app)
+pub(in crate::app) fn feeds_effective_set<'a>(
+    app: &'a App,
+    gui: &'a GuiClientState,
+) -> Cow<'a, GuiCollectionSet> {
+    GuiFeedsCollectionSite.effective_set(app, gui)
 }
 
 /// The entry the Hero shows (row 11.1): the stored pick.
 #[must_use]
-pub(in crate::app) fn feeds_picked_entry(app: &App) -> Option<&str> {
-    app.gui.feeds_selection.picked_entry.as_deref()
+pub(in crate::app) fn feeds_picked_entry(gui: &GuiClientState) -> Option<&str> {
+    gui.feeds_selection.picked_entry.as_deref()
 }
 
 /// The entries the selection lists (row 11.1), in App order.
-pub(in crate::app) fn feeds_entries(app: &App) -> Vec<&FeedEntry> {
-    match feeds_effective_set(app).as_ref() {
+pub(in crate::app) fn feeds_entries<'a>(
+    app: &'a App,
+    gui: &'a GuiClientState,
+) -> Vec<&'a FeedEntry> {
+    match feeds_effective_set(app, gui).as_ref() {
         GuiCollectionSet::All => app.feed_tab.all_entries.iter().collect(),
         GuiCollectionSet::Checked(keys) => {
             let mut merged = Vec::new();
@@ -262,9 +283,13 @@ pub(in crate::app) fn feeds_entries(app: &App) -> Vec<&FeedEntry> {
 /// list first, because that is the list the frame painted, then the other
 /// subscriptions' lists, so a play whose selection moved under a stale frame
 /// still addresses the entry it painted.
-pub(in crate::app) fn feed_entry(app: &App, item_id: &str) -> Option<FeedEntry> {
+pub(in crate::app) fn feed_entry(
+    app: &App,
+    gui: &GuiClientState,
+    item_id: &str,
+) -> Option<FeedEntry> {
     let id = GuiFeedEntryId::decode(item_id)?;
-    let listed = feeds_entries(app)
+    let listed = feeds_entries(app, gui)
         .into_iter()
         .find(|entry| feed_entry_matches(entry, &id));
     listed
@@ -296,8 +321,8 @@ fn feeds_subscription_index(app: &App, feed_id: &str) -> Option<usize> {
 /// Whether the checked subscriptions' list carries the entry `entry` names
 /// (row 11.1): a landed list admits only an entry it holds, and an empty
 /// list admits nothing, because no row is painted to pick.
-fn feeds_entry_known(app: &App, entry: &GuiFeedEntryId) -> bool {
-    feeds_entries(app)
+fn feeds_entry_known(app: &App, gui: &GuiClientState, entry: &GuiFeedEntryId) -> bool {
+    feeds_entries(app, gui)
         .iter()
         .any(|known| feed_entry_matches(known, entry))
 }

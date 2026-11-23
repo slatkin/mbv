@@ -29,6 +29,7 @@ use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 use mbv_ui_model::sort_filter::effective_sort_str;
@@ -203,8 +204,9 @@ impl GuiCore {
         let Some(picked_index) = ids.iter().position(|id| *id == picked) else {
             return;
         };
+        let gui = &self.gui;
         super::artwork::warm_hero_neighbours(&mut self.app, &ids, picked_index, |app, id| {
-            emby_hero_source(app, lib_idx, id)
+            emby_hero_source(app, gui, lib_idx, id)
         });
     }
 
@@ -214,12 +216,14 @@ impl GuiCore {
     /// and no pill, and the selected row's Hero.
     fn emby_plain_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
         let app = &self.app;
-        let (items, loading, failed) = match app.gui.emby_roots.get(&lib_idx) {
+        let gui = &self.gui;
+        let (items, loading, failed) = match gui.emby_roots.get(&lib_idx) {
             Some(super::GuiEmbyRootItems::Loaded(items)) => (items.as_slice(), false, false),
             Some(super::GuiEmbyRootItems::Loading) | None => (&[][..], true, false),
             Some(super::GuiEmbyRootItems::Failed) => (&[][..], false, true),
         };
-        let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Library(lib_idx));
+        let sort_frame =
+            super::list_sort::list_sort_frame(app, gui, GuiSortTarget::Library(lib_idx));
         let sort = sort_frame.active;
         let mut items: Vec<&EmbyItem> = items.iter().collect();
         // Under the Title sort the store's own `SortName` order stands
@@ -259,17 +263,21 @@ impl GuiCore {
     /// read the set it borrows — and the programme lookup's id-to-name map is
     /// built once, so a row's programme is one hash probe.
     fn emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
-        let set = super::emby::emby_feed_effective_set(&self.app, lib_idx);
+        let set = super::emby::emby_feed_effective_set(&self.app, &self.gui, lib_idx);
         let folders = root_folder_names(&self.app, lib_idx);
         let collections = super::collection_command::collections(
             &self.app,
+            &self.gui,
             GuiCollectionTarget::EmbyFeed(lib_idx),
         );
         let collection_names = feed_collection_names(set.as_ref(), &folders);
         let programmes: HashMap<&str, &str> =
             folders.iter().map(|(id, name)| (*id, *name)).collect();
-        let sort_frame =
-            super::list_sort::list_sort_frame(&self.app, GuiSortTarget::Library(lib_idx));
+        let sort_frame = super::list_sort::list_sort_frame(
+            &self.app,
+            &self.gui,
+            GuiSortTarget::Library(lib_idx),
+        );
         let sort = sort_frame.active;
         let (items, loading) = feed_items(&self.app, lib_idx, set.as_ref(), sort);
         let app = &self.app;
@@ -305,7 +313,6 @@ impl GuiCore {
     /// the list still carries it, else the first row — the Hero default.
     fn emby_selected(&self, lib_idx: usize, rows: &[GuiEmbyRow]) -> Option<String> {
         let stored = self
-            .app
             .gui
             .emby_libs
             .get(&lib_idx)
@@ -328,7 +335,7 @@ impl GuiCore {
     /// resolved row's own Hero gate, and the artwork fetched through the image
     /// cache at the producer's declared chain.
     fn emby_hero_for(&mut self, lib_idx: usize, selected: Option<&str>) -> Option<GuiEmbyHero> {
-        let item = emby_item(&self.app, lib_idx, selected?)?;
+        let item = emby_item(&self.app, &self.gui, lib_idx, selected?)?;
         hero_item(&self.app, lib_idx, &item).then(|| self.hero(&item))
     }
 
@@ -374,13 +381,18 @@ impl GuiCore {
 /// clones only the match, so a play names one clone. It reads only the core's
 /// Emby library state, so it is a core function the Hero's neighbour warm and
 /// the play and select paths reach through the App they already have.
-pub(in crate::app) fn emby_item(app: &App, lib_idx: usize, item_id: &str) -> Option<EmbyItem> {
+pub(in crate::app) fn emby_item(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+    item_id: &str,
+) -> Option<EmbyItem> {
     if app.is_feed_home_video_library(lib_idx) {
-        let set = super::emby::emby_feed_effective_set(app, lib_idx);
+        let set = super::emby::emby_feed_effective_set(app, gui, lib_idx);
         let (items, _) = feed_gathered(app, lib_idx, set.as_ref());
         return items.into_iter().find(|item| item.id == item_id).cloned();
     }
-    super::emby::stored_emby_root_items(app, lib_idx)
+    super::emby::stored_emby_root_items(gui, lib_idx)
         .find(|item| item.id == item_id)
         .cloned()
 }
@@ -408,8 +420,13 @@ fn hero_item(app: &App, lib_idx: usize, item: &EmbyItem) -> bool {
 /// folder, or a non-`Movie` in a Movies library — or an id the App no longer
 /// holds. It reads only the core's Emby library state, so it is a core
 /// function the Hero's neighbour warm reaches through the App it already has.
-fn emby_hero_source(app: &App, lib_idx: usize, item_id: &str) -> Option<ArtworkSource> {
-    let item = emby_item(app, lib_idx, item_id)?;
+fn emby_hero_source(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+    item_id: &str,
+) -> Option<ArtworkSource> {
+    let item = emby_item(app, gui, lib_idx, item_id)?;
     if !hero_item(app, lib_idx, &item) {
         return None;
     }

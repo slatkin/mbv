@@ -184,9 +184,8 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
         "the answer leaves the new queue's name for the Client to present"
     );
     let presented = core.present_pending_gui_overlay();
-    let app = core.into_app();
     assert!(presented, "the answer left the name draft to present");
-    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
+    let Some(GuiOverlay::QueueChooser(chooser)) = &core.gui.overlay else {
         panic!("the new queue's name is open for edit in the chooser");
     };
     assert_eq!(chooser.cursor, 2, "the cursor rests on the new queue");
@@ -264,8 +263,7 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
     // next input pass, as a real GUI Client's tick does.
     let mut core = GuiCore::new(app);
     core.route_gui_input(GuiInput::Key(answer_key(Key::Char('x'))), None);
-    let mut app = core.into_app();
-    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui.overlay else {
+    let Some(GuiOverlay::QueueChooser(chooser)) = &core.gui.overlay else {
         panic!("the new queue's name is open for edit");
     };
     assert_eq!(
@@ -273,6 +271,7 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         Some(new_queue())
     );
 
+    let mut app = core.into_app();
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
 
     assert_eq!(

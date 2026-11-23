@@ -4,26 +4,31 @@
 //! Every GUI-only field the `App` used to carry lives here: the library
 //! stores the GUI's projections read, the open overlay, the Settings and
 //! Playlists screens, and the panel toggles. Only GUI code reads or writes
-//! it. Until the GUI fields leave the `App` for `GuiCore` (row 8.1), the
-//! `App` holds this value as its one transitional `gui` field.
+//! it. `GuiCore` holds it beside the `App` it owns (design D4).
 //!
 //! The core never names a field of this struct. The struct is the GUI
-//! Client's state, not the core's.
+//! Client's state, not the core's. It is its own `ClientLibraryStores`
+//! implementor, so the core's library-event seam reaches the state through
+//! that trait and nothing else.
 
 use crate::app::GuiLibraryMenuRow;
+use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::gui_client_state::GuiOverlay;
+use crate::app::gui_library::emby_feed_wants_target_in_set;
+use crate::app::gui_library::group_albums_mark;
 use crate::app::gui_library::{
     GuiAudiobooksSelection, GuiCollectionSelection, GuiEmbyLibrarySelection, GuiEmbyRootItems,
     GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiListSort, GuiPodcastsSelection,
     GuiSearchStore, GuiSectionRequest, GuiShowsView, GuiTvShowsSelection,
 };
 use crate::app::gui_settings::GuiSettingsState;
+use crate::app::{App, FeedHomeVideoSelection};
 use mbv_config::TabIdentity;
 
 /// The canvas panel's two toggles: `z` collapses the panel to its rail, and
 /// `q` folds the expanded panel's queue to its one-line summary. The Client
 /// core holds them, so a window-content reload keeps them.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(in crate::app) struct PanelToggles {
     /// The `z` toggle: the panel collapsed to the rail.
     pub(in crate::app) collapsed: bool,
@@ -34,7 +39,7 @@ pub(in crate::app) struct PanelToggles {
 /// The GUI Client's Client-core presentation state: the library stores, the
 /// open overlay, the Settings and Playlists screens, and the panel toggles.
 /// The TUI Client never reads it.
-pub(in crate::app) struct GuiClientState {
+pub struct GuiClientState {
     /// Whether the GUI player's controls auto-hide while an item plays and
     /// the pointer is not over the artwork. Persisted as
     /// `gui_player_auto_hide`.
@@ -99,10 +104,32 @@ pub(in crate::app) struct GuiClientState {
     pub(in crate::app) ui_reset_epoch: u64,
 }
 
+impl std::fmt::Debug for GuiClientState {
+    /// The state names itself and whether an overlay holds the keyboard: its
+    /// stores carry no fact a log line needs, and the label keeps the debug
+    /// line as short as the `App`'s own.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GuiClientState")
+            .field("overlay", &self.overlay.as_ref().map(|_| "open"))
+            .field("panel_collapsed", &self.panel_toggles.collapsed)
+            .field("queue_folded", &self.panel_toggles.queue_folded)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Default for GuiClientState {
+    /// The lands a caller that swaps one in for the length of a core call
+    /// leaves empty: every map, every screen, and the toggles start as a
+    /// fresh state's do.
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
 impl GuiClientState {
     /// The state a fresh `App` starts with, with the auto-hide preference it
     /// reads from the Client prefs.
-    pub(in crate::app) fn new(player_auto_hide: bool) -> Self {
+    pub(crate) fn new(player_auto_hide: bool) -> Self {
         Self {
             player_auto_hide,
             library_groups: std::collections::HashMap::new(),
@@ -138,5 +165,103 @@ impl GuiClientState {
     #[must_use]
     pub fn overlay_is_open(&self) -> bool {
         self.overlay.is_some()
+    }
+
+    /// Write the auto-hide preference (design D4): the GUI owns the
+    /// `gui_player_auto_hide` key, so it persists it through the core's
+    /// Client-key writer.
+    pub(in crate::app) fn save_player_auto_hide(&self) {
+        App::save_client_pref(
+            "gui_player_auto_hide",
+            serde_json::json!(self.player_auto_hide),
+        );
+    }
+
+    /// Apply one effect a library event raised (design D4a (c)): this state
+    /// does the store work on its own fields, in the order the event raised
+    /// it, and the core `app` serves the work that stays the core's.
+    pub(in crate::app) fn apply_library_effect(
+        &mut self,
+        app: &mut App,
+        effect: ClientLibraryEffect,
+    ) {
+        match effect {
+            // The rows in view changed, so their artwork sources are stale:
+            // the GUI re-queues the artwork the in-view rows lack (the call
+            // this effect replaced, design D4a's table).
+            ClientLibraryEffect::RowArtSourcesChanged => {
+                crate::app::gui_library::queue_in_view_row_fetches(app, self);
+            }
+            // A landed target retires its terminal failure mark, so a later
+            // cache miss can fetch it again.
+            ClientLibraryEffect::FeedTargetLanded { lib_idx, selection } => {
+                if let Some(claim) = self
+                    .emby_libs
+                    .get_mut(&lib_idx)
+                    .and_then(|stored| stored.feed_claim.as_mut())
+                {
+                    claim.failed.remove(&selection);
+                }
+            }
+            // A failed target records the mark, so the shown pass skips it
+            // until a user press clears it and no repaint retries it.
+            ClientLibraryEffect::FeedTargetFailed { lib_idx, selection } => {
+                if let Some(claim) = self
+                    .emby_libs
+                    .get_mut(&lib_idx)
+                    .and_then(|stored| stored.feed_claim.as_mut())
+                {
+                    claim.failed.insert(selection);
+                }
+            }
+        }
+    }
+}
+
+/// The GUI Client's library stores, as the core's library event seam takes
+/// them (design D4a (c)): the state reads and writes its own fields, through
+/// the `app` the core passes for the work that stays the core's.
+impl ClientLibraryStores for GuiClientState {
+    fn wants_feed_target(
+        &self,
+        app: &App,
+        lib_idx: usize,
+        target: &FeedHomeVideoSelection,
+    ) -> bool {
+        // The claim this state holds still wants the target, checked against
+        // the effective set the core's root listing resolves.
+        self.emby_libs
+            .get(&lib_idx)
+            .is_some_and(|selection| selection.feed_claim.is_some())
+            && emby_feed_wants_target_in_set(app, self, lib_idx, target)
+    }
+
+    fn apply(&mut self, app: &mut App, effect: ClientLibraryEffect) {
+        self.apply_library_effect(app, effect);
+    }
+
+    fn install_group_albums(&mut self, event: crate::app::gui_library::GuiGroupAlbumsEvent) {
+        let lib_idx = event.lib_idx;
+        let group_id = event.group_id;
+        self.music_albums
+            .entry(lib_idx)
+            .or_default()
+            .insert(group_id, group_albums_mark(event.result));
+    }
+
+    fn install_emby_roots(
+        &mut self,
+        lib_idx: usize,
+        items: crate::app::gui_library::GuiEmbyRootItems,
+    ) {
+        self.emby_roots.insert(lib_idx, items);
+    }
+
+    fn install_shows_new(
+        &mut self,
+        library_id: String,
+        request: crate::app::gui_library::GuiSectionRequest<mbv_emby_model::EmbyItem>,
+    ) {
+        self.shows_new.insert(library_id, request);
     }
 }

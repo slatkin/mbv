@@ -1,5 +1,7 @@
 use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
-use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
+use crate::app::dispatch::library::stores::{
+    ClientLibraryEffect, ClientLibraryEventSeam, ClientLibraryStores,
+};
 use crate::app::state::app_struct::{LevelFillState, MAX_ALBUM_TRACKS_CACHE, insert_capped};
 use crate::app::state::events::{
     LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
@@ -71,18 +73,32 @@ impl App {
             // The GUI Library's collection store owns this event (add-gui-
             // library-panel design D5); the TUI never starts one.
             LibEvent::GuiGroupAlbums(event) => {
-                crate::app::gui_library::handle_group_albums(self, event);
+                collect_client_event(stores, ClientLibraryEventSeam::GroupAlbums(event));
             }
             // The GUI Library's root-list store owns this event (add-gui-
             // library-panel design D12, row 8.1); the TUI never starts one.
             LibEvent::GuiEmbyRootItems(event) => {
-                crate::app::gui_library::handle_emby_root_items(self, event);
+                let lib_idx = event.lib_idx;
+                collect_client_event(
+                    stores,
+                    ClientLibraryEventSeam::EmbyRootItems {
+                        lib_idx,
+                        items: crate::app::gui_library::handle_emby_root_items(event),
+                    },
+                );
             }
             // The GUI Shows New list's store owns this event
             // (gui-collection-dropdown design D9); only the GUI Client's launch
             // starts one, so the TUI never receives it.
             LibEvent::GuiShowsNew(event) => {
-                crate::app::gui_library::handle_shows_new(self, event);
+                let (library_id, request) = crate::app::gui_library::handle_shows_new(event);
+                collect_client_event(
+                    stores,
+                    ClientLibraryEventSeam::ShowsNew {
+                        library_id,
+                        request,
+                    },
+                );
             }
             // A feed-group target's failed fetch (gui-collection-dropdown
             // design D3): the GUI Library's store records the terminal failure
@@ -383,6 +399,11 @@ impl App {
 
     /// Apply the store effects one library event raised, in order. A Client
     /// that keeps no library stores passes `None`, so nothing runs.
+    ///
+    /// The Client's stores are its own state (`GuiClientState`, design D4a
+    /// (c)), not the core's, so a caller that holds them applies the effects
+    /// as its own events (`ClientThread::drain_lib_events`). This entry serves
+    /// the core instructions that run outside a Client drain.
     pub(in crate::app) fn apply_library_effects(
         &mut self,
         stores: Option<&mut dyn ClientLibraryStores>,
@@ -580,5 +601,17 @@ impl App {
                 }
             }
         }
+    }
+}
+
+/// Hand one Client-owned event carriage to its stores, when the calling Client
+/// keeps any (`decouple-client-core` design D4): the TUI passes `None`, so it
+/// drops the carriage it never starts.
+fn collect_client_event(
+    stores: Option<&mut dyn ClientLibraryStores>,
+    seam: ClientLibraryEventSeam,
+) {
+    if let Some(stores) = stores {
+        stores.apply_event(seam);
     }
 }

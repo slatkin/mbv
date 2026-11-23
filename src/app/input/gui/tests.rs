@@ -6,7 +6,6 @@ use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest, ShellRequest, TrackChipKind};
 
-use crate::app::App;
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
 use crate::app::tests::{
@@ -122,13 +121,13 @@ fn gui_context_z_toggles_the_panel_collapse() {
         &mut core,
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
     ));
-    assert!(core.app.gui.panel_toggles.collapsed);
+    assert!(core.gui.panel_toggles.collapsed);
 
     assert!(!gui_key(
         &mut core,
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
     ));
-    assert!(!core.app.gui.panel_toggles.collapsed);
+    assert!(!core.gui.panel_toggles.collapsed);
 }
 
 // The GUI has no Panel focus (ADR 0040, design D3 of
@@ -160,7 +159,7 @@ fn gui_context_q_toggles_the_queue_fold() {
         &mut core,
         GuiInput::Key(KeyEvent::new(Key::Char('q'), KeyModifiers::NONE)),
     ));
-    assert!(core.app.gui.panel_toggles.queue_folded);
+    assert!(core.gui.panel_toggles.queue_folded);
 }
 
 // The GUI-only key context's `c` cycles the subtitle track, the chord the
@@ -250,7 +249,7 @@ fn row_context_menu_request_opens_the_row_menu_with_hints() {
         ))),
     );
 
-    let Some(GuiOverlay::RowMenu(menu)) = &core.app.gui.overlay else {
+    let Some(GuiOverlay::RowMenu(menu)) = &core.gui.overlay else {
         panic!("the row menu opened");
     };
     assert_eq!(menu.cursor, 0);
@@ -338,7 +337,7 @@ fn row_menu_enter_plays_the_cursor_row() {
     );
 
     assert_eq!(played_slot_ids(&cmd_rx), vec![row.raw()]);
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // The canvas's two-stroke `dd` hint on Remove: the first `d` arms, the
@@ -366,7 +365,7 @@ fn row_menu_two_stroke_dd_removes_the_row() {
         GuiInput::Key(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE)),
     );
     // The first stroke arms only.
-    assert!(core.app.gui.overlay.is_some());
+    assert!(core.gui.overlay.is_some());
     gui_key(
         &mut core,
         GuiInput::Key(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE)),
@@ -380,7 +379,7 @@ fn row_menu_two_stroke_dd_removes_the_row() {
         })
         .collect();
     assert_eq!(removed, vec![row.raw()]);
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // The open overlay owns the keyboard while it is up: a chord its rules do
@@ -408,14 +407,14 @@ fn open_overlay_owns_the_keyboard() {
         &mut core,
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
     );
-    assert!(!core.app.gui.panel_toggles.collapsed);
-    assert!(core.app.gui.overlay.is_some());
+    assert!(!core.gui.panel_toggles.collapsed);
+    assert!(core.gui.overlay.is_some());
 
     gui_key(
         &mut core,
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
     );
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // The track popover's keyboard choice sends the Owner the chosen track: Down
@@ -437,7 +436,7 @@ fn track_popover_choose_sends_the_track_switch() {
         &mut core,
         Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles)),
     );
-    let Some(GuiOverlay::TrackPopover(popover)) = &core.app.gui.overlay else {
+    let Some(GuiOverlay::TrackPopover(popover)) = &core.gui.overlay else {
         panic!("the popover opened over the chip's choices");
     };
     assert_eq!(popover.cursor, 0, "the cursor starts on the chosen Off");
@@ -459,7 +458,7 @@ fn track_popover_choose_sends_the_track_switch() {
         })
         .collect();
     assert_eq!(switched, vec![2]);
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // Unit 6.2 review finding (P2): a track popover left open when the local
@@ -480,7 +479,7 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
         &mut core,
         Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles)),
     );
-    assert!(core.app.gui.overlay.is_some());
+    assert!(core.gui.overlay.is_some());
 
     // Playback ends while the popover is up (the queue exhausts, or the
     // Owner stops from another client): the chips' source is gone.
@@ -496,9 +495,9 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
     );
 
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
     assert!(
-        core.app.gui.panel_toggles.collapsed,
+        core.gui.panel_toggles.collapsed,
         "the chord routed to its binding"
     );
 }
@@ -547,22 +546,22 @@ fn gui_context_popover_chords_toggle_the_matching_popover() {
         status.sub_id = 0;
     });
     let key = |c: char| GuiInput::Key(KeyEvent::new(Key::Char(c), KeyModifiers::NONE));
-    let open_chip = |app: &App| match &app.gui.overlay {
+    let open_chip = |core: &GuiCore| match &core.gui.overlay {
         Some(GuiOverlay::TrackPopover(popover)) => Some(popover.chip),
         _ => None,
     };
 
     gui_key(&mut core, key('a'));
-    assert_eq!(open_chip(&core.app), Some(TrackChipKind::Audio));
+    assert_eq!(open_chip(&core), Some(TrackChipKind::Audio));
 
     gui_key(
         &mut core,
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
     );
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 
     gui_key(&mut core, key('s'));
-    assert_eq!(open_chip(&core.app), Some(TrackChipKind::Subtitles));
+    assert_eq!(open_chip(&core), Some(TrackChipKind::Subtitles));
 }
 
 // The GUI's QueueIntent::Clear runs the TUI's own App action: the `c`
@@ -599,7 +598,7 @@ fn queue_intent_clear_opens_the_confirm_overlay_and_enter_clears_the_queue() {
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
     );
 
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
     let cleared = cmd_rx.try_recv().is_ok_and(|cmd| {
         matches!(
             cmd,
@@ -629,7 +628,7 @@ fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
             mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
         ))),
     );
-    let index = match &core.app.gui.overlay {
+    let index = match &core.gui.overlay {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()
@@ -641,7 +640,7 @@ fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
     core.select_gui_row_menu_entry(index);
     present_pending_modal(&mut core);
 
-    match &core.app.gui.overlay {
+    match &core.gui.overlay {
         Some(GuiOverlay::Confirm(modal)) => {
             assert_eq!(modal.message, "Clear the queue?");
         }
@@ -672,7 +671,7 @@ fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
             mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots.clone()),
         ))),
     );
-    let index = match &core.app.gui.overlay {
+    let index = match &core.gui.overlay {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
             .iter()
@@ -695,7 +694,7 @@ fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
         removed,
         slots.iter().map(|slot| slot.raw()).collect::<Vec<_>>()
     );
-    assert!(core.app.gui.overlay.is_none());
+    assert!(core.gui.overlay.is_none());
 }
 
 // An unannounced local-Owner loss raises the recovery dialog
@@ -747,15 +746,12 @@ fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
             &mut core,
             GuiInput::Key(KeyEvent::new(code, KeyModifiers::NONE)),
         );
-        assert!(
-            core.app.gui.overlay_is_open(),
-            "{code:?} left the dialog up"
-        );
+        assert!(core.gui.overlay_is_open(), "{code:?} left the dialog up");
     }
     // An outside press leaves it up too (the confirm modal's opposite: the
     // recovery choice is the only way out).
     core.dismiss_open_gui_overlay();
-    assert!(core.app.gui.overlay_is_open());
+    assert!(core.gui.overlay_is_open());
 }
 
 mod destination_tabs;

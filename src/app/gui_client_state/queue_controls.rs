@@ -27,7 +27,7 @@ impl GuiCore {
             .iter()
             .position(|entry| entry.queue == Some(queue))
             .unwrap_or_default();
-        self.app.gui.overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
+        self.gui.overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
             cursor,
             renaming: Some(QueueRenameDraft::selecting(queue, text)),
         }));

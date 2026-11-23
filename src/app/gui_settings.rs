@@ -220,14 +220,14 @@ impl GuiCore {
     /// (design D2). A caller borrows the state; it is not cloned (design D10).
     #[must_use]
     pub fn gui_settings(&self) -> Option<&GuiSettingsState> {
-        self.app.gui.settings_screen.as_ref()
+        self.gui.settings_screen.as_ref()
     }
 
     /// Whether the Settings screen is open (design D2): the fact the router
     /// snapshot's queue-scoped gates read and the core's focus sync mirrors.
     #[must_use]
     pub fn gui_settings_is_open(&self) -> bool {
-        self.app.gui.settings_screen.is_some()
+        self.gui.settings_screen.is_some()
     }
 
     /// The Settings destination the core's openers recorded (design D2):
@@ -255,7 +255,7 @@ impl GuiCore {
     /// group's section; with the screen showing a section of the same group,
     /// close it; otherwise show the group's section and stay open.
     pub(in crate::app) fn toggle_gui_settings(&mut self, group: GuiSettingsGroup) {
-        match self.app.gui.settings_screen.as_ref() {
+        match self.gui.settings_screen.as_ref() {
             Some(state) if group.contains(state.section) => self.close_gui_settings(),
             Some(_) => self.show_gui_settings_section(group.section()),
             None => self.open_gui_settings_at(group.section()),
@@ -269,7 +269,7 @@ impl GuiCore {
         // The Settings and Playlists screens never show together, so opening
         // Settings closes the Playlists screen.
         self.close_gui_playlists();
-        self.app.gui.settings_screen = Some(GuiSettingsState::at(section));
+        self.gui.settings_screen = Some(GuiSettingsState::at(section));
         self.load_gui_settings_section(section);
     }
 
@@ -277,7 +277,7 @@ impl GuiCore {
     /// with it (design D9) — and the core's focus sync pops
     /// `ComponentId::Overlay(OverlayId::Settings)` so the Panel focus returns.
     pub fn close_gui_settings(&mut self) {
-        self.app.gui.settings_screen = None;
+        self.gui.settings_screen = None;
     }
 
     /// The Settings steps an overlay request names (design D2, D5): the TUI
@@ -349,7 +349,7 @@ impl GuiCore {
     /// Switch the open screen to `section`, keeping the caches the screen owns
     /// and starting the new section's load (design D9).
     fn show_gui_settings_section(&mut self, section: GuiSettingsSection) {
-        if let Some(state) = self.app.gui.settings_screen.as_mut() {
+        if let Some(state) = self.gui.settings_screen.as_mut() {
             state.section = section;
         }
         self.load_gui_settings_section(section);
@@ -360,7 +360,7 @@ impl GuiCore {
     /// it.
     #[must_use]
     pub fn gui_ui_reset_epoch(&self) -> u64 {
-        self.app.gui.ui_reset_epoch
+        self.gui.ui_reset_epoch
     }
 
     /// Log the Settings command whose frame is stale: the screen it addresses

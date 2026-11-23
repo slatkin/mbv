@@ -7,6 +7,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::test_reads::gui;
 use super::{GUI_MUSIC_LIBRARY_ID, music_group_level};
 use crate::app::App;
 use crate::app::state::service_runtime::EmbyRuntime;
@@ -59,8 +60,9 @@ impl App {
     /// while the group's union holds it.
     #[cfg(feature = "test")]
     pub fn pick_gui_album_for_test(&mut self, lib_idx: usize, group_id: &str, album_id: &str) {
-        self.gui
-            .library_picks
-            .insert((lib_idx, group_id.to_string()), album_id.to_string());
+        gui(self, |gui| {
+            gui.library_picks
+                .insert((lib_idx, group_id.to_string()), album_id.to_string());
+        });
     }
 }

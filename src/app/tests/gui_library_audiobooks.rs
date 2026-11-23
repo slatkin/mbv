@@ -146,7 +146,7 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
     gui_abs_select(&mut app, 0, "book-a");
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
-        Some("book-a"),
+        Some("book-a".to_string()),
         "the picked book is the select command's"
     );
     // The select started the TUI's detail loader: its worker reported one
@@ -187,7 +187,7 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
     gui_abs_select(&mut app, 0, "gone");
     assert_eq!(
         app.gui_abs_picked_book_for_test(0),
-        Some("book-a"),
+        Some("book-a".to_string()),
         "a stale id changes nothing"
     );
 }

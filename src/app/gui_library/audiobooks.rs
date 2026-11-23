@@ -20,6 +20,7 @@ use super::entry_list::picked_or_first;
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// The GUI Library's Audiobooks selection (row 9.1): per book library, the
@@ -38,12 +39,12 @@ impl GuiCore {
     /// Open the Audiobooks library `lib_idx` (row 9.1; gui-one-destination-ensure
     /// design D4).
     pub fn gui_abs_open(&mut self, lib_idx: usize) {
-        open_abs(&mut self.app, lib_idx);
+        open_abs(&mut self.app, &mut self.gui, lib_idx);
     }
 
     /// Select the book the Hero shows (row 9.1).
     pub fn gui_abs_select(&mut self, lib_idx: usize, book_id: &str) {
-        select_abs(&mut self.app, lib_idx, book_id);
+        select_abs(&mut self.app, &mut self.gui, lib_idx, book_id);
     }
 
     /// Play the book a command names (row 9.1).
@@ -89,7 +90,11 @@ pub(in crate::app::gui_library) fn abs_book_library(app: &App, lib_idx: usize) -
 /// retries on an open and not on a repaint, and then runs the destination's
 /// load pass. A `lib_idx` that names no Audiobooks library is an ignored
 /// command.
-pub(in crate::app::gui_library) fn open_abs(app: &mut App, lib_idx: usize) {
+pub(in crate::app::gui_library) fn open_abs(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+) {
     if !abs_book_library(app, lib_idx) {
         super::log_ignored_library_command(
             "absOpen",
@@ -101,7 +106,9 @@ pub(in crate::app::gui_library) fn open_abs(app: &mut App, lib_idx: usize) {
     // The ordered load pass is the GUI core's, so the open step hands the
     // core the App it holds.
     let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
+    *gui = std::mem::take(core.gui_state_mut());
     *app = core.into_app();
 }
 
@@ -111,7 +118,12 @@ pub(in crate::app::gui_library) fn open_abs(app: &mut App, lib_idx: usize) {
 /// is a stale frame's pick and changes nothing, as every item-named command's
 /// stale arm does; a catalog still landing admits the pick, because the list
 /// is what would name it stale.
-pub(in crate::app::gui_library) fn select_abs(app: &mut App, lib_idx: usize, book_id: &str) {
+pub(in crate::app::gui_library) fn select_abs(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+    book_id: &str,
+) {
     if !abs_book_library(app, lib_idx) {
         super::log_ignored_library_command(
             "absSelect",
@@ -123,7 +135,7 @@ pub(in crate::app::gui_library) fn select_abs(app: &mut App, lib_idx: usize, boo
         super::log_stale_library_item("absSelect", book_id);
         return;
     }
-    app.gui.abs_libs.entry(lib_idx).or_default().picked_book = Some(book_id.to_string());
+    gui.abs_libs.entry(lib_idx).or_default().picked_book = Some(book_id.to_string());
     // The loader reads the active tab's own browse state, so the load starts
     // for the destination that is open; the frame path's ensure covers the
     // pick a restore or a late select left unloaded.
@@ -162,11 +174,14 @@ pub(in crate::app::gui_library) fn clear_abs_catalog_failed(app: &mut App, lib_i
 /// so the Hero paints as soon as the catalog lands. `None` while the catalog
 /// holds no book. The selection arm is the shared `picked_or_first` rule every
 /// destination's list applies (row 7C.4).
-pub(in crate::app) fn abs_effective_pick(app: &App, lib_idx: usize) -> Option<String> {
+pub(in crate::app) fn abs_effective_pick(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+) -> Option<String> {
     let state = app.audiobookshelf_book_browse.get(lib_idx)?;
     picked_or_first(
-        app.gui
-            .abs_libs
+        gui.abs_libs
             .get(&lib_idx)
             .and_then(|selection| selection.picked_book.clone()),
         |picked| {

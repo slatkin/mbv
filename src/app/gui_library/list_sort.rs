@@ -13,6 +13,7 @@ use super::collection::{GuiDateOrder, compare_gui_date_order};
 use super::projection::sort_letter;
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// The sorts of every target but Audiobooks (design D2), in paint order.
@@ -175,24 +176,24 @@ impl GuiCore {
         target: GuiSortTarget,
         sort: GuiListSort,
     ) {
-        apply_list_sort(&mut self.app, target, sort);
+        apply_list_sort(&mut self.app, &mut self.gui, target, sort);
     }
 
     /// The sort `target`'s list is ordered by (design D2).
     #[must_use]
     pub fn gui_list_sort(&self, target: GuiSortTarget) -> GuiListSort {
-        list_sort(&self.app, target)
+        list_sort(&self.app, &self.gui, target)
     }
 
     /// The sort control `target`'s list paints (design D7).
     #[must_use]
     pub fn gui_list_sort_frame(&self, target: GuiSortTarget) -> GuiListSortFrame {
-        list_sort_frame(&self.app, target)
+        list_sort_frame(&self.app, &self.gui, target)
     }
 
     /// Set `target`'s sort (design D3).
     pub fn set_gui_list_sort(&mut self, target: GuiSortTarget, sort: GuiListSort) {
-        set_list_sort(&mut self.app, target, sort);
+        set_list_sort(&mut self.app, &mut self.gui, target, sort);
     }
 
     /// Install one destination's sort by its stable identity (design D3, D10).
@@ -201,7 +202,7 @@ impl GuiCore {
         identity: TabIdentity,
         sort: GuiListSort,
     ) {
-        install_list_sort(&mut self.app, identity, sort);
+        install_list_sort(&mut self.app, &mut self.gui, identity, sort);
     }
 
     /// The sort the store holds for `identity` (design D3, D10).
@@ -210,7 +211,7 @@ impl GuiCore {
         &self,
         identity: &TabIdentity,
     ) -> Option<GuiListSort> {
-        list_sort_stored(&self.app, identity)
+        list_sort_stored(&self.gui, identity)
     }
 }
 
@@ -219,6 +220,7 @@ impl GuiCore {
 /// choices, is logged and ignored; anything else sets the destination's store.
 pub(in crate::app::gui_library) fn apply_list_sort(
     app: &mut App,
+    gui: &mut GuiClientState,
     target: GuiSortTarget,
     sort: GuiListSort,
 ) {
@@ -233,7 +235,7 @@ pub(in crate::app::gui_library) fn apply_list_sort(
         );
         return;
     }
-    set_list_sort(app, target, sort);
+    set_list_sort(app, gui, target, sort);
 }
 
 /// Whether `target` names a presented flat list (design D5): the destination's
@@ -255,12 +257,16 @@ fn sort_target_present(app: &App, target: GuiSortTarget) -> bool {
 /// cannot paint it, and a target that resolves to no identity reads the
 /// default too.
 #[must_use]
-pub(in crate::app) fn list_sort(app: &App, target: GuiSortTarget) -> GuiListSort {
+pub(in crate::app) fn list_sort(
+    app: &App,
+    gui: &GuiClientState,
+    target: GuiSortTarget,
+) -> GuiListSort {
     let default = target.default_sort(sort_target_is_feed_group(app, target));
     let Some(identity) = sort_target_identity(app, target) else {
         return default;
     };
-    match list_sort_stored(app, &identity) {
+    match list_sort_stored(gui, &identity) {
         Some(sort) if target.choices().contains(&sort) => sort,
         _ => default,
     }
@@ -271,11 +277,12 @@ pub(in crate::app) fn list_sort(app: &App, target: GuiSortTarget) -> GuiListSort
 #[must_use]
 pub(in crate::app::gui_library) fn list_sort_frame(
     app: &App,
+    gui: &GuiClientState,
     target: GuiSortTarget,
 ) -> GuiListSortFrame {
     GuiListSortFrame {
         target,
-        active: list_sort(app, target),
+        active: list_sort(app, gui, target),
         choices: target.choices().to_vec(),
     }
 }
@@ -284,9 +291,14 @@ pub(in crate::app::gui_library) fn list_sort_frame(
 /// when the destination has none, so the store keeps the order its
 /// destinations were first sorted in. A target that resolves to no identity
 /// stores nothing.
-pub(in crate::app) fn set_list_sort(app: &mut App, target: GuiSortTarget, sort: GuiListSort) {
+pub(in crate::app) fn set_list_sort(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    target: GuiSortTarget,
+    sort: GuiListSort,
+) {
     if let Some(identity) = sort_target_identity(app, target) {
-        install_list_sort(app, identity, sort);
+        install_list_sort(app, gui, identity, sort);
     }
 }
 
@@ -295,18 +307,18 @@ pub(in crate::app) fn set_list_sort(app: &mut App, target: GuiSortTarget, sort: 
 /// sorts before any catalog lands, so it keys them by identity, and the
 /// command path resolves its target to that same identity.
 pub(in crate::app::gui_library) fn install_list_sort(
-    app: &mut App,
+    _app: &mut App,
+    gui: &mut GuiClientState,
     identity: TabIdentity,
     sort: GuiListSort,
 ) {
-    match app
-        .gui
+    match gui
         .list_sorts
         .iter_mut()
         .find(|(stored, _)| stored == &identity)
     {
         Some(entry) => entry.1 = sort,
-        None => app.gui.list_sorts.push((identity, sort)),
+        None => gui.list_sorts.push((identity, sort)),
     }
 }
 
@@ -315,11 +327,10 @@ pub(in crate::app::gui_library) fn install_list_sort(
 /// a saved date order only where it holds none.
 #[must_use]
 pub(in crate::app::gui_library) fn list_sort_stored(
-    app: &App,
+    gui: &GuiClientState,
     identity: &TabIdentity,
 ) -> Option<GuiListSort> {
-    app.gui
-        .list_sorts
+    gui.list_sorts
         .iter()
         .find(|(stored, _)| stored == identity)
         .map(|(_, sort)| *sort)

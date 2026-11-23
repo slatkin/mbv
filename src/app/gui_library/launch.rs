@@ -65,7 +65,7 @@ impl GuiCore {
         // lists are requested now, once per launch (gui-collection-dropdown
         // design D9). Both requests are idempotent, so a later catalog landing
         // re-requests nothing.
-        super::shows::spawn_shows_sections(&mut self.app);
+        super::shows::spawn_shows_sections(&mut self.app, &mut self.gui);
         self.restore_gui_shows_view(state.shows_view);
         GuiLaunchOpen::Opened(self.gui_launch_destination())
     }
@@ -75,8 +75,7 @@ impl GuiCore {
     /// changed, so a destination the session never touched opens on its own
     /// default.
     fn gui_launch_sorts(&self) -> Vec<GuiLaunchListSort> {
-        self.app
-            .gui
+        self.gui
             .list_sorts
             .iter()
             .map(|(destination, sort)| GuiLaunchListSort {
@@ -128,7 +127,7 @@ impl GuiCore {
             let GuiDestinationKind::Shows { lib_idx } = kind else {
                 continue;
             };
-            if !self.app.gui.shows_views.contains_key(&lib_idx) {
+            if !self.gui.shows_views.contains_key(&lib_idx) {
                 self.set_gui_shows_view(lib_idx, shows_view(view));
             }
         }
@@ -153,7 +152,7 @@ impl GuiCore {
                 })
         });
         shows.map_or(GuiLaunchShowsView::All, |lib_idx| {
-            launch_shows_view(super::shows::shows_view(&self.app, lib_idx))
+            launch_shows_view(super::shows::shows_view(&self.gui, lib_idx))
         })
     }
 
@@ -306,15 +305,15 @@ impl GuiCore {
         target: GuiLaunchCollectionTarget,
         destination: TabIdentity,
     ) -> Option<GuiDestinationCollections> {
-        if !site.has_stored_selection(&self.app) {
+        if !site.has_stored_selection(&self.gui) {
             return None;
         }
         Some(GuiDestinationCollections {
             destination,
             target,
-            group_ids: site.stored_set(&self.app).checked_keys().to_vec(),
+            group_ids: site.stored_set(&self.gui).checked_keys().to_vec(),
             order: None,
-            picks: site.saved_picks(&self.app),
+            picks: site.saved_picks(&self.gui),
         })
     }
 
@@ -372,14 +371,15 @@ impl GuiCore {
         let set = GuiCollectionSet::Checked(entry.group_ids.clone())
             .effective(present)
             .into_owned();
-        if site.has_stored_selection(&self.app) {
+        if site.has_stored_selection(&self.gui) {
             // The user already selected in the pre-restore window: the
             // restore never clobbers a choice the session made.
             return;
         }
-        site.install_picks(&mut self.app, &picks);
+        site.install_picks(&mut self.app, &mut self.gui, &picks);
         super::collection_command::apply_collection_at(
             &mut self.app,
+            &mut self.gui,
             site,
             CollectionOp::Restore { set },
         );

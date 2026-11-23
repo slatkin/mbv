@@ -9,6 +9,7 @@
 //! child module of `test_reads` and keeps that file within its line ceiling.
 
 use super::super::App;
+use super::gui;
 use super::{SeededAbsBook, SeededAbsEpisode};
 
 impl App {
@@ -62,11 +63,12 @@ impl App {
     /// The book the GUI Library's Hero shows for the Audiobookshelf book
     /// library `lib_idx` (add-gui-library-panel row 9.1).
     #[must_use]
-    pub fn gui_abs_picked_book_for_test(&self, lib_idx: usize) -> Option<&str> {
-        self.gui
-            .abs_libs
-            .get(&lib_idx)
-            .and_then(|selection| selection.picked_book.as_deref())
+    pub fn gui_abs_picked_book_for_test(&self, lib_idx: usize) -> Option<String> {
+        gui(self, |gui| {
+            gui.abs_libs
+                .get(&lib_idx)
+                .and_then(|selection| selection.picked_book.clone())
+        })
     }
 
     /// Seed the GUI's Audiobooks book catalog for `lib_idx` with `books`, as

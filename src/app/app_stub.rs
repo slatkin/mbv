@@ -8,11 +8,11 @@
 //! under `cfg(test)`, so a dependent crate's dev-dependency can enable it;
 //! the shipped builds never compile it.
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(feature = "test")]
 use std::sync::{Arc, Mutex};
 
 use super::App;
-#[cfg(any(test, feature = "test"))]
+#[cfg(feature = "test")]
 use super::QueueView;
 
 /// The stub constructions over `App::build`, in their own child module so this
@@ -610,6 +610,10 @@ pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>
 /// (`app_stub::test_reads`).
 #[cfg(any(test, feature = "test"))]
 pub(in crate::app) mod test_reads;
+#[cfg(feature = "test")]
+pub use self::test_reads::drain_lib_event_with_stores_for_test;
+#[cfg(any(test, feature = "test"))]
+pub use self::test_reads::gui_state_for_test;
 
 /// The `App` a GUI Client's Owner-exit test drives (`daemon-disconnect-`
 /// `handling` "Clients exit cleanly on an announced shutdown"): the stub

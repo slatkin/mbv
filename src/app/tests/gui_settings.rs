@@ -26,13 +26,10 @@ fn the_open_actions_follow_the_toggle_rule(
     #[case] expected: Option<GuiSettingsSection>,
 ) {
     let mut app = make_app_stub();
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
     if let Some(section) = shown {
-        let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
         core.open_gui_settings_at(section);
-        app = core.into_app();
     }
-
-    let mut core = crate::gui::GuiCore::new(app);
     core.toggle_gui_settings(group);
 
     assert_eq!(core.gui_settings().map(|state| state.section), expected);

@@ -177,7 +177,7 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
     );
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        Some("grp-hiphop")
+        Some("grp-hiphop".to_string())
     );
 }
 
@@ -277,7 +277,7 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
     // the Podcasts entry installs although no show list has landed.
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        Some("grp-hiphop"),
+        Some("grp-hiphop".to_string()),
         "the opened destination restores its own saved entry"
     );
     assert_eq!(

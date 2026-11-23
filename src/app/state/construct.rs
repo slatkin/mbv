@@ -21,7 +21,10 @@ fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
 }
 
-fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
+/// Whether the GUI player's controls auto-hide: the `gui_player_auto_hide`
+/// preference `GuiClientState` starts from (design D4 leaves the key a Client
+/// key, so its reader sits beside the state it fills).
+pub(crate) fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["gui_player_auto_hide"].as_bool().unwrap_or(false)
 }
 
@@ -186,13 +189,6 @@ impl App {
                 }),
             list_pane_width: list_pane_width_from_prefs(&prefs),
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
-            // The GUI Client's own state starts empty (design D4 of
-            // `decouple-client-core`): the window content's first command
-            // selects a destination's collections and an item's detail, and
-            // the open overlay and screens start closed.
-            gui: crate::app::gui_client_state::GuiClientState::new(
-                gui_player_auto_hide_from_prefs(&prefs),
-            ),
             panel_mode: PanelMode::default(),
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the terminal-cell panel rules and the visual-slot

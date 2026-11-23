@@ -49,7 +49,7 @@ fn the_show_detail_command_shows_the_picked_album() {
         test.core
             .app_mut()
             .gui_library_pick_for_test(0, "grp-hiphop"),
-        Some("alb-ill")
+        Some("alb-ill".to_string())
     );
 }
 

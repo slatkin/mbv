@@ -1,6 +1,44 @@
 use super::*;
 
-use crate::app::gui_library::GuiLibraryStores;
+pub(in crate::app) use crate::app::GuiClientState;
+
+/// The GUI Client's own state beside the stub `App` a test holds. The state
+/// lives in `GuiCore` (design D4), and these helpers drive the `App` alone, so
+/// the state a test seeds is held here beside it and never inside the `App`.
+/// Every test runs on its own thread with a stub `App` of its own, so one
+/// thread's state reaches no other test.
+pub(crate) fn stub_gui_state<R>(run: impl FnOnce(&mut crate::app::GuiClientState) -> R) -> R {
+    STUB_GUI_STATE.with(|slot| run(&mut slot.borrow_mut()))
+}
+
+thread_local! {
+    static STUB_GUI_STATE: std::cell::RefCell<crate::app::GuiClientState> =
+        std::cell::RefCell::new(crate::app::GuiClientState::new(false));
+}
+
+/// Run one GUI core call over a stub `App`, with the state a test seeded
+/// beside it: the call's state installs for its length, and the state it
+/// leaves installs back beside the `App`.
+fn with_stub_gui<T>(
+    app: &mut crate::app::App,
+    run: impl FnOnce(&mut crate::gui::GuiCore) -> T,
+) -> T {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = stub_gui_state(std::mem::take);
+    let value = run(&mut core);
+    core.into_app_keeping_gui(app);
+    value
+}
+
+/// A `GuiCore` over a stub `App` a test holds, with the state a test seeded
+/// beside it: the test takes the `App` back with `into_app_keeping_gui`.
+pub(in crate::app) fn core_holding_stub_gui(app: &mut crate::app::App) -> crate::gui::GuiCore {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    *core.gui_state_mut() = stub_gui_state(std::mem::take);
+    core
+}
 
 /// Apply one GUI Library command to a stub `App` a test holds: the test
 /// helper for the command tests, which run the command through the GUI core
@@ -9,10 +47,7 @@ pub(in crate::app) fn apply_gui_library_command(
     app: &mut crate::app::App,
     command: crate::app::GuiLibraryCommand,
 ) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.apply_gui_library_command(command);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.apply_gui_library_command(command));
 }
 
 /// One GUI core step over a stub `App` a test holds: the test helper for the
@@ -23,11 +58,9 @@ pub(in crate::app) fn restore_launch_collections(
     state: &mbv_config::GuiLaunchState,
     destination: &mbv_config::TabIdentity,
 ) -> bool {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let restored = core.restore_gui_launch_collections(state, destination);
-    *app = core.into_app();
-    restored
+    with_stub_gui(app, |core| {
+        core.restore_gui_launch_collections(state, destination)
+    })
 }
 
 /// The launch location's first phase over a stub `App` a test holds.
@@ -35,11 +68,7 @@ pub(in crate::app) fn open_launch_destination(
     app: &mut crate::app::App,
     state: &mbv_config::GuiLaunchState,
 ) -> crate::app::GuiLaunchOpen {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let opened = core.open_gui_launch_destination(state);
-    *app = core.into_app();
-    opened
+    with_stub_gui(app, |core| core.open_gui_launch_destination(state))
 }
 
 /// Run one GUI Library destination's ordered load pass over a stub `App` a
@@ -49,10 +78,7 @@ pub(in crate::app) fn ensure_gui_destination(
     app: &mut crate::app::App,
     kind: crate::app::GuiDestinationKind,
 ) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.ensure_gui_destination(kind);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.ensure_gui_destination(kind));
 }
 
 /// One destination's projection over a stub `App` a test holds.
@@ -60,11 +86,7 @@ pub(in crate::app) fn gui_audiobooks_projection(
     app: &mut crate::app::App,
     lib_idx: usize,
 ) -> crate::app::GuiAudiobooksProjection {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let projection = core.gui_audiobooks_projection(lib_idx);
-    *app = core.into_app();
-    projection
+    with_stub_gui(app, |core| core.gui_audiobooks_projection(lib_idx))
 }
 
 /// One destination's projection over a stub `App` a test holds.
@@ -72,11 +94,7 @@ pub(in crate::app) fn gui_emby_projection(
     app: &mut crate::app::App,
     lib_idx: usize,
 ) -> crate::app::GuiEmbyProjection {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let projection = core.gui_emby_projection(lib_idx);
-    *app = core.into_app();
-    projection
+    with_stub_gui(app, |core| core.gui_emby_projection(lib_idx))
 }
 
 /// One destination's projection over a stub `App` a test holds.
@@ -84,11 +102,7 @@ pub(in crate::app) fn gui_shows_projection(
     app: &mut crate::app::App,
     lib_idx: usize,
 ) -> crate::app::GuiShowsProjection {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let projection = core.gui_shows_projection(lib_idx);
-    *app = core.into_app();
-    projection
+    with_stub_gui(app, |core| core.gui_shows_projection(lib_idx))
 }
 
 /// One destination's Podcasts projection over a stub `App` a test holds.
@@ -96,83 +110,73 @@ pub(in crate::app) fn gui_podcasts_projection(
     app: &mut crate::app::App,
     lib_idx: usize,
 ) -> crate::app::GuiPodcastsProjection {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let projection = core.gui_podcasts_projection(lib_idx);
-    *app = core.into_app();
-    projection
+    with_stub_gui(app, |core| core.gui_podcasts_projection(lib_idx))
 }
 
 /// Select one Feeds entry over a stub `App` a test holds.
 pub(in crate::app) fn gui_feeds_select(app: &mut crate::app::App, entry: &str) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_feeds_select(entry);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_feeds_select(entry));
 }
 
-/// The Feeds projection over a stub `App` a test holds.
-pub(in crate::app) fn gui_feeds_projection(
+/// One destination's Feeds projection over a stub `App` a test holds, over the
+/// Client state the tests seeded beside it.
+pub(in crate::app) fn gui_feeds_projection_seeded(
     app: &crate::app::App,
 ) -> crate::app::GuiFeedsProjection {
-    crate::app::gui_library::feeds_projection(app)
+    crate::app::tests::stub_gui_state(|gui| crate::app::gui_library::feeds_projection(app, gui))
 }
 
-/// The entry the Feeds Hero shows over a stub `App` a test holds.
-pub(in crate::app) fn gui_feeds_picked_entry(app: &crate::app::App) -> Option<&str> {
-    crate::app::gui_library::feeds_picked_entry(app)
+/// The entries the Feeds selection lists over the state a test seeded beside
+/// the stub `App` it holds.
+pub(in crate::app) fn gui_feeds_entries_seeded(app: &crate::app::App) -> Vec<mbv_queue::FeedEntry> {
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::feeds_entries(app, gui)
+            .into_iter()
+            .cloned()
+            .collect()
+    })
 }
 
-/// The entries the Feeds selection lists over a stub `App` a test holds.
-pub(in crate::app) fn gui_feeds_entries(app: &crate::app::App) -> Vec<&mbv_queue::FeedEntry> {
-    crate::app::gui_library::feeds_entries(app)
-}
-
-/// The Feeds effective set over a stub `App` a test holds.
-pub(in crate::app) fn gui_feeds_effective_set(
+/// The Feeds effective set over the state a test seeded beside the stub `App`
+/// it holds.
+pub(in crate::app) fn gui_feeds_effective_set_seeded(
     app: &crate::app::App,
-) -> std::borrow::Cow<'_, crate::app::GuiCollectionSet> {
-    crate::app::gui_library::feeds_effective_set(app)
+) -> crate::app::GuiCollectionSet {
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::feeds_effective_set(app, gui).into_owned()
+    })
+}
+
+/// The entry the Feeds Hero shows over the state a test seeded beside the stub
+/// `App` it holds.
+pub(in crate::app) fn gui_feeds_picked_entry_seeded() -> Option<String> {
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::feeds_picked_entry(gui).map(str::to_string)
+    })
 }
 
 /// Open one Shows library over a stub `App` a test holds.
 pub(in crate::app) fn gui_tv_open(app: &mut crate::app::App, lib_idx: usize) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_tv_open(lib_idx);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_tv_open(lib_idx));
 }
 
 /// Select one Shows series over a stub `App` a test holds.
 pub(in crate::app) fn gui_tv_select_series(app: &mut crate::app::App, lib_idx: usize, id: &str) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_tv_select_series(lib_idx, id);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_tv_select_series(lib_idx, id));
 }
 
 /// Select one Shows season over a stub `App` a test holds.
 pub(in crate::app) fn gui_tv_select_season(app: &mut crate::app::App, lib_idx: usize, id: &str) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_tv_select_season(lib_idx, id);
-    *app = core.into_app();
-}
-
-/// One library's Shows view over a stub `App` a test holds.
-pub(in crate::app) fn gui_shows_view(
-    app: &crate::app::App,
-    lib_idx: usize,
-) -> crate::app::GuiShowsView {
-    crate::app::gui_library::shows_view(app, lib_idx)
+    with_stub_gui(app, |core| core.gui_tv_select_season(lib_idx, id));
 }
 
 /// Land one Shows New fetch over a stub `App` a test holds.
 pub(in crate::app) fn handle_gui_shows_new(
-    app: &mut crate::app::App,
+    core: &mut crate::gui::GuiCore,
     event: crate::app::gui_library::GuiShowsNewEvent,
 ) {
-    crate::app::gui_library::handle_shows_new(app, event);
+    let seam = crate::app::gui_library::handle_shows_new(event);
+    core.gui.shows_new.insert(seam.0, seam.1);
 }
 
 /// The Music destination's projection over a stub `App` a test holds.
@@ -180,22 +184,14 @@ pub(in crate::app) fn gui_music_projection(
     app: &mut crate::app::App,
     lib_idx: usize,
 ) -> crate::app::GuiMusicProjection {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let projection = core.gui_music_projection(lib_idx);
-    *app = core.into_app();
-    projection
+    with_stub_gui(app, |core| core.gui_music_projection(lib_idx))
 }
 
 /// The Home destination's projection over a stub `App` a test holds.
 pub(in crate::app) fn gui_home_projection(
     app: &mut crate::app::App,
 ) -> crate::app::GuiHomeProjection {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let projection = core.gui_home_projection();
-    *app = core.into_app();
-    projection
+    with_stub_gui(app, crate::gui::GuiCore::gui_home_projection)
 }
 
 /// One music artist row's art over a stub `App` a test holds.
@@ -206,92 +202,50 @@ pub(in crate::app) fn music_artist_row_art(
     crate::app::gui_library::music_artist_row_art(app, key)
 }
 
-/// One flat list's active sort over a stub `App` a test holds.
+/// One flat list's active sort over a stub `App` a test holds, read from the
+/// Client state the tests keep beside it.
 pub(in crate::app) fn gui_list_sort(
     app: &crate::app::App,
     target: crate::app::GuiSortTarget,
 ) -> crate::app::GuiListSort {
-    crate::app::gui_library::list_sort(app, target)
+    crate::app::tests::stub_gui_state(|gui| crate::app::gui_library::list_sort(app, gui, target))
 }
 
-/// Set one flat list's sort over a stub `App` a test holds.
+/// Set one flat list's sort over a stub `App` a test holds, in the Client
+/// state the tests keep beside it.
 pub(in crate::app) fn set_gui_list_sort(
     app: &mut crate::app::App,
     target: crate::app::GuiSortTarget,
     sort: crate::app::GuiListSort,
 ) {
-    crate::app::gui_library::set_list_sort(app, target, sort);
-}
-
-/// The Search projection over a stub `App` a test holds.
-pub(in crate::app) fn gui_search_projection(
-    app: &crate::app::App,
-) -> Option<crate::app::GuiSearchProjection> {
-    crate::app::gui_library::search_projection(app)
-}
-
-/// Send one Search query over a stub `App` a test holds.
-pub(in crate::app) fn gui_search_query(app: &mut crate::app::App, query: &str) {
-    crate::app::gui_library::search_query(app, query.to_string());
-}
-
-/// Close the Search results over a stub `App` a test holds.
-pub(in crate::app) fn gui_search_close(app: &mut crate::app::App) {
-    crate::app::gui_library::search_close(app);
-}
-
-/// Activate one Search result over a stub `App` a test holds.
-pub(in crate::app) fn gui_search_activate(
-    app: &mut crate::app::App,
-    item_id: &str,
-    item_type: &str,
-) {
-    crate::app::gui_library::search_activate(app, item_id.to_string(), item_type.to_string());
-}
-
-/// Apply the landed Search results over a stub `App` a test holds.
-pub(in crate::app) fn drain_gui_search_results(app: &mut crate::app::App) -> bool {
-    crate::app::gui_library::drain_search_results(app)
+    crate::app::tests::stub_gui_state(|gui| {
+        crate::app::gui_library::set_list_sort(app, gui, target, sort);
+    });
 }
 
 /// Open one plain Emby library over a stub `App` a test holds.
 pub(in crate::app) fn gui_emby_open(app: &mut crate::app::App, lib_idx: usize) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_emby_open(lib_idx);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_emby_open(lib_idx));
 }
 
 /// Select one plain Emby library row over a stub `App` a test holds.
 pub(in crate::app) fn gui_emby_select(app: &mut crate::app::App, lib_idx: usize, id: &str) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_emby_select(lib_idx, id);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_emby_select(lib_idx, id));
 }
 
 /// Open one Audiobooks library over a stub `App` a test holds.
 pub(in crate::app) fn gui_abs_open(app: &mut crate::app::App, lib_idx: usize) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_abs_open(lib_idx);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_abs_open(lib_idx));
 }
 
 /// Select one Audiobooks book over a stub `App` a test holds.
 pub(in crate::app) fn gui_abs_select(app: &mut crate::app::App, lib_idx: usize, id: &str) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_abs_select(lib_idx, id);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_abs_select(lib_idx, id));
 }
 
 /// Open one Podcasts destination over a stub `App` a test holds.
 pub(in crate::app) fn gui_podcast_open(app: &mut crate::app::App, lib_idx: usize) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_podcast_open(lib_idx);
-    *app = core.into_app();
+    with_stub_gui(app, |core| core.gui_podcast_open(lib_idx));
 }
 
 /// Select one Podcasts episode over a stub `App` a test holds.
@@ -311,19 +265,12 @@ pub(in crate::app) fn gui_podcast_select(
 pub(in crate::app) fn gui_library_row_menu(
     app: &mut crate::app::App,
 ) -> Option<crate::app::GuiLibraryRowMenu> {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    let menu = core.gui_library_row_menu();
-    *app = core.into_app();
-    menu
+    with_stub_gui(app, crate::gui::GuiCore::gui_library_row_menu)
 }
 
 /// Queue the in-view row fetches over a stub `App` a test holds.
 pub(in crate::app) fn gui_queue_in_view_row_fetches(app: &mut crate::app::App) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
-    core.gui_queue_in_view_row_fetches();
-    *app = core.into_app();
+    with_stub_gui(app, crate::gui::GuiCore::gui_queue_in_view_row_fetches);
 }
 
 /// Whether an interrupted art retry came due, over a stub `App` a test holds.

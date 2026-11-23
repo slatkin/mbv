@@ -38,9 +38,10 @@ fn app_with_rows(items: Vec<EmbyItem>) -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui
-        .emby_roots
-        .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_roots
+            .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    });
     app
 }
 
@@ -271,14 +272,15 @@ fn an_artist_search_answer_queues_the_row_art_it_unblocks() {
         "the row has no source until its name resolves"
     );
 
-    let mut stores = crate::app::gui_library::GuiLibraryStores;
-    app.handle_lib_event(
-        LibEvent::Music(MusicEvent::ArtistNameSearched {
-            name: name.to_owned(),
-            candidates: Some(vec![(name.to_owned(), "artist-9".to_owned())]),
-        }),
-        Some(&mut stores),
-    );
+    crate::app::tests::stub_gui_state(|gui| {
+        app.handle_lib_event(
+            LibEvent::Music(MusicEvent::ArtistNameSearched {
+                name: name.to_owned(),
+                candidates: Some(vec![(name.to_owned(), "artist-9".to_owned())]),
+            }),
+            Some(gui),
+        );
+    });
 
     assert!(
         app.images.is_loading(&key),

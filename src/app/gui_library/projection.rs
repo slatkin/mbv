@@ -20,6 +20,7 @@ use super::collection_command::GuiCollectionSite;
 use super::{GuiGroupAlbums, GuiMusicCollectionSite};
 use crate::app::App;
 use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// One artist row of the Music list (design D5, D7): the union's artist with
@@ -153,7 +154,7 @@ impl GuiCore {
     /// with their albums and cached tracklists, and the Hero's facts for the
     /// picked album (gui-collection-dropdown design D1, D2, D11).
     pub fn gui_music_projection(&mut self, lib_idx: usize) -> GuiMusicProjection {
-        music_projection(&mut self.app, lib_idx)
+        music_projection(&mut self.app, &mut self.gui, lib_idx)
     }
 }
 
@@ -175,17 +176,18 @@ pub(in crate::app::gui_library) fn music_destination(app: &App) -> Option<usize>
 #[must_use]
 pub(in crate::app::gui_library) fn music_projection(
     app: &mut App,
+    gui: &mut GuiClientState,
     lib_idx: usize,
 ) -> GuiMusicProjection {
     // The one effective-set read the frame takes: the helpers read the set it
     // borrows, so the frame never recomputes the retention.
-    let set = effective_music_set(app, lib_idx);
+    let set = effective_music_set(app, gui, lib_idx);
     let collections =
-        super::collection_command::collections(app, GuiCollectionTarget::Music(lib_idx));
-    let selected_groups = selected_groups(app, lib_idx, set.as_ref());
-    let union = music_union(app, lib_idx, &selected_groups);
+        super::collection_command::collections(app, gui, GuiCollectionTarget::Music(lib_idx));
+    let selected_groups = selected_groups(app, gui, lib_idx, set.as_ref());
+    let union = music_union(app, gui, lib_idx, &selected_groups);
     let artists = music_artists(app, &union);
-    let hero = music_hero(app, lib_idx, set.as_ref(), &artists, &collections);
+    let hero = music_hero(app, gui, lib_idx, set.as_ref(), &artists, &collections);
     let projection = GuiMusicProjection {
         collections,
         loading: union.loading,
@@ -250,8 +252,12 @@ pub(in crate::app::gui_library) fn music_groups(
 /// has not landed admits the stored set as it is, since the list is what would
 /// name its keys stale. A set nothing drops is returned borrowed, so a
 /// per-frame reader clones nothing.
-pub(in crate::app) fn effective_music_set(app: &App, lib_idx: usize) -> Cow<'_, GuiCollectionSet> {
-    GuiMusicCollectionSite(lib_idx).effective_set(app)
+pub(in crate::app) fn effective_music_set<'a>(
+    app: &'a App,
+    gui: &'a GuiClientState,
+    lib_idx: usize,
+) -> Cow<'a, GuiCollectionSet> {
+    GuiMusicCollectionSite(lib_idx).effective_set(app, gui)
 }
 
 /// The groups the Music destination shows, in pill order (design D1, D2):
@@ -262,6 +268,7 @@ pub(in crate::app) fn effective_music_set(app: &App, lib_idx: usize) -> Cow<'_, 
 /// without cloning.
 pub(in crate::app::gui_library) fn selected_groups<'a>(
     app: &'a App,
+    _gui: &GuiClientState,
     lib_idx: usize,
     set: &GuiCollectionSet,
 ) -> Vec<&'a str> {
@@ -287,10 +294,15 @@ pub(in crate::app::gui_library) fn selected_groups<'a>(
 /// whole album list, with the `(artist, year, name)` facts and stable
 /// `ArtistKey` that `group_album_plan` derives from `album_artist_cache`. All
 /// is every group's list; a failed fetch names the group in the failure line.
-fn music_union<'a>(app: &'a App, lib_idx: usize, group_ids: &[&str]) -> GuiMusicUnion<'a> {
+fn music_union<'a>(
+    app: &'a App,
+    gui: &'a GuiClientState,
+    lib_idx: usize,
+    group_ids: &[&str],
+) -> GuiMusicUnion<'a> {
     let mut union = GuiMusicUnion::default();
     let mut seen: HashSet<&str> = HashSet::new();
-    let groups = app.gui.music_albums.get(&lib_idx);
+    let groups = gui.music_albums.get(&lib_idx);
     for group_id in group_ids {
         let Some(state) = groups.and_then(|groups| groups.get(*group_id)) else {
             union.loading = true;
@@ -412,7 +424,8 @@ pub(in crate::app) fn music_artist_row_art(app: &App, key: &ArtistKey) -> GuiRow
 /// The group's pick is read through its borrowed id, so the per-frame Hero
 /// clones nothing for the lookup.
 fn picked_album_id(
-    app: &App,
+    _app: &App,
+    gui: &GuiClientState,
     lib_idx: usize,
     set: &GuiCollectionSet,
     artists: &[GuiMusicArtist],
@@ -427,13 +440,13 @@ fn picked_album_id(
         _ => None,
     };
     if let Some(group_id) = single_group
-        && let Some(pick) = library_group_pick(app, lib_idx, group_id)
+        && let Some(pick) = library_group_pick(gui, lib_idx, group_id)
         && holds(pick.as_str())
     {
         return Some(pick.clone());
     }
     if single_group.is_none()
-        && let Some(pick) = app.gui.music_union_picks.get(&lib_idx)
+        && let Some(pick) = gui.music_union_picks.get(&lib_idx)
         && holds(pick.as_str())
     {
         return Some(pick.clone());
@@ -448,9 +461,12 @@ fn picked_album_id(
 /// saves, that the group's album list keeps. The pick map is keyed by the
 /// owned id pair, so the lookup scans its few entries against the borrowed id
 /// instead of cloning the id for a key.
-fn library_group_pick<'a>(app: &'a App, lib_idx: usize, group_id: &str) -> Option<&'a String> {
-    app.gui
-        .library_picks
+fn library_group_pick<'a>(
+    gui: &'a GuiClientState,
+    lib_idx: usize,
+    group_id: &str,
+) -> Option<&'a String> {
+    gui.library_picks
         .iter()
         .find(|((idx, id), _)| *idx == lib_idx && id == group_id)
         .map(|(_, pick)| pick)
@@ -462,12 +478,13 @@ fn library_group_pick<'a>(app: &'a App, lib_idx: usize, group_id: &str) -> Optio
 /// is never blank while the group's albums are loaded.
 fn music_hero(
     app: &App,
+    gui: &GuiClientState,
     lib_idx: usize,
     set: &GuiCollectionSet,
     artists: &[GuiMusicArtist],
     collections: &GuiCollections,
 ) -> Option<GuiMusicHero> {
-    let picked = picked_album_id(app, lib_idx, set, artists)?;
+    let picked = picked_album_id(app, gui, lib_idx, set, artists)?;
     let (artist, album) = artists.iter().find_map(|artist| {
         artist
             .albums

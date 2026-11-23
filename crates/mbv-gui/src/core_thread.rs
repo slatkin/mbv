@@ -383,6 +383,15 @@ impl CoreThread {
         self.mark_hook(crate::sections::DrainHook::DrainStartupWorkers);
     }
 
+    /// The GUI Client's own state, for a Client's test seeds (design D4 of
+    /// `decouple-client-core`, row 8.1): the state lives in `GuiCore` now, so a
+    /// seed writes it there rather than on an `App` that no longer holds it.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_state_for_test(&mut self) -> &mut mbv::GuiClientState {
+        self.core.gui_state()
+    }
+
     /// Mark the sections a library completion marks (design D3 rule 2), for a
     /// test whose seed stands in for completions the library drain applies. The
     /// drain marks these rows when it reports a completion
@@ -537,6 +546,14 @@ impl CoreThread {
         self.core.app_mut().client_exit_teardown();
     }
 
+    /// Adopt the GUI Client's own state a Client's test seeded beside its
+    /// `App` (row 8.1 of `decouple-client-core`): the `App` seams write a state
+    /// that is not this core's, so the core takes that one before the step
+    /// reads it. Production builds no sidecar, so the call does nothing there.
+    fn adopt_seeded_gui_state(&mut self) {
+        self.core.adopt_seeded_gui_state_for_test();
+    }
+
     /// One step: wait for the next input, run one tick, and send the batch of
     /// the sections the tick changed (design D2). Returns whether the loop
     /// continues.
@@ -574,6 +591,11 @@ impl CoreThread {
         if !outcome.restart_requested {
             self.send_sections();
         }
+        // A Client's test seeds through the `App` seams, which write the state
+        // beside the `App` (row 8.1 of `decouple-client-core`). The adoption
+        // runs after this step's sections: it changes that state, so it
+        // belongs to the next step, which then marks what it changed.
+        self.adopt_seeded_gui_state();
         true
     }
 

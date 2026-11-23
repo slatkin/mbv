@@ -15,6 +15,7 @@ use super::{
     GuiPodcastsCollectionSite,
 };
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// The op one collection command carries (gui-collection-dropdown design D5):
@@ -73,24 +74,24 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     /// The destination's stored set (design D1): the raw entry the effective
     /// set retains against the catalog. All's site borrows
     /// [`GuiCollectionSet::ALL`], so a library without a stored entry never
-    /// clones a default.
-    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet;
+    /// clones a default. The set lives in the Client's own state.
+    fn stored_set<'a>(&self, gui: &'a GuiClientState) -> &'a GuiCollectionSet;
 
     /// Whether the session has changed this destination's collection state
     /// (design D10): a launch restore never overwrites a choice the session
     /// made before the saved file's collections landed.
-    fn has_stored_selection(&self, app: &App) -> bool;
+    fn has_stored_selection(&self, gui: &GuiClientState) -> bool;
 
     /// The collection album picks the session holds (design D13): only a
     /// Music destination keeps one, so the other sites save none.
-    fn saved_picks(&self, _app: &App) -> Vec<GuiGroupPick> {
+    fn saved_picks(&self, _gui: &GuiClientState) -> Vec<GuiGroupPick> {
         Vec::new()
     }
 
     /// Restore the saved album picks whose collections the landed catalog
     /// holds (design D13): the shared restore filters them with the same
     /// predicate that retains the saved set's keys.
-    fn install_picks(&self, _app: &mut App, _picks: &[GuiGroupPick]) {}
+    fn install_picks(&self, _app: &mut App, _gui: &mut GuiClientState, _picks: &[GuiGroupPick]) {}
 
     /// Why the destination cannot serve a collection command at all (design
     /// D5, D6).
@@ -106,14 +107,18 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
 
     /// Write the set back, starting the destination's own loads (design D2,
     /// D5).
-    fn install_set(&self, app: &mut App, set: GuiCollectionSet);
+    fn install_set(&self, app: &mut App, gui: &mut GuiClientState, set: GuiCollectionSet);
 
     /// The effective selection the destination paints (design D1): the stored
     /// set retained against the catalog. A set nothing drops is returned
     /// borrowed, so a per-frame reader clones nothing. The borrow is the
     /// `App`'s alone, so the caller's site value need not outlive it.
-    fn effective_set<'a>(&self, app: &'a App) -> Cow<'a, GuiCollectionSet> {
-        self.stored_set(app).effective(self.present(app))
+    fn effective_set<'a>(
+        &self,
+        app: &'a App,
+        gui: &'a GuiClientState,
+    ) -> Cow<'a, GuiCollectionSet> {
+        self.stored_set(gui).effective(self.present(app))
     }
 }
 
@@ -129,7 +134,7 @@ impl GuiCore {
         target: &GuiCollectionTarget,
         op: CollectionOp,
     ) {
-        apply_collection(&mut self.app, target, op);
+        apply_collection(&mut self.app, &mut self.gui, target, op);
     }
 }
 
@@ -141,19 +146,20 @@ impl GuiCore {
 /// shared.
 pub(in crate::app::gui_library) fn apply_collection(
     app: &mut App,
+    gui: &mut GuiClientState,
     target: &GuiCollectionTarget,
     op: CollectionOp,
 ) {
     match target {
         GuiCollectionTarget::Music(lib_idx) => {
-            apply_collection_at(app, &GuiMusicCollectionSite(*lib_idx), op);
+            apply_collection_at(app, gui, &GuiMusicCollectionSite(*lib_idx), op);
         }
         GuiCollectionTarget::Podcasts(lib_idx) => {
-            apply_collection_at(app, &GuiPodcastsCollectionSite(*lib_idx), op);
+            apply_collection_at(app, gui, &GuiPodcastsCollectionSite(*lib_idx), op);
         }
-        GuiCollectionTarget::Feeds => apply_collection_at(app, &GuiFeedsCollectionSite, op),
+        GuiCollectionTarget::Feeds => apply_collection_at(app, gui, &GuiFeedsCollectionSite, op),
         GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            apply_collection_at(app, &GuiEmbyFeedCollectionSite(*lib_idx), op);
+            apply_collection_at(app, gui, &GuiEmbyFeedCollectionSite(*lib_idx), op);
         }
     }
 }
@@ -163,6 +169,7 @@ pub(in crate::app::gui_library) fn apply_collection(
 /// installs the change, and All and the restore install their set.
 pub(in crate::app::gui_library) fn apply_collection_at(
     app: &mut App,
+    gui: &mut GuiClientState,
     site: &impl GuiCollectionSite,
     op: CollectionOp,
 ) {
@@ -188,15 +195,15 @@ pub(in crate::app::gui_library) fn apply_collection_at(
     match op {
         CollectionOp::Toggle { key } => {
             site.log_toggle(&key);
-            let next = site.effective_set(app).into_owned().toggle(&key);
-            site.install_set(app, next);
+            let next = site.effective_set(app, gui).into_owned().toggle(&key);
+            site.install_set(app, gui, next);
         }
-        CollectionOp::All => site.install_set(app, GuiCollectionSet::All),
+        CollectionOp::All => site.install_set(app, gui, GuiCollectionSet::All),
         CollectionOp::Restore { set } => {
             // An All entry leaves the default unset, as a destination the
             // session never touched does.
             if !set.is_all() {
-                site.install_set(app, set);
+                site.install_set(app, gui, set);
             }
         }
     }
@@ -207,18 +214,19 @@ pub(in crate::app::gui_library) fn apply_collection_at(
 /// the four frames cannot drift.
 pub(in crate::app::gui_library) fn collections(
     app: &App,
+    gui: &GuiClientState,
     target: GuiCollectionTarget,
 ) -> GuiCollections {
     match &target {
         GuiCollectionTarget::Music(lib_idx) => {
-            site_collections(app, &GuiMusicCollectionSite(*lib_idx), target)
+            site_collections(app, gui, &GuiMusicCollectionSite(*lib_idx), target)
         }
         GuiCollectionTarget::Podcasts(lib_idx) => {
-            site_collections(app, &GuiPodcastsCollectionSite(*lib_idx), target)
+            site_collections(app, gui, &GuiPodcastsCollectionSite(*lib_idx), target)
         }
-        GuiCollectionTarget::Feeds => site_collections(app, &GuiFeedsCollectionSite, target),
+        GuiCollectionTarget::Feeds => site_collections(app, gui, &GuiFeedsCollectionSite, target),
         GuiCollectionTarget::EmbyFeed(lib_idx) => {
-            site_collections(app, &GuiEmbyFeedCollectionSite(*lib_idx), target)
+            site_collections(app, gui, &GuiEmbyFeedCollectionSite(*lib_idx), target)
         }
     }
 }
@@ -227,9 +235,10 @@ pub(in crate::app::gui_library) fn collections(
 /// destination's catalog, its noun, and its scopes in catalog order.
 fn site_collections(
     app: &App,
+    gui: &GuiClientState,
     site: &impl GuiCollectionSite,
     target: GuiCollectionTarget,
 ) -> GuiCollections {
-    let set = site.effective_set(app);
+    let set = site.effective_set(app, gui);
     GuiCollections::new(target, set.as_ref(), site.noun(), site.scopes(app))
 }

@@ -55,12 +55,12 @@ pub use self::app::{
     compare_gui_date_order, gui_feeds_platform,
 };
 
+/// The GUI Client's own state (design D4 of `decouple-client-core`): the
+/// library stores, the open overlay, and the screens only the GUI presents. A
+/// Client names it here and seeds it through `GuiCore`; every other name stays
+/// inside the root package.
+pub use self::app::GuiClientState;
 pub use self::app::playing_track_id_for_shell;
-/// The GUI Client's transitional library stores (`decouple-client-core` design
-/// D4a (c)): the GUI's library event drain hands them to every event, so each
-/// event's collected effects apply through the same implementor as production.
-/// The TUI keeps no library stores and passes `None`.
-pub use self::app::{ClientLibraryEffect, ClientLibraryStores, GuiLibraryStores};
 pub use self::config::{Config, load_config};
 /// The GUI Client's core state (design D4 of `decouple-client-core`): the
 /// shared `App` it owns, wrapped by composition. A Client outside `crate::app`
@@ -91,14 +91,17 @@ pub use self::app::handoff_app;
 /// The `App` stub construction a Client's own tests build their `App` from
 /// (`extract-client-core` design D11). Compiled only under the root package's
 /// `test` feature, which no shipped build enables.
+#[cfg(any(test, feature = "test"))]
+pub use self::app::gui_state_for_test;
 #[cfg(feature = "test")]
 pub use self::app::{
-    gui_client_capabilities, set_cast_receivers_for_test, set_subtitle_tracks_for_test,
-    stub_app_for_gui_client, stub_app_with_cached_emby_client, stub_app_with_cast_target,
-    stub_app_with_completed_emby_startup, stub_app_with_completed_emby_startup_and_contents,
-    stub_app_with_failed_emby_setup, stub_app_with_local_daemon_events,
-    stub_app_with_open_row_menu, stub_app_with_pending_settings_save, stub_app_with_playing_items,
-    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
-    stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit, stub_app_with_track_choices,
-    stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,
+    set_subtitle_tracks_for_test, stub_app_for_gui_client, stub_app_with_cached_emby_client,
+    stub_app_with_cast_target, stub_app_with_completed_emby_startup,
+    stub_app_with_completed_emby_startup_and_contents, stub_app_with_failed_emby_setup,
+    stub_app_with_local_daemon_events, stub_app_with_open_row_menu,
+    stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
+    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_queue_and_cmd_rx,
+    stub_app_with_rebound_quit, stub_app_with_track_choices, stub_app_with_track_popover,
+    stub_app_with_unsaved_queue,
 };

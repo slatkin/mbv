@@ -11,6 +11,7 @@ use mbv_emby_model::EmbyItem;
 use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
+use crate::app::gui_client_state::GuiClientState;
 use crate::app::state::events::LibEvent;
 use crate::app::{App, PAGE_SIZE};
 
@@ -49,31 +50,36 @@ pub(in crate::app) struct GuiGroupAlbumsEvent {
 /// checked groups' album fetches start through the ensure step, one at a time.
 pub(in crate::app) fn install_library_collection(
     app: &mut App,
+    gui: &mut GuiClientState,
     lib_idx: usize,
     set: GuiCollectionSet,
 ) {
     // The previous selection as the projection paints it: the effective set,
     // not the raw stored entry, so a set the catalog trimmed (one of two
     // checked groups dropped) carries through the one group's kept pick.
-    let previous = super::projection::effective_music_set(app, lib_idx);
+    let previous = super::projection::effective_music_set(app, gui, lib_idx);
     let next_single = matches!(&set, GuiCollectionSet::Checked(keys) if keys.len() == 1);
-    if !next_single && let Some(album_id) = hero_album_under(app, lib_idx, &previous) {
-        app.gui.music_union_picks.insert(lib_idx, album_id);
+    if !next_single && let Some(album_id) = hero_album_under(gui, lib_idx, &previous) {
+        gui.music_union_picks.insert(lib_idx, album_id);
     }
-    app.gui
-        .library_groups
+    gui.library_groups
         .insert(lib_idx, GuiCollectionSelection { set });
-    clear_failed_music_groups(app, lib_idx);
-    run_destination_open(app, GuiDestinationKind::Music { lib_idx });
+    clear_failed_music_groups(app, gui, lib_idx);
+    run_destination_open(app, gui, GuiDestinationKind::Music { lib_idx });
 }
 
 /// Run one destination's ordered load pass (gui-one-destination-ensure design
 /// D1): the pass is the GUI core's, so the collection install reaches it by
 /// handing the core the App it holds.
-fn run_destination_open(app: &mut App, kind: GuiDestinationKind) {
+fn run_destination_open(app: &mut App, gui: &mut GuiClientState, kind: GuiDestinationKind) {
     let mut core =
         crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    // The caller's own state moves into the core and back, so the pass sees
+    // the selection it just installed and the caller keeps the state.
+    *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(kind);
+    // The core's two halves take back separately: the pass kept none of them.
+    *gui = std::mem::take(core.gui_state_mut());
     *app = core.into_app();
 }
 
@@ -81,13 +87,13 @@ fn run_destination_open(app: &mut App, kind: GuiDestinationKind) {
 /// selection change is the one refetch trigger, so a hard failure never retries
 /// on every frame. The ensure step then starts the cleared groups' fetches
 /// again, one at a time.
-fn clear_failed_music_groups(app: &mut App, lib_idx: usize) {
-    let set = super::projection::effective_music_set(app, lib_idx).into_owned();
-    let group_ids = super::projection::selected_groups(app, lib_idx, &set)
+fn clear_failed_music_groups(app: &App, gui: &mut GuiClientState, lib_idx: usize) {
+    let set = super::projection::effective_music_set(app, gui, lib_idx).into_owned();
+    let group_ids = super::projection::selected_groups(app, gui, lib_idx, &set)
         .into_iter()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    let Some(groups) = app.gui.music_albums.get_mut(&lib_idx) else {
+    let Some(groups) = gui.music_albums.get_mut(&lib_idx) else {
         return;
     };
     for group_id in group_ids {
@@ -104,14 +110,17 @@ fn clear_failed_music_groups(app: &mut App, lib_idx: usize) {
 /// not show, so a several-checked selection with no union pick carries none and
 /// resolution falls through to the union's first album. `None` while no album
 /// is known.
-fn hero_album_under(app: &App, lib_idx: usize, set: &GuiCollectionSet) -> Option<String> {
+fn hero_album_under(
+    gui: &GuiClientState,
+    lib_idx: usize,
+    set: &GuiCollectionSet,
+) -> Option<String> {
     match set {
         GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
-            if let Some(pick) = app.gui.library_picks.get(&(lib_idx, keys[0].clone())) {
+            if let Some(pick) = gui.library_picks.get(&(lib_idx, keys[0].clone())) {
                 return Some(pick.clone());
             }
-            match app
-                .gui
+            match gui
                 .music_albums
                 .get(&lib_idx)
                 .and_then(|groups| groups.get(&keys[0]))
@@ -122,7 +131,7 @@ fn hero_album_under(app: &App, lib_idx: usize, set: &GuiCollectionSet) -> Option
                 Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Failed) | None => None,
             }
         }
-        _ => app.gui.music_union_picks.get(&lib_idx).cloned(),
+        _ => gui.music_union_picks.get(&lib_idx).cloned(),
     }
 }
 
@@ -159,10 +168,14 @@ fn collection_reject_reason(app: &App, lib_idx: usize, group_id: &str) -> Option
 /// Start `group_id`'s album fetch when the store holds no list for it over the
 /// `App` the GUI core owns (design D5): the Client core thread never fetches,
 /// and the completion lands in the store outside `nav_stack`.
-pub(in crate::app) fn fetch_group_albums(app: &mut App, lib_idx: usize, group_id: String) {
+pub(in crate::app) fn fetch_group_albums(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+    group_id: String,
+) {
     if matches!(
-        app.gui
-            .music_albums
+        gui.music_albums
             .get(&lib_idx)
             .and_then(|groups| groups.get(&group_id)),
         Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Loaded(_))
@@ -178,8 +191,7 @@ pub(in crate::app) fn fetch_group_albums(app: &mut App, lib_idx: usize, group_id
         // change the built content between collects with no mark.
         return;
     };
-    app.gui
-        .music_albums
+    gui.music_albums
         .entry(lib_idx)
         .or_default()
         .insert(group_id.clone(), GuiGroupAlbums::Loading);
@@ -194,33 +206,23 @@ pub(in crate::app) fn fetch_group_albums(app: &mut App, lib_idx: usize, group_id
     });
 }
 
-/// Land one group's album fetch over the `App` the GUI core owns (design D5): a
-/// loaded list replaces the loading mark, and a failure marks only that group.
-pub(in crate::app) fn handle_group_albums(app: &mut App, event: GuiGroupAlbumsEvent) {
-    let GuiGroupAlbumsEvent {
-        lib_idx,
-        group_id,
-        result,
-    } = event;
-    let state = match result {
+/// The store mark one group's album fetch lands (design D5): a loaded list
+/// replaces the loading mark, and a failure marks only that group.
+pub(in crate::app) fn group_albums_mark(
+    result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
+) -> GuiGroupAlbums {
+    match result {
         Ok(albums) => GuiGroupAlbums::Loaded(albums),
         Err(error) => {
             tracing::info!(
                 name: "gui_library.group_albums.failed",
                 target: "gui_library",
-                library_index = lib_idx,
-                group = %group_id,
                 error = %error,
                 "the group's album list failed to load"
             );
             GuiGroupAlbums::Failed
         }
-    };
-    app.gui
-        .music_albums
-        .entry(lib_idx)
-        .or_default()
-        .insert(group_id, state);
+    }
 }
 
 /// The Grouped Music destination's collection-command site
@@ -246,25 +248,22 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
         super::projection::music_groups(app, self.0)
     }
 
-    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
-        app.gui
-            .library_groups
+    fn stored_set<'a>(&self, gui: &'a GuiClientState) -> &'a GuiCollectionSet {
+        gui.library_groups
             .get(&self.0)
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.set)
     }
 
-    fn has_stored_selection(&self, app: &App) -> bool {
-        app.gui.library_groups.contains_key(&self.0)
-            || app
-                .gui
+    fn has_stored_selection(&self, gui: &GuiClientState) -> bool {
+        gui.library_groups.contains_key(&self.0)
+            || gui
                 .library_picks
                 .keys()
                 .any(|(lib_idx, _)| *lib_idx == self.0)
     }
 
-    fn saved_picks(&self, app: &App) -> Vec<GuiGroupPick> {
-        let mut picks: Vec<GuiGroupPick> = app
-            .gui
+    fn saved_picks(&self, gui: &GuiClientState) -> Vec<GuiGroupPick> {
+        let mut picks: Vec<GuiGroupPick> = gui
             .library_picks
             .iter()
             .filter(|((pick_lib, _), _)| *pick_lib == self.0)
@@ -277,10 +276,9 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
         picks
     }
 
-    fn install_picks(&self, app: &mut App, picks: &[GuiGroupPick]) {
+    fn install_picks(&self, _app: &mut App, gui: &mut GuiClientState, picks: &[GuiGroupPick]) {
         for pick in picks {
-            app.gui
-                .library_picks
+            gui.library_picks
                 .entry((self.0, pick.group_id.clone()))
                 .or_insert_with(|| pick.album_id.clone());
         }
@@ -308,8 +306,8 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
         );
     }
 
-    fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
-        install_library_collection(app, self.0, set);
+    fn install_set(&self, app: &mut App, gui: &mut GuiClientState, set: GuiCollectionSet) {
+        install_library_collection(app, gui, self.0, set);
     }
 }
 

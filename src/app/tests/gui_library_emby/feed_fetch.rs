@@ -37,10 +37,10 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
 
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     assert!(
-        app.gui
+        crate::app::tests::stub_gui_state(|gui| gui
             .emby_libs
             .get(&0)
-            .is_some_and(|stored| stored.feed_claim.is_some()),
+            .is_some_and(|stored| stored.feed_claim.is_some())),
         "the shown pass claims the library's fetched results"
     );
 
@@ -65,11 +65,12 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
         &destination
     ));
 
-    let stored = app
-        .gui
-        .emby_feed_sets
-        .get(&0)
-        .expect("the saved folder set installed over the painted frame");
+    let stored = crate::app::tests::stub_gui_state(|gui| {
+        gui.emby_feed_sets
+            .get(&0)
+            .cloned()
+            .expect("the saved folder set installed over the painted frame")
+    });
     assert_eq!(
         stored.set.checked_keys(),
         ["folder-2".to_string()].as_slice(),

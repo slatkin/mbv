@@ -4,9 +4,10 @@
 //! shared builder's, so a window that paints only some of the entries still
 //! executes the one it painted. The TUI's own menu paths do not change.
 //!
-//! The block runs one step over its own `App` and reads no GUI state beyond the
-//! row menu the window last named (design D4, task 7.4), so each entry is a
-//! free function over the `App` and the `impl GuiCore` block calls it.
+//! The block runs one step over its own `App` and reads and writes the GUI
+//! Client's state for the row menu the window last named (design D4), so each
+//! entry is a free function that takes the `App` and that state and the
+//! `impl GuiCore` block hands it both.
 
 use mbv_queue::QueueItem;
 use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
@@ -19,6 +20,7 @@ use super::GuiDestinationKind;
 use super::GuiHomeRowId;
 use super::item_actions::GuiLibraryMenuTarget;
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 
 /// The row one Library menu names: the window sends it with `rowMenu` and
@@ -82,7 +84,7 @@ impl GuiCore {
     /// labels at paint time, never here. Empty when the item is gone, no menu
     /// applies, or another panel holds focus.
     pub fn gui_library_menu(&mut self, item_id: &str) -> Vec<GuiLibraryMenuItem> {
-        let entries = library_item_menu(&mut self.app, item_id)
+        let entries = library_item_menu(&mut self.app, &self.gui, item_id)
             .map(|menu| menu.entries)
             .unwrap_or_default();
         Self::gui_library_menu_items(entries)
@@ -95,11 +97,12 @@ impl GuiCore {
     /// gone, or another panel holds focus.
     pub fn gui_library_row_menu(&mut self) -> Option<GuiLibraryRowMenu> {
         let app = &mut self.app;
-        let row = app.gui.library_row_menu_target.clone()?;
+        let gui = &self.gui;
+        let row = gui.library_row_menu_target.clone()?;
         if !matches!(app.effective_panel_focus(), PanelFocus::Library) {
             return None;
         }
-        let target = menu_target(app, &row)?;
+        let target = menu_target(app, gui, &row)?;
         let entries = library_menu_entries(app, &target)?;
         if entries.iter().all(|entry| entry.action.is_none()) {
             return None;
@@ -119,7 +122,7 @@ impl GuiCore {
     /// the autoload rule), and a Home row takes the Home play and enqueue
     /// paths. The GUI never arms the TUI's `pending_overlay`.
     pub(super) fn run_gui_library_menu_entry(&mut self, row: &GuiLibraryMenuRow, index: usize) {
-        run_library_menu_entry(&mut self.app, row, index);
+        run_library_menu_entry(&mut self.app, &self.gui, row, index);
     }
 }
 
@@ -131,8 +134,13 @@ impl GuiCore {
 /// Emby Library row takes the GUI Library's explicit play and add (with
 /// the autoload rule), and a Home row takes the Home play and enqueue
 /// paths. The GUI never arms the TUI's `pending_overlay`.
-fn run_library_menu_entry(app: &mut App, row: &GuiLibraryMenuRow, index: usize) {
-    let Some(target) = menu_target(app, row) else {
+fn run_library_menu_entry(
+    app: &mut App,
+    gui: &GuiClientState,
+    row: &GuiLibraryMenuRow,
+    index: usize,
+) {
+    let Some(target) = menu_target(app, gui, row) else {
         super::log_ignored_library_command(
             "menuEntry",
             format_args!("the row names nothing the Service data holds"),
@@ -144,10 +152,10 @@ fn run_library_menu_entry(app: &mut App, row: &GuiLibraryMenuRow, index: usize) 
         .and_then(|entry| entry.action);
     match (action, &target) {
         (Some(ContextAction::Play), GuiLibraryMenuTarget::Library { lib_idx, item }) => {
-            super::item_actions::play_library_item(app, *lib_idx, item.clone());
+            super::item_actions::play_library_item(app, gui, *lib_idx, item.clone());
         }
         (Some(ContextAction::Enqueue), GuiLibraryMenuTarget::Library { item, .. }) => {
-            super::item_actions::add_library_item(app, &item.id);
+            super::item_actions::add_library_item(app, gui, &item.id);
         }
         (
             Some(ContextAction::Play),
@@ -214,7 +222,11 @@ fn library_menu_entries(
 /// row the active list painted — then every store, so a press whose
 /// destination changed under a stale frame still addresses the row it
 /// painted.
-fn menu_target(app: &App, row: &GuiLibraryMenuRow) -> Option<GuiLibraryMenuTarget> {
+fn menu_target(
+    app: &App,
+    gui: &GuiClientState,
+    row: &GuiLibraryMenuRow,
+) -> Option<GuiLibraryMenuTarget> {
     match row {
         GuiLibraryMenuRow::Home(home) => {
             let target = home.clone().into_home_item_target();
@@ -230,13 +242,13 @@ fn menu_target(app: &App, row: &GuiLibraryMenuRow) -> Option<GuiLibraryMenuTarge
                 QueueItem::Twitch(_) => None,
             }
         }
-        GuiLibraryMenuRow::Item(item_id) => item_target(app, item_id),
+        GuiLibraryMenuRow::Item(item_id) => item_target(app, gui, item_id),
     }
 }
 
 /// The destination menu target for a Library row's Service id, active
 /// destination first.
-fn item_target(app: &App, item_id: &str) -> Option<GuiLibraryMenuTarget> {
+fn item_target(app: &App, gui: &GuiClientState, item_id: &str) -> Option<GuiLibraryMenuTarget> {
     match super::tabs::active_destination(app) {
         Some(GuiDestinationKind::Audiobooks { .. } | GuiDestinationKind::Podcasts { .. }) => {
             if let Some(target) = super::item_actions::audiobookshelf_target(app, item_id) {
@@ -244,37 +256,41 @@ fn item_target(app: &App, item_id: &str) -> Option<GuiLibraryMenuTarget> {
             }
         }
         Some(GuiDestinationKind::Feeds) => {
-            if let Some(entry) = super::feeds::feed_entry(app, item_id) {
+            if let Some(entry) = super::feeds::feed_entry(app, gui, item_id) {
                 return Some(GuiLibraryMenuTarget::Feed(entry));
             }
         }
         _ => {
-            if let Some(target) = destination_target(app, item_id) {
+            if let Some(target) = destination_target(app, gui, item_id) {
                 return Some(target);
             }
         }
     }
-    destination_target(app, item_id)
+    destination_target(app, gui, item_id)
         .or_else(|| {
             super::item_actions::audiobookshelf_target(app, item_id)
                 .map(GuiLibraryMenuTarget::Audiobookshelf)
         })
-        .or_else(|| super::feeds::feed_entry(app, item_id).map(GuiLibraryMenuTarget::Feed))
+        .or_else(|| super::feeds::feed_entry(app, gui, item_id).map(GuiLibraryMenuTarget::Feed))
 }
 
 /// An Emby Library row's menu target: the item's own library store.
-fn destination_target(app: &App, item_id: &str) -> Option<GuiLibraryMenuTarget> {
-    let (lib_idx, item) = super::item_actions::library_item(app, item_id)?;
+fn destination_target(
+    app: &App,
+    gui: &GuiClientState,
+    item_id: &str,
+) -> Option<GuiLibraryMenuTarget> {
+    let (lib_idx, item) = super::item_actions::library_item(app, gui, item_id)?;
     Some(GuiLibraryMenuTarget::Library { lib_idx, item })
 }
 
 /// The item's menu from the shared builder (design D8): the Library panel's
 /// focus and an Emby library tab are what both the builder's target
 /// resolution and the executor's library lookup need.
-fn library_item_menu(app: &mut App, item_id: &str) -> Option<ContextMenu> {
+fn library_item_menu(app: &mut App, gui: &GuiClientState, item_id: &str) -> Option<ContextMenu> {
     if !matches!(app.effective_panel_focus(), PanelFocus::Library) {
         return None;
     }
-    let (_lib_idx, item) = super::item_actions::library_item(app, item_id)?;
+    let (_lib_idx, item) = super::item_actions::library_item(app, gui, item_id)?;
     app.build_context_menu_for(Some(item), false, None)
 }

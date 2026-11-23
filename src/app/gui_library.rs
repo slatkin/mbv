@@ -33,7 +33,6 @@ mod shows;
 pub(crate) mod shows_projection;
 mod shows_view;
 mod store;
-mod stores;
 mod tabs;
 mod tv;
 
@@ -52,6 +51,7 @@ pub use self::collection::{
 use self::collection_command::CollectionOp;
 use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
+pub(in crate::app) use self::emby::emby_feed_wants_target_in_set;
 pub(in crate::app) use self::emby::{
     GuiEmbyRootItems, GuiEmbyRootItemsEvent, handle_emby_root_items,
     handle_feed_home_video_selection_failed,
@@ -63,7 +63,9 @@ pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
 #[cfg(test)]
-pub(in crate::app) use self::feeds::{feeds_effective_set, feeds_entries, feeds_picked_entry};
+pub(in crate::app) use self::feeds::feeds_picked_entry;
+#[cfg(test)]
+pub(in crate::app) use self::feeds::{feeds_effective_set, feeds_entries};
 #[cfg(test)]
 pub(in crate::app) use self::feeds_projection::feeds_projection;
 pub use self::feeds_projection::{
@@ -93,12 +95,9 @@ pub use self::projection::{
     GuiMusicTrackTotal,
 };
 pub(in crate::app) use self::request::GuiSectionRequest;
+pub(in crate::app) use self::rows_in_view::queue_in_view_row_fetches;
 pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
-#[cfg(test)]
-pub(in crate::app) use self::search::{
-    drain_search_results, search_activate, search_close, search_projection, search_query,
-};
 #[cfg(test)]
 pub(in crate::app) use self::shows::shows_view;
 pub(in crate::app) use self::shows::{GuiShowsNewEvent, handle_shows_new};
@@ -110,8 +109,7 @@ pub use self::shows_view::GuiShowsView;
 use self::store::GuiMusicCollectionSite;
 #[cfg(test)]
 pub(in crate::app) use self::store::install_library_collection;
-pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent, handle_group_albums};
-pub use self::stores::GuiLibraryStores;
+pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent, group_albums_mark};
 pub(in crate::app) use self::tabs::step_library_tab as tabs_step_library_tab;
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 #[cfg(test)]
@@ -379,13 +377,13 @@ impl GuiCore {
                 self.open_gui_library_album(album_id);
             }
             GuiLibraryCommand::Play { item_id } => {
-                match item_actions::library_item(&self.app, &item_id) {
+                match item_actions::library_item(&self.app, &self.gui, &item_id) {
                     Some((lib_idx, item)) => self.play_gui_library_item(lib_idx, item),
                     None => log_stale_library_item("play", &item_id),
                 }
             }
             GuiLibraryCommand::PlayNext { item_id } => {
-                match item_actions::library_item(&self.app, &item_id) {
+                match item_actions::library_item(&self.app, &self.gui, &item_id) {
                     Some((lib_idx, item)) => self.app.play_lib_item_next(lib_idx, item),
                     None => log_stale_library_item("playNext", &item_id),
                 }
@@ -402,7 +400,7 @@ impl GuiCore {
                 self.run_gui_library_menu_entry(&row, index);
             }
             GuiLibraryCommand::RowMenu { row } => {
-                self.app.gui.library_row_menu_target = Some(row);
+                self.gui.library_row_menu_target = Some(row);
             }
             // The Home rows and every command after them are the second
             // pass's arms: the dispatch names them here, one per variant, so
@@ -457,13 +455,13 @@ impl GuiCore {
                 self.gui_tv_select_season(lib_idx, &season_id);
             }
             GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
-                self::shows::play_shows_item(&mut self.app, lib_idx, &item_id);
+                self::shows::play_shows_item(&mut self.app, &self.gui, lib_idx, &item_id);
             }
             GuiLibraryCommand::ShowsPlayNext { lib_idx, item_id } => {
-                self::shows::play_next_shows_item(&mut self.app, lib_idx, &item_id);
+                self::shows::play_next_shows_item(&mut self.app, &self.gui, lib_idx, &item_id);
             }
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
-                self::shows::enqueue_shows_item(&mut self.app, lib_idx, &item_id);
+                self::shows::enqueue_shows_item(&mut self.app, &self.gui, lib_idx, &item_id);
             }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => {
                 self.gui_emby_select(lib_idx, &row);
@@ -613,7 +611,7 @@ impl GuiCore {
     /// selection is the core's, so the frame carries it back and the launch
     /// of a window-content reload keeps it.
     fn select_gui_home_row(&mut self, row: &GuiHomeRowId) {
-        self.app.gui.home_selection = Some(row.clone());
+        self.gui.home_selection = Some(row.clone());
     }
 
     /// Play a Home row (design D12): the Home flat list's play path, whose

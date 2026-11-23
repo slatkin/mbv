@@ -47,7 +47,7 @@ impl App {
             + usize::from(self.has_feeds_subscriptions())
     }
 
-    pub(in crate::app) fn load_prefs() -> serde_json::Value {
+    pub(crate) fn load_prefs() -> serde_json::Value {
         let path = crate::config::prefs_path();
         std::fs::read_to_string(path)
             .ok()
@@ -75,7 +75,6 @@ impl App {
         v["pre_mute_volume"] = serde_json::json!(self.pre_mute_volume);
         v["queue_column_width"] = serde_json::json!(self.queue_column_width);
         v["visual_slot_hidden"] = serde_json::json!(self.visual_slot_hidden);
-        v["player_auto_hide"] = serde_json::json!(self.gui.player_auto_hide);
         write_prefs_object(&path, &v);
     }
 }
@@ -122,11 +121,15 @@ mod prefs_tests {
 
     #[test]
     fn gui_player_auto_hide_prefs_round_trip() {
-        let (mut app, _guard) = stub();
+        let (app, _guard) = stub();
+        let mut core = crate::gui::GuiCore::new(app);
 
-        app.gui.player_auto_hide = true;
-        app.save_prefs();
-        assert_eq!(App::load_prefs()["player_auto_hide"].as_bool(), Some(true));
+        core.gui.player_auto_hide = true;
+        core.gui.save_player_auto_hide();
+        assert_eq!(
+            App::load_prefs()["gui_player_auto_hide"].as_bool(),
+            Some(true)
+        );
     }
 
     /// `list_pane_width` is a Client key (design D4): the core's `save_prefs`

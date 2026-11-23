@@ -25,6 +25,7 @@ use super::artwork::{
     GuiRowArt, GuiRowMediaKind, queue_item_media_kind, queue_item_row_source, row_art,
 };
 use crate::app::App;
+use crate::app::gui_client_state::GuiClientState;
 use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -249,7 +250,7 @@ impl GuiCore {
 
     /// The Home projection the GUI Library panel paints (design D12).
     pub fn gui_home_projection(&mut self) -> GuiHomeProjection {
-        home_projection(&mut self.app)
+        home_projection(&mut self.app, &self.gui)
     }
 }
 
@@ -264,7 +265,10 @@ pub(in crate::app::gui_library) fn home_destination(app: &App) -> bool {
 /// list's two sections as heading rows and item rows, the core's selected row,
 /// and its Hero. The time the 14-day cutoff reads is read once per call, as
 /// each TUI Home push reads it once.
-pub(in crate::app::gui_library) fn home_projection(app: &mut App) -> GuiHomeProjection {
+pub(in crate::app::gui_library) fn home_projection(
+    app: &mut App,
+    gui: &GuiClientState,
+) -> GuiHomeProjection {
     let now_secs = mbv_ui_model::feed_age::current_time_secs();
     // The `Continue watching` rows keep the snapshot's order, with no gutter
     // date — the TUI's flat list's rule.
@@ -300,8 +304,7 @@ pub(in crate::app::gui_library) fn home_projection(app: &mut App) -> GuiHomeProj
     // 6.2).
     let items: Vec<&GuiHomeItem> = continue_rows.iter().chain(recent_rows.iter()).collect();
     let default_hero = items.first().map(|item| item.row.id.clone());
-    let selected = app
-        .gui
+    let selected = gui
         .home_selection
         .clone()
         .filter(|selected| items.iter().any(|item| item.id() == selected))
