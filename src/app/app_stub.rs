@@ -278,7 +278,9 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     // the core, with the same open the GUI's half runs: the open popover's
     // chip, and its cursor on the chosen choice. An inactive player lists no
     // choice, so it opens nothing.
-    if let Some(choices) = app.track_popover_choices(chip) {
+    let choices = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()))
+        .track_chip_popover_choices(chip);
+    if let Some(choices) = choices {
         let cursor = choices.iter().position(|choice| choice.chosen).unwrap_or(0);
         app.gui.overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
     }

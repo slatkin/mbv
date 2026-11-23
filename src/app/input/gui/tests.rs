@@ -9,6 +9,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest, ShellRequest
 use crate::app::App;
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
+use crate::app::input::gui::with_gui_core;
 use crate::app::tests::{
     QueueViewTestExt, gui_client_capabilities, make_app_stub, make_items,
     make_remote_app_stub_with_cmd_rx,
@@ -23,6 +24,16 @@ fn present_pending_modal(app: &mut App) {
         Some(OverlayRequest::DaemonLost(modal)) => app.present_gui_daemon_lost(modal),
         other => panic!("expected a modal request, got {other:?}"),
     }
+}
+
+/// One routed key, delivered through the GUI entry on `app`'s own core.
+fn gui_key(app: &mut App, input: GuiInput) -> bool {
+    with_gui_core(app, |core| core.route_gui_input(input, None))
+}
+
+/// One surface message, delivered through the GUI entry on `app`'s own core.
+fn gui_msg(app: &mut App, msg: Msg) {
+    with_gui_core(app, |core| core.handle_gui_surface_msg(msg));
 }
 
 /// The `Seek` commands the Owner received, in arrival order.
@@ -60,9 +71,10 @@ fn queue_row_click_focuses_the_queue_panel_review_u17_2() {
         .slot_id_at(1)
         .expect("row 1 has a slot");
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::QueueRowClick {
-        slot_id: Some(row),
-    })));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::QueueRowClick { slot_id: Some(row) })),
+    );
 
     assert_eq!(app.effective_panel_focus(), PanelFocus::Queue);
 }
@@ -80,9 +92,12 @@ fn queue_row_activate_plays_the_clicked_row_review_u17_2() {
         .slot_id_at(1)
         .expect("row 1 has a slot");
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::QueueRowActivate {
-        slot_id: Some(row),
-    })));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::QueueRowActivate {
+            slot_id: Some(row),
+        })),
+    );
 
     assert_eq!(played_slot_ids(&cmd_rx), vec![row.raw()]);
 }
@@ -95,15 +110,15 @@ fn gui_context_z_toggles_the_panel_collapse() {
     let mut app = make_app_stub();
     app.set_client_capabilities(gui_client_capabilities());
 
-    assert!(!app.route_gui_input(
+    assert!(!gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
-        None
     ));
     assert!(app.gui.panel_toggles.collapsed);
 
-    assert!(!app.route_gui_input(
+    assert!(!gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
-        None
     ));
     assert!(!app.gui.panel_toggles.collapsed);
 }
@@ -118,9 +133,9 @@ fn the_gui_panel_focus_chord_changes_no_panel_focus() {
     app.set_client_capabilities(gui_client_capabilities());
     app.set_panel_focus(PanelFocus::Queue);
 
-    assert!(!app.route_gui_input(
+    assert!(!gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Right, KeyModifiers::CONTROL)),
-        None
     ));
 
     assert_eq!(app.effective_panel_focus(), PanelFocus::Queue);
@@ -133,9 +148,9 @@ fn gui_context_q_toggles_the_queue_fold() {
     let mut app = make_app_stub();
     app.set_client_capabilities(gui_client_capabilities());
 
-    assert!(!app.route_gui_input(
+    assert!(!gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('q'), KeyModifiers::NONE)),
-        None
     ));
     assert!(app.gui.panel_toggles.queue_folded);
 }
@@ -159,9 +174,9 @@ fn gui_context_c_cycles_the_subtitle_track() {
         .subtitle_mode
         .clone();
 
-    assert!(!app.route_gui_input(
+    assert!(!gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('c'), KeyModifiers::NONE)),
-        None
     ));
 
     let after = app
@@ -182,22 +197,22 @@ fn gui_queue_filter_opens_types_and_closes() {
     app.set_client_capabilities(gui_client_capabilities());
     let key = |c: char| GuiInput::Key(KeyEvent::new(Key::Char(c), KeyModifiers::NONE));
 
-    app.route_gui_input(key('/'), None);
+    gui_key(&mut app, key('/'));
     assert!(app.queue_filter_active);
 
-    app.route_gui_input(key('a'), None);
-    app.route_gui_input(key('b'), None);
+    gui_key(&mut app, key('a'));
+    gui_key(&mut app, key('b'));
     assert_eq!(app.queue_filter, "ab");
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Backspace, KeyModifiers::NONE)),
-        None,
     );
     assert_eq!(app.queue_filter, "a");
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-        None,
     );
     assert!(!app.queue_filter_active);
     assert_eq!(app.queue_filter, "");
@@ -215,9 +230,12 @@ fn row_context_menu_request_opens_the_row_menu_with_hints() {
         .slot_id_at(0)
         .expect("row 0 has a slot");
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        ))),
+    );
 
     let Some(GuiOverlay::RowMenu(menu)) = &app.gui.overlay else {
         panic!("the row menu opened");
@@ -261,9 +279,12 @@ fn the_row_menu_projects_only_the_remove_entry_as_destructive() {
         .displayed_queue()
         .slot_id_at(0)
         .expect("row 0 has a slot");
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        ))),
+    );
 
     let playback = app.queue_playback_projection();
     let Some(GuiOverlayProjection::RowMenu { entries, .. }) = app.gui_overlay_projection(&playback)
@@ -288,13 +309,16 @@ fn row_menu_enter_plays_the_cursor_row() {
         .displayed_queue()
         .slot_id_at(1)
         .expect("row 1 has a slot");
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        ))),
+    );
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
     );
 
     assert_eq!(played_slot_ids(&cmd_rx), vec![row.raw()]);
@@ -313,19 +337,22 @@ fn row_menu_two_stroke_dd_removes_the_row() {
         .displayed_queue()
         .slot_id_at(1)
         .expect("row 1 has a slot");
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        ))),
+    );
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE)),
-        None,
     );
     // The first stroke arms only.
     assert!(app.gui.overlay.is_some());
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE)),
-        None,
     );
 
     let removed: Vec<u64> = cmd_rx
@@ -350,22 +377,25 @@ fn open_overlay_owns_the_keyboard() {
         .displayed_queue()
         .slot_id_at(0)
         .expect("row 0 has a slot");
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        ))),
+    );
 
     // The GUI-only collapse chord is a menu-owned chord while the menu is
     // open: it drops, and the panel does not collapse.
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
-        None,
     );
     assert!(!app.gui.panel_toggles.collapsed);
     assert!(app.gui.overlay.is_some());
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-        None,
     );
     assert!(app.gui.overlay.is_none());
 }
@@ -385,21 +415,22 @@ fn track_popover_choose_sends_the_track_switch() {
 
     // The GUI Client's playback entry runs the shared effect and then its own
     // half of the chip press (design D4a (a)).
-    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::OpenTrackPopover(
-        TrackChipKind::Subtitles,
-    )));
+    gui_msg(
+        &mut app,
+        Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles)),
+    );
     let Some(GuiOverlay::TrackPopover(popover)) = &app.gui.overlay else {
         panic!("the popover opened over the chip's choices");
     };
     assert_eq!(popover.cursor, 0, "the cursor starts on the chosen Off");
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)),
-        None,
     );
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
     );
 
     let switched: Vec<i64> = cmd_rx
@@ -427,9 +458,10 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
         status.sub_id = 0;
     });
-    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::OpenTrackPopover(
-        TrackChipKind::Subtitles,
-    )));
+    gui_msg(
+        &mut app,
+        Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles)),
+    );
     assert!(app.gui.overlay.is_some());
 
     // Playback ends while the popover is up (the queue exhausts, or the
@@ -439,9 +471,9 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
     // The next chord reconciles the orphaned popover before the snapshot,
     // so it routes to its binding instead of being consumed by the open
     // overlay's key rules.
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
-        None,
     );
 
     assert!(app.gui.overlay.is_none());
@@ -463,13 +495,13 @@ fn seek_relative_request_matches_the_seek_chords() {
 
     app.handle_playback_request(&PlaybackRequest::SeekRelative(-10.0));
     app.handle_playback_request(&PlaybackRequest::SeekRelative(30.0));
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
-        None,
     );
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Char(']'), KeyModifiers::NONE)),
-        None,
     );
 
     assert_eq!(seek_commands(&cmd_rx), vec![-10.0, 30.0, -10.0, 30.0]);
@@ -498,16 +530,16 @@ fn gui_context_popover_chords_toggle_the_matching_popover() {
         _ => None,
     };
 
-    app.route_gui_input(key('a'), None);
+    gui_key(&mut app, key('a'));
     assert_eq!(open_chip(&app), Some(TrackChipKind::Audio));
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-        None,
     );
     assert!(app.gui.overlay.is_none());
 
-    app.route_gui_input(key('s'), None);
+    gui_key(&mut app, key('s'));
     assert_eq!(open_chip(&app), Some(TrackChipKind::Subtitles));
 }
 
@@ -523,9 +555,12 @@ fn queue_intent_clear_opens_the_confirm_overlay_and_enter_clears_the_queue() {
     app.set_client_capabilities(gui_client_capabilities());
     app.playback_queue_mut().adopt_items(make_items(2), 0);
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::QueueIntent(
-        mbv_ui_msg::QueueIntent::Clear,
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::QueueIntent(
+            mbv_ui_msg::QueueIntent::Clear,
+        ))),
+    );
     present_pending_modal(&mut app);
 
     let playback = app.queue_playback_projection();
@@ -537,9 +572,9 @@ fn queue_intent_clear_opens_the_confirm_overlay_and_enter_clears_the_queue() {
     assert_eq!(message, "Clear the queue?");
     assert_eq!(buttons.len(), 2);
 
-    app.route_gui_input(
+    gui_key(
+        &mut app,
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
     );
 
     assert!(app.gui.overlay.is_none());
@@ -565,9 +600,12 @@ fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
         .slot_id_at(0)
         .expect("row 0 has a slot");
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        ))),
+    );
     let index = match &app.gui.overlay {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
@@ -605,9 +643,12 @@ fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
         .filter_map(|index| app.displayed_queue().slot_id_at(index))
         .collect();
 
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-        mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots.clone()),
-    ))));
+    gui_msg(
+        &mut app,
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots.clone()),
+        ))),
+    );
     let index = match &app.gui.overlay {
         Some(GuiOverlay::RowMenu(menu)) => menu
             .entries
@@ -679,7 +720,10 @@ fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
     // rules bind no default answer, and Esc must not dismiss it back to a
     // dead Owner.
     for code in [Key::Esc, Key::Enter, Key::Char('x')] {
-        app.route_gui_input(GuiInput::Key(KeyEvent::new(code, KeyModifiers::NONE)), None);
+        gui_key(
+            &mut app,
+            GuiInput::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+        );
         assert!(app.gui.overlay_is_open(), "{code:?} left the dialog up");
     }
     // An outside press leaves it up too (the confirm modal's opposite: the

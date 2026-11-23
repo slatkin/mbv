@@ -58,7 +58,7 @@ pub enum CoreInput {
     /// A key chord, translated on the Rust side (design D6), with the panel
     /// the window's pointer resolved for it (design D2 of
     /// `gui-pointer-target-interaction`). The core sets its Panel focus from
-    /// the target, then routes the key through `App::route_gui_input` with the
+    /// the target, then routes the key through `GuiCore::route_gui_input` with the
     /// focused surface as its leaf.
     Key { key: KeyEvent, target: KeyTarget },
     /// A pointer event, translated on the Rust side (design D4) and resolved
@@ -454,10 +454,7 @@ impl CoreThread {
         };
         self.apply_panel_focus(focus);
         if self.focus.focused().as_ref() != Some(&ComponentId::Queue) {
-            return self
-                .core
-                .app_mut()
-                .route_gui_input(GuiInput::Key(key), None);
+            return self.core.route_gui_input(GuiInput::Key(key), None);
         }
         let Self {
             core,
@@ -466,8 +463,7 @@ impl CoreThread {
             ..
         } = self;
         let mut leaf = QueueLeaf::new(queue, regions);
-        core.app_mut()
-            .route_gui_input(GuiInput::Key(key), Some(&mut leaf))
+        core.route_gui_input(GuiInput::Key(key), Some(&mut leaf))
     }
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
@@ -565,7 +561,7 @@ impl CoreThread {
     fn send_sections(&mut self) {
         self.sync_queue_surface();
         let batch = self.ledger.collect(SectionSources {
-            app: self.core.app_mut(),
+            core: &mut self.core,
             queue: &self.queue,
             playback_surface: &self.playback,
             viewport_rows: self.viewport_rows,

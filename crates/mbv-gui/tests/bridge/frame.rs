@@ -1,9 +1,9 @@
 mod settings_screen;
 
 use mbv::{
-    App, gui_client_capabilities, stub_app_with_open_row_menu, stub_app_with_playing_items,
-    stub_app_with_playing_queue, stub_app_with_queue, stub_app_with_track_popover,
-    stub_app_with_unsaved_queue,
+    App, GuiCore, gui_client_capabilities, stub_app_with_open_row_menu,
+    stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_queue,
+    stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
@@ -95,13 +95,15 @@ fn adopted_queue(app: &mut App) -> QueueSurface {
 fn built(app: &mut App, queue: &QueueSurface, playback: &QueuePlaybackSurface) -> Built {
     let mut ledger = SectionLedger::default();
     ledger.mark_all_gated();
+    let core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
     let batch = ledger.collect(SectionSources {
-        app,
+        core: &mut core,
         queue,
         playback_surface: playback,
         viewport_rows: VIEWPORT_ROWS,
         now: std::time::Instant::now(),
     });
+    *app = core.into_app();
     Built(batch.expect("the first collect builds every section"))
 }
 

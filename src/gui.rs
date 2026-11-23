@@ -27,13 +27,20 @@ impl GuiCore {
     /// The shared `App` the GUI Client owns: the drains, the router, and the
     /// projections read and mutate it.
     #[must_use]
-    pub fn app(&self) -> &App {
+    pub(crate) fn app(&self) -> &App {
         &self.app
     }
 
     /// The shared `App` the GUI Client owns, for mutation.
-    pub fn app_mut(&mut self) -> &mut App {
+    pub(crate) fn app_mut(&mut self) -> &mut App {
         &mut self.app
+    }
+
+    /// The shared `App` back out of the wrapper, for a caller that wraps the
+    /// `App` it owns for one call and takes it back afterwards.
+    #[must_use]
+    pub fn into_app(self) -> App {
+        self.app
     }
 }
 

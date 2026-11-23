@@ -243,8 +243,8 @@ impl App {
     /// leaves a Client that presents no chooser unchanged.
     fn open_new_queue_rename(&mut self, queue: NamedQueueId) {
         self.show_named_queue(queue);
-        let cursor = self
-            .queue_chooser_entries()
+        let entries = crate::app::input::gui::chooser_entries(self);
+        let cursor = entries
             .iter()
             .position(|entry| entry.queue == Some(queue))
             .unwrap_or_default();

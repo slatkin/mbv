@@ -12,6 +12,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::app::input::gui::GuiInput;
+use crate::app::input::gui::with_gui_core;
 use crate::app::tests::{gui_client_capabilities, make_app_stub};
 
 /// A catalog with a Grouped Music library at position 1 and a Shows library
@@ -38,7 +39,10 @@ fn music_and_shows_app() -> App {
 /// window's forwarder does for a key no surface takes.
 fn press(app: &mut App, key: Key) {
     assert!(
-        !app.route_gui_input(GuiInput::Key(KeyEvent::new(key, KeyModifiers::NONE)), None),
+        !with_gui_core(app, |core| core.route_gui_input(
+            GuiInput::Key(KeyEvent::new(key, KeyModifiers::NONE)),
+            None
+        )),
         "{key:?} asked to quit"
     );
 }

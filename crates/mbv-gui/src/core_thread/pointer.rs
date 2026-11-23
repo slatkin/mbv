@@ -35,21 +35,19 @@ impl CoreThread {
     /// points, resolve the gesture's point against the combined hit map of
     /// the last `LayoutReport`, apply the focus change the matching TUI click
     /// applies, and hand the surface that owns the region to
-    /// [`App::route_gui_pointer`]. A gesture whose point resolves to no
+    /// [`GuiCore::route_gui_pointer`]. A gesture whose point resolves to no
     /// reported region — and a `DragEnd`, which carries no point — resolves
     /// to nothing (`client-interaction-core`: pointer targets resolve from a
     /// semantic hit map); the disarm precedes all of it, so every pointer
     /// event cancels an armed prefix even when nothing resolves.
     pub(super) fn route_pointer(&mut self, event: PointerEvent) -> bool {
         // Any pointer event disarms prefix mode first — the shared contract
-        // `App::route_gui_input`'s pointer arm carries, the same silent
+        // `GuiCore::route_gui_input`'s pointer arm carries, the same silent
         // disarm every terminal mouse event applies in the TUI. The call
         // runs before the gesture and region resolution, so a hover move, a
         // drag end, or a press on no reported region still cancels an armed
         // prefix; the pointer arm itself delivers nothing else.
-        self.core
-            .app_mut()
-            .route_gui_input(GuiInput::Pointer(event), None);
+        self.core.route_gui_input(GuiInput::Pointer(event), None);
         // A cancelled gesture (the window lost the pointer, or the pointer
         // left the window; never an element's blur, which every press on a
         // row causes) drops the drag state and the double-click pair without
@@ -142,7 +140,7 @@ impl CoreThread {
                     ..
                 } = self;
                 let mut leaf = QueueLeaf::new(queue, regions);
-                core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
+                core.route_gui_pointer(gesture, Some(&mut leaf));
             }
             Some(RegionTarget::QueuePlayback(_)) => {
                 // The TUI's playback-panel click applies no focus change, so
@@ -170,13 +168,13 @@ impl CoreThread {
                     },
                     painted,
                 );
-                core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
+                core.route_gui_pointer(gesture, Some(&mut leaf));
             }
             Some(RegionTarget::StatusBar(_)) => {
                 // The TUI's status-row click applies no focus change either.
                 let Self { core, regions, .. } = self;
                 let mut leaf = StatusBarLeaf::new(regions);
-                core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
+                core.route_gui_pointer(gesture, Some(&mut leaf));
             }
             // A pre-attach button region is the attach campaign's target: the
             // attached slice resolves nothing for it, even when a stale
@@ -214,7 +212,7 @@ impl CoreThread {
             ..
         } = self;
         let mut leaf = QueueLeaf::new(queue, regions);
-        core.app_mut().route_gui_pointer(gesture, Some(&mut leaf));
+        core.route_gui_pointer(gesture, Some(&mut leaf));
         true
     }
 }

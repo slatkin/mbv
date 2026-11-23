@@ -35,25 +35,25 @@ pub use self::projection::{
     RowMenuEntryProjection, TrackPopoverChoice,
 };
 
-use crate::app::App;
+use crate::gui::GuiCore;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
-impl App {
+impl GuiCore {
     /// Whether the player panel hides its transport controls until the
     /// pointer enters the stage (gui-art-player-overlay design D5): the
     /// preference the GUI Client's panel frame carries. The core owns it, so
     /// the section build reads it here rather than from the window.
     #[must_use]
     pub fn gui_player_auto_hide(&self) -> bool {
-        self.gui.player_auto_hide
+        self.app.gui.player_auto_hide
     }
 
     /// The canvas panel's collapse and queue-fold facts (design D10).
     #[must_use]
     pub fn panel_toggles_projection(&self) -> PanelTogglesProjection {
         PanelTogglesProjection {
-            collapsed: self.gui.panel_toggles.collapsed,
-            queue_folded: self.gui.panel_toggles.queue_folded,
+            collapsed: self.app.gui.panel_toggles.collapsed,
+            queue_folded: self.app.gui.panel_toggles.queue_folded,
         }
     }
 
@@ -65,23 +65,23 @@ impl App {
     /// navigation keeps working while the filter is open. Returns whether
     /// the key was consumed.
     pub(in crate::app) fn apply_gui_filter_key(&mut self, key: KeyEvent) -> bool {
-        if !self.queue_filter_active {
+        if !self.app.queue_filter_active {
             return false;
         }
         match key.code {
             Key::Esc if key.modifiers.is_empty() => {
-                self.queue_filter_active = false;
-                self.queue_filter.clear();
+                self.app.queue_filter_active = false;
+                self.app.queue_filter.clear();
                 true
             }
             Key::Enter if key.modifiers.is_empty() => {
-                self.queue_filter_active = false;
+                self.app.queue_filter_active = false;
                 true
             }
             Key::Backspace if key.modifiers.is_empty() => {
-                if self.queue_filter.pop().is_none() {
-                    self.queue_filter_active = false;
-                    self.queue_filter.clear();
+                if self.app.queue_filter.pop().is_none() {
+                    self.app.queue_filter_active = false;
+                    self.app.queue_filter.clear();
                 }
                 true
             }
@@ -89,7 +89,7 @@ impl App {
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                self.queue_filter.push(c);
+                self.app.queue_filter.push(c);
                 true
             }
             _ => false,
@@ -98,11 +98,11 @@ impl App {
 
     /// The `z` toggle (design D10): collapse the panel to the rail.
     pub(in crate::app) fn toggle_panel_collapse(&mut self) {
-        self.gui.panel_toggles.collapsed = !self.gui.panel_toggles.collapsed;
+        self.app.gui.panel_toggles.collapsed = !self.app.gui.panel_toggles.collapsed;
     }
 
     /// The `q` toggle (design D10): fold the expanded panel's queue.
     pub(in crate::app) fn toggle_queue_fold(&mut self) {
-        self.gui.panel_toggles.queue_folded = !self.gui.panel_toggles.queue_folded;
+        self.app.gui.panel_toggles.queue_folded = !self.app.gui.panel_toggles.queue_folded;
     }
 }

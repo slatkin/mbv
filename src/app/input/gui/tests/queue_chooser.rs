@@ -9,12 +9,28 @@ use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 
 use crate::app::App;
-use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
+use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection, QueueChooserEntryProjection};
 use crate::app::input::gui::GuiInput;
+use crate::app::input::gui::with_gui_core;
 use crate::app::tests::{
     emby_unified_state, gui_client_capabilities, make_items, make_local_daemon_app_stub_with_cmd_rx,
 };
 use mbv_ctrl::player::PlayerEvent;
+
+/// One routed key, delivered through the GUI entry on `app`'s own core.
+fn gui_key(app: &mut App, input: GuiInput) -> bool {
+    with_gui_core(app, |core| core.route_gui_input(input, None))
+}
+
+/// One surface message, delivered through the GUI entry on `app`'s own core.
+fn gui_msg(app: &mut App, msg: Msg) {
+    with_gui_core(app, |core| core.handle_gui_surface_msg(msg));
+}
+
+/// The Queue chooser's entries, read through the GUI entry on `app`'s own core.
+fn chooser_entries(app: &mut App) -> Vec<QueueChooserEntryProjection> {
+    with_gui_core(app, |core| core.queue_chooser_entries())
+}
 
 /// The stub Owner's current queue.
 fn current() -> mbv_queue::NamedQueueId {
@@ -54,7 +70,7 @@ fn app_with_queues() -> (App, Receiver<CtrlCmd>) {
 
 /// The `t` chord, the next key in a test's sequence.
 fn press(app: &mut App, key: KeyEvent) {
-    app.route_gui_input(GuiInput::Key(key), None);
+    gui_key(app, GuiInput::Key(key));
 }
 
 /// The unmodified letter chord `c` presses.
@@ -93,7 +109,7 @@ fn the_chooser_projects_the_local_queues_then_the_peer() {
     let (mut app, _cmd_rx) = app_with_queues();
     app.show_named_queue(resting());
 
-    let entries = app.queue_chooser_entries();
+    let entries = chooser_entries(&mut app);
 
     let labels: Vec<&str> = entries.iter().map(|entry| entry.label.as_str()).collect();
     assert_eq!(labels, ["Default", "Kids"]);
@@ -213,7 +229,7 @@ fn a_peer_entry_cannot_be_renamed() {
 
     press(&mut app, KeyEvent::new(Key::Enter, KeyModifiers::NONE));
     assert!(
-        app.queue_chooser_entries()
+        chooser_entries(&mut app)
             .last()
             .is_some_and(|entry| entry.shown && entry.queue.is_none()),
         "Enter shows the peer entry"
@@ -265,8 +281,7 @@ fn the_chooser_counts_the_current_resting_and_peer_queues() {
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().expect("a test address")),
     );
 
-    let counts: Vec<usize> = app
-        .queue_chooser_entries()
+    let counts: Vec<usize> = chooser_entries(&mut app)
         .iter()
         .map(|entry| entry.len)
         .collect();
@@ -293,7 +308,7 @@ fn the_current_queues_count_follows_a_removal() {
     )));
 
     assert_eq!(
-        app.queue_chooser_entries().first().map(|entry| entry.len),
+        chooser_entries(&mut app).first().map(|entry| entry.len),
         Some(2),
         "the current queue's count follows the removal"
     );
@@ -339,7 +354,7 @@ fn the_queue_chords_need_the_queue_pointer_target() {
 fn the_header_chooser_press_opens_the_chooser_review_p1a() {
     let (mut app, _cmd_rx) = app_with_queues();
 
-    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::QueueChooserToggle));
+    gui_msg(&mut app, Msg::Playback(PlaybackRequest::QueueChooserToggle));
 
     assert!(
         matches!(app.gui.overlay, Some(GuiOverlay::QueueChooser(_))),

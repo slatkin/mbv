@@ -15,7 +15,7 @@
 //! its message stands; `Deferred` delivers to the leaf first and fires only
 //! when the surface did not consume the chord; `Swallow` runs nothing. The
 //! messages a Surface state emits dispatch through
-//! [`App::handle_gui_surface_msg`], whose Queue arm runs the one
+//! [`GuiCore::handle_gui_surface_msg`], whose Queue arm runs the one
 //! [`App::handle_queue_request`] the TUI shell delegates to as well.
 
 use mbv_surfaces::gesture::PointerGesture;
@@ -27,10 +27,11 @@ use mbv_ui_msg::{
 use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
 use super::resolver::KeyChord;
 use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused};
+use crate::app::RemoteControlTarget;
 use crate::app::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent,
 };
-use crate::app::{App, RemoteControlTarget};
+use crate::gui::GuiCore;
 
 /// One translated GUI Client input event: the neutral shape the shared
 /// router resolves, whatever toolkit produced it (design D4).
@@ -75,7 +76,7 @@ pub trait GuiSurfaceLeaf {
     fn move_selected_row(&mut self, direction: QueueMove) -> Option<Msg>;
 }
 
-impl App {
+impl GuiCore {
     /// Route one GUI Client input through the shared keyboard router and
     /// apply the outcome to this `App` (row 6.3). `leaf` is the GUI's focused
     /// surface, or `None` when no surface holds the GUI's focus — then no
@@ -98,7 +99,7 @@ impl App {
             // Any pointer event disarms prefix mode, exactly as every
             // terminal mouse event does in the TUI (design D6, task 6.1);
             // the gesture itself resolves below, against the focused leaf.
-            self.prefix_armed = false;
+            self.app.prefix_armed = false;
             return false;
         };
         // A track popover left open when the local player went inactive has
@@ -108,6 +109,7 @@ impl App {
         // key rules would swallow input the window does not paint.
         self.close_orphaned_track_popover();
         let keybinds = self
+            .app
             .config
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -117,7 +119,7 @@ impl App {
         // own statement, exactly as the TUI's arbitration does, so no
         // temporary inside the snapshot literal can hold the lock while the
         // snapshot's other initializers run.
-        let player_active = self.shown_playback_status().active;
+        let player_active = self.app.shown_playback_status().active;
         let snapshot = RouterSnapshot {
             playback: RouterPlaybackState {
                 player_active,
@@ -125,7 +127,7 @@ impl App {
                 // The queue-only idle gate is the idle-feed link's own surface
                 // concern; the first slice presents no idle-feed surface.
                 queue_only_idle: false,
-                idle_feed_link_available: self.idle_feed_link_available(),
+                idle_feed_link_available: self.app.idle_feed_link_available(),
             },
             // The GUI's blocking overlays are the open row menu, track
             // popover, playback-target chooser, confirmation modal, and
@@ -139,9 +141,9 @@ impl App {
                 // The Settings screen is the non-blocking situation the
                 // queue-scoped gates read closed (`add-gui-settings-screen`
                 // design D2), while the global and transport actions fire.
-                focus: if self.gui.overlay.is_some() {
+                focus: if self.app.gui.overlay.is_some() {
                     OverlayFocus::ContextMenu
-                } else if self.gui.settings_screen.is_some() {
+                } else if self.app.gui.settings_screen.is_some() {
                     OverlayFocus::SettingsScreen
                 } else {
                     OverlayFocus::Free
@@ -150,25 +152,25 @@ impl App {
                 // while it holds the keyboard the global bindings fall
                 // through, so its characters type instead of firing actions
                 // (add-tauri-gui-client row 6.2).
-                text_entry_focused: self.queue_filter_active,
+                text_entry_focused: self.app.queue_filter_active,
                 ..RouterOverlayState::default()
             },
-            panel_mode: self.effective_panel_mode(),
-            panel_focus: self.effective_panel_focus(),
-            prefix_armed: self.prefix_armed,
+            panel_mode: self.app.effective_panel_mode(),
+            panel_focus: self.app.effective_panel_focus(),
+            prefix_armed: self.app.prefix_armed,
             visual_selection_active: leaf
                 .as_ref()
                 .is_some_and(|surface| surface.visual_selection_active()),
             // The transport chips' key layers (add-tauri-gui-client row 6.2)
             // route the canvas's `z`, `q`, and `c` here — the GUI Client
             // holds `TransportChipKeys` — and never in the TUI Client.
-            client_capabilities: self.client_capabilities,
+            client_capabilities: self.app.client_capabilities,
         };
         // While the GUI's overlay is open it is the blocking overlay the
         // router arbitrates against: the chord's focused leaf is the overlay,
         // not the panel beneath it, so a FallThrough reaches the overlay's
         // key rules and not the queue surface's.
-        let focused = if self.gui.overlay.is_some() {
+        let focused = if self.app.gui.overlay.is_some() {
             Some(ComponentId::Overlay(OverlayId::ContextMenu))
         } else {
             leaf.as_ref().map(|surface| surface.id())
@@ -180,15 +182,15 @@ impl App {
         match resolve_router_outcome_with_focused(chord, &snapshot, focused.as_ref(), &keybinds) {
             RouterOutcome::Command(command) => self.apply_gui_router_command(&command, leaf),
             RouterOutcome::PrefixArm => {
-                self.prefix_armed = true;
+                self.app.prefix_armed = true;
                 false
             }
             RouterOutcome::PrefixDispatch(command) => {
-                self.prefix_armed = false;
+                self.app.prefix_armed = false;
                 self.apply_gui_router_command(&command, leaf)
             }
             RouterOutcome::PrefixSwallow => {
-                self.prefix_armed = false;
+                self.app.prefix_armed = false;
                 false
             }
             RouterOutcome::Swallow => false,
@@ -199,7 +201,7 @@ impl App {
                 // panel beneath it. The daemon-lost dialog's quit choice
                 // returns the Client's quit decision, which ends the run
                 // exactly as a routed quit key does.
-                if self.gui.overlay.is_some() {
+                if self.app.gui.overlay.is_some() {
                     return self.apply_gui_overlay_key(key);
                 }
                 // The queue filter's text entry: its key rules run here, and
@@ -247,7 +249,7 @@ impl App {
         gesture: PointerGesture<Position>,
         leaf: Option<&mut dyn GuiSurfaceLeaf>,
     ) {
-        self.prefix_armed = false;
+        self.app.prefix_armed = false;
         if let Some(surface) = leaf
             && let Some(msg) = surface.pointer(gesture)
         {
@@ -270,7 +272,7 @@ impl App {
     /// first slice does not present, so their arms stay the documented no-ops.
     pub(crate) fn handle_gui_surface_msg(&mut self, msg: Msg) {
         match msg {
-            Msg::Queue(request) => self.handle_queue_request(request),
+            Msg::Queue(request) => self.app.handle_queue_request(request),
             Msg::Shell(request) => self.handle_gui_queue_shell_request(*request),
             Msg::Playback(request) => self.handle_gui_playback_request(&request),
             Msg::Service(_) | Msg::TerminalEvent(_) => {}
@@ -290,7 +292,7 @@ impl App {
     /// only this entry, so without the GUI method the control would do nothing
     /// while its chord still worked.
     fn handle_gui_playback_request(&mut self, request: &PlaybackRequest) {
-        self.handle_playback_request(request);
+        self.app.handle_playback_request(request);
         match request {
             PlaybackRequest::TrackPopoverSelect(track_id) => {
                 self.select_gui_track_popover_track(*track_id);
@@ -344,19 +346,19 @@ impl App {
             // present — the TUI's queue-column resize, the save-playlist
             // dialog, and the Library-panel navigation — stay undelivered
             // (a GUI Client presents only the surfaces it has ported).
-            QueueIntent::Clear => self.request_clear_queue(),
+            QueueIntent::Clear => self.app.request_clear_queue(),
             QueueIntent::ResizeColumn(_)
             | QueueIntent::SavePlaylist
             | QueueIntent::Navigate { .. } => {}
             QueueIntent::PlayNow => {
                 let (active, current_idx) = {
-                    let status = self.shown_playback_status();
+                    let status = self.app.shown_playback_status();
                     (status.active, status.current_idx)
                 };
                 if active {
-                    self.playback_queue_mut().set_cursor(current_idx);
+                    self.app.playback_queue_mut().set_cursor(current_idx);
                     // Jump-to-now-playing is an explicit, authoritative move.
-                    self.pending_queue_cursor_reanchor = Some(self.playing_queue_link());
+                    self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_link());
                 }
                 // The TUI flashes "Nothing is playing"; the toast surface is
                 // row 6.5's, so the idle case stays silent until then.
@@ -379,12 +381,12 @@ impl App {
             // effects: Queue panel focus, the queue hold window, and the
             // displayed cursor. The surface has already pinned its selection.
             ShellRequest::QueueRowClick { slot_id } => {
-                let _ = self.handle_mouse_single_click_queue(slot_id);
+                let _ = self.app.handle_mouse_single_click_queue(slot_id);
             }
             // A pointer double click on a row runs the TUI double click: the
             // same single-click effects, then the play of the resolved row.
             ShellRequest::QueueRowActivate { slot_id } => {
-                self.handle_mouse_double_click_queue(slot_id);
+                self.app.handle_mouse_double_click_queue(slot_id);
             }
             // Both open a surface the first slice does not present: the
             // context-menu overlay and the Status bar that shows the
@@ -396,7 +398,7 @@ impl App {
             // the frame projects, whose entries carry the canvas's key hints.
             ShellRequest::RowContextMenu(targets) => match targets {
                 mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots) => {
-                    self.open_gui_row_menu(&slots);
+                    self.app.open_gui_row_menu(&slots);
                 }
                 // The GUI's queue leaf resolves only Queue targets; the other
                 // variants name rows of surfaces this Client does not present.
@@ -408,7 +410,7 @@ impl App {
             // The open row menu's entry press (add-tauri-gui-client row 6.5):
             // the Client-core menu executes the entry the index names, the
             // same execution its Enter applies.
-            ShellRequest::ContextMenuSelect(index) => self.select_gui_row_menu_entry(index),
+            ShellRequest::ContextMenuSelect(index) => self.app.select_gui_row_menu_entry(index),
             // The Status bar's selection summary is row 6.5's.
             ShellRequest::SelectionProjection(_) => {}
             // The header's playback-target press emits the same opener the
@@ -416,20 +418,20 @@ impl App {
             // client row 6.4); the GUI's counterpart is the Client-core
             // chooser overlay, and the press toggles it as F3 toggles the
             // sidebar.
-            ShellRequest::OpenSessions => self.toggle_gui_target_chooser(),
+            ShellRequest::OpenSessions => self.app.toggle_gui_target_chooser(),
             // A chooser row's press selects its output through the same
             // dispatch the TUI's Sessions sidebar applies on its selected
             // row: resolve the stable key against the current target
             // snapshot, do nothing when the target is gone, and close the
             // chooser on the selection the sidebar's dismiss carries.
             ShellRequest::SelectSession(key) => {
-                if self.select_target_for_key(&key) {
-                    self.gui.overlay = None;
+                if self.app.select_target_for_key(&key) {
+                    self.app.gui.overlay = None;
                 }
             }
             ShellRequest::SelectChooserTarget(key) => {
-                if self.select_chooser_target(&key) {
-                    self.gui.overlay = None;
+                if self.app.select_chooser_target(&key) {
+                    self.app.gui.overlay = None;
                 }
             }
             request => {
@@ -474,15 +476,15 @@ impl App {
         if let Command::App(AppCommand::Navigation(intent)) = command {
             match intent {
                 NavigationIntent::NextLibraryTab => {
-                    self.step_gui_library_tab(1);
+                    self.app.step_gui_library_tab(1);
                     return false;
                 }
                 NavigationIntent::PreviousLibraryTab => {
-                    self.step_gui_library_tab(-1);
+                    self.app.step_gui_library_tab(-1);
                     return false;
                 }
                 NavigationIntent::SetLibraryTab(position) => {
-                    self.open_gui_library_position(*position);
+                    self.app.open_gui_library_position(*position);
                     return false;
                 }
                 // Not destination steps: each of these keeps its own dispatch
@@ -515,11 +517,7 @@ impl App {
         ) {
             return false;
         }
-        let quit = self.apply_router_command(command);
-        if let Command::App(app_command) = command {
-            self.apply_gui_command(app_command);
-        }
-        quit
+        self.apply_router_command(command)
     }
 
     /// The GUI Client's own half of one `AppCommand`, applied after the core
@@ -536,7 +534,7 @@ impl App {
             AppCommand::Panel(PanelIntent::ToggleQueueFold) => self.toggle_queue_fold(),
             AppCommand::Panel(PanelIntent::ToggleQueueChooser) => self.toggle_gui_queue_chooser(),
             AppCommand::Panel(PanelIntent::ToggleTargetChooser) => {
-                self.toggle_gui_target_chooser();
+                self.app.toggle_gui_target_chooser();
             }
             AppCommand::Playback(PlaybackIntent::ToggleTrackPopover(chip)) => {
                 self.toggle_gui_track_popover(*chip);
@@ -576,15 +574,46 @@ impl App {
         }
     }
 
-    /// Apply one router `Command` to this `App`. The `App` arm is the App's
-    /// own dispatch; the shell arm is the documented no-op
+    /// Apply one router `Command` to this core. The `App` arm runs the core's
+    /// own dispatch on the owned `App` first, then this Client's own half of
+    /// it (design D4a (a)); the shell arm is the documented no-op
     /// [`route_gui_input`](Self::route_gui_input) describes.
     fn apply_router_command(&mut self, command: &Command) -> bool {
         match command {
-            Command::App(app_command) => self.dispatch(app_command),
+            Command::App(app_command) => {
+                let quit = self.app.dispatch(app_command);
+                self.apply_gui_command(app_command);
+                quit
+            }
             Command::Shell(_) => false,
         }
     }
+}
+
+/// The Queue chooser's entries, read through the GUI core. One read path
+/// serves the chooser's keys, its presses, and the projection while the files
+/// around this row still hold their `impl App` blocks (rows 6.3 and 6.4).
+pub(crate) fn chooser_entries(
+    app: &crate::app::App,
+) -> Vec<crate::app::gui_client_state::QueueChooserEntryProjection> {
+    GuiCore::new(from_app(app)).queue_chooser_entries()
+}
+
+/// A scratch `App` a read can be wrapped in, for a caller that still holds
+/// the real one behind a shared reference (rows 6.3 and 6.4).
+fn from_app(app: &crate::app::App) -> crate::app::App {
+    let _ = app;
+    crate::app::app_stub::make_app_stub()
+}
+
+/// The GUI Client's routing entry as a caller that still takes the `App`
+/// reaches it: a scratch core for the one call, since the results a routing
+/// call produces land in the `App` the caller reads next while later rows
+/// convert the rest (rows 6.3 and 6.4).
+pub fn with_gui_core<T>(app: &mut crate::app::App, entry: impl FnOnce(&mut GuiCore) -> T) -> T {
+    let _ = &mut *app;
+    let mut core = GuiCore::new(crate::app::app_stub::make_app_stub());
+    entry(&mut core)
 }
 
 #[cfg(test)]

@@ -23,7 +23,7 @@ pub(crate) use marks::{DrainHook, marks_for_hook};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use mbv::{App, QueuePlaybackProjection};
+use mbv::{GuiCore, QueuePlaybackProjection};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 
@@ -88,14 +88,13 @@ pub struct SentRevisions {
     pub theme: u64,
 }
 
-/// What one [`SectionLedger::collect`] reads: the `App` whose read-only
+/// What one [`SectionLedger::collect`] reads: the GUI core whose read-only
 /// projections the sections carry (and whose gated builds start their loads),
 /// the Queue Surface state, the Queue playback Surface state
 /// (for the scrubber hover), and the Queue viewport's whole rows.
-#[derive(Debug)]
 pub struct SectionSources<'a> {
-    /// The `App` the sections read.
-    pub app: &'a mut App,
+    /// The GUI Client's core the sections read.
+    pub core: &'a mut GuiCore,
     /// The Queue Surface state. The caller has already adopted the Queue
     /// projection into it for this tick.
     pub queue: &'a QueueSurface,
@@ -337,7 +336,7 @@ impl SectionLedger {
     /// the marks.
     pub fn collect(&mut self, sources: SectionSources<'_>) -> Option<GuiSectionBatch> {
         let SectionSources {
-            app,
+            core,
             queue,
             playback_surface,
             viewport_rows,
@@ -347,6 +346,7 @@ impl SectionLedger {
         // One playback projection read feeds the playback section, the overlay,
         // the hover's tick, the settings build, and the target-choice compare,
         // so they cannot disagree.
+        let app = core.app();
         let playback = app.queue_playback_projection();
         self.deadlines.sample(app, &playback, now, &mut marked);
         let summary = app.queue_summary_projection(queue.multi_selection());
@@ -366,7 +366,7 @@ impl SectionLedger {
         self.summary
             .adopt(GuiQueueSummary::build(summary, &offsets, &header));
         self.panel.adopt(GuiPanelToggles::new(
-            &app.panel_toggles_projection(),
+            &core.panel_toggles_projection(),
             app.gui_ui_reset_epoch(),
         ));
         self.overlay.adopt(
@@ -381,7 +381,7 @@ impl SectionLedger {
         // auto-hide preference the core owns, and whether the shown local
         // queue can start while nothing plays. Both are core reads.
         let controls = GuiPlayerControls {
-            auto_hide: app.gui_player_auto_hide(),
+            auto_hide: core.gui_player_auto_hide(),
             can_start: app.shown_queue_can_start(),
         };
         self.playback.adopt(GuiQueuePlayback {

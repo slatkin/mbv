@@ -5,14 +5,26 @@
 
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 
+use crate::app::App;
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
+use crate::app::input::gui::with_gui_core;
 use crate::app::tests::make_app_stub;
+
+/// One key, delivered through the GUI entry on `app`'s own core with no
+/// focused leaf.
+fn gui_key(app: &mut App, key: Key) {
+    with_gui_core(app, |core| {
+        core.route_gui_input(GuiInput::Key(KeyEvent::new(key, KeyModifiers::NONE)), None);
+    });
+}
 
 /// A playback request delivered through the GUI Client's entry, which runs the
 /// shared App-side effect and then the Client's own half (design D4a (a)).
-fn gui_request(app: &mut crate::app::App, request: PlaybackRequest) {
-    app.handle_gui_surface_msg(Msg::Playback(request));
+fn gui_request(app: &mut App, request: PlaybackRequest) {
+    with_gui_core(app, |core| {
+        core.handle_gui_surface_msg(Msg::Playback(request));
+    });
 }
 
 // The player panel's right-click opens the menu at the pointer anchor the
@@ -47,10 +59,7 @@ fn player_menu_esc_closes_with_no_toggle() {
     );
     let before = app.gui.player_auto_hide;
 
-    app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-        None,
-    );
+    gui_key(&mut app, Key::Esc);
 
     assert!(app.gui.overlay.is_none());
     assert_eq!(app.gui.player_auto_hide, before);
@@ -67,10 +76,7 @@ fn player_menu_enter_toggles_and_closes() {
     );
     let before = app.gui.player_auto_hide;
 
-    app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
-    );
+    gui_key(&mut app, Key::Enter);
 
     assert!(app.gui.overlay.is_none());
     assert_eq!(app.gui.player_auto_hide, !before);

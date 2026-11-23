@@ -209,7 +209,7 @@ impl App {
     /// one tick.
     #[must_use]
     pub fn gui_queue_header_projection(&self) -> QueueHeaderProjection {
-        let entries = self.queue_chooser_entries();
+        let entries = crate::app::input::gui::chooser_entries(self);
         QueueHeaderProjection {
             shown_name: entries
                 .iter()
@@ -292,7 +292,7 @@ impl App {
             // resolve against, so the rows it paints and the rows a press or
             // a key addresses cannot disagree inside one frame.
             Some(GuiOverlay::QueueChooser(chooser)) => {
-                let entries = self.queue_chooser_entries();
+                let entries = crate::app::input::gui::chooser_entries(self);
                 Some(GuiOverlayProjection::QueueChooser {
                     cursor: chooser.cursor.min(entries.len().saturating_sub(1)),
                     entries,

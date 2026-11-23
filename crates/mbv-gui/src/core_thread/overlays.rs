@@ -39,7 +39,7 @@ impl CoreThread {
     /// dismissal condition the caller applies.
     pub(super) fn press_outside_open_overlay(&self, event: &PointerEvent) -> bool {
         matches!(event.kind, PointerKind::Press | PointerKind::RightPress)
-            && self.core.app().gui_overlay_is_open()
+            && self.core.gui_overlay_is_open()
             && !self
                 .regions
                 .resolve(event.position)
