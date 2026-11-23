@@ -213,7 +213,7 @@ impl App {
         if lib_idx >= self.libs.len() || !self.is_grouped_music_library(lib_idx) {
             return Vec::new();
         }
-        let Some(group_level) = self.gui_music_group_level(lib_idx) else {
+        let Some(group_level) = super::launch::music_group_level(self, lib_idx) else {
             return Vec::new();
         };
         group_level
@@ -247,7 +247,7 @@ impl App {
         lib_idx: usize,
         set: &GuiCollectionSet,
     ) -> Vec<&str> {
-        let Some(group_level) = self.gui_music_group_level(lib_idx) else {
+        let Some(group_level) = super::launch::music_group_level(self, lib_idx) else {
             return Vec::new();
         };
         match set {
@@ -293,7 +293,7 @@ impl App {
     /// The display name the group's failure line paints (design D5): the
     /// group's name in the group level, or the id when the level holds none.
     fn gui_group_name(&self, lib_idx: usize, group_id: &str) -> String {
-        self.gui_music_group_level(lib_idx)
+        super::launch::music_group_level(self, lib_idx)
             .and_then(|level| {
                 level
                     .items

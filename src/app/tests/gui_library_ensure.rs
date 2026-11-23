@@ -56,10 +56,13 @@ impl GuiDestinationLoads for RecordingLoads<'_> {
 fn driver_runs_root_then_selection_then_dependents() {
     let mut app = make_app_stub();
     let steps = RefCell::new(Vec::new());
-    app.run_gui_destination_loads(&RecordingLoads {
-        steps: &steps,
-        halt_at: None,
-    });
+    crate::app::gui_library::ensure::run_gui_destination_loads(
+        &mut app,
+        &RecordingLoads {
+            steps: &steps,
+            halt_at: None,
+        },
+    );
     assert_eq!(
         steps.into_inner(),
         vec![LoadStep::Root, LoadStep::Selection, LoadStep::Dependents]
@@ -72,10 +75,13 @@ fn driver_runs_root_then_selection_then_dependents() {
 fn driver_stops_at_the_step_that_calls_for_a_load() {
     let mut app = make_app_stub();
     let steps = RefCell::new(Vec::new());
-    app.run_gui_destination_loads(&RecordingLoads {
-        steps: &steps,
-        halt_at: Some(LoadStep::Selection),
-    });
+    crate::app::gui_library::ensure::run_gui_destination_loads(
+        &mut app,
+        &RecordingLoads {
+            steps: &steps,
+            halt_at: Some(LoadStep::Selection),
+        },
+    );
     assert_eq!(
         steps.into_inner(),
         vec![LoadStep::Root, LoadStep::Selection]

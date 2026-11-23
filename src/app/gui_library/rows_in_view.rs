@@ -115,7 +115,7 @@ impl App {
             GuiRowArtScope::Home => self.gui_home_row_source(id),
             GuiRowArtScope::Emby => {
                 let lib_idx = self.gui_active_library_index()?;
-                emby_row_source(&self.gui_emby_item(lib_idx, id)?)
+                emby_row_source(&super::emby_projection::emby_item(self, lib_idx, id)?)
             }
             GuiRowArtScope::Music => self.gui_music_row_source(id),
             GuiRowArtScope::ShowsSeries => emby_row_source(&self.gui_shows_series_item(id)?),
@@ -123,7 +123,7 @@ impl App {
             GuiRowArtScope::ShowsUpcoming => self.gui_upcoming_row_source(id),
             GuiRowArtScope::Podcasts => self.gui_podcast_row_source(id),
             GuiRowArtScope::Audiobooks => {
-                let lib_idx = self.gui_audiobooks_destination()?;
+                let lib_idx = super::audiobooks_projection::audiobooks_destination(self)?;
                 let state = self.audiobookshelf_book_browse.get(lib_idx)?;
                 let book = state.books.iter().find(|book| book.library_item_id == id)?;
                 catalog_book_row_source(book)

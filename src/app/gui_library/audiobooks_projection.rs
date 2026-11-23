@@ -25,7 +25,19 @@ use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::app::App;
+use crate::gui::GuiCore;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
+
+/// The active destination's Audiobooks library index (row 9.1): the
+/// destination whose book list the GUI Library panel paints. `None` for every
+/// other destination, which presents no Audiobooks section.
+#[must_use]
+pub(in crate::app) fn audiobooks_destination(app: &App) -> Option<usize> {
+    match app.gui_active_destination() {
+        Some(super::GuiDestinationKind::Audiobooks { lib_idx }) => Some(lib_idx),
+        _ => None,
+    }
+}
 
 /// One row of the book list (row 9.1). The identity is the book's stable
 /// `library_item_id` a select or play command sends, never a row position.
@@ -151,28 +163,17 @@ pub struct GuiAudiobooksProjection {
     pub playing_book_id: Option<String>,
 }
 
-impl App {
-    /// The active destination's Audiobooks library index (row 9.1): the
-    /// destination whose book list the GUI Library panel paints. `None` for
-    /// every other destination, which presents no Audiobooks section.
-    #[must_use]
-    pub fn gui_audiobooks_destination(&self) -> Option<usize> {
-        match self.gui_active_destination() {
-            Some(super::GuiDestinationKind::Audiobooks { lib_idx }) => Some(lib_idx),
-            _ => None,
-        }
-    }
-
+impl GuiCore {
     /// The Audiobooks projection the GUI Library panel paints (row 9.1):
     /// the flat book list, the selected book, and its Hero. A `lib_idx`
     /// that names no book library projects the empty projection, as the
     /// frame's gate excludes that destination anyway.
     #[must_use]
     pub fn gui_audiobooks_projection(&mut self, lib_idx: usize) -> GuiAudiobooksProjection {
-        if !self.gui_abs_book_library(lib_idx) {
+        if !self.app.gui_abs_book_library(lib_idx) {
             return GuiAudiobooksProjection::default();
         }
-        let Some(state) = self.audiobookshelf_book_browse.get(lib_idx) else {
+        let Some(state) = self.app.audiobookshelf_book_browse.get(lib_idx) else {
             return GuiAudiobooksProjection {
                 loading: true,
                 ..GuiAudiobooksProjection::default()
@@ -180,7 +181,9 @@ impl App {
         };
         let loading = !state.loading_pages.is_empty();
         let failed = state.error.is_some();
-        let sort_frame = self.gui_list_sort_frame(GuiSortTarget::Audiobooks(lib_idx));
+        let sort_frame = self
+            .app
+            .gui_list_sort_frame(GuiSortTarget::Audiobooks(lib_idx));
         let sort = sort_frame.active;
         let mut books: Vec<&mbv_audiobookshelf::AudiobookshelfBook> = state.books.iter().collect();
         // Under Author the catalog's own order stands: it is already the
@@ -204,9 +207,10 @@ impl App {
         }
         let rows: Vec<GuiAudiobooksRow> = books
             .into_iter()
-            .map(|book| book_row(self, book, sort))
+            .map(|book| book_row(&self.app, book, sort))
             .collect();
         let selected = self
+            .app
             .gui_abs_effective_pick(lib_idx)
             .filter(|pick| rows.iter().any(|row| &row.id == pick));
         let workspace_loading = selected
@@ -214,7 +218,7 @@ impl App {
             .is_some_and(|pick| state.detail_loading_ids.contains_key(pick));
         let hero = selected
             .as_deref()
-            .and_then(|pick| self.gui_abs_hero(lib_idx, pick));
+            .and_then(|pick| self.abs_hero(lib_idx, pick));
         GuiAudiobooksProjection {
             loading,
             failed,
@@ -223,7 +227,7 @@ impl App {
             selected,
             hero,
             workspace_loading,
-            playing_book_id: self.gui_playing_book_id(),
+            playing_book_id: self.app.gui_playing_book_id(),
         }
     }
 
@@ -234,8 +238,8 @@ impl App {
     /// `resolved_hero_data` builds them (design D15) — the cover fetched
     /// through the Service-scoped book cover chain, and the Workspace the
     /// book's detail holds.
-    fn gui_abs_hero(&mut self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksHero> {
-        let state = self.audiobookshelf_book_browse.get(lib_idx)?;
+    fn abs_hero(&mut self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksHero> {
+        let state = self.app.audiobookshelf_book_browse.get(lib_idx)?;
         let book = audiobookshelf_book_item(state, book_id)?;
         // The catalog's own record beside the queue item: the narrator, the
         // published year, and the description ride only there.
@@ -274,10 +278,10 @@ impl App {
             Some(ArtworkSource::AudiobookshelfCover {
                 library_item_id,
                 book: true,
-            }) => self.gui_abs_hero_artwork(library_item_id),
+            }) => self.abs_hero_artwork(library_item_id),
             Some(_) | None => None,
         };
-        let workspace = self.gui_abs_workspace(lib_idx, book_id);
+        let workspace = self.abs_workspace(lib_idx, book_id);
         Some(GuiAudiobooksHero {
             title: content.facts.title.clone(),
             meta_rows: content.facts.meta_rows.clone(),
@@ -285,7 +289,8 @@ impl App {
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
             art_shape: artwork_shape(
-                self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
+                self.app
+                    .gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
             ),
             art,
             workspace,
@@ -296,17 +301,17 @@ impl App {
     /// hero-scoped book-cover cache key, fetched here and encoded from the
     /// image cache once per key — the same resolution the other projections'
     /// hero art runs. `None` when no Audiobookshelf server is configured.
-    fn gui_abs_hero_artwork(&mut self, library_item_id: &str) -> Option<GuiLibraryArtwork> {
-        let cache_key = self.audiobookshelf_book_cover_key(library_item_id)?;
-        Some(self.resolve_gui_art(&cache_key))
+    fn abs_hero_artwork(&mut self, library_item_id: &str) -> Option<GuiLibraryArtwork> {
+        let cache_key = self.app.audiobookshelf_book_cover_key(library_item_id)?;
+        Some(self.app.resolve_gui_art(&cache_key))
     }
 
     /// The book Hero's Workspace (row 9.1): the book's chapter rows in the
     /// TUI's `visible_rows` order, the `Part N` fallback over the audio
     /// files when the book holds no chapters. `None` while the book's
     /// detail has not landed.
-    fn gui_abs_workspace(&self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksWorkspace> {
-        let state = self.audiobookshelf_book_browse.get(lib_idx)?;
+    fn abs_workspace(&self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksWorkspace> {
+        let state = self.app.audiobookshelf_book_browse.get(lib_idx)?;
         let rows = state
             .visible_rows(book_id)
             .into_iter()

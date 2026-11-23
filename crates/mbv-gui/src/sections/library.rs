@@ -7,7 +7,7 @@
 //! add-gui-library-panel; gui-one-destination-ensure design D2). The ledger
 //! compares each section on its own.
 
-use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
+use mbv::{GuiCore, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
@@ -36,15 +36,15 @@ pub(crate) struct LibraryPass {
 /// section is `None` while no presented destination is active. The
 /// destination's one load pass runs before the parts are built, so a part never
 /// starts a load of its own.
-pub(crate) fn build(app: &mut App) -> LibraryPass {
-    let destination = app.ensure_gui_active_destination();
-    let Some((list, detail)) = destination_parts(app, destination) else {
+pub(crate) fn build(core: &mut GuiCore) -> LibraryPass {
+    let destination = core.ensure_gui_active_destination();
+    let Some((list, detail)) = destination_parts(core, destination) else {
         return LibraryPass::default();
     };
-    let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
+    let GuiLibraryTabs { tabs, current } = core.app().gui_library_tabs();
     // The right-click item menu is the Library's, not one destination's (design
     // D8, D15): a row of any destination opens it.
-    let row_menu = app.gui_library_row_menu();
+    let row_menu = core.app_mut().gui_library_row_menu();
     LibraryPass {
         list: Some(GuiLibraryList {
             tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
@@ -60,37 +60,37 @@ pub(crate) fn build(app: &mut App) -> LibraryPass {
 /// presented destination is active. The match names every destination, so a new
 /// destination forces a row here.
 fn destination_parts(
-    app: &mut App,
+    core: &mut GuiCore,
     destination: Option<GuiDestinationKind>,
 ) -> Option<(GuiDestinationList, GuiLibraryDetail)> {
     match destination {
         None => None,
-        Some(GuiDestinationKind::Home) => Some(home_parts(app)),
-        Some(GuiDestinationKind::Music { lib_idx }) => Some(music_parts(app, lib_idx)),
-        Some(GuiDestinationKind::Shows { lib_idx }) => Some(shows_parts(app, lib_idx)),
-        Some(GuiDestinationKind::Library { lib_idx }) => Some(emby_parts(app, lib_idx)),
-        Some(GuiDestinationKind::Audiobooks { lib_idx }) => Some(audiobooks_parts(app, lib_idx)),
-        Some(GuiDestinationKind::Podcasts { lib_idx }) => Some(podcasts_parts(app, lib_idx)),
-        Some(GuiDestinationKind::Feeds) => Some(feeds_parts(app)),
+        Some(GuiDestinationKind::Home) => Some(home_parts(core)),
+        Some(GuiDestinationKind::Music { lib_idx }) => Some(music_parts(core, lib_idx)),
+        Some(GuiDestinationKind::Shows { lib_idx }) => Some(shows_parts(core, lib_idx)),
+        Some(GuiDestinationKind::Library { lib_idx }) => Some(emby_parts(core, lib_idx)),
+        Some(GuiDestinationKind::Audiobooks { lib_idx }) => Some(audiobooks_parts(core, lib_idx)),
+        Some(GuiDestinationKind::Podcasts { lib_idx }) => Some(podcasts_parts(core, lib_idx)),
+        Some(GuiDestinationKind::Feeds) => Some(feeds_parts(core)),
     }
 }
 
 /// The Music destination's parts (design D5): the projection's list facts, and
 /// the detail facts with the Hero's artwork, the picked item's menu, and the
 /// playing track's id.
-fn music_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = app.gui_music_projection(lib_idx);
+fn music_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
+    let projection = core.app_mut().gui_music_projection(lib_idx);
     let picked = projection
         .hero
         .as_ref()
         .map(|hero| hero.album.album_id.clone());
     let art = picked
         .as_deref()
-        .map(|album_id| GuiArtRef::from(&app.gui_library_artwork(album_id)));
+        .map(|album_id| GuiArtRef::from(&core.app_mut().gui_library_artwork(album_id)));
     let menu = picked
-        .map(|album_id| app.gui_library_menu(&album_id))
+        .map(|album_id| core.app_mut().gui_library_menu(&album_id))
         .unwrap_or_default();
-    let playing_track_id = mbv::playing_track_id_for_shell(app);
+    let playing_track_id = mbv::playing_track_id_for_shell(core.app());
     (
         GuiDestinationList::Music(GuiMusicList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Music(GuiMusicDetail::from_projection(
@@ -103,8 +103,8 @@ fn music_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibrary
 }
 
 /// The Home destination's parts (design D12).
-fn home_parts(app: &mut App) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = app.gui_home_projection();
+fn home_parts(core: &mut GuiCore) -> (GuiDestinationList, GuiLibraryDetail) {
+    let projection = core.app_mut().gui_home_projection();
     (
         GuiDestinationList::Home(GuiHomeList::from_projection(&projection)),
         GuiLibraryDetail::Home(GuiHomeDetail::from_projection(&projection)),
@@ -112,8 +112,8 @@ fn home_parts(app: &mut App) -> (GuiDestinationList, GuiLibraryDetail) {
 }
 
 /// The Shows destination's parts (design D14).
-fn shows_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = app.gui_shows_projection(lib_idx);
+fn shows_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
+    let projection = core.gui_shows_projection(lib_idx);
     (
         GuiDestinationList::Shows(GuiShowsList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Shows(GuiShowsDetail::from_projection(&projection)),
@@ -121,8 +121,8 @@ fn shows_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibrary
 }
 
 /// The Emby-library destination's parts (design D12, row 8.1).
-fn emby_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = app.gui_emby_projection(lib_idx);
+fn emby_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
+    let projection = core.gui_emby_projection(lib_idx);
     (
         GuiDestinationList::Emby(GuiEmbyList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Emby(GuiEmbyDetail::from_projection(&projection)),
@@ -130,8 +130,8 @@ fn emby_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryD
 }
 
 /// The Audiobooks destination's parts (design D12, row 9.1).
-fn audiobooks_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = app.gui_audiobooks_projection(lib_idx);
+fn audiobooks_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
+    let projection = core.gui_audiobooks_projection(lib_idx);
     (
         GuiDestinationList::Audiobooks(GuiAudiobooksList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Audiobooks(GuiAudiobooksDetail::from_projection(&projection)),
@@ -139,8 +139,8 @@ fn audiobooks_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLi
 }
 
 /// The Podcasts destination's parts (design D12, row 10.1).
-fn podcasts_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = app.gui_podcasts_projection(lib_idx);
+fn podcasts_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
+    let projection = core.app_mut().gui_podcasts_projection(lib_idx);
     (
         GuiDestinationList::Podcasts(GuiPodcastsList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Podcasts(GuiPodcastsDetail::from_projection(&projection)),
@@ -149,8 +149,8 @@ fn podcasts_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibr
 
 /// The Feeds destination's parts (design D12, row 11.1). The entries arrive
 /// from the shared startup fetch.
-fn feeds_parts(app: &mut App) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = app.gui_feeds_projection();
+fn feeds_parts(core: &mut GuiCore) -> (GuiDestinationList, GuiLibraryDetail) {
+    let projection = core.app_mut().gui_feeds_projection();
     (
         GuiDestinationList::Feeds(GuiFeedsList::from_projection(&projection)),
         GuiLibraryDetail::Feeds(GuiFeedsDetail::from_projection(&projection)),

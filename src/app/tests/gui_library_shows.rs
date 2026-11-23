@@ -107,7 +107,7 @@ fn the_series_mode_projects_the_tree() {
     let _guard = TestStateDirGuard::new();
     let mut app = series_tree_app();
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection
         .series
@@ -163,8 +163,8 @@ fn presenting_an_empty_shows_root_starts_the_root_load_once_without_an_open_dest
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
 
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
 
     assert_eq!(app.libs[0].nav_stack.len(), 1, "one root level is started");
     let root = &app.libs[0].nav_stack[0];
@@ -188,7 +188,7 @@ fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
     let _guard = TestStateDirGuard::new();
     let mut app = series_tree_app();
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the series Hero paints");
     assert_eq!(hero.title, "Alfred");
@@ -246,7 +246,7 @@ fn a_stale_selection_falls_back_to_the_first_row() {
     ]);
     app.gui.tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     assert_eq!(
         projection.selected.as_deref(),
@@ -287,7 +287,7 @@ fn the_series_heroes_art_box_follows_the_fetched_images_own_aspect() {
         },
     );
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the series Hero paints");
     assert!(hero.art.is_some(), "the seeded image is the Hero's art");
@@ -370,7 +370,7 @@ fn the_new_view_paints_the_merged_latest_episodes() {
         },
     );
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(ids, ["ep-new", "ep-mid", "ep-old"]);
@@ -401,7 +401,7 @@ fn the_upcoming_view_paints_display_only_premieres() {
         },
     );
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(ids, [sooner.stable_key(), later.stable_key()]);
@@ -434,9 +434,14 @@ fn an_upcoming_row_resolves_no_playable_item() {
             view: GuiShowsView::Upcoming,
         },
     );
-    let id = app.gui_shows_projection(0).rows[0].id.clone();
+    let id = crate::app::tests::gui_shows_projection(&mut app, 0).rows[0]
+        .id
+        .clone();
 
-    assert_eq!(app.gui_shows_item(0, &id), None);
+    assert_eq!(
+        crate::app::gui_library::shows_projection::shows_item(&app, 0, &id),
+        None
+    );
 }
 
 /// PR 1021 regression: a New fetch that lands with no rows — whether the
@@ -462,7 +467,7 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
         result,
     });
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     assert!(!projection.loading, "the landed fetch is not loading");
     assert!(projection.rows.is_empty(), "the list paints no rows");
@@ -501,7 +506,7 @@ fn an_upcoming_row_shows_its_series_image() {
     ));
     app.seed_card_image_for_test(key.clone(), still);
 
-    let projection = app.gui_shows_projection(0);
+    let projection = crate::app::tests::gui_shows_projection(&mut app, 0);
 
     assert_eq!(
         projection.rows[0].art,

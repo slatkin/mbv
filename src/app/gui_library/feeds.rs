@@ -135,7 +135,12 @@ impl App {
         if !self.gui_feeds_present() {
             super::log_ignored_library_command("feedsOpen", format_args!("the feed tab is absent"));
         }
-        self.ensure_gui_destination(GuiDestinationKind::Feeds);
+        // The ordered load pass is the GUI core's, so the open step hands
+        // the core the App it holds.
+        let mut core =
+            crate::gui::GuiCore::new(std::mem::replace(self, crate::app::app_stub::handoff_app()));
+        core.ensure_gui_destination(GuiDestinationKind::Feeds);
+        *self = core.into_app();
     }
 
     /// Select the entry the Hero shows (row 11.1).

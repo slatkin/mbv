@@ -155,7 +155,7 @@ impl App {
     fn presented_tab_positions(&self) -> Vec<usize> {
         let mut positions = vec![0];
         positions.extend(
-            self.presented_destinations()
+            super::launch::presented_destinations(self)
                 .into_iter()
                 .filter_map(|kind| self.gui_destination_position(kind)),
         );
@@ -215,8 +215,7 @@ impl App {
     /// and the restore cannot disagree.
     #[must_use]
     pub fn gui_library_tabs(&self) -> GuiLibraryTabs {
-        let tabs = self
-            .presented_destinations()
+        let tabs = super::launch::presented_destinations(self)
             .into_iter()
             .filter_map(|kind| {
                 let position = self.gui_destination_position(kind)?;

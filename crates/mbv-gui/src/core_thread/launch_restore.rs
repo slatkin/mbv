@@ -42,7 +42,7 @@ impl CoreThread {
             GuiLaunchRestore::Done => return,
             GuiLaunchRestore::Destination(state) => {
                 let state = state.clone();
-                let destination = match self.core.app_mut().open_gui_launch_destination(&state) {
+                let destination = match self.core.open_gui_launch_destination(&state) {
                     GuiLaunchOpen::Retry => return,
                     GuiLaunchOpen::Opened(destination) => destination,
                 };
@@ -65,7 +65,6 @@ impl CoreThread {
         // retries it when the list lands.
         if self
             .core
-            .app_mut()
             .restore_gui_launch_collections(&state, &destination)
         {
             self.launch_restore = GuiLaunchRestore::Done;
@@ -77,7 +76,7 @@ impl CoreThread {
     /// never while the window is open. A failed write is logged and never
     /// blocks the exit.
     pub(crate) fn save_launch_location(&mut self) {
-        let state = self.core.app().gui_launch_state();
+        let state = self.core.gui_launch_state();
         if let Err(error) = mbv_config::save_gui_launch_state(&state) {
             tracing::warn!(
                 name: "launch_state.save.failed",

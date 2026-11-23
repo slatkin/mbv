@@ -15,6 +15,82 @@ pub(in crate::app) fn apply_gui_library_command(
     *app = core.into_app();
 }
 
+/// One GUI core step over a stub `App` a test holds: the test helper for the
+/// launch tests, which run the launch location's phases through the GUI core
+/// over the `App`, as a client does.
+pub(in crate::app) fn restore_launch_collections(
+    app: &mut crate::app::App,
+    state: &mbv_config::GuiLaunchState,
+    destination: &mbv_config::TabIdentity,
+) -> bool {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let restored = core.restore_gui_launch_collections(state, destination);
+    *app = core.into_app();
+    restored
+}
+
+/// The launch location's first phase over a stub `App` a test holds.
+pub(in crate::app) fn open_launch_destination(
+    app: &mut crate::app::App,
+    state: &mbv_config::GuiLaunchState,
+) -> crate::app::GuiLaunchOpen {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let opened = core.open_gui_launch_destination(state);
+    *app = core.into_app();
+    opened
+}
+
+/// Run one GUI Library destination's ordered load pass over a stub `App` a
+/// test holds: the test helper for the destination load tests, which run the
+/// pass through the GUI core over the `App`, as a client does.
+pub(in crate::app) fn ensure_gui_destination(
+    app: &mut crate::app::App,
+    kind: crate::app::GuiDestinationKind,
+) {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    core.ensure_gui_destination(kind);
+    *app = core.into_app();
+}
+
+/// One destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_audiobooks_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiAudiobooksProjection {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let projection = core.gui_audiobooks_projection(lib_idx);
+    *app = core.into_app();
+    projection
+}
+
+/// One destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_emby_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiEmbyProjection {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let projection = core.gui_emby_projection(lib_idx);
+    *app = core.into_app();
+    projection
+}
+
+/// One destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_shows_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiShowsProjection {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let projection = core.gui_shows_projection(lib_idx);
+    *app = core.into_app();
+    projection
+}
+
 // The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
 // to `crate::app::shell::test_support` (task 4.7): they write the shell
 // `Model`'s size and push the single-panel fact the core reads.

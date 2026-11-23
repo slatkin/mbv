@@ -19,6 +19,7 @@
 use std::collections::HashSet;
 
 use crate::app::App;
+use crate::gui::GuiCore;
 
 use super::GuiDestinationKind;
 use super::store::GuiGroupAlbums;
@@ -57,7 +58,7 @@ pub(in crate::app) trait GuiDestinationLoads {
     fn ensure_dependents(&self, _app: &mut App) {}
 }
 
-impl App {
+impl GuiCore {
     /// Run the one ordered load pass for `kind` (design D1): resolve the
     /// destination to its site value, then run that site's three steps in
     /// order. The match is exhaustive and has no wildcard arm, so a new
@@ -68,31 +69,31 @@ impl App {
     /// tab.
     pub(in crate::app) fn ensure_gui_destination(&mut self, kind: GuiDestinationKind) {
         match kind {
-            GuiDestinationKind::Home => self.run_gui_destination_loads(&HomeLoads),
+            GuiDestinationKind::Home => run_gui_destination_loads(&mut self.app, &HomeLoads),
             GuiDestinationKind::Music { lib_idx } => {
-                self.run_gui_destination_loads(&MusicLoads { lib_idx });
+                run_gui_destination_loads(&mut self.app, &MusicLoads { lib_idx });
             }
             GuiDestinationKind::Shows { lib_idx } => {
-                self.run_gui_destination_loads(&ShowsLoads { lib_idx });
+                run_gui_destination_loads(&mut self.app, &ShowsLoads { lib_idx });
             }
             GuiDestinationKind::Library { lib_idx } => {
-                self.run_gui_destination_loads(&EmbyLoads { lib_idx });
+                run_gui_destination_loads(&mut self.app, &EmbyLoads { lib_idx });
             }
             GuiDestinationKind::Audiobooks { lib_idx } => {
-                if self.tab.audiobookshelf_index() == Some(lib_idx)
-                    && self.gui_abs_book_library(lib_idx)
+                if self.app.tab.audiobookshelf_index() == Some(lib_idx)
+                    && self.app.gui_abs_book_library(lib_idx)
                 {
-                    self.run_gui_destination_loads(&AudiobooksLoads { lib_idx });
+                    run_gui_destination_loads(&mut self.app, &AudiobooksLoads { lib_idx });
                 }
             }
             GuiDestinationKind::Podcasts { lib_idx } => {
-                if self.tab.audiobookshelf_index() == Some(lib_idx)
-                    && self.gui_podcast_library(lib_idx)
+                if self.app.tab.audiobookshelf_index() == Some(lib_idx)
+                    && self.app.gui_podcast_library(lib_idx)
                 {
-                    self.run_gui_destination_loads(&PodcastsLoads { lib_idx });
+                    run_gui_destination_loads(&mut self.app, &PodcastsLoads { lib_idx });
                 }
             }
-            GuiDestinationKind::Feeds => self.run_gui_destination_loads(&FeedsLoads),
+            GuiDestinationKind::Feeds => run_gui_destination_loads(&mut self.app, &FeedsLoads),
         }
     }
 
@@ -103,24 +104,25 @@ impl App {
     /// destination only, whose steps then hold their own idempotent guards.
     /// It returns that destination, so the caller does not resolve it again.
     pub fn ensure_gui_active_destination(&mut self) -> Option<GuiDestinationKind> {
-        let kind = self.gui_active_destination()?;
+        let kind = self.app.gui_active_destination()?;
         self.ensure_gui_destination(kind);
         Some(kind)
     }
+}
 
-    /// Run one site's steps in the shared order (design D1): root, then
-    /// selection, then dependents, stopping at the first step that calls for a
-    /// load (design D3). This is the only place the order lives; every
-    /// destination reaches it through [`Self::ensure_gui_destination`].
-    pub(in crate::app) fn run_gui_destination_loads<L: GuiDestinationLoads>(&mut self, loads: &L) {
-        if loads.ensure_root(self) == GuiStepOutcome::LoadStarted {
-            return;
-        }
-        if loads.ensure_selection(self) == GuiStepOutcome::LoadStarted {
-            return;
-        }
-        loads.ensure_dependents(self);
+/// Run one site's steps in the shared order (design D1): root, then selection,
+/// then dependents, stopping at the first step that calls for a load (design
+/// D3). This is the only place the order lives; every destination reaches it
+/// through [`GuiCore::ensure_gui_destination`]. It takes the `App` the sites
+/// step over, so it stays a core driver and never a GUI-core method.
+pub(in crate::app) fn run_gui_destination_loads<L: GuiDestinationLoads>(app: &mut App, loads: &L) {
+    if loads.ensure_root(app) == GuiStepOutcome::LoadStarted {
+        return;
     }
+    if loads.ensure_selection(app) == GuiStepOutcome::LoadStarted {
+        return;
+    }
+    loads.ensure_dependents(app);
 }
 
 /// Whether an Audiobookshelf catalog (book or show list) is unloaded in a shape
@@ -214,7 +216,7 @@ struct ShowsLoads {
 
 impl GuiDestinationLoads for ShowsLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
-        if app.gui_shows_root_needs_load(self.lib_idx) {
+        if super::shows_projection::shows_root_needs_load(app, self.lib_idx) {
             app.load_gui_shows_root(self.lib_idx);
             return GuiStepOutcome::LoadStarted;
         }
@@ -222,7 +224,8 @@ impl GuiDestinationLoads for ShowsLoads {
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        let Some(series_id) = app.gui_shows_default_series(self.lib_idx) else {
+        let Some(series_id) = super::shows_projection::shows_default_series(app, self.lib_idx)
+        else {
             return GuiStepOutcome::Continue;
         };
         if app.series_detail_cache.contains_key(&series_id) {
@@ -233,10 +236,13 @@ impl GuiDestinationLoads for ShowsLoads {
     }
 
     fn ensure_dependents(&self, app: &mut App) {
-        let Some(series_id) = app.gui_shows_default_series(self.lib_idx) else {
+        let Some(series_id) = super::shows_projection::shows_default_series(app, self.lib_idx)
+        else {
             return;
         };
-        let Some(season_id) = app.gui_shows_selected_season(self.lib_idx, &series_id) else {
+        let Some(season_id) =
+            super::shows_projection::hero::shows_selected_season(app, self.lib_idx, &series_id)
+        else {
             return;
         };
         app.fetch_series_season_episodes(series_id, season_id);

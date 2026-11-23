@@ -156,17 +156,21 @@ fn a_saved_checked_set_restores_as_saved(
     if let Some(sort) = sort {
         seed_launch_sort(&mut source, sort);
     }
-    let saved = source.gui_launch_state();
+    let saved = crate::gui::GuiCore::new(source).gui_launch_state();
     mbv_config::save_gui_launch_state(&saved).expect("the snapshot is written");
     let loaded = mbv_config::load_gui_launch_state().expect("the snapshot is read");
 
     let mut restored = launch_roundtrip_app(&target);
 
     assert!(matches!(
-        restored.open_gui_launch_destination(&loaded),
+        crate::app::tests::open_launch_destination(&mut restored, &loaded),
         GuiLaunchOpen::Opened(_)
     ));
-    assert!(restored.restore_gui_launch_collections(&loaded, &loaded.destination));
+    assert!(crate::app::tests::restore_launch_collections(
+        &mut restored,
+        &loaded,
+        &loaded.destination
+    ));
     let set = restored_launch_selection(&restored, &target);
     let expected: Vec<String> = keys.iter().map(ToString::to_string).collect();
     assert_eq!(set.checked_keys(), expected.as_slice());
@@ -207,7 +211,11 @@ fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
         sorts: Vec::new(),
     };
 
-    assert!(app.restore_gui_launch_collections(&state, &destination));
+    assert!(crate::app::tests::restore_launch_collections(
+        &mut app,
+        &state,
+        &destination
+    ));
 
     let set = restored_launch_selection(&app, &GuiCollectionTarget::Feeds);
     let expected = vec![FEED_B.to_string()];
@@ -249,7 +257,7 @@ fn a_saved_resting_music_set_installs_without_a_group_list() {
     };
 
     assert!(
-        app.restore_gui_launch_collections(&state, &destination),
+        crate::app::tests::restore_launch_collections(&mut app, &state, &destination),
         "a resting destination's entry needs no retry"
     );
 
@@ -298,7 +306,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
     };
 
     assert!(
-        !app.restore_gui_launch_collections(&state, &destination),
+        !crate::app::tests::restore_launch_collections(&mut app, &state, &destination),
         "the Podcasts entry waits while its catalog can still land"
     );
 
@@ -308,7 +316,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
         crate::app::state::service_runtime::AudiobookshelfRuntime::new(false);
 
     assert!(
-        app.restore_gui_launch_collections(&state, &destination),
+        crate::app::tests::restore_launch_collections(&mut app, &state, &destination),
         "the switch abandons the restore"
     );
     assert!(
@@ -340,7 +348,11 @@ fn a_saved_group_no_longer_held_restores_as_all() {
         sorts: Vec::new(),
     };
 
-    assert!(app.restore_gui_launch_collections(&state, &destination));
+    assert!(crate::app::tests::restore_launch_collections(
+        &mut app,
+        &state,
+        &destination
+    ));
 
     assert!(
         !app.gui.library_groups.contains_key(&0),
@@ -365,7 +377,7 @@ fn the_shows_view_survives_a_restart() {
     app.tab = TabSelection::EmbyLibrary(0);
     app.gui.shows_views.insert(0, GuiShowsView::Upcoming);
 
-    let saved = app.gui_launch_state();
+    let saved = crate::gui::GuiCore::new(app).gui_launch_state();
     assert_eq!(saved.shows_view, mbv_config::GuiLaunchShowsView::Upcoming);
     mbv_config::save_gui_launch_state(&saved).expect("the snapshot is written");
     let loaded = mbv_config::load_gui_launch_state().expect("the snapshot is read");
@@ -376,7 +388,7 @@ fn the_shows_view_survives_a_restart() {
     restored.libs.push(crate::app::LibraryTab::new(library));
 
     assert!(matches!(
-        restored.open_gui_launch_destination(&loaded),
+        crate::app::tests::open_launch_destination(&mut restored, &loaded),
         GuiLaunchOpen::Opened(_)
     ));
     assert_eq!(restored.gui_shows_view(0), GuiShowsView::Upcoming);
@@ -393,6 +405,6 @@ fn the_shows_view_survives_a_restart() {
     library.id = "lib-tv".into();
     library.collection_type = "tvshows".into();
     fresh.libs.push(crate::app::LibraryTab::new(library));
-    fresh.open_gui_launch_destination(&old);
+    crate::app::tests::open_launch_destination(&mut fresh, &old);
     assert_eq!(fresh.gui_shows_view(0), GuiShowsView::All);
 }

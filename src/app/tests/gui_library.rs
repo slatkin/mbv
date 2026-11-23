@@ -273,7 +273,7 @@ fn pressing_all_refetches_a_failed_group() {
     // The rest of All's groups fetch one at a time on later frames, and the
     // union holds every group's albums once their fetches land.
     http.respond(200, SOUL_ALBUMS);
-    app.ensure_gui_destination(GuiDestinationKind::Music { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     land_one_group(&mut app);
     let projection = app.gui_music_projection(0);
     assert_eq!(
@@ -299,8 +299,8 @@ fn an_ensure_call_does_not_refetch_a_failed_group() {
     select_group(&mut app, HIPHOP);
     land_one_group(&mut app);
 
-    app.ensure_gui_destination(GuiDestinationKind::Music { lib_idx: 0 });
-    app.ensure_gui_destination(GuiDestinationKind::Music { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
 
     assert!(
         app.channels.lib_rx.try_recv().is_err(),
@@ -583,7 +583,7 @@ fn all_fetches_once_the_client_appears() {
     );
     app.install_gui_library_collection(0, GuiCollectionSet::All);
 
-    app.ensure_gui_destination(GuiDestinationKind::Music { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     assert!(
         app.channels.lib_rx.try_recv().is_err(),
         "no client starts no fetch"
@@ -592,9 +592,9 @@ fn all_fetches_once_the_client_appears() {
     http.respond(200, ALBUMS);
     http.respond(200, SOUL_ALBUMS);
     app.emby_runtime = ready;
-    app.ensure_gui_destination(GuiDestinationKind::Music { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     land_one_group(&mut app);
-    app.ensure_gui_destination(GuiDestinationKind::Music { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     land_one_group(&mut app);
 
     let projection = app.gui_music_projection(0);

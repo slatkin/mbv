@@ -67,7 +67,19 @@ impl App {
             .library_groups
             .insert(lib_idx, GuiCollectionSelection { set });
         self.clear_failed_music_groups(lib_idx);
-        self.ensure_gui_destination(GuiDestinationKind::Music { lib_idx });
+        self.run_gui_destination_open(GuiDestinationKind::Music { lib_idx });
+    }
+
+    /// Run one destination's ordered load pass (gui-one-destination-ensure
+    /// design D1): the pass is the GUI core's, so the collection install
+    /// reaches it by handing the core the App it holds.
+    fn run_gui_destination_open(&mut self, kind: GuiDestinationKind) {
+        // The ordered load pass is the GUI core's, so the open step hands
+        // the core the App it holds.
+        let mut core =
+            crate::gui::GuiCore::new(std::mem::replace(self, crate::app::app_stub::handoff_app()));
+        core.ensure_gui_destination(kind);
+        *self = core.into_app();
     }
 
     /// Drop the failed album marks of `lib_idx`'s selected groups (design D5):
@@ -143,7 +155,7 @@ impl App {
         if let Some(reason) = self.gui_library_collection_target_reject_reason(lib_idx) {
             return Some(reason);
         }
-        let level = self.gui_music_group_level(lib_idx)?;
+        let level = super::launch::music_group_level(self, lib_idx)?;
         if level.items.iter().any(|group| group.id == group_id) {
             None
         } else {
@@ -231,7 +243,7 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
     }
 
     fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
-        let level = app.gui_music_group_level(self.0)?;
+        let level = super::launch::music_group_level(app, self.0)?;
         if level.loading {
             return None;
         }

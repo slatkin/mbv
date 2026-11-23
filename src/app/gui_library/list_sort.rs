@@ -283,7 +283,7 @@ impl App {
     /// its sort across a restart and two libraries of one kind keep their
     /// own.
     fn gui_sort_target_identity(&self, target: GuiSortTarget) -> Option<TabIdentity> {
-        self.gui_destination_identity(target.destination_kind())
+        super::launch::destination_identity(self, target.destination_kind())
     }
 
     /// Whether `target` is a `Library` target in the feed-group mode (design

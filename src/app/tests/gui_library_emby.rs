@@ -252,7 +252,7 @@ fn opening_a_feed_view_library_loads_its_default_selection() {
 
     app.gui_emby_open(0);
     land_root_listing(&mut app);
-    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     land_shown_selection(&mut app);
 
     let items = app.feed_home_video_selected_items(0);
@@ -363,7 +363,7 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
         None,
         "the first fetch retired its mark"
     );
-    app.ensure_gui_destination(GuiDestinationKind::Library { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     assert_eq!(
         app.libs[0].feed_home_video.as_ref().unwrap().fetching,
         Some(FeedHomeVideoSelection::Folder("folder-2".into())),
@@ -371,7 +371,7 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
     );
     land(&mut app);
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,
@@ -549,7 +549,7 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
         movie_item("m-3", "9th Street", 0, 0),
     ]);
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(ids, ["m-1", "m-2", "m-3"], "the rows are the store's list");
@@ -667,7 +667,7 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
         ..FeedHomeVideoState::default()
     });
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     assert!(projection.feed_group, "the feed-group mode is named");
     let collections = projection
@@ -739,7 +739,7 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
         },
     );
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     assert_eq!(
         projection.selected.as_deref(),
@@ -776,7 +776,7 @@ fn the_plain_mode_rows_paint_their_row_art() {
     let mut app = plain_movies_app(vec![tagged, untagged]);
     app.seed_card_image_for_test(key.clone(), row_image());
 
-    let projection = app.gui_emby_projection(0);
+    let projection = crate::app::tests::gui_emby_projection(&mut app, 0);
 
     assert_eq!(
         projection.rows[0].art,

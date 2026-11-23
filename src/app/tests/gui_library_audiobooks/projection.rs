@@ -79,7 +79,7 @@ fn the_projection_carries_the_rows_letters_and_the_default_pick() {
         None,
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
@@ -137,7 +137,7 @@ fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
         Some(1800.0),
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
@@ -212,7 +212,7 @@ fn a_chapter_row_paints_its_own_span_not_its_absolute_end() {
         None,
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let workspace = projection
         .hero
@@ -243,7 +243,7 @@ fn the_workspace_falls_back_to_part_rows_without_chapters() {
         None,
     );
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let workspace = projection
         .hero
@@ -315,7 +315,7 @@ fn the_playing_book_rides_the_projection() {
         status.position_ticks = mbv_emby_model::seconds_to_ticks(2000.0);
     });
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     assert_eq!(
         projection.playing_book_id.as_deref(),
@@ -644,7 +644,7 @@ fn the_book_hero_restores_the_narrator_year_and_description() {
     book.published_year = Some("1999".into());
     book.description = Some("A novel of manners. https://example.test/x".into());
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(
@@ -689,7 +689,7 @@ fn a_book_row_shows_its_cover() {
     ));
     app.seed_card_image_for_test(key.clone(), cover);
 
-    let projection = app.gui_audiobooks_projection(0);
+    let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 
     assert_eq!(
         projection.rows[0].art,

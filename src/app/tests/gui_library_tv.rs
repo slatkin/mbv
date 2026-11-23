@@ -228,7 +228,7 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
         },
     );
 
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
     land(&mut app);
 
     let episodes = &app.series_detail_cache["series-a"].episodes["season-1"];
@@ -315,19 +315,19 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
     );
     land(&mut app);
     assert_eq!(
-        app.gui_shows_projection(0).series,
+        crate::app::tests::gui_shows_projection(&mut app, 0).series,
         Vec::new(),
         "a settled Latest root projects no series row, the blank tree"
     );
 
     // The frame ensure reloads the root as the All series list, once: the
     // second pass finds the All list and starts no second request.
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
     land(&mut app);
-    app.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
 
     assert_eq!(
-        app.gui_shows_projection(0)
+        crate::app::tests::gui_shows_projection(&mut app, 0)
             .series
             .iter()
             .map(|series| series.id.as_str())

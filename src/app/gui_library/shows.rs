@@ -220,7 +220,7 @@ impl App {
         lib_idx: usize,
         item_id: &str,
     ) {
-        match self.gui_shows_item(lib_idx, item_id) {
+        match super::shows_projection::shows_item(self, lib_idx, item_id) {
             Some(item) => self.play_or_activate_lib_item(lib_idx, item),
             None => super::log_stale_library_item("showsPlay", item_id),
         }
@@ -233,7 +233,7 @@ impl App {
         lib_idx: usize,
         item_id: &str,
     ) {
-        match self.gui_shows_item(lib_idx, item_id) {
+        match super::shows_projection::shows_item(self, lib_idx, item_id) {
             Some(item) => self.play_lib_item_next(lib_idx, item),
             None => super::log_stale_library_item("showsPlayNext", item_id),
         }
@@ -245,7 +245,7 @@ impl App {
         lib_idx: usize,
         item_id: &str,
     ) {
-        match self.gui_shows_item(lib_idx, item_id) {
+        match super::shows_projection::shows_item(self, lib_idx, item_id) {
             Some(item) => self.enqueue_lib_item(lib_idx, item),
             None => super::log_stale_library_item("showsQueue", item_id),
         }

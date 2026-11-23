@@ -154,7 +154,10 @@ fn a_restored_podcasts_destination_starts_its_show_list_load() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
-    app.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx: 1 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Podcasts { lib_idx: 1 },
+    );
 
     let state = podcast_state(&app);
     assert_eq!(
@@ -170,7 +173,7 @@ fn a_restored_podcasts_destination_starts_its_show_list_load() {
 /// One frame's load pass for library 1's show catalog, as the catalog request
 /// serial it left: an armed replacement batch bumps the serial.
 fn pass_catalog_request(app: &mut App) -> u64 {
-    app.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx: 1 });
+    crate::app::tests::ensure_gui_destination(app, GuiDestinationKind::Podcasts { lib_idx: 1 });
     podcast_state(app).catalog_request
 }
 
@@ -406,11 +409,13 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
         shows_view: mbv_config::GuiLaunchShowsView::All,
         sorts: Vec::new(),
     };
-    let crate::app::GuiLaunchOpen::Opened(opened) = app.open_gui_launch_destination(&saved) else {
+    let crate::app::GuiLaunchOpen::Opened(opened) =
+        crate::app::tests::open_launch_destination(&mut app, &saved)
+    else {
         panic!("the catalog is presented, so the start has opened");
     };
     assert!(
-        app.restore_gui_launch_collections(&saved, &opened),
+        crate::app::tests::restore_launch_collections(&mut app, &saved, &opened),
         "the Podcasts destination applies no saved pill and needs no retry"
     );
     assert_eq!(

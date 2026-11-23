@@ -30,7 +30,7 @@ mod request;
 mod rows_in_view;
 mod search;
 mod shows;
-mod shows_projection;
+pub(crate) mod shows_projection;
 mod shows_view;
 mod store;
 mod stores;
@@ -489,7 +489,7 @@ impl GuiCore {
     /// position that names no presented destination opens nothing — the top
     /// bar paints no tab for it, so it is the absent digit key.
     pub(in crate::app) fn open_gui_library_position(&mut self, position: usize) {
-        if self.app.presents_open_position(position) {
+        if launch::presents_open_position(&self.app, position) {
             self.app.set_library_tab(position);
             self.open_gui_active_destination();
         } else {
@@ -517,7 +517,12 @@ impl GuiCore {
             // the pass's selection step (design D3), so neither has user-action
             // work and the pass alone is their open step.
             Some(GuiDestinationKind::Home | GuiDestinationKind::Music { .. }) => {
-                self.app.ensure_gui_active_destination();
+                let mut core = GuiCore::new(std::mem::replace(
+                    &mut self.app,
+                    crate::app::app_stub::handoff_app(),
+                ));
+                core.ensure_gui_active_destination();
+                self.app = core.into_app();
             }
             // Feeds' entries ride the shared startup fetch, so its pass is a
             // no-op and its open only reports an absent tab.

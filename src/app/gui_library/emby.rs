@@ -120,7 +120,7 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
     }
 
     fn scopes(&self, app: &App) -> impl IntoIterator<Item = (String, String)> {
-        app.gui_root_folder_names(self.0)
+        super::emby_projection::root_folder_names(app, self.0)
             .into_iter()
             .map(|(id, name)| (id.to_owned(), name.to_owned()))
     }
@@ -199,7 +199,12 @@ impl App {
                 self.gui.emby_roots.remove(&lib_idx);
             }
         }
-        self.ensure_gui_destination(GuiDestinationKind::Library { lib_idx });
+        // The ordered load pass is the GUI core's, so the open step hands
+        // the core the App it holds.
+        let mut core =
+            crate::gui::GuiCore::new(std::mem::replace(self, crate::app::app_stub::handoff_app()));
+        core.ensure_gui_destination(GuiDestinationKind::Library { lib_idx });
+        *self = core.into_app();
     }
 
     /// Select the row the Hero shows (row 8.1): the selection the core owns,
@@ -244,7 +249,8 @@ impl App {
     fn gui_emby_row_known(&self, lib_idx: usize, item_id: &str) -> bool {
         if self.is_feed_home_video_library(lib_idx) {
             let set = self.gui_emby_feed_effective_set(lib_idx);
-            let (items, loading) = self.gui_emby_feed_gathered(lib_idx, set.as_ref());
+            let (items, loading) =
+                super::emby_projection::feed_gathered(self, lib_idx, set.as_ref());
             return loading || items.iter().any(|item| item.id == item_id);
         }
         match self.gui.emby_roots.get(&lib_idx) {
@@ -537,7 +543,10 @@ impl App {
         lib_idx: usize,
         item_id: &str,
     ) {
-        match self.gui_emby_item(lib_idx, item_id) {
+        // The row resolution is the GUI's, so it runs through the core's own
+        // read; the play itself is the shared core path.
+        let item = super::emby_projection::emby_item(self, lib_idx, item_id);
+        match item {
             Some(item) => self.play_or_activate_lib_item(lib_idx, item),
             None => super::log_stale_library_item("embyPlay", item_id),
         }
@@ -551,7 +560,10 @@ impl App {
         lib_idx: usize,
         item_id: &str,
     ) {
-        match self.gui_emby_item(lib_idx, item_id) {
+        // The row resolution is the GUI's, so it runs through the core's own
+        // read; the play itself is the shared core path.
+        let item = super::emby_projection::emby_item(self, lib_idx, item_id);
+        match item {
             Some(item) => self.play_lib_item_next(lib_idx, item),
             None => super::log_stale_library_item("embyPlayNext", item_id),
         }
@@ -564,7 +576,10 @@ impl App {
         lib_idx: usize,
         item_id: &str,
     ) {
-        match self.gui_emby_item(lib_idx, item_id) {
+        // The row resolution is the GUI's, so it runs through the core's own
+        // read; the play itself is the shared core path.
+        let item = super::emby_projection::emby_item(self, lib_idx, item_id);
+        match item {
             Some(item) => self.enqueue_lib_item(lib_idx, item),
             None => super::log_stale_library_item("embyQueue", item_id),
         }

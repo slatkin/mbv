@@ -51,7 +51,12 @@ impl App {
             );
             return;
         }
-        self.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
+        // The ordered load pass is the GUI core's, so the open step hands
+        // the core the App it holds.
+        let mut core =
+            crate::gui::GuiCore::new(std::mem::replace(self, crate::app::app_stub::handoff_app()));
+        core.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
+        *self = core.into_app();
     }
 
     /// Start the Shows library's root load (gui-one-destination-ensure design

@@ -429,7 +429,7 @@ impl SectionLedger {
             audit_clean(Section::Theme, &self.theme, &GuiTheme::current());
         }
         if !marked.contains(&Section::Library) {
-            let pass = library::build(core.app_mut());
+            let pass = library::build(core);
             audit_clean(Section::Library, &self.library_list, &pass.list);
             audit_clean(Section::Library, &self.library_detail, &pass.detail);
             audit_clean(Section::Library, &self.row_menu, &pass.row_menu);
@@ -464,7 +464,7 @@ impl SectionLedger {
         }
         if marked.contains(&Section::Library) {
             let before = (self.library_list.revision, self.library_detail.revision);
-            let pass = library::build(core.app_mut());
+            let pass = library::build(core);
             self.library_list.adopt(pass.list);
             self.library_detail.adopt(pass.detail);
             self.row_menu.adopt(pass.row_menu);

@@ -148,7 +148,7 @@ impl App {
             return;
         }
         self.clear_gui_podcast_catalog_failed(lib_idx);
-        self.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
+        self.run_gui_podcast_loads(lib_idx);
     }
 
     /// The one write the toggle and the All press take: the shared collection
@@ -161,7 +161,20 @@ impl App {
             .or_default()
             .selection
             .set = set;
-        self.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
+        self.run_gui_podcast_loads(lib_idx);
+    }
+
+    /// Run the Podcasts destination's one ordered load pass (gui-one-
+    /// destination-ensure design D1): the GUI core runs the pass, so the
+    /// open step and the selection install reach it by handing the core the
+    /// App they hold.
+    fn run_gui_podcast_loads(&mut self, lib_idx: usize) {
+        // The ordered load pass is the GUI core's, so the open step hands
+        // the core the App it holds.
+        let mut core =
+            crate::gui::GuiCore::new(std::mem::replace(self, crate::app::app_stub::handoff_app()));
+        core.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
+        *self = core.into_app();
     }
 
     /// Select the episode the Hero shows (row 10.1): the selection the core

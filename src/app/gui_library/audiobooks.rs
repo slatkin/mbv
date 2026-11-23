@@ -57,7 +57,12 @@ impl App {
             return;
         }
         self.clear_gui_abs_catalog_failed(lib_idx);
-        self.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
+        // The ordered load pass is the GUI core's, so the open step hands
+        // the core the App it holds.
+        let mut core =
+            crate::gui::GuiCore::new(std::mem::replace(self, crate::app::app_stub::handoff_app()));
+        core.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
+        *self = core.into_app();
     }
 
     /// Select the book the Hero shows (row 9.1): the selection the core owns,

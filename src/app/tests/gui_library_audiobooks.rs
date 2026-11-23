@@ -202,7 +202,10 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     let mut app = abs_app();
     app.audiobookshelf_book_browse[0].books = vec![book("book-a", "A Book")];
 
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Audiobooks { lib_idx: 0 },
+    );
     let _ = app
         .channels
         .lib_rx
@@ -220,7 +223,10 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     while app.drain_lib_event() {}
     assert!(book_state(&app).detail_cache.contains_key("book-a"));
 
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Audiobooks { lib_idx: 0 },
+    );
     assert_eq!(
         book_state(&app).next_detail_request,
         request,
@@ -279,7 +285,10 @@ fn a_restored_audiobooks_destination_starts_its_catalog_load() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(
+        &mut app,
+        GuiDestinationKind::Audiobooks { lib_idx: 0 },
+    );
 
     let state = book_state(&app);
     assert_eq!(
@@ -299,7 +308,7 @@ fn a_restored_audiobooks_destination_starts_its_catalog_load() {
 /// One frame's load pass for library 0's book catalog, as the catalog request
 /// serial it left: an armed replacement batch bumps the serial.
 fn pass_catalog_request(app: &mut App) -> u64 {
-    app.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx: 0 });
+    crate::app::tests::ensure_gui_destination(app, GuiDestinationKind::Audiobooks { lib_idx: 0 });
     app.audiobookshelf_book_browse[0].catalog_request
 }
 

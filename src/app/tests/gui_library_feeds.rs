@@ -208,12 +208,14 @@ fn a_saved_feeds_location_applies_no_saved_selection() {
         sorts: Vec::new(),
     };
 
-    let crate::app::GuiLaunchOpen::Opened(opened) = app.open_gui_launch_destination(&saved) else {
+    let crate::app::GuiLaunchOpen::Opened(opened) =
+        crate::app::tests::open_launch_destination(&mut app, &saved)
+    else {
         panic!("the feed tab is presented, so the start has opened");
     };
 
     assert!(
-        app.restore_gui_launch_collections(&saved, &opened),
+        crate::app::tests::restore_launch_collections(&mut app, &saved, &opened),
         "the Feeds destination needs no retry"
     );
     assert_eq!(

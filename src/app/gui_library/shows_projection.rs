@@ -7,7 +7,7 @@
 //! TUI's: series by `SortName`, seasons by `SortName` (the server order the
 //! detail fetch requests), episodes by `IndexNumber`.
 
-mod hero;
+pub(super) mod hero;
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{QueueItem, TvContentMode};
@@ -25,8 +25,8 @@ use super::projection::sort_letter;
 use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
-use super::tv::GuiTvShowsSelection;
 use crate::app::App;
+use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 use mbv_ui_model::sort_filter::effective_sort_str;
 
@@ -211,13 +211,13 @@ pub struct GuiShowsProjection {
     pub hero: Option<GuiShowsHero>,
 }
 
-impl App {
+impl GuiCore {
     /// The active destination's Shows library index (design D12): the
     /// destination whose Shows content the GUI Library panel paints. `None`
     /// for every other destination, which presents no Shows section.
     #[must_use]
     pub fn gui_shows_destination(&self) -> Option<usize> {
-        match self.gui_active_destination() {
+        match self.app.gui_active_destination() {
             Some(GuiDestinationKind::Shows { lib_idx }) => Some(lib_idx),
             _ => None,
         }
@@ -229,26 +229,27 @@ impl App {
     /// `lib_idx` that names no Shows library projects the empty projection.
     #[must_use]
     pub fn gui_shows_projection(&mut self, lib_idx: usize) -> GuiShowsProjection {
-        if !self.gui_tv_library(lib_idx) {
+        if !self.app.gui_tv_library(lib_idx) {
             return GuiShowsProjection::default();
         }
-        let view = self.gui_shows_view(lib_idx);
+        let view = self.app.gui_shows_view(lib_idx);
         let mut sort_frame = None;
         let (series, rows, selected, hero, workspace_loading, loading) = match view {
             GuiShowsView::All => {
                 let series = self.gui_shows_series_tree(lib_idx);
                 let loading = self
+                    .app
                     .libs
                     .get(lib_idx)
                     .and_then(|lib| lib.nav_stack.last())
                     .is_none_or(|level| level.loading);
-                let selected = self.gui_shows_default_series(lib_idx);
+                let selected = shows_default_series(&self.app, lib_idx);
                 let hero = selected
                     .as_ref()
-                    .and_then(|selected| self.gui_shows_hero(lib_idx, selected));
+                    .and_then(|selected| self.shows_hero(lib_idx, selected));
                 let workspace_loading = selected
                     .as_ref()
-                    .is_some_and(|series_id| self.gui_shows_workspace_loading(lib_idx, series_id));
+                    .is_some_and(|series_id| self.shows_workspace_loading(lib_idx, series_id));
                 (
                     series,
                     Vec::new(),
@@ -259,10 +260,13 @@ impl App {
                 )
             }
             GuiShowsView::New => {
-                let frame = self.gui_list_sort_frame(GuiSortTarget::ShowsNew(lib_idx));
+                let frame = self
+                    .app
+                    .gui_list_sort_frame(GuiSortTarget::ShowsNew(lib_idx));
                 let rows = self.gui_shows_new_rows(frame.active);
                 sort_frame = Some(frame);
                 let selected = self
+                    .app
                     .gui
                     .shows_flat_selection
                     .clone()
@@ -270,10 +274,11 @@ impl App {
                     .or_else(|| rows.first().map(|row| row.id.clone()));
                 let hero = selected
                     .as_ref()
-                    .and_then(|id| self.gui_shows_new_item(id))
-                    .map(|item| self.gui_shows_flat_hero(&item));
-                let loading = self.libs.get(lib_idx).is_some_and(|lib| {
+                    .and_then(|id| self.app.gui_shows_new_item(id))
+                    .map(|item| self.app.gui_shows_flat_hero(&item));
+                let loading = self.app.libs.get(lib_idx).is_some_and(|lib| {
                     !self
+                        .app
                         .gui
                         .shows_new
                         .get(&lib.library.id)
@@ -284,10 +289,10 @@ impl App {
             GuiShowsView::Upcoming => {
                 // An Upcoming row is display-only: the Hero keeps the series
                 // the All view showed, so the detail part stays meaningful.
-                let selected = self.gui_shows_default_series(lib_idx);
+                let selected = shows_default_series(&self.app, lib_idx);
                 let hero = selected
                     .as_ref()
-                    .and_then(|selected| self.gui_shows_hero(lib_idx, selected));
+                    .and_then(|selected| self.shows_hero(lib_idx, selected));
                 (
                     Vec::new(),
                     self.gui_shows_upcoming_rows(),
@@ -309,7 +314,7 @@ impl App {
             hero,
         };
         if view == GuiShowsView::All {
-            self.warm_gui_shows_hero_neighbours(lib_idx, &projection);
+            self.warm_shows_hero_neighbours(lib_idx, &projection);
         }
         projection
     }
@@ -324,6 +329,7 @@ impl App {
     /// episodes` section's.
     fn gui_shows_new_rows(&self, sort: GuiListSort) -> Vec<GuiShowsRow> {
         let mut items: Vec<EmbyItem> = self
+            .app
             .gui
             .shows_new
             .values()
@@ -359,7 +365,7 @@ impl App {
                     Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
                     None => (parts.title.text.clone(), None),
                 };
-                let art = self.gui_row_art(emby_row_source(&episode).as_ref());
+                let art = self.app.gui_row_art(emby_row_source(&episode).as_ref());
                 GuiShowsRow {
                     sort_letter: sort.rail_letter(&title),
                     id: episode.id,
@@ -379,7 +385,7 @@ impl App {
     /// carried. Every row is display-only.
     fn gui_shows_upcoming_rows(&self) -> Vec<GuiShowsRow> {
         let mut premieres: Vec<&mbv_emby_model::UpcomingPremiere> =
-            self.tv_upcoming_snapshots.values().flatten().collect();
+            self.app.tv_upcoming_snapshots.values().flatten().collect();
         premieres.sort_by_cached_key(|premiere| {
             let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
             (
@@ -392,8 +398,10 @@ impl App {
             .into_iter()
             .map(|premiere| {
                 let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
-                let series = self.gui_shows_series_item(premiere.series_id.as_str());
-                let art = self.gui_row_art(Some(&upcoming_row_source(premiere, series.as_ref())));
+                let series = self.app.gui_shows_series_item(premiere.series_id.as_str());
+                let art = self
+                    .app
+                    .gui_row_art(Some(&upcoming_row_source(premiere, series.as_ref())));
                 GuiShowsRow {
                     id: premiere.stable_key(),
                     title: premiere.series_name.clone(),
@@ -418,7 +426,12 @@ impl App {
     /// series with no cached detail paints closed and expandable, and its
     /// open asks the core to load it.
     fn gui_shows_series_tree(&self, lib_idx: usize) -> Vec<GuiShowsSeries> {
-        let Some(level) = self.libs.get(lib_idx).and_then(|lib| lib.nav_stack.last()) else {
+        let Some(level) = self
+            .app
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+        else {
             return Vec::new();
         };
         level
@@ -426,7 +439,7 @@ impl App {
             .iter()
             .filter(|item| item.item_type == "Series")
             .map(|item| {
-                let detail = self.series_detail_cache.get(&item.id);
+                let detail = self.app.series_detail_cache.get(&item.id);
                 let seasons = detail
                     .map(|detail| {
                         detail
@@ -452,112 +465,109 @@ impl App {
                     sort_letter: sort_letter(effective_sort_str(item)),
                     expandable: detail.is_none_or(|detail| !detail.seasons.is_empty()),
                     seasons,
-                    art: self.gui_row_art(emby_row_source(item).as_ref()),
+                    art: self.app.gui_row_art(emby_row_source(item).as_ref()),
                     media: GuiRowMediaKind::Video,
                 }
             })
             .collect()
     }
+}
 
-    /// The series the Shows Hero shows (design D12): the stored selection
-    /// while the root list still carries it as a Series, else the root list's
-    /// first series row — the Hero default, so the Hero paints as soon as the
-    /// series list lands and the detail load can start for it before any
-    /// select does. `None` while the root list holds no series.
-    pub(in crate::app::gui_library) fn gui_shows_default_series(
-        &self,
-        lib_idx: usize,
-    ) -> Option<String> {
-        let in_root = |series_id: &str| {
-            self.libs
+/// The series the Shows Hero shows (design D12): the stored selection while
+/// the root list still carries it as a Series, else the root list's first
+/// series row — the Hero default, so the Hero paints as soon as the series list
+/// lands and the detail load can start for it before any select does. `None`
+/// while the root list holds no series. It reads only the core's library state
+/// and the destination's stored selection, so it is a core function the
+/// projection and the destination's load site share.
+pub(in crate::app) fn shows_default_series(app: &App, lib_idx: usize) -> Option<String> {
+    let in_root = |series_id: &str| {
+        app.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .is_some_and(|level| {
+                level
+                    .items
+                    .iter()
+                    .any(|item| item.id == series_id && item.item_type == "Series")
+            })
+    };
+    app.gui
+        .tv_shows
+        .get(&lib_idx)
+        .and_then(|selection| selection.series_id.clone())
+        .filter(|stored| in_root(stored))
+        .or_else(|| {
+            app.libs
                 .get(lib_idx)
                 .and_then(|lib| lib.nav_stack.last())
-                .is_some_and(|level| {
-                    level
-                        .items
-                        .iter()
-                        .any(|item| item.id == series_id && item.item_type == "Series")
-                })
-        };
-        self.gui
-            .tv_shows
-            .get(&lib_idx)
-            .and_then(|selection| selection.series_id.clone())
-            .filter(|stored| in_root(stored))
-            .or_else(|| {
-                self.libs
-                    .get(lib_idx)
-                    .and_then(|lib| lib.nav_stack.last())
-                    .and_then(|level| level.items.iter().find(|item| item.item_type == "Series"))
-                    .map(|item| item.id.clone())
-            })
-    }
-
-    /// Whether the frame path must start the Shows root load: no root level
-    /// yet, or a root whose mode is not the All series list. A root loading as
-    /// All is left alone so a repaint never starts a second request, and a
-    /// settled All list is left alone — landed rows or not — because the
-    /// All series list is exactly what the destination presents. Any other
-    /// mode must be reloaded as All, loading or settled, because the mode is
-    /// what the destination presents and not the level's progress: the tab's
-    /// activation pushes a root with no mode yet and its own browse request in
-    /// flight, so a loading root without the All mode would otherwise land a
-    /// list the destination never presents. The shared landing path's
-    /// default-mode resolution (`maybe_capture_library_total_and_apply_default_pill`)
-    /// replaces the first landed root with the Latest episodes list
-    /// (`resolve_tv_content_mode`'s any-size Latest default), whose episodes
-    /// project no series row and leave the tree blank (the live defect of
-    /// 2026-11-18: a launch restored onto Shows painted nothing until a
-    /// destination click forced the All list).
-    pub(in crate::app::gui_library) fn gui_shows_root_needs_load(&self, lib_idx: usize) -> bool {
-        if !self.gui_tv_library(lib_idx) {
-            return false;
-        }
-        if self.libs[lib_idx].nav_stack.is_empty() {
-            return true;
-        }
-        self.libs[lib_idx].tv_content_mode.as_ref() != Some(&TvContentMode::All)
-    }
-
-    /// The Shows library's selection, as the TUI's empty selection reads.
-    pub(super) fn gui_shows_selection(&self, lib_idx: usize) -> GuiTvShowsSelection {
-        self.gui.tv_shows.get(&lib_idx).cloned().unwrap_or_default()
-    }
-
-    /// The Emby item a Shows play command names (design D12, D9): a New row
-    /// resolves through the merged episodes; an Upcoming row resolves nothing,
-    /// because it is display-only; All resolves the series, season, and
-    /// Workspace episode rows. A stale command plays nothing.
-    pub(in crate::app) fn gui_shows_item(&self, lib_idx: usize, item_id: &str) -> Option<EmbyItem> {
-        match self.gui_shows_view(lib_idx) {
-            GuiShowsView::New => return self.gui_shows_new_item(item_id),
-            GuiShowsView::Upcoming => return None,
-            GuiShowsView::All => {}
-        }
-        let lib = self.libs.get(lib_idx)?;
-        if let Some(item) = lib
-            .nav_stack
-            .iter()
-            .rev()
-            .find_map(|level| level.items.iter().find(|item| item.id == item_id))
-        {
-            return Some(item.clone());
-        }
-        // A season is a folder item the Hero's season buttons name: the shared
-        // folder play, play-next, and enqueue expand it, as they do a series.
-        let details = self.series_detail_cache.values();
-        let season = details
-            .clone()
-            .flat_map(|detail| detail.seasons.iter())
-            .find(|season| season.id == item_id)
-            .cloned();
-        season.or_else(|| {
-            details
-                .flat_map(|detail| detail.episodes.values().flatten())
-                .find(|episode| episode.id == item_id)
-                .cloned()
+                .and_then(|level| level.items.iter().find(|item| item.item_type == "Series"))
+                .map(|item| item.id.clone())
         })
+}
+
+/// Whether the frame path must start the Shows root load: no root level yet, or
+/// a root whose mode is not the All series list. A root loading as All is left
+/// alone so a repaint never starts a second request, and a settled All list is
+/// left alone — landed rows or not — because the All series list is exactly
+/// what the destination presents. Any other mode must be reloaded as All,
+/// loading or settled, because the mode is what the destination presents and
+/// not the level's progress: the tab's activation pushes a root with no mode
+/// yet and its own browse request in flight, so a loading root without the All
+/// mode would otherwise land a list the destination never presents. The shared
+/// landing path's default-mode resolution
+/// (`maybe_capture_library_total_and_apply_default_pill`) replaces the first
+/// landed root with the Latest episodes list (`resolve_tv_content_mode`'s
+/// any-size Latest default), whose episodes project no series row and leave the
+/// tree blank (the live defect of 2026-11-18: a launch restored onto Shows
+/// painted nothing until a destination click forced the All list). It reads
+/// only the core's library state, so it is a core function the projection and
+/// the destination's load site share.
+pub(in crate::app) fn shows_root_needs_load(app: &App, lib_idx: usize) -> bool {
+    if !app.gui_tv_library(lib_idx) {
+        return false;
     }
+    if app.libs[lib_idx].nav_stack.is_empty() {
+        return true;
+    }
+    app.libs[lib_idx].tv_content_mode.as_ref() != Some(&TvContentMode::All)
+}
+
+/// The Emby item a Shows play command names (design D12, D9): a New row
+/// resolves through the merged episodes; an Upcoming row resolves nothing,
+/// because it is display-only; All resolves the series, season, and Workspace
+/// episode rows. A stale command plays nothing. It reads only the core's
+/// library state and the destination's cached episodes, so it is a core
+/// function the Hero, the row art, and the play paths share.
+pub(in crate::app) fn shows_item(app: &App, lib_idx: usize, item_id: &str) -> Option<EmbyItem> {
+    match app.gui_shows_view(lib_idx) {
+        GuiShowsView::New => return app.gui_shows_new_item(item_id),
+        GuiShowsView::Upcoming => return None,
+        GuiShowsView::All => {}
+    }
+    let lib = app.libs.get(lib_idx)?;
+    if let Some(item) = lib
+        .nav_stack
+        .iter()
+        .rev()
+        .find_map(|level| level.items.iter().find(|item| item.id == item_id))
+    {
+        return Some(item.clone());
+    }
+    // A season is a folder item the Hero's season buttons name: the shared
+    // folder play, play-next, and enqueue expand it, as they do a series.
+    let details = app.series_detail_cache.values();
+    let season = details
+        .clone()
+        .flat_map(|detail| detail.seasons.iter())
+        .find(|season| season.id == item_id)
+        .cloned();
+    season.or_else(|| {
+        details
+            .flat_map(|detail| detail.episodes.values().flatten())
+            .find(|episode| episode.id == item_id)
+            .cloned()
+    })
 }
 
 /// The series name a New row leads with, and the key its Title sort compares
