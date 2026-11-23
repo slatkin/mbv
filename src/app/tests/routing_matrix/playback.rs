@@ -275,7 +275,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
 /// the "back 10 s, forward 30 s" spec): `[`/`]` command the deep seeks in
 /// the GUI Client and fall through in the TUI, whose gate stays closed.
 #[test]
-fn gui_context_seek_brackets_command_only_in_the_gui_client() {
+fn gui_context_seek_brackets_command_only_with_transport_chip_keys() {
     let gui = RouterSnapshot {
         client_capabilities: gui_client_capabilities(),
         ..active_snapshot()
@@ -315,7 +315,7 @@ fn gui_context_seek_brackets_command_only_in_the_gui_client() {
 /// `OpenTrackPopover` press routes — and fall through in the TUI, whose
 /// gate stays closed and which paints no track chip.
 #[test]
-fn gui_context_popover_chords_command_only_in_the_gui_client() {
+fn gui_context_popover_chords_command_only_with_popover_chord_keys() {
     let gui = RouterSnapshot {
         client_capabilities: gui_client_capabilities(),
         ..active_snapshot()
