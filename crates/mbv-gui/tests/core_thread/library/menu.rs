@@ -17,7 +17,14 @@ use super::{
 #[test]
 fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     let http = MockHttp::new();
-    http.respond(200, TRACKS);
+    // Three fetches reach the mock while the test drives its commands: the
+    // album's grouped row list, the picked album's tracklist, and the album
+    // folder's recursive playable list the Play All entry reads. Each answers
+    // by its own path, so no request order can leave one of them unscripted
+    // (an unscripted request stalls the caller for an hour).
+    http.respond_when("ParentId=grp-hiphop&", 200, "[]");
+    http.respond_when("ParentId=alb-paul&", 200, TRACKS);
+    http.respond_when("ParentId=alb-ill&", 200, TRACKS);
     let (mut test, cmd_rx) = seeded_music_core(&http);
     let _ = send_library_frame(
         &mut test,
