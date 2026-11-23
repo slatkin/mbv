@@ -177,7 +177,7 @@ pub(in crate::app::gui_library) fn open_feeds(app: &mut App, gui: &mut GuiClient
     }
     // The ordered load pass is the GUI core's, so the open step hands the
     // core the App it holds.
-    let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let mut core = GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
     *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Feeds);
     *gui = std::mem::take(core.gui_state_mut());

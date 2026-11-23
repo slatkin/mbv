@@ -39,7 +39,7 @@ fn normalized(name: &str) -> String {
 /// The App's record of the Service artist item id known for an artist name,
 /// and what a name's artist search knows while it has no resolved id.
 #[derive(Debug, Default)]
-pub(in crate::app) struct ArtistNameLookup;
+pub struct ArtistNameLookup;
 
 impl ArtistNameLookup {
     /// The Service artist item id known for an artist name, if any.

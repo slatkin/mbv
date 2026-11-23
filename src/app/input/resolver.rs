@@ -16,7 +16,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 /// neutral key vocabulary, so a TUI chord and a GUI chord for the same
 /// physical press are one value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::app) struct KeyChord {
+pub struct KeyChord {
     pub(in crate::app) code: Key,
     pub(in crate::app) mods: KeyModifiers,
 }
@@ -52,7 +52,7 @@ impl KeyChord {
         Self { code, mods }
     }
 
-    pub(in crate::app) fn from_key(key: KeyEvent) -> Self {
+    pub fn from_key(key: KeyEvent) -> Self {
         Self::new(key.code, key.modifiers)
     }
 
@@ -97,7 +97,7 @@ impl KeyChord {
     /// slip past the collision check against a declared `Shift+N` default
     /// while routing the same press. `from_keybinds_chord` of the result is
     /// the pressed chord again, its `KeyChord::new` folding undoing this.
-    pub(in crate::app) fn to_keybinds_chord(self) -> Option<mbv_keybinds::Chord> {
+    pub fn to_keybinds_chord(self) -> Option<mbv_keybinds::Chord> {
         use mbv_keybinds::Key as RegistryKey;
         let key = match self.code {
             Key::Backspace => RegistryKey::Backspace,

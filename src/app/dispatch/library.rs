@@ -1,4 +1,4 @@
-pub(in crate::app) mod artist_lookup;
+pub mod artist_lookup;
 pub(in crate::app) mod browse;
 pub(in crate::app) mod browse_level;
 pub(in crate::app) mod cursor;
@@ -8,4 +8,4 @@ pub(in crate::app) mod event_reconcile;
 pub(in crate::app) mod load;
 pub(in crate::app) mod search;
 pub(in crate::app) mod shuffle_folder;
-pub(in crate::app) mod stores;
+pub mod stores;

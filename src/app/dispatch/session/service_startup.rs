@@ -274,7 +274,7 @@ pub(in crate::app) fn start_audiobookshelf_books(
 /// Fetches one podcast library's `/personalized` shelves and reports
 /// `LibEvent::Audiobookshelf(AudiobookshelfEvent::ShelfFetched)`. The Podcasts destination's Latest
 /// snapshot is built from the `Newest Episodes` shelf in the result.
-pub(in crate::app) fn start_audiobookshelf_shelves(
+pub fn start_audiobookshelf_shelves(
     config: crate::app::config::Config,
     generation: SetupGeneration,
     library_id: String,

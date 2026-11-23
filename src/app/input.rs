@@ -2,14 +2,14 @@ mod browse_dispatch;
 mod confirm_keys;
 pub(in crate::app) mod gui;
 pub(in crate::app) mod key_policy;
-pub(in crate::app) use key_policy::{
+pub use key_policy::{
     OverlayFocus, RemoteControlTarget, RouterNow, RouterOverlayState, RouterPlaybackState,
 };
 mod lib_keys;
 mod playlist_keys;
 mod queue_keys;
-pub(in crate::app) mod resolver;
-pub(in crate::app) mod router;
+pub mod resolver;
+pub mod router;
 mod search_sidebar_keys;
 
 #[cfg(test)]

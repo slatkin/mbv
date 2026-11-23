@@ -10,7 +10,7 @@ use std::time::Duration;
 /// Save the launch snapshot the shell supplied — at teardown or for a
 /// `SwapPrepare` (tray-pin-swap design D6). The failure is logged and never
 /// blocks the swap: the shell answers `SwapPrepared` either way.
-pub(in crate::app) fn save_launch_state(launch_state: &mbv_config::TuiLaunchState) {
+pub fn save_launch_state(launch_state: &mbv_config::TuiLaunchState) {
     if let Err(error) = mbv_config::save_tui_launch_state(launch_state) {
         tracing::warn!(name: "launch_state.save.failed", target: "launch_state", error = %error, "TUI launch state save failed");
     }

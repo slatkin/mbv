@@ -35,10 +35,10 @@ mod infra;
 mod input;
 pub mod owner_link;
 pub mod pin;
-mod projection;
+pub mod projection;
 mod queue_card_artwork;
 mod queue_footer_projection;
-mod queue_playback_projection;
+pub mod queue_playback_projection;
 mod queue_summary_projection;
 mod queue_surface;
 pub mod state;
@@ -112,11 +112,10 @@ pub use self::gui_settings::{
     SetupSecret,
 };
 pub use self::infra::image_fetch::CardImageDrain;
-pub(in crate::app) use self::infra::open_url::open_url;
-pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
-pub(in crate::app) use self::infra::signals::{
-    QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,
-};
+pub use self::infra::open_url::open_url;
+pub use self::infra::paging::PAGE_SIZE;
+pub(in crate::app) use self::infra::paging::PREFETCH_AHEAD;
+pub use self::infra::signals::{QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog};
 pub use self::input::gui::GuiInput;
 pub use self::input::gui::GuiSurfaceLeaf;
 pub use self::input::key_policy::{
@@ -154,16 +153,16 @@ use self::state::app_init::AppInit;
 use self::state::bootstrap::bootstrap_unified_queue;
 use self::state::playback_target::LocalPlaybackTarget;
 use crate::app::state::events::SessionEvent;
-pub(in crate::app) use crate::app::state::events::{
-    AudiobookshelfEvent, BrowseEvent, LibEvent, ModelContentEvent, MusicEvent, PlaylistEvent,
-    SeriesEvent,
+pub(in crate::app) use crate::app::state::events::{AudiobookshelfEvent, PlaylistEvent};
+pub use crate::app::state::events::{
+    BrowseEvent, LibEvent, ModelContentEvent, MusicEvent, SeriesEvent,
 };
 use crate::app::state::playback::{
     DestinationLatestSource, PendingQueueAction, QueueLinkResolution, QueueTarget, RemoteSlotState,
     ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
 use crate::app::state::queue_deferrals::QueueDeferrals;
-pub(crate) use crate::app::state::queue_view::QueueView;
+pub use crate::app::state::queue_view::QueueView;
 #[cfg(test)]
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
@@ -183,7 +182,7 @@ use mbv_ui_model::feed::{
     FeedHomeVideoSelection, FeedHomeVideoState, SavePlaylistDialog, SavePlaylistStage,
 };
 use mbv_ui_model::library_tab::LibraryTab;
-pub(in crate::app) use mbv_ui_model::overlay::SidebarId;
+pub use mbv_ui_model::overlay::SidebarId;
 use mbv_ui_model::playback::QueueLink;
 #[cfg(test)]
 use mbv_ui_model::settings::SettingKey;

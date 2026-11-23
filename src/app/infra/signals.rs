@@ -17,7 +17,7 @@ impl App {
     }
 }
 
-pub(in crate::app) static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+pub static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 // Set only by SIGHUP or stdin POLLHUP (terminal vanished). Never set by q/SIGTERM.
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
 pub(in crate::app) static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
@@ -40,7 +40,7 @@ extern "C" fn handle_quit_signal(signum: i32) {
     }
 }
 
-pub(in crate::app) fn install_signal_handlers() {
+pub fn install_signal_handlers() {
     unsafe extern "C" {
         fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
     }
@@ -66,7 +66,7 @@ fn stdin_has_hup() -> bool {
 }
 
 // Watchdog thread detects terminal close even if the TUI event loop is stuck.
-pub(in crate::app) fn start_quit_watchdog() {
+pub fn start_quit_watchdog() {
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(50));

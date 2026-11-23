@@ -33,7 +33,7 @@ pub(in crate::app) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilit
     }
 }
 
-pub(in crate::app) fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCapabilities {
+pub fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCapabilities {
     let playable = mbv_ui_model::ui_util::is_playable(item) && !item.is_folder;
     // Music is fire-and-forget in mbv (no resume, played state ignored), so a
     // mixed selection containing any music item loses the played-state entry.

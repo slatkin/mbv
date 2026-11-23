@@ -2,7 +2,7 @@
 //! Both Clients run it, so it lives in `infra` rather than the TUI shell and
 //! names no terminal toolkit.
 
-pub(in crate::app) fn open_url(url: &str) -> std::io::Result<()> {
+pub fn open_url(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("cmd")

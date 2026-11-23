@@ -52,7 +52,7 @@ impl PanelTarget {
 
 /// Resolve an activation against the latest shell-owned target snapshot.
 #[must_use]
-pub(in crate::app) fn resolve_session_target(
+pub fn resolve_session_target(
     targets: &[PanelTarget],
     key: &SessionTargetKey,
 ) -> Option<PanelTarget> {

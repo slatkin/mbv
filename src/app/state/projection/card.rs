@@ -155,7 +155,7 @@ fn prefetch_card_images(app: &mut App, cursor: usize) {
 /// The neutral record this sync's title-site decision leaves for the shell's
 /// overlay encoder: the base key, its item, and the parts the shell measures
 /// the overlay from. `None` when the site is not `Artwork`.
-pub(in crate::app) struct QueueTitleRecord {
+pub struct QueueTitleRecord {
     pub base_key: String,
     pub parts: mbv_queue::PlaybackTitleParts,
     pub logo_cache_key: Option<String>,
@@ -352,10 +352,7 @@ fn queue_title_overlay(
 /// record after the sync (`Model::ensure_queue_card_title_overlay`, design D2
 /// rule 3 of `split-tui-gui-clients`), and a Client that paints no protocol
 /// ignores it.
-pub(in crate::app) fn refresh_queue_card_image(
-    app: &mut App,
-    column_resizing: bool,
-) -> Option<QueueTitleRecord> {
+pub fn refresh_queue_card_image(app: &mut App, column_resizing: bool) -> Option<QueueTitleRecord> {
     // The site carries over from the previous sync: transient pipeline
     // churn (a resize drag, an unmeasured protocol size, an encode in
     // flight) must not resurrect the header — only the mode gates below

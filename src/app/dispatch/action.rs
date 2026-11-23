@@ -230,7 +230,7 @@ impl From<PanelIntent> for Command {
 /// queue-visible layout, so the gate follows it instead of the panel mode and
 /// the link is gated off in idle `both` and `queue-only`, on in idle
 /// `library-only` where the strip displays the feed.
-pub(in crate::app) struct IdleFeedLinkContext {
+pub struct IdleFeedLinkContext {
     pub player_active: bool,
     pub playback_panel_present_idle: bool,
     pub link_available: bool,

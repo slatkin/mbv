@@ -222,7 +222,7 @@ pub(in crate::app::gui_library) fn install_podcast_set(
 /// destination-ensure design D1): the GUI core owns the pass, so a step that
 /// holds an `App` hands it to the core.
 fn run_podcast_loads(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
-    let mut core = GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let mut core = GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
     *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
     *gui = std::mem::take(core.gui_state_mut());

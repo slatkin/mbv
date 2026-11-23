@@ -62,8 +62,7 @@ pub(in crate::app) fn install_library_collection(
 /// D1): the pass is the GUI core's, so the collection install reaches it by
 /// handing the core the App it holds.
 fn run_destination_open(app: &mut App, gui: &mut GuiClientState, kind: GuiDestinationKind) {
-    let mut core =
-        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
     // The caller's own state moves into the core and back, so the pass sees
     // the selection it just installed and the caller keeps the state.
     *core.gui_state_mut() = std::mem::take(gui);

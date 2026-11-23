@@ -1,4 +1,4 @@
-pub(in crate::app) mod card;
+pub mod card;
 pub(in crate::app) mod chrome_player_context;
 pub(in crate::app) mod chrome_status;
 pub(in crate::app) mod detail;
