@@ -15,7 +15,12 @@ static PIN_SWAP_PARTICIPANT: OnceLock<bool> = OnceLock::new();
 /// Claim whether this process's Client connections take part in Pin swap.
 /// Called before this process's first Owner connection. The unclaimed
 /// default `true` is the TUI Client's claim; the GUI Client claims `false`
-/// when its Owner-link attach passes `crate::ClientKind::Gui`.
+/// before it calls `attach_owner` (design D6a of `decouple-client-core`).
+#[expect(
+    dead_code,
+    reason = "the GUI Client calls this before `attach_owner` in the next row of \
+              decouple-client-core (row 3.2); no caller exists yet"
+)]
 pub(crate) fn claim_pin_swap_participant(participates: bool) {
     let _ = PIN_SWAP_PARTICIPANT.set(participates);
 }

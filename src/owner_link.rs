@@ -20,8 +20,9 @@ use crate::app::App;
 use crate::config::Config;
 use crate::local_daemon;
 use crate::single_instance;
+use crate::{ClientCapabilities, ClientCapability};
 use mbv_emby::EmbyClient;
-use mbv_remote_player::{DaemonEndpoint, RemotePlayer, RemotePlayerError};
+use mbv_remote_player::{ClientHelloClaims, DaemonEndpoint, RemotePlayer, RemotePlayerError};
 
 /// What the local Owner process is doing, as a Client sees it: the step the
 /// Client runs next.
@@ -84,9 +85,10 @@ pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerEr
 /// none runs, and again after an Owner restart: `None` for the TUI Client,
 /// which is `mbv` itself; the `mbv` program the GUI Client resolved, so the
 /// Owner is never the GUI program (design D9). The Hello claims every
-/// connection sends follow `kind` and this process's Pin-swap participation
-/// claim: the TUI Client advertises `pin-swap`, the GUI Client sends a plain
-/// Hello and claims `named-queues` on its local link.
+/// connection sends follow `capabilities` and this process's Pin-swap
+/// participation claim: the TUI Client advertises `pin-swap`, the GUI Client
+/// sends a plain Hello and claims `named-queues` on its local link (design
+/// D6a).
 ///
 /// The Owner link starts MPRIS from `App` construction (#160, moved there from
 /// `startup` in #175 so `App` owns the resulting handle and can `rebind` it
@@ -104,18 +106,17 @@ pub fn attach_owner(
     config: &Config,
     owner_exe: Option<&Path>,
     image_decode: mbv_images::ImageDecode,
-    kind: crate::ClientKind,
+    capabilities: ClientCapabilities,
 ) -> Result<App, RemotePlayerError> {
     // The GUI Client never takes part in Pin swap (design D9 of
     // `extract-client-core`): it is neither a terminal Client nor a pinned
     // panel, and the swap's launch snapshot is a TUI shell query it cannot
-    // produce. Claimed before the connect below, so this process's first and
-    // every later connection advertises alike.
-    if matches!(kind, crate::ClientKind::Gui) {
-        crate::pin::claim_pin_swap_participant(false);
-    }
+    // produce. No capability stands for it (design D6a), so the caller that
+    // builds those capabilities claims its own non-participation before this
+    // call, and this process's first and every later connection advertises
+    // alike.
     let client = cached_emby_client(config);
-    let claims = crate::client_kind::client_hello_claims(kind, &DaemonEndpoint::Local);
+    let claims = hello_claims(capabilities, &DaemonEndpoint::Local);
     let (remote, player_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Local, &claims)?;
     let mut app = App::new_remote_optional_with_config(
         client,
@@ -126,8 +127,21 @@ pub fn attach_owner(
         image_decode,
     );
     app.set_owner_exe(owner_exe.map(Path::to_path_buf));
-    app.set_client_kind(kind);
+    app.set_client_capabilities(capabilities);
     Ok(app)
+}
+
+/// The Hello claims one connection to `endpoint` makes, built from
+/// `capabilities` (design D6a of `decouple-client-core`). A Client that shows
+/// one queue entry at a time claims `named-queues` on its local Owner link.
+/// The Pin-swap claim follows this process's claimed Pin-swap participation
+/// (`pin_swap_hello`, claimed at start-up).
+#[must_use]
+fn hello_claims(capabilities: ClientCapabilities, endpoint: &DaemonEndpoint) -> ClientHelloClaims {
+    ClientHelloClaims {
+        pin_swap: crate::pin::pin_swap_hello(),
+        named_queues: endpoint.is_local() && capabilities.has(ClientCapability::ShownQueueEntries),
+    }
 }
 
 /// The notice a Client shows when a live Owner holds the lock but does not

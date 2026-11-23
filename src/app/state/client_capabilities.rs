@@ -4,7 +4,7 @@
 
 /// One thing a Client presents. The core never names a Client.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) enum ClientCapability {
+pub enum ClientCapability {
     /// The Client may present one panel only, and hides an empty queue
     /// column in its two-panel layout (TUI: yes, GUI: no).
     TerminalPanelRules,
@@ -35,30 +35,30 @@ impl ClientCapability {
 /// The capabilities of this Client. Each Client builds its own value: the
 /// default holds none of them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(in crate::app) struct ClientCapabilities(u8);
+pub struct ClientCapabilities(u8);
 
 impl ClientCapabilities {
     /// No capabilities.
     #[must_use]
-    pub(in crate::app) const fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self(0)
     }
 
     /// This set plus `capability`.
     #[must_use]
-    pub(in crate::app) const fn with(self, capability: ClientCapability) -> Self {
+    pub const fn with(self, capability: ClientCapability) -> Self {
         Self(self.0 | capability.bit())
     }
 
     /// This set without `capability`.
     #[must_use]
-    pub(in crate::app) const fn without(self, capability: ClientCapability) -> Self {
+    pub const fn without(self, capability: ClientCapability) -> Self {
         Self(self.0 & !capability.bit())
     }
 
     /// Whether this set holds `capability`.
     #[must_use]
-    pub(in crate::app) const fn has(self, capability: ClientCapability) -> bool {
+    pub const fn has(self, capability: ClientCapability) -> bool {
         self.0 & capability.bit() != 0
     }
 }

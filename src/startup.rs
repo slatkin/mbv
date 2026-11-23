@@ -15,6 +15,7 @@ use crate::local_daemon;
 use crate::owner_link::{self, OwnerStartOptions, OwnerState};
 use crate::owner_restart;
 use crate::pin;
+use crate::{ClientCapabilities, ClientCapability};
 use mbv_core::applog;
 use mbv_ctrl::OwnerAction;
 
@@ -394,7 +395,11 @@ fn run_local_instance(config: &Config, log_level: Option<&applog::LogSpec>) {
             config,
             None,
             mbv_images::ImageDecode::Pixels,
-            crate::ClientKind::Tui,
+            // The TUI Client presents one panel at a time and paints the
+            // visualizer and the visual-slot hide control (design D6a).
+            ClientCapabilities::empty()
+                .with(ClientCapability::TerminalPanelRules)
+                .with(ClientCapability::VisualSlotControls),
         ) {
             Ok(app) => {
                 run_tui(app);

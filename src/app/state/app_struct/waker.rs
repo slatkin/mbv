@@ -29,11 +29,14 @@ impl App {
         self.owner_exe = owner_exe;
     }
 
-    /// Record which Client this process runs (gui-named-queues design D7):
-    /// the Hello claims every later App-side reconnect sends follow it. The
-    /// Owner link sets it at attach time.
-    pub(crate) fn set_client_kind(&mut self, kind: crate::ClientKind) {
-        self.client_kind = kind;
+    /// Record the capabilities of this process's Client (design D6a of
+    /// `decouple-client-core`). The Owner link sets them at attach time,
+    /// before `App` exists, so the core reads them before the first step.
+    pub(crate) fn set_client_capabilities(
+        &mut self,
+        capabilities: crate::app::state::client_capabilities::ClientCapabilities,
+    ) {
+        self.client_capabilities = capabilities;
     }
 
     /// Start this machine's Owner process from the Client's `mbv` program and

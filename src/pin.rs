@@ -199,7 +199,7 @@ pub(crate) fn swap_token() -> Option<String> {
     SWAP_TOKEN.get().cloned().flatten()
 }
 
-pub(crate) use self::swap::{claim_pin_swap_participant, pin_swap_hello};
+pub(crate) use self::swap::pin_swap_hello;
 mod swap;
 
 /// The reserve mode a panel change asks for: the collapsed panel

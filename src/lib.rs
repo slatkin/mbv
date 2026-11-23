@@ -66,6 +66,11 @@ pub use mbv_images::ImageDecode;
 pub use mbv_ui_model::toast::{ToastCard, ToastId};
 pub use mbv_ui_msg::TrackChipKind;
 
+/// The capabilities a Client builds at attach time and `attach_owner` takes
+/// in place of a Client kind (design D6a of `decouple-client-core`). A
+/// Client outside `crate::app` names them here.
+pub use crate::app::state::client_capabilities::{ClientCapabilities, ClientCapability};
+
 /// The `App` stub construction a Client's own tests build their `App` from
 /// (`extract-client-core` design D11). Compiled only under the root package's
 /// `test` feature, which no shipped build enables.
