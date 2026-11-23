@@ -106,7 +106,7 @@ fn spawn_shows_new(app: &mut App, gui: &mut GuiClientState, library_id: String) 
     let tx = app.gui_client_event_sender();
     std::thread::spawn(move || {
         let result = client.get_latest_episodes(&library_id, 30);
-        let _ = tx.send(GuiClientEvent::ShowsNew { library_id, result });
+        tx.send(GuiClientEvent::ShowsNew { library_id, result });
     });
 }
 

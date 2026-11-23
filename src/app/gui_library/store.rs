@@ -188,7 +188,7 @@ pub(in crate::app) fn fetch_group_albums(
     let tx = app.gui_client_event_sender();
     std::thread::spawn(move || {
         let result = fetch_all_pages(&client, &group_id, None);
-        let _ = tx.send(GuiClientEvent::GroupAlbums {
+        tx.send(GuiClientEvent::GroupAlbums {
             lib_idx,
             group_id,
             result,

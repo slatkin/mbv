@@ -546,7 +546,7 @@ pub(in crate::app) fn fetch_emby_root_items(
     let tx = app.gui_client_event_sender();
     std::thread::spawn(move || {
         let result = super::store::fetch_all_pages(&client, &parent_id, item_types.as_deref());
-        let _ = tx.send(GuiClientEvent::EmbyRootItems { lib_idx, result });
+        tx.send(GuiClientEvent::EmbyRootItems { lib_idx, result });
     });
 }
 
