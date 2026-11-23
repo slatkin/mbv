@@ -9,12 +9,11 @@ use mbv_ui_model::overlay::OverlayRequest;
 
 mod emby;
 
-/// The anchor a context menu opens at: the pointer when one is given,
-/// otherwise the selected row of `focus`.
-pub(super) fn menu_anchor(anchor: Option<(u16, u16)>, focus: PanelFocus) -> ContextMenuAnchor {
-    anchor.map_or(ContextMenuAnchor::SelectedItem(focus), |(x, y)| {
-        ContextMenuAnchor::Pointer { x, y }
-    })
+/// The anchor a selection menu opens at: the selected row of `focus`. A
+/// pointer-anchored menu (a right-click) sets the anchor at its own raise site,
+/// so no core builder takes a pointer cell (design D6).
+pub(super) fn menu_anchor(focus: PanelFocus) -> ContextMenuAnchor {
+    ContextMenuAnchor::SelectedItem(focus)
 }
 
 impl App {
@@ -60,17 +59,13 @@ impl App {
         self.build_context_menu_for(None, home_cw_selected, cw_item)
     }
 
-    pub(in crate::app) fn open_feeds_context_menu(
-        &mut self,
-        entries: &[mbv_queue::FeedEntry],
-        anchor: Option<(u16, u16)>,
-    ) {
+    pub(in crate::app) fn open_feeds_context_menu(&mut self, entries: &[mbv_queue::FeedEntry]) {
         if entries.is_empty() {
             return;
         }
         let menu_entries = Self::build_feeds_menu_entries(entries);
         let menu = ContextMenu {
-            anchor: menu_anchor(anchor, PanelFocus::Library),
+            anchor: menu_anchor(PanelFocus::Library),
             cursor: 0,
             entries: menu_entries,
             bounds: None,
@@ -147,14 +142,13 @@ impl App {
     pub(in crate::app) fn open_audiobookshelf_context_menu(
         &mut self,
         targets: &[AudiobookshelfMenuTarget],
-        anchor: Option<(u16, u16)>,
     ) {
         if targets.is_empty() {
             return;
         }
         let menu_entries = self.build_audiobookshelf_menu_entries(targets);
         let menu = ContextMenu {
-            anchor: menu_anchor(anchor, PanelFocus::Library),
+            anchor: menu_anchor(PanelFocus::Library),
             cursor: ContextMenu::first_selectable(&menu_entries),
             entries: menu_entries,
             bounds: None,
@@ -275,14 +269,11 @@ impl App {
     pub(in crate::app) fn open_context_menu_for_selection(
         &mut self,
         items: &[EmbyItem],
-        anchor: Option<(u16, u16)>,
         focus: PanelFocus,
         capabilities: Vec<ItemCapabilities>,
         remove_targets: Vec<BulkRemoveTarget>,
     ) {
-        if let Some(menu) =
-            Self::build_selection_menu(capabilities, items, remove_targets, focus, anchor)
-        {
+        if let Some(menu) = Self::build_selection_menu(capabilities, items, remove_targets, focus) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
     }
@@ -293,22 +284,12 @@ impl App {
     /// a multi-selection right-click (its canvas menu is a per-row menu, so
     /// the shared builder is the only bulk-entry source), and never raises
     /// it — the frame carries the entries to the window content, which
-    /// anchors the menu on the first selected slot itself.
+    /// anchors the menu on the first selected slot itself. The TUI's
+    /// multi-selection right-click takes it too and sets the pointer anchor
+    /// itself before the raise.
     pub(in crate::app) fn build_queue_selection_menu(
         &mut self,
         slot_ids: &[mbv_queue::QueueSlotId],
-    ) -> Option<ContextMenu> {
-        self.build_queue_selection_menu_at(slot_ids, None)
-    }
-
-    /// [`build_queue_selection_menu`](Self::build_queue_selection_menu) with
-    /// the opening gesture's pointer anchor: the TUI's multi-selection
-    /// right-click raises the menu at the pointer, exactly as its single-row
-    /// right-click does.
-    pub(in crate::app) fn build_queue_selection_menu_at(
-        &mut self,
-        slot_ids: &[mbv_queue::QueueSlotId],
-        anchor: Option<(u16, u16)>,
     ) -> Option<ContextMenu> {
         let link = self.playing_queue_link();
         let (items, remove_targets, capabilities) = slot_ids
@@ -339,7 +320,6 @@ impl App {
             &items,
             remove_targets,
             mbv_ui_model::settings::PanelFocus::Queue,
-            anchor,
         )
     }
 
@@ -351,7 +331,6 @@ impl App {
         items: &[EmbyItem],
         remove_targets: Vec<BulkRemoveTarget>,
         focus: PanelFocus,
-        anchor: Option<(u16, u16)>,
     ) -> Option<ContextMenu> {
         let capabilities = crate::app::state::context_menu_capabilities::intersect(capabilities)?;
         let mut entries = Vec::new();
@@ -401,7 +380,7 @@ impl App {
             return None;
         }
         Some(ContextMenu {
-            anchor: menu_anchor(anchor, focus),
+            anchor: menu_anchor(focus),
             cursor: 0,
             entries,
             bounds: None,

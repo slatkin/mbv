@@ -60,7 +60,7 @@ impl Model {
             )],
         });
         if targets.len() > 1 {
-            self.home_multi_context_menu(&targets, anchor);
+            self.home_multi_context_menu(&targets);
         } else {
             self.home_single_context_menu(targets.into_iter().next(), anchor);
         }
@@ -72,14 +72,14 @@ impl Model {
     /// any non-Emby row makes the selection span Services, and that menu
     /// offers Play and Add to Queue only. An unresolved target contributes
     /// nothing, as in enqueue.
-    fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget], anchor: Option<(u16, u16)>) {
+    fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget]) {
         let resolved: Vec<(QueueItem, bool)> = targets
             .iter()
             .filter_map(|target| Some((self.app.home_stable_target(target)?, target.is_continue())))
             .collect();
         if resolved.iter().any(|(item, _)| !item.is_emby()) {
             let mixed_items = resolved.into_iter().map(|(item, _)| item).collect();
-            self.app.open_home_mixed_context_menu(mixed_items, anchor);
+            self.app.open_home_mixed_context_menu(mixed_items);
             return;
         }
         let removes: Vec<mbv_ui_model::context_menu::BulkRemoveTarget> = resolved
@@ -101,7 +101,6 @@ impl Model {
             .collect();
         self.app.open_context_menu_for_selection(
             &items,
-            anchor,
             mbv_ui_model::settings::PanelFocus::Library,
             capabilities,
             removes,
@@ -140,17 +139,15 @@ impl Model {
                 // `home_context_item` (no tab-dependent re-read), so the
                 // resolved row is pinned there before the menu opens.
                 self.home_context_item = Some(item.as_ref().clone());
-                self.app
-                    .open_explicit_item_context_menu(item.as_ref(), anchor);
+                self.app.open_explicit_item_context_menu(item.as_ref());
             }
             QueueItem::Feed(entry) => {
-                self.app.open_feeds_context_menu(&[entry], anchor);
+                self.app.open_feeds_context_menu(&[entry]);
             }
             QueueItem::Audiobookshelf(item) => {
-                self.app.open_audiobookshelf_context_menu(
-                    &[mbv_ui_model::context_menu::AudiobookshelfMenuTarget::for_item(&item)],
-                    anchor,
-                );
+                self.app.open_audiobookshelf_context_menu(&[
+                    mbv_ui_model::context_menu::AudiobookshelfMenuTarget::for_item(&item),
+                ]);
             }
             // A Twitch row offers the generic queue actions only: it carries
             // no Service destination menu (design D8).
