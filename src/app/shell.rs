@@ -321,10 +321,13 @@ pub(in crate::app) fn push_image_protocol_facts(
     // The active picker's cell grid, as the paint path reads it: the
     // halfblock fallback's while a dimming backdrop forces it (#451), else
     // the configured picker's.
-    let fallback = app.dim_halfblock_forced();
+    let suffix = if app.dim_halfblock_forced() {
+        "halfblock"
+    } else {
+        image_protocols.configured_protocol_name()
+    };
     let font = image_protocols
-        .picker_for_suffix(if fallback { "halfblock" } else { "" })
-        .or_else(|| image_protocols.image_picker())
+        .picker_for_suffix(suffix)
         .map_or((10, 20), |picker| {
             let font = picker.font_size();
             (font.width, font.height)

@@ -313,8 +313,10 @@ pub struct App {
     /// a pushed fact (change `split-tui-gui-clients`, design D2 rule 3) that
     /// the TUI shell derives from its image pickers (`App::set_halfblock_facts`).
     /// The queue title site reads it, since a halfblock card cannot carry the
-    /// title in its artwork. A Client that paints no terminal protocol leaves
-    /// it true and keeps the title on the header row.
+    /// title in its artwork. The constructor's default is false — until a
+    /// Client pushes the facts its pickers are unknown, and the site keeps the
+    /// title on the artwork, as the pre-move check did for a Client that
+    /// initializes no pickers.
     pub(in crate::app) halfblock_configured: bool,
     /// Whether this Client's image pickers are initialized at all. The same
     /// pushed fact record as `halfblock_configured`.
@@ -561,12 +563,11 @@ pub struct App {
     /// (`App::set_configured_protocol_suffix`) because the cache keys carry
     /// it; the core never detects a protocol itself.
     pub(in crate::app) configured_protocol_suffix: &'static str,
-    /// Artwork entries a completed fetch built for a Client that paints
-    /// terminal protocols: the entry's decoded source, which the shell's
-    /// drain encodes and register under the entry's key (`ImageProtocols` lives
-    /// on the shell `Model`, design D2 rule 3).
-    pub(in crate::app) pending_protocol_encodes:
-        std::collections::VecDeque<(String, image::DynamicImage)>,
+    /// Cache keys a completed fetch stored for a Client that paints terminal
+    /// protocols, oldest first: the shell's drain encodes each from the
+    /// cached entry (`ImageProtocols` lives on the shell `Model`, design D2
+    /// rule 3). Only keys travel, so the tick thread clones no bitmap.
+    pub(in crate::app) pending_protocol_encodes: std::collections::VecDeque<String>,
     /// Cache keys whose stored protocol encoding must drop: the projection
     /// found the entry's pixels or its cover fit changed, so the next paint
     /// re-encodes from the retained source. The shell's drain clears them

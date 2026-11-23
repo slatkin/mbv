@@ -103,25 +103,12 @@ fn overlay_app_with_base_image(model: Model) -> (Model, String) {
 }
 
 /// Run the card's sync pass and build the overlay variant from the record it
-/// leaves, the way `Model::sync_queue` does: the overlay's protocol is the
-/// shell's, the decision is the core's.
+/// leaves, exactly as `Model::sync_queue` does: the decision is the core's,
+/// the overlay's protocol is the shell's.
 fn sync_card(model: &mut Model, resizing: bool) {
     let record = refresh_queue_card_image(&mut model.app, resizing);
-    if let Some(record) = record
-        && !resizing
-    {
-        let (height, width) = model.app.images.last_card_size();
-        let variant = model.ensure_title_overlay_protocol(
-            &record.base_key,
-            (width, height),
-            &record.parts,
-            record.logo_cache_key.as_deref(),
-            &record.item_kind,
-        );
-        model.app.queue_card_projection.plain_cache_key = Some(record.base_key.clone());
-        if let Some(variant) = variant {
-            model.app.queue_card_projection.cache_key = Some(variant);
-        }
+    if let Some(record) = record {
+        model.ensure_queue_card_title_overlay(&record, resizing);
     }
 }
 

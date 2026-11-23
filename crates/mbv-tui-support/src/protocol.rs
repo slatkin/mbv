@@ -268,22 +268,24 @@ impl ImageProtocols {
     /// tagged with the cache generation too, but a proof (a completed fetch) can
     /// store a new entry with the same pixels under the same generation; the
     /// pixel tag catches that case.
-    pub fn set_pixels(&mut self, bare_key: &str, suffix: &'static str, pixels: u64) {
+    pub fn set_pixels(&mut self, bare_key: &str, suffix: &'static str, img: &image::DynamicImage) {
+        let pixels = mbv_images::hash_image_bytes(img);
         if let Some(stored) = self.protocols.get_mut(bare_key) {
             stored.pixels.insert(suffix, pixels);
         }
     }
 
-    /// Whether `bare_key`'s `suffix` encoding was built from `pixels`, for the
-    /// entry the cache still holds.
+    /// Whether `bare_key`'s `suffix` encoding was built from `img`'s pixels,
+    /// for the entry the cache still holds.
     #[must_use]
     pub fn has_pixels(
         &mut self,
         cache: &ImageCache,
         bare_key: &str,
         suffix: &str,
-        pixels: u64,
+        img: &image::DynamicImage,
     ) -> bool {
+        let pixels = mbv_images::hash_image_bytes(img);
         self.drop_key_if_stale(cache, bare_key);
         self.protocols
             .get(bare_key)

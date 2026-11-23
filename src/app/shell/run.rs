@@ -98,6 +98,11 @@ impl Model {
         // focus stack's derived focus to TuiRealm, and this pass's only other
         // TuiRealm focus caller is that step.
         self.sync_mouse_subscriptions();
+        // The projections queue the protocol work they owe — a cleared crop,
+        // a cleared entry — and the paint below runs in the same pass, so the
+        // pass settles it before the draw instead of at the next tick's
+        // completion drain (which would paint one stale frame).
+        self.drain_protocol_work();
     }
 
     /// Terminal-resize side effects, applied in the sync pass before any

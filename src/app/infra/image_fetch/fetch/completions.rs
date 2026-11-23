@@ -74,10 +74,13 @@ impl App {
             if interrupted && artist_completion.is_none() {
                 self.images.fetch_interrupted(cache_key);
             } else {
-                // Both stores have changed now: the cache holds the entry, so
-                // its encoding is recordable under the new generation.
-                self.queue_protocol_encode(&cache_key, entry.img.as_ref());
+                // The shell encodes a key once its entry is in place; only the
+                // key travels, so this tick clones no bitmap.
+                let has_art = entry.has_art();
                 self.images.complete_fetch(cache_key.clone(), entry);
+                if has_art {
+                    self.queue_protocol_encode(&cache_key);
+                }
             }
             if let Some(event) = artist_completion {
                 let _ = self.channels.lib_tx.send(event);

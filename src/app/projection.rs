@@ -91,6 +91,14 @@ impl App {
             return State(mbv_ui_model::playback::HeroImageState::None);
         };
         let Some(decoded) = self.hero_artwork_decoded(&cache_key) else {
+            // A fetch that resolved empty (or got no answer, so may never) is
+            // final: the shared placeholder shows, and no encode is owed. Only
+            // a fetch still in flight paints as loading.
+            let entry = self.images.image(&cache_key);
+            let settled = entry.is_some_and(|entry| !entry.has_art());
+            if settled || self.images.is_fetch_interrupted(&cache_key) {
+                return State(mbv_ui_model::playback::HeroImageState::None);
+            }
             return State(mbv_ui_model::playback::HeroImageState::Loading);
         };
         // The fit rule follows the arm on every surface: Landscape artwork
@@ -131,8 +139,9 @@ impl App {
     }
 
     /// The decoded pixel size of a cached hero artwork, or `None` while the
-    /// fetch is pending or resolved empty — both paint as the loading
-    /// placeholder for this pass.
+    /// fetch is pending or resolved empty. The caller tells the two apart from
+    /// the cache: a settled entry with no pixels means nothing will arrive, an
+    /// absent or loading key means the fetch is in flight.
     fn hero_artwork_decoded(&self, cache_key: &str) -> Option<(u32, u32)> {
         if self.images.is_loading(cache_key) {
             return None;

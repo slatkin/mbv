@@ -9,7 +9,6 @@
 //! and drains the records out.
 
 use crate::app::App;
-use mbv_images::hash_image_bytes;
 
 impl App {
     /// The suffix the artwork cache keys must carry: the halfblocks
@@ -81,32 +80,22 @@ impl App {
         self.image_font_size
     }
 
-    /// Queue one completed fetch's decoded source for the shell to encode and
-    /// register under `cache_key`. Does nothing when the source carries no
-    /// pixels (a resolved-empty or interrupted fetch).
-    pub(in crate::app) fn queue_protocol_encode(
-        &mut self,
-        cache_key: &str,
-        img: Option<&image::DynamicImage>,
-    ) {
-        if let Some(img) = img {
-            self.pending_protocol_encodes
-                .push_back((cache_key.to_owned(), img.clone()));
-        }
+    /// Queue a completed fetch's cache key for the shell to encode, once the
+    /// entry it stored is in place. Does nothing for a fetch that resolved
+    /// empty or interrupted: it stored no pixels.
+    pub(in crate::app) fn queue_protocol_encode(&mut self, cache_key: &str) {
+        self.pending_protocol_encodes
+            .push_back(cache_key.to_owned());
     }
 
     /// Take the next completed fetch awaiting its encoding, with the
-    /// configured suffix its key carries and the entry's pixel hash, which
-    /// tags the encoding.
+    /// configured suffix its key carries. The decoded source stays in the
+    /// cache: the shell reads it from there, so a completion clones no bitmap.
     #[must_use]
     pub fn next_pending_protocol_encode(&mut self) -> Option<PendingProtocolEncode> {
-        let (cache_key, img) = self.pending_protocol_encodes.pop_front()?;
-        let pixel_hash = hash_image_bytes(&img);
         Some(PendingProtocolEncode {
-            cache_key,
+            cache_key: self.pending_protocol_encodes.pop_front()?,
             suffix: self.configured_protocol_suffix,
-            img,
-            pixel_hash,
         })
     }
 
@@ -120,24 +109,13 @@ impl App {
     pub fn take_pending_protocol_clears(&mut self) -> Vec<String> {
         std::mem::take(&mut self.pending_protocol_clears)
     }
-
-    /// The pixel hash of `cache_key`'s source image, the tag an encoding is
-    /// stored under, so a re-encode of the same pixels is reused.
-    #[must_use]
-    pub(in crate::app) fn source_image_hash(&self, cache_key: &str) -> Option<u64> {
-        self.images
-            .image(cache_key)
-            .and_then(|entry| entry.img.as_ref())
-            .map(hash_image_bytes)
-    }
 }
 
-/// One completed fetch awaiting the shell's encoding: the decoded source and
-/// the configured suffix its cache key carries.
+/// One completed fetch awaiting the shell's encoding: the cache key and the
+/// configured suffix its key carries. The decoded source is read from the
+/// cache.
 #[derive(Debug)]
 pub struct PendingProtocolEncode {
     pub cache_key: String,
     pub suffix: &'static str,
-    pub img: image::DynamicImage,
-    pub pixel_hash: u64,
 }

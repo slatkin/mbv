@@ -319,18 +319,25 @@ impl Model {
             return;
         }
         while let Some(pending) = self.app.next_pending_protocol_encode() {
-            if self.app.source_image_hash(&pending.cache_key) != Some(pending.pixel_hash) {
+            // The entry the completion stored: a key the cache replaced or
+            // cleared since encodes nothing (invariant 38).
+            let Some(img) = self
+                .app
+                .images
+                .image(&pending.cache_key)
+                .and_then(|entry| entry.img.clone())
+            else {
                 continue;
-            }
+            };
             if self.image_protocols.has_pixels(
                 &self.app.images,
                 &pending.cache_key,
                 pending.suffix,
-                pending.pixel_hash,
+                &img,
             ) {
                 continue;
             }
-            self.encode_completed_fetch(&pending);
+            self.encode_completed_fetch(&pending, &img);
         }
         for cache_key in self.app.take_pending_protocol_clears() {
             self.image_protocols.clear_key(&cache_key);
@@ -339,23 +346,34 @@ impl Model {
 
     /// Encode one completed fetch's decoded source under the suffix its cache
     /// key carries and store it, tagged with the pixels it was built from.
-    fn encode_completed_fetch(&mut self, pending: &PendingProtocolEncode) {
-        let built = self.image_protocols.build_entry(
-            &pending.cache_key,
-            Some(pending.img.clone()),
-            None,
-            pending.suffix,
-        );
-        if let Some(protocol) = built.protocol {
-            self.image_protocols.insert_protocol(
-                &self.app.images,
+    fn encode_completed_fetch(
+        &mut self,
+        pending: &PendingProtocolEncode,
+        img: &image::DynamicImage,
+    ) {
+        let protocol = {
+            let Some(picker) = self
+                .image_protocols
+                .picker_for_suffix(pending.suffix)
+                .cloned()
+            else {
+                return;
+            };
+            self.image_protocols.build_protocol(
                 &pending.cache_key,
                 pending.suffix,
-                protocol,
-            );
-            self.image_protocols
-                .set_pixels(&pending.cache_key, pending.suffix, pending.pixel_hash);
-        }
+                &picker,
+                img.clone(),
+            )
+        };
+        self.image_protocols.insert_protocol(
+            &self.app.images,
+            &pending.cache_key,
+            pending.suffix,
+            protocol,
+        );
+        self.image_protocols
+            .set_pixels(&pending.cache_key, pending.suffix, img);
     }
 
     /// Drain ctrl transport commands through the Client core's drain.

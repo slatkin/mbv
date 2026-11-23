@@ -58,7 +58,7 @@ impl Model {
     ///
     /// Invariant 20: a resize drag builds nothing; the settled width composes
     /// it once the hold lifts.
-    fn ensure_queue_card_title_overlay(
+    pub(in crate::app) fn ensure_queue_card_title_overlay(
         &mut self,
         record: &crate::app::state::projection::card::QueueTitleRecord,
         resizing: bool,

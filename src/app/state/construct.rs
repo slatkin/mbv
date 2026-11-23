@@ -146,7 +146,7 @@ impl App {
             configured_protocol_suffix: "halfblock",
             pending_protocol_encodes: std::collections::VecDeque::new(),
             pending_protocol_clears: Vec::new(),
-            halfblock_configured: true,
+            halfblock_configured: false,
             image_pickers_ready: false,
             image_font_size: (10, 20),
             image_decode: init.image_decode,
