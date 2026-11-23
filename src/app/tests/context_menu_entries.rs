@@ -313,7 +313,6 @@ fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
     model.handle_terminal_message(
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![latest_row]),
-            None,
         ))),
         &mut false,
         &mut false,

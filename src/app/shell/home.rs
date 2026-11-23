@@ -4,7 +4,6 @@ use super::Model;
 use mbv_components::home_content::HomeContent;
 use mbv_queue::QueueItem;
 use mbv_ui_model::library::LibraryKey;
-use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_msg::HomeRequest;
 
@@ -13,8 +12,8 @@ impl Model {
         match request {
             HomeRequest::Play(target) => self.home_play_request(&target),
             HomeRequest::Enqueue(targets) => self.home_enqueue_request(targets),
-            HomeRequest::ContextMenu(targets, anchor) => {
-                self.home_context_menu_request(targets, anchor);
+            HomeRequest::ContextMenu(targets) => {
+                self.home_context_menu_request(targets);
             }
             HomeRequest::Delete(targets) => self.home_delete_request(targets),
             HomeRequest::ToggleWatched(targets) => self.home_toggle_watched_request(targets),
@@ -45,11 +44,10 @@ impl Model {
         }
     }
 
-    fn home_context_menu_request(
-        &mut self,
-        targets: Vec<HomeItemTarget>,
-        anchor: Option<(u16, u16)>,
-    ) {
+    /// A request a right-click raised in this tick anchors at the recorded
+    /// pointer; a keyboard request keeps the core's selected-item anchor
+    /// (design D6).
+    fn home_context_menu_request(&mut self, targets: Vec<HomeItemTarget>) {
         let origin = mbv_ui_model::media_list::SelectionOrigin::Library(
             mbv_ui_model::media_list::LibrarySelectionOrigin::Home,
         );
@@ -61,9 +59,9 @@ impl Model {
             )],
         });
         if targets.len() > 1 {
-            self.home_multi_context_menu(&targets, anchor);
+            self.home_multi_context_menu(&targets);
         } else {
-            self.home_single_context_menu(targets.into_iter().next(), anchor);
+            self.home_single_context_menu(targets.into_iter().next());
         }
     }
 
@@ -73,7 +71,7 @@ impl Model {
     /// any non-Emby row makes the selection span Services, and that menu
     /// offers Play and Add to Queue only. An unresolved target contributes
     /// nothing, as in enqueue.
-    fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget], anchor: Option<(u16, u16)>) {
+    fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget]) {
         let resolved: Vec<(QueueItem, bool)> = targets
             .iter()
             .filter_map(|target| Some((self.app.home_stable_target(target)?, target.is_continue())))
@@ -81,7 +79,7 @@ impl Model {
         if resolved.iter().any(|(item, _)| !item.is_emby()) {
             let mixed_items = resolved.into_iter().map(|(item, _)| item).collect();
             self.app.open_home_mixed_context_menu(mixed_items);
-            self.anchor_pending_menu(anchor);
+            self.anchor_pending_menu_at_pointer();
             return;
         }
         let removes: Vec<mbv_ui_model::context_menu::BulkRemoveTarget> = resolved
@@ -107,31 +105,14 @@ impl Model {
             capabilities,
             removes,
         );
-        self.anchor_pending_menu(anchor);
-    }
-
-    /// Set the pointer anchor on the menu the core just raised: the pointer
-    /// cell is the Client's, and the core builds every menu with a keyboard
-    /// anchor (design D6). A keyboard request passes `None` and keeps the
-    /// core's anchor; a raise that produced no menu changes nothing.
-    fn anchor_pending_menu(&mut self, anchor: Option<(u16, u16)>) {
-        let Some((x, y)) = anchor else {
-            return;
-        };
-        if let Some(OverlayRequest::ContextMenu(menu)) = self.app.pending_overlay.as_mut() {
-            menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x, y };
-        }
+        self.anchor_pending_menu_at_pointer();
     }
 
     /// The single-row Home context menu (`openspec/specs/home-latest-sections`): a Continue row keeps today's Continue
     /// Watching menu; a `Recently added` row opens its Service's destination
     /// menu — the same entries the row offers on that Service's Latest list.
     /// An absent or unresolved target opens nothing.
-    fn home_single_context_menu(
-        &mut self,
-        target: Option<HomeItemTarget>,
-        anchor: Option<(u16, u16)>,
-    ) {
+    fn home_single_context_menu(&mut self, target: Option<HomeItemTarget>) {
         let Some(target) = target else {
             return;
         };
@@ -142,12 +123,8 @@ impl Model {
             // A Continue row is always Emby content (`openspec/specs/home-latest-sections`).
             let item = item.as_emby().cloned();
             self.home_context_item.clone_from(&item);
-            if anchor.is_some() {
-                self.app.open_context_menu_at(true, item);
-                self.anchor_pending_menu(anchor);
-            } else {
-                self.app.open_context_menu(true, item);
-            }
+            self.app.open_context_menu_at(true, item);
+            self.anchor_pending_menu_at_pointer();
             return;
         }
         match item {
@@ -157,14 +134,17 @@ impl Model {
                 // resolved row is pinned there before the menu opens.
                 self.home_context_item = Some(item.as_ref().clone());
                 self.app.open_explicit_item_context_menu(item.as_ref());
+                self.anchor_pending_menu_at_pointer();
             }
             QueueItem::Feed(entry) => {
                 self.app.open_feeds_context_menu(&[entry]);
+                self.anchor_pending_menu_at_pointer();
             }
             QueueItem::Audiobookshelf(item) => {
                 self.app.open_audiobookshelf_context_menu(&[
                     mbv_ui_model::context_menu::AudiobookshelfMenuTarget::for_item(&item),
                 ]);
+                self.anchor_pending_menu_at_pointer();
             }
             // A Twitch row offers the generic queue actions only: it carries
             // no Service destination menu (design D8).
@@ -314,7 +294,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let item = make_item("cw-target", "Movie");
         model.app.home_content.continue_items = vec![item.clone()];
-        model.handle_home_request(HomeRequest::ContextMenu(vec![target(&item.id)], None));
+        model.handle_home_request(HomeRequest::ContextMenu(vec![target(&item.id)]));
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {
@@ -520,10 +500,9 @@ mod tests {
             )],
         );
 
-        model.handle_home_request(HomeRequest::ContextMenu(
-            vec![HomeItemTarget::Recent(episode.content_id())],
-            None,
-        ));
+        model.handle_home_request(HomeRequest::ContextMenu(vec![HomeItemTarget::Recent(
+            episode.content_id(),
+        )]));
 
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
@@ -553,13 +532,10 @@ mod tests {
         );
         model.app.feed_tab.all_entries = vec![feed_entry("entry", current - day)];
 
-        model.handle_home_request(HomeRequest::ContextMenu(
-            vec![
-                HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Emby("movie".into())),
-                HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Feed("entry".into())),
-            ],
-            None,
-        ));
+        model.handle_home_request(HomeRequest::ContextMenu(vec![
+            HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Emby("movie".into())),
+            HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Feed("entry".into())),
+        ]));
 
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay

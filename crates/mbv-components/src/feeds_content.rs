@@ -338,7 +338,6 @@ impl FeedsContent {
         };
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries),
-            None,
         ))))
     }
 

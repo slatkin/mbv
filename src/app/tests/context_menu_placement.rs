@@ -58,10 +58,11 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
     let mut app = library_app();
     app.open_context_menu_at(false, None);
     if let Some(OverlayRequest::ContextMenu(menu)) = app.pending_overlay.as_mut() {
-        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x: 70, y: 20 };
+        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
     }
 
     let mut model = Model::new(app);
+    model.menu_pointer = Some((70, 20));
     model.sync_modal_requests();
 
     // Render once and capture the rect placed from the click point.
@@ -102,10 +103,9 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
-            mbv_ui_msg::HomeRequest::ContextMenu(
-                vec![mbv_ui_model::targets::HomeItemTarget::continue_item("id0")],
-                None,
-            ),
+            mbv_ui_msg::HomeRequest::ContextMenu(vec![
+                mbv_ui_model::targets::HomeItemTarget::continue_item("id0"),
+            ]),
         ))),
         &mut false,
         &mut false,
@@ -208,10 +208,9 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.app.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
-            mbv_ui_msg::HomeRequest::ContextMenu(
-                vec![mbv_ui_model::targets::HomeItemTarget::continue_item("id0")],
-                None,
-            ),
+            mbv_ui_msg::HomeRequest::ContextMenu(vec![
+                mbv_ui_model::targets::HomeItemTarget::continue_item("id0"),
+            ]),
         ))),
         &mut false,
         &mut false,
@@ -333,8 +332,9 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
         .unwrap();
     model.app.open_visual_slot_context_menu();
     if let Some(OverlayRequest::ContextMenu(menu)) = model.app.pending_overlay.as_mut() {
-        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x: 2, y: 20 };
+        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
     }
+    model.menu_pointer = Some((2, 20));
     model.sync_modal_requests();
 
     term.draw(|f| {

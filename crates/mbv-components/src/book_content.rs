@@ -522,20 +522,19 @@ impl BookContent {
             Some(RowIntent::ContextSelection(targets)) => targets,
             _ => vec![target],
         };
-        Some(Self::book_context_msg(targets, None))
+        Some(Self::book_context_msg(targets))
     }
 
     /// The typed shell request one resolved context gesture emits (design
-    /// D1): provider-native book targets, with the pointer anchor kept for
-    /// right-click openings.
-    fn book_context_msg(targets: Vec<String>, anchor: Option<(u16, u16)>) -> Msg {
+    /// D1): provider-native book targets. The Client records its own pointer
+    /// cell (design D6).
+    fn book_context_msg(targets: Vec<String>) -> Msg {
         let targets = targets
             .into_iter()
             .map(|library_item_id| AudiobookshelfMenuTarget::Book { library_item_id })
             .collect();
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Audiobookshelf(targets),
-            anchor,
         )))
     }
 }

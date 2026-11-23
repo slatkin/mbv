@@ -88,7 +88,7 @@ impl Model {
                     };
                     (panel, selected)
                 }
-                ContextMenuAnchor::Pointer { .. } => {
+                ContextMenuAnchor::Pointer => {
                     let panel = match self.app.effective_panel_focus() {
                         PanelFocus::Library
                             if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
@@ -117,7 +117,7 @@ impl Model {
             }
         };
         let pointer = match &anchor {
-            ContextMenuAnchor::Pointer { x, y } => Some((*x, *y)),
+            ContextMenuAnchor::Pointer => self.menu_pointer,
             ContextMenuAnchor::SelectedItem(_) => None,
         };
         let (x, y) = ContextMenu::place(

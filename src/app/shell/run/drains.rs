@@ -386,6 +386,9 @@ impl Model {
             return false;
         }
         *had_events = true;
+        // This tick's dispatch starts fresh: a right-click in this tick sets
+        // `menu_pointer_current` again before any menu request is handled.
+        self.menu_pointer_current = false;
         // `PollStrategy::Once` delivers at most one terminal event per
         // tick, so this runs 0 or 1 times; `quit` handles the legacy
         // `handle_key`-returns-true loop break without a labelled

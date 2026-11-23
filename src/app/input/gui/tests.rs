@@ -216,7 +216,6 @@ fn row_context_menu_request_opens_the_row_menu_with_hints() {
 
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
         mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-        None,
     ))));
 
     let Some(GuiOverlay::RowMenu(menu)) = &app.gui_overlay else {
@@ -263,7 +262,6 @@ fn the_row_menu_projects_only_the_remove_entry_as_destructive() {
         .expect("row 0 has a slot");
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
         mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-        None,
     ))));
 
     let playback = app.queue_playback_projection();
@@ -291,7 +289,6 @@ fn row_menu_enter_plays_the_cursor_row() {
         .expect("row 1 has a slot");
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
         mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-        None,
     ))));
 
     app.route_gui_input(
@@ -317,7 +314,6 @@ fn row_menu_two_stroke_dd_removes_the_row() {
         .expect("row 1 has a slot");
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
         mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-        None,
     ))));
 
     app.route_gui_input(
@@ -355,7 +351,6 @@ fn open_overlay_owns_the_keyboard() {
         .expect("row 0 has a slot");
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
         mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-        None,
     ))));
 
     // The GUI-only collapse chord is a menu-owned chord while the menu is
@@ -561,7 +556,6 @@ fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
 
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
         mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
-        None,
     ))));
     let index = match &app.gui_overlay {
         Some(GuiOverlay::RowMenu(menu)) => menu
@@ -602,7 +596,6 @@ fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
 
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
         mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots.clone()),
-        None,
     ))));
     let index = match &app.gui_overlay {
         Some(GuiOverlay::RowMenu(menu)) => menu

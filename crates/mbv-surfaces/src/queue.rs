@@ -602,14 +602,13 @@ impl QueueSurface {
             .external_intent
         {
             Some(RowIntent::Context(slot_id)) => Msg::Shell(Box::new(
-                ShellRequest::RowContextMenu(ContextMenuTargets::Queue(vec![slot_id]), None),
+                ShellRequest::RowContextMenu(ContextMenuTargets::Queue(vec![slot_id])),
             )),
             Some(RowIntent::ContextSelection(slot_ids)) => Msg::Shell(Box::new(
-                ShellRequest::RowContextMenu(ContextMenuTargets::Queue(slot_ids), None),
+                ShellRequest::RowContextMenu(ContextMenuTargets::Queue(slot_ids)),
             )),
             _ => Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                 ContextMenuTargets::Queue(vec![]),
-                None,
             ))),
         }
     }

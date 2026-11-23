@@ -334,7 +334,7 @@ impl App {
             // which resolves through the same request — opens the GUI's row
             // menu (add-tauri-gui-client row 6.2): the Client-core overlay
             // the frame projects, whose entries carry the canvas's key hints.
-            ShellRequest::RowContextMenu(targets, _) => match targets {
+            ShellRequest::RowContextMenu(targets) => match targets {
                 mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots) => {
                     self.open_gui_row_menu(&slots);
                 }

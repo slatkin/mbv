@@ -98,7 +98,7 @@ fn dot_opens_the_selected_book_context_menu_anchored_to_the_selection() {
         Some(Msg::Shell(ref shell_boxed))
             if matches!(
                 shell_boxed.as_ref(),
-                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets))
                     if targets.as_slice() == [AudiobookshelfMenuTarget::Book {
                         library_item_id: "book-a".into(),
                     }]
@@ -127,7 +127,7 @@ fn dot_over_a_visual_selection_emits_every_marked_book_in_list_order() {
         Some(Msg::Shell(ref shell_boxed))
             if matches!(
                 shell_boxed.as_ref(),
-                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets))
                     if targets.as_slice() == [
                         AudiobookshelfMenuTarget::Book { library_item_id: "book-a".into() },
                         AudiobookshelfMenuTarget::Book { library_item_id: "book-b".into() },

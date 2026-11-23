@@ -22,9 +22,10 @@ pub enum HomeRequest {
     /// order, or the single selected item target. The shell resolves each
     /// stable identity and never consults a cursor.
     ToggleWatched(Vec<HomeItemTarget>),
-    /// Open the Home context menu for the resolved targets at an optional
-    /// pointer anchor.
-    ContextMenu(Vec<HomeItemTarget>, Option<(u16, u16)>),
+    /// Open the Home context menu for the resolved targets. The Client
+    /// records the pointer cell it places a right-click menu against (design
+    /// D6).
+    ContextMenu(Vec<HomeItemTarget>),
     /// A row the user single-clicked in the Home list or Library Hero overlay.
     /// The component has already moved its own selection to the resolved row;
     /// the shell only pulls panel focus to the Library.

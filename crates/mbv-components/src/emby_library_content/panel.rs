@@ -372,7 +372,7 @@ impl EmbyLibraryContent {
                     target: Some(target),
                 })))
             }
-            MediaListSurfaceInput::ContextClick(at) => {
+            MediaListSurfaceInput::ContextClick(_) => {
                 let target = target?;
                 let outcome = self
                     .carrier
@@ -389,7 +389,6 @@ impl EmbyLibraryContent {
                 (!items.is_empty()).then(|| {
                     Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                         mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                        Some((at.x, at.y)),
                     )))
                 })
             }

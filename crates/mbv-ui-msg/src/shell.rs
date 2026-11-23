@@ -110,7 +110,7 @@ pub enum ShellRequest {
     /// Open a context menu for already-resolved Music targets. This keeps
     /// Music's focus-before-menu policy in one shell arm without changing the
     /// generic `RowContextMenu` behavior used by other destinations.
-    MusicRowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
+    MusicRowContextMenu(ContextMenuTargets),
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
     MusicGroupSwitch {
@@ -220,13 +220,9 @@ pub enum ShellRequest {
     /// A Home-owned request (play, enqueue, delete, toggle watched, context
     /// menu, row click and activate).
     Home(HomeRequest),
-    /// Open a destination row context menu at an optional pointer anchor.
-    ///
-    /// The anchor remains a raw pointer-coordinate tuple because the shell
-    /// must preserve the click position across the component-to-shell
-    /// boundary; keyboard requests use `None` and resolve placement from the
-    /// freshly painted selection geometry.
-    RowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
+    /// Open a destination row context menu. The Client records the pointer
+    /// cell it places the menu against; the core carries no cell (design D6).
+    RowContextMenu(ContextMenuTargets),
     /// Open the queue visual slot's chrome menu at the pointer anchor. The
     /// menu chooses artwork or the visualizer, or hides the slot; it carries
     /// no row targets.

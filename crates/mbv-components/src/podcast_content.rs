@@ -431,13 +431,13 @@ impl PodcastContent {
             Some(RowIntent::ContextSelection(targets)) => targets,
             _ => vec![target],
         };
-        Some(Self::episode_context_msg(targets, None))
+        Some(Self::episode_context_msg(targets))
     }
 
     /// The typed shell request one resolved context gesture emits (design
-    /// D1): provider-native episode targets, with the pointer anchor kept
-    /// for right-click openings.
-    fn episode_context_msg(targets: Vec<PodcastEpisodeTarget>, anchor: Option<(u16, u16)>) -> Msg {
+    /// D1): provider-native episode targets. The Client records its own
+    /// pointer cell (design D6).
+    fn episode_context_msg(targets: Vec<PodcastEpisodeTarget>) -> Msg {
         let targets = targets
             .into_iter()
             .map(|target| AudiobookshelfMenuTarget::Episode {
@@ -447,7 +447,6 @@ impl PodcastContent {
             .collect();
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Audiobookshelf(targets),
-            anchor,
         )))
     }
 

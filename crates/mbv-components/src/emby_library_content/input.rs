@@ -101,7 +101,6 @@ impl EmbyLibraryContent {
                         .map(|item| {
                             Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                                 mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
-                                None,
                             )))
                         }),
                     // A context click never resolves an activate intent, a
@@ -222,7 +221,6 @@ impl EmbyLibraryContent {
                 let items = self.items_for_targets(&targets);
                 (!items.is_empty()).then_some(ShellRequest::RowContextMenu(
                     mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
-                    None,
                 ))
             }
             Key::Char('r') if ctrl => Some(ShellRequest::EmbyLibraryRescan),

@@ -161,7 +161,7 @@ impl LibraryContentOwner for PodcastContent {
                         Some(RowIntent::ContextSelection(targets)) => targets,
                         _ => vec![target],
                     };
-                    Some(Self::episode_context_msg(targets, Some((at.x, at.y))))
+                    Some(Self::episode_context_msg(targets))
                 }
                 MediaListSurfaceInput::DoubleClick(at) => {
                     // Resolve once, then delegate the target-bearing activation.

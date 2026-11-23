@@ -208,6 +208,7 @@ pub(in crate::app) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
                         | TerminalObserverEvent::FocusLost
                         | TerminalObserverEvent::Mouse
                         | TerminalObserverEvent::MouseClick { .. }
+                        | TerminalObserverEvent::MouseRightClick { .. }
                         | TerminalObserverEvent::MouseClaimed
                         | TerminalObserverEvent::KeyClaimed
                 )

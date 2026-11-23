@@ -189,6 +189,18 @@ pub struct Model {
     /// Shell-owned projection of the focused list's Visual selection.
     pub(in crate::app) visual_selection: Option<(mbv_ui_model::settings::PanelFocus, usize)>,
     pub(in crate::app) context_menu_origin: Option<mbv_ui_model::media_list::SelectionOrigin>,
+    /// The cell the last right-click landed on, in terminal cells. The core
+    /// builds every menu with the neutral `ContextMenuAnchor::Pointer` and no
+    /// cell (design D6); the shell records the one `MouseRightClick` observer
+    /// signal and places a pointer-anchored menu here. `None` leaves a pointer
+    /// menu at its panel's top-left corner, as an unset anchor always did.
+    pub(in crate::app) menu_pointer: Option<(u16, u16)>,
+    /// Whether `menu_pointer` was recorded by a right-click in the tick now
+    /// being dispatched. A right-click and the component request it raises
+    /// reach the shell in one tick, so this is what separates a pointer
+    /// opening (anchor at `menu_pointer`) from a keyboard opening (keep the
+    /// core's selected-item anchor). Reset at the start of every tick.
+    pub(in crate::app) menu_pointer_current: bool,
     pub(in crate::app) context_action_snapshot: Option<
         mbv_ui_model::context_menu::ContextActionSnapshot<
             mbv_ui_model::context_menu::ContextMenuTargets,
@@ -318,6 +330,8 @@ impl Model {
             pending_terminal_resize: false,
             visual_selection: None,
             context_menu_origin: None,
+            menu_pointer: None,
+            menu_pointer_current: false,
             context_action_snapshot: None,
             keybinds,
             focus_stack,
@@ -415,6 +429,14 @@ fn apply_terminal_observer(
         // disarms prefix mode (design D6, task 6.1) — a shell-side flag
         // clear plus focus restore; the mouse event's own delivery and
         // handling are unchanged.
+        // A right press on any surface records the context-menu pointer the
+        // shell places a pointer-anchored menu against (design D6). It is
+        // also a mouse event, so it disarms prefix mode like every other.
+        TerminalObserverEvent::MouseRightClick { column, row } => {
+            model.menu_pointer = Some((*column, *row));
+            model.menu_pointer_current = true;
+            model.disarm_prefix_mode();
+        }
         TerminalObserverEvent::MouseClick { .. } | TerminalObserverEvent::Mouse => {
             model.disarm_prefix_mode();
         }
