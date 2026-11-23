@@ -8,12 +8,16 @@ TAILWINDCSS ?= tailwindcss
 
 all: build
 
+# Make passes DESTDIR from the command line into MAKEFLAGS, and every child
+# inherits it. OpenSSL's vendored build reads DESTDIR and installs its libs into
+# the staging tree, where openssl-sys cannot find them. Hide the make variables
+# from cargo.
 build:
-	cargo build --release
+	env -u DESTDIR -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS cargo build --release
 
 # The file set the AUR packages ship (PKGBUILD-git's package()).
 install: build
-	cargo build --release -p mbv-gui
+	env -u DESTDIR -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS cargo build --release -p mbv-gui
 	install -Dm755 target/release/$(BINARY) $(DESTDIR)$(PREFIX)/bin/$(BINARY)
 	install -Dm755 target/release/mbvd $(DESTDIR)$(PREFIX)/bin/mbvd
 	install -Dm755 target/release/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-gui
