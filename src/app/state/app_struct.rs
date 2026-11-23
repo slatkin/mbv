@@ -158,7 +158,6 @@ pub struct App {
     /// down to a bool that must be manually kept in sync.
     pub(in crate::app) player_endpoint: Option<mbv_remote_player::DaemonEndpoint>,
     pub(in crate::app) hidden_libraries: Vec<String>,
-    pub(in crate::app) home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
     /// Home content (add-gui-library-panel row 6.1): the authoritative
     /// Continue Watching snapshot both Clients store. The launch Home load
     /// fills it (`App::load_home_at_startup`), a rebuilt startup-drain
@@ -727,9 +726,6 @@ pub struct App {
     /// palette, held while Settings is open so cycling can return to it
     /// (issue #875). Cleared each time Settings mounts; never persisted.
     pub(in crate::app) accent_custom: Option<mbv_config::PanelAccentColor>,
-    /// The last sync pass that saw a live resize drag; starts the settle
-    /// window (invariant 20). The live bit stays with the gesture components.
-    pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
     #[cfg(any(test, feature = "test"))]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
     /// How many cast discovery browses this `App` started. Only the Clients'

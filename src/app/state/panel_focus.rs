@@ -40,14 +40,6 @@ impl App {
             && self.single_panel
     }
 
-    /// The single-panel fact as the TUI would derive it today, for the shell
-    /// call sites that record a terminal size into `App` without pushing it
-    /// (the draw path's per-frame size, and test harnesses that set a width).
-    /// Row 4.7 replaces the remaining call sites with `set_single_panel`.
-    pub(in crate::app) fn derive_single_panel(width: u16) -> bool {
-        width < mbv_render::layout::MINI_VIEW_THRESHOLD
-    }
-
     /// Record the single-panel fact the TUI derives from its terminal width.
     /// The TUI sets it at every point where it records the terminal size, on
     /// resize and in the per-frame size on the draw path.

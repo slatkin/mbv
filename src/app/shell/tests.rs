@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 fn set_test_terminal_size(model: &mut Model, width: u16, height: u16) {
     model.terminal_width = width;
     model.terminal_height = height;
-    let single_panel = crate::app::App::derive_single_panel(width);
+    let single_panel = single_panel_for_width(width);
     model.app.set_single_panel(single_panel);
 }
 

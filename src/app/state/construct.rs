@@ -145,10 +145,6 @@ impl App {
             library_position_state: load_position_state_without_pills(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
-            home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow {
-                previous: None,
-                current: 0,
-            },
             music_levels: init.music_levels,
             album_indexes: std::collections::HashMap::new(),
             use_nerd_fonts: init.use_nerd_fonts,
@@ -160,7 +156,6 @@ impl App {
             pinned_width: mbv_ui_model::settings::PinnedWidth::default(),
             pinned_request_pending: None,
             accent_custom: None,
-            resize_drag_activity: None,
 
             pending_overlay: None,
             gui_settings: None,

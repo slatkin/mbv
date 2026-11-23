@@ -6,14 +6,14 @@ use super::*;
 pub(in crate::app) fn set_terminal_size(model: &mut Model, width: u16, height: u16) {
     model.terminal_width = width;
     model.terminal_height = height;
-    let single_panel = App::derive_single_panel(width);
+    let single_panel = crate::app::shell::single_panel_for_width(width);
     model.app.set_single_panel(single_panel);
 }
 
 /// Record only a terminal width, pushing the matching single-panel fact.
 pub(in crate::app) fn set_terminal_width(model: &mut Model, width: u16) {
     model.terminal_width = width;
-    let single_panel = App::derive_single_panel(width);
+    let single_panel = crate::app::shell::single_panel_for_width(width);
     model.app.set_single_panel(single_panel);
 }
 

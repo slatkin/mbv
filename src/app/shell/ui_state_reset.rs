@@ -94,6 +94,15 @@ impl Model {
         self.pending_music_reanchor = None;
     }
 
+    /// Write the shell-owned list-pane width preference (design D4): the field
+    /// stays on `App`, but its prefs key belongs to the TUI Client.
+    pub(in crate::app) fn save_client_list_pane_width(&self) {
+        App::save_client_pref(
+            "list_pane_width",
+            serde_json::json!(self.app.list_pane_width),
+        );
+    }
+
     /// Restore the presentation layout and the geometry-specific startup
     /// focus rule: ordinary two-panel geometry focuses the Library; the
     /// geometry-forced Mini keeps its startup Queue focus.
@@ -104,6 +113,7 @@ impl Model {
         self.app.queue_column_width = LEFT_WIDTH_DEFAULT;
         self.clamp_queue_column_width();
         self.app.list_pane_width = None;
+        self.save_client_list_pane_width();
         self.app.visual_slot_hidden = false;
         self.app.visualizer_enabled = false;
         self.app.stop_visualizer_capture();

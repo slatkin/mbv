@@ -233,7 +233,7 @@ impl Model {
                             content_area.width,
                         );
                 }
-                self.app.save_prefs();
+                self.save_client_list_pane_width();
             }
             _ => unreachable!("request is a pointer or layout request"),
         }

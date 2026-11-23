@@ -323,7 +323,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let now = mbv_ui_model::feed_age::current_time_secs();
         let day = 24 * 60 * 60;
-        model.app.home_latest_launch_window = mbv_ui_model::home_latest::HomeLatestLaunchWindow {
+        model.home_latest_launch_window = mbv_ui_model::home_latest::HomeLatestLaunchWindow {
             previous: None,
             current: now - 30 * day,
         };
@@ -347,7 +347,7 @@ mod tests {
     #[test]
     fn home_pushes_merged_recently_added_rows_newest_first_inside_14_days() {
         let mut model = Model::new(make_app_stub());
-        let current = model.app.home_latest_launch_window.current;
+        let current = model.home_latest_launch_window.current;
         let day = 24 * 60 * 60;
 
         let mut movie = make_item("Movie", "Movie");
@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn single_recent_podcast_row_opens_the_audiobookshelf_destination_menu() {
         let mut model = Model::new(make_app_stub());
-        let current = model.app.home_latest_launch_window.current;
+        let current = model.home_latest_launch_window.current;
         let episode = podcast_episode("episode", current - 24 * 60 * 60);
         model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
@@ -520,7 +520,7 @@ mod tests {
     #[test]
     fn mixed_service_selection_menu_offers_play_and_add_to_queue_only() {
         let mut model = Model::new(make_app_stub());
-        let current = model.app.home_latest_launch_window.current;
+        let current = model.home_latest_launch_window.current;
         let day = 24 * 60 * 60;
         model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Emby("lib".into()),

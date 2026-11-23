@@ -150,7 +150,7 @@ impl Model {
         if self.acknowledged_home_latest_sources.contains(source) {
             return false;
         }
-        let window = self.app.home_latest_launch_window;
+        let window = self.home_latest_launch_window;
         match source {
             // Stored rows are already filtered to the 14-day cutoff on
             // arrival, so the launch window is the remaining test: an item

@@ -538,16 +538,15 @@ impl Model {
     /// Whether image work keyed on panel geometry must hold (invariant 20): a
     /// resize drag (queue-column boundary or Library wide split) is live, or
     /// its settle window has not elapsed. A live drag refreshes
-    /// `App::resize_drag_activity`, so the window runs from the last drag
+    /// `Model::resize_drag_activity`, so the window runs from the last drag
     /// event. Every geometry-keyed image projection (queue card, hero) takes
     /// the result as an input.
     pub(in crate::app) fn refresh_resize_drag_hold(&mut self) -> bool {
         let live = self.resize_drag_live();
         if live {
-            self.app.resize_drag_activity = Some(Instant::now());
+            self.resize_drag_activity = Some(Instant::now());
         }
         live || self
-            .app
             .resize_drag_activity
             .is_some_and(|at| at.elapsed() < RESIZE_DRAG_SETTLE)
     }

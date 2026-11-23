@@ -1,5 +1,7 @@
 use mbv_theme as palette;
 use std::time::Duration;
+#[cfg(test)]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{
     AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, LibEvent, PanelFocus,
@@ -8,8 +10,6 @@ use super::{
 };
 use super::{QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog};
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
-#[cfg(test)]
-use crate::app::state::home_latest::current_launch_secs;
 use crate::app::state::playback::{DestinationLatestSnapshot, DestinationLatestSource};
 use mbv_components::{QueueBoundaryComponent, UiRootComponent};
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
@@ -247,6 +247,33 @@ pub struct Model {
     /// (`App::set_single_panel`) and the queue-column clamp from these.
     pub(in crate::app) terminal_width: u16,
     pub(in crate::app) terminal_height: u16,
+    /// The Home "new content" launch window (row 4.4 of design D2): the launch
+    /// instant and the previous launch, read by the shell's destination-latest
+    /// markers. Set once at `Model` construction.
+    pub(in crate::app) home_latest_launch_window: HomeLatestLaunchWindow,
+    /// The last sync pass that saw a live resize drag; starts the settle
+    /// window (invariant 20). The live bit stays with the gesture components.
+    pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
+}
+
+/// The single-panel fact the TUI derives from its terminal width: the width
+/// is below the mini-view breakpoint (row 4.4 of design D2, from the row
+/// 4.1-4.3 review). The TUI owns the threshold; the core only receives the
+/// fact through `App::set_single_panel`.
+pub(in crate::app) fn single_panel_for_width(width: u16) -> bool {
+    width < mbv_render::layout::MINI_VIEW_THRESHOLD
+}
+
+/// The current launch instant in Unix seconds: the upper bound of the Home
+/// "new content" launch window (row 4.4 of design D2). The window is shell
+/// presentation state, so the clock read lives here too.
+#[cfg(test)]
+#[must_use]
+fn current_launch_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 impl Model {
@@ -312,13 +339,12 @@ impl Model {
     }
 
     fn new_with_listener_and_window(
-        mut app: App,
+        app: App,
         listener_cfg: EventListenerCfg<UserEvent>,
         move_gate: input_port::MoveGate,
         home_latest_launch_window: HomeLatestLaunchWindow,
     ) -> Self {
         let application = Application::init(listener_cfg);
-        app.home_latest_launch_window = home_latest_launch_window;
         // Legacy Home Latest selector snapshots are reanchored to Continue
         // Watching by the Home owner's launch-state restoration.
         let initial_terminal_size = (80, 24);
@@ -361,6 +387,8 @@ impl Model {
             tab_scroll: 0,
             terminal_width: initial_terminal_size.0,
             terminal_height: initial_terminal_size.1,
+            home_latest_launch_window,
+            resize_drag_activity: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
@@ -432,7 +460,7 @@ fn apply_terminal_observer(
             model.pending_terminal_resize = true;
             model.terminal_width = *width;
             model.terminal_height = *height;
-            let single_panel = App::derive_single_panel(*width);
+            let single_panel = single_panel_for_width(*width);
             model.app.set_single_panel(single_panel);
             // Invariant 17: a resize neither blanks the terminal nor wipes
             // the image cache. A `force_clear` here blanked the panel in the

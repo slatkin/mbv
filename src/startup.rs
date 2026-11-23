@@ -8,7 +8,7 @@
 
 use std::io::IsTerminal;
 
-use crate::app::state::home_latest::{capture_launch_window, current_launch_secs};
+use crate::app::state::home_latest::capture_launch_window;
 use crate::app::{App, Model};
 use crate::config::{self, Config, load_config};
 use crate::local_daemon;
@@ -109,7 +109,7 @@ extern "C" fn signal_handler(sig: libc::c_int) {
 /// with the launch window available to the model. A pinned Client always
 /// starts with Panel focus on Queue.
 fn run_tui(mut app: App) {
-    let launch_window = capture_launch_window(current_launch_secs());
+    let launch_window = capture_launch_window();
     app.init_image_pickers();
     if pin::is_pinned() {
         app.pin_launch_focus_to_queue();

@@ -1,16 +1,15 @@
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Capture the launch window: the launch instant, plus the previous launch
+/// from the saved launch state, which is replaced by the launch instant. The
+/// caller reads the clock; this function handles the saved copy.
 #[must_use]
-pub(crate) fn current_launch_secs() -> u64 {
-    SystemTime::now()
+pub(crate) fn capture_launch_window() -> HomeLatestLaunchWindow {
+    let current = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs()
-}
-
-#[must_use]
-pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
+        .as_secs();
     if current == 0 {
         tracing::warn!(name: "home_latest.launch_cutoff.invalid", target: "home_latest", current, "launch cutoff is not positive; markers disabled");
         return HomeLatestLaunchWindow {

@@ -22,7 +22,7 @@ pub(in crate::app) fn compute_frame_layout(
     }
     model.terminal_width = area.width;
     model.terminal_height = area.height;
-    let single_panel = App::derive_single_panel(area.width);
+    let single_panel = super::single_panel_for_width(area.width);
     model.app.set_single_panel(single_panel);
     Some(compute_chrome_geometry(
         &model.app,

@@ -4,12 +4,9 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::{
-    Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
+    App, Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
     restore_terminal, start_quit_watchdog,
 };
-// The run-loop tests reach `App` through this module's scope.
-#[cfg(test)]
-use super::App;
 
 /// Issue #940: a run-loop phase that takes at least this long gets a WARN
 /// naming the phase that consumed it, so a stalled input window names its
@@ -133,7 +130,10 @@ impl Model {
             self.app.mini_view_focus = PanelFocus::Queue;
         }
         if self.clamp_queue_column_width() {
-            self.app.save_prefs();
+            App::save_client_pref(
+                "queue_column_width",
+                serde_json::json!(self.app.queue_column_width),
+            );
         }
     }
 

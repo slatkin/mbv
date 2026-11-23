@@ -644,7 +644,7 @@ fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
 #[test]
 fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
     let mut model = Model::new(make_app_stub());
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     let day = 24 * 60 * 60;
     model
         .app
@@ -679,7 +679,7 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
 #[test]
 fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain() {
     let mut model = Model::new(make_app_stub());
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     model
         .app
         .channels
@@ -710,7 +710,7 @@ fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain()
 #[test]
 fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
     let mut model = Model::new(make_app_stub());
-    let current = model.app.home_latest_launch_window.current;
+    let current = model.home_latest_launch_window.current;
     model
         .app
         .channels
