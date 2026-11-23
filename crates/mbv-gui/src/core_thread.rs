@@ -406,6 +406,14 @@ impl CoreThread {
         self.core.gui_settings().map(|state| state.section)
     }
 
+    /// One Library flat list's active sort, for a Client's test that asserts
+    /// the sort a command or a launch restore left the destination in.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_list_sort_for_test(&self, target: mbv::GuiSortTarget) -> mbv::GuiListSort {
+        self.core.gui_list_sort(target)
+    }
+
     /// Whether the Playlists screen is open, for a Client's test that asserts
     /// a key or a drained request opened or closed it.
     #[doc(hidden)]

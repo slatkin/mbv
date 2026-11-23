@@ -122,7 +122,7 @@ fn restored_launch_selection<'a>(
 /// Seed one destination's sort as the user's press leaves it (gui-flat-list-sort
 /// design D10).
 fn seed_launch_sort(app: &mut App, sort: (GuiSortTarget, GuiListSort)) {
-    app.set_gui_list_sort(sort.0, sort.1);
+    set_gui_list_sort(app, sort.0, sort.1);
 }
 
 /// Every collection dropdown's checked set, in saved order, and its list sort,
@@ -176,7 +176,7 @@ fn a_saved_checked_set_restores_as_saved(
     assert_eq!(set.checked_keys(), expected.as_slice());
     if let Some((sort_target, expected_sort)) = sort {
         assert_eq!(
-            restored.gui_list_sort(sort_target),
+            gui_list_sort(&restored, sort_target),
             expected_sort,
             "the destination's saved sort restores"
         );

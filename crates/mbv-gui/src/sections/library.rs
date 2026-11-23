@@ -79,14 +79,14 @@ fn destination_parts(
 /// the detail facts with the Hero's artwork, the picked item's menu, and the
 /// playing track's id.
 fn music_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = core.app_mut().gui_music_projection(lib_idx);
+    let projection = core.gui_music_projection(lib_idx);
     let picked = projection
         .hero
         .as_ref()
         .map(|hero| hero.album.album_id.clone());
     let art = picked
         .as_deref()
-        .map(|album_id| GuiArtRef::from(&core.app_mut().gui_library_artwork(album_id)));
+        .map(|album_id| GuiArtRef::from(&core.gui_library_artwork(album_id)));
     let menu = picked
         .map(|album_id| core.gui_library_menu(&album_id))
         .unwrap_or_default();
@@ -104,7 +104,7 @@ fn music_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLi
 
 /// The Home destination's parts (design D12).
 fn home_parts(core: &mut GuiCore) -> (GuiDestinationList, GuiLibraryDetail) {
-    let projection = core.app_mut().gui_home_projection();
+    let projection = core.gui_home_projection();
     (
         GuiDestinationList::Home(GuiHomeList::from_projection(&projection)),
         GuiLibraryDetail::Home(GuiHomeDetail::from_projection(&projection)),

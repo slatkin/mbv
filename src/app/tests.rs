@@ -175,6 +175,85 @@ pub(in crate::app) fn handle_gui_shows_new(
     crate::app::gui_library::handle_shows_new(app, event);
 }
 
+/// The Music destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_music_projection(
+    app: &mut crate::app::App,
+    lib_idx: usize,
+) -> crate::app::GuiMusicProjection {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let projection = core.gui_music_projection(lib_idx);
+    *app = core.into_app();
+    projection
+}
+
+/// The Home destination's projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_home_projection(
+    app: &mut crate::app::App,
+) -> crate::app::GuiHomeProjection {
+    let mut core =
+        crate::gui::GuiCore::new(std::mem::replace(app, crate::app::app_stub::handoff_app()));
+    let projection = core.gui_home_projection();
+    *app = core.into_app();
+    projection
+}
+
+/// One music artist row's art over a stub `App` a test holds.
+pub(in crate::app) fn music_artist_row_art(
+    app: &crate::app::App,
+    key: &mbv_ui_model::music_grouping::ArtistKey,
+) -> crate::app::GuiRowArt {
+    crate::app::gui_library::music_artist_row_art(app, key)
+}
+
+/// One flat list's active sort over a stub `App` a test holds.
+pub(in crate::app) fn gui_list_sort(
+    app: &crate::app::App,
+    target: crate::app::GuiSortTarget,
+) -> crate::app::GuiListSort {
+    crate::app::gui_library::list_sort(app, target)
+}
+
+/// Set one flat list's sort over a stub `App` a test holds.
+pub(in crate::app) fn set_gui_list_sort(
+    app: &mut crate::app::App,
+    target: crate::app::GuiSortTarget,
+    sort: crate::app::GuiListSort,
+) {
+    crate::app::gui_library::set_list_sort(app, target, sort);
+}
+
+/// The Search projection over a stub `App` a test holds.
+pub(in crate::app) fn gui_search_projection(
+    app: &crate::app::App,
+) -> Option<crate::app::GuiSearchProjection> {
+    crate::app::gui_library::search_projection(app)
+}
+
+/// Send one Search query over a stub `App` a test holds.
+pub(in crate::app) fn gui_search_query(app: &mut crate::app::App, query: &str) {
+    crate::app::gui_library::search_query(app, query.to_string());
+}
+
+/// Close the Search results over a stub `App` a test holds.
+pub(in crate::app) fn gui_search_close(app: &mut crate::app::App) {
+    crate::app::gui_library::search_close(app);
+}
+
+/// Activate one Search result over a stub `App` a test holds.
+pub(in crate::app) fn gui_search_activate(
+    app: &mut crate::app::App,
+    item_id: &str,
+    item_type: &str,
+) {
+    crate::app::gui_library::search_activate(app, item_id.to_string(), item_type.to_string());
+}
+
+/// Apply the landed Search results over a stub `App` a test holds.
+pub(in crate::app) fn drain_gui_search_results(app: &mut crate::app::App) -> bool {
+    crate::app::gui_library::drain_search_results(app)
+}
+
 /// Open one plain Emby library over a stub `App` a test holds.
 pub(in crate::app) fn gui_emby_open(app: &mut crate::app::App, lib_idx: usize) {
     let mut core =

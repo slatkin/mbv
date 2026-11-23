@@ -70,7 +70,9 @@ impl App {
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
             // The GUI Library's collection store owns this event (add-gui-
             // library-panel design D5); the TUI never starts one.
-            LibEvent::GuiGroupAlbums(event) => self.handle_gui_group_albums(event),
+            LibEvent::GuiGroupAlbums(event) => {
+                crate::app::gui_library::handle_group_albums(self, event);
+            }
             // The GUI Library's root-list store owns this event (add-gui-
             // library-panel design D12, row 8.1); the TUI never starts one.
             LibEvent::GuiEmbyRootItems(event) => {

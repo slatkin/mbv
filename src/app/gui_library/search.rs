@@ -19,6 +19,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_ui_model::search_sidebar::is_navigable_type;
 
 use crate::app::App;
+use crate::gui::GuiCore;
 
 /// The GUI Library's Search store (row 12.1).
 ///
@@ -79,40 +80,23 @@ pub struct GuiSearchProjection {
     pub rows: Vec<GuiSearchRow>,
 }
 
-impl App {
+impl GuiCore {
     /// Send a query from the GUI's Search field (row 12.1), or clear the
     /// results on an empty one.
     ///
     /// A non-empty query stores the live query and starts the TUI's own
     /// search worker through `App::spawn_search_sidebar_query`; the result
     /// lands on the search channel and the tick host applies it through
-    /// [`App::drain_gui_search_results`]. A Client with no Emby Service
+    /// [`GuiCore::drain_gui_search_results`]. A Client with no Emby Service
     /// attached runs no search and logs the ignored command, as every
     /// ignored Library command is logged — never a silent empty result.
     pub fn gui_search_query(&mut self, query: String) {
-        if query.trim().is_empty() {
-            self.gui.search = GuiSearchStore::default();
-            return;
-        }
-        self.gui.search.query.clone_from(&query);
-        self.gui.search.loading = false;
-        self.gui.search.failed = false;
-        self.gui.search.rows.clear();
-        let Some(client) = self.emby_snapshot() else {
-            super::log_ignored_library_command(
-                "searchQuery",
-                format_args!("no Emby Service is attached"),
-            );
-            return;
-        };
-        self.gui.search.loading = true;
-        self.spawn_search_sidebar_query(client, query);
+        search_query(&mut self.app, query);
     }
 
-    /// Close the GUI's Search results (row 12.1): Esc in the field. The live
-    /// query, its rows, and its flags go, so the next query starts clean.
+    /// Close the GUI's Search results (row 12.1): Esc in the field.
     pub fn gui_search_close(&mut self) {
-        self.gui.search = GuiSearchStore::default();
+        search_close(&mut self.app);
     }
 
     /// Activate a result (row 12.1): Enter on the row, a press, or the
@@ -126,19 +110,7 @@ impl App {
     /// pair no stored row carries is a stale frame's row and navigates
     /// nowhere.
     pub fn gui_search_activate(&mut self, item_id: String, item_type: String) {
-        let known = self
-            .gui
-            .search
-            .rows
-            .iter()
-            .any(|row| row.id == item_id && row.item_type == item_type);
-        if !known {
-            super::log_stale_library_item("searchActivate", &item_id);
-            return;
-        }
-        let libs = self.library_tabs_for_nav();
-        self.gui.search = GuiSearchStore::default();
-        self.spawn_navigate_to_item(item_id, item_type, libs);
+        search_activate(&mut self.app, item_id, item_type);
     }
 
     /// Apply the landed search results to the store (row 12.1): the GUI tick
@@ -150,11 +122,7 @@ impl App {
     /// host runs instead, because no component is mounted in that Client.
     /// Returns whether a result applied — a stale one changes nothing.
     pub fn drain_gui_search_results(&mut self) -> bool {
-        let mut applied = false;
-        while let Ok((query, result)) = self.channels.search_rx.try_recv() {
-            applied |= self.apply_gui_search_result(&query, result);
-        }
-        applied
+        drain_search_results(&mut self.app)
     }
 
     /// The Search projection the GUI Library panel paints (row 12.1), or
@@ -162,55 +130,121 @@ impl App {
     /// a closed field projects nothing, so the frame rides it as `null`.
     #[must_use]
     pub fn gui_search_projection(&self) -> Option<GuiSearchProjection> {
-        if self.gui.search.query.trim().is_empty() && self.gui.search.rows.is_empty() {
-            return None;
-        }
-        Some(GuiSearchProjection {
-            query: self.gui.search.query.clone(),
-            loading: self.gui.search.loading,
-            failed: self.gui.search.failed,
-            rows: self.gui.search.rows.clone(),
-        })
+        search_projection(&self.app)
     }
+}
 
-    /// Apply one landed result (row 12.1). A result answering an older query
-    /// changes nothing, the guard the TUI's `SearchSidebar::apply_drain`
-    /// applies: keystrokes can dispatch a newer query while an older one is
-    /// still in flight, so responses race on arrival order. A result for the
-    /// live query ends its load and lands its navigable rows, or records the
-    /// failure and keeps no rows.
-    fn apply_gui_search_result(
-        &mut self,
-        query: &str,
-        result: Result<Vec<EmbyItem>, EmbyError>,
-    ) -> bool {
-        if query != self.gui.search.query {
-            return false;
-        }
-        self.gui.search.loading = false;
-        match result {
-            Ok(items) => {
-                self.gui.search.failed = false;
-                self.gui.search.rows = items
-                    .iter()
-                    .filter(|item| is_navigable_type(&item.item_type))
-                    .map(gui_search_row)
-                    .collect();
-            }
-            Err(error) => {
-                self.gui.search.failed = true;
-                self.gui.search.rows.clear();
-                tracing::info!(
-                    name: "search.query.failed",
-                    target: "gui_library",
-                    query,
-                    error = %error,
-                    "the GUI Search query failed"
-                );
-            }
-        }
-        true
+/// Send a query from the GUI's Search field over the `App` the GUI core owns
+/// (row 12.1): an empty query clears the store, and a non-empty one stores the
+/// live query and starts the TUI's own search worker.
+pub(in crate::app) fn search_query(app: &mut App, query: String) {
+    if query.trim().is_empty() {
+        app.gui.search = GuiSearchStore::default();
+        return;
     }
+    app.gui.search.query.clone_from(&query);
+    app.gui.search.loading = false;
+    app.gui.search.failed = false;
+    app.gui.search.rows.clear();
+    let Some(client) = app.emby_snapshot() else {
+        super::log_ignored_library_command(
+            "searchQuery",
+            format_args!("no Emby Service is attached"),
+        );
+        return;
+    };
+    app.gui.search.loading = true;
+    app.spawn_search_sidebar_query(client, query);
+}
+
+/// Close the GUI's Search results (row 12.1): the live query, its rows, and
+/// its flags go, so the next query starts clean.
+pub(in crate::app) fn search_close(app: &mut App) {
+    app.gui.search = GuiSearchStore::default();
+}
+
+/// Activate a result over the `App` the GUI core owns (row 12.1): a stored
+/// row navigates through the TUI's own path, and an unknown id and type pair
+/// is a stale frame's row.
+pub(in crate::app) fn search_activate(app: &mut App, item_id: String, item_type: String) {
+    let known = app
+        .gui
+        .search
+        .rows
+        .iter()
+        .any(|row| row.id == item_id && row.item_type == item_type);
+    if !known {
+        super::log_stale_library_item("searchActivate", &item_id);
+        return;
+    }
+    let libs = app.library_tabs_for_nav();
+    app.gui.search = GuiSearchStore::default();
+    app.spawn_navigate_to_item(item_id, item_type, libs);
+}
+
+/// Apply the landed search results to the store over the `App` the GUI core
+/// owns (row 12.1): every result the channel holds, oldest first. Returns
+/// whether one applied.
+pub(in crate::app) fn drain_search_results(app: &mut App) -> bool {
+    let mut applied = false;
+    while let Ok((query, result)) = app.channels.search_rx.try_recv() {
+        applied |= apply_search_result(app, &query, result);
+    }
+    applied
+}
+
+/// The Search projection over the `App` the GUI core owns (row 12.1), or
+/// `None` while the store holds no query and no row.
+#[must_use]
+pub(in crate::app) fn search_projection(app: &App) -> Option<GuiSearchProjection> {
+    if app.gui.search.query.trim().is_empty() && app.gui.search.rows.is_empty() {
+        return None;
+    }
+    Some(GuiSearchProjection {
+        query: app.gui.search.query.clone(),
+        loading: app.gui.search.loading,
+        failed: app.gui.search.failed,
+        rows: app.gui.search.rows.clone(),
+    })
+}
+
+/// Apply one landed result (row 12.1). A result answering an older query
+/// changes nothing, the guard the TUI's `SearchSidebar::apply_drain` applies:
+/// keystrokes can dispatch a newer query while an older one is still in
+/// flight, so responses race on arrival order. A result for the live query
+/// ends its load and lands its navigable rows, or records the failure and
+/// keeps no rows.
+fn apply_search_result(
+    app: &mut App,
+    query: &str,
+    result: Result<Vec<EmbyItem>, EmbyError>,
+) -> bool {
+    if query != app.gui.search.query {
+        return false;
+    }
+    app.gui.search.loading = false;
+    match result {
+        Ok(items) => {
+            app.gui.search.failed = false;
+            app.gui.search.rows = items
+                .iter()
+                .filter(|item| is_navigable_type(&item.item_type))
+                .map(gui_search_row)
+                .collect();
+        }
+        Err(error) => {
+            app.gui.search.failed = true;
+            app.gui.search.rows.clear();
+            tracing::info!(
+                name: "search.query.failed",
+                target: "gui_library",
+                query,
+                error = %error,
+                "the GUI Search query failed"
+            );
+        }
+    }
+    true
 }
 
 /// One row of the results (row 12.1): the item's stable id and type for the

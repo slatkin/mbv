@@ -23,6 +23,7 @@ use mbv_ui_model::ui_util::row_date;
 use super::GuiLibraryArtwork;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, queue_item_media_kind};
 use crate::app::App;
+use crate::gui::GuiCore;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One Home row's stable identity (design D12): the identity
@@ -235,171 +236,185 @@ impl GuiHomeItem {
     }
 }
 
-impl App {
+impl GuiCore {
     /// Whether Home is the active destination (design D2, D12): the
     /// position-0 open destination the Music content gate excludes, and the
     /// only active position whose Library section carries `home` content.
     #[must_use]
     pub fn gui_home_destination(&self) -> bool {
-        self.tab == TabSelection::Home
+        home_destination(&self.app)
     }
 
-    /// The Home projection the GUI Library panel paints (design D12): the
-    /// flat list's two sections as heading rows and item rows, the core's
-    /// selected row, and its Hero. The time the 14-day cutoff reads is read
-    /// once per call, as each TUI Home push reads it once.
+    /// The Home projection the GUI Library panel paints (design D12).
     pub fn gui_home_projection(&mut self) -> GuiHomeProjection {
-        let now_secs = mbv_ui_model::feed_age::current_time_secs();
-        // The `Continue watching` rows keep the snapshot's order, with no
-        // gutter date — the TUI's flat list's rule.
-        let continue_items: Vec<QueueItem> = self
-            .home_content
-            .continue_items
-            .iter()
-            .cloned()
-            .map(|item| QueueItem::Emby(Box::new(item)))
-            .collect();
-        let mut continue_rows = Vec::new();
-        for item in &continue_items {
-            let id = GuiHomeRowId::Continue(item.id().to_owned());
-            continue_rows.push(self.home_item(item, id, None, time_left(item)));
-        }
-        // The `Recently added` rows: the merged store-and-Feeds rows inside
-        // the 14-day cutoff (`App::home_recent_rows`'s merge order, newest
-        // first), each with its gutter date and the Feeds subscription name
-        // the split title reads.
-        let mut recent_rows = Vec::new();
-        for row in self.home_recent_rows(now_secs) {
-            let HomeRecentRow { item, feed_name } = &row;
-            if !is_home_recent(provider_timestamp_secs(item), now_secs) {
-                continue;
-            }
-            let id = GuiHomeRowId::Recent(item.content_id());
-            let date = row_date(provider_timestamp_secs(item));
-            recent_rows.push(self.home_item(item, id, feed_name.as_deref(), date));
-        }
+        home_projection(&mut self.app)
+    }
+}
 
-        // The selection (design D2, D12): the core's stored row while the
-        // list still carries it, else the first item row — Home's Hero
-        // default (row 6.2).
-        let items: Vec<&GuiHomeItem> = continue_rows.iter().chain(recent_rows.iter()).collect();
-        let default_hero = items.first().map(|item| item.row.id.clone());
-        let selected = self
-            .gui
-            .home_selection
-            .clone()
-            .filter(|selected| items.iter().any(|item| item.id() == selected))
-            .or(default_hero);
-        let hero = selected
-            .as_ref()
-            .and_then(|selected| self.home_hero(&items, selected));
+/// Whether Home is the active destination over the `App` the GUI core owns
+/// (design D2, D12).
+#[must_use]
+pub(in crate::app::gui_library) fn home_destination(app: &App) -> bool {
+    app.tab == TabSelection::Home
+}
 
-        // The flat rows in paint order: the sections' heading rows, each
-        // omitted when it has no rows, and the spacer only between two
-        // non-empty sections.
-        let sections: [(&str, Vec<GuiHomeRow>); 2] = [
-            (
-                "Continue watching",
-                continue_rows.iter().map(GuiHomeItem::flat_row).collect(),
-            ),
-            (
-                "Recently added",
-                recent_rows.iter().map(GuiHomeItem::flat_row).collect(),
-            ),
-        ];
-        let mut rows = Vec::new();
-        for (heading, section_rows) in sections {
-            if section_rows.is_empty() {
-                continue;
-            }
-            if !rows.is_empty() {
-                rows.push(GuiHomeRow::Spacer);
-            }
-            rows.push(GuiHomeRow::Heading {
-                text: heading.to_string(),
-            });
-            rows.extend(section_rows);
+/// The Home projection over the `App` the GUI core owns (design D12): the flat
+/// list's two sections as heading rows and item rows, the core's selected row,
+/// and its Hero. The time the 14-day cutoff reads is read once per call, as
+/// each TUI Home push reads it once.
+pub(in crate::app::gui_library) fn home_projection(app: &mut App) -> GuiHomeProjection {
+    let now_secs = mbv_ui_model::feed_age::current_time_secs();
+    // The `Continue watching` rows keep the snapshot's order, with no gutter
+    // date — the TUI's flat list's rule.
+    let continue_items: Vec<QueueItem> = app
+        .home_content
+        .continue_items
+        .iter()
+        .cloned()
+        .map(|item| QueueItem::Emby(Box::new(item)))
+        .collect();
+    let mut continue_rows = Vec::new();
+    for item in &continue_items {
+        let id = GuiHomeRowId::Continue(item.id().to_owned());
+        continue_rows.push(home_item(app, item, id, None, time_left(item)));
+    }
+    // The `Recently added` rows: the merged store-and-Feeds rows inside the
+    // 14-day cutoff (`App::home_recent_rows`'s merge order, newest first),
+    // each with its gutter date and the Feeds subscription name the split
+    // title reads.
+    let mut recent_rows = Vec::new();
+    for row in app.home_recent_rows(now_secs) {
+        let HomeRecentRow { item, feed_name } = &row;
+        if !is_home_recent(provider_timestamp_secs(item), now_secs) {
+            continue;
         }
-        GuiHomeProjection {
-            loading: self.home_content.loading,
-            rows,
-            selected,
-            hero,
-        }
+        let id = GuiHomeRowId::Recent(item.content_id());
+        let date = row_date(provider_timestamp_secs(item));
+        recent_rows.push(home_item(app, item, id, feed_name.as_deref(), date));
     }
 
-    /// One item row beside the queue item that projects it (design D12):
-    /// the row's title parts, kind, state, trailing text, and art read the
-    /// item alone. `trailing` is the caller's text for a row whose trailing
-    /// fact is not the time left (a `Recently added` row's date).
-    fn home_item(
-        &self,
-        item: &QueueItem,
-        id: GuiHomeRowId,
-        feed_name: Option<&str>,
-        trailing: Option<String>,
-    ) -> GuiHomeItem {
-        let parts = item.playback_title_parts(feed_name);
-        let (title, subtitle) = match &parts.context {
-            Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
-            None => (parts.title.text.clone(), None),
-        };
-        let kind = home_item_kind(item);
-        let state = MediaSemanticState::from_queue_item(item);
-        let media = queue_item_media_kind(item);
-        let art = self.gui_row_art(self.queue_item_row_source(item).as_ref());
-        GuiHomeItem {
-            item: item.clone(),
-            row: GuiHomeItemRow {
-                id,
-                title,
-                subtitle,
-                trailing,
-                kind,
-                state,
-                art,
-                media,
-            },
-        }
-    }
+    // The selection (design D2, D12): the core's stored row while the list
+    // still carries it, else the first item row — Home's Hero default (row
+    // 6.2).
+    let items: Vec<&GuiHomeItem> = continue_rows.iter().chain(recent_rows.iter()).collect();
+    let default_hero = items.first().map(|item| item.row.id.clone());
+    let selected = app
+        .gui
+        .home_selection
+        .clone()
+        .filter(|selected| items.iter().any(|item| item.id() == selected))
+        .or(default_hero);
+    let hero = selected
+        .as_ref()
+        .and_then(|selected| home_hero(app, &items, selected));
 
-    /// The selected row's Hero facts (design D12): the shared hero
-    /// producers' facts for the row's item, with the artwork fetched through
-    /// the image cache at the artwork policy's chain. Home has no
-    /// Workspace. `None` while the selection names no row of the list, which
-    /// a stale frame's id can only miss.
-    fn home_hero(
-        &mut self,
-        items: &[&GuiHomeItem],
-        selected: &GuiHomeRowId,
-    ) -> Option<GuiHomeHero> {
-        let item = items
-            .iter()
-            .find_map(|item| (item.id() == selected).then_some(*item))?;
-        let content = hero_content_queue(&item.item);
-        // The artwork rides the artwork policy's declared source: an Emby
-        // source is the fetched chain, an Audiobookshelf cover is the
-        // Service-scoped cover the Podcasts and Audiobooks Heroes read, and
-        // an undeclared arm (a feed entry) paints without art.
-        let art = match content.facts.artwork.source.as_ref() {
-            Some(ArtworkSource::AudiobookshelfCover {
-                library_item_id,
-                book,
-            }) => self.gui_abs_cover_art(library_item_id, *book),
-            source => self.gui_emby_hero_art(source),
-        };
-        let art_shape =
-            artwork_shape(self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()));
-        Some(GuiHomeHero {
-            title: content.facts.title.clone(),
-            meta_rows: content.facts.meta_rows.clone(),
-            duration_row: content.facts.duration_row,
-            progress_row: content.facts.progress_row,
-            overview: content.overview.clone(),
-            art_shape,
+    // The flat rows in paint order: the sections' heading rows, each omitted
+    // when it has no rows, and the spacer only between two non-empty
+    // sections.
+    let sections: [(&str, Vec<GuiHomeRow>); 2] = [
+        (
+            "Continue watching",
+            continue_rows.iter().map(GuiHomeItem::flat_row).collect(),
+        ),
+        (
+            "Recently added",
+            recent_rows.iter().map(GuiHomeItem::flat_row).collect(),
+        ),
+    ];
+    let mut rows = Vec::new();
+    for (heading, section_rows) in sections {
+        if section_rows.is_empty() {
+            continue;
+        }
+        if !rows.is_empty() {
+            rows.push(GuiHomeRow::Spacer);
+        }
+        rows.push(GuiHomeRow::Heading {
+            text: heading.to_string(),
+        });
+        rows.extend(section_rows);
+    }
+    GuiHomeProjection {
+        loading: app.home_content.loading,
+        rows,
+        selected,
+        hero,
+    }
+}
+
+/// One item row beside the queue item that projects it (design D12): the
+/// row's title parts, kind, state, trailing text, and art read the item alone.
+/// `trailing` is the caller's text for a row whose trailing fact is not the
+/// time left (a `Recently added` row's date).
+fn home_item(
+    app: &App,
+    item: &QueueItem,
+    id: GuiHomeRowId,
+    feed_name: Option<&str>,
+    trailing: Option<String>,
+) -> GuiHomeItem {
+    let parts = item.playback_title_parts(feed_name);
+    let (title, subtitle) = match &parts.context {
+        Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
+        None => (parts.title.text.clone(), None),
+    };
+    let kind = home_item_kind(item);
+    let state = MediaSemanticState::from_queue_item(item);
+    let media = queue_item_media_kind(item);
+    let art = app.gui_row_art(app.queue_item_row_source(item).as_ref());
+    GuiHomeItem {
+        item: item.clone(),
+        row: GuiHomeItemRow {
+            id,
+            title,
+            subtitle,
+            trailing,
+            kind,
+            state,
             art,
-        })
+            media,
+        },
     }
+}
+
+/// The selected row's Hero facts (design D12): the shared hero producers'
+/// facts for the row's item, with the artwork fetched through the image cache
+/// at the artwork policy's chain. Home has no Workspace. `None` while the
+/// selection names no row of the list, which a stale frame's id can only miss.
+fn home_hero(
+    app: &mut App,
+    items: &[&GuiHomeItem],
+    selected: &GuiHomeRowId,
+) -> Option<GuiHomeHero> {
+    let item = items
+        .iter()
+        .find_map(|item| (item.id() == selected).then_some(*item))?;
+    let content = hero_content_queue(&item.item);
+    // The artwork rides the artwork policy's declared source: an Emby source
+    // is the fetched chain, an Audiobookshelf cover is the Service-scoped
+    // cover the Podcasts and Audiobooks Heroes read, and an undeclared arm (a
+    // feed entry) paints without art.
+    let art = match content.facts.artwork.source.as_ref() {
+        Some(ArtworkSource::AudiobookshelfCover {
+            library_item_id,
+            book,
+        }) => super::artwork::abs_cover_art(app, library_item_id, *book),
+        source => super::artwork::emby_hero_art(app, source),
+    };
+    let art_shape = artwork_shape(super::artwork::hero_shape(
+        app,
+        content.facts.artwork.shape,
+        art.as_ref(),
+    ));
+    Some(GuiHomeHero {
+        title: content.facts.title.clone(),
+        meta_rows: content.facts.meta_rows.clone(),
+        duration_row: content.facts.duration_row,
+        progress_row: content.facts.progress_row,
+        overview: content.overview.clone(),
+        art_shape,
+        art,
+    })
 }
 
 /// The item row's kind: an Emby folder is the container the Home play path

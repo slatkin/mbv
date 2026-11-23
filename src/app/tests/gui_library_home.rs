@@ -153,7 +153,7 @@ fn the_seeded_sections_project_as_heading_rows_in_order() {
     seed_recently_added(&mut app);
     seed_relocated_tv_lists(&mut app);
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     let headings: Vec<String> = projection
         .rows
@@ -250,7 +250,7 @@ fn an_empty_home_projects_no_rows_and_no_hero() {
     let _guard = TestStateDirGuard::new();
     let mut app = home_app(Vec::new());
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     assert!(projection.rows.is_empty(), "no rows without sections");
     assert_eq!(projection.selected, None);
@@ -268,7 +268,7 @@ fn a_stale_selection_falls_back_to_the_first_item_row() {
         "gone".into(),
     )));
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     assert_eq!(
         projection.selected,
@@ -351,7 +351,7 @@ fn home_rows_paint_their_row_art_and_fetch_nothing_before_rows_in_view() {
     let episode_key = mbv_images::abs_row_cache_key(server, "pod-lib", 0);
     app.seed_card_image_for_test(episode_key.clone(), square_row_image());
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     let items: Vec<&GuiHomeItemRow> = projection
         .rows
@@ -413,7 +413,7 @@ fn a_continue_row_shows_the_time_left(
         runtime_secs * mbv_emby_model::TICKS_PER_SECOND,
     )]);
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     assert_eq!(
         item_of(&projection.rows[1]).trailing.as_deref(),
@@ -434,7 +434,7 @@ fn a_recently_added_row_keeps_its_date() {
         vec![recent_episode("recent-episode", now - 3600)],
     );
 
-    let projection = app.gui_home_projection();
+    let projection = gui_home_projection(&mut app);
 
     let date = mbv_ui_model::ui_util::row_date(Some(now - 3600)).expect("the instant formats");
     assert_eq!(

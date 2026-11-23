@@ -12,7 +12,7 @@ use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use mbv_ui_model::music_grouping::ArtistKey;
 /// The album the Hero shows, by Service id (add-gui-library-panel design D13).
 fn hero_album_id(app: &mut App) -> Option<String> {
-    app.gui_music_projection(0)
+    gui_music_projection(app, 0)
         .hero
         .map(|hero| hero.album.album_id)
 }
@@ -29,7 +29,7 @@ fn a_group_with_no_pick_heroes_its_first_album() {
         ],
         Vec::new(),
     );
-    let first = app.gui_music_projection(0).artists[0].albums[0]
+    let first = gui_music_projection(&mut app, 0).artists[0].albums[0]
         .album_id
         .clone();
 
@@ -113,7 +113,7 @@ fn the_picked_albums_neighbours_are_warmed() {
         .checked_sub(std::time::Duration::from_secs(1))
         .unwrap();
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert_eq!(
         projection
@@ -151,7 +151,7 @@ fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
             item_id: "alb-3".into(),
         },
     );
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert!(projection.hero.is_some(), "the pick still heroes its album");
     let warmed: Vec<String> = (0..6)
@@ -194,8 +194,7 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
         },
     );
 
-    let hero = app
-        .gui_music_projection(0)
+    let hero = gui_music_projection(&mut app, 0)
         .hero
         .expect("the picked album has a Hero");
 
@@ -258,8 +257,7 @@ fn the_artist_total_waits_for_every_albums_tracklist() {
         },
     );
 
-    let hero = app
-        .gui_music_projection(0)
+    let hero = gui_music_projection(&mut app, 0)
         .hero
         .expect("the picked album has a Hero");
 
@@ -301,7 +299,8 @@ fn a_second_group_keeps_the_hero() {
         },
     );
 
-    app.install_gui_library_collection(
+    install_library_collection(
+        &mut app,
         0,
         GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
     );
@@ -374,7 +373,8 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
     );
     app.gui.library_groups.remove(&0);
 
-    app.install_gui_library_collection(
+    install_library_collection(
+        &mut app,
         0,
         GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
     );
@@ -400,7 +400,7 @@ fn a_fallback_artist_row_requests_the_artist_item_its_tracks_named() {
     ArtistNameLookup::record(&mut app, "Beastie Boys", "artist-7".into());
 
     assert_eq!(
-        app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),
+        music_artist_row_art(&app, &ArtistKey::Fallback("Beastie Boys".into())),
         GuiRowArt::Loading
     );
 }
@@ -436,7 +436,7 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
     ));
     app.seed_card_image_for_test(key.clone(), cover);
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert_eq!(
         projection.artists[0].art,
@@ -445,7 +445,7 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
     );
     assert_eq!(projection.artists[0].media, GuiRowMediaKind::Audio);
     assert_eq!(
-        app.music_artist_row_art(&ArtistKey::Service("artist-1".into())),
+        music_artist_row_art(&app, &ArtistKey::Service("artist-1".into())),
         GuiRowArt::Image {
             key: key.clone(),
             square: true
@@ -453,7 +453,7 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
         "a Service-named artist shows its own cached image"
     );
     assert_eq!(
-        app.music_artist_row_art(&ArtistKey::Fallback("Beastie Boys".into())),
+        music_artist_row_art(&app, &ArtistKey::Fallback("Beastie Boys".into())),
         GuiRowArt::NoSource
     );
 }

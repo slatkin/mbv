@@ -171,13 +171,12 @@ impl GuiDestinationLoads for MusicLoads {
     /// library: the next group's fetch starts on a later pass, when the
     /// previous one landed. A failed fetch is not retried here: a pass never
     /// re-issues it, so a hard failure does not retry on every paint; a
-    /// selection change through [`App::install_gui_library_collection`] drops
+    /// selection change through [`GuiCore::install_gui_library_collection`] drops
     /// the selection's failed marks, so the next pass starts their fetches
     /// again.
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        let set = app.gui_effective_music_set(self.lib_idx).into_owned();
-        let group_ids = app
-            .gui_selected_groups(self.lib_idx, &set)
+        let set = super::projection::effective_music_set(app, self.lib_idx).into_owned();
+        let group_ids = super::projection::selected_groups(app, self.lib_idx, &set)
             .into_iter()
             .map(str::to_owned)
             .collect::<Vec<_>>();
@@ -200,7 +199,7 @@ impl GuiDestinationLoads for MusicLoads {
         }) else {
             return GuiStepOutcome::Continue;
         };
-        app.fetch_gui_group_albums(self.lib_idx, group_id);
+        super::store::fetch_group_albums(app, self.lib_idx, group_id);
         GuiStepOutcome::LoadStarted
     }
 }

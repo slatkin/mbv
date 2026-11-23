@@ -111,9 +111,10 @@ impl GuiCore {
         content: &HeroContentData,
         workspace: Option<GuiShowsWorkspace>,
     ) -> GuiShowsHero {
-        let art = self
-            .app
-            .gui_emby_hero_art(content.facts.artwork.source.as_ref());
+        let art = super::super::artwork::emby_hero_art(
+            &mut self.app,
+            content.facts.artwork.source.as_ref(),
+        );
         GuiShowsHero {
             title: content.facts.title.clone(),
             parent: None,
@@ -121,10 +122,11 @@ impl GuiCore {
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
-            art_shape: artwork_shape(
-                self.app
-                    .gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
-            ),
+            art_shape: artwork_shape(super::super::artwork::hero_shape(
+                &self.app,
+                content.facts.artwork.shape,
+                art.as_ref(),
+            )),
             art,
             workspace,
         }
@@ -197,9 +199,11 @@ impl GuiCore {
         let Some(picked_index) = ids.iter().position(|id| *id == picked) else {
             return;
         };
-        self.app
-            .warm_gui_hero_neighbours(&ids, picked_index, |app, id| {
-                shows_hero_source(app, lib_idx, id)
-            });
+        super::super::artwork::warm_hero_neighbours(
+            &mut self.app,
+            &ids,
+            picked_index,
+            |app, id| shows_hero_source(app, lib_idx, id),
+        );
     }
 }

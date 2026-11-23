@@ -435,7 +435,6 @@ impl SectionLedger {
         }
         if !marked.contains(&Section::Search) {
             let search = core
-                .app()
                 .gui_search_projection()
                 .map(GuiSearchFrame::from_projection);
             audit_clean(Section::Search, &self.search, &search);
@@ -479,8 +478,7 @@ impl SectionLedger {
         }
         if marked.contains(&Section::Search) {
             self.search.adopt(
-                core.app()
-                    .gui_search_projection()
+                core.gui_search_projection()
                     .map(GuiSearchFrame::from_projection),
             );
         }

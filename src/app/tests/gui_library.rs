@@ -11,6 +11,7 @@ use std::io::ErrorKind;
 
 use super::*;
 use crate::app::gui_library::GuiGroupAlbums;
+use crate::app::gui_library::install_library_collection;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
@@ -100,7 +101,11 @@ fn app_with_music_groups(http: &MockHttp) -> App {
 /// directly, so these store tests read the one-group rule the collection
 /// commands build on.
 fn select_group(app: &mut App, group_id: &str) {
-    app.install_gui_library_collection(0, GuiCollectionSet::Checked(vec![group_id.to_string()]));
+    install_library_collection(
+        app,
+        0,
+        GuiCollectionSet::Checked(vec![group_id.to_string()]),
+    );
 }
 
 /// One album as the store holds it, with the display artist and year the
@@ -275,7 +280,7 @@ fn pressing_all_refetches_a_failed_group() {
     http.respond(200, SOUL_ALBUMS);
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     land_one_group(&mut app);
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
     assert_eq!(
         app.gui_group_album_ids_for_test(0, SOUL),
         Some(vec!["alb-3ft".to_string()]),
@@ -360,7 +365,7 @@ fn the_selected_group_alone_fills_the_list() {
         ],
     );
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     let rows: Vec<(&str, bool)> = checked_rows(&projection);
     assert_eq!(
@@ -442,7 +447,7 @@ fn a_collection_toggle_checks_two_groups() {
         ])),
         "two presses check two groups"
     );
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
     let artists: Vec<&str> = projection
         .artists
         .iter()
@@ -468,7 +473,7 @@ fn a_stored_group_the_library_lost_falls_back_to_all() {
         },
     );
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert_eq!(
         checked_names(&projection),
@@ -499,7 +504,7 @@ fn no_stored_choice_selects_all() {
     );
     app.gui.library_groups.remove(&0);
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert_eq!(
         checked_names(&projection),
@@ -550,7 +555,7 @@ fn a_failed_selected_group_shows_a_failure_line() {
         .or_default()
         .insert(SOUL.to_string(), GuiGroupAlbums::Failed);
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
 
     assert_eq!(
         projection.failure.as_deref(),
@@ -581,7 +586,7 @@ fn all_fetches_once_the_client_appears() {
         &mut app.emby_runtime,
         crate::app::state::service_runtime::EmbyRuntime::new(true),
     );
-    app.install_gui_library_collection(0, GuiCollectionSet::All);
+    install_library_collection(&mut app, 0, GuiCollectionSet::All);
 
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     assert!(
@@ -597,7 +602,7 @@ fn all_fetches_once_the_client_appears() {
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     land_one_group(&mut app);
 
-    let projection = app.gui_music_projection(0);
+    let projection = gui_music_projection(&mut app, 0);
     assert_eq!(
         app.gui_group_album_ids_for_test(0, HIPHOP),
         Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),

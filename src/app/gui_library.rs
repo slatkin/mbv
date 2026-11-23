@@ -76,6 +76,8 @@ pub use self::home::{
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
 pub use self::list_sort::{GuiListSort, GuiListSortFrame, GuiSortTarget};
+#[cfg(test)]
+pub(in crate::app) use self::list_sort::{list_sort, set_list_sort};
 pub use self::marks::GuiPlayheadMarks;
 
 use self::podcasts::GuiPodcastsCollectionSite;
@@ -84,6 +86,8 @@ pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
 };
+#[cfg(test)]
+pub(in crate::app) use self::projection::music_artist_row_art;
 pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
@@ -91,6 +95,10 @@ pub use self::projection::{
 pub(in crate::app) use self::request::GuiSectionRequest;
 pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
+#[cfg(test)]
+pub(in crate::app) use self::search::{
+    drain_search_results, search_activate, search_close, search_projection, search_query,
+};
 #[cfg(test)]
 pub(in crate::app) use self::shows::shows_view;
 pub(in crate::app) use self::shows::{GuiShowsNewEvent, handle_shows_new};
@@ -100,7 +108,9 @@ pub use self::shows_projection::{
 };
 pub use self::shows_view::GuiShowsView;
 use self::store::GuiMusicCollectionSite;
-pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
+#[cfg(test)]
+pub(in crate::app) use self::store::install_library_collection;
+pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent, handle_group_albums};
 pub use self::stores::GuiLibraryStores;
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 pub use self::tv::GuiTvShowsSelection;
@@ -353,7 +363,7 @@ impl GuiCore {
                 self.app.apply_collection(&target, CollectionOp::All);
             }
             GuiLibraryCommand::ListSort { target, sort } => {
-                self.app.apply_gui_list_sort(target, sort);
+                self.apply_gui_list_sort(target, sort);
             }
             GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
                 self.set_gui_shows_view(lib_idx, view);
@@ -466,11 +476,11 @@ impl GuiCore {
             GuiLibraryCommand::FeedsQueue { item_id } => self.enqueue_gui_feed_row(&item_id),
             // The Search field's commands (design D12, row 12.1): the field
             // is cross-destination, so no library index rides them.
-            GuiLibraryCommand::SearchQuery { query } => self.app.gui_search_query(query),
+            GuiLibraryCommand::SearchQuery { query } => self.gui_search_query(query),
             GuiLibraryCommand::SearchActivate { id, item_type } => {
-                self.app.gui_search_activate(id, item_type);
+                self.gui_search_activate(id, item_type);
             }
-            GuiLibraryCommand::SearchClose => self.app.gui_search_close(),
+            GuiLibraryCommand::SearchClose => self.gui_search_close(),
             GuiLibraryCommand::RowsInView { scope, ids } => {
                 self.apply_gui_rows_in_view(scope, ids);
             }

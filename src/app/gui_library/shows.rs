@@ -175,9 +175,12 @@ pub(in crate::app::gui_library) fn shows_flat_hero(
 ) -> super::GuiShowsHero {
     let item = QueueItem::Emby(Box::new(item.clone()));
     let content = hero_content_queue(&item);
-    let art = app.gui_emby_hero_art(content.facts.artwork.source.as_ref());
-    let art_shape =
-        super::home::artwork_shape(app.gui_hero_shape(content.facts.artwork.shape, art.as_ref()));
+    let art = super::artwork::emby_hero_art(app, content.facts.artwork.source.as_ref());
+    let art_shape = super::home::artwork_shape(super::artwork::hero_shape(
+        app,
+        content.facts.artwork.shape,
+        art.as_ref(),
+    ));
     super::GuiShowsHero {
         title: content.facts.title.clone(),
         parent: None,

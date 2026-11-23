@@ -496,7 +496,7 @@ fn the_oldest_sort_sets_the_oldest_order() {
     );
 
     assert_eq!(
-        app.gui_list_sort(GuiSortTarget::Feeds),
+        gui_list_sort(&app, GuiSortTarget::Feeds),
         GuiListSort::Oldest,
         "the command stores the destination's sort"
     );

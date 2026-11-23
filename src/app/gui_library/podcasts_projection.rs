@@ -190,7 +190,7 @@ fn podcasts_projection(app: &mut App, lib_idx: usize) -> GuiPodcastsProjection {
     // The one effective-set read the frame takes: the rows read the set
     // it borrows, so the frame never recomputes the retention.
     let set = super::podcasts::podcast_effective_set(app, lib_idx);
-    let sort_frame = app.gui_list_sort_frame(GuiSortTarget::Podcasts(lib_idx));
+    let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Podcasts(lib_idx));
     let sort = sort_frame.active;
     let collections = app.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
     let (rows, loading, failed) = podcast_rows(app, lib_idx, set.as_ref(), sort);
@@ -352,7 +352,11 @@ fn podcast_hero(
         duration_row,
         progress_row: content.facts.progress_row,
         overview: content.overview.clone(),
-        art_shape: artwork_shape(app.gui_hero_shape(content.facts.artwork.shape, art.as_ref())),
+        art_shape: artwork_shape(super::artwork::hero_shape(
+            app,
+            content.facts.artwork.shape,
+            art.as_ref(),
+        )),
         art,
     })
 }
@@ -395,7 +399,7 @@ pub(in crate::app::gui_library) fn podcast_hero_item(
 /// configured.
 fn podcast_episode_artwork(app: &mut App, show_id: &str) -> Option<GuiLibraryArtwork> {
     let cache_key = app.audiobookshelf_cover_key(show_id)?;
-    Some(app.resolve_gui_art(&cache_key))
+    Some(super::artwork::resolve_gui_art(app, &cache_key))
 }
 
 /// One row of the active list (row 10.1): the TUI podcast row's facts —

@@ -102,7 +102,7 @@ fn show_library_detail(app: &mut App, item_id: &str) {
         super::log_stale_library_item("showDetail", item_id);
         return;
     };
-    let single_group = match app.gui_effective_music_set(lib_idx).as_ref() {
+    let single_group = match super::projection::effective_music_set(app, lib_idx).as_ref() {
         GuiCollectionSet::Checked(keys) if keys.len() == 1 => Some(keys[0].clone()),
         _ => None,
     };

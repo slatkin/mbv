@@ -203,10 +203,9 @@ impl GuiCore {
         let Some(picked_index) = ids.iter().position(|id| *id == picked) else {
             return;
         };
-        self.app
-            .warm_gui_hero_neighbours(&ids, picked_index, |app, id| {
-                emby_hero_source(app, lib_idx, id)
-            });
+        super::artwork::warm_hero_neighbours(&mut self.app, &ids, picked_index, |app, id| {
+            emby_hero_source(app, lib_idx, id)
+        });
     }
 
     /// The plain mode's projection (row 8.1): the root-list store's rows —
@@ -220,7 +219,7 @@ impl GuiCore {
             Some(super::GuiEmbyRootItems::Loading) | None => (&[][..], true, false),
             Some(super::GuiEmbyRootItems::Failed) => (&[][..], false, true),
         };
-        let sort_frame = app.gui_list_sort_frame(GuiSortTarget::Library(lib_idx));
+        let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Library(lib_idx));
         let sort = sort_frame.active;
         let mut items: Vec<&EmbyItem> = items.iter().collect();
         // Under the Title sort the store's own `SortName` order stands
@@ -268,9 +267,8 @@ impl GuiCore {
         let collection_names = feed_collection_names(set.as_ref(), &folders);
         let programmes: HashMap<&str, &str> =
             folders.iter().map(|(id, name)| (*id, *name)).collect();
-        let sort_frame = self
-            .app
-            .gui_list_sort_frame(GuiSortTarget::Library(lib_idx));
+        let sort_frame =
+            super::list_sort::list_sort_frame(&self.app, GuiSortTarget::Library(lib_idx));
         let sort = sort_frame.active;
         let (items, loading) = feed_items(&self.app, lib_idx, set.as_ref(), sort);
         let app = &self.app;
@@ -339,9 +337,8 @@ impl GuiCore {
     /// TUI's hero paints. No Workspace rides a plain Emby-library Hero.
     fn hero(&mut self, item: &EmbyItem) -> GuiEmbyHero {
         let content = hero_content_emby(item);
-        let art = self
-            .app
-            .gui_emby_hero_art(content.facts.artwork.source.as_ref());
+        let art =
+            super::artwork::emby_hero_art(&mut self.app, content.facts.artwork.source.as_ref());
         GuiEmbyHero {
             kind: item.item_type.to_lowercase(),
             title: content.facts.title.clone(),
@@ -359,10 +356,11 @@ impl GuiCore {
                 })
                 .collect(),
             imdb_url: content.facts.links.first().map(|link| link.url.clone()),
-            art_shape: artwork_shape(
-                self.app
-                    .gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
-            ),
+            art_shape: artwork_shape(super::artwork::hero_shape(
+                &self.app,
+                content.facts.artwork.shape,
+                art.as_ref(),
+            )),
             art,
         }
     }

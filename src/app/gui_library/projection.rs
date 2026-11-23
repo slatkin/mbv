@@ -19,6 +19,7 @@ use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::collection_command::GuiCollectionSite;
 use super::{GuiGroupAlbums, GuiMusicCollectionSite};
 use crate::app::App;
+use crate::gui::GuiCore;
 
 /// One artist row of the Music list (design D5, D7): the union's artist with
 /// its albums, in artist sort-name order.
@@ -139,350 +140,363 @@ struct GuiMusicUnion<'a> {
     loading: bool,
 }
 
-impl App {
-    /// The active destination's Grouped Music library index (design D2, D5):
-    /// the destination whose Music content the GUI Library panel paints.
-    /// `None` for every other destination, which presents no Music section.
+impl GuiCore {
+    /// The active destination's Grouped Music library index (design D2, D5).
     #[must_use]
     pub fn gui_music_destination(&self) -> Option<usize> {
-        let mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(lib_idx) = self.tab else {
-            return None;
-        };
-        (lib_idx < self.libs.len() && self.is_grouped_music_library(lib_idx)).then_some(lib_idx)
+        music_destination(&self.app)
     }
 
     /// The Music projection the GUI Library panel paints (design D5): the
-    /// Grouped Music library's pills, the union of the checked groups'
-    /// artists with their albums and cached tracklists, and the Hero's facts
-    /// for the picked album (gui-collection-dropdown design D1, D2, D11).
-    #[must_use]
+    /// Grouped Music library's pills, the union of the checked groups' artists
+    /// with their albums and cached tracklists, and the Hero's facts for the
+    /// picked album (gui-collection-dropdown design D1, D2, D11).
     pub fn gui_music_projection(&mut self, lib_idx: usize) -> GuiMusicProjection {
-        // The one effective-set read the frame takes: the helpers read the
-        // set it borrows, so the frame never recomputes the retention.
-        let set = self.gui_effective_music_set(lib_idx);
-        let collections = self.gui_collections(GuiCollectionTarget::Music(lib_idx));
-        let selected_groups = self.gui_selected_groups(lib_idx, set.as_ref());
-        let union = self.gui_music_union(lib_idx, &selected_groups);
-        let artists = self.gui_music_artists(&union);
-        let hero = self.gui_music_hero(lib_idx, set.as_ref(), &artists, &collections);
-        let projection = GuiMusicProjection {
-            collections,
-            loading: union.loading,
-            failure: failure_line(&union.failed),
-            artists,
-            hero,
-        };
-        self.warm_gui_music_hero_neighbours(&projection);
-        projection
+        music_projection(&mut self.app, lib_idx)
     }
+}
 
-    /// Warm the Hero artwork of the album leaves neighbouring the picked one
-    /// in the painted tree order (artists in order, each artist's albums in
-    /// order): the TUI's grouped-Music neighbour window over the GUI's own
-    /// projection, through the shared navigation-idle gate. The pick's own art
-    /// is the frame's fetch, so the picked album is never warmed here.
-    fn warm_gui_music_hero_neighbours(&mut self, projection: &GuiMusicProjection) {
-        let Some(picked) = projection.hero.as_ref() else {
-            return;
-        };
-        let albums: Vec<&str> = projection
-            .artists
-            .iter()
-            .flat_map(|artist| &artist.albums)
-            .map(|album| album.album_id.as_str())
-            .collect();
-        let Some(picked_index) = albums
-            .iter()
-            .position(|album_id| *album_id == picked.album.album_id)
-        else {
-            return;
-        };
-        self.warm_gui_hero_neighbours(&albums, picked_index, |_app, album_id| {
-            Some(super::artwork::music_album_source(album_id))
-        });
+/// The active destination's Grouped Music library index (design D2, D5): the
+/// destination whose Music content the GUI Library panel paints. `None` for
+/// every other destination, which presents no Music section.
+#[must_use]
+pub(in crate::app::gui_library) fn music_destination(app: &App) -> Option<usize> {
+    let mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(lib_idx) = app.tab else {
+        return None;
+    };
+    (lib_idx < app.libs.len() && app.is_grouped_music_library(lib_idx)).then_some(lib_idx)
+}
+
+/// The Music projection over the `App` the GUI core owns (design D5): the
+/// Grouped Music library's pills, the union of the checked groups' artists
+/// with their albums and cached tracklists, and the Hero's facts for the
+/// picked album (gui-collection-dropdown design D1, D2, D11).
+#[must_use]
+pub(in crate::app::gui_library) fn music_projection(
+    app: &mut App,
+    lib_idx: usize,
+) -> GuiMusicProjection {
+    // The one effective-set read the frame takes: the helpers read the set it
+    // borrows, so the frame never recomputes the retention.
+    let set = effective_music_set(app, lib_idx);
+    let collections = app.gui_collections(GuiCollectionTarget::Music(lib_idx));
+    let selected_groups = selected_groups(app, lib_idx, set.as_ref());
+    let union = music_union(app, lib_idx, &selected_groups);
+    let artists = music_artists(app, &union);
+    let hero = music_hero(app, lib_idx, set.as_ref(), &artists, &collections);
+    let projection = GuiMusicProjection {
+        collections,
+        loading: union.loading,
+        failure: failure_line(&union.failed),
+        artists,
+        hero,
+    };
+    warm_music_hero_neighbours(app, &projection);
+    projection
+}
+
+/// Warm the Hero artwork of the album leaves neighbouring the picked one in
+/// the painted tree order (artists in order, each artist's albums in order):
+/// the TUI's grouped-Music neighbour window over the GUI's own projection,
+/// through the shared navigation-idle gate. The pick's own art is the frame's
+/// fetch, so the picked album is never warmed here.
+fn warm_music_hero_neighbours(app: &mut App, projection: &GuiMusicProjection) {
+    let Some(picked) = projection.hero.as_ref() else {
+        return;
+    };
+    let albums: Vec<&str> = projection
+        .artists
+        .iter()
+        .flat_map(|artist| &artist.albums)
+        .map(|album| album.album_id.as_str())
+        .collect();
+    let Some(picked_index) = albums
+        .iter()
+        .position(|album_id| *album_id == picked.album.album_id)
+    else {
+        return;
+    };
+    super::artwork::warm_hero_neighbours(app, &albums, picked_index, |_app, album_id| {
+        Some(super::artwork::music_album_source(album_id))
+    });
+}
+
+/// The Grouped Music library's groups as the collection selector's catalog in
+/// the group level's order (design D5, D6): each group's stable Service id and
+/// its display name. The group level is the library's own level in
+/// `nav_stack`.
+pub(in crate::app::gui_library) fn music_groups(
+    app: &App,
+    lib_idx: usize,
+) -> Vec<(String, String)> {
+    if lib_idx >= app.libs.len() || !app.is_grouped_music_library(lib_idx) {
+        return Vec::new();
     }
+    let Some(group_level) = super::launch::music_group_level(app, lib_idx) else {
+        return Vec::new();
+    };
+    group_level
+        .items
+        .iter()
+        .map(|group| (group.id.clone(), group.name.clone()))
+        .collect()
+}
 
-    /// The Grouped Music library's groups as the collection selector's catalog
-    /// in the group level's order (design D5, D6): each group's stable Service
-    /// id and its display name. The group level is the library's own level in
-    /// `nav_stack`.
-    pub(in crate::app::gui_library) fn gui_music_groups(
-        &self,
-        lib_idx: usize,
-    ) -> Vec<(String, String)> {
-        if lib_idx >= self.libs.len() || !self.is_grouped_music_library(lib_idx) {
-            return Vec::new();
-        }
-        let Some(group_level) = super::launch::music_group_level(self, lib_idx) else {
-            return Vec::new();
-        };
-        group_level
+/// The Grouped Music library's effective selection (design D1): the stored
+/// set, or All when none is stored. A checked set whose keys the library no
+/// longer holds falls back to All (the spec's vanish rule); a group list that
+/// has not landed admits the stored set as it is, since the list is what would
+/// name its keys stale. A set nothing drops is returned borrowed, so a
+/// per-frame reader clones nothing.
+pub(in crate::app) fn effective_music_set(app: &App, lib_idx: usize) -> Cow<'_, GuiCollectionSet> {
+    GuiMusicCollectionSite(lib_idx).effective_set(app)
+}
+
+/// The groups the Music destination shows, in pill order (design D1, D2):
+/// every group of the library for All, and the checked groups for a checked
+/// set. `None`'s case — the group list has not landed or the library holds no
+/// group — shows no group, so the frame path starts no fetch until the list
+/// lands. The ids are borrowed from the group level, so the union reads them
+/// without cloning.
+pub(in crate::app::gui_library) fn selected_groups<'a>(
+    app: &'a App,
+    lib_idx: usize,
+    set: &GuiCollectionSet,
+) -> Vec<&'a str> {
+    let Some(group_level) = super::launch::music_group_level(app, lib_idx) else {
+        return Vec::new();
+    };
+    match set {
+        GuiCollectionSet::All => group_level
             .items
             .iter()
-            .map(|group| (group.id.clone(), group.name.clone()))
-            .collect()
+            .map(|group| group.id.as_str())
+            .collect(),
+        GuiCollectionSet::Checked(keys) => group_level
+            .items
+            .iter()
+            .filter(|group| keys.contains(&group.id))
+            .map(|group| group.id.as_str())
+            .collect(),
     }
+}
 
-    /// The Grouped Music library's effective selection (design D1): the
-    /// stored set, or All when none is stored. A checked set whose keys the
-    /// library no longer holds falls back to All (the spec's vanish rule); a
-    /// group list that has not landed admits the stored set as it is, since
-    /// the list is what would name its keys stale. A set nothing drops is
-    /// returned borrowed, so a per-frame reader clones nothing.
-    pub(in crate::app) fn gui_effective_music_set(
-        &self,
-        lib_idx: usize,
-    ) -> Cow<'_, GuiCollectionSet> {
-        GuiMusicCollectionSite(lib_idx).effective_set(self)
-    }
-
-    /// The groups the Music destination shows, in pill order (design D1, D2):
-    /// every group of the library for All, and the checked groups for a
-    /// checked set. `None`'s case — the group list has not landed or the
-    /// library holds no group — shows no group, so the frame path starts no
-    /// fetch until the list lands. The ids are borrowed from the group
-    /// level, so the union reads them without cloning.
-    pub(in crate::app::gui_library) fn gui_selected_groups(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-    ) -> Vec<&str> {
-        let Some(group_level) = super::launch::music_group_level(self, lib_idx) else {
-            return Vec::new();
+/// The albums of the checked groups (design D1, D2): each checked group's
+/// whole album list, with the `(artist, year, name)` facts and stable
+/// `ArtistKey` that `group_album_plan` derives from `album_artist_cache`. All
+/// is every group's list; a failed fetch names the group in the failure line.
+fn music_union<'a>(app: &'a App, lib_idx: usize, group_ids: &[&str]) -> GuiMusicUnion<'a> {
+    let mut union = GuiMusicUnion::default();
+    let mut seen: HashSet<&str> = HashSet::new();
+    let groups = app.gui.music_albums.get(&lib_idx);
+    for group_id in group_ids {
+        let Some(state) = groups.and_then(|groups| groups.get(*group_id)) else {
+            union.loading = true;
+            continue;
         };
-        match set {
-            GuiCollectionSet::All => group_level
+        match state {
+            GuiGroupAlbums::Loaded(albums) => {
+                extend_music_union(app, &mut union, &mut seen, albums);
+            }
+            GuiGroupAlbums::Failed => union.failed.push(group_name(app, lib_idx, group_id)),
+            GuiGroupAlbums::Loading => union.loading = true,
+        }
+    }
+    union
+}
+
+/// The display name the group's failure line paints (design D5): the group's
+/// name in the group level, or the id when the level holds none.
+fn group_name(app: &App, lib_idx: usize, group_id: &str) -> String {
+    super::launch::music_group_level(app, lib_idx)
+        .and_then(|level| {
+            level
                 .items
                 .iter()
-                .map(|group| group.id.as_str())
-                .collect(),
-            GuiCollectionSet::Checked(keys) => group_level
-                .items
-                .iter()
-                .filter(|group| keys.contains(&group.id))
-                .map(|group| group.id.as_str())
-                .collect(),
+                .find(|group| group.id == group_id)
+                .map(|group| group.name.clone())
+        })
+        .unwrap_or_else(|| group_id.to_string())
+}
+
+/// Append one loaded group's albums to the union, de-duplicated by album id,
+/// with the facts and stable identity `group_album_plan` derives from
+/// `album_artist_cache` (design D5).
+fn extend_music_union<'a>(
+    app: &'a App,
+    union: &mut GuiMusicUnion<'a>,
+    seen: &mut HashSet<&'a str>,
+    albums: &'a [EmbyItem],
+) {
+    let (facts, keys) = group_album_plan(&app.album_artist_cache, albums, None);
+    for ((facts, key), album) in facts.into_iter().zip(keys).zip(albums) {
+        if seen.insert(album.id.as_str()) {
+            union.albums.push(album);
+            union.facts.push(facts);
+            union.keys.push(key);
         }
     }
+}
 
-    /// The albums of the checked groups (design D1, D2): each checked
-    /// group's whole album list, with the `(artist, year, name)` facts and
-    /// stable `ArtistKey` that `group_album_plan` derives from
-    /// `album_artist_cache`. All is every group's list; a failed fetch names
-    /// the group in the failure line.
-    fn gui_music_union(&self, lib_idx: usize, group_ids: &[&str]) -> GuiMusicUnion<'_> {
-        let mut union = GuiMusicUnion::default();
-        let mut seen: HashSet<&str> = HashSet::new();
-        let groups = self.gui.music_albums.get(&lib_idx);
-        for group_id in group_ids {
-            let Some(state) = groups.and_then(|groups| groups.get(*group_id)) else {
-                union.loading = true;
-                continue;
-            };
-            match state {
-                GuiGroupAlbums::Loaded(albums) => {
-                    self.extend_gui_music_union(&mut union, &mut seen, albums);
-                }
-                GuiGroupAlbums::Failed => union.failed.push(self.gui_group_name(lib_idx, group_id)),
-                GuiGroupAlbums::Loading => union.loading = true,
-            }
-        }
-        union
-    }
-
-    /// The display name the group's failure line paints (design D5): the
-    /// group's name in the group level, or the id when the level holds none.
-    fn gui_group_name(&self, lib_idx: usize, group_id: &str) -> String {
-        super::launch::music_group_level(self, lib_idx)
-            .and_then(|level| {
-                level
-                    .items
-                    .iter()
-                    .find(|group| group.id == group_id)
-                    .map(|group| group.name.clone())
-            })
-            .unwrap_or_else(|| group_id.to_string())
-    }
-
-    /// Append one loaded group's albums to the union, de-duplicated by album
-    /// id, with the facts and stable identity `group_album_plan`
-    /// derives from `album_artist_cache` (design D5).
-    fn extend_gui_music_union<'a>(
-        &'a self,
-        union: &mut GuiMusicUnion<'a>,
-        seen: &mut HashSet<&'a str>,
-        albums: &'a [EmbyItem],
-    ) {
-        let (facts, keys) = group_album_plan(&self.album_artist_cache, albums, None);
-        for ((facts, key), album) in facts.into_iter().zip(keys).zip(albums) {
-            if seen.insert(album.id.as_str()) {
-                union.albums.push(album);
-                union.facts.push(facts);
-                union.keys.push(key);
-            }
-        }
-    }
-
-    /// The union's artist rows in artist sort-name order (design D5): the
-    /// `sorted_group_album_order` order of the union's facts,
-    /// grouped into one row per `ArtistKey` at its first occurrence.
-    fn gui_music_artists(&self, union: &GuiMusicUnion<'_>) -> Vec<GuiMusicArtist> {
-        let order = sorted_group_album_order(&union.facts);
-        let mut artists: Vec<GuiMusicArtist> = Vec::new();
-        let mut positions: HashMap<&ArtistKey, usize> = HashMap::new();
-        for &index in &order {
-            let (Some(facts), Some(album), Some(key)) = (
-                union.facts.get(index),
-                union.albums.get(index),
-                union.keys.get(index),
-            ) else {
-                continue;
-            };
-            let (artist, year, name) = facts;
-            let position = if let Some(position) = positions.get(key).copied() {
-                position
-            } else {
-                artists.push(GuiMusicArtist {
-                    artist_key: key.clone(),
-                    name: artist.clone(),
-                    sort_letter: sort_letter(artist),
-                    albums: Vec::new(),
-                    art: self.music_artist_row_art(key),
-                    media: GuiRowMediaKind::Audio,
-                });
-                let position = artists.len() - 1;
-                positions.insert(key, position);
-                position
-            };
-            artists[position]
-                .albums
-                .push(self.gui_music_album(album, year, name));
-        }
-        artists
-    }
-
-    /// One album row of the union, with its cached tracklist when
-    /// `album_tracks_cache` holds it (design D5). An opened album's fetch
-    /// fills that cache, and its drain sorts it into disc and track order.
-    fn gui_music_album(&self, album: &EmbyItem, year: &str, name: &str) -> GuiMusicAlbum {
-        let tracks = self.album_tracks_cache.get(&album.id);
-        GuiMusicAlbum {
-            album_id: album.id.clone(),
-            name: name.to_string(),
-            year: year.to_string(),
-            tracks: tracks.map(|tracks| gui_music_tracks(tracks)),
-            total: tracks.map(|tracks| track_total(tracks)),
-        }
-    }
-
-    /// One artist row's art (gui-delineated-rows design D5): a Service-named
-    /// artist shows its own `Primary` image, read from the row cache alone, and
-    /// the fallback identity — a name the Service never named — has no source.
-    pub(in crate::app) fn music_artist_row_art(&self, key: &ArtistKey) -> GuiRowArt {
-        match key {
-            ArtistKey::Service(id) => self.gui_row_art(Some(&artist_row_source(id))),
-            ArtistKey::Fallback(name) => self
-                .gui_artist_item_id(name)
-                .map_or(GuiRowArt::NoSource, |id| {
-                    self.gui_row_art(Some(&artist_row_source(id)))
-                }),
-        }
-    }
-
-    /// The picked album id under the selection (gui-collection-dropdown
-    /// design D11): one checked group's kept pick while the union holds it;
-    /// All or several groups' session union pick while the union holds it;
-    /// else the union's first album in list order. `None` while the union
-    /// holds no album. The group's pick is read through its borrowed id, so
-    /// the per-frame Hero clones nothing for the lookup.
-    fn gui_picked_album_id(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-        artists: &[GuiMusicArtist],
-    ) -> Option<String> {
-        let holds = |album_id: &str| {
-            artists
-                .iter()
-                .any(|artist| artist.albums.iter().any(|album| album.album_id == album_id))
+/// The union's artist rows in artist sort-name order (design D5): the
+/// `sorted_group_album_order` order of the union's facts, grouped into one row
+/// per `ArtistKey` at its first occurrence.
+fn music_artists(app: &App, union: &GuiMusicUnion<'_>) -> Vec<GuiMusicArtist> {
+    let order = sorted_group_album_order(&union.facts);
+    let mut artists: Vec<GuiMusicArtist> = Vec::new();
+    let mut positions: HashMap<&ArtistKey, usize> = HashMap::new();
+    for &index in &order {
+        let (Some(facts), Some(album), Some(key)) = (
+            union.facts.get(index),
+            union.albums.get(index),
+            union.keys.get(index),
+        ) else {
+            continue;
         };
-        let single_group = match set {
-            GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.first().map(String::as_str),
-            _ => None,
+        let (artist, year, name) = facts;
+        let position = if let Some(position) = positions.get(key).copied() {
+            position
+        } else {
+            artists.push(GuiMusicArtist {
+                artist_key: key.clone(),
+                name: artist.clone(),
+                sort_letter: sort_letter(artist),
+                albums: Vec::new(),
+                art: music_artist_row_art(app, key),
+                media: GuiRowMediaKind::Audio,
+            });
+            let position = artists.len() - 1;
+            positions.insert(key, position);
+            position
         };
-        if let Some(group_id) = single_group
-            && let Some(pick) = self.gui_library_group_pick(lib_idx, group_id)
-            && holds(pick.as_str())
-        {
-            return Some(pick.clone());
-        }
-        if single_group.is_none()
-            && let Some(pick) = self.gui.music_union_picks.get(&lib_idx)
-            && holds(pick.as_str())
-        {
-            return Some(pick.clone());
-        }
+        artists[position]
+            .albums
+            .push(music_album(app, album, year, name));
+    }
+    artists
+}
+
+/// One album row of the union, with its cached tracklist when
+/// `album_tracks_cache` holds it (design D5). An opened album's fetch fills
+/// that cache, and its drain sorts it into disc and track order.
+fn music_album(app: &App, album: &EmbyItem, year: &str, name: &str) -> GuiMusicAlbum {
+    let tracks = app.album_tracks_cache.get(&album.id);
+    GuiMusicAlbum {
+        album_id: album.id.clone(),
+        name: name.to_string(),
+        year: year.to_string(),
+        tracks: tracks.map(|tracks| gui_music_tracks(tracks)),
+        total: tracks.map(|tracks| track_total(tracks)),
+    }
+}
+
+/// One artist row's art (gui-delineated-rows design D5): a Service-named
+/// artist shows its own `Primary` image, read from the row cache alone, and
+/// the fallback identity — a name the Service never named — has no source.
+pub(in crate::app) fn music_artist_row_art(app: &App, key: &ArtistKey) -> GuiRowArt {
+    match key {
+        ArtistKey::Service(id) => app.gui_row_art(Some(&artist_row_source(id))),
+        ArtistKey::Fallback(name) => app
+            .gui_artist_item_id(name)
+            .map_or(GuiRowArt::NoSource, |id| {
+                app.gui_row_art(Some(&artist_row_source(id)))
+            }),
+    }
+}
+
+/// The picked album id under the selection (gui-collection-dropdown design
+/// D11): one checked group's kept pick while the union holds it; All or
+/// several groups' session union pick while the union holds it; else the
+/// union's first album in list order. `None` while the union holds no album.
+/// The group's pick is read through its borrowed id, so the per-frame Hero
+/// clones nothing for the lookup.
+fn picked_album_id(
+    app: &App,
+    lib_idx: usize,
+    set: &GuiCollectionSet,
+    artists: &[GuiMusicArtist],
+) -> Option<String> {
+    let holds = |album_id: &str| {
         artists
             .iter()
-            .find_map(|artist| artist.albums.first())
-            .map(|album| album.album_id.clone())
+            .any(|artist| artist.albums.iter().any(|album| album.album_id == album_id))
+    };
+    let single_group = match set {
+        GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.first().map(String::as_str),
+        _ => None,
+    };
+    if let Some(group_id) = single_group
+        && let Some(pick) = library_group_pick(app, lib_idx, group_id)
+        && holds(pick.as_str())
+    {
+        return Some(pick.clone());
     }
+    if single_group.is_none()
+        && let Some(pick) = app.gui.music_union_picks.get(&lib_idx)
+        && holds(pick.as_str())
+    {
+        return Some(pick.clone());
+    }
+    artists
+        .iter()
+        .find_map(|artist| artist.albums.first())
+        .map(|album| album.album_id.clone())
+}
 
-    /// The kept pick of one checked group (design D11): the pick the launch
-    /// file saves, that the group's album list keeps. The pick map is keyed
-    /// by the owned id pair, so the lookup scans its few entries against the
-    /// borrowed id instead of cloning the id for a key.
-    fn gui_library_group_pick(&self, lib_idx: usize, group_id: &str) -> Option<&String> {
-        self.gui
-            .library_picks
+/// The kept pick of one checked group (design D11): the pick the launch file
+/// saves, that the group's album list keeps. The pick map is keyed by the
+/// owned id pair, so the lookup scans its few entries against the borrowed id
+/// instead of cloning the id for a key.
+fn library_group_pick<'a>(app: &'a App, lib_idx: usize, group_id: &str) -> Option<&'a String> {
+    app.gui
+        .library_picks
+        .iter()
+        .find(|((idx, id), _)| *idx == lib_idx && id == group_id)
+        .map(|(_, pick)| pick)
+}
+
+/// The Hero's facts for the picked album (design D5, D13): the artist header
+/// from the album's union row, and the album block with its tracklist. The
+/// picked album is the selected group's pick, or its first album, so the Hero
+/// is never blank while the group's albums are loaded.
+fn music_hero(
+    app: &App,
+    lib_idx: usize,
+    set: &GuiCollectionSet,
+    artists: &[GuiMusicArtist],
+    collections: &GuiCollections,
+) -> Option<GuiMusicHero> {
+    let picked = picked_album_id(app, lib_idx, set, artists)?;
+    let (artist, album) = artists.iter().find_map(|artist| {
+        artist
+            .albums
             .iter()
-            .find(|((idx, id), _)| *idx == lib_idx && id == group_id)
-            .map(|(_, pick)| pick)
-    }
+            .find(|album| album.album_id == picked)
+            .map(|album| (artist, album))
+    })?;
+    Some(GuiMusicHero {
+        artist: artist.name.clone(),
+        collections: collections.selected_names(),
+        album_count: artist.albums.len(),
+        artist_tracks: artist_tracks(app, artist),
+        album: album.clone(),
+    })
+}
 
-    /// The Hero's facts for the picked album (design D5, D13): the artist header
-    /// from the album's union row, and the album block with its tracklist. The
-    /// picked album is the selected group's pick, or its first album, so the
-    /// Hero is never blank while the group's albums are loaded.
-    fn gui_music_hero(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-        artists: &[GuiMusicArtist],
-        collections: &GuiCollections,
-    ) -> Option<GuiMusicHero> {
-        let picked = self.gui_picked_album_id(lib_idx, set, artists)?;
-        let (artist, album) = artists.iter().find_map(|artist| {
-            artist
-                .albums
-                .iter()
-                .find(|album| album.album_id == picked)
-                .map(|album| (artist, album))
-        })?;
-        Some(GuiMusicHero {
-            artist: artist.name.clone(),
-            collections: collections.selected_names(),
-            album_count: artist.albums.len(),
-            artist_tracks: self.gui_artist_tracks(artist),
-            album: album.clone(),
-        })
+/// The picked artist's track count and total time, once every one of its union
+/// albums holds a cached tracklist (design D5).
+fn artist_tracks(app: &App, artist: &GuiMusicArtist) -> Option<GuiMusicTrackTotal> {
+    let mut count = 0;
+    let mut ticks = 0;
+    for album in &artist.albums {
+        let tracks = app.album_tracks_cache.get(&album.album_id)?;
+        count += tracks.len();
+        ticks += tracks.iter().map(|track| track.runtime_ticks).sum::<i64>();
     }
-
-    /// The picked artist's track count and total time, once every one of its
-    /// union albums holds a cached tracklist (design D5).
-    fn gui_artist_tracks(&self, artist: &GuiMusicArtist) -> Option<GuiMusicTrackTotal> {
-        let mut count = 0;
-        let mut ticks = 0;
-        for album in &artist.albums {
-            let tracks = self.album_tracks_cache.get(&album.album_id)?;
-            count += tracks.len();
-            ticks += tracks.iter().map(|track| track.runtime_ticks).sum::<i64>();
-        }
-        Some(GuiMusicTrackTotal {
-            count,
-            duration: fmt_duration_short(ticks / TICKS_PER_SECOND),
-        })
-    }
+    Some(GuiMusicTrackTotal {
+        count,
+        duration: fmt_duration_short(ticks / TICKS_PER_SECOND),
+    })
 }
 
 /// The album's tracklist rows (design D5, D7).

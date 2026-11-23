@@ -181,9 +181,8 @@ impl GuiCore {
         };
         let loading = !state.loading_pages.is_empty();
         let failed = state.error.is_some();
-        let sort_frame = self
-            .app
-            .gui_list_sort_frame(GuiSortTarget::Audiobooks(lib_idx));
+        let sort_frame =
+            super::list_sort::list_sort_frame(&self.app, GuiSortTarget::Audiobooks(lib_idx));
         let sort = sort_frame.active;
         let mut books: Vec<&mbv_audiobookshelf::AudiobookshelfBook> = state.books.iter().collect();
         // Under Author the catalog's own order stands: it is already the
@@ -286,10 +285,11 @@ impl GuiCore {
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
-            art_shape: artwork_shape(
-                self.app
-                    .gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
-            ),
+            art_shape: artwork_shape(super::artwork::hero_shape(
+                &self.app,
+                content.facts.artwork.shape,
+                art.as_ref(),
+            )),
             art,
             workspace,
         })
@@ -301,7 +301,7 @@ impl GuiCore {
     /// hero art runs. `None` when no Audiobookshelf server is configured.
     fn abs_hero_artwork(&mut self, library_item_id: &str) -> Option<GuiLibraryArtwork> {
         let cache_key = self.app.audiobookshelf_book_cover_key(library_item_id)?;
-        Some(self.app.resolve_gui_art(&cache_key))
+        Some(super::artwork::resolve_gui_art(&self.app, &cache_key))
     }
 
     /// The book Hero's Workspace (row 9.1): the book's chapter rows in the

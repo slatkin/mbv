@@ -61,7 +61,6 @@ impl CoreThread {
             },
             Some(ArtPath::Card(key)) => {
                 self.core
-                    .app()
                     .gui_art_source(&key)
                     .map_or(ArtResponse::Missing, |source| ArtResponse::Found {
                         mime: source.mime,
@@ -181,7 +180,7 @@ impl ClientTickHost for CoreThread {
         // The Library Status bar's own field reads the App store this
         // App-side drain fills, and the bar's section carries it; a landed
         // result reports changed so the next batch sends it.
-        let landed = self.core.app_mut().drain_gui_search_results();
+        let landed = self.core.drain_gui_search_results();
         if landed {
             self.mark_hook(DrainHook::DrainSearchResults);
         }

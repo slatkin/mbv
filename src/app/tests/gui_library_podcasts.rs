@@ -302,7 +302,7 @@ fn a_collection_command_on_another_podcast_library_starts_no_load() {
 fn the_oldest_sort_puts_the_earliest_episode_first_with_undated_last() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
-    app.set_gui_list_sort(GuiSortTarget::Podcasts(1), GuiListSort::Oldest);
+    set_gui_list_sort(&mut app, GuiSortTarget::Podcasts(1), GuiListSort::Oldest);
 
     let projection = gui_podcasts_projection(&mut app, 1);
 

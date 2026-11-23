@@ -112,10 +112,10 @@ impl GuiCore {
     /// Install one saved sort unless the session already set that
     /// destination's sort (design D10).
     fn install_saved_sort(&mut self, destination: &TabIdentity, sort: GuiListSort) {
-        if self.app.gui_list_sort_stored(destination).is_some() {
+        if self.gui_list_sort_stored(destination).is_some() {
             return;
         }
-        self.app.install_gui_list_sort(destination.clone(), sort);
+        self.install_gui_list_sort(destination.clone(), sort);
     }
 
     /// Apply the saved Shows view to every presented Shows destination

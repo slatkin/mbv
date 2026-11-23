@@ -283,8 +283,7 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
     );
     assert_eq!(
         test.core
-            .app_mut()
-            .gui_list_sort(mbv::GuiSortTarget::Podcasts(1)),
+            .gui_list_sort_for_test(mbv::GuiSortTarget::Podcasts(1)),
         mbv::GuiListSort::Oldest,
         "the resting destination installs its saved order as its sort with no show list"
     );

@@ -260,9 +260,8 @@ impl GuiCore {
                 )
             }
             GuiShowsView::New => {
-                let frame = self
-                    .app
-                    .gui_list_sort_frame(GuiSortTarget::ShowsNew(lib_idx));
+                let frame =
+                    super::list_sort::list_sort_frame(&self.app, GuiSortTarget::ShowsNew(lib_idx));
                 let rows = self.gui_shows_new_rows(frame.active);
                 sort_frame = Some(frame);
                 let selected = self

@@ -179,7 +179,7 @@ pub(in crate::app) fn feeds_projection(app: &App) -> GuiFeedsProjection {
     if !super::feeds::feeds_present(app) {
         return GuiFeedsProjection::default();
     }
-    let sort_frame = app.gui_list_sort_frame(GuiSortTarget::Feeds);
+    let sort_frame = super::list_sort::list_sort_frame(app, GuiSortTarget::Feeds);
     let sort = sort_frame.active;
     let collections = app.gui_collections(GuiCollectionTarget::Feeds);
     let mut entries = super::feeds::feeds_entries(app);
