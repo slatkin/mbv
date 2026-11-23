@@ -75,7 +75,7 @@ pub enum CoreInput {
     Library(mbv::GuiLibraryCommand),
     /// One Settings screen request (`add-gui-settings-screen` design D5): the
     /// window content's `settings` command. The core applies it through
-    /// [`App::apply_gui_settings_command`].
+    /// [`GuiCore::apply_gui_settings_command`].
     Settings(mbv::GuiSettingsCommand),
     /// One Playlists screen request: the window content's `playlists`
     /// command, applied through [`App::apply_gui_playlists_command`].
@@ -403,7 +403,16 @@ impl CoreThread {
     }
 
     pub fn gui_settings_section_for_test(&self) -> Option<mbv::GuiSettingsSection> {
-        self.core.app().gui_settings().map(|state| state.section)
+        self.core.gui_settings().map(|state| state.section)
+    }
+
+    /// The Feeds section's content the GUI's core projects: the secrets-free
+    /// subscription list and the add's progress, for a test that asserts what
+    /// a command or a drained result left behind.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_settings_feeds_for_test(&self) -> mbv::GuiSettingsFeedsProjection {
+        self.core.gui_settings_feeds()
     }
 
     /// Apply one `LayoutReport` to the Surface state's capacity and the hit

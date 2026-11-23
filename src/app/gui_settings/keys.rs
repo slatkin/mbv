@@ -15,8 +15,8 @@ use mbv_keybinds::{Keybinds, action_by_id};
 use mbv_ui_msg::KeyEvent;
 
 use super::projection::GuiSettingsKeyRefusalProjection;
-use crate::app::App;
 use crate::app::input::resolver::KeyChord;
+use crate::gui::GuiCore;
 
 /// The frame's binding target (`design D5`): what a `keysCapture` or
 /// `keysClear` command edits.
@@ -56,7 +56,7 @@ impl GuiKeyTarget {
     }
 }
 
-impl App {
+impl GuiCore {
     /// Row 5.4's `keysCapture` arm: the captured press becomes the candidate
     /// chord for the target, and the edit is accepted only when the resulting
     /// configuration passes the load rules (design D6).
@@ -72,7 +72,7 @@ impl App {
             );
             return;
         };
-        let keybinds = self.config.lock().unwrap().keybinds.clone();
+        let keybinds = self.app.config.lock().unwrap().keybinds.clone();
         let candidate = match target {
             GuiKeyTarget::Router(action) => keybinds.with_router(action, chord),
             GuiKeyTarget::PrefixAction(action) => {
@@ -90,7 +90,13 @@ impl App {
             Self::log_ignored_gui_settings_command("keysReset", "the action is not declared");
             return;
         };
-        let keybinds = self.config.lock().unwrap().keybinds.without_router(action);
+        let keybinds = self
+            .app
+            .config
+            .lock()
+            .unwrap()
+            .keybinds
+            .without_router(action);
         self.commit_gui_settings_keybinds(&keybinds, Some(action.id));
     }
 
@@ -101,7 +107,7 @@ impl App {
             Self::log_ignored_gui_settings_command("keysClear", "the target is not declared");
             return;
         };
-        let keybinds = self.config.lock().unwrap().keybinds.clone();
+        let keybinds = self.app.config.lock().unwrap().keybinds.clone();
         let (candidate, action) = match target {
             GuiKeyTarget::PrefixAction(action) => (
                 keybinds.with_prefix_assignment(action, None),
@@ -133,7 +139,7 @@ impl App {
             }
         };
         let config = {
-            let mut config = self.config.lock().unwrap();
+            let mut config = self.app.config.lock().unwrap();
             config.keybinds = loaded;
             config.clone()
         };
@@ -141,11 +147,11 @@ impl App {
             crate::config::save_config_section(&config, mbv_config::ConfigSection::Keys)
         {
             tracing::warn!(name: "config.save.failed", target: "config", error = %error, "config save failed");
-            self.flash_error(format!(
+            self.app.flash_error(format!(
                 "Key bindings changed but the save failed ({error})"
             ));
         }
-        if let Some(state) = self.gui.settings_screen.as_mut() {
+        if let Some(state) = self.app.gui.settings_screen.as_mut() {
             state.refusal = None;
         }
     }
@@ -160,7 +166,7 @@ impl App {
             reason = %text,
             "the Keys edit was refused"
         );
-        if let Some(state) = self.gui.settings_screen.as_mut() {
+        if let Some(state) = self.app.gui.settings_screen.as_mut() {
             state.refusal = Some(GuiSettingsKeyRefusalProjection {
                 action: action.unwrap_or("prefix").to_string(),
                 text: text.to_string(),

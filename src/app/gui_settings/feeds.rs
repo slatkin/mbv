@@ -8,29 +8,29 @@
 use mbv_queue::FeedKind;
 use mbv_ui_model::feeds_manage::FeedsManagePopup;
 
-use crate::app::App;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// Row 5.3's `feedAdd` arm: start the background fetch through the shared
     /// `App::begin_feed_add`, whose result the Client tick host drains
     /// (`App::drain_feed_add_results`).
     pub(super) fn apply_gui_settings_feed_add(&mut self, name: &str, url: &str, kind: FeedKind) {
-        if self.feeds_manage.is_none() {
-            self.feeds_manage = Some(FeedsManagePopup::new());
+        if self.app.feeds_manage.is_none() {
+            self.app.feeds_manage = Some(FeedsManagePopup::new());
         }
-        self.begin_feed_add(name, url, kind);
+        self.app.begin_feed_add(name, url, kind);
     }
 
     /// Row 5.3's `feedEdit` arm: change the name and kind of the subscription
     /// at `url` through the shared `App::edit_feed`. An unknown URL changes
     /// nothing.
     pub(super) fn apply_gui_settings_feed_edit(&mut self, url: &str, name: &str, kind: FeedKind) {
-        self.edit_feed(url, name, kind);
+        self.app.edit_feed(url, name, kind);
     }
 
     /// Row 5.3's `feedRemove` arm: raise the shared remove confirmation for
     /// the subscription at `url`. An unknown URL changes nothing.
     pub(super) fn apply_gui_settings_feed_remove(&mut self, url: &str) {
-        self.request_feed_removal(url);
+        self.app.request_feed_removal(url);
     }
 }

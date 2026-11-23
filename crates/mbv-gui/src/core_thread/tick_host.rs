@@ -360,7 +360,7 @@ impl ClientTickHost for CoreThread {
                     if matches!(command, mbv::GuiSettingsCommand::ResetUiState) {
                         self.reset_gui_ui_state();
                     } else {
-                        self.core.app_mut().apply_gui_settings_command(command);
+                        self.core.apply_gui_settings_command(command);
                     }
                 }
                 CoreInput::Playlists(command) => {

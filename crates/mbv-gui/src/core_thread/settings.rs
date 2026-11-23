@@ -38,15 +38,15 @@ impl CoreThread {
     pub(super) fn reset_gui_ui_state(&mut self) {
         // Step 1: abandon the saved launch restore, then Home.
         self.launch_restore = GuiLaunchRestore::Done;
-        self.core.app_mut().reset_gui_ui_state();
+        self.core.reset_gui_ui_state();
         // Step 3's core half: the Queue Surface's cursor, marks, and viewport.
         // The queue's contents and the viewed link stay.
         self.queue.reset_presentation();
         // Steps 4 to 6: the overlays and the Settings screen already closed
         // with the App's steps; the saved launch location goes, then the
         // counter rises.
-        self.core.app_mut().clear_gui_launch_state();
-        self.core.app_mut().bump_gui_ui_reset_epoch();
+        self.core.clear_gui_launch_state();
+        self.core.bump_gui_ui_reset_epoch();
     }
     /// Present the overlays the core handed off for this tick (design D8 of
     /// `gui-named-queues`): a new queue the local Owner made opens the Queue
@@ -83,15 +83,11 @@ impl CoreThread {
                     // F2 toggles the F2 group — every section except the two
                     // sidebars' own (design D2, the spec's open-action rule).
                     SidebarId::Settings => {
-                        self.core
-                            .app_mut()
-                            .toggle_gui_settings(GuiSettingsGroup::F2);
+                        self.core.toggle_gui_settings(GuiSettingsGroup::F2);
                     }
                     // F3 and F4 toggle their own sections.
                     SidebarId::Sessions => {
-                        self.core
-                            .app_mut()
-                            .toggle_gui_settings(GuiSettingsGroup::Sessions);
+                        self.core.toggle_gui_settings(GuiSettingsGroup::Sessions);
                     }
                     SidebarId::Playlists => self.core.app_mut().toggle_gui_playlists(),
                     // Search has no toggle request path: its open raises
@@ -103,7 +99,7 @@ impl CoreThread {
                     // reach the GUI here: the section the App's
                     // `settings_destination` names opens (design D2).
                     SidebarId::Settings => {
-                        let section = match self.core.app_mut().gui_settings_destination() {
+                        let section = match self.core.gui_settings_destination() {
                             SettingsDestination::Services | SettingsDestination::Main => {
                                 GuiSettingsSection::Services
                             }
@@ -112,7 +108,7 @@ impl CoreThread {
                             // GUI maps it to Services.
                             SettingsDestination::Panel => GuiSettingsSection::Services,
                         };
-                        self.core.app_mut().open_gui_settings_at(section);
+                        self.core.open_gui_settings_at(section);
                     }
                     // The GUI presents no Search sidebar, and the two other
                     // ids never raise an open request.
@@ -162,7 +158,7 @@ impl CoreThread {
         // The Settings id's stack membership follows the App's state (design
         // D2): the push and the pop are idempotent, so a tick that changed
         // nothing re-records the same membership.
-        if self.core.app_mut().gui_settings_is_open() {
+        if self.core.gui_settings_is_open() {
             self.focus
                 .push_overlay(ComponentId::Overlay(OverlayId::Settings));
         } else {

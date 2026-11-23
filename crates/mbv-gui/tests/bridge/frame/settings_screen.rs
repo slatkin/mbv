@@ -9,6 +9,14 @@ use mbv_ui_model::settings::SettingKey;
 
 use super::frame_after_tick;
 
+/// Open the Settings screen at `section` through the GUI Client's core, as
+/// the core thread's drain does.
+fn open_settings_at(app: &mut mbv::App, section: mbv::GuiSettingsSection) {
+    let mut core = mbv::GuiCore::new(std::mem::replace(app, mbv::stub_app_with_queue(0)));
+    core.open_gui_settings_at(section);
+    *app = core.into_app();
+}
+
 /// The Settings frame section is `None` while the screen is closed
 /// (`add-gui-settings-screen` design D9): the window mounts the screen only for
 /// a frame that carries it.
@@ -35,7 +43,7 @@ fn f2_row(rows: &[GuiSettingRow], key: SettingKey) -> &GuiSettingRow {
 #[test]
 fn an_open_f2_section_carries_its_rows_with_values() {
     let mut app = mbv::stub_app_with_queue(0);
-    app.open_gui_settings_at(mbv::GuiSettingsSection::Queue);
+    open_settings_at(&mut app, mbv::GuiSettingsSection::Queue);
 
     let frame = frame_after_tick(&mut app);
     let settings = frame
@@ -77,7 +85,7 @@ fn an_open_f2_section_carries_its_rows_with_values() {
         );
     }
 
-    app.open_gui_settings_at(mbv::GuiSettingsSection::Session);
+    open_settings_at(&mut app, mbv::GuiSettingsSection::Session);
     let frame = frame_after_tick(&mut app);
     let Some(GuiSettingsContent::Rows { rows }) =
         frame.settings().map(|settings| settings.content.clone())

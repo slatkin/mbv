@@ -442,8 +442,9 @@ pub fn stub_app_with_failed_emby_setup() -> App {
     use crate::app::dispatch::session::services_settings::EmbySetupForm;
     use mbv_core::service_runtime::ServiceState;
 
-    let mut app = make_app_stub();
-    app.open_gui_settings_at(super::GuiSettingsSection::Services);
+    let mut core = crate::gui::GuiCore::new(make_app_stub());
+    core.open_gui_settings_at(super::GuiSettingsSection::Services);
+    let mut app = core.into_app();
     app.setup.emby_setup_form = Some(EmbySetupForm {
         fields: [
             "https://emby.example.test".to_string(),

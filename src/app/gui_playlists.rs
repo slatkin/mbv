@@ -90,7 +90,12 @@ impl App {
     /// Open the screen and load the saved playlists. The Settings screen and
     /// the Playlists screen never show together, so the open closes Settings.
     pub fn open_gui_playlists(&mut self) {
-        self.close_gui_settings();
+        // The Settings and Playlists screens never show together, so the open
+        // closes Settings. The clear is inline rather than a call to
+        // `GuiCore::close_gui_settings`, which borrows the whole GUI core: a
+        // TUI caller holds this `App`, not that core, and the Settings state
+        // it clears is the same field.
+        self.gui.settings_screen = None;
         self.gui.playlists_screen_open = true;
         self.spawn_load_playlists();
     }

@@ -24,9 +24,12 @@ fn opening_settings_closes_the_playlists_screen_and_back() {
     let mut app = make_app_stub();
     app.open_gui_playlists();
 
-    app.open_gui_settings_at(GuiSettingsSection::Services);
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
+    core.open_gui_settings_at(GuiSettingsSection::Services);
+    app = core.into_app();
     assert!(!app.gui_playlists_is_open());
 
     app.open_gui_playlists();
-    assert!(app.gui_settings().is_none());
+    let core = crate::gui::GuiCore::new(app);
+    assert!(core.gui_settings().is_none());
 }

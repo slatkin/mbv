@@ -350,6 +350,9 @@ impl SectionLedger {
         let playback = core.app().queue_playback_projection();
         self.deadlines
             .sample(core.app_mut(), &playback, now, &mut marked);
+        // The frame's reset counter is read before the core's longer read
+        // borrow, so both borrows stay sequential.
+        let reset_epoch = core.gui_ui_reset_epoch();
         let app = core.app();
         let summary = app.queue_summary_projection(queue.multi_selection());
         // The queue's end offsets (design D5): the duration facts the summary
@@ -369,7 +372,7 @@ impl SectionLedger {
             .adopt(GuiQueueSummary::build(summary, &offsets, &header));
         self.panel.adopt(GuiPanelToggles::new(
             &core.panel_toggles_projection(),
-            app.gui_ui_reset_epoch(),
+            reset_epoch,
         ));
         self.overlay.adopt(
             core.gui_overlay_projection(&playback)
@@ -439,7 +442,7 @@ impl SectionLedger {
             audit_clean(Section::Search, &self.search, &search);
         }
         if !marked.contains(&Section::Settings) {
-            let settings = GuiSettingsFrame::build(core.app(), playback);
+            let settings = GuiSettingsFrame::build(core, playback);
             audit_clean(Section::Settings, &self.settings, &settings);
         }
         if !marked.contains(&Section::Playlists) {
@@ -483,8 +486,7 @@ impl SectionLedger {
             );
         }
         if marked.contains(&Section::Settings) {
-            self.settings
-                .adopt(GuiSettingsFrame::build(core.app(), playback));
+            self.settings.adopt(GuiSettingsFrame::build(core, playback));
         }
         if marked.contains(&Section::Playlists) {
             self.playlists.adopt(GuiPlaylistsFrame::build(core.app()));

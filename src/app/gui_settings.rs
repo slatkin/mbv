@@ -31,7 +31,7 @@ pub use self::projection::{
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::{SETTING_SECTIONS, SettingKey, SettingScope, SettingsDestination};
 
-use super::App;
+use crate::gui::GuiCore;
 
 /// The one Settings screen's sections (design D3): the closed list in the
 /// spec's sidebar order. `Sessions` is the GUI's own sidebar
@@ -215,27 +215,27 @@ impl GuiSettingsState {
     }
 }
 
-impl App {
+impl GuiCore {
     /// The open Settings screen's state, `None` while the screen is closed
     /// (design D2). A caller borrows the state; it is not cloned (design D10).
     #[must_use]
     pub fn gui_settings(&self) -> Option<&GuiSettingsState> {
-        self.gui.settings_screen.as_ref()
+        self.app.gui.settings_screen.as_ref()
     }
 
     /// Whether the Settings screen is open (design D2): the fact the router
     /// snapshot's queue-scoped gates read and the core's focus sync mirrors.
     #[must_use]
     pub fn gui_settings_is_open(&self) -> bool {
-        self.gui.settings_screen.is_some()
+        self.app.gui.settings_screen.is_some()
     }
 
-    /// The Settings destination the App-side openers recorded (design D2):
+    /// The Settings destination the core's openers recorded (design D2):
     /// the `OpenSidebar(Settings)` drain arm reads it to pick the section.
     /// The TUI shell reads the same field for its own sidebar.
     #[must_use]
     pub fn gui_settings_destination(&self) -> SettingsDestination {
-        self.settings_destination
+        self.app.settings_destination
     }
 
     /// The `open` command's rule (design D5, design D11 *Mouse-centric*):
@@ -255,7 +255,7 @@ impl App {
     /// group's section; with the screen showing a section of the same group,
     /// close it; otherwise show the group's section and stay open.
     pub fn toggle_gui_settings(&mut self, group: GuiSettingsGroup) {
-        match self.gui.settings_screen.as_ref() {
+        match self.app.gui.settings_screen.as_ref() {
             Some(state) if group.contains(state.section) => self.close_gui_settings(),
             Some(_) => self.show_gui_settings_section(group.section()),
             None => self.open_gui_settings_at(group.section()),
@@ -266,8 +266,10 @@ impl App {
     /// drain arm's open, and the open half of the toggle rule. The section's
     /// load starts here (design D9).
     pub fn open_gui_settings_at(&mut self, section: GuiSettingsSection) {
-        self.close_gui_playlists();
-        self.gui.settings_screen = Some(GuiSettingsState::at(section));
+        // The Settings and Playlists screens never show together, so opening
+        // Settings closes the Playlists screen.
+        self.app.close_gui_playlists();
+        self.app.gui.settings_screen = Some(GuiSettingsState::at(section));
         self.load_gui_settings_section(section);
     }
 
@@ -275,7 +277,7 @@ impl App {
     /// with it (design D9) — and the core's focus sync pops
     /// `ComponentId::Overlay(OverlayId::Settings)` so the Panel focus returns.
     pub fn close_gui_settings(&mut self) {
-        self.gui.settings_screen = None;
+        self.app.gui.settings_screen = None;
     }
 
     /// Show a section of the open screen and start its load (design D5's
@@ -295,7 +297,7 @@ impl App {
     /// Switch the open screen to `section`, keeping the caches the screen owns
     /// and starting the new section's load (design D9).
     fn show_gui_settings_section(&mut self, section: GuiSettingsSection) {
-        if let Some(state) = self.gui.settings_screen.as_mut() {
+        if let Some(state) = self.app.gui.settings_screen.as_mut() {
             state.section = section;
         }
         self.load_gui_settings_section(section);
@@ -306,7 +308,7 @@ impl App {
     /// it.
     #[must_use]
     pub fn gui_ui_reset_epoch(&self) -> u64 {
-        self.gui.ui_reset_epoch
+        self.app.gui.ui_reset_epoch
     }
 
     /// Log the Settings command whose frame is stale: the screen it addresses

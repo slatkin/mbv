@@ -246,7 +246,7 @@ fn a_feed_edit_for_an_unknown_url_changes_nothing() {
         },
     );
 
-    let feeds = test.core.app_mut().gui_settings_feeds().subscriptions;
+    let feeds = test.core.gui_settings_feeds_for_test().subscriptions;
     assert_eq!(feeds.len(), 1, "no subscription was added");
     assert_eq!(feeds[0].name, "A", "the known subscription is untouched");
     assert_eq!(feeds[0].url, "https://a");
@@ -266,7 +266,7 @@ fn an_injected_feed_add_result_appends_the_subscription() {
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());
 
-    let feeds = test.core.app_mut().gui_settings_feeds().subscriptions;
+    let feeds = test.core.gui_settings_feeds_for_test().subscriptions;
     assert_eq!(feeds.len(), 1, "the applied add appended one subscription");
     assert_eq!(feeds[0].name, "Added");
     assert_eq!(feeds[0].url, "https://added");
@@ -460,7 +460,9 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
     app.seed_gui_library_groups_for_test(0, "grp-soul");
     mbv_config::save_gui_launch_state(&mbv_config::first_launch())
         .expect("the saved launch location is written");
-    let epoch_before = app.gui_ui_reset_epoch();
+    // A fresh `App` carries epoch 0, and the panel section reaches the window
+    // only through a build, so the reset's rise is what the frame shows.
+    let epoch_before = 0;
     let mut test = test_core_with(app);
     open_settings_at(&mut test, mbv::GuiSettingsSection::Actions);
     send_key(&mut test, Key::Char('z'), KeyModifiers::NONE);

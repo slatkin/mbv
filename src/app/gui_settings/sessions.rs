@@ -3,25 +3,25 @@
 
 use mbv_ui_model::panel_targets::ChooserTargetKey;
 
-use crate::app::App;
+use crate::gui::GuiCore;
 
-impl App {
+impl GuiCore {
     /// Row 5.5's `selectTarget` arm (design D5): select the playback target
     /// through the chooser's own path, leaving the screen open (the spec's
     /// *Sessions lists and selects the playback targets*).
     pub(super) fn apply_gui_settings_select_target(&mut self, target: &ChooserTargetKey) {
         match target {
             ChooserTargetKey::Local => {
-                if self.remote_playback_attached() {
-                    self.detach_to_local();
+                if self.app.remote_playback_attached() {
+                    self.app.detach_to_local();
                 }
             }
             ChooserTargetKey::Target(key) => {
                 if let Some(target) = crate::app::state::panel_targets::resolve_session_target(
-                    &self.panel_targets,
+                    &self.app.panel_targets,
                     key,
                 ) {
-                    self.select_panel_target(target);
+                    self.app.select_panel_target(target);
                 }
             }
         }
