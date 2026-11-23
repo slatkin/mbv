@@ -18,7 +18,7 @@ fn a_gui_client_connected_to_a_peer_shows_a_local_queue() {
     let sess = make_session("peer-host", "mbv");
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
     assert!(app.suspended_local.is_some(), "the local link stays held");
-    app.enable_gui_client();
+    app.mark_gui_client();
 
     app.show_named_queue(current());
 
@@ -61,7 +61,7 @@ pub(crate) fn gui_app_with_peer() -> (
     while home_cmd_rx.try_recv().is_ok() {}
     app.player
         .update_status(|status| status.position_ticks = HOME_POSITION);
-    app.enable_gui_client();
+    app.mark_gui_client();
     app.adopt_named_queue_list(named_queue_list(), current());
 
     let (peer, peer_rx, peer_cmd_rx) =

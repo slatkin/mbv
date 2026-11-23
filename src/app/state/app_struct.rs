@@ -256,7 +256,7 @@ pub struct App {
     pub(in crate::app) panel_mode: PanelMode,
     /// The one Client-kind fact (add-gui-library-panel design D4, D9):
     /// `true` for a GUI Client, `false` for a TUI Client. The GUI Client
-    /// sets it before its first step (`App::enable_gui_client`); the TUI
+    /// sets it before its first step (`App::mark_gui_client`); the TUI
     /// Client never does. It decides both facts the Clients differ on,
     /// exposed as `App::client_arranges_panels` and
     /// `App::visual_slot_controls`: the GUI Client arranges its own panels

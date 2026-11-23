@@ -408,7 +408,7 @@ fn playing_queue_frame_carries_the_status_indicator_cluster() {
 #[test]
 fn queue_filter_narrows_projected_rows_only() {
     let mut app = stub_app_with_playing_queue(3);
-    app.enable_gui_client();
+    app.mark_gui_client();
     // The stub titles are "Item 0", "Item 1", "Item 2": the query matches
     // one row.
     let frame = frame_after_keys(

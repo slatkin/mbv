@@ -30,22 +30,17 @@ pub use self::projection::{
 };
 
 use crate::app::App;
-use crate::app::state::app_struct::LaunchRestore;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 impl App {
-    /// Adopt the GUI Client's `App` rules (add-gui-library-panel design D4,
-    /// D9): the GUI arranges its own panels from its measured size and always
-    /// paints the Queue panel, so the TUI's terminal-width Mini check and its
-    /// hidden empty queue column do not apply, it paints no visualizer or
-    /// hide control for the visual slot, and the GUI's own launch location
-    /// replaces the TUI's, so this `App` starts with `LaunchRestore::Done`
-    /// and no TUI launch state moves its tab or Panel focus. The GUI Client
-    /// calls it before its first step; the TUI Client never does, so the
-    /// TUI's values do not change.
-    pub fn enable_gui_client(&mut self) {
+    /// Mark this `App` as the GUI Client's (design D6a): the sole reader of
+    /// `gui_client` that remains until rows 3.3 and 3.4 delete the field and
+    /// its readers. The GUI Client calls it before its first step; nothing
+    /// else sets the flag. It decides no launch rule of its own: the GUI
+    /// adopts its launch location through `App::skip_launch_restore`.
+    #[doc(hidden)]
+    pub fn mark_gui_client(&mut self) {
         self.gui_client = true;
-        self.launch_restore = LaunchRestore::Done;
     }
 
     /// Whether the Client arranges its own panels from its measured size and

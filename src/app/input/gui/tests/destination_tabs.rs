@@ -49,7 +49,7 @@ fn press(app: &mut App, key: Key) {
 #[test]
 fn tab_from_music_opens_shows_and_starts_its_root_load() {
     let mut app = music_and_shows_app();
-    app.enable_gui_client();
+    app.mark_gui_client();
 
     press(&mut app, Key::Tab);
 
@@ -77,7 +77,7 @@ fn tab_from_music_opens_shows_and_starts_its_root_load() {
 #[test]
 fn a_router_step_opens_no_destination_the_gui_does_not_present() {
     let mut app = music_and_shows_app();
-    app.enable_gui_client();
+    app.mark_gui_client();
 
     // Position 3 names no tab: Home is 0 and the two libraries take 1 and 2.
     press(&mut app, Key::Char('4'));

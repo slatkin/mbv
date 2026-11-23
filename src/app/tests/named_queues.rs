@@ -71,7 +71,7 @@ fn app_with_named_queues(local_items: Vec<EmbyItem>) -> App {
 fn a_resting_snapshot_fills_the_shown_view_and_not_the_current_queue() {
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
     while cmd_rx.try_recv().is_ok() {}
-    app.enable_gui_client();
+    app.mark_gui_client();
     app.adopt_named_queue_list(named_queue_list(), current());
 
     app.show_named_queue(resting());
@@ -133,7 +133,7 @@ pub(crate) fn gui_app_with_named_queues() -> (App, std::sync::mpsc::Receiver<mbv
     );
     close_initial_services(&mut app);
     while cmd_rx.try_recv().is_ok() {}
-    app.enable_gui_client();
+    app.mark_gui_client();
     app.adopt_named_queue_list(named_queue_list(), current());
     (app, cmd_rx)
 }

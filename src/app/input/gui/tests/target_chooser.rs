@@ -113,7 +113,7 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
 #[test]
 fn gui_context_r_opens_the_target_chooser() {
     let (mut app, _cmd_rx) = cast_target_app();
-    app.enable_gui_client();
+    app.mark_gui_client();
 
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Char('r'), KeyModifiers::NONE)),
