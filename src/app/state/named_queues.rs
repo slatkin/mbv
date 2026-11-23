@@ -9,6 +9,7 @@
 use mbv_ctrl::{NamedQueueEntry, NamedQueueEvent};
 use mbv_queue::NamedQueueId;
 
+use crate::app::state::client_capabilities::ClientCapability;
 use crate::app::state::playback::ShownEntry;
 use crate::app::state::queue_view::{AdoptCause, QueueView};
 use crate::app::{App, QueueLink, QueueTarget};
@@ -79,6 +80,15 @@ impl NamedQueueList {
 }
 
 impl App {
+    /// Whether this Client shows one queue entry at a time that the user
+    /// picks (design D6a, D7): a Named queue or the peer's queue. Only the
+    /// GUI Client does, so every shown-queue gate reads this one fact.
+    #[must_use]
+    pub(in crate::app) fn shows_queue_entries(&self) -> bool {
+        self.client_capabilities
+            .has(ClientCapability::ShownQueueEntries)
+    }
+
     /// Adopt one piece of Named-queue traffic (design D3, D7): the queue list,
     /// or one resting queue's snapshot. Both Owner links carry it — the active
     /// link, or the suspended home link while a peer holds control — so every
@@ -156,7 +166,7 @@ impl App {
     /// The TUI Client keeps the connection rule, so it records nothing and its
     /// resolution ignores a shown entry either way.
     pub(in crate::app) fn show_peer_entry(&mut self) {
-        if !self.gui_client {
+        if !self.shows_queue_entries() {
             return;
         }
         self.shown_resting = None;
@@ -169,7 +179,7 @@ impl App {
     /// there is no identity to name, so the shown entry is cleared and the
     /// resolution falls back to the same queue.
     pub(in crate::app) fn show_local_current_entry(&mut self) {
-        if !self.gui_client {
+        if !self.shows_queue_entries() {
             return;
         }
         self.shown_resting = None;
@@ -182,7 +192,7 @@ impl App {
     /// close each name the entry they land on, and the reset follows the
     /// change, not the event.
     fn show_entry(&mut self, entry: Option<ShownEntry>) {
-        if !self.gui_client || self.shown_entry == entry {
+        if !self.shows_queue_entries() || self.shown_entry == entry {
             return;
         }
         self.shown_entry = entry;
@@ -220,7 +230,7 @@ impl App {
     /// dismisses itself on the entry it showed, so this setter is the one
     /// place the shown queue and its subscription change together.
     pub(in crate::app) fn show_named_queue(&mut self, queue: NamedQueueId) {
-        if !self.gui_client {
+        if !self.shows_queue_entries() {
             return;
         }
         let rests = self.named_queues.rests(queue);
@@ -314,7 +324,7 @@ impl App {
     /// connection rule — and a peer has no Named queues.
     #[must_use]
     pub(in crate::app) fn shown_queue_edit(&self) -> Option<NamedQueueId> {
-        if !self.gui_client {
+        if !self.shows_queue_entries() {
             return None;
         }
         match self.shown_entry {

@@ -177,7 +177,7 @@ impl App {
     /// shown entry: the TUI Client keeps the connection rule, whatever its
     /// shown-entry field holds.
     fn queue_link_resolution(&self) -> QueueLinkResolution {
-        let shown_entry = if self.gui_client {
+        let shown_entry = if self.shows_queue_entries() {
             self.shown_entry
         } else {
             None
