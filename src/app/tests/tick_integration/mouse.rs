@@ -1,5 +1,4 @@
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use ratatui::layout::Rect;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 

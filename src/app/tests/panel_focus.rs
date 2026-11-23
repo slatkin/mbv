@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use crate::app::state::panel_focus::{PanelPresentation, panel_appearance_focus_decision};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use mbv_tui_support::ToRatatui;

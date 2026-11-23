@@ -8,6 +8,7 @@
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::podcast::add_emby_movie_library;
 use super::*;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use mbv_components::ContextMenuComponent;
 use mbv_components::library_panel::LibraryPanel;

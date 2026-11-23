@@ -5,8 +5,7 @@
 
 use std::sync::mpsc;
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 
 use super::harness::TickHarness;
 use crate::app::QueueLink;

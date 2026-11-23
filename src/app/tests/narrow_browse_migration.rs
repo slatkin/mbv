@@ -21,6 +21,7 @@
 //! split episode rows, Workspace-free Wide hero, one painter per surface).
 
 use super::*;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use mbv_components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_model::browse::ServerRows;

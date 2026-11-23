@@ -69,25 +69,15 @@ pub(crate) mod tick_integration;
 mod twitch_url;
 
 use mbv_emby::test_support::make_session;
+// `TestBackend`, `Terminal`, and `confirm_replace_queue` moved to
+// `crate::app::shell::test_support` (task 4.6c): they name the toolkit.
 use mbv_emby_model::test_support::make_item;
-use ratatui::backend::TestBackend;
-
-use ratatui::Terminal;
 
 // The App stub construction moved to `app_stub` so the Clients' own tests
 // can build it too; the `crate::app::tests::*` paths stay working.
 pub(crate) use super::app_stub::{gui_client_capabilities, make_app_stub, make_built_app};
 
 // ── test helpers ─────────────────────────────────────────────────────────
-
-/// Confirm the populated-queue replacement gate the way the shell's confirm
-/// modal does, so a gated replacement executes.
-pub(crate) fn confirm_replace_queue(app: &mut App) {
-    app.apply_confirm_action(
-        crate::app::ConfirmAction::ReplacePopulatedQueue,
-        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Enter, mbv_ui_msg::KeyModifiers::NONE),
-    );
-}
 
 pub(crate) trait QueueViewTestExt {
     fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize);

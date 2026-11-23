@@ -2,8 +2,7 @@
 //! its own retained geometry, in the layouts the panel paints it: `both` and
 //! mini-view `queue-only`. A collapsed (idle) panel's rows resolve nothing.
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use ratatui::layout::Rect;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 

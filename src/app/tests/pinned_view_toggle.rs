@@ -6,6 +6,7 @@
 //! no `pinwin` process runs and nothing sleeps.
 
 use super::*;
+use crate::app::shell::test_support::{Terminal, TestBackend};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_components::QueuePlaybackPanel;
