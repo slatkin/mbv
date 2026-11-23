@@ -1,6 +1,6 @@
 //! The title-site decision: why this sync's eligibility gates stop the artwork
 //! from carrying the now-playing title, and what the header does about it
-//! (invariant 16). It builds no ratatui value, so it lives in `state`; the
+//! (invariant 16). It builds no terminal value, so it lives in `state`; the
 //! slot's paint is the shell's (`shell::queue_card`).
 
 use crate::app::App;

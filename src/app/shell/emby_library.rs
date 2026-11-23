@@ -18,19 +18,17 @@ impl Model {
             return;
         };
         match request {
-            // A `Series` item routes through the shared Series-activation gate
-            // first (task 3.4a): at non-Wide TV width — the only layout where
-            // `TvContent` is mounted for a TV library — that opens the Library
-            // Hero overlay instead of a flat drill-in. `false` means
-            // it was not a Series (or had no id), so fall back to the normal
-            // select-item path, including the folder scroll-persist.
+            // Series activation (task 3.4a): at non-Wide TV width — the only
+            // layout where `TvContent` is mounted for a TV library — a
+            // `Series` opens the Library Hero overlay instead of a flat
+            // drill-in. The breakpoint is painted geometry, so the shell
+            // gates it here (design D2). A non-Series item, and a Series that
+            // the core entry declines, take the normal select-item path
+            // including the folder scroll-persist.
             ShellRequest::EmbyLibraryActivate { item } => {
-                if item.item_type == "Series"
-                    && self.app.activate_selected_series_item(lib_idx, &item)
-                {
-                    // handled by Series activation (Library Hero overlay at
-                    // non-Wide width, persistent workspace at wide)
-                } else {
+                let series_at_narrow_width =
+                    item.item_type == "Series" && !self.app.tv_workspace_wide.contains(&lib_idx);
+                if !series_at_narrow_width || !self.open_library_hero_overlay() {
                     self.app.select_item(lib_idx, item);
                 }
             }

@@ -41,6 +41,29 @@ fn mounted_context_menu_rect(model: &Model) -> Rect {
         .menu_rect()
 }
 
+/// Record a right-click at `cell` the way the `UiRoot` observer does: the
+/// shell keeps the cell in `menu_pointer`, and the pointer-anchored menu in
+/// `pending_overlay` carries no cell of its own (design D6).
+fn right_click_at(model: &mut Model, cell: (u16, u16)) {
+    model.menu_pointer = Some(cell);
+    model.menu_pointer_current = true;
+    if let Some(OverlayRequest::ContextMenu(menu)) = model.app.pending_overlay.as_mut() {
+        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
+    }
+}
+
+fn menu_anchor(model: &Model) -> ContextMenuAnchor {
+    let id = ComponentId::Overlay(OverlayId::ContextMenu);
+    model
+        .application
+        .get_component(&id)
+        .expect("context menu mounted")
+        .as_any()
+        .downcast_ref::<ContextMenuComponent>()
+        .expect("context menu type")
+        .anchor()
+}
+
 fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
@@ -57,13 +80,14 @@ fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
 fn pointer_placement_stays_click_anchored_not_following_selection() {
     let mut app = library_app();
     app.open_context_menu_at(false, None);
-    if let Some(OverlayRequest::ContextMenu(menu)) = app.pending_overlay.as_mut() {
-        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
-    }
 
     let mut model = Model::new(app);
-    model.menu_pointer = Some((70, 20));
+    right_click_at(&mut model, (70, 20));
     model.sync_modal_requests();
+    assert!(
+        matches!(menu_anchor(&model), ContextMenuAnchor::Pointer),
+        "placement follows `menu_pointer` only; the menu keeps its neutral anchor"
+    );
 
     // Render once and capture the rect placed from the click point.
     let a = render_at(&mut model, 100, 40);
@@ -331,10 +355,7 @@ fn visual_slot_menu_clamps_inside_the_queue_column() {
     term.draw(|f| crate::app::shell::draw::compose_root_frame(&mut model.app, f))
         .unwrap();
     model.app.open_visual_slot_context_menu();
-    if let Some(OverlayRequest::ContextMenu(menu)) = model.app.pending_overlay.as_mut() {
-        menu.anchor = mbv_ui_model::context_menu::ContextMenuAnchor::Pointer;
-    }
-    model.menu_pointer = Some((2, 20));
+    right_click_at(&mut model, (2, 20));
     model.sync_modal_requests();
 
     term.draw(|f| {

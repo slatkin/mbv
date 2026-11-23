@@ -61,8 +61,8 @@ pub struct WorkspaceRelayout {
 /// ([`crate::app::client_drains`]); what stays in a host method is the
 /// Client's own: its projections, the lifecycle it alone acts on, and the
 /// phases only one Client can run (the TUI terminal poll, the TUI search and
-/// card surfaces, image resize). The TUI Client implements the trait for
-/// `Model` (see `shell::run::tick_host`).
+/// card surfaces, image resize). The TUI Client implements the trait for its
+/// shell `Model`.
 pub trait ClientTickHost {
     /// The shared runtime state the drains read and mutate.
     fn app_mut(&mut self) -> &mut App;

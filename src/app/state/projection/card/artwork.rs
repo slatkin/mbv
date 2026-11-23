@@ -1,6 +1,6 @@
 //! The queue card's artwork rules: the cache keys and fetch chains for a queue
 //! item, the logo owner for the title overlay, and the title overlay's
-//! log-dedup memo. These build no ratatui value, so the core keeps them; the
+//! log-dedup memo. These build no terminal value, so the core keeps them; the
 //! projection that reads them is the shell's (`queue_card.rs`), and the GUI
 //! Home projection re-reads the same chains (design D12).
 

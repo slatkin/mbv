@@ -289,6 +289,7 @@ impl App {
             queue_filter_active: false,
             gui_overlay: None,
             tab_scroll: 0,
+            tv_workspace_wide: std::collections::HashSet::new(),
             last_nav_at: Instant::now()
                 .checked_sub(Duration::from_secs(1))
                 .unwrap_or_else(Instant::now),

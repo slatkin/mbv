@@ -414,7 +414,25 @@ impl Model {
             .collect()
     }
 
+    /// Publish the one library whose Wide TV series Workspace this Client
+    /// paints, as the write-back the core's shared Series-activation branch
+    /// reads (design D2). The breakpoint is terminal geometry, so the core
+    /// cannot compute it. It runs first in every content push, so a library
+    /// that is no longer wide (or no longer the tab) never leaves a stale
+    /// entry behind. A non-TvShows TV tab still publishes its breakpoint: its
+    /// Series rows open the Workspace at wide width.
+    fn publish_wide_workspace(&mut self) {
+        self.app.tv_workspace_wide.clear();
+        let Some(index) = self.app.tab.emby_library_index() else {
+            return;
+        };
+        if self.app.libs.get(index).is_some() && super::tv_wide::is_right_panel_wide(&self.app) {
+            self.app.tv_workspace_wide.insert(index);
+        }
+    }
+
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {
+        self.publish_wide_workspace();
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };

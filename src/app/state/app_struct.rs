@@ -589,6 +589,13 @@ pub struct App {
     pub(in crate::app) gui_ui_reset_epoch: u64,
     pub(in crate::app) force_clear: bool,
     pub(in crate::app) tab_scroll: usize,
+    /// Emby libraries whose Wide TV series Workspace the Client last painted
+    /// wide. The breakpoint is terminal geometry, so only a Client computes
+    /// it; this set is the Client's write-back, and the core reads it for the
+    /// one activation branch both Clients reach (design D2). The TUI sets it
+    /// from its painted layout each sync pass; a Client that paints no such
+    /// workspace leaves it empty.
+    pub(in crate::app) tv_workspace_wide: std::collections::HashSet<usize>,
     pub(in crate::app) ui_volume: u8,
     pub(in crate::app) pre_mute_volume: Option<u8>,
     pub(in crate::app) mute_on: bool,

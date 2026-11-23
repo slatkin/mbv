@@ -1,6 +1,6 @@
 //! The queue card's core part (design D3): the artwork cache keys, the fetch
 //! chains, the title overlay's logo owner, the sync-pass fetch issue, and the
-//! title-site decision. None of it builds a ratatui value, so it stays in
+//! title-site decision. None of it builds a terminal value, so it stays in
 //! `state`; the slot's paint is the shell's (`shell::queue_card`).
 
 use crate::app::App;
@@ -266,7 +266,7 @@ fn queue_title_site(
 
 /// The covers gate and the overlay composition: decides the artwork site and,
 /// when the glyphs and the measured cell size allow it, composes the overlay
-/// variant. It takes the measured cell size as plain numbers, so no ratatui
+/// variant. It takes the measured cell size as plain numbers, so no terminal
 /// value is built here.
 fn queue_title_overlay(
     app: &mut App,

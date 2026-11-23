@@ -1,4 +1,4 @@
-//! Status-bar content that builds no ratatui value (task 2.2, design D3).
+//! Status-bar content that builds no terminal value (task 2.2, design D3).
 //!
 //! The mounted `StatusBarPanel` Interactive Component
 //! (`crates/mbv-components/src/status_bar_panel.rs`) owns the status row's pill hit
@@ -7,8 +7,8 @@
 //! the presented facts the shell's painters turn into spans.
 //!
 //! The span builders themselves moved to `shell::chrome_status`: they build
-//! ratatui values, so they belong to the TUI edge. The playback target's
-//! labels and the in-app toast gate stay here, because they build no ratatui
+//! terminal values, so they belong to the TUI edge. The playback target's
+//! labels and the in-app toast gate stay here, because they build no terminal
 //! value and every Client reads them.
 //!
 //! The Local/Peer queue-link pills are queue concern and paint in the
