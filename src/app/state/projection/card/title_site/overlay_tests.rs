@@ -28,19 +28,21 @@ fn app_with_card_image() -> Model {
     app.configure_image_protocol_for_test(None, true);
     let mut model = Model::new(app);
     crate::app::shell::install_image_pickers_for_test(&mut model, configured, Picker::halfblocks());
-    model.app.images.insert_image(
-        CARD_KEY.to_owned(),
+    model.app.insert_cached_image_for_test(
+        CARD_KEY,
         cached(Some(image::DynamicImage::ImageRgba8(
             image::RgbaImage::from_pixel(4, 2, image::Rgba([20, 40, 60, 255])),
         ))),
     );
-    model.app.queue_card_projection = QueueCardProjection {
-        cache_key: Some(CARD_KEY.to_owned()),
-        plain_cache_key: None,
-        images_enabled: true,
-        visualizer: false,
-        title_site: NowPlayingTitleSite::Header,
-    };
+    model
+        .app
+        .seed_queue_card_projection_for_test(QueueCardProjection {
+            cache_key: Some(CARD_KEY.to_owned()),
+            plain_cache_key: None,
+            images_enabled: true,
+            visualizer: false,
+            title_site: NowPlayingTitleSite::Header,
+        });
     model
 }
 
@@ -63,9 +65,9 @@ fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
 /// happens to coincide on a shared font grid.
 #[test]
 fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
-    let mut app = app_with_card_image();
-    let ensure = |app: &mut Model| {
-        app.ensure_title_overlay_protocol(
+    let mut model = app_with_card_image();
+    let ensure = |model: &mut Model| {
+        model.ensure_title_overlay_protocol(
             CARD_KEY,
             (16, 32),
             &title_parts("a title"),
@@ -75,24 +77,24 @@ fn dimmed_backdrop_keeps_the_title_overlay_variant_and_pipeline_stable() {
     };
 
     let variant =
-        ensure(&mut app).expect("the variant builds while the configured protocol is active");
-    let builds_after_open = app.image_protocols.protocol_builds();
+        ensure(&mut model).expect("the variant builds while the configured protocol is active");
+    let builds_after_open = model.image_protocols.protocol_builds();
 
-    app.app.dim_backdrop_active = true;
+    model.app.set_dim_backdrop_active_for_test(true);
     assert_eq!(
-        ensure(&mut app),
+        ensure(&mut model),
         Some(variant.clone()),
         "the dimmed backdrop must not size the overlay into a new variant key"
     );
     assert_eq!(
-        app.image_protocols.protocol_builds(),
+        model.image_protocols.protocol_builds(),
         builds_after_open,
         "the sizing path must measure the configured protocol, not build fallback re-encodes"
     );
 
-    app.app.dim_backdrop_active = false;
+    model.app.set_dim_backdrop_active_for_test(false);
     assert_eq!(
-        ensure(&mut app),
+        ensure(&mut model),
         Some(variant),
         "closing the backdrop returns to the same variant"
     );

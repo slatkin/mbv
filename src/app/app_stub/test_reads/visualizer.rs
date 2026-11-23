@@ -17,4 +17,11 @@ impl App {
     pub fn visualizer_owns_the_slot_for_test(&self) -> bool {
         self.visualizer_enabled
     }
+
+    /// Hold `enabled` as whether the visualizer owns the visual slot, as a
+    /// settled mode change leaves it: the artwork then carries no title.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_visualizer_enabled_for_test(&mut self, enabled: bool) {
+        self.visualizer_enabled = enabled;
+    }
 }
