@@ -57,6 +57,12 @@ pub use self::gui_client_state::{
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
+/// The Client-only fetch result a dependent Client's test scripts onto the
+/// `App`'s channel (`decouple-client-core` design D5): the next tick's
+/// `drain_client_events` takes it exactly as it takes a worker's own send.
+#[cfg(feature = "test")]
+#[doc(hidden)]
+pub use self::gui_library::client_events::GuiClientEvent;
 pub(crate) use self::gui_library::client_events::install_client_event;
 pub use self::gui_library::{
     GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,

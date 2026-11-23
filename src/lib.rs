@@ -88,6 +88,8 @@ pub use crate::app::state::client_capabilities::{ClientCapabilities, ClientCapab
 /// drops it as soon as the real `App` comes back.
 pub use self::app::handoff_app;
 
+#[cfg(feature = "test")]
+pub use self::app::GuiClientEvent;
 /// The `App` stub construction a Client's own tests build their `App` from
 /// (`extract-client-core` design D11). Compiled only under the root package's
 /// `test` feature, which no shipped build enables.

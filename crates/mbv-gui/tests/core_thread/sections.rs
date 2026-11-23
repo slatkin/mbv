@@ -3,7 +3,7 @@
 //! else.
 
 use mbv::{
-    App, ClientTickHost, stub_app_with_completed_emby_startup,
+    App, ClientTickHost, GuiClientEvent, stub_app_with_completed_emby_startup,
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_queue,
 };
 use mbv_emby_model::EmbyItem;
@@ -385,15 +385,53 @@ fn a_playing_track_change_with_no_input_sends_the_library_section() {
     assert_eq!(music.playing_track_id.as_deref(), Some("trk-2"));
 }
 
+/// Seed one Music library whose checked group `grp-hiphop` has no albums, so a
+/// fetched group-album result changes what the Library section builds.
+fn seed_empty_group_albums(test: &mut TestCore) {
+    let http = MockHttp::new();
+    let app = test.core.app_mut();
+    app.seed_gui_music_library_for_test(test_emby_client(&http));
+    app.seed_gui_library_groups_for_test(0, "grp-hiphop");
+    app.seed_gui_music_albums_for_test(0, "grp-hiphop", &[]);
+}
+
+/// Land one `GroupAlbums` result on the App's Client-only fetch channel, as a
+/// fetch worker would (design D5): a scripted send with no worker and no wait.
+fn land_group_albums(test: &mut TestCore) {
+    let mut album = make_item("alb-new", "MusicAlbum");
+    "alb-new".clone_into(&mut album.id);
+    test.core
+        .app_mut()
+        .send_gui_client_event_for_test(GuiClientEvent::GroupAlbums {
+            lib_idx: 0,
+            group_id: "grp-hiphop".to_owned(),
+            result: Ok(vec![album]),
+        });
+}
+
 /// A landed Client-only fetch result marks the Library section (design D3
 /// rule 2, the `drain_client_events` row): the GUI Library's own stores are
 /// the Library section's source, so that drain's row names the Library, as
-/// the library drain's row does. Regression for the review finding that
-/// `drain_client_events` installed its results and marked nothing.
+/// the library drain's row does. The event lands on the App's channel and the
+/// core's own step drains it, so this covers the tick host's wiring: the
+/// stores the drain installed reach the step's batch. Regression for the
+/// review finding that `drain_client_events` installed its results and marked
+/// nothing.
 #[test]
-fn a_landed_client_result_marks_the_library_section() {
-    assert!(
-        mbv_gui::sections::client_event_marks().contains(&Section::Library),
-        "the client-event drain's mark table names the Library section"
+fn a_landed_client_result_sends_the_library_section() {
+    let mut test = test_core_with(empty_app());
+    seed_empty_group_albums(&mut test);
+    assert!(test.core.step());
+    test.next_batch();
+
+    land_group_albums(&mut test);
+    assert!(test.core.step());
+
+    assert_eq!(carried_gated(&test.next_batch()), [Section::Library]);
+    assert_eq!(
+        test.core
+            .app_mut()
+            .gui_group_album_ids_for_test(0, "grp-hiphop"),
+        Some(vec!["alb-new".to_owned()])
     );
 }

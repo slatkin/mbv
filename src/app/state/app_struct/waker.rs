@@ -42,6 +42,19 @@ impl App {
         self.gui_client_events.try_take()
     }
 
+    /// Land one Client-only fetch result on this `App`'s channel, as a fetch
+    /// worker would (design D5 of `decouple-client-core`): a dependent Client's
+    /// test scripts the result instead of starting a worker, so the next tick's
+    /// `drain_client_events` takes it from the same channel production fills.
+    #[cfg(feature = "test")]
+    #[doc(hidden)]
+    pub fn send_gui_client_event_for_test(
+        &self,
+        event: crate::app::gui_library::client_events::GuiClientEvent,
+    ) {
+        self.gui_client_event_sender().send(event);
+    }
+
     /// Wait up to `timeout` for one queued Client-only fetch result (task 8.3
     /// of `decouple-client-core`), for a test drain that has no tick to wake
     /// it.

@@ -39,6 +39,8 @@ pub(crate) enum DrainHook {
 /// result (`decouple-client-core` design D5). The GUI Library's own stores are
 /// the Library section's source, so the drain's row names the sections such a
 /// result can change, read here by the drain's own test.
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
 #[must_use]
 pub fn client_event_marks() -> &'static [Section] {
     marks_for_hook(DrainHook::DrainClientEvents)

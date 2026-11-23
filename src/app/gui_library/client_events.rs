@@ -12,9 +12,11 @@ use crate::app::gui_client_state::GuiClientState;
 use mbv_emby_model::EmbyItem;
 
 /// One Client-only fetch's completion, drained from the channel `GuiCore`
-/// owns.
+/// owns. `pub` because a dependent Client's test scripts one onto that
+/// channel; the enum's module is `pub(in crate::app)`, so nothing but the
+/// `test`-gated re-export reaches it.
 #[derive(Debug)]
-pub(crate) enum GuiClientEvent {
+pub enum GuiClientEvent {
     /// One group's album list landed.
     GroupAlbums {
         lib_idx: usize,
