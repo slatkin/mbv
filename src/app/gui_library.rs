@@ -585,12 +585,7 @@ impl GuiCore {
             // the pass's selection step (design D3), so neither has user-action
             // work and the pass alone is their open step.
             Some(GuiDestinationKind::Home | GuiDestinationKind::Music { .. }) => {
-                let mut core = GuiCore::new(std::mem::replace(
-                    &mut self.app,
-                    crate::app::app_stub::handoff_app(),
-                ));
-                core.ensure_gui_active_destination();
-                self.app = core.into_app();
+                self.ensure_gui_active_destination();
             }
             // Feeds' entries ride the shared startup fetch, so its pass is a
             // no-op and its open only reports an absent tab.
