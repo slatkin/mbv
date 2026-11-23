@@ -42,3 +42,28 @@ impl GuiCore {
         self.gui.save_player_auto_hide();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::app::App;
+    use crate::app::tests::make_app_stub;
+    use crate::gui::GuiCore;
+
+    /// The key is the GUI Client's (design D4): the toggle writes
+    /// `gui_player_auto_hide` through the Client-key writer, and a fresh
+    /// state reads it back at start.
+    #[test]
+    fn player_auto_hide_prefs_round_trip() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut core = GuiCore::new(make_app_stub());
+        core.gui.player_auto_hide = true;
+
+        core.gui.save_player_auto_hide();
+
+        assert_eq!(
+            App::load_prefs()["gui_player_auto_hide"].as_bool(),
+            Some(true)
+        );
+        assert!(GuiCore::new(make_app_stub()).gui_player_auto_hide());
+    }
+}

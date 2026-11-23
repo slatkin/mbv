@@ -119,19 +119,6 @@ mod prefs_tests {
         );
     }
 
-    #[test]
-    fn gui_player_auto_hide_prefs_round_trip() {
-        let (app, _guard) = stub();
-        let mut core = crate::gui::GuiCore::new(app);
-
-        core.gui.player_auto_hide = true;
-        core.gui.save_player_auto_hide();
-        assert_eq!(
-            App::load_prefs()["gui_player_auto_hide"].as_bool(),
-            Some(true)
-        );
-    }
-
     /// `list_pane_width` is a Client key (design D4): the core's `save_prefs`
     /// leaves it alone, and `save_client_pref` writes it.
     #[test]
