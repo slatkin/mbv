@@ -50,6 +50,25 @@ fn idle_at() -> Instant {
         .expect("a past instant")
 }
 
+/// A stub `App` on a grouped Music library, with the image cache enabled and
+/// no Emby client: a reserved fetch stays visible. The GUI's capabilities are
+/// the ones that present the artist-name search.
+fn app_with_grouped_music() -> App {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.set_client_capabilities(app_stub::gui_client_capabilities());
+    app.emby_runtime = EmbyRuntime::default();
+    app.images
+        .configure_protocol(Some("kitty".to_owned()), true);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".to_owned();
+    library.collection_type = "music".to_owned();
+    app.music_levels = vec!["group".to_string(), "album".to_string()];
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::EmbyLibrary(0);
+    app
+}
+
 /// A set sent during navigation queues nothing; the idle pass then fetches only
 /// the rows the set names, and the out-of-view row stays unfetched.
 #[test]
@@ -207,5 +226,40 @@ fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
     assert!(
         !app.images.is_cached("row:filler:0"),
         "the oldest untouched row is evicted instead"
+    );
+}
+
+/// dcc-5.1-5.6 review P1: an artist-name search's answer re-queues the row art
+/// it unblocks. The answer records the Service id the folder-named artist row
+/// resolves through, so the Client's stores re-queue the in-view rows and the
+/// row's `Primary` fetch starts; before the fix the answer recorded the id and
+/// the row waited for the next navigation.
+#[test]
+fn an_artist_search_answer_queues_the_row_art_it_unblocks() {
+    let mut app = app_with_grouped_music();
+    let name = "The Smiths";
+    app.apply_gui_library_command(GuiLibraryCommand::RowsInView {
+        scope: GuiRowArtScope::Music,
+        ids: vec![format!("artist-name:{name}")],
+    });
+    app.last_nav_at = idle_at();
+    let key = mbv_images::row::emby_row_primary_request("artist-9").cache_key;
+    assert!(
+        !app.images.is_loading(&key),
+        "the row has no source until its name resolves"
+    );
+
+    let mut stores = crate::app::gui_library::GuiLibraryStores;
+    app.handle_lib_event(
+        LibEvent::Music(MusicEvent::ArtistNameSearched {
+            name: name.to_owned(),
+            candidates: Some(vec![(name.to_owned(), "artist-9".to_owned())]),
+        }),
+        Some(&mut stores),
+    );
+
+    assert!(
+        app.images.is_loading(&key),
+        "the answer re-queues the in-view row art"
     );
 }

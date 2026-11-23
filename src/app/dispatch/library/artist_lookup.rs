@@ -7,12 +7,20 @@
 //! unblocks (an in-flight search, its dedupe, and its row fetches), so only
 //! this half moves here.
 
-use crate::app::gui_library::artist_lookup::ArtistNameLookupEntry;
 use crate::app::state::client_capabilities::ClientCapability;
 use crate::app::{App, LibEvent, MusicEvent};
 
 /// Candidates one artist search asks the Service for.
 pub(in crate::app) const ARTIST_LOOKUP_LIMIT: usize = 10;
+
+/// What a name's artist search knows while it has no resolved id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum ArtistNameLookupEntry {
+    /// The search is in flight.
+    Loading,
+    /// The Service answered and no artist name matched. Final.
+    Unmatched,
+}
 
 /// A name with its case and punctuation removed and its leading article
 /// dropped, so `AC/DC` and `ac dc`, or `The Smiths` and `Smiths`, meet.
@@ -55,8 +63,8 @@ impl ArtistNameLookup {
     /// dropped rather than written. No answer (the request failed) forgets the
     /// name so a later pass retries: no answer is not no image (invariant 27).
     /// A name the search matched takes its id; a name it did not match stays
-    /// terminal. The record is all this half does: the caller that owns the
-    /// search re-queues the rows the answer unblocks.
+    /// terminal. The record is all this half does: the event arm that calls
+    /// it re-queues the rows the answer unblocks, through the Client's stores.
     pub(in crate::app) fn searched(
         app: &mut App,
         name: &str,

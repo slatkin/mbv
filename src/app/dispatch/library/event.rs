@@ -120,11 +120,17 @@ impl App {
                     &[ClientLibraryEffect::RowArtSourcesChanged],
                 );
             }
-            // The App half records the answer; the Client that searched
-            // re-queues the rows it unblocks (`decouple-client-core` design
-            // D4a (b)).
+            // The App half records the answer; the answer can give a row its
+            // image source, so the Client re-queues the artwork its in-view
+            // rows lack (`decouple-client-core` design D4a (b); the re-queue
+            // the GUI's own `handle_gui_artist_name_searched` always ran).
             MusicEvent::ArtistNameSearched { name, candidates } => {
                 ArtistNameLookup::searched(self, &name, candidates.as_deref());
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::RowArtSourcesChanged],
+                );
             }
             MusicEvent::GroupWarmupListed { generation, groups } => {
                 self.handle_music_group_warmup_listed(generation, groups);
