@@ -92,6 +92,14 @@ For each function, type, field, and test:
 
 The leaf-crate moves (`mbv-desktop`, `mbv-daemon`, `mbv-core`, `mbv-config`) land first (tasks group 1), because the crates of group 4 and the Owner program of `3-add-owner-program` both need them.
 
+Placements the implementation settled (row 2.1), recorded so the plan matches the built shape:
+
+- The realized `impl App` split deletes `ExitKind`: it carried `Model::launch_state_snapshot()` in its `Quit` variant, so it could not move to the core. The shell `Model` decides `swapped_out` and saves the launch snapshot itself, then calls `App::teardown(quit_timeout, swapped_out)`. `client_exit_teardown` stays as the GUI Client's shell-free entry.
+- The hero projection splits across the seam: the fetch and the Resizing/Ready decision live in the core (`app::projection`), which returns `HeroImageProjection` verdicts (`WideLandscape` and `ReadyOverlay` among them); the cover-fit encoding stays in the shell.
+- `focus_ring_arg` stays core-side beside `size_arg` and `collapsed_reserve`: all three are argv-grammar siblings of the pinned-setting requests, and forcing it TUI-side would duplicate the argv grammar.
+
+The terminal image protocol store keeps its shell-side home. `ImageProtocols` lives on the shell `Model`, not on `App`. The core pushes protocol facts (`image_font_size`, `halfblock_configured`, `image_pickers_ready`, `configured_protocol_suffix`) and holds neutral queues — `pending_protocol_encodes` of `(cache_key, decoded image)` and `pending_protocol_clears` — that the shell drains each tick (`drain_protocol_work`); the per-tick protocol prune is shell-side. `mbv-tui-support::protocol` gained pixel tags (`set_pixels` / `has_pixels`) so a staged encode never shadows newer pixels under one cache generation. This follows D4b rule 5 (pushed facts, no mirrored field) and row 3.1's exclusion of `mbv-tui-support` from the core.
+
 ### D4. Each Client wraps `App` by composition (restated)
 
 `App` lives in `mbv-client-core`. The TUI shell `Model` owns it and the TUI-only state; `GuiCore { app, gui }` owns it and all GUI state (`1-decouple-client-core` built both). `App` fields stay `pub(in crate::app)` inside the core. A Client reads and changes `App` only through `pub` methods. No field becomes `pub`, also not under the `test` feature.
