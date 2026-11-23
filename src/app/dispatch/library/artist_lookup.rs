@@ -7,7 +7,7 @@
 //! unblocks (an in-flight search, its dedupe, and its row fetches), so only
 //! this half moves here.
 
-use crate::app::gui_library::artist_lookup::GuiArtistNameLookup;
+use crate::app::gui_library::artist_lookup::ArtistNameLookupEntry;
 use crate::app::state::client_capabilities::ClientCapability;
 use crate::app::{App, LibEvent, MusicEvent};
 
@@ -81,7 +81,7 @@ impl ArtistNameLookup {
             }
             None => {
                 app.artist_name_lookups
-                    .insert(key, GuiArtistNameLookup::Unmatched);
+                    .insert(key, ArtistNameLookupEntry::Unmatched);
             }
         }
     }
@@ -111,7 +111,7 @@ impl ArtistNameLookup {
             (c.config.server_url.clone(), c.token.clone(), c.http_agent())
         };
         app.artist_name_lookups
-            .insert(key, GuiArtistNameLookup::Loading);
+            .insert(key, ArtistNameLookupEntry::Loading);
         let tx = app.channels.lib_tx.clone();
         let name = name.to_owned();
         std::thread::spawn(move || {

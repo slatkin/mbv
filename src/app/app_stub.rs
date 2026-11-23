@@ -10,6 +10,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::gui_client_state::{GuiOverlay, TrackPopoverState};
 use super::{App, AppInit, QueueView};
 
 /// The GUI `sections` bench's bench-scale seeds (design D12 of
@@ -270,8 +271,13 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     // The popover opens through the GUI Client's own half of the chip press:
     // the shared playback dispatch's arm for it is a documented core no-op
     // (design D4a (a)), and the GUI entry (`input/gui.rs`) applies it after
-    // the core.
-    app.toggle_gui_track_popover(chip);
+    // the core, with the same open the GUI's half runs: the open popover's
+    // chip, and its cursor on the chosen choice. An inactive player lists no
+    // choice, so it opens nothing.
+    if let Some(choices) = app.track_popover_choices(chip) {
+        let cursor = choices.iter().position(|choice| choice.chosen).unwrap_or(0);
+        app.gui_overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
+    }
     app
 }
 /// The `App` a GUI Client's test drives with the cast receivers replaced by

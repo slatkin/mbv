@@ -22,7 +22,9 @@ mod queue_controls;
 mod row_menu;
 mod target;
 
-pub(in crate::app) use self::overlay::{GuiOverlay, QueueChooserState, QueueRenameDraft};
+pub(in crate::app) use self::overlay::{
+    GuiOverlay, QueueChooserState, QueueRenameDraft, TrackPopoverState,
+};
 pub use self::projection::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,

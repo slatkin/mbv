@@ -635,7 +635,7 @@ pub struct App {
     /// resolved id (`gui_library::artist_lookup`). Cleared on Service swap.
     pub(in crate::app) artist_name_lookups: std::collections::HashMap<
         String,
-        crate::app::gui_library::artist_lookup::GuiArtistNameLookup,
+        crate::app::gui_library::artist_lookup::ArtistNameLookupEntry,
     >,
     /// Per-level album-artist fill lifecycle: one background request fills
     /// every album bucket in a level, so the fill state is keyed by level id

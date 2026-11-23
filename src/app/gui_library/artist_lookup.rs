@@ -13,7 +13,7 @@ use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 
 /// What a name's artist search knows while it has no resolved id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::app) enum GuiArtistNameLookup {
+pub(in crate::app) enum ArtistNameLookupEntry {
     /// The search is in flight.
     Loading,
     /// The Service answered and no artist name matched. Final.
