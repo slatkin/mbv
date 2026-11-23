@@ -8,41 +8,53 @@ TAILWINDCSS ?= tailwindcss
 
 all: build
 
-# Make passes DESTDIR from the command line into MAKEFLAGS, and every child
-# inherits it. OpenSSL's vendored build reads DESTDIR and installs its libs into
-# the staging tree, where openssl-sys cannot find them. Hide the make variables
-# from cargo.
+# Never run make under sudo. Make as root rebuilds the whole tree as root, and
+# root's cargo cannot use the build user's sccache (it cannot read /root), so
+# every rustc spawn fails with EACCES. The copies in `install` ask for the
+# password themselves, and only when they write outside DESTDIR.
+ifneq ($(SUDO_USER),)
+$(error Run make as yourself; it uses sudo only for the final file copies)
+endif
+
+# Make passes a command-line DESTDIR down through MAKEFLAGS; OpenSSL's vendored
+# build reads it and installs its libs into the staging tree, where openssl-sys
+# cannot find them.
+CARGO   = env -u DESTDIR -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS cargo
+# Staging (DESTDIR) needs no privileges; a system install does.
+INSTALL = $(if $(DESTDIR),install,sudo install)
+RM_ROOT = $(if $(DESTDIR),rm,sudo rm)
+
 build:
-	env -u DESTDIR -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS cargo build --release
+	$(CARGO) build --release
 
 # The file set the AUR packages ship (PKGBUILD-git's package()).
 install: build
-	env -u DESTDIR -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS cargo build --release -p mbv-gui
-	install -Dm755 target/release/$(BINARY) $(DESTDIR)$(PREFIX)/bin/$(BINARY)
-	install -Dm755 target/release/mbvd $(DESTDIR)$(PREFIX)/bin/mbvd
-	install -Dm755 target/release/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-gui
-	install -Dm644 contrib/mbv.desktop $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
-	install -Dm644 assets/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
-	install -d $(DESTDIR)$(PREFIX)/share/mbv/scripts
-	install -m644 scripts/mbv.lua scripts/mbv_*.lua $(DESTDIR)$(PREFIX)/share/mbv/scripts/
-	install -Dm644 fonts/Material-Design-Iconic-Font.ttf $(DESTDIR)$(PREFIX)/share/mbv/fonts/Material-Design-Iconic-Font.ttf
-	install -Dm644 dist/config.toml $(DESTDIR)$(PREFIX)/share/mbv/config.toml
-	install -Dm644 contrib/mbvd.service $(DESTDIR)$(PREFIX)/lib/systemd/system/mbvd.service
-	install -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSE
-	install -Dm644 LICENSES/MPL-2.0.txt $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSES/MPL-2.0.txt
-	install -m644 crates/mbv-gui/assets/fonts/*-OFL-1.1.txt crates/mbv-gui/assets/vendor/*.txt $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSES/
+	$(CARGO) build --release -p mbv-gui
+	$(INSTALL) -Dm755 target/release/$(BINARY) $(DESTDIR)$(PREFIX)/bin/$(BINARY)
+	$(INSTALL) -Dm755 target/release/mbvd $(DESTDIR)$(PREFIX)/bin/mbvd
+	$(INSTALL) -Dm755 target/release/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-gui
+	$(INSTALL) -Dm644 contrib/mbv.desktop $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
+	$(INSTALL) -Dm644 assets/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
+	$(INSTALL) -d $(DESTDIR)$(PREFIX)/share/mbv/scripts
+	$(INSTALL) -m644 scripts/mbv.lua scripts/mbv_*.lua $(DESTDIR)$(PREFIX)/share/mbv/scripts/
+	$(INSTALL) -Dm644 fonts/Material-Design-Iconic-Font.ttf $(DESTDIR)$(PREFIX)/share/mbv/fonts/Material-Design-Iconic-Font.ttf
+	$(INSTALL) -Dm644 dist/config.toml $(DESTDIR)$(PREFIX)/share/mbv/config.toml
+	$(INSTALL) -Dm644 contrib/mbvd.service $(DESTDIR)$(PREFIX)/lib/systemd/system/mbvd.service
+	$(INSTALL) -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSE
+	$(INSTALL) -Dm644 LICENSES/MPL-2.0.txt $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSES/MPL-2.0.txt
+	$(INSTALL) -m644 crates/mbv-gui/assets/fonts/*-OFL-1.1.txt crates/mbv-gui/assets/vendor/*.txt $(DESTDIR)$(PREFIX)/share/licenses/mbv/LICENSES/
 	@if [ -f $(DESTDIR)/etc/mbv/config.toml ]; then \
 		echo "Kept existing $(DESTDIR)/etc/mbv/config.toml"; \
 	else \
-		install -Dm640 dist/mbvd.toml $(DESTDIR)/etc/mbv/config.toml; \
+		$(INSTALL) -Dm640 dist/mbvd.toml $(DESTDIR)/etc/mbv/config.toml; \
 	fi
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/$(BINARY) $(DESTDIR)$(PREFIX)/bin/mbvd $(DESTDIR)$(PREFIX)/bin/mbv-gui
-	rm -rf $(DESTDIR)$(PREFIX)/share/mbv $(DESTDIR)$(PREFIX)/share/licenses/mbv
-	rm -f $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
-	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
-	rm -f $(DESTDIR)$(PREFIX)/lib/systemd/system/mbvd.service
+	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/bin/$(BINARY) $(DESTDIR)$(PREFIX)/bin/mbvd $(DESTDIR)$(PREFIX)/bin/mbv-gui
+	$(RM_ROOT) -rf $(DESTDIR)$(PREFIX)/share/mbv $(DESTDIR)$(PREFIX)/share/licenses/mbv
+	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
+	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
+	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/lib/systemd/system/mbvd.service
 	@echo "Left $(DESTDIR)/etc/mbv/config.toml in place."
 	# Legacy copies from the user-local installer removed in June 2026.
 	rm -f $(HOME)/.local/bin/$(BINARY)
