@@ -309,8 +309,11 @@ pub fn init_image_protocols(app: &mut App) -> mbv_tui_support::ImageProtocols {
 
 /// Push the picker facts the core's projections read (design D2 rule 3):
 /// whether the configured picker paints halfblocks, whether the pickers are
-/// initialized, the active picker's terminal font size, and the suffix the
-/// artwork cache keys carry.
+/// initialized, the configured picker's cell grid, the grid of the picker that
+/// paints the current suffix, and the suffix the artwork cache keys carry.
+///
+/// Call it again whenever the dim state flips (`Model::draw_frame`): the
+/// active grid follows the fallback, and the hero cover fit reads it.
 pub(in crate::app) fn push_image_protocol_facts(
     app: &mut App,
     image_protocols: &mbv_tui_support::ImageProtocols,
@@ -318,22 +321,31 @@ pub(in crate::app) fn push_image_protocol_facts(
     let protocol_override = app.images.protocol_override().map(str::to_owned);
     let protocol_override = protocol_override.as_deref();
     let halfblock = image_protocols.is_halfblock_configured(protocol_override);
-    // The active picker's cell grid, as the paint path reads it: the
-    // halfblock fallback's while a dimming backdrop forces it (#451), else
-    // the configured picker's.
+    let configured_font = image_protocols.image_picker().map_or((10, 20), cell_size);
+    // The picker that paints the key's current suffix: the halfblock
+    // fallback's while a dimming backdrop forces it (#451), else the
+    // configured picker's.
     let suffix = if app.dim_halfblock_forced() {
         "halfblock"
     } else {
         image_protocols.configured_protocol_name()
     };
-    let font = image_protocols
+    let active_font = image_protocols
         .picker_for_suffix(suffix)
-        .map_or((10, 20), |picker| {
-            let font = picker.font_size();
-            (font.width, font.height)
-        });
-    app.set_image_protocol_facts(halfblock, image_protocols.image_picker().is_some(), font);
+        .map_or((10, 20), cell_size);
+    app.set_image_protocol_facts(
+        halfblock,
+        image_protocols.image_picker().is_some(),
+        configured_font,
+        active_font,
+    );
     app.set_configured_protocol_suffix(image_protocols.configured_protocol_name());
+}
+
+/// A picker's terminal cell, in pixels.
+fn cell_size(picker: &ratatui_image::picker::Picker) -> (u16, u16) {
+    let font = picker.font_size();
+    (font.width, font.height)
 }
 
 /// Install a test's pickers on a shell and push the facts the core's

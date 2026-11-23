@@ -278,7 +278,7 @@ impl Model {
     /// One hero artwork box's pixel size from its cell size (task 5.10,
     /// design D5's cover-fit input).
     pub(in crate::app) fn hero_box_pixels(&self, box_w: u16, box_h: u16) -> (u32, u32) {
-        let (font_w, font_h) = self.app.image_font_size();
+        let (font_w, font_h) = self.app.active_image_font_size();
         (
             u32::from(box_w) * u32::from(font_w.max(1)),
             u32::from(box_h) * u32::from(font_h.max(1)),

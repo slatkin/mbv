@@ -322,10 +322,16 @@ pub struct App {
     /// pushed fact record as `halfblock_configured`.
     pub(in crate::app) image_pickers_ready: bool,
     /// The configured picker's terminal font size — the cell-to-pixel ratio
-    /// the queue card's title overlay is composed at and the hero cover fit's
-    /// box pixels derive from. The same pushed fact record; the constructor's
-    /// default until the pickers initialize.
+    /// the queue card's title overlay is composed at. The same pushed fact
+    /// record; the constructor's default until the pickers initialize.
     pub(in crate::app) image_font_size: (u16, u16),
+    /// The picker that paints under the artwork cache key's current suffix —
+    /// the halfblocks fallback's cell while a dimming backdrop forces it
+    /// (#451), else the configured picker's — in pixels. The hero cover fit's
+    /// box pixels derive from it, so a paint under the fallback crops on the
+    /// grid it actually paints. The same pushed fact record, re-pushed when
+    /// the dim state changes.
+    pub(in crate::app) active_image_font_size: (u16, u16),
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
     /// The Settings feeds-management popup's background add-feed channel,

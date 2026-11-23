@@ -91,12 +91,15 @@ impl App {
             return State(mbv_ui_model::playback::HeroImageState::None);
         };
         let Some(decoded) = self.hero_artwork_decoded(&cache_key) else {
-            // A fetch that resolved empty (or got no answer, so may never) is
-            // final: the shared placeholder shows, and no encode is owed. Only
-            // a fetch still in flight paints as loading.
-            let entry = self.images.image(&cache_key);
-            let settled = entry.is_some_and(|entry| !entry.has_art());
-            if settled || self.images.is_fetch_interrupted(&cache_key) {
+            // A fetch that resolved empty is final: the shared placeholder
+            // shows and no encode is owed. An interrupted fetch wrote no entry
+            // and may still succeed on its retry (invariant 27), so it stays
+            // `Loading` like a fetch in flight.
+            let resolved_empty = self
+                .images
+                .image(&cache_key)
+                .is_some_and(|entry| !entry.has_art());
+            if resolved_empty {
                 return State(mbv_ui_model::playback::HeroImageState::None);
             }
             return State(mbv_ui_model::playback::HeroImageState::Loading);

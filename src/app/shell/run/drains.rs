@@ -302,11 +302,13 @@ impl Model {
         self.image_protocols.prune(&self.app.images);
     }
 
-    /// Perform the protocol work the core queued this tick (design D2 rule 3
-    /// of `split-tui-gui-clients`): encode every completed fetch's entry, then
-    /// drop the encodings the projections re-keyed. The store needs a picker,
-    /// so a Client whose pickers never initialized drops the records without
-    /// encoding.
+    /// Perform the protocol work the core queued (design D2 rule 3 of
+    /// `split-tui-gui-clients`), in this order: first encode every completed
+    /// fetch's entry, then drop the encodings the projections re-keyed. An
+    /// encode is skipped when its pixels are already stored, and a re-keyed
+    /// key re-encodes lazily from the retained source at its next paint. The
+    /// store needs a picker, so a Client whose pickers never initialized drops
+    /// the records without encoding.
     ///
     /// A queued encoding whose entry the cache replaced or cleared in the same
     /// tick is skipped, and one whose pixels the store already holds for that
@@ -329,15 +331,16 @@ impl Model {
             else {
                 continue;
             };
+            let pixels = mbv_images::hash_image_bytes(&img);
             if self.image_protocols.has_pixels(
                 &self.app.images,
                 &pending.cache_key,
                 pending.suffix,
-                &img,
+                pixels,
             ) {
                 continue;
             }
-            self.encode_completed_fetch(&pending, &img);
+            self.encode_completed_fetch(&pending, img, pixels);
         }
         for cache_key in self.app.take_pending_protocol_clears() {
             self.image_protocols.clear_key(&cache_key);
@@ -345,11 +348,14 @@ impl Model {
     }
 
     /// Encode one completed fetch's decoded source under the suffix its cache
-    /// key carries and store it, tagged with the pixels it was built from.
+    /// key carries and store it, tagged with the pixel hash the caller already
+    /// computed: the bitmap moves into the encode, so neither side clones or
+    /// hashes it twice.
     fn encode_completed_fetch(
         &mut self,
         pending: &PendingProtocolEncode,
-        img: &image::DynamicImage,
+        img: image::DynamicImage,
+        pixels: u64,
     ) {
         let protocol = {
             let Some(picker) = self
@@ -359,12 +365,8 @@ impl Model {
             else {
                 return;
             };
-            self.image_protocols.build_protocol(
-                &pending.cache_key,
-                pending.suffix,
-                &picker,
-                img.clone(),
-            )
+            self.image_protocols
+                .build_protocol(&pending.cache_key, pending.suffix, &picker, img)
         };
         self.image_protocols.insert_protocol(
             &self.app.images,
@@ -373,7 +375,7 @@ impl Model {
             protocol,
         );
         self.image_protocols
-            .set_pixels(&pending.cache_key, pending.suffix, img);
+            .set_pixels(&pending.cache_key, pending.suffix, pixels);
     }
 
     /// Drain ctrl transport commands through the Client core's drain.

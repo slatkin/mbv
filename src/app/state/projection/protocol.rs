@@ -38,17 +38,26 @@ impl App {
     }
 
     /// Record whether the configured picker paints halfblocks — the title
-    /// site's sizing gate — whether the pickers are initialized at all, and
-    /// the configured picker's terminal font size.
+    /// site's sizing gate — whether the pickers are initialized at all, the
+    /// configured picker's terminal font size, and the cell grid of the picker
+    /// that paints under the current suffix.
     pub fn set_image_protocol_facts(
         &mut self,
         halfblock_configured: bool,
         ready: bool,
         font_size: (u16, u16),
+        active_font_size: (u16, u16),
     ) {
         self.halfblock_configured = halfblock_configured;
         self.image_pickers_ready = ready;
         self.image_font_size = font_size;
+        self.active_image_font_size = active_font_size;
+    }
+
+    /// Record the cell grid of the picker that paints under the current
+    /// artwork suffix, for the facts re-pushed when the dim state changes.
+    pub fn set_active_image_font_size(&mut self, font_size: (u16, u16)) {
+        self.active_image_font_size = font_size;
     }
 
     /// Record the configured protocol's suffix, which the artwork cache keys
@@ -73,11 +82,22 @@ impl App {
     }
 
     /// The configured picker's terminal cell, in pixels: the grid the queue
-    /// card's title overlay is composed at and the hero cover fit's box pixels
-    /// derive from (the constructor's default until the pickers initialize).
+    /// card's title overlay is composed at, which must not move when a
+    /// dimming backdrop forces the fallback (the variant key encodes cols/rows
+    /// but not the font). The constructor's default until the pickers
+    /// initialize.
     #[must_use]
     pub(in crate::app) fn image_font_size(&self) -> (u16, u16) {
         self.image_font_size
+    }
+
+    /// The cell grid of the picker that paints under the current artwork
+    /// suffix: the halfblocks fallback's while a dimming backdrop forces it,
+    /// else the configured picker's. The hero cover fit's box pixels derive
+    /// from it. The constructor's default until the pickers initialize.
+    #[must_use]
+    pub(in crate::app) fn active_image_font_size(&self) -> (u16, u16) {
+        self.active_image_font_size
     }
 
     /// Queue a completed fetch's cache key for the shell to encode, once the

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use super::{
     App, Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
-    restore_terminal, start_quit_watchdog,
+    push_image_protocol_facts, restore_terminal, start_quit_watchdog,
 };
 
 /// Issue #940: a run-loop phase that takes at least this long gets a WARN
@@ -142,6 +142,18 @@ impl Model {
         }
     }
 
+    /// Record the dimming-backdrop fact for this frame and, when it flipped,
+    /// re-push the picker facts: the halfblocks fallback measures cells on its
+    /// own grid, so the hero cover fit must derive its box from the grid that
+    /// actually paints (#451).
+    fn set_dim_backdrop(&mut self, active: bool) {
+        let changed = self.app.dim_backdrop_active != active;
+        self.app.set_dim_backdrop_active(active);
+        if changed {
+            push_image_protocol_facts(&mut self.app, &self.image_protocols);
+        }
+    }
+
     /// The sole frame orchestrator: root placement publication, mounted
     /// component views, deferred protocol-image paint, and overlay stack.
     pub(in crate::app) fn draw_frame(
@@ -154,8 +166,7 @@ impl Model {
         // backdrop and stay-alive indicator; that fact now lives in TuiRealm
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter).
-        self.app
-            .set_dim_backdrop_active(self.blocking_overlay_active());
+        self.set_dim_backdrop(self.blocking_overlay_active());
         // Design D6b: a direct draw (startup, or a test fixture) takes any
         // pending reveal request first, so the painted strip matches state.
         self.reveal_requested_tab();

@@ -263,29 +263,28 @@ impl ImageProtocols {
             .insert(suffix, protocol);
     }
 
-    /// Record the pixels `bare_key`'s `suffix` encoding was built from, so
+    /// Record the pixel hash `bare_key`'s `suffix` encoding was built from, so
     /// [`ImageProtocols::has_pixels`] can report a stale encoding. Entries are
     /// tagged with the cache generation too, but a proof (a completed fetch) can
     /// store a new entry with the same pixels under the same generation; the
     /// pixel tag catches that case.
-    pub fn set_pixels(&mut self, bare_key: &str, suffix: &'static str, img: &image::DynamicImage) {
-        let pixels = mbv_images::hash_image_bytes(img);
+    pub fn set_pixels(&mut self, bare_key: &str, suffix: &'static str, pixels: u64) {
         if let Some(stored) = self.protocols.get_mut(bare_key) {
             stored.pixels.insert(suffix, pixels);
         }
     }
 
-    /// Whether `bare_key`'s `suffix` encoding was built from `img`'s pixels,
-    /// for the entry the cache still holds.
+    /// Whether `bare_key`'s `suffix` encoding was built from the pixels
+    /// `pixels` hashes, for the entry the cache still holds. The caller hashes
+    /// once and passes the value to this and to [`ImageProtocols::set_pixels`].
     #[must_use]
     pub fn has_pixels(
         &mut self,
         cache: &ImageCache,
         bare_key: &str,
         suffix: &str,
-        img: &image::DynamicImage,
+        pixels: u64,
     ) -> bool {
-        let pixels = mbv_images::hash_image_bytes(img);
         self.drop_key_if_stale(cache, bare_key);
         self.protocols
             .get(bare_key)

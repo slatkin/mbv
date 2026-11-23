@@ -149,6 +149,7 @@ impl App {
             halfblock_configured: false,
             image_pickers_ready: false,
             image_font_size: (10, 20),
+            active_image_font_size: (10, 20),
             image_decode: init.image_decode,
             library_position_state: load_position_state_without_pills(),
             hidden_libraries: init.hidden_libraries,
