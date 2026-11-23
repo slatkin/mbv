@@ -12,7 +12,6 @@
 mod app;
 mod config;
 mod gui;
-mod launch;
 mod local_daemon;
 mod owner_link;
 mod owner_restart;

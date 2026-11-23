@@ -16,19 +16,14 @@
 use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
-use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use crate::launch::launch_exe;
+use mbv_desktop::launch::{detach, launch_exe, terminal_prefix, toggle_panel};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const READY_POLL_INTERVAL: Duration = Duration::from_millis(20);
-
-fn to_io(e: nix::Error) -> io::Error {
-    io::Error::from_raw_os_error(e as i32)
-}
 
 /// Fork+detach a local daemon (`mbv --__local-daemon`) and wait until its
 /// control socket is ready. On failure -- including the daemon exiting
@@ -119,7 +114,7 @@ fn swap_argv(
     match direction {
         mbv_daemon::SwapDirection::Pin => Ok(vec![exe, "--pin".to_string()]),
         mbv_daemon::SwapDirection::Unpin => {
-            let mut argv = crate::pin::terminal_prefix(panel_terminal, terminal_env, "terminal")
+            let mut argv = terminal_prefix(panel_terminal, terminal_env, "terminal")
                 .map_err(|reason| format!("cannot start a terminal Client: {reason}"))?;
             argv.push(exe);
             Ok(argv)
@@ -136,21 +131,6 @@ fn detached_swap_command(argv: &[String]) -> Command {
     cmd.args(&argv[1..]);
     detach(&mut cmd, Stdio::null());
     cmd
-}
-
-/// Null stdin and stdout, the given stderr, and a new session via `setsid`
-/// in `pre_exec`.
-fn detach(cmd: &mut Command, stderr: Stdio) {
-    cmd.stdin(Stdio::null());
-    cmd.stdout(Stdio::null());
-    cmd.stderr(stderr);
-    // SAFETY: The child-side hook only creates a new session before exec.
-    unsafe {
-        cmd.pre_exec(|| {
-            nix::unistd::setsid().map_err(to_io)?;
-            Ok(())
-        })
-    };
 }
 
 /// Fork+detach a local daemon (`mbv --__local-daemon`) and wait until its
@@ -336,11 +316,11 @@ pub fn run_local_daemon_main() -> ! {
                 )?;
                 Ok(detached_swap_command(&command_argv))
             }),
-            notify: Box::new(crate::pin::notify),
+            notify: Box::new(mbv_desktop::launch::notify),
             // The Tray's icon click asks the Owner process to toggle the
             // pinned panel; the request runs on a worker thread, so the
             // Owner's event loop never waits for pinwin.
-            toggle_panel: Box::new(crate::pin::toggle_panel),
+            toggle_panel: Box::new(toggle_panel),
         },
         // The Local daemon owns the Cast connector and hosts an Emby
         // Session output; see `LocalOutputHooks` for the entry-point rule.

@@ -12,38 +12,12 @@ use std::io::IsTerminal;
 use std::process::Command;
 use std::sync::OnceLock;
 
-use crate::launch::launch_exe;
 use mbv_config::PanelConfig;
 use mbv_ctrl::SWAP_TOKEN_ENV;
+use mbv_desktop::launch::{
+    PANEL_NAME, PinSpawnError, launch_exe, notify, run_request, terminal_prefix,
+};
 use mbv_ui_model::settings::PinnedWidth;
-
-/// Why the `pinwin` program could not be spawned. A missing binary asks for an
-/// install; any other failure names its cause.
-#[derive(Debug)]
-pub(crate) struct PinSpawnError(std::io::Error);
-
-impl PinSpawnError {
-    fn new(error: std::io::Error) -> Self {
-        Self(error)
-    }
-}
-
-impl fmt::Display for PinSpawnError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.kind() == std::io::ErrorKind::NotFound {
-            f.write_str("pinwin is not installed")
-        } else {
-            write!(f, "pinwin could not start: {}", self.0)
-        }
-    }
-}
-
-impl std::error::Error for PinSpawnError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.0)
-    }
-}
-
 /// Why a pinned launch did not reach `pinwin run`.
 #[derive(Debug)]
 pub(crate) enum PinStartError {
@@ -77,36 +51,6 @@ impl std::error::Error for PinStartError {
         }
     }
 }
-
-/// Why one `pinwin` request did not finish.
-#[derive(Debug)]
-enum PinRequestError {
-    /// The `pinwin` program could not be spawned.
-    Spawn(PinSpawnError),
-    /// `pinwin` ran and refused the request.
-    Refused(String),
-}
-
-impl fmt::Display for PinRequestError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Spawn(error) => error.fmt(f),
-            Self::Refused(reason) => f.write_str(reason),
-        }
-    }
-}
-
-impl std::error::Error for PinRequestError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Spawn(error) => Some(error),
-            Self::Refused(_) => None,
-        }
-    }
-}
-
-/// The panel name every pinned mbv runs under.
-pub(crate) const PANEL_NAME: &str = "mbv";
 
 /// The hidden launch flag that marks an mbv pinwin started inside a panel.
 /// It is parsed but never shown in `--help`; a panel environment without it
@@ -313,26 +257,6 @@ fn focus_ring_arg(config: &PanelConfig) -> String {
     }
 }
 
-/// The terminal argv prefix that hosts a Client: the configured
-/// prefix when set, else `TERMINAL -e`. With neither set the launch fails with
-/// a reason that names both sources; `config_key` is the configuration key the
-/// caller reads the prefix from.
-pub(crate) fn terminal_prefix(
-    configured: Option<&[String]>,
-    terminal_env: Option<&str>,
-    config_key: &str,
-) -> Result<Vec<String>, String> {
-    let prefix = configured.filter(|argv| !argv.is_empty());
-    let terminal = terminal_env.filter(|terminal| !terminal.trim().is_empty());
-    match (prefix, terminal) {
-        (Some(prefix), _) => Ok(prefix.to_vec()),
-        (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string()]),
-        (None, None) => Err(format!(
-            "neither [panel] {config_key} (config) nor TERMINAL (environment) is set"
-        )),
-    }
-}
-
 /// The `pinwin run` argv that docks the terminal as the `mbv` panel and runs
 /// mbv in it. `--show-existing` makes a second `--pin`
 /// show the running panel instead of opening a second one, and the launcher
@@ -439,7 +363,8 @@ pub(crate) fn spawn_pinned_request(
     std::thread::Builder::new()
         .name("pinwin-request".to_string())
         .spawn(move || {
-            let outcome = run_request(&argv).map_err(|error| error.to_string());
+            let outcome =
+                run_request(&argv, identity().socket.as_deref()).map_err(|error| error.to_string());
             let _ = tx.send(outcome);
         })
         .map(|_| ())
@@ -497,55 +422,6 @@ fn set_reserve_argv(panel: &str, reserve: PanelReserveMode) -> Vec<String> {
     ]
 }
 
-/// `toggle <panel>`.
-#[must_use]
-fn toggle_argv(panel: &str) -> Vec<String> {
-    vec!["toggle".to_string(), panel.to_string()]
-}
-
-/// The result a finished `pinwin` request reports: exit 0 is
-/// success, exit 1 is pinwin's own reason from stderr, exit 2 is a usage
-/// mismatch between mbv and pinwin, and any other ending is a failure that
-/// names it.
-fn request_result(code: Option<i32>, stderr: &str) -> Result<(), String> {
-    match code {
-        Some(0) => Ok(()),
-        Some(1) => {
-            let reason = stderr.trim();
-            if reason.is_empty() {
-                Err("pinwin refused the request".to_string())
-            } else {
-                Err(reason.to_string())
-            }
-        }
-        Some(2) => Err(
-            "pinwin rejected the command line: mbv and pinwin disagree on the pinwin CLI"
-                .to_string(),
-        ),
-        Some(code) => Err(format!("pinwin exited with status {code}")),
-        None => Err("pinwin ended by a signal".to_string()),
-    }
-}
-
-/// Run one `pinwin` request against the claimed panel daemon. The
-/// child is the untested boundary; the argv it runs and the result it maps to
-/// are pure.
-fn run_request(argv: &[String]) -> Result<(), PinRequestError> {
-    let mut command = Command::new("pinwin");
-    command.args(argv);
-    if let Some(socket) = identity().socket.as_deref() {
-        command.env(PINWIN_SOCKET_ENV, socket);
-    }
-    let output = command
-        .output()
-        .map_err(|error| PinRequestError::Spawn(PinSpawnError::new(error)))?;
-    request_result(
-        output.status.code(),
-        &String::from_utf8_lossy(&output.stderr),
-    )
-    .map_err(PinRequestError::Refused)
-}
-
 /// What a finished `pinwin run` reports: a success exits with
 /// its status, a failure is always logged, and a desktop launch also
 /// notifies because it has no stderr to read.
@@ -600,6 +476,11 @@ pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
     };
     let exe = launch_exe(&current, std::process::id());
     let mut command = Command::new("pinwin");
+    // The panel host owns no socket of its own: it was started by the Client
+    // whose `PINWIN_SOCKET` that Client claimed and removed.
+    if let Some(socket) = identity().socket.as_deref() {
+        command.env(PINWIN_SOCKET_ENV, socket);
+    }
     command.args(run_argv(config, &terminal, exe.as_os_str(), log_level));
     if let Some(token) = swap_token() {
         command.env(SWAP_TOKEN_ENV, token);
@@ -607,7 +488,7 @@ pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
-            report_start_failure(&PinStartError::Spawn(PinSpawnError::new(error)));
+            report_start_failure(&PinStartError::Spawn(PinSpawnError::from(error)));
             return;
         }
     };
@@ -648,65 +529,6 @@ fn finish(status: std::process::ExitStatus) -> ! {
         notify(&format!("mbv: {reason}"));
     }
     std::process::exit(status.code().unwrap_or(1));
-}
-
-/// Ask pinwin on the current Wayland display to toggle the `mbv` panel:
-/// hide it if shown, show it if hidden. Exits 1 with pinwin's
-/// reason when no panel runs or the request fails; exits 0 silently on
-/// success.
-pub(crate) fn toggle_running() {
-    if let Err(error) = run_request(&toggle_argv(PANEL_NAME)) {
-        report_toggle_failure(&error.to_string());
-    }
-}
-
-/// Ask pinwin to toggle the pinned panel: hide it if shown, show it if
-/// hidden. This is the request the `--toggle` flag sends, run from the
-/// Owner process on the Tray's behalf (tray-panel-toggle design D4).
-///
-/// The request runs on a worker thread, so the caller's thread never waits
-/// for pinwin, and a failure is reported as a desktop notification: the
-/// caller is a background process with no terminal to print on.
-pub(crate) fn toggle_panel() {
-    let argv = toggle_argv(PANEL_NAME);
-    let worker = std::thread::Builder::new()
-        .name("pinwin-toggle".to_string())
-        .spawn(move || {
-            if let Err(error) = run_request(&argv) {
-                let reason = error.to_string();
-                tracing::warn!(
-                    name: "panel_toggle.failed",
-                    target: "panel_toggle",
-                    { error = %reason },
-                    "pinned panel toggle failed"
-                );
-                notify(&format!("cannot toggle the pinned panel: {reason}"));
-            }
-        });
-    if let Err(error) = worker {
-        tracing::warn!(
-            name: "panel_toggle.worker_failed",
-            target: "panel_toggle",
-            { error = %error },
-            "pinned panel toggle worker could not start"
-        );
-    }
-}
-
-/// Report a failed `--toggle` and exit 1: stderr when stdin is a
-/// terminal, otherwise a desktop notification, because a compositor key has
-/// no terminal.
-fn report_toggle_failure(reason: &str) -> ! {
-    let message = format!("mbv: {reason}");
-    match failure_action(std::io::stdin().is_terminal()) {
-        StartFailureAction::WarnInTerminal => {
-            eprintln!("{message}");
-        }
-        StartFailureAction::NotifyAndExit => {
-            notify(&message);
-        }
-    }
-    std::process::exit(1);
 }
 
 /// What a failed pinned start does next.
@@ -764,35 +586,6 @@ pub(crate) fn fatal(message: impl fmt::Display) -> ! {
         eprintln!("{message}");
     }
     std::process::exit(1);
-}
-
-/// Best-effort `notify-send`, matching the TUI's system notifications; a
-/// missing binary is only logged. Also the swap-failure notification path for
-/// the daemon's `notify` hook (`local_daemon.rs`).
-pub(crate) fn notify(message: &str) {
-    let result = std::process::Command::new("notify-send")
-        .arg("--app-name=mbv")
-        .arg("mbv")
-        .arg(message)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
-    match result {
-        Ok(status) if status.success() => {}
-        Ok(status) => tracing::warn!(
-            name: "startup.pin.notify.failed",
-            target: "startup",
-            code = status.code().unwrap_or(-1),
-            "notify-send failed"
-        ),
-        Err(error) => tracing::warn!(
-            name: "startup.pin.notify.failed",
-            target: "startup",
-            { error = %error },
-            "notify-send could not run"
-        ),
-    }
 }
 
 #[cfg(test)]

@@ -1,10 +1,9 @@
 //! Unit tests for the pinwin boundary.
 
 use super::{
-    PanelExitAction, PanelGutter, PanelIdentity, PanelReserveMode, PinSpawnError,
-    StartFailureAction, claim_panel_identity, exit_action, failure_action, is_pinned,
-    pinned_width_argv, request_result, run_argv, set_edge_argv, set_gutters_argv, set_reserve_argv,
-    terminal_prefix, toggle_argv,
+    PanelExitAction, PanelGutter, PanelIdentity, PanelReserveMode, StartFailureAction,
+    claim_panel_identity, exit_action, failure_action, is_pinned, pinned_width_argv, run_argv,
+    set_edge_argv, set_gutters_argv, set_reserve_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use mbv_ui_model::settings::PinnedWidth;
@@ -147,38 +146,6 @@ fn run_argv_carries_the_layout_the_terminal_and_the_log_level(
     );
 }
 
-/// `[panel] pin_terminal` wins over `TERMINAL`, and an empty
-/// prefix counts as unset.
-#[rstest::rstest]
-#[case::config_prefix_wins(
-    Some(vec!["ghostty", "--gtk-single-instance=false", "-e"]),
-    Some("wezterm"),
-    vec!["ghostty", "--gtk-single-instance=false", "-e"]
-)]
-#[case::empty_config_prefix_falls_back(Some(vec![]), Some("wezterm"), vec!["wezterm", "-e"])]
-fn terminal_prefix_prefers_the_config_prefix_then_the_environment(
-    #[case] pin_terminal: Option<Vec<&str>>,
-    #[case] terminal_env: Option<&str>,
-    #[case] expected: Vec<&str>,
-) {
-    let pin_terminal = pin_terminal.map(|argv| strings(&argv));
-    assert_eq!(
-        terminal_prefix(pin_terminal.as_deref(), terminal_env, "pin_terminal"),
-        Ok(strings(&expected))
-    );
-}
-
-/// With neither source set, the reason names both.
-#[test]
-fn terminal_prefix_without_a_source_names_both() {
-    let error = terminal_prefix(None, None, "pin_terminal").expect_err("no terminal must fail");
-    assert!(
-        error.contains("[panel] pin_terminal"),
-        "error must name config"
-    );
-    assert!(error.contains("TERMINAL"), "error must name environment");
-}
-
 /// The requested view picks both the saved width and the reserve
 /// mode, so one `x` press is one panel change and no tiled window moves.
 #[rstest::rstest]
@@ -253,50 +220,4 @@ fn set_gutters_argv_sends_the_edited_gutter(
 #[case::reserve_off(PanelReserveMode::Cover, vec!["set-reserve", "mbv", "cover"])]
 fn set_reserve_argv_sends_the_mode(#[case] reserve: PanelReserveMode, #[case] expected: Vec<&str>) {
     assert_eq!(set_reserve_argv("mbv", reserve), strings(&expected));
-}
-
-/// `--toggle` names the panel it toggles.
-#[test]
-fn toggle_argv_names_the_panel() {
-    assert_eq!(toggle_argv("mbv"), strings(&["toggle", "mbv"]));
-}
-
-/// A missing `pinwin` asks for an install; any other spawn failure names its
-/// cause.
-#[rstest::rstest]
-#[case::missing(std::io::ErrorKind::NotFound, "pinwin is not installed")]
-#[case::denied(
-    std::io::ErrorKind::PermissionDenied,
-    "pinwin could not start: permission denied"
-)]
-fn pin_spawn_error_names_the_cause(#[case] kind: std::io::ErrorKind, #[case] expected: &str) {
-    assert_eq!(
-        PinSpawnError::new(std::io::Error::from(kind)).to_string(),
-        expected
-    );
-}
-
-/// Exit 0 is success, exit 1 is pinwin's own reason, exit 2 is a
-/// usage mismatch, and any other ending names the ending.
-#[rstest::rstest]
-#[case::success(Some(0), "", Ok(()))]
-#[case::refused(
-    Some(1),
-    "pinwin: no panel named mbv\n",
-    Err("pinwin: no panel named mbv".to_string())
-)]
-#[case::refused_without_a_reason(Some(1), "  \n", Err("pinwin refused the request".to_string()))]
-#[case::usage_mismatch(
-    Some(2),
-    "usage: pinwin <command> [options]\n",
-    Err("pinwin rejected the command line: mbv and pinwin disagree on the pinwin CLI".to_string())
-)]
-#[case::other_status(Some(3), "", Err("pinwin exited with status 3".to_string()))]
-#[case::signal(None, "", Err("pinwin ended by a signal".to_string()))]
-fn request_result_maps_the_exit_code_and_stderr(
-    #[case] code: Option<i32>,
-    #[case] stderr: &str,
-    #[case] expected: Result<(), String>,
-) {
-    assert_eq!(request_result(code, stderr), expected);
 }

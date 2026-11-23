@@ -1,4 +1,5 @@
-//! Desktop surfaces for a Local process: MPRIS D-Bus server and system tray.
+//! Desktop surfaces for a Local process: MPRIS D-Bus server, system tray, and
+//! the launches a Local process starts.
 //!
 //! The `mpris` media-player endpoint serves two publishers (design D1): the local
 //! Owner process holds `org.mpris.MediaPlayer2.mbv` for its lifetime
@@ -9,5 +10,6 @@
 //! processes, which show the tray while Stay-alive is enabled or the `Show systray
 //! icon` preference is on.
 
+pub mod launch;
 pub mod mpris;
 pub mod tray;
