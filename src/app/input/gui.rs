@@ -281,10 +281,14 @@ impl App {
     /// (`App::handle_playback_request`), then the Client's own half of the
     /// requests whose effect is GUI presentation. Those requests are the
     /// documented core no-ops of design D4a (a) — the track chip's popover
-    /// open, the track popover's row press, the header's collapse and
-    /// queue-fold controls, the player menu's open and entry press, and the
-    /// Queue chooser's entry press — so each pair runs the core and then the
-    /// GUI method here, in the order the core ran them before the split.
+    /// open, the track popover's row press, the player menu's open and entry
+    /// press, and the Queue chooser's entry press — so each pair runs the core
+    /// and then the GUI method here, in the order the core ran them before the
+    /// split. The requests whose whole effect is GUI presentation and whose
+    /// core half is a panel intent (the header's collapse, queue-fold, and
+    /// chooser controls) are listed here too: a header control's press reaches
+    /// only this entry, so without the GUI method the control would do nothing
+    /// while its chord still worked.
     fn handle_gui_playback_request(&mut self, request: &PlaybackRequest) {
         self.handle_playback_request(request);
         match request {
@@ -299,8 +303,16 @@ impl App {
                 self.show_gui_queue_chooser_entry(*queue);
             }
             PlaybackRequest::OpenTrackPopover(chip) => self.toggle_gui_track_popover(*chip),
+            // The canvas queue header's chooser control (design D8): the
+            // request's core arm dispatches `PanelIntent::ToggleQueueChooser`,
+            // which is a documented core no-op, so the toggle runs here. The
+            // `t` chord reaches the same method through `apply_gui_command`.
+            PlaybackRequest::QueueChooserToggle => self.toggle_gui_queue_chooser(),
             // The transport controls run their whole effect in the core, and
-            // the request's own arm already applied it above.
+            // the request's own arm already applied it above. The remaining
+            // queue-header controls dispatch a panel intent the core applies
+            // itself (the filter's chord equivalent, the new, rename, and
+            // close requests), so their effect is complete before this match.
             PlaybackRequest::TogglePlayPause
             | PlaybackRequest::Stop
             | PlaybackRequest::Previous
@@ -312,7 +324,6 @@ impl App {
             | PlaybackRequest::CycleAudio
             | PlaybackRequest::CycleSubtitle
             | PlaybackRequest::ActivateQueueFilter
-            | PlaybackRequest::QueueChooserToggle
             | PlaybackRequest::NewQueue
             | PlaybackRequest::RenameQueue
             | PlaybackRequest::CloseQueue => {}
@@ -515,6 +526,10 @@ impl App {
     /// (design D4a (a)): the panel actions whose effect is GUI presentation,
     /// and the track popover's toggle. Each of their core arms is a documented
     /// no-op, so this runs the GUI method the core called before the split.
+    ///
+    /// Every variant is listed, as `AGENTS.md` requires: a wildcard here would
+    /// drop a new `PanelIntent` that needs a GUI half without a word, and the
+    /// arm list is the one place that pairing is visible.
     fn apply_gui_command(&mut self, command: &AppCommand) {
         match command {
             AppCommand::Panel(PanelIntent::TogglePanelCollapse) => self.toggle_panel_collapse(),
@@ -526,8 +541,34 @@ impl App {
             AppCommand::Playback(PlaybackIntent::ToggleTrackPopover(chip)) => {
                 self.toggle_gui_track_popover(*chip);
             }
-            AppCommand::Panel(_)
-            | AppCommand::Playback(_)
+            // The commands with no GUI half. The panel intents the core applies
+            // itself, or whose GUI half is an entry of its own: the layout cycle
+            // and the panel focus (core only), the queue filter (the core runs
+            // it), the new, close, and rename requests (one core path each), and
+            // the row move (the router hands it to the focused Queue leaf). The
+            // playback intents: each is a transport control whose whole effect
+            // is in the core, or the chip opener, whose GUI half is the
+            // `ToggleTrackPopover` arm above. The rest name no GUI presentation.
+            AppCommand::Panel(
+                PanelIntent::CyclePanelMode
+                | PanelIntent::FocusPanel(_)
+                | PanelIntent::ActivateQueueFilter
+                | PanelIntent::RequestNewQueue
+                | PanelIntent::RequestCloseQueue
+                | PanelIntent::RequestRenameQueue
+                | PanelIntent::MoveQueueRow(_),
+            )
+            | AppCommand::Playback(
+                PlaybackIntent::TogglePlayPause
+                | PlaybackIntent::Stop
+                | PlaybackIntent::SeekRelative(_)
+                | PlaybackIntent::NextTrack
+                | PlaybackIntent::PreviousTrack
+                | PlaybackIntent::CycleOrToggleSubtitle
+                | PlaybackIntent::AdjustVolume(_)
+                | PlaybackIntent::ToggleMute
+                | PlaybackIntent::CycleAudio,
+            )
             | AppCommand::Navigation(_)
             | AppCommand::Visual(_)
             | AppCommand::QueuePlayCursor(_)

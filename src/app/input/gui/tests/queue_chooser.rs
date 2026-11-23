@@ -6,7 +6,7 @@ use std::sync::mpsc::Receiver;
 
 use mbv_ctrl::CtrlCmd;
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 
 use crate::app::App;
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
@@ -326,5 +326,23 @@ fn the_queue_chords_need_the_queue_pointer_target() {
     assert!(
         app.gui_overlay.is_none(),
         "no Queue chord opened the chooser over the Library column"
+    );
+}
+
+/// The queue header's Queue chooser control presses through the GUI Client's
+/// playback entry, not the router: the press emits
+/// `PlaybackRequest::QueueChooserToggle`, whose core arm is a documented no-op
+/// (design D4a (a)), so the GUI entry must run the toggle (D8, "the header's
+/// chooser press"). Without it the header button did nothing while the `t`
+/// chord still worked (row 5.1 review P1a).
+#[test]
+fn the_header_chooser_press_opens_the_chooser_review_p1a() {
+    let (mut app, _cmd_rx) = app_with_queues();
+
+    app.handle_gui_surface_msg(Msg::Playback(PlaybackRequest::QueueChooserToggle));
+
+    assert!(
+        matches!(app.gui_overlay, Some(GuiOverlay::QueueChooser(_))),
+        "the header press opened the Queue chooser"
     );
 }
