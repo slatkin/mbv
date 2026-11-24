@@ -285,10 +285,9 @@ pub fn QueuePlaybackPanel() -> Element {
                 // tightened from the canvas's 16/20/18 so the block sits
                 // shorter), the rule that separates it
                 // from the queue header, the title in the mono face's 18 px/700
-                // caps, and the parent line under it in the mono face's 14 px/400
-                // (user request 2026-11-24). The title is uppercased here, not by
-                // `text-transform`, so the `Truncate` measure reads the glyphs it
-                // paints. The canvas draws the parent line as an `<a href="#">`,
+                // (user request 2026-11-24: no longer uppercased), and the parent
+                // line under it in the mono face's 14 px/400 (user request
+                // 2026-11-24). The canvas draws the parent line as an `<a href="#">`,
                 // but the GUI presents no surface to go to: the static line
                 // carries no region and the press is a no-op. The block's
                 // leading edge carries the item's media-kind icon (user request
@@ -310,8 +309,9 @@ pub fn QueuePlaybackPanel() -> Element {
                         // long name takes the lines it needs, and a long token
                         // breaks rather than overflowing the column.
                         span {
+                            "data-now-playing-title": "",
                             style: format!(
-                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; line-height: 1.15; letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: break-word; color: {};",
+                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; line-height: 1.15; letter-spacing: 0.06em; overflow-wrap: break-word; color: {};",
                                 ef_var(EfToken::Fg)
                             ),
                             "{title}"

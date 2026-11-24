@@ -13,6 +13,22 @@ use crate::bridge::frame::playback::GuiQueuePlayback;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::time::format_wall_clock;
 
+/// Contract (user request 2026-11-24): the now-playing title paints its own
+/// case — the block no longer uppercases it.
+#[test]
+fn the_now_playing_title_paints_no_uppercase_transform() {
+    let mut fixture = built(TALL);
+    fixture.set_playback(playback());
+
+    assert!(fixture.presents("[data-now-playing-title]"));
+    assert!(
+        !fixture
+            .style_of("[data-now-playing-title]")
+            .contains("text-transform: uppercase"),
+        "the title paints its own case"
+    );
+}
+
 /// Contract (`Panel.test.ts`): the compact strip paints the meta line with
 /// the next item — the parent line and `Next: <title>` joined as one
 /// truncating line — and no queue row paints (the next item is a summary
