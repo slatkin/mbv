@@ -160,20 +160,6 @@ pub struct SearchControlState {
     pub panel_open: bool,
 }
 
-/// The hover controls a Library row offers (gui-row-hover-actions design D3,
-/// D4): one press per control the row has, and `None` for a control its row
-/// does not offer. A painter passes the set to the shared
-/// `RowHoverActions` part, which paints only the controls it receives.
-#[derive(Debug, Clone, Default)]
-pub struct RowHoverPresses {
-    /// Play the row.
-    pub play: Option<Callback<()>>,
-    /// Add the row to the queue.
-    pub queue: Option<Callback<()>>,
-    /// Shuffle the row's items.
-    pub shuffle: Option<Callback<()>>,
-}
-
 /// The window's Library interaction store (D15): the port of `state.ts`'s
 /// module-level stores as one context-provided struct. The root creates it
 /// once and provides it as context; the key router and the painters read and
@@ -763,7 +749,10 @@ impl LibraryState {
     }
 }
 
+mod hover;
 mod rows;
+
+pub use hover::RowHoverPresses;
 
 #[cfg(test)]
 mod tests;

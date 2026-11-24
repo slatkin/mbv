@@ -352,7 +352,7 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint) -> Element {
     rsx! {
         li {
             key: "{row.id}",
-            class: "row-hover-host relative grid items-center",
+            class: "row-hover-host grid items-center",
             style: "{row_style}",
             oncontextmenu: move |event: MouseEvent| {
                 if let Some(on_context) = on_context {

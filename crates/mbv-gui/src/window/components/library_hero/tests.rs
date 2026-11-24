@@ -551,7 +551,7 @@ fn a_track_s_play_gesture_sends_that_track_play() {
 
     let track_id = "t2".to_owned();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.play_library_track(track_id));
+    fixture.in_runtime(move || state.play_library_track(&track_id));
 
     assert_eq!(
         fixture.library_commands(),

@@ -52,16 +52,10 @@ fn home_menu_row(id: &GuiHomeRowIdFrame) -> crate::gui_core::GuiLibraryMenuRow {
 /// The hover Shuffle press of a Home row (gui-row-hover-actions design D3):
 /// only a `Collection` row's menu carries the shuffle entry, so only that row
 /// offers the control. The press runs the row menu's own entry through
-/// [`LibraryState::shuffle_library_row`], as the row's right-press does.
+/// [`LibraryState::shuffle_press`], as the row's right-press does.
 fn home_hover_shuffle(item: &HomeItemRow, library: &LibraryState) -> Option<Callback<()>> {
-    if item.item_kind != GuiHomeRowKindFrame::Collection {
-        return None;
-    }
-    let shuffle_library = library.clone();
-    let row = home_menu_row(&item.row_id);
-    Some(Callback::new(move |()| {
-        shuffle_library.shuffle_library_row(row.clone());
-    }))
+    (item.item_kind == GuiHomeRowKindFrame::Collection)
+        .then(|| library.shuffle_press(home_menu_row(&item.row_id)))
 }
 
 /// One painted row of the flat list: the section

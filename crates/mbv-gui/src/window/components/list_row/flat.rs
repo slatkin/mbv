@@ -20,7 +20,7 @@ use crate::bridge::frame::library::GuiHomeRowStateFrame;
 use crate::window::components::library_attr::library_attr;
 use crate::window::components::list_row::{
     LIBRARY_ROW_HEIGHT, LibraryRowThumb, LibraryTrailPart, ROW_DIVIDER_PX, ROW_PADDING_PX,
-    RowLevel, context_press, paint_thumb,
+    RowLevel, context_press, hover_trail_class, paint_thumb,
 };
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
@@ -210,23 +210,18 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     } else {
         "relative flex w-full items-center overflow-hidden"
     };
-    let trail_class = if paints_actions {
-        "row-hover-trail flex-none font-mono tabular-nums"
-    } else {
-        "flex-none font-mono tabular-nums"
-    };
+    let trail_class = hover_trail_class(paints_actions);
     let on_double_click = props.on_toggle.unwrap_or(props.on_play);
     let on_press = props.on_press;
     let on_context = props.on_context;
     let show_guide = props.tree_guide;
     let tree_open = props.tree_open;
-    let row_name = Some(props.title.clone());
 
     // The host is the hover box (design D2): the row button keeps its own
     // semantics, and the controls are its later sibling, never a child.
     rsx! {
         div {
-            class: "row-hover-host relative",
+            class: "row-hover-host",
             style: "{host_style}",
             button {
                 "type": "button",
@@ -276,7 +271,7 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
                     on_shuffle: on_hover_shuffle,
                     on_toggle,
                     open: tree_open.unwrap_or(false),
-                    row_name,
+                    row_name: Some(props.title.clone()),
                 }
             }
         }

@@ -22,7 +22,9 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
-use crate::window::components::row_hover_actions::ROW_HOVER_ACTION_STYLE;
+use crate::window::components::row_hover_actions::{
+    ROW_HOVER_ACTION_GLYPH_PX, ROW_HOVER_ACTION_PX, action_style,
+};
 use crate::window::icons::Play;
 use crate::window::layout::region_set::MarkHandler;
 use crate::window::theme::{canvas_var, role_var};
@@ -34,22 +36,14 @@ use super::row_cells::{ItemRow, RowCells, RowChrome, row_look};
 /// 2026-11-20): every row is square, the now-playing row included.
 const ROW_RADIUS_PX: u16 = 0;
 
-/// The hovered row's Play control size in logical pixels: the square the
-/// shared [`ROW_HOVER_ACTION_STYLE`] paints.
-const PLAY_CONTROL_PX: u16 = 24;
-
 /// The hovered row's Play control top in logical pixels: the control centred in
 /// the row.
-const PLAY_CONTROL_TOP_PX: u16 = (ROW_HEIGHT_PX - PLAY_CONTROL_PX) / 2;
-
-/// The Play control's glyph size in logical pixels: the size the shared
-/// `RowHoverActions` part paints.
-const PLAY_GLYPH_PX: u16 = 14;
+const PLAY_CONTROL_TOP_PX: u16 = (ROW_HEIGHT_PX - ROW_HOVER_ACTION_PX) / 2;
 
 /// The trailing pad a hovered row takes, in logical pixels: its own inset, the
 /// Play control's square, and the cell gap before the control, so the row's
 /// cells stop before the control in place of the duration.
-const HOVERED_TRAILING_PAD_PX: u16 = ROW_INSET_PX + PLAY_CONTROL_PX + ROW_CELL_GAP_PX;
+const HOVERED_TRAILING_PAD_PX: u16 = ROW_INSET_PX + ROW_HOVER_ACTION_PX + ROW_CELL_GAP_PX;
 
 /// The empty-queue text, as the TUI's local queue shows it. The frame
 /// carries no queue link, so the remote-queue text cannot be selected; the
@@ -124,12 +118,13 @@ pub(super) fn queue_row_card(paint: RowPaint<'_>) -> Element {
     let look = row_look(&item, queue);
     let button_style = row_button_style(hovered, look.background);
     let line = insertion_line(insertion, slot);
+    // The Play control's accessible name: the row's own title line.
+    let play_label = format!("Play {}", item.title());
     let chrome = if hovered {
         RowChrome::Hover
     } else {
         RowChrome::Row
     };
-    let play_label = format!("Play {}", item.title());
     rsx! {
         div {
             key: "{slot}",
@@ -146,22 +141,33 @@ pub(super) fn queue_row_card(paint: RowPaint<'_>) -> Element {
             if hovered
                 && let Some(play_mark) = play_mark
             {
-                // The hovered row's Play control (design D6 of
-                // `gui-row-hover-actions`): the `RowHoverActions` button look
-                // and Play glyph, in the trailing slot the row reserves in
-                // place of its duration. It is its own region, marked after the
-                // row's `slot` region, so a press resolves to the control. A
-                // double-click elsewhere plays the row; a press here plays it
-                // through the activation request (design D6).
-                button {
-                    "type": "button",
-                    class: "absolute flex items-center justify-center",
-                    style: "right: {ROW_INSET_PX}px; top: {PLAY_CONTROL_TOP_PX}px; {ROW_HOVER_ACTION_STYLE}",
-                    "aria-label": "{play_label}",
-                    title: "{play_label}",
-                    "data-row-play": "{slot}",
-                    onmounted: play_mark,
-                    Play { size: PLAY_GLYPH_PX, fill: "currentColor".to_owned(), stroke_width: 0.0 }
+                {
+                    // The hovered row's Play control (design D6 of
+                    // `gui-row-hover-actions`): the `RowHoverActions` button
+                    // look and Play glyph, in the trailing slot the row reserves
+                    // in place of its duration. It is its own region, marked
+                    // after the row's `slot` region, so a press resolves to the
+                    // control. A double-click elsewhere plays the row; a press
+                    // here plays it through the activation request (design D6).
+                    // The look and its place in the row's trailing slot are one
+                    // style, and its square comes from the shared part, so the
+                    // two cannot drift.
+                    let style = format!(
+                        "right: {ROW_INSET_PX}px; top: {PLAY_CONTROL_TOP_PX}px; {}",
+                        action_style()
+                    );
+                    rsx! {
+                        button {
+                            "type": "button",
+                            class: "absolute flex items-center justify-center",
+                            style: "{style}",
+                            "aria-label": "{play_label}",
+                            title: "{play_label}",
+                            "data-row-play": "{slot}",
+                            onmounted: play_mark,
+                            Play { size: ROW_HOVER_ACTION_GLYPH_PX, fill: "currentColor".to_owned(), stroke_width: 0.0 }
+                        }
+                    }
                 }
             }
             // The 1 px divider under the row (design D3): the rows sit flush

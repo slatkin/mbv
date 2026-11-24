@@ -268,28 +268,22 @@ impl LibraryState {
 
     /// The hover controls' presses for a Shows row that names `item_id`
     /// (gui-row-hover-actions design D3, D4): Play and Add run the same commands
-    /// the keys run, and Shuffle runs the row's own right-click shuffle entry.
-    /// The painter drops the controls its row does not offer — an episode and a
-    /// flat row paint no Shuffle — and a display-only row takes none of them.
+    /// the keys run, and Shuffle runs the row's own right-click shuffle entry, on
+    /// the rows whose menu carries one (`offers_shuffle`: a series and a season,
+    /// never an episode or a flat row, which name no collection). A display-only
+    /// row takes none of them.
     #[must_use]
-    pub fn shows_row_hover_presses(&self, item_id: String) -> RowHoverPresses {
-        let play = self.clone();
-        let play_id = item_id.clone();
-        let queue = self.clone();
-        let queue_id = item_id.clone();
-        let shuffle = self.clone();
-        RowHoverPresses {
-            play: Some(Callback::new(move |()| {
-                play.play_shows_row(&play_id);
-            })),
-            queue: Some(Callback::new(move |()| {
-                queue.queue_shows_row(&queue_id);
-            })),
-            shuffle: Some(Callback::new(move |()| {
-                shuffle
-                    .shuffle_library_row(crate::gui_core::GuiLibraryMenuRow::Item(item_id.clone()));
-            })),
-        }
+    pub fn shows_row_hover_presses(
+        &self,
+        item_id: String,
+        offers_shuffle: bool,
+    ) -> RowHoverPresses {
+        self.item_hover_presses(
+            item_id,
+            Self::play_shows_row,
+            Self::queue_shows_row,
+            offers_shuffle,
+        )
     }
 
     /// Scroll the list by one movement key (design D6): Up and Down move by the

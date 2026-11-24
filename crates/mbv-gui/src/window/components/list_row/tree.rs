@@ -21,6 +21,7 @@ use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiMetaKindFrame, GuiM
 use crate::window::components::library_attr::library_attr;
 use crate::window::components::list_row::{
     LibraryTrailPart, NODE_ROW_HEIGHT, ROW_PADDING_PX, RowLevel, TRACK_ROW_HEIGHT, context_press,
+    hover_trail_class,
 };
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{
@@ -317,13 +318,12 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     let on_context = props.on_context;
     let tree_open = props.open;
     let guides = row_guides(props.depth, level, height, props.shows_children);
-    let row_name = Some(props.title.clone());
 
     // The host is the hover box (design D2): the row button keeps its own
     // semantics, and the controls are its later sibling, never a child.
     rsx! {
         div {
-            class: "row-hover-host relative",
+            class: "row-hover-host",
             style: "{host_style}",
             button {
                 "type": "button",
@@ -343,20 +343,10 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
                     on_shuffle: on_hover_shuffle,
                     on_toggle,
                     open: tree_open.unwrap_or(false),
-                    row_name,
+                    row_name: Some(props.title.clone()),
                 }
             }
         }
-    }
-}
-
-/// The trailing text's class (gui-row-hover-actions design D2): the mono face,
-/// plus the trail marker the hover controls hide while they cover it.
-fn hover_trail_class(paints_actions: bool) -> &'static str {
-    if paints_actions {
-        "row-hover-trail flex-none font-mono tabular-nums"
-    } else {
-        "flex-none font-mono tabular-nums"
     }
 }
 

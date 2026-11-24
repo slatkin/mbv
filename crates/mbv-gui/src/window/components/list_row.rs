@@ -135,6 +135,19 @@ impl RowLevel {
     }
 }
 
+/// The trailing text's class (`gui-row-hover-actions` design D2): the mono face,
+/// plus the trail marker the stylesheet hides while the hover controls cover the
+/// text. A row that offers no control keeps the trail visible, so its text never
+/// steps aside for nothing.
+#[must_use]
+pub fn hover_trail_class(paints_actions: bool) -> &'static str {
+    if paints_actions {
+        "row-hover-trail flex-none font-mono tabular-nums"
+    } else {
+        "flex-none font-mono tabular-nums"
+    }
+}
+
 /// The one right-press handler every row part shares (`gui-unified-list-rows`
 /// design D4): a right-press on a row that names a menu stops the window's
 /// default, presses the row first — so the menu's View Detail opens the Hero

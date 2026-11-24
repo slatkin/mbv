@@ -72,7 +72,7 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
     let on_press = Callback::new(|_track_id: String| {});
     let play_library = library.clone();
     let on_play = Callback::new(move |track_id: String| {
-        play_library.play_library_track(track_id);
+        play_library.play_library_track(&track_id);
     });
     let menu_library = library.clone();
     let on_context = Callback::new(move |(x, y, track_id): (f32, f32, String)| {

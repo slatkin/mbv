@@ -107,7 +107,7 @@ fn paint_shows_series(
         .map(str::to_owned)
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
-    let hover = library.shows_row_hover_presses(series.source_id.clone());
+    let hover = library.shows_row_hover_presses(series.source_id.clone(), true);
     rsx! {
         FlatRow {
             attr: "shows",
@@ -163,7 +163,7 @@ fn paint_shows_season(
         .map(str::to_owned)
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
-    let hover = library.shows_row_hover_presses(season.source_id.clone());
+    let hover = library.shows_row_hover_presses(season.source_id.clone(), true);
     rsx! {
         TreeRow {
             attr: "shows",
@@ -216,7 +216,7 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
     let (hover_play, hover_queue) = if display_only {
         (None, None)
     } else {
-        let hover = library.shows_row_hover_presses(id.clone());
+        let hover = library.shows_row_hover_presses(id.clone(), false);
         (hover.play, hover.queue)
     };
     rsx! {
@@ -279,7 +279,7 @@ fn paint_shows_episode(
     let play_library = library.clone();
     let menu_id = LibraryState::row_menu_item(episode.source_id.clone());
     let menu_library = library.clone();
-    let hover = library.shows_row_hover_presses(episode.source_id.clone());
+    let hover = library.shows_row_hover_presses(episode.source_id.clone(), false);
     rsx! {
         TreeRow {
             attr: "shows",

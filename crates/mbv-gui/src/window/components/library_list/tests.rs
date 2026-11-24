@@ -611,7 +611,7 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
     measure(&mut fixture, 240.0);
 
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.play_library_track("t1".to_owned()));
+    fixture.in_runtime(move || state.play_library_track("t1"));
 
     assert_eq!(
         fixture.library_commands(),

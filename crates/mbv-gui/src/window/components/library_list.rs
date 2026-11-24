@@ -95,7 +95,7 @@ fn paint_track_row(
     let menu_library = library.clone();
     let play_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
-    let hover = library.row_hover_presses(item_id.clone());
+    let hover = library.row_hover_presses(item_id.clone(), false);
     let track_id = track_id.clone();
     rsx! {
         TreeRow {
@@ -110,7 +110,7 @@ fn paint_track_row(
             selected: picked_row,
             tail,
             on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
-            on_play: Callback::new(move |()| play_library.play_library_track(track_id.clone())),
+            on_play: Callback::new(move |()| play_library.play_library_track(&track_id)),
             on_hover_play: hover.play,
             on_hover_queue: hover.queue,
             // The part presses the row first, so the menu's View Detail opens
@@ -174,7 +174,7 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
     let toggle_library = library.clone();
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
-    let hover = library.row_hover_presses(item_id.clone());
+    let hover = library.row_hover_presses(item_id.clone(), true);
     rsx! {
         FlatRow {
             attr: "",
@@ -241,7 +241,7 @@ fn paint_album_row(
     let toggle_library = library.clone();
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
-    let hover = library.row_hover_presses(item_id.clone());
+    let hover = library.row_hover_presses(item_id.clone(), true);
     rsx! {
         TreeRow {
             attr: "",

@@ -23,13 +23,24 @@ use dioxus_native::prelude::*;
 
 use crate::window::icons::{ChevronDown, ChevronUp, Play, Plus, Shuffle};
 
+/// The square one hover control paints, in CSS pixels: the Queue row's own Play
+/// control reserves the same square (design D6).
+pub(crate) const ROW_HOVER_ACTION_PX: u16 = 24;
+
+/// The glyph size of one control, in CSS pixels.
+pub(crate) const ROW_HOVER_ACTION_GLYPH_PX: u16 = 14;
+
 /// The look of one hover control (design D6: the Queue row's Play control
 /// paints the same one): a square ghost button in the row's heading tone, with
 /// no fill of its own, so the shared pointer veil answers the pointer over it.
-pub(crate) const ROW_HOVER_ACTION_STYLE: &str = "width: 24px; height: 24px; padding: 0; background: none; border: 0; border-radius: 4px; color: var(--canvas-heading); cursor: pointer;";
-
-/// The glyph size of one control, in CSS pixels.
-const ACTION_GLYPH_PX: u16 = 14;
+/// The square comes from [`ROW_HOVER_ACTION_PX`], so the Queue row's own sizing
+/// of the control cannot drift from the look.
+#[must_use]
+pub(crate) fn action_style() -> String {
+    format!(
+        "width: {ROW_HOVER_ACTION_PX}px; height: {ROW_HOVER_ACTION_PX}px; padding: 0; background: none; border: 0; border-radius: 4px; color: var(--canvas-heading); cursor: pointer;"
+    )
+}
 
 /// The props of the hover controls: one callback per control the row offers,
 /// and the node's open state for the toggle's glyph.
@@ -63,6 +74,7 @@ pub struct RowHoverActionsProps {
 fn action_button(
     action: &'static str,
     label: &str,
+    style: &str,
     onpress: Callback<()>,
     glyph: Element,
 ) -> Element {
@@ -72,7 +84,7 @@ fn action_button(
             class: "flex items-center justify-center",
             "aria-label": "{label}",
             title: "{label}",
-            style: ROW_HOVER_ACTION_STYLE,
+            style: "{style}",
             "data-row-action": "{action}",
             onclick: move |event: MouseEvent| {
                 event.stop_propagation();
@@ -99,6 +111,8 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
         .row_name
         .as_deref()
         .map_or_else(|| "Play".to_owned(), |name| format!("Play {name}"));
+    // One look for every control the part paints, built once per paint.
+    let style = action_style();
 
     rsx! {
         div {
@@ -111,9 +125,10 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
                     action_button(
                         "play",
                         &play_label,
+                        &style,
                         on_play,
                         rsx! {
-                            Play { size: ACTION_GLYPH_PX, fill: "currentColor".to_owned(), stroke_width: 0.0 }
+                            Play { size: ROW_HOVER_ACTION_GLYPH_PX, fill: "currentColor".to_owned(), stroke_width: 0.0 }
                         },
                     )
                 }
@@ -123,9 +138,10 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
                     action_button(
                         "queue",
                         "Add to queue",
+                        &style,
                         on_queue,
                         rsx! {
-                            Plus { size: ACTION_GLYPH_PX }
+                            Plus { size: ROW_HOVER_ACTION_GLYPH_PX }
                         },
                     )
                 }
@@ -135,9 +151,10 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
                     action_button(
                         "shuffle",
                         "Shuffle",
+                        &style,
                         on_shuffle,
                         rsx! {
-                            Shuffle { size: ACTION_GLYPH_PX }
+                            Shuffle { size: ROW_HOVER_ACTION_GLYPH_PX }
                         },
                     )
                 }
@@ -148,12 +165,13 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
                     action_button(
                         "toggle",
                         label,
+                        &style,
                         on_toggle,
                         rsx! {
                             if open {
-                                ChevronUp { size: ACTION_GLYPH_PX }
+                                ChevronUp { size: ROW_HOVER_ACTION_GLYPH_PX }
                             } else {
-                                ChevronDown { size: ACTION_GLYPH_PX }
+                                ChevronDown { size: ROW_HOVER_ACTION_GLYPH_PX }
                             }
                         },
                     )
