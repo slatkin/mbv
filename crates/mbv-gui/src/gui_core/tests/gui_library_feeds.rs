@@ -40,7 +40,10 @@ fn fetched_feeds_app() -> App {
         ],
     );
     app.send_gui_feed_fetch_result_for_test(1, &[("b-mid", Some(200)), ("b-undated", None)]);
-    assert!(app.drain_feed_tab_results(), "both results drained");
+    assert!(
+        app.drain_feed_tab_results_for_test(),
+        "both results drained"
+    );
     app
 }
 
@@ -442,7 +445,7 @@ fn a_vanished_checked_subscription_falls_back_to_all() {
             ("a-undated", None),
         ],
     );
-    assert!(app.drain_feed_tab_results(), "the refetch drained");
+    assert!(app.drain_feed_tab_results_for_test(), "the refetch drained");
 
     let projection = gui_feeds_projection_seeded(&app);
 
@@ -532,7 +535,10 @@ fn two_subscriptions_publishing_the_same_guid_name_different_entries() {
     app.seed_active_tab_for_test(TabSelection::Feeds);
     app.send_gui_feed_fetch_result_for_test(0, &[("dup", Some(100))]);
     app.send_gui_feed_fetch_result_for_test(1, &[("dup", Some(200))]);
-    assert!(app.drain_feed_tab_results(), "both results drained");
+    assert!(
+        app.drain_feed_tab_results_for_test(),
+        "both results drained"
+    );
 
     let rows = gui_feeds_projection_seeded(&app).rows;
     assert_eq!(rows.len(), 2, "both subscriptions' entries are rows");
@@ -577,7 +583,7 @@ fn a_resume_position_without_a_duration_stays_active_with_no_percent() {
         played: false,
     };
     app.send_gui_feed_entries_for_test(0, &[entry]);
-    assert!(app.drain_feed_tab_results(), "the result drained");
+    assert!(app.drain_feed_tab_results_for_test(), "the result drained");
 
     let rows = gui_feeds_projection_seeded(&app).rows;
 

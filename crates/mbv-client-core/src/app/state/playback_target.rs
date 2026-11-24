@@ -123,7 +123,7 @@ impl App {
             .slot_index(target)
     }
 
-    pub fn displayed_queue_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
+    pub(crate) fn displayed_queue_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         // A shown resting Named queue is not the run's queue: the local
         // Owner's playback names slots of the current queue, so reading its
         // index against the resting queue's rows would mark a row the run

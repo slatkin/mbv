@@ -7,7 +7,7 @@
 use crate::tui::tests::tick_integration::harness::TickHarness;
 use mbv_client_core::App;
 use mbv_client_core::dispatch::notify::ToastSeverity;
-use mbv_client_core::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
+use mbv_client_core::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK};
 use mbv_client_core::tests::{
     close_initial_services, emby_unified_state, make_items, make_local_daemon_app_stub,
     make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
@@ -540,19 +540,17 @@ fn an_accepted_play_at_the_expanded_pinned_width_records_one_collapse_request() 
     // by pinned_view_toggle.rs.
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
-    PINNED_REQUESTS.lock().unwrap().clear();
     let (mut app, _cmd_rx) = answered_local_daemon_app();
+    app.clear_pinned_requests_for_test();
     let tx = inject_player_rx(&mut app);
     tx.send(applied(1, snapshot(1))).unwrap();
     app.seed_pinned_width_for_test(PinnedWidth::Expanded);
 
     assert!(app.submit_queue_item(one_queue_item().remove(0), true));
 
-    let requests = PINNED_REQUESTS.lock().unwrap().clone();
-    assert_eq!(requests.len(), 1, "one collapse request for the play");
-    assert_eq!(
-        requests[0],
-        mbv_client_core::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
+    assert!(
+        app.pinned_requests_are_one_width_for_test(PinnedWidth::Collapsed),
+        "one collapse request for the play"
     );
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
@@ -563,8 +561,8 @@ fn a_not_applied_play_records_no_collapse_request() {
     // reaches the collapse step.
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
-    PINNED_REQUESTS.lock().unwrap().clear();
     let (mut app, _cmd_rx) = answered_local_daemon_app();
+    app.clear_pinned_requests_for_test();
     let tx = inject_player_rx(&mut app);
     tx.send(PlayerEvent::QueueOpResult {
         op: QueueOpId(1),
@@ -575,7 +573,7 @@ fn a_not_applied_play_records_no_collapse_request() {
 
     assert!(!app.submit_queue_item(one_queue_item().remove(0), true));
 
-    assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
+    assert_eq!(app.pinned_request_count_for_test(), 0);
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
@@ -586,15 +584,15 @@ fn an_enqueue_records_no_collapse_request() {
     // starting playback and must not touch the pinned view.
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
-    PINNED_REQUESTS.lock().unwrap().clear();
     let (mut app, _cmd_rx) = answered_local_daemon_app();
+    app.clear_pinned_requests_for_test();
     let tx = inject_player_rx(&mut app);
     tx.send(applied(1, snapshot(3))).unwrap();
     app.seed_pinned_width_for_test(PinnedWidth::Expanded);
 
     assert!(app.submit_queue_item(one_queue_item().remove(0), false));
 
-    assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
+    assert_eq!(app.pinned_request_count_for_test(), 0);
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Expanded);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }

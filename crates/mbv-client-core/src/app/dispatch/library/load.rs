@@ -366,7 +366,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the Emby client lock is poisoned.
-    pub fn fetch_home(&mut self) -> Result<HomeContent, mbv_emby::EmbyFailure> {
+    pub(crate) fn fetch_home(&mut self) -> Result<HomeContent, mbv_emby::EmbyFailure> {
         let mut emby_fetched = false;
         let (continue_items, all_views) = match self.emby_client() {
             Some(client) => {

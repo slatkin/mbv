@@ -8,7 +8,7 @@
 use super::*;
 use crate::tui::test_support::{Terminal, TestBackend};
 use crate::tui::tests::tick_integration::harness::TickHarness;
-use mbv_client_core::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
+use mbv_client_core::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK};
 use mbv_components::QueuePlaybackPanel;
 use mbv_ui_model::settings::PinnedWidth;
 
@@ -119,15 +119,15 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
 fn a_second_x_press_while_a_request_is_pending_sends_nothing() {
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
-    PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
+    app.clear_pinned_requests_for_test();
     app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
 
     app.pinned_view_toggle_for_test();
     app.pinned_view_toggle_for_test();
 
     assert_eq!(
-        PINNED_REQUESTS.lock().unwrap().len(),
+        app.pinned_request_count_for_test(),
         1,
         "the pending press is ignored, not queued"
     );
@@ -142,17 +142,15 @@ fn a_second_x_press_while_a_request_is_pending_sends_nothing() {
 fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request() {
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
-    PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
+    app.clear_pinned_requests_for_test();
     app.seed_pinned_width_for_test(PinnedWidth::Expanded);
 
     app.collapse_pinned_view_after_play_for_test();
 
-    let requests = PINNED_REQUESTS.lock().unwrap().clone();
-    assert_eq!(requests.len(), 1, "one collapse request for the play");
-    assert_eq!(
-        requests[0],
-        mbv_client_core::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
+    assert!(
+        app.pinned_requests_are_one_width_for_test(PinnedWidth::Collapsed),
+        "one collapse request for the play"
     );
     assert!(app.drain_pinned_requests_for_test());
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
@@ -170,13 +168,13 @@ fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request()
 fn the_play_collapse_step_from_the_collapsed_width_records_no_request() {
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
-    PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
+    app.clear_pinned_requests_for_test();
     app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
 
     app.collapse_pinned_view_after_play_for_test();
 
-    assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
+    assert_eq!(app.pinned_request_count_for_test(), 0);
     assert!(!app.pinned_request_pending_for_test());
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
@@ -187,8 +185,8 @@ fn the_play_collapse_step_from_the_collapsed_width_records_no_request() {
 fn a_drained_outcome_applies_the_pinned_view() {
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
-    PINNED_REQUESTS.lock().unwrap().clear();
     let mut app = make_app_stub();
+    app.clear_pinned_requests_for_test();
     app.seed_pinned_width_for_test(PinnedWidth::Collapsed);
     app.set_panel_mode_for_test(PanelMode::QueueOnly);
     app.set_panel_focus_for_test(PanelFocus::Queue);

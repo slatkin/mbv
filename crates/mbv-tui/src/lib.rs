@@ -55,9 +55,7 @@ pub use mbv_client_core::LibraryFetchEvent;
 /// Client's test target enables the `test` feature to name them.
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
-pub use mbv_client_core::pin::{
-    PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS,
-};
+pub use mbv_client_core::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK};
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use mbv_client_core::test_seams::{

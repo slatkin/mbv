@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Playlists);
+        app.request_sidebar_open_for_test(mbv_ui_model::overlay::SidebarId::Playlists);
         let mut model = Model::new(app);
         model.sync_modal_requests();
         let id = ComponentId::Overlay(OverlayId::Playlists);

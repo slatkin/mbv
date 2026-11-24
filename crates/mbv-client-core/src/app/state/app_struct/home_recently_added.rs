@@ -39,7 +39,7 @@ impl App {
     /// filtered to the 14-day cutoff. Fetches never produce a Feeds source
     /// (Feeds rows are derived at merge time), so a Feeds event stores
     /// nothing.
-    pub fn accept_home_recently_added(
+    pub(crate) fn accept_home_recently_added(
         &mut self,
         source: DestinationLatestSource,
         generation: mbv_core::service_runtime::SetupGeneration,
@@ -60,7 +60,7 @@ impl App {
     /// Stores one fetched library's Home Recently added items (`openspec/specs/home-latest-sections`):
     /// filtered to the 14-day cutoff on arrival, keyed by the source. An
     /// item without a valid date gets no age branch and is omitted.
-    pub fn store_home_recently_added(
+    pub(crate) fn store_home_recently_added(
         &mut self,
         source: DestinationLatestSource,
         items: Vec<QueueItem>,

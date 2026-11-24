@@ -42,7 +42,7 @@ impl App {
     /// command names its link through this one accessor, so an answer that
     /// arrives on one link never lands in the other link's mirror (design D7
     /// of `gui-named-queues`).
-    pub fn queue_owner_player(&self, link: QueueLink) -> &mbv_player::PlayerProxy {
+    pub(crate) fn queue_owner_player(&self, link: QueueLink) -> &mbv_player::PlayerProxy {
         match link {
             QueueLink::Local => self.local_queue_player(),
             QueueLink::Peer => &self.player,
@@ -287,7 +287,7 @@ impl App {
     ///
     /// `PlayerStatus::previous_idx`/`next_idx` fold in `active` and
     /// `queue_len`, so they answer both questions from the owner's status.
-    pub fn transport_prev_next_available(&self) -> (bool, bool) {
+    pub(crate) fn transport_prev_next_available(&self) -> (bool, bool) {
         let st = self.shown_playback_status();
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }

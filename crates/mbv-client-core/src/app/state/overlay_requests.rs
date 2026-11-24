@@ -14,7 +14,7 @@ impl App {
         self.pending_overlay.take()
     }
 
-    pub fn request_sidebar_open(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
+    pub(crate) fn request_sidebar_open(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(sidebar));
     }
 
@@ -27,7 +27,7 @@ impl App {
         ));
     }
 
-    pub fn request_sidebar_toggle(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
+    pub(crate) fn request_sidebar_toggle(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ToggleSidebar(
             sidebar,
         ));

@@ -242,6 +242,13 @@ impl App {
         self.open_services_settings();
     }
 
+    /// Open the Services Settings form through the production intent, as the
+    /// Settings row's activation does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn open_services_settings_for_test(&mut self) {
+        self.open_services_settings();
+    }
+
     /// Fire `action_id` on `chord` instead of its default (`add-gui-settings-screen`
     /// rows 3.2, 3.3): the `[keys]` override a user's rebind writes, for a
     /// Client's test that routes a rebound chord.

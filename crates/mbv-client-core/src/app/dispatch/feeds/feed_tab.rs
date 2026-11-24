@@ -42,7 +42,7 @@ impl App {
     }
 
     /// Drain completed background fetch results from the channel.
-    pub fn drain_feed_tab_results(&mut self) -> bool {
+    pub(crate) fn drain_feed_tab_results(&mut self) -> bool {
         let mut had_events = false;
         // Take the receiver once; we'll put it back after draining.
         let Some(rx) = self.feed_tab.refresh_rx.take() else {

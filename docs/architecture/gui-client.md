@@ -52,7 +52,7 @@ Surface state; the drains for surfaces the first slice does not present are
 documented no-ops. The GUI's Client-only fetch results (a group's albums, a
 plain Emby library's root list, a Shows library's New episodes) do not ride
 the shared library event enum (ADR 0042): their workers send a
-`GuiClientEvent` on a channel the `App` owns, and the shared tick drains it
+`LibraryFetchEvent` on a channel the `App` owns, and the shared tick drains it
 through `ClientTickHost::drain_client_events` (`GuiCore::drain_client_event`,
 looping) after the library drain; a landed fetch wakes the tick through the
 same `ClientWaker` the other channels use. The card-image completion drain
@@ -688,7 +688,7 @@ the span's end is exclusive, and an empty span — an audio-part row's `0`/`0`
 — never holds one.
 
 What stays in Rust are the facts that change only on a discontinuity: the
-end offsets themselves (`App::gui_queue_end_offsets` over
+end offsets themselves (`App::queue_end_offsets` over
 `queue_end_offsets` in `src/app/queue_summary_projection.rs`), the Music
 playing track id and the playing book id (a mark source, design D3), and
 the scrubber hover's `time_label` (the pointer drives it, not the clock).

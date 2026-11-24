@@ -94,7 +94,7 @@ impl QueueTarget {
 /// slot back to `from`. `slot_id` is the runtime queue occurrence that was
 /// moved; the owner rejects the undo as stale when that slot is gone.
 #[derive(Debug)]
-pub enum UndoEntry {
+pub(crate) enum UndoEntry {
     Remove {
         /// The queue the edit reached: the GUI Client's shown queue, or the
         /// current queue. The inverse edit and the view lookups name it,

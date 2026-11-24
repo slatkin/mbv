@@ -312,7 +312,7 @@ impl App {
         self.start_audiobookshelf_podcast_fan_out(index);
     }
 
-    pub fn select_audiobookshelf_show(&mut self, cursor: usize) {
+    pub(crate) fn select_audiobookshelf_show(&mut self, cursor: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -544,7 +544,7 @@ impl App {
 }
 
 #[must_use]
-pub fn seconds_to_ticks(seconds: f64) -> i64 {
+pub(crate) fn seconds_to_ticks(seconds: f64) -> i64 {
     seconds_to_ticks_u64(seconds)
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)

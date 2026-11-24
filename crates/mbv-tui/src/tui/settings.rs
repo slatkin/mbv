@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn settings_service_request_stays_at_shell_boundary() {
         let mut app = mbv_client_core::tests::make_app_stub();
-        app.open_services_settings();
+        app.open_services_settings_for_test();
         let mut model = Model::new(app);
         model.handle_service_request(ServiceRequest::ActivateService(0));
         assert!(model.app.emby_setup_form_present());

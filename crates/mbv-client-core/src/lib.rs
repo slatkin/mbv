@@ -66,7 +66,7 @@ pub use self::app::artist_artwork_cache_key;
 /// Client's test target enables the `test` feature to name them.
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
-pub use self::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
+pub use self::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK};
 #[cfg(any(test, feature = "test"))]
 pub use self::app::test_seams;
 #[cfg(any(test, feature = "test"))]

@@ -48,7 +48,7 @@ fn queue_projection_uses_adopted_pending_transition_without_progress() {
     let displayed = app.displayed_playback_state();
     let rows = mbv_components::queue::queue_media_rows(
         app.playback_queue().slots(),
-        app.displayed_queue_playback_state(),
+        app.displayed_queue_playback_state_for_test(),
         app.pending_playback_slot(),
     );
 
@@ -80,7 +80,7 @@ fn now_playing_music_row_carries_no_progress() {
 
     let rows = mbv_components::queue::queue_media_rows(
         app.playback_queue().slots(),
-        app.displayed_queue_playback_state(),
+        app.displayed_queue_playback_state_for_test(),
         app.pending_playback_slot(),
     );
 
@@ -118,7 +118,7 @@ fn deleting_before_playing_row_keeps_highlight_on_playing_slot() {
         mbv_client_core::state::queue_view::AdoptCause::OwnAnswer,
     );
 
-    let displayed = app.displayed_queue_playback_state();
+    let displayed = app.displayed_queue_playback_state_for_test();
     assert_eq!(displayed.active_idx, Some(0));
     let rows = mbv_components::queue::queue_media_rows(
         app.playback_queue().slots(),
@@ -364,19 +364,15 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
     // the visible queue is Local, so the Local undo entry is consumed and
     // its inverse edit is sent to the Local owner instead of flashing a
     // spurious remote-undo-unsupported error.
-    use mbv_client_core::state::playback::UndoEntry;
     let mut app = make_app_stub();
     let _cmd_rx = live_owner_channel(&mut app);
     app.seed_playback_queue_for_test(emby_items(2), 0);
-    app.seed_queue_undo_for_test(
+    app.seed_queue_undo_remove_for_test(
         QueueLink::Local,
-        UndoEntry::Remove {
-            target: crate::queue_target_for_test(QueueLink::Local),
-            index: 0,
-            item: Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
-                "restored", "Movie",
-            )))),
-        },
+        0,
+        Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
+            "restored", "Movie",
+        )))),
     );
     let mut model = Model::new(app);
     assert!(!model.app.has_direct_remote_queue_for_test());
@@ -403,18 +399,10 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
 // it silently); the one `App` dispatch is the behaviour both now share.
 #[test]
 fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
-    use mbv_client_core::state::playback::UndoEntry;
     let (app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(2));
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     let mut app = app;
-    app.seed_queue_undo_for_test(
-        QueueLink::Peer,
-        UndoEntry::Move {
-            target: crate::queue_target_for_test(QueueLink::Peer),
-            slot_id: mbv_queue::QueueSlotId::from_raw(2),
-            from: 0,
-        },
-    );
+    app.seed_queue_undo_move_for_test(QueueLink::Peer, mbv_queue::QueueSlotId::from_raw(2), 0);
     let mut model = Model::new(app);
 
     model.handle_queue_request(QueueRequest::Undo {

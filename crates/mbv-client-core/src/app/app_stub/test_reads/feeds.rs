@@ -93,4 +93,11 @@ impl App {
                 entries: Ok(entries),
             });
     }
+
+    /// Drain the completed Feeds fetches through the production drain, as the
+    /// Client tick does, answering whether one landed.
+    #[cfg(any(test, feature = "test"))]
+    pub fn drain_feed_tab_results_for_test(&mut self) -> bool {
+        self.drain_feed_tab_results()
+    }
 }

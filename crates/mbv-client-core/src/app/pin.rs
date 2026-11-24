@@ -146,7 +146,7 @@ impl PanelReserveMode {
 
 /// One of the panel's four gutters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PanelGutter {
+pub(crate) enum PanelGutter {
     /// Inset from the output's top edge.
     Top,
     /// Inset from the output's bottom edge.
@@ -175,7 +175,7 @@ impl PanelGutter {
 /// the edited value is the width pinwin validates; a side or gutter row applies
 /// at the panel's current width.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PinnedSettingRequest {
+pub(crate) enum PinnedSettingRequest {
     /// `Width` (`Collapsed`) or `Expanded width` (`Expanded`): one `set-size`
     /// with the candidate width and its reserve mode.
     Width(PinnedWidth),
@@ -308,7 +308,7 @@ pub static PINNED_REQUEST_OVERRIDE: std::sync::Mutex<Option<Result<(), String>>>
 
 /// The requests the test seam delivered, in order.
 #[cfg(any(test, feature = "test"))]
-pub static PINNED_REQUESTS: std::sync::Mutex<Vec<PinnedSettingRequest>> =
+pub(crate) static PINNED_REQUESTS: std::sync::Mutex<Vec<PinnedSettingRequest>> =
     std::sync::Mutex::new(Vec::new());
 
 /// Serializes tests that install [`PINNED_REQUEST_OVERRIDE`].

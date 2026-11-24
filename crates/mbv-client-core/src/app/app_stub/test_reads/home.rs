@@ -771,4 +771,29 @@ impl App {
     pub fn drain_session_events_for_test(&mut self) -> bool {
         self.drain_session_events()
     }
+
+    /// Accept one fetched library's Home Recently added items through the
+    /// production acceptance, as a landed Home fetch does: the generation
+    /// check runs, and live items are stored under their source.
+    #[cfg(any(test, feature = "test"))]
+    pub fn accept_home_recently_added_for_test(
+        &mut self,
+        source: crate::app::state::playback::DestinationLatestSource,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        items: Vec<mbv_queue::QueueItem>,
+    ) {
+        self.accept_home_recently_added(source, generation, items);
+    }
+
+    /// Store one library's Home Recently added items through the production
+    /// store, bypassing the generation check as a test that seeds a past
+    /// fetch's rows does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn store_home_recently_added_for_test(
+        &mut self,
+        source: crate::app::state::playback::DestinationLatestSource,
+        items: Vec<mbv_queue::QueueItem>,
+    ) {
+        self.store_home_recently_added(source, items);
+    }
 }

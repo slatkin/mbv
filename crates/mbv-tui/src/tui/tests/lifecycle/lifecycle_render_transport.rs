@@ -67,5 +67,5 @@ fn transport_prev_next(
         status.queue_len = queue_len;
         status.current_idx = current_idx;
     });
-    assert_eq!(app.transport_prev_next_available(), expected);
+    assert_eq!(app.transport_prev_next_available_for_test(), expected);
 }

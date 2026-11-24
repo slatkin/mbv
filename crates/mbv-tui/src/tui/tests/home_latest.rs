@@ -80,7 +80,7 @@ fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
     let source =
         mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
 
-    model.app.accept_home_recently_added(
+    model.app.accept_home_recently_added_for_test(
         source.clone(),
         model.app.emby_setup_generation_for_test(),
         vec![movie_dated("movie", i64::try_from(current - 60).unwrap())],
@@ -104,7 +104,7 @@ fn acknowledging_the_source_clears_its_marker() {
     let current = model.home_latest_launch_window.current;
     let source =
         mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
-    model.app.accept_home_recently_added(
+    model.app.accept_home_recently_added_for_test(
         source.clone(),
         model.app.emby_setup_generation_for_test(),
         vec![movie_dated("movie", i64::try_from(current - 60).unwrap())],
@@ -128,7 +128,7 @@ fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
     let source =
         mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
 
-    model.app.accept_home_recently_added(
+    model.app.accept_home_recently_added_for_test(
         source.clone(),
         model.app.emby_setup_generation_for_test(),
         vec![movie_dated(
@@ -152,7 +152,7 @@ fn an_item_dated_after_the_launch_instant_does_not_mark() {
     let source =
         mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
 
-    model.app.accept_home_recently_added(
+    model.app.accept_home_recently_added_for_test(
         source.clone(),
         model.app.emby_setup_generation_for_test(),
         vec![movie_dated(
@@ -191,7 +191,7 @@ fn a_podcast_library_marks_from_its_home_recently_added_rows() {
         cover_path: None,
     };
 
-    model.app.accept_home_recently_added(
+    model.app.accept_home_recently_added_for_test(
         source.clone(),
         model.app.audiobookshelf_setup_generation_for_test(),
         vec![QueueItem::Audiobookshelf(

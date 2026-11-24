@@ -89,6 +89,52 @@ impl App {
         self.drain_pinned_requests()
     }
 
+    /// Clear the pinned-request seam's recorded requests, so a test reads only
+    /// what its own step recorded.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the seam's lock is poisoned.
+    #[cfg(any(test, feature = "test"))]
+    pub fn clear_pinned_requests_for_test(&mut self) {
+        crate::app::pin::PINNED_REQUESTS
+            .lock()
+            .expect("the pinned-request seam lock holds")
+            .clear();
+    }
+
+    /// How many pinned requests the seam recorded since the last clear.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the seam's lock is poisoned.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pinned_request_count_for_test(&self) -> usize {
+        crate::app::pin::PINNED_REQUESTS
+            .lock()
+            .expect("the pinned-request seam lock holds")
+            .len()
+    }
+
+    /// Whether the seam recorded exactly one `Width` request for `width`: the
+    /// one request a pinned collapse step sends.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the seam's lock is poisoned.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pinned_requests_are_one_width_for_test(&self, width: PinnedWidth) -> bool {
+        matches!(
+            crate::app::pin::PINNED_REQUESTS
+                .lock()
+                .expect("the pinned-request seam lock holds")
+                .as_slice(),
+            [crate::app::pin::PinnedSettingRequest::Width(requested)] if *requested == width
+        )
+    }
+
     /// Record `width` as the applied pinned width through the production
     /// path, as the worker's outcome does.
     #[cfg(any(test, feature = "test"))]
@@ -393,5 +439,12 @@ impl App {
     #[cfg(any(test, feature = "test"))]
     pub fn seed_feed_entries_for_test(&mut self, entries: Vec<FeedEntry>) {
         self.feed_tab.all_entries = entries;
+    }
+
+    /// Request `sidebar` through the production overlay request, as the key
+    /// that opens it does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn request_sidebar_open_for_test(&mut self, sidebar: mbv_ui_model::overlay::SidebarId) {
+        self.request_sidebar_open(sidebar);
     }
 }

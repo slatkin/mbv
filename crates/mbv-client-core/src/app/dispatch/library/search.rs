@@ -304,7 +304,7 @@ impl App {
     /// caller's live/resting cursor) — never re-read from the level, so the
     /// prefetch decision no longer depends on `BrowseLevel.cursor` (task 4.3,
     /// R7).
-    pub fn maybe_fetch_next_page_sized(
+    pub(crate) fn maybe_fetch_next_page_sized(
         &mut self,
         lib_idx: usize,
         cursor: usize,

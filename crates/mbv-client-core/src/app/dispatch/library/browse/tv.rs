@@ -303,7 +303,7 @@ impl App {
         self.spawn_emby_latest_snapshot(lib.library.id.clone());
     }
 
-    pub fn spawn_emby_latest_snapshot(&self, library_id: String) {
+    pub(crate) fn spawn_emby_latest_snapshot(&self, library_id: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };

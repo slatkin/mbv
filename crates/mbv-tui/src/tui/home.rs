@@ -332,9 +332,10 @@ mod tests {
         movie.date_added = date_added_iso(i64::try_from(now - 20 * day).unwrap());
         let source = mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into());
 
-        model
-            .app
-            .store_home_recently_added(source.clone(), vec![QueueItem::Emby(Box::new(movie))]);
+        model.app.store_home_recently_added_for_test(
+            source.clone(),
+            vec![QueueItem::Emby(Box::new(movie))],
+        );
 
         assert!(model.app.home_recently_added_for(&source).is_empty());
     }
@@ -358,7 +359,7 @@ mod tests {
         old_movie.id = "movie-old".into();
         old_movie.date_added = date_added_iso(i64::try_from(current - 20 * day).unwrap());
         let episode = podcast_episode("episode", current - 2 * day);
-        model.app.accept_home_recently_added(
+        model.app.accept_home_recently_added_for_test(
             mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             model.app.emby_setup_generation(),
             vec![
@@ -366,7 +367,7 @@ mod tests {
                 QueueItem::Emby(Box::new(old_movie)),
             ],
         );
-        model.app.accept_home_recently_added(
+        model.app.accept_home_recently_added_for_test(
             mbv_client_core::state::playback::DestinationLatestSource::Audiobookshelf(
                 "pod-lib".into(),
             ),
@@ -496,7 +497,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let current = model.home_latest_launch_window.current;
         let episode = podcast_episode("episode", current - 24 * 60 * 60);
-        model.app.accept_home_recently_added(
+        model.app.accept_home_recently_added_for_test(
             mbv_client_core::state::playback::DestinationLatestSource::Audiobookshelf(
                 "pod-lib".into(),
             ),
@@ -528,7 +529,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let current = model.home_latest_launch_window.current;
         let day = 24 * 60 * 60;
-        model.app.accept_home_recently_added(
+        model.app.accept_home_recently_added_for_test(
             mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             model.app.emby_setup_generation(),
             vec![QueueItem::Emby(Box::new(recent_movie(

@@ -163,15 +163,57 @@ impl App {
         self.has_direct_remote_queue()
     }
 
-    /// Hold a queue edit's undo entry on `link`'s undo stack, as the edit
-    /// that made it leaves it: the inverse the undo consumes.
+    /// Hold a removed queue item's undo entry on `link`'s undo stack, as the
+    /// edit that removed `item` at `index` leaves it: the inverse re-appends
+    /// the item there when the undo is consumed.
     #[cfg(any(test, feature = "test"))]
-    pub fn seed_queue_undo_for_test(
+    pub fn seed_queue_undo_remove_for_test(
         &mut self,
         link: mbv_ui_model::playback::QueueLink,
-        entry: crate::app::state::playback::UndoEntry,
+        index: usize,
+        item: Box<mbv_queue::QueueItem>,
     ) {
-        self.undo_stack_for_link_mut(link).push(entry);
+        self.undo_stack_for_link_mut(link)
+            .push(crate::app::state::playback::UndoEntry::Remove {
+                target: crate::app::state::playback::QueueTarget::current(link),
+                item,
+                index,
+            });
+    }
+
+    /// Hold a moved queue slot's undo entry on `link`'s undo stack, as the
+    /// edit that moved `slot_id` away from `from` leaves it: the inverse moves
+    /// the slot back when the undo is consumed.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_queue_undo_move_for_test(
+        &mut self,
+        link: mbv_ui_model::playback::QueueLink,
+        slot_id: mbv_queue::QueueSlotId,
+        from: usize,
+    ) {
+        self.undo_stack_for_link_mut(link)
+            .push(crate::app::state::playback::UndoEntry::Move {
+                target: crate::app::state::playback::QueueTarget::current(link),
+                slot_id,
+                from,
+            });
+    }
+
+    /// The playback state the shown queue displays, through the production
+    /// resolution: the state a test asserts the queue's rows and playhead
+    /// against.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn displayed_queue_playback_state_for_test(&self) -> mbv_ui_model::playback::PlaybackState {
+        self.displayed_queue_playback_state()
+    }
+
+    /// Whether the shown queue's previous and next transport positions are
+    /// usable, through the production read: `(prev_available, next_available)`.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn transport_prev_next_available_for_test(&self) -> (bool, bool) {
+        self.transport_prev_next_available()
     }
 
     /// Hold `source` as the local queue view's source, as a queue adopted from
