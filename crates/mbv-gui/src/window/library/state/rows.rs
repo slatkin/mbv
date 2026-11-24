@@ -9,6 +9,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicList};
 use crate::bridge::library::GuiLibraryCommand;
+use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::library::list::{
     LibraryRow, LibraryTree, ListMove, MusicRowsFacts, album_row_id, artist_row_id,
     build_library_rows, jump_to_letter, letter_rail, scroll_step, scroll_top_to_show_cursor,
@@ -16,7 +17,7 @@ use crate::window::library::list::{
 use crate::window::library::parts::library_music_list;
 use crate::window::library::scroll::set_scroll_top;
 
-use super::{LibraryState, LibraryUiState};
+use super::{LibraryState, LibraryUiState, RowHoverPresses};
 
 /// The id list with `id` present when `present` and absent otherwise, keeping
 /// the other ids' order.
@@ -84,7 +85,7 @@ impl LibraryState {
 
     /// The item an action on the hovered row names (design D3, D8): an artist
     /// row's Service item, an album's own id, and a track's id, so the
-    /// play-next and add-to-queue keys act on what the pointer marks.
+    /// add-to-queue key acts on what the pointer marks.
     #[must_use]
     pub fn action_item_id(row: &LibraryRow) -> Option<String> {
         match row {
@@ -194,9 +195,55 @@ impl LibraryState {
     /// the album's tracks replace it from the played track onward. The list's track
     /// rows and the Hero's tracklist rows both send it, so one gesture cannot drift
     /// from the other.
-    pub fn play_library_track(&self, track_id: String) {
-        self.link
-            .library(GuiLibraryCommand::Play { item_id: track_id });
+    pub fn play_library_track(&self, track_id: &str) {
+        self.play_library_item(track_id);
+    }
+
+    /// Play the item a row names (`add-gui-library-panel` design D2's Enter):
+    /// the item's own stable id. The Music list's Enter, its row double-click,
+    /// and its hover Play all send it (gui-row-hover-actions design D4).
+    pub fn play_library_item(&self, item_id: &str) {
+        self.link.library(GuiLibraryCommand::Play {
+            item_id: item_id.to_owned(),
+        });
+    }
+
+    /// Add the item a row names to the queue (`add-gui-library-panel` design D2's
+    /// `a`): the item's own stable id. The Music list's `a` and its hover Add
+    /// both send it (gui-row-hover-actions design D4).
+    pub fn queue_library_item(&self, item_id: &str) {
+        self.link.library(GuiLibraryCommand::AddToQueue {
+            item_id: item_id.to_owned(),
+        });
+    }
+
+    /// Shuffle the row (gui-row-hover-actions design D4): the core runs the
+    /// row's own right-click shuffle entry, so the hover Shuffle control and the
+    /// menu entry cannot drift apart.
+    pub fn shuffle_library_row(&self, row: GuiLibraryMenuRow) {
+        self.link.library(GuiLibraryCommand::Shuffle { row });
+    }
+
+    /// The hover controls' presses for a Music row that names `item_id`
+    /// (gui-row-hover-actions design D3, D4): Play, Add, and Shuffle run the same
+    /// commands the keys and the row menu run, and `offers_shuffle` names whether
+    /// the row's menu carries a shuffle entry — only a collection's does. A row
+    /// that names no item offers none of them, so an artist row without an item
+    /// id keeps its Expand control alone.
+    #[must_use]
+    pub fn row_hover_presses(
+        &self,
+        item_id: Option<String>,
+        offers_shuffle: bool,
+    ) -> RowHoverPresses {
+        item_id.map_or_else(RowHoverPresses::default, |item_id| {
+            self.item_hover_presses(
+                item_id,
+                Self::play_library_item,
+                Self::queue_library_item,
+                offers_shuffle,
+            )
+        })
     }
 
     /// Press a row (design D7, gui-tree-double-click design D1): a press is the

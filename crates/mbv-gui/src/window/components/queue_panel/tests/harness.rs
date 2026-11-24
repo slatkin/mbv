@@ -238,7 +238,7 @@ pub(super) fn entry(label: &str, key_hint: Option<&str>, destructive: bool) -> G
     }
 }
 
-/// The open row menu the fixture paints: five entries, the cursor on the
+/// The open row menu the fixture paints: four entries, the cursor on the
 /// second, the destructive `Remove from queue` last.
 pub(super) fn row_menu() -> GuiOverlayFrame {
     GuiOverlayFrame::RowMenu {
@@ -246,7 +246,6 @@ pub(super) fn row_menu() -> GuiOverlayFrame {
         cursor: 1,
         entries: vec![
             entry("Play now", Some("Enter"), false),
-            entry("Play next", Some("n"), false),
             entry("Mark watched", Some("w"), false),
             entry("Go to episode", Some("g"), false),
             entry("Remove from queue", Some("dd"), true),

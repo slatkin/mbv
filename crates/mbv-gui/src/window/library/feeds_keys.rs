@@ -6,17 +6,16 @@
 //! decides the control a key acts on: the list, or the Hero — which carries no
 //! Workspace and no cursor.
 //!
-//! Enter, `n`, and `a` act on the row the pointer marks, and the Hero's entry
+//! Enter and `a` act on the row the pointer marks, and the Hero's entry
 //! Workspace has its own router, so Enter plays the entry the pointer marks
 //! there and `a` queues it (design D2, D6).
 //!
 //! The routing itself is the shared panel key handler's
 //! ([`super::keys_shared`], row 7C.2): the movements and Enter never reach
 //! the core, Esc's overlay and menu handling runs before this, `/` opens the
-//! list's filter, and Space stays the core's play and pause. This module keeps only the Feeds facts it routes over. There is no
-//! play-next on the destination: `n` is consumed and does nothing, and `a`
-//! sends the queue command. A Client holds one feed tab, so no library index
-//! rides the commands.
+//! list's filter, and Space stays the core's play and pause. This module keeps only the Feeds facts it routes over. `n` is not a Library
+//! key, so it goes to the core's router, and `a` sends the queue command. A
+//! Client holds one feed tab, so no library index rides the commands.
 
 use dioxus_native::prelude::*;
 
@@ -46,8 +45,7 @@ impl FeedsFrame {
 }
 
 /// The Feeds facts the shared panel key handler routes over (row 7C.2): the
-/// item the play and queue commands name is the entry the pointer marks, and
-/// there is no play-next.
+/// item the play and queue commands name is the entry the pointer marks.
 struct FeedsKeys<'a> {
     state: &'a LibraryState,
 }
@@ -112,15 +110,11 @@ impl PanelKeys for FeedsKeys<'_> {
     ) -> Option<KeyOutcome> {
         Some(route_workspace_key(self.state, key, pointer, target))
     }
-
-    // A feed entry has no play-next: the shared default consumes `n` and
-    // sends nothing.
 }
 
 /// Route a key to the Hero's entry Workspace (design D2, D6): Enter plays the
 /// entry the pointer marks and `a` queues it. No movement key moves a row,
-/// because the Workspace keeps no cursor, and `n` is consumed because Feeds has
-/// no play-next.
+/// because the Workspace keeps no cursor; `n` goes to the core.
 fn route_workspace_key(
     state: &LibraryState,
     key: &DomKey,
@@ -132,7 +126,6 @@ fn route_workspace_key(
             route_workspace_item_key(state, key, pointer);
             KeyOutcome::Handled
         }
-        "n" => KeyOutcome::Handled,
         _ if is_list_and_hero_key(&key.key) => KeyOutcome::Handled,
         _ => KeyOutcome::Core(target),
     }

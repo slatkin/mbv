@@ -70,7 +70,9 @@ fn paint_letter_row(letter: char) -> Element {
 /// The track row under an open album: the number, the muted name, and the
 /// runtime. It is a leaf of the tree at the second depth, so it paints both
 /// guides that pass through it — the artist's and its album's — and the mono
-/// leaf face (gui-unified-list-rows design D3).
+/// leaf face (gui-unified-list-rows design D3). Its hover offers Play and Add
+/// and no Shuffle, because a track is no collection (gui-row-hover-actions
+/// design D3).
 fn paint_track_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -93,6 +95,7 @@ fn paint_track_row(
     let menu_library = library.clone();
     let play_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
+    let hover = library.row_hover_presses(item_id.clone(), false);
     let track_id = track_id.clone();
     rsx! {
         TreeRow {
@@ -107,7 +110,9 @@ fn paint_track_row(
             selected: picked_row,
             tail,
             on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
-            on_play: Callback::new(move |()| play_library.play_library_track(track_id.clone())),
+            on_play: Callback::new(move |()| play_library.play_library_track(&track_id)),
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
             // The part presses the row first, so the menu's View Detail opens
             // the Hero for this row.
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
@@ -143,10 +148,13 @@ fn paint_library_row(
 /// A top-level artist row (gui-delineated-rows design D1): the shared top-level
 /// row part over the artist's name and its art thumb. It is a tree parent
 /// (gui-tree-double-click design D2, D4), so it paints no caret: its
-/// double-click toggles the node and its hover shows the hint. A press picks
-/// nothing (the Hero is album-scoped), and a double-click only opens it, so the
-/// row names no play path. While it shows album rows it starts its guide under
-/// its thumb (gui-tree-indent-guides design D3).
+/// double-click toggles the node and its hover offers Play, Add, and Shuffle
+/// over the artist's item id, plus Expand
+/// (gui-row-hover-actions design D3). An artist frame that carries no item id
+/// paints Expand alone. A press picks nothing (the Hero is album-scoped), and a
+/// double-click only opens it, so the row names no double-click play path.
+/// While it shows album rows it starts its guide under its thumb
+/// (gui-tree-indent-guides design D3).
 fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
     let LibraryRow::Artist {
         base,
@@ -166,6 +174,7 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
     let toggle_library = library.clone();
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
+    let hover = library.row_hover_presses(item_id.clone(), true);
     rsx! {
         FlatRow {
             attr: "",
@@ -187,6 +196,9 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
             on_toggle: Some(Callback::new(move |()| {
                 toggle_library.toggle_library_node(&toggle_row);
             })),
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
+            on_hover_shuffle: hover.shuffle,
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 // An artist press picks no item, so its menu offers no View
                 // Detail.
@@ -203,7 +215,9 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
 /// A nested album row under an open artist: a tree parent at the first depth,
 /// so it paints the Music album look — its press picks the album, its
 /// double-click opens or closes the node, its year paints the parent trail's
-/// date, and the hover hint replaces it (gui-unified-list-rows design D3).
+/// date, and the hover controls replace it (gui-unified-list-rows design D3;
+/// gui-row-hover-actions design D3). The album is a collection that names its
+/// own item, so it offers Play, Add, Shuffle, and Expand.
 fn paint_album_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -227,6 +241,7 @@ fn paint_album_row(
     let toggle_library = library.clone();
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
+    let hover = library.row_hover_presses(item_id.clone(), true);
     rsx! {
         TreeRow {
             attr: "",
@@ -245,6 +260,9 @@ fn paint_album_row(
             on_toggle: Some(Callback::new(move |()| {
                 toggle_library.toggle_library_node(&toggle_row);
             })),
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
+            on_hover_shuffle: hover.shuffle,
             // The part presses the row first, so the menu's View Detail opens
             // the Hero for this row.
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {

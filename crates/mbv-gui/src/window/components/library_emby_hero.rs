@@ -18,7 +18,7 @@
 //! boxset plays through the TUI's folder-play rule, so the pane is the frame
 //! and no nested list opens.
 //!
-//! Play, Play next (`n`), and Add to queue (`a`) send the Emby destination's
+//! Play and Add to queue (`a`) send the Emby destination's
 //! commands with the frame's selected row (design D12) — the core owns the
 //! selection, so the actions name the row the frame painted and never a
 //! position, and the destination's list part names the library index.
@@ -171,11 +171,6 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
     let on_play = Callback::new(move |()| {
         hero_command::<EmbyList>(&play_library, &play_detail, EmbyList::play);
     });
-    let next_library = library.clone();
-    let next_detail = props.detail.clone();
-    let on_play_next = Callback::new(move |()| {
-        hero_command::<EmbyList>(&next_library, &next_detail, EmbyList::play_next);
-    });
     let queue_library = library.clone();
     let queue_detail = props.detail.clone();
     let on_queue = Callback::new(move |()| {
@@ -185,7 +180,6 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
         LibraryHeroActions {
             attr: "emby",
             on_play: Some(on_play),
-            on_play_next: Some(on_play_next),
             on_queue: Some(on_queue),
         }
     };

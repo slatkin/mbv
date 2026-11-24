@@ -1,26 +1,42 @@
-//! Headless tests of the Workspace table's hover swap (D16): the port
-//! review's regression test — off-hover the row's play control hides and the
-//! number paints, and the hovered row swaps them, exactly as the former client
-//! ternaries did. A headless document cannot fire a pointerenter, so the
-//! hovered half asserts the one style decision both cells route through. No
-//! test opens a window, sleeps, or reaches the core.
+//! Headless tests of the Workspace table's trailing cell (gui-row-hover-actions
+//! design D5): the row's duration rests as the `row-hover-trail` the stylesheet
+//! hides while the hover controls show, and the controls paint over it — Play
+//! always, Add only where the destination passes `on_queue`. No test opens a
+//! window, sleeps, or reaches the core.
 
 use blitz_dom::{Document as _, LocalName};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
+use rstest::rstest;
 
-use super::{LibraryWorkspaceTable, WorkspaceRow, hover_styles};
+use super::{LibraryWorkspaceTable, WorkspaceRow};
 use crate::window::pointer_target::PointerList;
 
-/// The harness's props: the rows the table paints.
+/// The harness's props: the rows the table paints and whether the destination
+/// has an Add path.
 #[derive(Clone)]
 struct FixtureProps {
     rows: Vec<WorkspaceRow>,
+    with_queue: bool,
+}
+
+/// The one row every case paints.
+fn row() -> WorkspaceRow {
+    WorkspaceRow {
+        id: "t1".to_owned(),
+        number: "1".to_owned(),
+        name: "Rhymin & Stealin".to_owned(),
+        duration: "3:27".to_owned(),
+        playing: false,
+        state: None,
+        progress: None,
+    }
 }
 
 /// The root: paints the table, as the Heroes mount it.
 fn table_app(props: FixtureProps) -> Element {
+    let on_queue = props.with_queue.then(|| Callback::new(|_: String| {}));
     rsx! {
         LibraryWorkspaceTable {
             root: "data-library-tracklist",
@@ -31,86 +47,72 @@ fn table_app(props: FixtureProps) -> Element {
             rows: props.rows,
             on_press: Callback::new(|_: String| {}),
             on_play: Callback::new(|_: String| {}),
+            on_queue,
         }
     }
 }
 
-struct Fixture {
-    doc: DioxusDocument,
-}
-
-impl Fixture {
-    /// Poll the document until the first render has landed (a fixed poll
-    /// count with a tripwire: never an unbounded wait).
-    fn poll_until_idle(&mut self) {
-        for _ in 0..8 {
-            if !self.doc.poll(None) {
-                return;
-            }
-        }
-        panic!("document did not become idle");
-    }
-
-    /// The style attribute of the first node the selector names.
-    fn style_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_node(id)
-            .expect("the node is in the document")
-            .attr(LocalName::from("style"))
-            .unwrap_or_default()
-            .to_owned()
-    }
-}
-
-/// Build the document over the rows and let the first render land.
-fn built(rows: Vec<WorkspaceRow>) -> Fixture {
+/// Build the document over the rows and let the first render land (a fixed
+/// poll count with a tripwire: never an unbounded wait).
+fn built(with_queue: bool) -> DioxusDocument {
     let mut doc = DioxusDocument::new(
-        VirtualDom::new_with_props(table_app, FixtureProps { rows }),
+        VirtualDom::new_with_props(
+            table_app,
+            FixtureProps {
+                rows: vec![row()],
+                with_queue,
+            },
+        ),
         DocumentConfig {
             viewport: Some(Viewport::new(1200, 900, 1.0, ColorScheme::Light)),
             ..DocumentConfig::default()
         },
     );
     doc.initial_build();
-    let mut fixture = Fixture { doc };
-    fixture.poll_until_idle();
-    fixture
+    for _ in 0..8 {
+        if !doc.poll(None) {
+            return doc;
+        }
+    }
+    panic!("document did not become idle");
 }
 
-/// Regression test (the port review's hidden-control finding): off-hover the
-/// row's play control is `display: none` and the number paints with no
-/// display style, so the control swaps for the number instead of painting
-/// beside it; the hovered row swaps them.
-#[test]
-fn the_hover_swaps_the_number_for_the_play_control() {
-    let fixture = built(vec![WorkspaceRow {
-        id: "t1".to_owned(),
-        number: "1".to_owned(),
-        name: "Rhymin & Stealin".to_owned(),
-        duration: "3:27".to_owned(),
-        playing: false,
-        state: None,
-        progress: None,
-    }]);
+/// The `data-row-action` value of every painted control, in paint order.
+fn actions(doc: &DioxusDocument) -> Vec<String> {
+    let dom = doc.inner();
+    dom.query_selector_all("[data-library-track=\"t1\"] [data-row-action]")
+        .expect("the selector is valid")
+        .into_iter()
+        .filter_map(|id| {
+            dom.get_node(id)
+                .expect("the node is in the document")
+                .attr(LocalName::from("data-row-action"))
+                .map(str::to_owned)
+        })
+        .collect()
+}
 
-    let control_style = fixture.style_of("[data-library-track-action=\"play\"]");
+/// Contract (design D5): the merged trailing cell holds the row's duration as
+/// the trail the hover hides, and the controls paint over it — Play always, Add
+/// only where the destination passes `on_queue`.
+#[rstest]
+#[case(true, &["play", "queue"])]
+#[case(false, &["play"])]
+fn the_trailing_cell_holds_the_duration_and_the_offered_controls(
+    #[case] with_queue: bool,
+    #[case] expected: &[&str],
+) {
+    let doc = built(with_queue);
+
+    assert_eq!(actions(&doc), expected);
+    let dom = doc.inner();
     assert!(
-        control_style.contains("display: none"),
-        "the play control hides off-hover, painted: {control_style}"
-    );
-    let number_style = fixture.style_of("[data-library-track-number]");
-    assert!(
-        !number_style.contains("display"),
-        "the number paints off-hover with no display style, painted: {number_style}"
-    );
-    assert_eq!(
-        hover_styles(true),
-        ("display: none;", "display: flex;"),
-        "the hovered row hides the number and shows the control"
+        dom.query_selector(
+            "[data-library-track=\"t1\"] [data-library-track-duration].row-hover-trail"
+        )
+        .expect("the selector is valid")
+        .is_some(),
+        "the trailing cell paints the row's duration as its hover trail"
     );
 }
 
@@ -119,16 +121,8 @@ fn the_hover_swaps_the_number_for_the_play_control() {
 /// key's pointer target reads.
 #[test]
 fn the_table_and_its_rows_carry_the_pointer_markers() {
-    let fixture = built(vec![WorkspaceRow {
-        id: "t1".to_owned(),
-        number: "1".to_owned(),
-        name: "Rhymin & Stealin".to_owned(),
-        duration: "3:27".to_owned(),
-        playing: false,
-        state: None,
-        progress: None,
-    }]);
-    let dom = fixture.doc.inner();
+    let doc = built(false);
+    let dom = doc.inner();
     let list = dom
         .query_selector("[data-pointer-list]")
         .expect("the selector is valid")
@@ -140,12 +134,12 @@ fn the_table_and_its_rows_carry_the_pointer_markers() {
             .attr(LocalName::from("data-pointer-list")),
         Some("tracklist")
     );
-    let row = dom
+    let row_node = dom
         .query_selector("[data-pointer-row]")
         .expect("the selector is valid")
         .expect("the row carries its marker");
     assert_eq!(
-        dom.get_node(row)
+        dom.get_node(row_node)
             .expect("the node is in the document")
             .attr(LocalName::from("data-pointer-row")),
         Some("t1")

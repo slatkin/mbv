@@ -124,6 +124,30 @@ impl GuiCore {
     pub(super) fn run_gui_library_menu_entry(&mut self, row: &GuiLibraryMenuRow, index: usize) {
         run_library_menu_entry(&mut self.app, &self.gui, row, index);
     }
+
+    /// Shuffle the row (gui-row-hover-actions design D4): the row's hover
+    /// Shuffle control runs the row menu's own shuffle entry, so the two
+    /// cannot disagree. The row resolves through the same target and builder
+    /// the row menu paints, and the first entry whose action is a shuffle runs
+    /// through the same executor. A row whose menu carries no shuffle entry
+    /// changes nothing.
+    pub(super) fn shuffle_gui_library_row(&mut self, row: &GuiLibraryMenuRow) {
+        let index = {
+            let app = &mut self.app;
+            let gui = &self.gui;
+            menu_target(app, gui, row)
+                .and_then(|target| library_menu_entries(app, &target))
+                .and_then(|entries| entries.iter().position(is_shuffle_entry))
+        };
+        if let Some(index) = index {
+            self.run_gui_library_menu_entry(row, index);
+        } else {
+            super::log_ignored_library_command(
+                "shuffle",
+                format_args!("the row's menu carries no shuffle entry"),
+            );
+        }
+    }
 }
 
 /// Run the row menu's entry at `index` (design D8): the entry the frame
@@ -183,6 +207,13 @@ fn run_library_menu_entry(
         }
         (action, _) => app.execute_context_action(action, None),
     }
+}
+
+/// Whether the entry's action shuffles the row (gui-row-hover-actions design
+/// D4): the hover Shuffle control finds its entry by this question, never by
+/// the entry's label or its fixed index.
+fn is_shuffle_entry(entry: &ContextMenuEntry) -> bool {
+    entry.action.as_ref().is_some_and(ContextAction::is_shuffle)
 }
 
 /// The entries the row's destination builder produces for `target`

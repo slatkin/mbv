@@ -27,7 +27,6 @@ use mbv_config::GuiPanelWidths;
 
 use super::note_panel_ui_reset;
 use crate::bridge::frame::GuiPanelToggles;
-use crate::window::components::tree_hint::TreeHint;
 use crate::window::input::f32_from_f64;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
@@ -36,6 +35,7 @@ mod art;
 mod header;
 mod paint;
 mod resize;
+mod row_hover;
 
 /// The pass bound for the idle assertion: a settling effect goes `Pending`
 /// within a few passes; a self-triggering one never does.
@@ -191,14 +191,6 @@ fn stylesheet_probe() -> Element {
                 class: "hover:bg-[var(--canvas-border)]",
                 style: "width: 120px; height: 40px;",
             }
-            // The tree rows' hover hint rides a real parent row: the hint is
-            // absolute under it, and the hover the test drives must land on
-            // the parent, not on the pointer-events-none hint.
-            div { id: "probe-parent",
-                class: "tree-parent relative flex items-center",
-                style: "width: 160px; height: 40px;",
-                TreeHint { open: false }
-            }
         }
     }
 }
@@ -240,30 +232,13 @@ impl Stylesheet {
     /// restyle, as the window does on a pointer move; returns the element's
     /// resolved value of `property` under the pointer.
     fn hovered(&mut self, selector: &str, property: &str) -> String {
-        self.hovered_at(selector, selector, property, 0.0)
-    }
-
-    /// Put the pointer over the middle of the element `hover_selector` names,
-    /// then restyle at animation time `now` (seconds, as the shell passes
-    /// them), and return the element `probe_selector` names' resolved value of
-    /// `property`. `now` past a pending transition's delay lets that
-    /// transition finish, as a later frame would. The two selectors differ
-    /// when the probed element takes no hover itself (a `pointer-events-none`
-    /// hint) and its hover state rides the ancestor the pointer sits on.
-    fn hovered_at(
-        &mut self,
-        hover_selector: &str,
-        probe_selector: &str,
-        property: &str,
-        now: f64,
-    ) -> String {
         let mut dom = self.doc.inner.borrow_mut();
-        let hover_id = dom
-            .query_selector(hover_selector)
+        let id = dom
+            .query_selector(selector)
             .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{hover_selector} paints"));
+            .unwrap_or_else(|| panic!("{selector} paints"));
         let rect = dom
-            .get_client_bounding_rect(hover_id)
+            .get_client_bounding_rect(id)
             .expect("the probe is laid out");
         let x = f32_from_f64(rect.x + rect.width / 2.0);
         let y = f32_from_f64(rect.y + rect.height / 2.0);
@@ -273,16 +248,9 @@ impl Stylesheet {
         // `probe-frame` veil test's hit on its `input` shows).
         dom.set_hover_to(x, y);
         let hover_path = dom.maybe_node_element_ancestors(dom.get_hover_node_id());
-        assert!(
-            hover_path.contains(&hover_id),
-            "{hover_selector} takes the hover"
-        );
-        dom.resolve(now);
-        let probe_id = dom
-            .query_selector(probe_selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{probe_selector} paints"));
-        dom.resolved_style_value(probe_id, property)
+        assert!(hover_path.contains(&id), "{selector} takes the hover");
+        dom.resolve(0.0);
+        dom.resolved_style_value(id, property)
     }
 }
 
@@ -383,31 +351,6 @@ fn the_filter_frame_paints_the_hover_veil_under_the_pointer() {
     assert!(
         hovered.starts_with("linear-gradient("),
         "the hovered frame paints the veil: {hovered}"
-    );
-}
-
-/// Contract (2026-11-23, the hint showed as soon as the pointer touched the
-/// row): the tree hint waits out the rest delay the browsers give their own
-/// tooltips — hidden until the pointer rests past it, shown after. The rule
-/// pair carries the delay on the hover state only; swapped, the card would
-/// flash at once on entry and linger 500ms after the pointer leaves.
-#[test]
-fn the_tree_hint_shows_only_after_the_hover_rests() {
-    let mut sheet = Stylesheet::built();
-    assert_eq!(
-        sheet.resolved("[data-tree-hint]", "visibility"),
-        "hidden",
-        "the hint waits for the pointer"
-    );
-    let touched = sheet.hovered_at("#probe-parent", "[data-tree-hint]", "visibility", 0.0);
-    assert_eq!(
-        touched, "hidden",
-        "the hint still waits while the pointer has not rested past the delay"
-    );
-    let rested = sheet.hovered_at("#probe-parent", "[data-tree-hint]", "visibility", 0.6);
-    assert_eq!(
-        rested, "visible",
-        "the hint shows once the pointer rests past the delay"
     );
 }
 

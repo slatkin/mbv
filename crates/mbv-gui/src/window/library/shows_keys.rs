@@ -23,8 +23,7 @@ use super::list::ListMove;
 use super::parts::{library_shows_detail, library_shows_list};
 use super::shows_list::ShowsListRow;
 use super::shows_workspace::{
-    play_next_shows_episode, play_shows_episode, queue_shows_episode, shows_episode_at,
-    step_shows_season,
+    play_shows_episode, queue_shows_episode, shows_episode_at, step_shows_season,
 };
 use super::state::LibraryState;
 
@@ -115,11 +114,6 @@ impl PanelKeys for ShowsKeys<'_> {
         self.state.queue_shows_row(item_id);
     }
 
-    fn play_next_item(&self, item_id: &str) -> bool {
-        self.state.play_shows_row_next(item_id);
-        true
-    }
-
     /// Right on `row` (design D14): a node opens. A leaf has no children, so the
     /// key changes nothing.
     fn open_row(&self, row: &ShowsListRow) {
@@ -169,11 +163,11 @@ impl PanelKeys for ShowsKeys<'_> {
 }
 
 /// Route a key to the Shows keys (design D12): the shared handler over the
-/// Shows facts. The movement keys scroll the list under the pointer, and Enter
-/// opens or closes a series or season node and plays an episode leaf. `n` and
-/// `a` act on the item the pointer's control names — a series row in the tree,
-/// an episode in the Workspace — and a series, season, or heading row is not
-/// playable, so its `n` and `a` change nothing.
+/// shows facts. The movement keys scroll the list under the pointer, and Enter
+/// opens or closes a series or season node and plays an episode leaf. `a` acts
+/// on the item the pointer's control names — a series row in the tree, an
+/// episode in the Workspace — and a series, season, or heading row is not
+/// playable, so its `a` changes nothing.
 #[must_use]
 pub fn route_shows_panel_key(
     state: &LibraryState,
@@ -184,10 +178,10 @@ pub fn route_shows_panel_key(
 }
 
 /// Route a key to the Hero's Workspace (design D12, D2 of
-/// `gui-pointer-target-interaction`): Left and Right step the season, Enter,
-/// `n`, and `a` act on the episode the pointer marks, and the other list keys
-/// change nothing but are consumed. The Workspace keeps no cursor, so a
-/// movement key moves no row.
+/// `gui-pointer-target-interaction`): Left and Right step the season, Enter and
+/// `a` act on the episode the pointer marks, and the other list keys change
+/// nothing but are consumed. The Workspace keeps no cursor, so a movement key
+/// moves no row.
 fn route_workspace_key(
     state: &LibraryState,
     key: &DomKey,
@@ -208,7 +202,7 @@ fn route_workspace_key(
             step_shows_season(state, 1, lib_idx, detail);
             KeyOutcome::Handled
         }
-        "Enter" | "n" | "a" => {
+        "Enter" | "a" => {
             route_workspace_item_key(state, key, lib_idx, detail, pointer);
             KeyOutcome::Handled
         }
@@ -217,9 +211,9 @@ fn route_workspace_key(
     }
 }
 
-/// Run Enter, `n`, or `a` against the Workspace episode the pointer marks
-/// (design D2): the marker carries the episode's stable Service id, and a
-/// marker that names no painted episode sends nothing.
+/// Run Enter or `a` against the Workspace episode the pointer marks (design
+/// D2): the marker carries the episode's stable Service id, and a marker that
+/// names no painted episode sends nothing.
 fn route_workspace_item_key(
     state: &LibraryState,
     key: &DomKey,
@@ -235,10 +229,6 @@ fn route_workspace_item_key(
         return;
     };
     let episode_id = episode.episode_id.as_str();
-    if key.key == "n" {
-        play_next_shows_episode(state, lib_idx, episode_id);
-        return;
-    }
     if key.key == "a" {
         queue_shows_episode(state, lib_idx, episode_id);
         return;

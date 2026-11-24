@@ -7,9 +7,12 @@
 //!
 //! A playlist row is a tree parent (`gui-tree-double-click` design D1 to D3):
 //! a press picks it, a double-click opens it when closed and closes it when
-//! open, its count gives way to the hover hint, and it paints no chevron. An
+//! open, its count gives way to the hover controls, and it paints no chevron. An
 //! item row stays a leaf whose double-click plays it, and the playlist's own
-//! Play control and menu Play entry still play the playlist.
+//! Play control and menu Play entry still play the playlist. The hover
+//! controls run the same `Control` dispatch the hero and the menu run
+//! (`gui-row-hover-actions` design D3, D4): a playlist offers Play, Add,
+//! Shuffle, and its own toggle; an item offers Play and Add.
 //!
 //! Both row kinds paint through the shared row parts (`gui-unified-list-rows`
 //! design D2, D3): a playlist as a top-level row with no thumb and its count as
@@ -119,6 +122,23 @@ pub(crate) fn controls_for(pick: &Pick) -> &'static [Control] {
     }
 }
 
+/// The controls a playlist row's hover offers (`gui-row-hover-actions` design
+/// D3): the three whole-row actions, in the shared part's order.
+const PLAYLIST_HOVER: [Control; 3] = [Control::Play, Control::Add, Control::Shuffle];
+
+/// The controls an item row's hover offers: Play and Add. The screen's own item
+/// control set keeps its Shuffle for the hero and the menu, while the item
+/// row's hover leaves it out (`gui-row-hover-actions` design D3).
+const ITEM_HOVER: [Control; 2] = [Control::Play, Control::Add];
+
+/// The controls the row `pick` names offers on hover.
+fn hover_controls_for(pick: &Pick) -> &'static [Control] {
+    match pick {
+        Pick::Playlist(_) => &PLAYLIST_HOVER,
+        Pick::Item { .. } => &ITEM_HOVER,
+    }
+}
+
 /// The command one control sends for the row `pick` names. `None` for the
 /// Rename control, which opens a local draft instead of sending.
 pub(crate) fn command_for(pick: &Pick, control: Control) -> Option<GuiPlaylistsCommand> {
@@ -147,6 +167,14 @@ pub(crate) fn command_for(pick: &Pick, control: Control) -> Option<GuiPlaylistsC
     }
 }
 
+/// Run one whole-row action on the row `pick` names: the command the hero, the
+/// menu, and the row's hover control all send, so the three cannot drift apart.
+fn run_row_action(link: &CoreLink, pick: &Pick, control: Control) {
+    if let Some(command) = command_for(pick, control) {
+        link.playlists(command);
+    }
+}
+
 /// Run one control on the row `pick` names.
 fn run_control(
     link: &CoreLink,
@@ -163,9 +191,22 @@ fn run_control(
         }
         return;
     }
-    if let Some(command) = command_for(pick, control) {
-        link.playlists(command);
+    run_row_action(link, pick, control);
+}
+
+/// The hover press of one control on the row `pick` names
+/// (`gui-row-hover-actions` design D3, D4): `Some` while the row offers that
+/// control on hover, and the press runs the same whole-row action path the
+/// hero and the menu run, so a row and the hero cannot drift apart.
+fn hover_press(link: &CoreLink, pick: &Pick, control: Control) -> Option<Callback<()>> {
+    if !hover_controls_for(pick).contains(&control) {
+        return None;
     }
+    let run_link = link.clone();
+    let target = pick.clone();
+    Some(Callback::new(move |()| {
+        run_row_action(&run_link, &target, control);
+    }))
 }
 
 /// The command a double-click on the playlist `id` sends: it opens the
@@ -453,6 +494,13 @@ fn playlist_node(
     let rename_name = rename.as_ref().map(|draft| draft.name.clone());
     let mut press_pick = pick;
     let row_id = id.clone();
+    // The hover controls (gui-row-hover-actions design D3, D4): Play, Add, and
+    // Shuffle run the screen's own `Control` dispatch, and the row's toggle
+    // supplies Expand.
+    let hover_row = Pick::Playlist(id.clone());
+    let hover_play = hover_press(link, &hover_row, Control::Play);
+    let hover_queue = hover_press(link, &hover_row, Control::Add);
+    let hover_shuffle = hover_press(link, &hover_row, Control::Shuffle);
     rsx! {
         div {
             key: "{id}",
@@ -476,6 +524,9 @@ fn playlist_node(
                 on_toggle: Some(Callback::new(move |()| {
                     toggle_link.playlists(toggle_command(is_open, &toggle_id));
                 })),
+                on_hover_play: hover_play,
+                on_hover_queue: hover_queue,
+                on_hover_shuffle: hover_shuffle,
                 on_context: Some(Callback::new(move |at: (f32, f32)| {
                     open_menu(at, Pick::Playlist(context_id.clone()), pick, menu);
                 })),
@@ -493,7 +544,9 @@ fn playlist_node(
 /// The open playlist's item rows, indented under it. Each item row is a leaf of
 /// the tree at the first depth, so it carries its playlist's guide from its top
 /// to its bottom (`gui-tree-indent-guides` design D3), and the last one paints
-/// the divider the open parent row gave up.
+/// the divider the open parent row gave up. Its hover offers Play and Add
+/// through the screen's own `Control` dispatch (`gui-row-hover-actions` design
+/// D3, D4).
 fn items_block(
     open: Option<&GuiOpenPlaylist>,
     link: &CoreLink,
@@ -521,6 +574,8 @@ fn items_block(
                     let play_playlist = open.id.clone();
                     let play_item = item.id.clone();
                     let tail = open.items.last().is_some_and(|last| last.id == item.id);
+                    let hover_play = hover_press(link, &this, Control::Play);
+                    let hover_queue = hover_press(link, &this, Control::Add);
                     let mut press_pick = pick;
                     rsx! {
                         TreeRow {
@@ -544,6 +599,8 @@ fn items_block(
                             on_context: Some(Callback::new(move |at: (f32, f32)| {
                                 open_menu(at, context.clone(), pick, menu);
                             })),
+                            on_hover_play: hover_play,
+                            on_hover_queue: hover_queue,
                         }
                     }
                 }

@@ -6,10 +6,9 @@
 //! progress roles, the overview, and the hover actions. No Workspace and no
 //! tracklist paint here: Home has neither, so the pane is one block.
 //!
-//! Play, Play next (`n`), and Add to queue (`a`) send the Home destination's
-//! row commands with the frame's selected row (design D12) — the core owns the
-//! selection, so the actions name the row the frame painted and never a
-//! position.
+//! Play and Add to queue (`a`) send the Home destination's row commands with
+//! the frame's selected row (design D12) — the core owns the selection, so the
+//! actions name the row the frame painted and never a position.
 
 use dioxus_native::prelude::*;
 
@@ -61,15 +60,6 @@ pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {
     let on_play = Callback::new(move |()| {
         press(&play_library, &play_detail, LibraryState::play_home_row);
     });
-    let next_detail = props.detail.clone();
-    let next_library = library.clone();
-    let on_play_next = Callback::new(move |()| {
-        press(
-            &next_library,
-            &next_detail,
-            LibraryState::play_home_row_next,
-        );
-    });
     let queue_detail = props.detail.clone();
     let queue_library = library.clone();
     let on_queue = Callback::new(move |()| {
@@ -95,7 +85,6 @@ pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {
                 section: "data-library-home-hero",
                 hero,
                 on_play: Some(on_play),
-                on_play_next: Some(on_play_next),
                 on_queue: Some(on_queue),
             }
         }

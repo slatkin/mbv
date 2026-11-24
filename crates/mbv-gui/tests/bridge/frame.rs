@@ -325,7 +325,7 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
     assert_eq!(frame.summary().remaining, 2);
 
     // The open row menu rides the same frame: the row it opened on, and the
-    // canvas's five entries, each with the key hint that selects it
+    // canvas's four entries, each with the key hint that selects it
     // directly.
     let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::RowMenu {
         anchor_slot,
@@ -344,7 +344,6 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
         labels,
         [
             "Play now",
-            "Play next",
             "Mark watched",
             "Go to episode",
             "Remove from queue",
@@ -357,14 +356,7 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
         .collect();
     assert_eq!(
         hints,
-        [
-            Some("Enter"),
-            Some("n"),
-            Some("w"),
-            Some("g"),
-            Some("dd"),
-            Some("c")
-        ]
+        [Some("Enter"), Some("w"), Some("g"), Some("dd"), Some("c")]
     );
 }
 

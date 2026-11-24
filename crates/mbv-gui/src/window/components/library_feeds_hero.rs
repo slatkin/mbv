@@ -6,8 +6,7 @@
 //!
 //! A feed entry has no artwork source and no overview, so the box paints the
 //! window's placeholder for the shape and no overview paragraph paints. There
-//! is no Workspace and no tracklist. Play next is not a Feeds command
-//! (row 11.1), so only Play and Add to queue paint.
+//! is no Workspace and no tracklist, so only Play and Add to queue paint.
 //!
 //! Play and Add to queue send the Feeds destination's commands with the
 //! frame's selected entry (design D12) — the core owns the selection, so the
@@ -22,7 +21,7 @@ use crate::bridge::frame::library::{
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{
-    LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow, WorkspaceRowState,
+    LibraryWorkspaceTable, WorkspaceRow, WorkspaceRowState,
 };
 use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::library::hero::{HeroLayoutFacts, hero_command, hero_layout};
@@ -117,8 +116,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     };
 
     // The actions' sends (design D12, row 11.1): the Feeds destination's
-    // commands over the picked entry's own stable id. There is no play-next
-    // command for Feeds.
+    // commands over the picked entry's own stable id.
     let play_library = library.clone();
     let play_detail = props.detail.clone();
     let on_play = Callback::new(move |()| {
@@ -148,16 +146,12 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
         play_library.play_feeds_row(&item_id);
     });
 
-    // The row's hover action: add the entry to the queue.
-    let action_library = library.clone();
-    let row_actions = vec![WorkspaceAction {
-        key: "queue".to_owned(),
-        label: "Add to queue".to_owned(),
-        icon: WorkspaceActionIcon::ListEnd,
-        run: Callback::new(move |item_id: String| {
-            action_library.queue_feeds_row(&item_id);
-        }),
-    }];
+    // The row's hover Add (gui-row-hover-actions D5): add the entry to the
+    // queue.
+    let queue_library = library.clone();
+    let on_queue = Callback::new(move |item_id: String| {
+        queue_library.queue_feeds_row(&item_id);
+    });
 
     rsx! {
         LibraryHeroFrame {
@@ -177,9 +171,9 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
                     noun: "Entry",
                     pointer_list: PointerList::Workspace,
                     rows: entry_rows,
-                    actions: row_actions,
                     on_press,
                     on_play,
+                    on_queue: Some(on_queue),
                 }
             }),
         }

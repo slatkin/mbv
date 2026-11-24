@@ -307,13 +307,6 @@ pub trait LetteredDestination: Sized + Copy + PartialEq + 'static {
     /// Add the item `item_id` names to the queue's tail: `a` on the hovered
     /// row.
     fn queue(state: &LibraryState, item_id: &str);
-
-    /// Play the item `item_id` names next: `n` on the hovered row. Only Emby
-    /// overrides this; a destination with no play-next sends nothing, so `n`
-    /// is consumed and does nothing there.
-    fn play_next(state: &LibraryState, item_id: &str) {
-        let _ = (state, item_id);
-    }
 }
 
 /// The one set of `LibraryState` methods the lettered destinations share

@@ -373,10 +373,10 @@ fn enter_on_a_series_row_selects_it_for_the_hero() {
     );
 }
 
-// A series row is not playable (row 7.1): its `n` and `a` send nothing, so
-// the keys never act on a row the core refuses.
+// A series row is not playable (row 7.1): its `a` sends nothing, so the key
+// never acts on a row the core refuses. `n` is not a Library key either.
 #[test]
-fn n_and_a_on_a_series_row_send_nothing() {
+fn a_on_a_series_row_sends_nothing() {
     let content = shows_content(shows_tree(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
@@ -384,7 +384,7 @@ fn n_and_a_on_a_series_row_send_nothing() {
         route_on_row(state, facts, "n", "n", "shows-series:s1");
         route_on_row(state, facts, "a", "a", "shows-series:s1");
     });
-    assert_eq!(facts, ["n=Handled", "a=Handled"]);
+    assert_eq!(facts, ["n=Core(None)", "a=Handled"]);
     assert_eq!(commands(&rx), []);
 }
 
@@ -423,8 +423,9 @@ fn down_over_the_workspace_is_consumed_and_moves_nothing() {
     assert_eq!(commands(&rx), []);
 }
 
-// Enter, `n`, and `a` on the Workspace act on the episode the pointer marks
-// (design D2): the Hero names no cursor, so the marker is the row.
+// Enter and `a` on the Workspace act on the episode the pointer marks
+// (design D2): the Hero names no cursor, so the marker is the row. `n` is not a
+// Library key, so it goes to the core.
 #[test]
 fn enter_n_and_a_on_the_workspace_name_the_hovered_episode() {
     let content = shows_content(shows_tree(), Some(series_hero()));
@@ -435,15 +436,11 @@ fn enter_n_and_a_on_the_workspace_name_the_hovered_episode() {
         route_on_workspace(state, facts, "n", "n", "ep2");
         route_on_workspace(state, facts, "a", "a", "ep2");
     });
-    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(facts, ["enter=Handled", "n=Core(None)", "a=Handled"]);
     assert_eq!(
         commands(&rx),
         [
             crate::gui_core::GuiLibraryCommand::ShowsPlay {
-                lib_idx: 0,
-                item_id: "ep2".to_owned(),
-            },
-            crate::gui_core::GuiLibraryCommand::ShowsPlayNext {
                 lib_idx: 0,
                 item_id: "ep2".to_owned(),
             },

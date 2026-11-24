@@ -16,9 +16,9 @@ impl GuiCore {
     /// selection). A multi-selection takes the shared selection menu the
     /// TUI's right-click builds (its bulk `Remove` names every marked
     /// slot); a single row takes the canvas's per-row entries: Play now,
-    /// Play next, the mark entry the row's own state picks, the go-to
-    /// entry, Remove, and Clear queue — the mark and go-to entries only
-    /// for a non-music Emby row, per the TUI queue menu's rules.
+    /// the mark entry the row's own state picks, the go-to entry, Remove,
+    /// and Clear queue — the mark and go-to entries only for a non-music
+    /// Emby row, per the TUI queue menu's rules.
     pub(crate) fn open_gui_row_menu(&mut self, targets: &[QueueSlotId]) {
         if targets.len() > 1 {
             let Some(menu) = self.app.build_queue_selection_menu(targets) else {
@@ -44,11 +44,6 @@ impl GuiCore {
             label: "Play now",
             action: Some(ContextAction::PlayQueue(index)),
             key_hint: Some("Enter"),
-        });
-        entries.push(ContextMenuEntry {
-            label: "Play next",
-            action: Some(ContextAction::PlayNext(index)),
-            key_hint: Some("n"),
         });
         if let Some(item) = item
             && !item.is_music()

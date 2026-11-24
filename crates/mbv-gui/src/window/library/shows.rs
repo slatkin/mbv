@@ -25,7 +25,7 @@ use crate::window::library::shows_list::{
     ShowsListRow, ShowsRowsFacts, ShowsTreeState, build_shows_rows, shows_letter_rail,
 };
 
-use super::state::LibraryState;
+use super::state::{LibraryState, RowHoverPresses};
 
 /// The Shows list's interaction state (`shows.ts`'s `ShowsUiState`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -243,28 +243,6 @@ impl LibraryState {
         });
     }
 
-    /// Play a Shows episode next (design D12): `n` on a flat row.
-    pub fn play_shows_row_next(&self, row_id: &str) {
-        let Some(lib_idx) = self.shows_lib_idx() else {
-            return;
-        };
-        if self.shows_row_at(row_id).is_some_and(|row| {
-            matches!(
-                row,
-                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
-                    display_only: true,
-                    ..
-                })
-            )
-        }) {
-            return;
-        }
-        self.link.library(GuiLibraryCommand::ShowsPlayNext {
-            lib_idx,
-            item_id: row_id.to_owned(),
-        });
-    }
-
     /// Add a Shows episode to the queue's tail (design D12): `a` on a flat
     /// row.
     pub fn queue_shows_row(&self, row_id: &str) {
@@ -286,6 +264,26 @@ impl LibraryState {
             lib_idx,
             item_id: row_id.to_owned(),
         });
+    }
+
+    /// The hover controls' presses for a Shows row that names `item_id`
+    /// (gui-row-hover-actions design D3, D4): Play and Add run the same commands
+    /// the keys run, and Shuffle runs the row's own right-click shuffle entry, on
+    /// the rows whose menu carries one (`offers_shuffle`: a series and a season,
+    /// never an episode or a flat row, which name no collection). A display-only
+    /// row takes none of them.
+    #[must_use]
+    pub fn shows_row_hover_presses(
+        &self,
+        item_id: String,
+        offers_shuffle: bool,
+    ) -> RowHoverPresses {
+        self.item_hover_presses(
+            item_id,
+            Self::play_shows_row,
+            Self::queue_shows_row,
+            offers_shuffle,
+        )
     }
 
     /// Scroll the list by one movement key (design D6): Up and Down move by the

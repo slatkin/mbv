@@ -1,16 +1,16 @@
 //! The Library Hero (`replace-tauri-with-blitz` task 7.5, the port of
 //! `LibraryHero`; add-gui-library-panel design D5, D8): the canvas's
 //! detail pane for the picked album — the artist header with Shuffle artist,
-//! the album block with its square artwork and its Play, Play next, Add to
-//! queue, and More actions controls, and the album's tracklist. The Wide
+//! the album block with its square artwork and its Play, Add to queue, and
+//! More actions controls, and the album's tracklist. The Wide
 //! arrangement paints it as the pane beside the list, and the Narrow
 //! arrangement paints the very same painters inside its overlay (design D4),
 //! so the two cannot drift.
 //!
 //! Every control sends the command the core applies through its existing App
-//! action (design D8): Play, Play next, Add to queue, and Shuffle artist name
-//! stable Service ids, and Shuffle artist names the artist's albums in the
-//! current union. The Hero's controls paint their keys (`n`, `a`).
+//! action (design D8): Play, Add to queue, and Shuffle artist name stable
+//! Service ids, and Shuffle artist names the artist's albums in the current
+//! union. The Hero's controls paint their key (`a`).
 //!
 //! More actions opens the picked item's menu: the core builds the entries and
 //! the frame carries them, so the window paints what the core can run. The
@@ -52,13 +52,6 @@ pub struct LibraryHeroProps {
 /// album's tracks reach the Owner as one replacement.
 fn play_album(library: &LibraryState, album_id: &str) {
     library.link.library(GuiLibraryCommand::Play {
-        item_id: album_id.to_owned(),
-    });
-}
-
-/// Admit the album directly after the active slot (design D8).
-fn play_next_album(library: &LibraryState, album_id: &str) {
-    library.link.library(GuiLibraryCommand::PlayNext {
         item_id: album_id.to_owned(),
     });
 }
@@ -143,9 +136,6 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     let album_id = hero.album.album_id.clone();
     let play_library = library.clone();
     let on_play = Callback::new(move |()| play_album(&play_library, &album_id));
-    let next_library = library.clone();
-    let album_id = hero.album.album_id.clone();
-    let on_play_next = Callback::new(move |()| play_next_album(&next_library, &album_id));
     let queue_library = library.clone();
     let album_id = hero.album.album_id.clone();
     let on_queue = Callback::new(move |()| add_album_to_queue(&queue_library, &album_id));
@@ -191,7 +181,6 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
         LibraryHeroActions {
             attr: "",
             on_play: Some(on_play),
-            on_play_next: Some(on_play_next),
             on_queue: Some(on_queue),
         }
         if !menu.is_empty() {

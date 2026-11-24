@@ -128,22 +128,6 @@ fn enter_on_home_plays_the_hovered_row_by_its_opaque_id() {
     );
 }
 
-// `n` on Home sends play next for the hovered row.
-#[test]
-fn n_on_home_sends_play_next_for_the_hovered_row() {
-    let (facts, rx) = run(|state, facts| {
-        carry_home(state);
-        route_on_row(state, facts, "n", "n", PointerList::Home, &continued_key());
-    });
-    assert_eq!(facts, ["n=Handled"]);
-    assert_eq!(
-        commands(&rx),
-        [crate::gui_core::GuiLibraryCommand::HomePlayNext {
-            row: continued_row_id()
-        }]
-    );
-}
-
 // `a` on Home adds the hovered row to the queue.
 #[test]
 fn a_on_home_adds_the_hovered_row_to_the_queue() {

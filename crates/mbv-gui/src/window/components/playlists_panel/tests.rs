@@ -64,3 +64,15 @@ fn a_double_click_toggles_the_playlist_row(
 ) {
     assert_eq!(toggle_command(is_open, "pl"), expected);
 }
+
+/// Contract (gui-row-hover-actions design D3): a playlist row's hover offers
+/// Play, Add, and Shuffle, and an item row's offers Play and Add — the item
+/// keeps its Shuffle for the hero and the menu, not for its row.
+#[test]
+fn a_playlist_row_hovers_three_controls_and_an_item_row_two() {
+    assert_eq!(
+        hover_controls_for(&playlist()),
+        [Control::Play, Control::Add, Control::Shuffle]
+    );
+    assert_eq!(hover_controls_for(&item()), [Control::Play, Control::Add]);
+}

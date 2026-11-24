@@ -10,7 +10,7 @@
 //! row 7C.2): the movements and Enter never reach the core, Esc's overlay and
 //! menu handling runs before this, `/` opens the list's filter, and Space stays
 //! the core's play and pause. This module keeps only the Emby facts it routes
-//! over: the hovered row, `n`'s play-next, and the list's scroll.
+//! over: the hovered row and the list's scroll.
 
 use dioxus_native::prelude::*;
 
@@ -42,8 +42,7 @@ impl EmbyFrame {
 }
 
 /// The Emby facts the shared panel key handler routes over (row 7C.2): the
-/// item the play and queue commands name is the row the pointer marks, and `n`
-/// plays it next.
+/// item the play and queue commands name is the row the pointer marks.
 struct EmbyKeys<'a> {
     state: &'a LibraryState,
 }
@@ -98,16 +97,11 @@ impl PanelKeys for EmbyKeys<'_> {
     fn queue_item(&self, item_id: &str) {
         EmbyList::queue(self.state, item_id);
     }
-
-    fn play_next_item(&self, item_id: &str) -> bool {
-        EmbyList::play_next(self.state, item_id);
-        true
-    }
 }
 
 /// Route a key to the Emby library's keys (row 8.1): the shared handler over
 /// the Emby facts. Enter on the hovered row plays it — a folder or a boxset too,
-/// through the core's folder-play rule — and `n` and `a` act on the same row.
+/// through the core's folder-play rule — and `a` acts on the same row.
 #[must_use]
 pub fn route_emby_panel_key(
     state: &LibraryState,

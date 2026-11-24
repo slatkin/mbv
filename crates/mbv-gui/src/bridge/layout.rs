@@ -120,7 +120,23 @@ impl RegionTarget {
             )
             | Self::Confirm(_)
             | Self::DaemonLost(_) => true,
-            Self::Queue(_) | Self::QueuePlayback(_) | Self::StatusBar(_) | Self::Attach(_) => false,
+            // A row's own region, its hover Play control, the footer's
+            // playlist pill, and the header's controls open nothing: a press
+            // there reaches the surface, or dismisses the open overlay. The
+            // queue variants are listed one by one, so a new target is a
+            // compile error here rather than a silent pass-through.
+            Self::Queue(
+                QueueTargetId::Slot(_)
+                | QueueTargetId::RowPlay(_)
+                | QueueTargetId::PlaylistPill
+                | QueueTargetId::Filter
+                | QueueTargetId::NewQueue
+                | QueueTargetId::CloseQueue
+                | QueueTargetId::RenameQueue,
+            )
+            | Self::QueuePlayback(_)
+            | Self::StatusBar(_)
+            | Self::Attach(_) => false,
         }
     }
 }
@@ -177,6 +193,11 @@ pub(crate) fn hit_map(regions: &[LayoutRegion]) -> HitMap<RegionTarget> {
 pub enum QueueTargetId {
     /// A queue row for one stable slot. The number is `QueueSlotId::raw`.
     Slot(u64),
+    /// A queue row's hover Play control (gui-row-hover-actions design D6): a
+    /// press plays the row, as a double-click on the row does. The number is
+    /// the row's `QueueSlotId::raw`. The control paints only while the row is
+    /// hovered, so a press reaches this target only then.
+    RowPlay(u64),
     /// The playlist pill in the queue footer.
     PlaylistPill,
     /// One entry of the open row menu: the entry's index in the section's

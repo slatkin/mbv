@@ -1,10 +1,10 @@
 //! Headless tests of the Audiobooks keys (D16): the contracts of
 //! `audiobooks-keys.test.ts` on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2) — the movement keys scroll the list
-//! under the pointer, Enter plays the hovered book and `a` queues it, the
-//! Hero's Enter plays the hovered chapter, and `n` is consumed and does
-//! nothing (books have no play-next). The 7.1 review's lesson holds: every
-//! Library key on the list returns handled and none reaches the core. The
+//! under the pointer, Enter plays the hovered book and `a` queues it, and the
+//! Hero's Enter plays the hovered chapter. The 7.1 review's lesson holds: every
+//! Library key on the list returns handled and none reaches the core, and `n`
+//! is not a Library key at all. The
 //! router under test is the panel's one routing site,
 //! [`super::super::keys::route_library_key`], so these assertions cover the
 //! Audiobooks dispatch it hands to [`super::route_audiobooks_panel_key`]. The
@@ -29,7 +29,7 @@ use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 
 /// The Library's own keys: the movements, Right and Left's open and close,
-/// Enter, and the item keys `n` and `a` (design D3, step 4).
+/// Enter, and the item key `a` (design D3, step 4).
 const LIBRARY_KEYS: &[&str] = &[
     "Enter",
     "ArrowUp",
@@ -40,7 +40,6 @@ const LIBRARY_KEYS: &[&str] = &[
     "PageDown",
     "Home",
     "End",
-    "n",
     "a",
 ];
 
@@ -227,21 +226,9 @@ fn a_on_the_hovered_book_queues_it() {
     );
 }
 
-// Books have no play-next: `n` is consumed, so no command leaves and no key
-// reaches the core (design D12, row 9.1).
-#[test]
-fn n_on_the_hovered_book_does_nothing_and_is_handled() {
-    let (facts, rx) = run(|state, facts| {
-        carry(state);
-
-        route_row(state, facts, "n", "n", PointerList::Audiobooks, "b2");
-    });
-    assert_eq!(facts, ["n=Handled"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// Enter, `n`, and `a` with the pointer over no book row do nothing (design
-// D2, step 3): the key is the window's, and it sends no command.
+// Enter and `a` with the pointer over no book row do nothing (design
+// D2, step 3): the key is the window's, and it sends no command. `n` is not a
+// Library key, so it goes to the core.
 #[test]
 fn enter_n_and_a_with_no_hovered_row_send_nothing() {
     let (facts, rx) = run(|state, facts| {
@@ -251,7 +238,7 @@ fn enter_n_and_a_with_no_hovered_row_send_nothing() {
         route(state, facts, "n", "n", false);
         route(state, facts, "a", "a", false);
     });
-    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(facts, ["enter=Handled", "n=Core(None)", "a=Handled"]);
     assert_eq!(commands(&rx), []);
 }
 
@@ -410,22 +397,21 @@ fn the_hero_workspace_queues_the_selected_book_on_a() {
     );
 }
 
-// The Hero's Workspace consumes `n` without a call.
+// The Hero's Workspace sends `n` to the core: it is not a Library key.
 #[test]
-fn the_hero_workspace_consumes_n_without_a_call() {
+fn the_hero_workspace_sends_n_to_the_core() {
     let (facts, rx) = run(|state, facts| {
         carry_hero(state);
 
         route_hero(state, facts, "n", "n", Some("1"));
     });
-    assert_eq!(facts, ["n=Handled"]);
+    assert_eq!(facts, ["n=Core(None)"]);
     assert_eq!(commands(&rx), []);
 }
 
 // Review of row 7.1's lesson, applied to Audiobooks from the start: no list
 // leaks a Library key to the core's router. A control that does not act on a
-// key still consumes it, so `a` and `n` never reach the core's playback
-// chords.
+// key still consumes it, so `a` never reaches the core's playback chords.
 #[test]
 fn the_list_consumes_every_library_key() {
     let (facts, _rx) = run(|state, facts| {

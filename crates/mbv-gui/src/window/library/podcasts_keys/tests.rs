@@ -197,22 +197,9 @@ fn a_on_the_hovered_row_queues_the_episode() {
     );
 }
 
-// A podcast episode has no play-next (row 10.1): `n` is consumed and sends
-// nothing, so it neither queues nor reaches the core's playback chords.
-#[test]
-fn n_on_the_hovered_row_sends_nothing_and_is_handled() {
-    let content = podcasts_content(PillSelection::Latest, &episodes(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_podcasts(state, content.clone());
-
-        route_row(state, facts, "n", "n", PointerList::Podcasts, "e1:ep1");
-    });
-    assert_eq!(facts, ["n=Handled"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// Enter, `n`, and `a` with the pointer over no episode row do nothing (design
-// D2, step 3): the key is the window's, and it sends no command.
+// Enter and `a` with the pointer over no episode row do nothing (design
+// D2, step 3): the key is the window's, and it sends no command. `n` is not a
+// Library key, so it goes to the core.
 #[test]
 fn enter_n_and_a_with_no_hovered_row_send_nothing() {
     let content = podcasts_content(PillSelection::Latest, &episodes(), None);
@@ -223,7 +210,7 @@ fn enter_n_and_a_with_no_hovered_row_send_nothing() {
         route(state, facts, "n", "n", false);
         route(state, facts, "a", "a", false);
     });
-    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(facts, ["enter=Handled", "n=Core(None)", "a=Handled"]);
     assert_eq!(commands(&rx), []);
 }
 

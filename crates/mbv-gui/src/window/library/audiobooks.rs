@@ -127,8 +127,7 @@ impl LibraryState {
         });
     }
 
-    /// Add a book to the queue's tail (row 9.1): `a` on the hovered book. Books
-    /// have no play-next, so `n` is consumed and does nothing here.
+    /// Add a book to the queue's tail (row 9.1): `a` on the hovered book.
     pub fn queue_audiobooks_row(&self, book_id: &str) {
         let Some(lib_idx) = self.audiobooks_lib_idx() else {
             return;

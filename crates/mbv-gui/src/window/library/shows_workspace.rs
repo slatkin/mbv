@@ -92,15 +92,6 @@ pub fn play_shows_episode(state: &LibraryState, lib_idx: usize, episode_id: &str
     });
 }
 
-/// Play an episode directly after the active slot (design D12): `n` on the
-/// Workspace.
-pub fn play_next_shows_episode(state: &LibraryState, lib_idx: usize, episode_id: &str) {
-    state.link.library(GuiLibraryCommand::ShowsPlayNext {
-        lib_idx,
-        item_id: episode_id.to_owned(),
-    });
-}
-
 /// Add an episode to the queue (design D12): `a` on the Workspace.
 pub fn queue_shows_episode(state: &LibraryState, lib_idx: usize, episode_id: &str) {
     state.link.library(GuiLibraryCommand::ShowsQueue {

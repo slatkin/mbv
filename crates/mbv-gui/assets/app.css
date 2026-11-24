@@ -434,34 +434,64 @@ button:disabled {
 	height: calc(20px * var(--player-scale));
 }
 
-/* The tree rows' hover tooltip (gui-tree-double-click design D3; user request
-   2026-11-20): a parent row carries `tree-parent`, which is also its
-   positioning box, and paints the shared `TreeHint` card, which carries
-   `tree-hint`, floating under the row's bottom edge. The card shows only after
-   the pointer rests on the row past the delay the browsers give their own
-   tooltips (~500ms), and hides as soon as the pointer leaves, so no pointer
-   state is kept: Blitz sets and clears the hover, and a pointer that leaves
-   the window clears the hover chain, as the stage's auto-hide rule notes. The
-   row's trailing text (`Music` album year, Playlists item count, a date)
-   carries `tree-trailing` and stays visible.
+/* The Library rows' hover controls (gui-row-hover-actions design D1, D2):
+   every row painter wraps its row in a `row-hover-host` box — which is the
+   part's positioning box — and paints the shared `RowHoverActions` part as
+   the row's later sibling, so no control nests inside the row's button and
+   the button keeps its own semantics. The part rests hidden and shows on the
+   host's own `:hover`, so the window keeps no hover state: Blitz sets and
+   clears the hover, and re-resolves it after every layout and scroll, which
+   the Workspace table's `onpointerenter` signal could not do under a still
+   pointer. The reveal has no rest delay: a control must answer at once.
 
-   The delay is a `transition` on `visibility`, not on `display`: a card under
-   `display: none` has no before-change style, so Stylo starts no transition
-   and the card would flash at once. The delay Stylo reads is the destination
-   state's, so the hover rule carries the 500ms and the resting rule the 0s —
-   that order is load-bearing: swapped, the card would linger 500ms after the
-   pointer leaves and flash at once on entry. The card always lays out and
-   only `visibility` gates the paint (`blitz-paint::render` skips subtrees
-   with a non-visible visibility), and the 500ms rest window keeps the window
-   repainting — the accepted animation gap the Blitz table in
-   `docs/architecture/gui-client.md` names. */
-.tree-hint {
-	visibility: hidden;
-	transition: visibility 0s linear 0s;
+   The part overlays the row's trailing end instead of taking flow space, so
+   the title keeps its width on hover, and it paints the row's own fill behind
+   it — the host's `--row-fill`, the same custom property the row button reads
+   — so it covers the row's trailing text cleanly. `Truncate` measures in
+   Rust, so a CSS reveal cannot shorten the title, and the cover is the
+   accepted look. The host also hides the trailing text (`row-hover-trail`)
+   while the part shows. `z-index` puts the part over the row button; the
+   Library's dropdowns and popovers are later siblings over list content for
+   the same reason.
+
+   The part stops above the row's divider: the host's `--row-divider` names the
+   divider's width (`0` where the row paints none), so the cover's fill never
+   blanks the line under the row.
+
+   A row that paints its own fill (`row-hover-row`: the top-level and nested
+   Library rows) keeps its pointer veil while the pointer rests on the part. The
+   veil is the shared button rule's, and it lands on the row's own button
+   (`row-hover-face`) only while the pointer is over that button, so the host's
+   `:hover` carries it to the button and to the part's cover together: the row
+   reads as one hovered row, whichever of its two boxes the pointer is on. The
+   Workspace table's rows paint no fill, so they take no veil of their own. */
+.row-hover-host {
+	position: relative;
 }
-.tree-parent:hover .tree-hint {
-	visibility: visible;
-	transition: visibility 0s linear 500ms;
+.row-hover-actions {
+	display: none;
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: var(--row-divider, 0px);
+	z-index: 1;
+	align-items: center;
+	gap: 2px;
+	padding-inline: 4px;
+	background: var(--row-fill, transparent);
+}
+.row-hover-host:hover .row-hover-actions {
+	display: flex;
+}
+.row-hover-host:hover .row-hover-trail {
+	visibility: hidden;
+}
+.row-hover-row:hover .row-hover-face,
+.row-hover-row:hover .row-hover-actions {
+	background-image: linear-gradient(
+		var(--hover-veil, var(--canvas-hover-veil)),
+		var(--hover-veil, var(--canvas-hover-veil))
+	) !important;
 }
 
 @layer base {

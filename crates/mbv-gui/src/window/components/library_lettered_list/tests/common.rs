@@ -401,3 +401,31 @@ fn a_played_row_dims_its_title_and_an_active_one_paints_its_resume_percent() {
     played_and_active_rows::<PodcastsList>();
     played_and_active_rows::<FeedsList>();
 }
+
+/// A row that names no collection offers Play and Add and no Shuffle: the
+/// sample rows of every lettered destination are books, episodes, entries, and
+/// media, so the shared part paints the two controls alone.
+fn offers_play_and_add<D: Host>() {
+    let mut fixture = built::<D>(
+        D::frame(D::rows(), false, false),
+        D::detail_of(Some(D::IDS[0])),
+    );
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.hover_controls_of(D::IDS[0]),
+        ["play", "queue"],
+        "the row offers Play and Add and no Shuffle"
+    );
+}
+
+/// Contract (gui-row-hover-actions design D3, D4): every lettered destination's
+/// rows offer Play and Add on hover, wired to the destination's own play and
+/// queue paths.
+#[test]
+fn every_row_offers_play_and_add() {
+    offers_play_and_add::<EmbyList>();
+    offers_play_and_add::<AudiobooksList>();
+    offers_play_and_add::<PodcastsList>();
+    offers_play_and_add::<FeedsList>();
+}

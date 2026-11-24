@@ -8,8 +8,9 @@ use crate::bridge::layout::{ListId, ListRows, QueuePlaybackTargetId, QueueTarget
 /// Contract (`QueuePanel.test.ts`): the regions carry the header, slot,
 /// and menu-entry ids, menu last — the header's controls lead in
 /// paint order (the switcher, the new-queue control, and the filter, with one
-/// local queue so no acting close control), the rows follow, and the
-/// menu's entries report last.
+/// local queue so no acting close control), the rows follow, with the hovered
+/// row's Play control right after its slot (design D6 of
+/// `gui-row-hover-actions`), and the menu's entries report last.
 #[test]
 fn the_regions_carry_the_header_slot_and_menu_entry_ids_menu_last() {
     let rows = vec![item(1), item(2)];
@@ -25,12 +26,12 @@ fn the_regions_carry_the_header_slot_and_menu_entry_ids_menu_last() {
             RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
             RegionTarget::Queue(QueueTargetId::Slot(2)),
+            RegionTarget::Queue(QueueTargetId::RowPlay(2)),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(0)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(1)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(2)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(3)),
-            RegionTarget::Queue(QueueTargetId::RowMenuEntry(4)),
         ]
     );
 }

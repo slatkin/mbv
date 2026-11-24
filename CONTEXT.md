@@ -737,7 +737,7 @@ Retired term. An Emby Session without a direct endpoint becomes a *Session outpu
 _Avoid_: Session watch
 
 Direct remote control:
-A client with its own control-socket connection to the Player owner of another device. Connect moves only control: the client sees and edits the queue of the connected Player owner, and the music stays where it plays. Disconnect returns the queue panel to the local Owner queue and leaves the peer playing. It gives the same queue management as local playback, that is reorder, remove, play next, and all of it. The device stays the connected row in the Sessions sidebar. Attachment does not erase that. The Owner process is never Direct remote control. Copying a queue between Player owners is *Queue handoff* or *Take*, never connect.
+A client with its own control-socket connection to the Player owner of another device. Connect moves only control: the client sees and edits the queue of the connected Player owner, and the music stays where it plays. Disconnect returns the queue panel to the local Owner queue and leaves the peer playing. It gives the same queue management as local playback, that is reorder, remove, and all of it. The device stays the connected row in the Sessions sidebar. Attachment does not erase that. The Owner process is never Direct remote control. Copying a queue between Player owners is *Queue handoff* or *Take*, never connect.
 _Avoid_: green pill, remote takeover, queue management (alone)
 
 Queue handoff:
