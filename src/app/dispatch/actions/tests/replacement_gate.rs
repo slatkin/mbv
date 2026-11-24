@@ -7,23 +7,19 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
     let (mut app, cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_view
-        .as_mut()
-        .expect("the direct remote fixture keeps a target queue")
-        .adopt_items(vec![existing], 0);
+    app.adopt_direct_remote_queue_items_for_test(vec![existing], 0);
     let mut track = make_item("Track", "Audio");
     track.id = "track-1".into();
-    app.album_tracks_cache
-        .insert("album-1".into(), vec![track.clone()]);
+    app.seed_album_track_items_for_test("album-1", vec![track.clone()]);
 
     assert!(app.play_album_track("album-1", &track));
 
     assert!(matches!(
-        &app.pending_overlay,
+        app.pending_overlay(),
         Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal))
             if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
     ));
-    assert!(app.queue_deferrals.has_gated_replacement());
+    assert!(app.has_gated_replacement_for_test());
     assert_eq!(queued_track_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().cursor(), 0);
 
@@ -32,7 +28,7 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
     // Row 5.3: the confirmed replacement reaches the owner as a
     // `UnifiedQueueReplace`; the Client's view follows the owner's answer.
     assert_eq!(last_replace(&cmd_rx).0, ["track-1"]);
-    assert!(!app.queue_deferrals.has_gated_replacement());
+    assert!(!app.has_gated_replacement_for_test());
 }
 
 /// Row 3.1 cancellation: Esc at the album-track replacement prompt changes
@@ -42,14 +38,10 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
     let (mut app, _cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_view
-        .as_mut()
-        .expect("the direct remote fixture keeps a target queue")
-        .adopt_items(vec![existing], 0);
+    app.adopt_direct_remote_queue_items_for_test(vec![existing], 0);
     let mut track = make_item("Track", "Audio");
     track.id = "track-1".into();
-    app.album_tracks_cache
-        .insert("album-1".into(), vec![track.clone()]);
+    app.seed_album_track_items_for_test("album-1", vec![track.clone()]);
 
     assert!(app.play_album_track("album-1", &track));
     app.apply_confirm_action(
@@ -57,7 +49,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
         mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Esc, mbv_ui_msg::KeyModifiers::NONE),
     );
 
-    assert!(!app.queue_deferrals.has_gated_replacement());
+    assert!(!app.has_gated_replacement_for_test());
     assert_eq!(queued_track_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().cursor(), 0);
 }
@@ -71,31 +63,24 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let http = mbv_net::mock_http::MockHttp::new();
-    let mut config = app.config.lock().unwrap().clone();
+    let mut config = app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
     install_test_emby(&mut app, config);
     let client = app
-        .emby_runtime
-        .client
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap()
-        .clone()
+        .emby_client_for_test()
+        .expect("the installed test client is the runtime's")
         .with_test_agent(http.agent());
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
+    app.adopt_ready_emby_client_for_test(client);
 
     // Populated target queue + a music library holding the played folder.
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.local_view.adopt_items(vec![existing], 0);
+    app.seed_local_queue_emby_items_for_test(vec![existing], 0);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.collection_type = "music".into();
-    app.libs.push(LibraryTab::new(library));
-    app.local_view.adopt_source(mbv_queue::QueueSource::Album);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Album);
 
     http.respond(
         200,
@@ -103,14 +88,20 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     );
     app.play_or_activate_lib_item(0, folder("album-1", "Album"));
 
-    assert!(app.queue_deferrals.has_gated_replacement());
-    assert_eq!(app.local_view.source(), &mbv_queue::QueueSource::Album);
+    assert!(app.has_gated_replacement_for_test());
+    assert_eq!(
+        app.local_queue_source_for_test(),
+        &mbv_queue::QueueSource::Album
+    );
 
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
         mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Esc, mbv_ui_msg::KeyModifiers::NONE),
     );
 
-    assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(app.local_view.source(), &mbv_queue::QueueSource::Album);
+    assert!(!app.has_gated_replacement_for_test());
+    assert_eq!(
+        app.local_queue_source_for_test(),
+        &mbv_queue::QueueSource::Album
+    );
 }

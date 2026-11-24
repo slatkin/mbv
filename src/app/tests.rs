@@ -356,7 +356,7 @@ mod pinned_view_toggle;
 mod podcast;
 mod queue;
 pub(crate) mod render_fixtures;
-mod route_state;
+pub(crate) mod route_state;
 mod routing_matrix;
 mod services_settings_lifecycle;
 mod session_connect;
@@ -571,11 +571,11 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::app::config::Confi
     app.adopt_ready_emby_client_for_test(mbv_emby::EmbyClient::new(config));
 }
 
-fn remote_stub_config() -> crate::app::config::Config {
+pub(crate) fn remote_stub_config() -> crate::app::config::Config {
     crate::app::config::Config::default()
 }
 
-fn close_initial_services(app: &mut App) {
+pub(crate) fn close_initial_services(app: &mut App) {
     app.close_settings();
     app.clear_pending_overlay_for_test();
 }

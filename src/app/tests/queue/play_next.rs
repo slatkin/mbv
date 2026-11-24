@@ -4,7 +4,7 @@
 //! every answer is injected ahead of the call, so nothing waits on a clock.
 
 use crate::app::tests::queue::queue_op::{answered_local_daemon_app, inject_player_rx};
-use crate::app::tests::{QueueViewTestExt, emby_unified_state, make_items};
+use crate::app::tests::{emby_unified_state, make_items};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::QueueItem;
@@ -58,8 +58,7 @@ fn play_next_admits_the_item_before_the_slot_after_the_active_one() {
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
     // The active slot is the first of three, so the anchor is slot 2.
-    app.local_view
-        .adopt_queue_items_with_active(queue_items(3), 0, 0);
+    app.seed_local_queue_items_with_active_for_test(queue_items(3), 0, 0);
     answer_the_append(&tx);
 
     app.play_lib_item_next(0, next_item());
@@ -78,8 +77,7 @@ fn play_next_admits_the_item_before_the_slot_after_the_active_one() {
 fn play_next_appends_at_the_tail_when_the_active_slot_is_the_last_one() {
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view
-        .adopt_queue_items_with_active(queue_items(3), 0, 2);
+    app.seed_local_queue_items_with_active_for_test(queue_items(3), 0, 2);
     answer_the_append(&tx);
 
     app.play_lib_item_next(0, next_item());
@@ -94,7 +92,7 @@ fn play_next_appends_at_the_tail_when_the_owner_reports_no_active_slot() {
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
     // An adopted snapshot whose active slot is unset.
-    app.local_view.adopt_queue_items(queue_items(3), 0);
+    app.seed_local_queue_items_for_test(queue_items(3), 0);
     answer_the_append(&tx);
 
     app.play_lib_item_next(0, next_item());

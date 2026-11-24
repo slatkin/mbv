@@ -173,7 +173,9 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
     // scenario "Take from an unconnected peer", plus the probe-stop contract
     // (row 8.1): the source Stop reaches the probe link the transfer opened
     // — never `self.player` — and the settlement closes that link.
-    let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+    let _guard = crate::app::test_seams::DIRECT_CONNECT_TEST_LOCK
+        .lock()
+        .unwrap();
     let (mut app, local_cmd_rx) =
         make_local_daemon_app_stub_with_cmd_rx_and_compat(make_audio_items(2), owner_compat());
     let peer_items = make_audio_items(3);
@@ -184,7 +186,9 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
     probe.update_status(|status| status.position_ticks = 420_000_000);
     let (_dropped_tx, probe_event_rx) = mpsc::channel();
     *PROBE_LINK.lock().unwrap() = Some((probe, probe_event_rx));
-    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
+    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = Some(staged_probe_connect);
     app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
         "peer-owner",
     )))]);
@@ -275,7 +279,9 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
             && !app.has_remote_queue_for_test(),
         "the settled Take leaves no staged link and the Client stays unconnected"
     );
-    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = None;
 }
 
 #[test]
@@ -587,7 +593,9 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
     // Review P2 (row 8.1): the dead link is the peer's probe — the report
     // must name the peer, not the local Owner the settlement's own link
     // loss names.
-    let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+    let _guard = crate::app::test_seams::DIRECT_CONNECT_TEST_LOCK
+        .lock()
+        .unwrap();
     let (mut app, local_cmd_rx) =
         make_local_daemon_app_stub_with_cmd_rx_and_compat(make_audio_items(2), owner_compat());
     let (mut probe, _stub_rx, probe_cmd_rx) =
@@ -596,7 +604,9 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
     probe.set_disconnected_for_test(true);
     let (_dropped_tx, probe_event_rx) = mpsc::channel();
     *PROBE_LINK.lock().unwrap() = Some((probe, probe_event_rx));
-    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
+    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = Some(staged_probe_connect);
     app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
         "peer-owner",
     )))]);
@@ -630,5 +640,7 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
         !app.pending_queue_transfer_for_test() && !app.queue_transfer_is_staged_for_test(),
         "the dead probe arms nothing"
     );
-    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+        .lock()
+        .unwrap() = None;
 }

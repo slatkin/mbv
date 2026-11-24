@@ -133,7 +133,7 @@ impl KeyChord {
 /// Map the registry's Ctrl/Shift/Alt modifier set onto the neutral modifiers.
 /// Extracted from `KeyChord::from_keybinds_chord` (issue #803); the mapping
 /// is lossless in both directions.
-fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
+pub fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
     use mbv_keybinds::KeyMods;
     let mut out = KeyModifiers::NONE;
     if mods.contains(KeyMods::CTRL) {

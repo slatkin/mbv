@@ -12,12 +12,12 @@ fn album(id: &str, name: &str) -> EmbyItem {
 
 fn recursive_music_app() -> App {
     let mut app = make_app_stub();
-    app.music_levels = vec!["group".into(), "artist".into(), "album".into()];
+    app.seed_music_levels_for_test(&["group", "artist", "album"]);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "music-lib".into();
     library.collection_type = "music".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
+    app.push_library_for_test(LibraryTab::new(library));
     app
 }
 #[test]
@@ -108,8 +108,8 @@ fn album_index_traverses_deep_branches_pages_and_ignores_non_albums() {
 #[test]
 fn failed_album_index_becomes_unavailable() {
     let mut app = recursive_music_app();
-    app.album_indexes.insert(
-        "music-lib".into(),
+    app.seed_album_index_state_for_test(
+        "music-lib",
         AlbumIndexState::Loading {
             rebuild_pending: false,
         },
@@ -123,7 +123,7 @@ fn failed_album_index_becomes_unavailable() {
     );
 
     assert!(matches!(
-        app.album_indexes.get("music-lib"),
+        app.album_index("music-lib"),
         Some(AlbumIndexState::Unavailable)
     ));
     assert!(app.newest_toast_text().contains("index failed"));
@@ -133,29 +133,29 @@ fn failed_album_index_becomes_unavailable() {
 fn recursive_activation_keeps_panel_focus_and_installs_path() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = recursive_music_app();
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
-    app.libs[0].nav_stack.push(BrowseLevel {
-        rows: ServerRows::new(1),
-        parent_id: "group-a".into(),
-        title: "Group A".into(),
-        items: vec![folder("artist-a", "Artist A")],
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.edit_library_for_test(0, |tab| {
+        tab.nav_stack.push(BrowseLevel {
+            rows: ServerRows::new(1),
+            parent_id: "group-a".into(),
+            title: "Group A".into(),
+            items: vec![folder("artist-a", "Artist A")],
 
-        resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
-        item_types: None,
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        loading: false,
-        all_items: None,
-        letter_filter: None,
-        tv_content_mode: None,
-        music_grouping: None,
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        });
     });
-    let default_position = app.libs[0].library_position_snapshot(&[]);
-    app.library_position_state
-        .libraries
-        .insert("music-lib".into(), default_position.clone());
+    let default_position = app.libs_for_test()[0].library_position_snapshot(&[]);
+    app.seed_library_position_for_test("music-lib", default_position.clone());
     let level = BrowseLevel {
         rows: ServerRows::new(1),
         parent_id: "artist-c".into(),
@@ -186,12 +186,11 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
     // inline track focus for the activated album is the shell's trigger into
     // `MusicWorkspaceComponent` (asserted at the shell boundary in
     // `shell/music_workspace.rs`).
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().parent_id, "artist-c");
-    let position = app
-        .library_position_state
-        .libraries
-        .get("music-lib")
-        .unwrap();
+    assert_eq!(
+        app.libs_for_test()[0].nav_stack.last().unwrap().parent_id,
+        "artist-c"
+    );
+    let position = app.library_position_for_test("music-lib").unwrap();
     assert_eq!(
         position.levels.last().map(|level| level.parent_id.as_str()),
         Some("artist-c")

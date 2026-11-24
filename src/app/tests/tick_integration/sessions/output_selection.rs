@@ -145,7 +145,7 @@ fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
 /// connect falls back to the output selection.
 #[test]
 fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_owner_output() {
-    use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+    use crate::app::test_seams::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
 
     let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(failed_direct_connect);

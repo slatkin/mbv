@@ -287,7 +287,7 @@ impl App {
     ///
     /// `PlayerStatus::previous_idx`/`next_idx` fold in `active` and
     /// `queue_len`, so they answer both questions from the owner's status.
-    pub(in crate::app) fn transport_prev_next_available(&self) -> (bool, bool) {
+    pub fn transport_prev_next_available(&self) -> (bool, bool) {
         let st = self.shown_playback_status();
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }

@@ -12,7 +12,7 @@ fn artist_cache_key(
             library_id: "lib-music".into(),
             kind: mbv_ui_model::library::LibraryKind::Music,
         },
-        generation: app.emby_runtime.generation().value(),
+        generation: app.emby_setup_generation_for_test().value(),
         artist_id: artist_id.into(),
         revision: 7,
     }
@@ -35,7 +35,7 @@ fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
     let mut other_album = make_item("Other", "Audio");
     other_album.id = "other-track".into();
     other_album.album_id = "album-2".into();
-    app.artist_detail_cache.insert(
+    app.seed_artist_detail_cache_for_test(
         artist_cache_key(&app, "artist-alpha"),
         mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![first, second.clone(), other_album],
@@ -43,7 +43,7 @@ fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
         },
     );
     assert!(
-        app.album_tracks_cache.is_empty(),
+        app.album_tracks_cache_is_empty_for_test(),
         "the artist-ID path populates only the artist cache"
     );
 
@@ -64,12 +64,11 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
     let mut only = make_item("Only", "Audio");
     only.id = "album-track".into();
     only.album_id = "album-1".into();
-    app.album_tracks_cache
-        .insert("album-1".into(), vec![only.clone()]);
+    app.seed_album_track_items_for_test("album-1", vec![only.clone()]);
     let mut extra = make_item("Extra", "Audio");
     extra.id = "artist-extra".into();
     extra.album_id = "album-1".into();
-    app.artist_detail_cache.insert(
+    app.seed_artist_detail_cache_for_test(
         artist_cache_key(&app, "artist-alpha"),
         mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![only.clone(), extra],
@@ -86,7 +85,7 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
 
     // A failed or truncated per-album page (an entry that does not hold the
     // activated row) must not hide the artist group the row came from.
-    app.album_tracks_cache.insert("album-1".into(), Vec::new());
+    app.seed_album_track_items_for_test("album-1", Vec::new());
     assert!(app.play_album_track("album-1", &only));
     // The second activation targets a populated queue, so it goes through the
     // replacement gate before the queue changes.
@@ -108,7 +107,7 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
 #[test]
 fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_track() {
     let (mut app, cmd_rx) = remote_playback_app();
-    app.config.lock().unwrap().autoload = true;
+    app.config_for_test(|config| config.autoload = true);
     let tracks = [("track-3", 3), ("track-1", 1), ("track-2", 2)]
         .into_iter()
         .map(|(id, number)| {
@@ -120,7 +119,7 @@ fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_
             track
         })
         .collect::<Vec<_>>();
-    app.album_tracks_cache.insert("album-1".into(), tracks);
+    app.seed_album_track_items_for_test("album-1", tracks);
 
     match app
         .grouped_track_play_action("album-1", "track-2")
@@ -164,7 +163,7 @@ fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_
 #[test]
 fn grouped_track_without_autoload_queues_only_the_selected_track() {
     let (mut app, cmd_rx) = remote_playback_app();
-    app.config.lock().unwrap().autoload = false;
+    app.config_for_test(|config| config.autoload = false);
     let tracks = ["track-1", "track-2", "track-3"]
         .into_iter()
         .enumerate()
@@ -177,7 +176,7 @@ fn grouped_track_without_autoload_queues_only_the_selected_track() {
             track
         })
         .collect::<Vec<_>>();
-    app.album_tracks_cache.insert("album-1".into(), tracks);
+    app.seed_album_track_items_for_test("album-1", tracks);
 
     assert!(app.play_grouped_track("album-1", "track-2"));
     assert_eq!(
@@ -192,25 +191,20 @@ fn grouped_track_without_autoload_queues_only_the_selected_track() {
 #[test]
 fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() {
     let (mut app, cmd_rx) = remote_playback_app();
-    app.config.lock().unwrap().autoload = true;
+    app.config_for_test(|config| config.autoload = true);
     let mut cached = make_item("Cached", "Audio");
     cached.id = "cached-track".into();
     cached.album_id = "album-1".into();
     cached.media_type = "Audio".into();
     cached.index_number = 1;
-    app.album_tracks_cache
-        .insert("album-1".into(), vec![cached]);
+    app.seed_album_track_items_for_test("album-1", vec![cached]);
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_view
-        .as_mut()
-        .expect("the direct remote fixture keeps a target queue")
-        .adopt_items(vec![existing], 0);
-    app.local_view
-        .adopt_source(mbv_queue::QueueSource::Playlist {
-            id: Some("playlist-1".into()),
-            name: "Playlist".into(),
-        });
+    app.adopt_direct_remote_queue_items_for_test(vec![existing], 0);
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Playlist {
+        id: Some("playlist-1".into()),
+        name: "Playlist".into(),
+    });
 
     assert!(!app.play_grouped_track("album-1", "missing-track"));
     assert_eq!(
@@ -224,7 +218,7 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
     );
     assert_eq!(app.playback_queue().cursor(), 0);
     assert!(matches!(
-        app.local_view.source(),
+        app.local_queue_source_for_test(),
         mbv_queue::QueueSource::Playlist { .. }
     ));
     assert!(

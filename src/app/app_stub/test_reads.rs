@@ -18,6 +18,10 @@ mod audiobookshelf;
 /// design D4b rule 5) lives in its own child module for the same reason.
 mod artists;
 
+/// The Emby library browse fixtures (`split-tui-gui-clients` design D4b rule
+/// 5) live in their own child module for the same reason.
+mod browse;
+
 /// The TUI shell's Home, Feeds, and status-row fixtures (`split-tui-gui-clients`
 /// design D4b rule 5) live in their own child module for the same reason.
 mod home;

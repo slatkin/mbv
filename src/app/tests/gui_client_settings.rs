@@ -82,11 +82,11 @@ fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
     let art = image::DynamicImage::new_rgb8(4, 4);
     let mut gui = playing_movie_app();
     gui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
-    gui.visual_slot_hidden = true;
-    gui.set_client_capabilities(gui_client_capabilities());
+    gui.seed_visual_slot_hidden_for_test(true);
+    gui.set_gui_client_capabilities_for_test();
     let mut tui = playing_movie_app();
     tui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
-    tui.visual_slot_hidden = true;
+    tui.seed_visual_slot_hidden_for_test(true);
 
     assert_eq!(
         gui.queue_card_artwork(),
@@ -113,19 +113,22 @@ fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
 fn the_gui_client_leaves_the_tuis_visual_slot_controls_alone() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut tui = playing_movie_app();
-    tui.set_visual_slot_hidden(true);
+    tui.set_visual_slot_hidden_for_test(true);
     let mut gui = playing_movie_app();
-    gui.visual_slot_hidden = true;
-    gui.set_client_capabilities(gui_client_capabilities());
+    gui.seed_visual_slot_hidden_for_test(true);
+    gui.set_gui_client_capabilities_for_test();
 
-    gui.set_visual_slot_hidden(false);
+    gui.set_visual_slot_hidden_for_test(false);
     gui.set_visualizer(true);
 
     assert!(
-        gui.visual_slot_hidden,
+        gui.visual_slot_hidden_for_test(),
         "the GUI never changes the stored hide"
     );
-    assert!(!gui.visualizer_enabled, "the GUI enables no visualizer");
+    assert!(
+        !gui.visualizer_owns_the_slot_for_test(),
+        "the GUI enables no visualizer"
+    );
     assert_eq!(
         App::load_prefs()["visual_slot_hidden"].as_bool(),
         Some(true),

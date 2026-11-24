@@ -46,7 +46,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
         )
         .expect("series");
     assert_eq!(wide_target.id, "movie-focused");
-    assert!(model.app.activate_selected_series(0));
+    assert!(model.app.activate_selected_series_for_test(0));
 
     // Narrow layout => the shell routes the resolved Series through the
     // mounted owner's Library Hero overlay.
@@ -94,14 +94,14 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
 
     // Guard 1: a non-tvshows collection_type rejects.
     model.app.set_library_collection_type_for_test(0, "movies");
-    assert!(!model.app.activate_selected_series(0));
+    assert!(!model.app.activate_selected_series_for_test(0));
 
     // Guard 2: a selected item that is not a Series rejects.
     model.app.set_library_collection_type_for_test(0, "tvshows");
     model
         .app
         .set_library_row_item_type_for_test(0, 0, 0, "Movie");
-    assert!(!model.app.activate_selected_series(0));
+    assert!(!model.app.activate_selected_series_for_test(0));
 }
 
 /// Wide TV layout: the generic browser's `EmbyLibraryActivate` for a Series
@@ -232,7 +232,7 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
             .is_some()
     );
 
-    assert!(model.app.activate_selected_series(1));
+    assert!(model.app.activate_selected_series_for_test(1));
     assert!(
         model.app.pending_overlay_request_for_test().is_none(),
         "library 1 is wide-eligible; activation must enter the persistent \

@@ -720,4 +720,18 @@ impl App {
             status.queue_len = queue_len;
         });
     }
+
+    /// Drain the pending notification actions once, answering whether one was
+    /// applied.
+    #[cfg(any(test, feature = "test"))]
+    pub fn drain_notif_actions_for_test(&mut self) -> bool {
+        self.drain_notif_actions()
+    }
+
+    /// Drain the pending Cast session events once, answering whether one was
+    /// applied.
+    #[cfg(any(test, feature = "test"))]
+    pub fn drain_session_events_for_test(&mut self) -> bool {
+        self.drain_session_events()
+    }
 }

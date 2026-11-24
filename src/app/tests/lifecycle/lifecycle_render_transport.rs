@@ -16,7 +16,7 @@ fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
             source: mbv_images::ImageSource::Emby,
             rendition: mbv_images::ImageRendition::Hero,
         };
-        let _ = app.images.reserve_fetch(req, 0);
+        app.reserve_image_fetch_for_test(req);
     }
     assert_eq!(app.render_interval(), expected);
 }
@@ -24,9 +24,9 @@ fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
 #[test]
 fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     let mut app = make_app_stub();
-    app.config.lock().unwrap().auto_reconnect = false;
+    app.config_for_test(|config| config.auto_reconnect = false);
 
-    let cfg = app.config.lock().unwrap().clone();
+    let cfg = app.config_for_test(|config| config.clone());
     assert_eq!(
         settings::setting_label(SettingKey::AutoReconnect),
         "Auto reconnect"
@@ -37,19 +37,19 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     );
 
     app.handle_settings_activate(SettingKey::AutoReconnect);
-    let cfg = app.config.lock().unwrap().clone();
+    let cfg = app.config_for_test(|config| config.clone());
     assert!(cfg.auto_reconnect);
     assert_eq!(
         settings::setting_value(SettingKey::AutoReconnect, &cfg, &app.ui_config_snapshot()),
         "on"
     );
     assert!(
-        app.settings_save_at.is_some(),
+        app.gui_settings_save_armed_for_test(),
         "settings toggle must use the delayed save path"
     );
 
     app.handle_settings_activate(SettingKey::AutoReconnect);
-    assert!(!app.config.lock().unwrap().auto_reconnect);
+    assert!(!app.config_for_test(|config| config.auto_reconnect));
 }
 
 #[rstest]
@@ -61,13 +61,11 @@ fn transport_prev_next(
     #[case] current_idx: usize,
     #[case] expected: (bool, bool),
 ) {
-    let app = make_app_stub();
-    {
-        app.player.update_status(|st| {
-            st.active = active;
-            st.queue_len = queue_len;
-            st.current_idx = current_idx;
-        });
-    };
+    let mut app = make_app_stub();
+    app.edit_player_status_for_test(|status| {
+        status.active = active;
+        status.queue_len = queue_len;
+        status.current_idx = current_idx;
+    });
     assert_eq!(app.transport_prev_next_available(), expected);
 }

@@ -114,7 +114,7 @@ impl App {
 /// The server-bytes stand-in for a test's decoded image: its PNG encode.
 #[cfg(any(test, feature = "test"))]
 #[must_use]
-pub(in crate::app) fn test_source(img: &image::DynamicImage) -> SourceImage {
+pub fn test_source(img: &image::DynamicImage) -> SourceImage {
     let mut buf = std::io::Cursor::new(Vec::new());
     img.write_to(&mut buf, image::ImageFormat::Png)
         .expect("PNG encode of an in-memory cursor cannot fail");

@@ -32,11 +32,11 @@ pub use self::app_stub::{
 };
 mod image_cache;
 mod infra;
-mod input;
+pub mod input;
 pub mod owner_link;
 pub mod pin;
 pub mod projection;
-mod queue_card_artwork;
+pub mod queue_card_artwork;
 mod queue_footer_projection;
 pub mod queue_playback_projection;
 mod queue_summary_projection;
@@ -136,14 +136,9 @@ pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;
 pub(in crate::app) use self::waking_relay::spawn_waking_relay;
-#[cfg(test)]
-mod test_seams;
-#[cfg(test)]
-pub(in crate::app) use self::test_seams::{
-    DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
-    DIRECT_CONNECT_TEST_LOCK, OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
-};
 mod shell;
+#[cfg(any(test, feature = "test"))]
+pub mod test_seams;
 use self::dispatch::notify::ToastSeverity;
 pub use self::shell::Model;
 /// The TUI's image pickers, built before the `TuiRealm` listener starts

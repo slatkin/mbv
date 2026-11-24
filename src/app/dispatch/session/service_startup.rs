@@ -45,22 +45,22 @@ pub(in crate::app) struct AudiobookshelfStartupReceiver {
     pub(in crate::app) rx: mpsc::Receiver<AudiobookshelfCompletion>,
 }
 
-type AudiobookshelfProgressMap =
-    std::collections::HashMap<(String, String), mbv_audiobookshelf::AudiobookshelfProgress>;
-
-type AudiobookshelfBookProgressMap =
-    std::collections::HashMap<String, mbv_audiobookshelf::AudiobookshelfBookProgress>;
+/// The catalog worker's answer: the libraries it read with their podcast and
+/// book progress maps, or the failure it hit. The completion type, the
+/// catalog load's channel, and the Clients' test seeds all carry this one
+/// shape.
+pub type AudiobookshelfCatalogOutcome = Result<
+    (
+        Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
+        std::collections::HashMap<(String, String), mbv_audiobookshelf::AudiobookshelfProgress>,
+        std::collections::HashMap<String, mbv_audiobookshelf::AudiobookshelfBookProgress>,
+    ),
+    mbv_audiobookshelf::AudiobookshelfError,
+>;
 
 pub(in crate::app) struct AudiobookshelfCatalogCompletion {
     pub(in crate::app) generation: SetupGeneration,
-    pub(in crate::app) result: Result<
-        (
-            Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
-            AudiobookshelfProgressMap,
-            AudiobookshelfBookProgressMap,
-        ),
-        mbv_audiobookshelf::AudiobookshelfError,
-    >,
+    pub(in crate::app) result: AudiobookshelfCatalogOutcome,
 }
 
 pub(in crate::app) struct AudiobookshelfCatalogReceiver {

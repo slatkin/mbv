@@ -112,7 +112,7 @@ impl QueueDeferrals {
         self.save.is_some()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     pub(in crate::app) fn has_gated_replacement(&self) -> bool {
         self.gate.is_some()
     }

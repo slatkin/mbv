@@ -130,8 +130,8 @@ fn record_open(url: &str) {
 /// the window — reaches no opener.
 #[test]
 fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
-    let _guard = crate::app::OPEN_URL_TEST_LOCK.lock().unwrap();
-    *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = Some(record_open);
+    let _guard = crate::app::test_seams::OPEN_URL_TEST_LOCK.lock().unwrap();
+    *crate::app::test_seams::OPEN_URL_OVERRIDE.lock().unwrap() = Some(record_open);
     let mut app = make_app_stub();
     apply_gui_library_command(
         &mut app,
@@ -145,7 +145,7 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
             url: "javascript:alert(1)".to_string(),
         },
     );
-    *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = None;
+    *crate::app::test_seams::OPEN_URL_OVERRIDE.lock().unwrap() = None;
 
     assert_eq!(
         *OPENED.lock().unwrap(),

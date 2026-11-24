@@ -276,4 +276,103 @@ impl App {
         self.player = mbv_player::PlayerProxy::from_remote(remote, always_play_next);
         self.player_rx = player_rx;
     }
+
+    /// Hold a setup receiver whose worker exited without answering, as a
+    /// crashed validation worker leaves the attempt.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_audiobookshelf_setup_worker_gone_for_test(&mut self) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        drop(tx);
+        self.setup.audiobookshelf_setup_rx = Some(rx);
+    }
+
+    /// Whether the Audiobookshelf setup attempt still holds a result receiver:
+    /// whether the drain put a live worker's receiver back.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn audiobookshelf_setup_receiver_present_for_test(&self) -> bool {
+        self.setup.audiobookshelf_setup_rx.is_some()
+    }
+
+    /// Start one more Audiobookshelf validation round, as a retry does, so the
+    /// generation the runtime now accepts differs from the one it held.
+    #[cfg(any(test, feature = "test"))]
+    pub fn begin_audiobookshelf_validation_for_test(&mut self) {
+        self.audiobookshelf_runtime.begin_validation();
+    }
+
+    /// Hold the catalog worker's answered `result` as the catalog load's
+    /// receiver, as a completed catalog fetch leaves it.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the freshly built catalog channel refuses its one
+    /// completion, which needs the receiver dropped.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_audiobookshelf_catalog_result_for_test(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        result: crate::app::dispatch::session::service_startup::AudiobookshelfCatalogOutcome,
+    ) {
+        use crate::app::dispatch::session::service_startup::{
+            AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver,
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(AudiobookshelfCatalogCompletion { generation, result })
+            .expect("the catalog channel accepts its one completion");
+        self.setup.audiobookshelf_catalog_rx =
+            Some(AudiobookshelfCatalogReceiver { generation, rx });
+    }
+
+    /// Hold a catalog receiver at `generation` whose worker exited without
+    /// answering, as a crashed catalog worker leaves the load.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_audiobookshelf_catalog_worker_gone_for_test(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+    ) {
+        use crate::app::dispatch::session::service_startup::AudiobookshelfCatalogReceiver;
+        let (tx, rx) = std::sync::mpsc::channel();
+        drop(tx);
+        self.setup.audiobookshelf_catalog_rx =
+            Some(AudiobookshelfCatalogReceiver { generation, rx });
+    }
+
+    /// Apply the validation worker's `result` for the current setup generation,
+    /// as the worker's answer drains into the runtime.
+    #[cfg(any(test, feature = "test"))]
+    pub fn apply_audiobookshelf_result_for_test(
+        &mut self,
+        result: Result<
+            mbv_audiobookshelf::AudiobookshelfUser,
+            mbv_audiobookshelf::AudiobookshelfError,
+        >,
+    ) {
+        use crate::app::dispatch::session::service_startup::{
+            AudiobookshelfCompletion, AudiobookshelfCompletionKind,
+        };
+        let generation = self.audiobookshelf_runtime.generation();
+        self.apply_audiobookshelf_completion(AudiobookshelfCompletion {
+            generation,
+            kind: AudiobookshelfCompletionKind::Startup,
+            result,
+        });
+    }
+
+    /// Report the validation worker's exit at `generation`, as the drain does
+    /// when its channel closes.
+    #[cfg(any(test, feature = "test"))]
+    pub fn report_audiobookshelf_worker_disconnect_for_test(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+    ) {
+        self.handle_audiobookshelf_worker_disconnect(generation);
+    }
+
+    /// Drain the Audiobookshelf setup hand-offs once, answering whether a
+    /// completion or a disconnect was applied.
+    #[cfg(any(test, feature = "test"))]
+    pub fn drain_audiobookshelf_events_for_test(&mut self) -> bool {
+        self.drain_audiobookshelf_events()
+    }
 }

@@ -137,7 +137,7 @@ fn connect_local_daemon(
 
 #[test]
 fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
-    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
+    use crate::app::test_seams::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
 
     let (mut app, command_rx) =
         make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));

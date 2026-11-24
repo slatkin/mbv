@@ -19,6 +19,17 @@ pub const SETTLED_CATALOG_REVISION: u64 = 7;
 pub const SETTLED_ALBUM_ID: &str = "album-1";
 
 impl App {
+    /// Hold `entry` as the artist-detail cache's answer for `key`, as a landed
+    /// artist push leaves it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_artist_detail_cache_for_test(
+        &mut self,
+        key: mbv_ui_model::music_artist_detail::ArtistDetailKey,
+        entry: mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry,
+    ) {
+        self.artist_detail_cache.insert(key, entry);
+    }
+
     /// A music-grouping app whose artist root resolves one settled album held
     /// under [`SETTLED_ALBUM_ID`] and attributed to `artist-alpha`, with images
     /// enabled and a ready (unroutable) Emby runtime.

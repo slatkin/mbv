@@ -10,7 +10,7 @@ fn reconnect_local_daemon(
     mbv_remote_player::RemotePlayer::stub(make_items(2), 0)
 }
 
-pub(super) fn stub_endpoint() -> DaemonEndpoint {
+pub(crate) fn stub_endpoint() -> DaemonEndpoint {
     DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap())
 }
 
@@ -161,7 +161,7 @@ fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
 // Owns player-target-locality "Daemon target transitions update classification".
 #[test]
 fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
-    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
+    use crate::app::test_seams::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
 
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);

@@ -74,6 +74,16 @@ impl App {
         self.player = player;
     }
 
+    /// Rewrite the active player's status through `edit`, as a status drain
+    /// leaves it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn edit_player_status_for_test(
+        &mut self,
+        edit: impl FnOnce(&mut mbv_ctrl::player::PlayerStatus),
+    ) {
+        self.player.update_status(edit);
+    }
+
     /// Suspend a stub home link, and keep what it receives. The active
     /// connection keeps answering for the peer link beside it.
     #[cfg(any(test, feature = "test"))]

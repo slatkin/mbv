@@ -61,6 +61,42 @@ impl App {
         self.local_view.set_cursor(cursor);
     }
 
+    /// Hold `items` as the local queue's slots with `active` as the active
+    /// slot, cursor at `cursor`, as the Owner's queue adoption leaves them.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_local_queue_items_with_active_for_test(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+        active: usize,
+    ) {
+        let slots: Vec<_> = items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+                slot_id: u64::try_from(index).unwrap_or(u64::MAX) + 1,
+                item,
+            })
+            .collect();
+        let state = mbv_ctrl::UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
+            status: mbv_ctrl::player::PlayerStatus {
+                current_idx: active,
+                ..Default::default()
+            },
+            active_slot: slots.get(active).map(|slot| slot.slot_id),
+            slots,
+            revision: 1,
+            source: mbv_queue::QueueSource::Unknown,
+            lineage: mbv_queue::QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        };
+        self.local_view = crate::app::QueueView::from_snapshot(&state);
+        self.local_view.set_cursor(cursor);
+    }
+
     /// Hold `items` as the local queue view's Emby slots, cursor at `cursor`,
     /// as the Owner's queue adoption leaves them: the shape the queue tests
     /// seed with Emby fixtures.
@@ -394,5 +430,141 @@ impl App {
     #[must_use]
     pub fn cached_image_pixels_for_test(&self, key: &str) -> Option<image::DynamicImage> {
         self.cached_image_pixels(key)
+    }
+
+    /// The source the local queue's projected view carries, as the last
+    /// adoption left it.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn local_queue_source_for_test(&self) -> &mbv_queue::QueueSource {
+        self.local_view.source()
+    }
+
+    /// Reserve `req` on the image cache as an in-flight card fetch, as a
+    /// painted card's fetch does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn reserve_image_fetch_for_test(&mut self, req: mbv_images::ImageFetchReq) {
+        let _ = self.images.reserve_fetch(req, 0);
+    }
+
+    /// Whether an album-track replacement waits behind the confirm gate, as a
+    /// play on a populated target queue leaves it.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn has_gated_replacement_for_test(&self) -> bool {
+        self.queue_deferrals.has_gated_replacement()
+    }
+
+    /// Adopt `items` as the direct remote link's projected queue, starting at
+    /// `cursor`, as the peer's snapshot leaves it. The fixture keeps a target
+    /// queue: a test that adopts into it holds a routed peer.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the `App` holds no direct remote view.
+    #[cfg(any(test, feature = "test"))]
+    pub fn adopt_direct_remote_queue_items_for_test(
+        &mut self,
+        items: Vec<mbv_emby_model::EmbyItem>,
+        cursor: usize,
+    ) {
+        let slots: Vec<_> = items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+                slot_id: index as u64 + 1,
+                item: mbv_queue::QueueItem::Emby(Box::new(item)),
+            })
+            .collect();
+        let state = mbv_ctrl::UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
+            status: mbv_ctrl::player::PlayerStatus {
+                current_idx: cursor,
+                ..Default::default()
+            },
+            active_slot: None,
+            slots,
+            revision: 1,
+            source: mbv_queue::QueueSource::default(),
+            lineage: mbv_queue::QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        };
+        let view = self
+            .remote_view
+            .as_mut()
+            .expect("the direct remote fixture keeps a target queue");
+        view.adopt(
+            &state,
+            crate::app::state::queue_view::AdoptCause::Replacement,
+        );
+        view.set_cursor(cursor);
+    }
+
+    /// Hold `source` and `lineage` as the source update this Client sent and
+    /// waits for the owner to confirm.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_pending_owner_source_update_for_test(
+        &mut self,
+        source: mbv_queue::QueueSource,
+        lineage: mbv_queue::QueueLineage,
+    ) {
+        self.pending_owner_source_update = Some((source, lineage));
+    }
+
+    /// The source update this Client sent and waits for the owner to confirm.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pending_owner_source_update_for_test(
+        &self,
+    ) -> Option<(mbv_queue::QueueSource, mbv_queue::QueueLineage)> {
+        self.pending_owner_source_update.clone()
+    }
+
+    /// Hold `dirty` as whether the queue carries edits the owner has not
+    /// confirmed.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_queue_dirty_for_test(&mut self, dirty: bool) {
+        self.queue_dirty = dirty;
+    }
+
+    /// The Client-local queue epoch a mutation is made against.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn queue_epoch_for_test(&self) -> crate::app::state::queue_owner::QueueEpoch {
+        self.queue_epoch
+    }
+
+    /// The origin a mutation is made against: this Client's epoch plus
+    /// `lineage` as the owner reported it.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn queue_origin_with_lineage_for_test(
+        &self,
+        lineage: mbv_queue::QueueLineage,
+    ) -> crate::app::state::queue_owner::QueueOrigin {
+        crate::app::state::queue_owner::QueueOrigin {
+            epoch: self.queue_epoch,
+            lineage,
+        }
+    }
+
+    /// Adopt the home link's `snapshot` as the local queue, as the Client's
+    /// drain does when the owner reports one.
+    #[cfg(any(test, feature = "test"))]
+    pub fn adopt_home_snapshot_for_test(&mut self, snapshot: &mbv_ctrl::UnifiedQueueStateData) {
+        self.adopt_home_snapshot(snapshot);
+    }
+
+    /// Apply a saved playlist's `source` change at `origin`, answering whether
+    /// the update reached the owner link.
+    #[cfg(any(test, feature = "test"))]
+    pub fn apply_saved_playlist_source_for_test(
+        &mut self,
+        source: mbv_queue::QueueSource,
+        origin: crate::app::state::queue_owner::QueueOrigin,
+    ) -> bool {
+        self.apply_saved_playlist_source(source, origin)
     }
 }

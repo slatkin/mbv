@@ -536,7 +536,7 @@ fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
 /// `cast-session-control` "Playback targets are mutually exclusive").
 #[test]
 fn tick_sessions_direct_endpoint_activation_switches_away_from_an_mbvd_owner() {
-    use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+    use crate::app::test_seams::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
     use std::sync::Mutex;
 
     static REQUESTED: Mutex<Option<mbv_remote_player::DaemonEndpoint>> = Mutex::new(None);

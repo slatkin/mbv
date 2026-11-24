@@ -24,4 +24,20 @@ impl App {
     pub fn set_visualizer_enabled_for_test(&mut self, enabled: bool) {
         self.visualizer_enabled = enabled;
     }
+
+    /// Whether the persisted visual-slot hide is on, as a TUI run's prefs
+    /// leave it.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn visual_slot_hidden_for_test(&self) -> bool {
+        self.visual_slot_hidden
+    }
+
+    /// Hold `hidden` as the persisted visual-slot hide, as a TUI run's prefs
+    /// leave it for the next launch. It is the stored fact, not the `h`
+    /// action: no Client capability gates it and no capture reconciles.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_visual_slot_hidden_for_test(&mut self, hidden: bool) {
+        self.visual_slot_hidden = hidden;
+    }
 }

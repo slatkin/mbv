@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::test_seams::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
 
 #[test]
 fn app_construction_never_attempts_a_daemon_route_connect() {

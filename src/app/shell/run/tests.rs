@@ -2,10 +2,10 @@ use super::*;
 use crate::app::AudiobookshelfEvent;
 use crate::app::ModelContentEvent;
 use crate::app::SessionEvent;
-use crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion;
+use crate::app::dispatch::session::service_startup::AudiobookshelfCatalogOutcome;
 use crate::app::state::events::LibEvent;
 use crate::app::tests::make_app_stub;
-use crate::app::tests::render_fixtures::{CatalogResult, catalog_receiver, make_movie_app};
+use crate::app::tests::render_fixtures::make_movie_app;
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,
@@ -90,7 +90,7 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     app.send_notif_action_for_test("clear:yes");
 
     assert!(
-        app.drain_notif_actions(),
+        app.drain_notif_actions_for_test(),
         "a queued action must report produced=true"
     );
     assert!(
@@ -124,7 +124,7 @@ fn drain_session_events_dispatches_a_queued_event() {
     });
 
     assert!(
-        app.drain_session_events(),
+        app.drain_session_events_for_test(),
         "a queued event must report produced=true"
     );
     assert_eq!(
@@ -185,12 +185,10 @@ fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
 /// reset lands on `NotConfigured`.
 #[test]
 fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
-    // The sender drops here: the worker exited without a completion.
-    let (_, rx) = std::sync::mpsc::channel::<AudiobookshelfSetupCompletion>();
-    let mut app = audiobookshelf_setup_attempt_app(rx);
+    let mut app = audiobookshelf_setup_attempt_app();
 
     assert!(
-        app.drain_audiobookshelf_events(),
+        app.drain_audiobookshelf_events_for_test(),
         "a Disconnected setup receiver must report produced"
     );
     assert_eq!(
@@ -207,22 +205,22 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
 /// The stub `App` of a running Audiobookshelf setup attempt whose worker has
 /// already handed back `rx`: the attempt started, its receiver installed, and
 /// its completion sender dropped, so the drain sees the worker exit.
-fn audiobookshelf_setup_attempt_app(
-    rx: std::sync::mpsc::Receiver<AudiobookshelfSetupCompletion>,
-) -> App {
+fn audiobookshelf_setup_attempt_app() -> App {
     let mut app = make_app_stub();
     app.begin_audiobookshelf_setup_for_test();
-    app.seed_audiobookshelf_setup_receiver_for_test(rx);
+    // The sender drops inside the seam: the worker exited without a
+    // completion.
+    app.seed_audiobookshelf_setup_worker_gone_for_test();
     app
 }
 
 /// The production catalog hand-off: the stub `App` with `completion` queued on
 /// the Audiobookshelf catalog load's result receiver, as a completed catalog
 /// fetch leaves it, so the drain that applies it is the production path.
-fn audiobookshelf_catalog_completion_app(completion: CatalogResult) -> App {
+fn audiobookshelf_catalog_completion_app(completion: AudiobookshelfCatalogOutcome) -> App {
     let mut app = make_app_stub();
     let generation = app.audiobookshelf_setup_generation_for_test();
-    app.seed_audiobookshelf_catalog_receiver_for_test(catalog_receiver(generation, completion));
+    app.seed_audiobookshelf_catalog_result_for_test(generation, completion);
     app
 }
 
@@ -245,7 +243,7 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
         .expect("secret is written under the test state dir");
 
     assert!(
-        app.drain_audiobookshelf_events(),
+        app.drain_audiobookshelf_events_for_test(),
         "the completion must be reported"
     );
     assert_eq!(
@@ -299,7 +297,7 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
     )));
 
     assert!(
-        app.drain_audiobookshelf_events(),
+        app.drain_audiobookshelf_events_for_test(),
         "the catalog completion must be reported"
     );
 
@@ -751,6 +749,3 @@ fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
             .is_empty()
     );
 }
-
-// The Service setup hand-offs the drains above consume.
-mod setup_receivers;

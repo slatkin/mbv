@@ -91,8 +91,20 @@ pub use self::app::GuiClientEvent;
 /// `test` feature, which no shipped build enables.
 #[cfg(any(test, feature = "test"))]
 pub use self::app::gui_state_for_test;
+/// The connect, session-load, URL-open, and pinned-request overrides a
+/// dependent Client's tests install (design D4e): the core reads them, and a
+/// Client's test target enables the `test` feature to name them.
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
+pub use self::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 #[cfg(feature = "test")]
 pub use self::app::seeded_gui_state_for_test;
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
+pub use self::app::test_seams::{
+    DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
+    DIRECT_CONNECT_TEST_LOCK, OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
+};
 #[cfg(feature = "test")]
 pub use self::app::{
     drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,

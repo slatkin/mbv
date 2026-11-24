@@ -384,7 +384,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         },
     );
     model.sync_mounted_surfaces();
-    assert!(!model.app.is_viewing_album_folders(0));
+    assert!(!model.app.is_viewing_album_folders_for_test(0));
     assert!(
         model.music_owner().is_none(),
         "Music is no longer the active owner"
@@ -398,7 +398,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
     // divergent owner cursor survived untouched.
     model.app.go_back(0);
     model.sync_mounted_surfaces();
-    assert!(model.app.is_viewing_album_folders(0));
+    assert!(model.app.is_viewing_album_folders_for_test(0));
     assert_eq!(
         model.test_music_owner().album_cursor(),
         1,

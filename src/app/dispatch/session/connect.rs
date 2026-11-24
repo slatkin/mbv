@@ -73,7 +73,10 @@ impl App {
         &self,
     ) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError> {
         #[cfg(test)]
-        if let Some(f) = *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
+        if let Some(f) = *crate::app::test_seams::SESSIONS_LOAD_OVERRIDE
+            .lock()
+            .unwrap()
+        {
             let Some(client) = self.emby_client() else {
                 return Err(mbv_emby::EmbyError::from(
                     mbv_emby::EmbyFailure::unavailable("Emby is unavailable"),
@@ -102,7 +105,10 @@ impl App {
         mbv_remote_player::RemotePlayerError,
     > {
         #[cfg(test)]
-        if let Some(connect) = *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
+        if let Some(connect) = *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+            .lock()
+            .unwrap()
+        {
             return connect(endpoint);
         }
 
@@ -130,7 +136,10 @@ impl App {
         mbv_remote_player::RemotePlayerError,
     > {
         #[cfg(test)]
-        if let Some(connect) = *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
+        if let Some(connect) = *crate::app::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
+            .lock()
+            .unwrap()
+        {
             return Ok(connect(endpoint));
         }
 
