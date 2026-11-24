@@ -19,8 +19,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryShowsList;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
-    GuiShowsDetail, GuiShowsList, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
+    GuiDestinationList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame,
+    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsList, GuiShowsRowFrame,
+    GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -184,6 +185,32 @@ impl Fixture {
             .collect()
     }
 
+    /// The hover controls the host of the row `row_id` offers, in paint order
+    /// (gui-row-hover-actions design D3): the actions are the row button's later
+    /// sibling in the row's hover host, so the row's own node names them.
+    fn hover_controls_of(&self, row_id: &str) -> Vec<String> {
+        let dom = self.doc.inner();
+        let row = dom
+            .query_selector(&format!("[data-library-shows-row-id=\"{row_id}\"]"))
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{row_id} paints"));
+        let host = dom
+            .get_node(row)
+            .expect("the row is in the document")
+            .parent
+            .expect("the row sits in its hover host");
+        dom.query_selector_all_in(host, "[data-row-action]")
+            .expect("the selector is valid")
+            .into_iter()
+            .filter_map(|action| {
+                dom.get_node(action)
+                    .expect("the control is in the document")
+                    .attr(LocalName::from("data-row-action"))
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
     /// Run `f` with the store inside the virtual dom's runtime and return
     /// the value it computed, then let the re-renders land.
     fn compute<R: 'static>(&mut self, f: impl FnOnce(&LibraryState) -> R + 'static) -> R {
@@ -313,6 +340,30 @@ fn tree() -> Vec<GuiShowsSeriesFrame> {
             seasons: Vec::new(),
         },
     ]
+}
+
+/// The series list's tree with a landed season: Atlanta with Season 1 and one
+/// episode, so the episode leaf paints beside its nodes.
+fn tree_with_episodes() -> Vec<GuiShowsSeriesFrame> {
+    vec![GuiShowsSeriesFrame {
+        art: GuiRowArtFrame::Loading,
+        media: GuiRowMediaKindFrame::Video,
+        id: "s1".to_owned(),
+        title: "Atlanta".to_owned(),
+        sort_letter: 'A',
+        expandable: true,
+        seasons: vec![GuiShowsSeasonFrame {
+            id: "se1".to_owned(),
+            name: "Season 1".to_owned(),
+            episodes: Some(vec![GuiShowsEpisodeRowFrame {
+                episode_id: "ep1".to_owned(),
+                number: 1,
+                name: "The Big Bang".to_owned(),
+                duration: "24:00".to_owned(),
+                state: GuiHomeRowStateFrame::Ordinary,
+            }]),
+        }],
+    }]
 }
 
 /// The painted rows' ids, in paint order.
@@ -501,6 +552,74 @@ fn the_shows_header_paints_no_selection_label() {
     assert!(
         !fixture.presents("[data-library-selection-label]"),
         "the Shows header paints no selection label"
+    );
+}
+
+/// Contract (gui-row-hover-actions design D3, D4): a series and a season name a
+/// collection, so their hover offers Play, Add, Shuffle, and the node's Expand,
+/// while an episode leaf offers Play and Add alone.
+#[test]
+fn the_tree_rows_offer_their_hover_controls() {
+    let mut fixture = built(shows_frame(tree_with_episodes()), shows_detail(None));
+    fixture.measure(300.0);
+    toggle_row(&mut fixture, "shows-series:s1");
+    toggle_row(&mut fixture, "shows-season:s1:se1");
+
+    assert_eq!(
+        fixture.hover_controls_of("shows-series:s1"),
+        ["play", "queue", "shuffle", "toggle"],
+        "the series row offers Play, Add, Shuffle, and Expand"
+    );
+    assert_eq!(
+        fixture.hover_controls_of("shows-season:s1:se1"),
+        ["play", "queue", "shuffle", "toggle"],
+        "the season row offers Play, Add, Shuffle, and Expand"
+    );
+    assert_eq!(
+        fixture.hover_controls_of("shows-episode:ep1"),
+        ["play", "queue"],
+        "the episode row offers Play and Add and no Shuffle"
+    );
+}
+
+/// Contract (gui-row-hover-actions design D3, D4): a New row is a playable
+/// episode, so its hover offers Play and Add and no Shuffle.
+#[test]
+fn a_new_row_offers_play_and_add() {
+    let frame = GuiShowsList {
+        sort: None,
+        view: crate::gui_core::GuiShowsView::New,
+        rows: new_view_rows(),
+        ..shows_frame(Vec::new())
+    };
+    let mut fixture = built(frame, shows_detail(None));
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.hover_controls_of("new:e1"),
+        ["play", "queue"],
+        "the New row offers Play and Add"
+    );
+}
+
+/// Contract (gui-row-hover-actions design D3): an Upcoming row is display-only,
+/// so it paints no hover control.
+#[test]
+fn an_upcoming_row_offers_no_hover_control() {
+    let mut row = new_view_rows().remove(0);
+    row.display_only = true;
+    let frame = GuiShowsList {
+        sort: None,
+        view: crate::gui_core::GuiShowsView::Upcoming,
+        rows: vec![row],
+        ..shows_frame(Vec::new())
+    };
+    let mut fixture = built(frame, shows_detail(None));
+    fixture.measure(300.0);
+
+    assert!(
+        fixture.hover_controls_of("new:e1").is_empty(),
+        "the display-only row paints no hover control"
     );
 }
 

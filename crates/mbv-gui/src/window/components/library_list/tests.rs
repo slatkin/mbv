@@ -194,6 +194,32 @@ impl Fixture {
             .map(str::to_owned)
     }
 
+    /// The hover controls the host of the row `row_id` offers, in paint order
+    /// (gui-row-hover-actions design D3): the actions are the row button's later
+    /// sibling in the row's hover host, so the row's own node names them.
+    fn hover_controls_of(&self, row_id: &str) -> Vec<String> {
+        let dom = self.doc.inner();
+        let row = dom
+            .query_selector(&format!("[data-library-row-id=\"{row_id}\"]"))
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{row_id} paints"));
+        let host = dom
+            .get_node(row)
+            .expect("the row is in the document")
+            .parent
+            .expect("the row sits in its hover host");
+        dom.query_selector_all_in(host, "[data-row-action]")
+            .expect("the selector is valid")
+            .into_iter()
+            .filter_map(|action| {
+                dom.get_node(action)
+                    .expect("the control is in the document")
+                    .attr(blitz_dom::LocalName::from("data-row-action"))
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
     /// The `RowsInView` reports the core link received, in send order.
     fn reported_rows_in_view(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
@@ -438,6 +464,38 @@ fn a_press_on_an_album_picks_it_and_leaves_it_closed() {
     );
 }
 
+/// Contract (gui-row-hover-actions design D3, D4; gui-tree-double-click design
+/// D1, D5): a Music album row is a collection that names its own item, so its
+/// hover offers all four controls — Play, Add, Shuffle, and the node's Expand.
+#[test]
+fn an_album_row_offers_every_hover_control() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
+    open_beastie(&mut fixture);
+    measure(&mut fixture, 240.0);
+
+    assert_eq!(
+        fixture.hover_controls_of("album:al1"),
+        ["play", "queue", "shuffle", "toggle"],
+        "the album row offers Play, Add, Shuffle, and Expand"
+    );
+}
+
+/// Contract (gui-row-hover-actions design D3, D4): a Music track row is a leaf
+/// and no collection, so its hover offers Play and Add alone.
+#[test]
+fn a_track_row_offers_play_and_add() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
+    open_beastie(&mut fixture);
+    open_licensed_to_ill(&mut fixture);
+    measure(&mut fixture, 240.0);
+
+    assert_eq!(
+        fixture.hover_controls_of("track:t1"),
+        ["play", "queue"],
+        "the track row offers Play and Add and no Shuffle"
+    );
+}
+
 /// Contract (`LibraryList.test.ts`): a right-press on a row requests the
 /// item's menu for its id — the artist's item id, an album's own id, a
 /// track's id.
@@ -566,9 +624,9 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
 /// Contract (gui-tree-double-click design D2, D4; gui-row-hover-actions design
 /// D1-D3): the Music artist row is a tree parent — its open state paints as
 /// `aria-expanded` and its hover offers the Expand control, which reuses the
-/// row's toggle. The hint the row used to paint is gone.
+/// row's toggle, beside Play, Add, and Shuffle over the artist's item id.
 #[test]
-fn the_artist_row_paints_its_open_state_and_the_expand_control() {
+fn the_artist_row_paints_its_open_state_and_offers_every_control() {
     let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     measure(&mut fixture, 240.0);
 
@@ -578,13 +636,10 @@ fn the_artist_row_paints_its_open_state_and_the_expand_control() {
         Some("false".to_owned()),
         "the closed artist paints its open state"
     );
-    assert!(
-        fixture.presents(".row-hover-actions [data-row-action=\"toggle\"]"),
-        "the artist row offers the hover Expand control"
-    );
-    assert!(
-        !fixture.presents("[data-tree-hint]"),
-        "the artist row paints no tree hint"
+    assert_eq!(
+        fixture.hover_controls_of("artist:service:a1"),
+        ["play", "queue", "shuffle", "toggle"],
+        "the artist with an item id offers Play, Add, Shuffle, and Expand"
     );
 }
 

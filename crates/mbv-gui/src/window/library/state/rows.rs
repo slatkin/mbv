@@ -9,6 +9,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicList};
 use crate::bridge::library::GuiLibraryCommand;
+use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::library::list::{
     LibraryRow, LibraryTree, ListMove, MusicRowsFacts, album_row_id, artist_row_id,
     build_library_rows, jump_to_letter, letter_rail, scroll_step, scroll_top_to_show_cursor,
@@ -16,7 +17,7 @@ use crate::window::library::list::{
 use crate::window::library::parts::library_music_list;
 use crate::window::library::scroll::set_scroll_top;
 
-use super::{LibraryState, LibraryUiState};
+use super::{LibraryState, LibraryUiState, RowHoverPresses};
 
 /// The id list with `id` present when `present` and absent otherwise, keeping
 /// the other ids' order.
@@ -195,8 +196,56 @@ impl LibraryState {
     /// rows and the Hero's tracklist rows both send it, so one gesture cannot drift
     /// from the other.
     pub fn play_library_track(&self, track_id: String) {
-        self.link
-            .library(GuiLibraryCommand::Play { item_id: track_id });
+        self.play_library_item(track_id);
+    }
+
+    /// Play the item a row names (`add-gui-library-panel` design D2's Enter):
+    /// the item's own stable id. The Music list's Enter, its row double-click,
+    /// and its hover Play all send it (gui-row-hover-actions design D4).
+    pub fn play_library_item(&self, item_id: String) {
+        self.link.library(GuiLibraryCommand::Play { item_id });
+    }
+
+    /// Add the item a row names to the queue (`add-gui-library-panel` design D2's
+    /// `a`): the item's own stable id. The Music list's `a` and its hover Add
+    /// both send it (gui-row-hover-actions design D4).
+    pub fn queue_library_item(&self, item_id: String) {
+        self.link.library(GuiLibraryCommand::AddToQueue { item_id });
+    }
+
+    /// Shuffle the row (gui-row-hover-actions design D4): the core runs the
+    /// row's own right-click shuffle entry, so the hover Shuffle control and the
+    /// menu entry cannot drift apart.
+    pub fn shuffle_library_row(&self, row: GuiLibraryMenuRow) {
+        self.link.library(GuiLibraryCommand::Shuffle { row });
+    }
+
+    /// The hover controls' presses for a Music row that names `item_id`
+    /// (gui-row-hover-actions design D3, D4): Play, Add, and Shuffle run the same
+    /// commands the keys and the row menu run. A row that names no item offers
+    /// none of them, so an artist row without an item id keeps its Expand
+    /// control alone.
+    #[must_use]
+    pub fn row_hover_presses(&self, item_id: Option<String>) -> RowHoverPresses {
+        let Some(item_id) = item_id else {
+            return RowHoverPresses::default();
+        };
+        let play = self.clone();
+        let play_id = item_id.clone();
+        let queue = self.clone();
+        let queue_id = item_id.clone();
+        let shuffle = self.clone();
+        RowHoverPresses {
+            play: Some(Callback::new(move |()| {
+                play.play_library_item(play_id.clone());
+            })),
+            queue: Some(Callback::new(move |()| {
+                queue.queue_library_item(queue_id.clone());
+            })),
+            shuffle: Some(Callback::new(move |()| {
+                shuffle.shuffle_library_row(GuiLibraryMenuRow::Item(item_id.clone()));
+            })),
+        }
     }
 
     /// Press a row (design D7, gui-tree-double-click design D1): a press is the

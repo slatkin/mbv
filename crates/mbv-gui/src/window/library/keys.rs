@@ -9,7 +9,6 @@
 
 use crate::bridge::frame::library::{GuiDestinationList, GuiHomeRowIdFrame, GuiSearchFrame};
 use crate::bridge::keys::{DomKey, KeyTarget};
-use crate::bridge::library::GuiLibraryCommand;
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
@@ -260,7 +259,7 @@ fn hovered_item_id(state: &LibraryState, pointer: &PointerTarget) -> Option<Stri
 /// item for the Hero, and Enter plays.
 fn play_hovered_item(state: &LibraryState, pointer: &PointerTarget) {
     if let Some(item_id) = hovered_item_id(state, pointer) {
-        state.link.library(GuiLibraryCommand::Play { item_id });
+        state.play_library_item(item_id);
     }
 }
 
@@ -272,9 +271,7 @@ fn route_item_key(state: &LibraryState, pointer: &PointerTarget) {
     let Some(item_id) = hovered_item_id(state, pointer) else {
         return;
     };
-    state
-        .link
-        .library(GuiLibraryCommand::AddToQueue { item_id });
+    state.queue_library_item(item_id);
 }
 
 /// Close the window's open menu or overlay with Esc (design D2, step 1): the

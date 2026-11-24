@@ -25,7 +25,7 @@ use crate::window::library::shows_list::{
     ShowsListRow, ShowsRowsFacts, ShowsTreeState, build_shows_rows, shows_letter_rail,
 };
 
-use super::state::LibraryState;
+use super::state::{LibraryState, RowHoverPresses};
 
 /// The Shows list's interaction state (`shows.ts`'s `ShowsUiState`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -264,6 +264,32 @@ impl LibraryState {
             lib_idx,
             item_id: row_id.to_owned(),
         });
+    }
+
+    /// The hover controls' presses for a Shows row that names `item_id`
+    /// (gui-row-hover-actions design D3, D4): Play and Add run the same commands
+    /// the keys run, and Shuffle runs the row's own right-click shuffle entry.
+    /// The painter drops the controls its row does not offer — an episode and a
+    /// flat row paint no Shuffle — and a display-only row takes none of them.
+    #[must_use]
+    pub fn shows_row_hover_presses(&self, item_id: String) -> RowHoverPresses {
+        let play = self.clone();
+        let play_id = item_id.clone();
+        let queue = self.clone();
+        let queue_id = item_id.clone();
+        let shuffle = self.clone();
+        RowHoverPresses {
+            play: Some(Callback::new(move |()| {
+                play.play_shows_row(&play_id);
+            })),
+            queue: Some(Callback::new(move |()| {
+                queue.queue_shows_row(&queue_id);
+            })),
+            shuffle: Some(Callback::new(move |()| {
+                shuffle
+                    .shuffle_library_row(crate::gui_core::GuiLibraryMenuRow::Item(item_id.clone()));
+            })),
+        }
     }
 
     /// Scroll the list by one movement key (design D6): Up and Down move by the

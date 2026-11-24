@@ -3,7 +3,7 @@
 //! shape asks for, the media kind icon while the thumb holds no image, the
 //! row's resume run along the thumb's bottom edge, and a row that carries a
 //! title alone; and the nested row's level look (its height, inset, face, and
-//! open-state hint) and its title tone over its play state. The document paints
+//! open state) and its title tone over its play state. The document paints
 //! the part; the harness supplies the art painter's contexts and the utilities
 //! the tree sizes its boxes with. No test opens a window, sleeps, or reaches the
 //! core.
@@ -16,7 +16,7 @@ use rstest::rstest;
 
 use super::{
     FlatRow, LIBRARY_ROW_HEIGHT, LibraryRowThumb, LibraryTrailPart, NODE_ROW_HEIGHT,
-    THUMB_SQUARE_PX, TRACK_ROW_HEIGHT, TreeDepth, TreeLevel, TreeRow,
+    THUMB_SQUARE_PX, TRACK_ROW_HEIGHT, TreeDepth, TreeLevel, TreeRow, TreeTrail,
 };
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
@@ -57,9 +57,7 @@ const THUMB_PROGRESS: &str = "[data-library-test-thumb-progress]";
 /// The progress mark no part paints outside the thumb.
 const ROW_PROGRESS: &str = "[data-library-test-progress]";
 
-/// The shared hint a nested parent's row paints, and the mono label a leaf row
-/// wraps its title in.
-const TREE_HINT: &str = "[data-tree-hint]";
+/// The mono label a leaf row wraps its title in.
 const MONO_LABEL: &str = "[style*=\"font-family: var(--font-mono)\"]";
 
 /// One top-level row the fixture paints.
@@ -182,6 +180,30 @@ fn tree_app(spec: TreeSpec) -> Element {
     }
 }
 
+/// The root: paints one nested parent row that offers every hover control and
+/// carries a trailing date.
+fn tree_hover_app() -> Element {
+    rsx! {
+        TreeRow {
+            attr: "test",
+            kind: "item".to_owned(),
+            id: "row-1".to_owned(),
+            level: TreeLevel::Parent,
+            depth: TreeDepth::One,
+            title: "Sabrosito".to_owned(),
+            trail: Some(TreeTrail::Date("1986".to_owned())),
+            selected: false,
+            open: Some(false),
+            on_press: Callback::new(|()| {}),
+            on_play: Callback::new(|()| {}),
+            on_toggle: Some(Callback::new(|()| {})),
+            on_hover_play: Some(Callback::new(|()| {})),
+            on_hover_queue: Some(Callback::new(|()| {})),
+            on_hover_shuffle: Some(Callback::new(|()| {})),
+        }
+    }
+}
+
 struct Fixture {
     doc: DioxusDocument,
 }
@@ -226,17 +248,6 @@ impl Fixture {
             .text_content()
             .trim()
             .to_owned()
-    }
-
-    /// The open-state hint's text, `None` while the row paints no hint.
-    fn hint(&self) -> Option<String> {
-        let dom = self.doc.inner();
-        let id = dom.query_selector(TREE_HINT).ok().flatten()?;
-        Some(
-            dom.get_node(id)
-                .expect("the node is in the document")
-                .text_content(),
-        )
     }
 
     /// Poll the document until its renders and effects have landed (a fixed
@@ -290,6 +301,16 @@ fn tree_built(spec: TreeSpec) -> Fixture {
         VirtualDom::new_with_props(|spec: TreeSpec| tree_app(spec), spec),
         config(),
     );
+    doc.initial_build();
+    let mut fixture = Fixture { doc };
+    fixture.poll_until_idle();
+    fixture
+}
+
+/// Paint one nested parent row that offers the hover controls and let its first
+/// render land.
+fn tree_hover_built() -> Fixture {
+    let mut doc = DioxusDocument::new(VirtualDom::new(tree_hover_app), config());
     doc.initial_build();
     let mut fixture = Fixture { doc };
     fixture.poll_until_idle();
@@ -514,9 +535,46 @@ fn the_hover_controls_are_the_hosts_sibling_and_the_play_is_named_after_the_row(
     );
 }
 
+/// Contract (gui-row-hover-actions design D1, D2): a nested parent row is a
+/// hover host like the top-level row — its fill moves to `--row-fill` for the
+/// row button and the controls, the trailing text rests as the trail the
+/// stylesheet hides, and the controls are the row's later sibling, never its
+/// child.
+#[test]
+fn a_nested_row_is_a_hover_host_with_the_controls_beside_it() {
+    let fixture = tree_hover_built();
+
+    assert!(
+        fixture.presents(".row-hover-host [data-library-test-row]"),
+        "the row button sits in the hover host"
+    );
+    assert!(
+        !fixture.presents("[data-library-test-row] [data-row-hover-actions]"),
+        "no control nests inside the row button"
+    );
+    assert!(
+        fixture.presents(".row-hover-host [data-row-hover-actions]"),
+        "the controls paint in the host"
+    );
+    assert!(
+        fixture.style_of(".row-hover-host").contains("--row-fill:"),
+        "the host carries the row's fill"
+    );
+    assert!(
+        fixture
+            .style_of(ROW)
+            .contains("background: var(--row-fill)"),
+        "the row button paints the host's fill"
+    );
+    assert!(
+        fixture.class_of(DATE).contains("row-hover-trail"),
+        "the trailing text rests as the trail"
+    );
+}
+
 /// Contract (design D3): the nested row's level picks its look and its depth
 /// picks its inset — a parent paints the album look (the node height, the
-/// nested inset, the sans face, and the open-state hint), and a leaf paints the
+/// nested inset, the sans face, and its open state), and a leaf paints the
 /// track look (the track height, the leaf inset, and the mono label), opening
 /// nothing.
 #[rstest]
@@ -527,7 +585,7 @@ fn the_hover_controls_are_the_hosts_sibling_and_the_play_is_named_after_the_row(
     NESTED_INSET_X,
     TREE_ROW_FONT_PX,
     false,
-    Some("Double-click to expand")
+    true
 )]
 #[case(
     TreeLevel::Leaf,
@@ -536,7 +594,7 @@ fn the_hover_controls_are_the_hosts_sibling_and_the_play_is_named_after_the_row(
     LEAF_INSET_X,
     LEAF_ROW_FONT_PX,
     true,
-    None
+    false
 )]
 fn a_nested_rows_level_and_depth_pick_its_look(
     #[case] level: TreeLevel,
@@ -545,13 +603,13 @@ fn a_nested_rows_level_and_depth_pick_its_look(
     #[case] inset: f32,
     #[case] font_px: f32,
     #[case] mono: bool,
-    #[case] hint: Option<&str>,
+    #[case] parent: bool,
 ) {
     let fixture = tree_built(TreeSpec {
         level,
         depth,
         play: None,
-        open: hint.map(|_| false),
+        open: parent.then_some(false),
     });
 
     let style = fixture.style_of(ROW);
@@ -572,7 +630,6 @@ fn a_nested_rows_level_and_depth_pick_its_look(
         mono,
         "the leaf wraps its title in the mono label"
     );
-    assert_eq!(fixture.hint().as_deref(), hint);
 }
 
 /// Contract (design D4): a nested row's title tone follows its play state — no

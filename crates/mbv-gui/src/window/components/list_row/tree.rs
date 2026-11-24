@@ -8,8 +8,12 @@
 //! and maps onto the shared [`RowLevel`] rules, [`TreeDepth`] picks the inset
 //! and the guides that pass through the row, and [`TreeTrail`] picks the
 //! trailing text's kind and hook part.
-
-use std::fmt::Write as _;
+//!
+//! The row sits in a `row-hover-host` box with the shared hover controls as its
+//! later sibling (gui-row-hover-actions design D2). The box carries the row's
+//! fill as `--row-fill`, so the row button and the controls that cover its
+//! trailing end paint the same fill, and the trailing text carries
+//! `row-hover-trail` while the controls cover it.
 
 use dioxus_native::prelude::*;
 
@@ -18,11 +22,11 @@ use crate::window::components::library_attr::library_attr;
 use crate::window::components::list_row::{
     LibraryTrailPart, NODE_ROW_HEIGHT, ROW_PADDING_PX, RowLevel, TRACK_ROW_HEIGHT, context_press,
 };
+use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{
     GuideTone, LEAF_INSET_X, NESTED_INSET_X, TOP_GUIDE_X, TreeGuide, leaf_guides,
     nested_parent_guides, tail_divider_style,
 };
-use crate::window::components::tree_hint::TreeHint;
 use crate::window::components::tree_row::{
     LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text,
 };
@@ -168,9 +172,9 @@ pub struct TreeRowProps {
     /// Whether the selection marks the row.
     pub selected: bool,
     /// The row's open state as a tree parent, `None` on a row that opens
-    /// nothing. `Some(open)` adds the `tree-parent` class and the row's
-    /// `aria-expanded`, paints the shared [`TreeHint`], and turns the row's
-    /// double-click into [`Self::on_toggle`].
+    /// nothing. `Some(open)` adds the row's `aria-expanded`, picks the hover
+    /// toggle control's glyph, and turns the row's double-click into
+    /// [`Self::on_toggle`].
     #[props(default)]
     pub open: Option<bool>,
     /// Whether the open parent shows child rows: the row then starts its own
@@ -186,9 +190,24 @@ pub struct TreeRowProps {
     /// A double-click on the row.
     pub on_play: Callback<()>,
     /// A double-click on a parent that opens: it opens or closes the node, in
-    /// place of [`Self::on_play`]. `None` while the row opens nothing.
+    /// place of [`Self::on_play`]. `None` while the row opens nothing. The hover
+    /// controls paint their Expand/collapse control from it, so it is also that
+    /// control's press.
     #[props(default)]
     pub on_toggle: Option<Callback<()>>,
+    /// The hover controls' Play press: it runs the row's play path, the same one
+    /// Enter runs (gui-row-hover-actions design D3, D4). `None` on a row that
+    /// cannot play.
+    #[props(default)]
+    pub on_hover_play: Option<Callback<()>>,
+    /// The hover controls' Add press: it runs the row's queue path, the same one
+    /// `a` runs. `None` on a row that offers no Add.
+    #[props(default)]
+    pub on_hover_queue: Option<Callback<()>>,
+    /// The hover controls' Shuffle press: it runs the row's shuffle path. `None`
+    /// on a row that is no collection.
+    #[props(default)]
+    pub on_hover_shuffle: Option<Callback<()>>,
     /// A right-press on the row, with the pointer's client position; `None`
     /// while the row names no item a menu could open.
     #[props(default)]
@@ -237,16 +256,34 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
         row_level.selection_radius(props.selected),
         level.font_px()
     );
+    // The row's fill (gui-row-hover-actions design D2) lives on the host as
+    // `--row-fill`, so the row button and the hover controls that cover its
+    // trailing end paint the same fill.
     let fill = row_level
         .selection_fill(props.selected)
         .unwrap_or_else(|| canvas_var("tree-subtree"));
-    let _ = write!(row_style, " background: {fill};");
+    row_style.push_str(" background: var(--row-fill);");
     row_style.push_str(&tail_divider_style(props.tail));
+    let host_style = format!("--row-fill: {fill};");
 
     let title_css = row_level.title_tone(props.play.as_ref());
     let title_attrs = vec![Attribute::new(library_attr(attr, "title"), "", None, false)];
     let number = props.number.clone().filter(|number| !number.is_empty());
     let trail = props.trail.clone().filter(|trail| !trail.text().is_empty());
+
+    // The hover controls (gui-row-hover-actions design D1-D3): the trailing
+    // text steps aside for them, and Expand reuses the row's own toggle, so a
+    // tree parent offers it without a second handler. A row that offers no
+    // control paints neither the part nor the trailing text's swap.
+    let on_hover_play = props.on_hover_play;
+    let on_hover_queue = props.on_hover_queue;
+    let on_hover_shuffle = props.on_hover_shuffle;
+    let on_toggle = props.on_toggle;
+    let paints_actions = on_hover_play.is_some()
+        || on_hover_queue.is_some()
+        || on_hover_shuffle.is_some()
+        || on_toggle.is_some();
+    let trail_class = hover_trail_class(paints_actions);
 
     // The level's own body: a parent's title over its date, or a leaf's number,
     // title, and runtime.
@@ -254,7 +291,7 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
         TreeLevel::Parent => rsx! {
             {parent_title(props.title.clone(), &title_css, title_attrs)}
             if let Some(trail) = trail {
-                {parent_trail(attr, &trail, props.selected)}
+                {parent_trail(attr, &trail, props.selected, trail_class)}
             }
         },
         TreeLevel::Leaf => rsx! {
@@ -263,39 +300,63 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
             }
             {leaf_title(props.title.clone(), &title_css, title_attrs)}
             if let Some(trail) = trail {
-                {leaf_trail(attr, &trail)}
+                {leaf_trail(attr, &trail, trail_class)}
             }
         },
     };
 
-    // A parent that opens carries the hint and toggles on a double-click; a
-    // leaf, and a parent that opens nothing, plays.
+    // A parent that opens toggles on a double-click; a leaf, and a parent that
+    // opens nothing, plays.
     let row_class = if props.open.is_some() {
-        "tree-parent relative flex w-full items-center"
+        "relative flex w-full items-center"
     } else {
         "relative flex w-full items-center overflow-hidden"
     };
     let on_double_click = props.on_toggle.unwrap_or(props.on_play);
     let on_press = props.on_press;
     let on_context = props.on_context;
-    let open = props.open;
+    let tree_open = props.open;
     let guides = row_guides(props.depth, level, height, props.shows_children);
+    let row_name = Some(props.title.clone());
 
+    // The host is the hover box (design D2): the row button keeps its own
+    // semantics, and the controls are its later sibling, never a child.
     rsx! {
-        button {
-            "type": "button",
-            class: "{row_class}",
-            style: "{row_style}",
-            onclick: move |_| on_press.call(()),
-            ondoubleclick: move |_| on_double_click.call(()),
-            oncontextmenu: move |event: MouseEvent| context_press(&event, on_press, on_context),
-            ..row_attrs,
-            {body}
-            {guides}
-            if let Some(open) = open {
-                TreeHint { open }
+        div {
+            class: "row-hover-host relative",
+            style: "{host_style}",
+            button {
+                "type": "button",
+                class: "{row_class}",
+                style: "{row_style}",
+                onclick: move |_| on_press.call(()),
+                ondoubleclick: move |_| on_double_click.call(()),
+                oncontextmenu: move |event: MouseEvent| context_press(&event, on_press, on_context),
+                ..row_attrs,
+                {body}
+                {guides}
+            }
+            if paints_actions {
+                RowHoverActions {
+                    on_play: on_hover_play,
+                    on_queue: on_hover_queue,
+                    on_shuffle: on_hover_shuffle,
+                    on_toggle,
+                    open: tree_open.unwrap_or(false),
+                    row_name,
+                }
             }
         }
+    }
+}
+
+/// The trailing text's class (gui-row-hover-actions design D2): the mono face,
+/// plus the trail marker the hover controls hide while they cover it.
+fn hover_trail_class(paints_actions: bool) -> &'static str {
+    if paints_actions {
+        "row-hover-trail flex-none font-mono tabular-nums"
+    } else {
+        "flex-none font-mono tabular-nums"
     }
 }
 
@@ -350,9 +411,14 @@ fn number_cell(attr: &'static str, number: &str) -> Element {
 
 /// A parent row's trailing text (design D3): a date in the typed text's date
 /// token, at the repeat opacity unless the selection marks the row, and in the
-/// muted tone while it does. The hover hint replaces it while the pointer rests
-/// on the row.
-fn parent_trail(attr: &'static str, trail: &TreeTrail, selected: bool) -> Element {
+/// muted tone while it does. The hover controls replace it while the pointer
+/// rests on the row.
+fn parent_trail(
+    attr: &'static str,
+    trail: &TreeTrail,
+    selected: bool,
+    class: &'static str,
+) -> Element {
     let attrs = vec![Attribute::new(
         library_attr(attr, trail.part().part()),
         trail.text().to_owned(),
@@ -373,7 +439,7 @@ fn parent_trail(attr: &'static str, trail: &TreeTrail, selected: bool) -> Elemen
     }];
     rsx! {
         span {
-            class: "tree-trailing flex-none font-mono tabular-nums",
+            class: "{class}",
             style: "{style}",
             ..attrs,
             TypedText { segments, repeat: !selected }
@@ -382,7 +448,7 @@ fn parent_trail(attr: &'static str, trail: &TreeTrail, selected: bool) -> Elemen
 }
 
 /// A leaf row's trailing text (design D3): the runtime in the muted mono tone.
-fn leaf_trail(attr: &'static str, trail: &TreeTrail) -> Element {
+fn leaf_trail(attr: &'static str, trail: &TreeTrail, class: &'static str) -> Element {
     let attrs = vec![Attribute::new(
         library_attr(attr, trail.part().part()),
         trail.text().to_owned(),
@@ -391,7 +457,7 @@ fn leaf_trail(attr: &'static str, trail: &TreeTrail) -> Element {
     )];
     rsx! {
         span {
-            class: "flex-none font-mono tabular-nums",
+            class: "{class}",
             style: "font-size: {TRAIL_FONT_PX}px; color: var(--canvas-muted);",
             ..attrs,
             "{trail.text()}"
