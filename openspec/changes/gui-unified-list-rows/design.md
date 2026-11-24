@@ -2,133 +2,89 @@
 
 ## Context
 
-See proposal.md (Why) for the problem. Current state of the painters in `crates/mbv-gui/src/window/`:
+See proposal.md (Why). The painters today, in `crates/mbv-gui/src/window/`:
 
-| Row | Painter today | Look source |
-| --- | --- | --- |
-| Home items | `LibraryItemRow` via `library_home_list.rs` | `name_color(state)`; `played_mark` on Recent rows only (commit `ad064a00e`) |
-| Podcasts, Feeds | `paint_item_row` -> `LibraryItemRow` | `name_color(state)`, `episode_progress` |
-| Emby, Audiobooks | `LibraryItemRow` in `library/lettered/adapters.rs` | `canvas_var("text")` hard-coded, `progress: None` |
-| Shows New / Upcoming | `LibraryItemRow` in `library_shows_list.rs` | `canvas_var("text")` hard-coded |
-| Music artist, Shows series | `LibraryItemRow` with `tree_open` | `canvas_var("text")` hard-coded |
-| Music album, track | hand-built `button` in `library_list.rs` | own style strings; tracks always muted |
-| Shows season, episode | hand-built `button` in `library_shows_list.rs` | own `row_name_color` / `episode_played` lookup |
-| Playlists playlist, item | hand-built `button` in `playlists_panel.rs` | own `row_style`, `canvas-selected` fill |
+| Row | Painter today |
+| --- | --- |
+| Home, Podcasts, Feeds, Emby, Audiobooks, Shows New/Upcoming, Shows series, Music artist | `LibraryItemRow` with caller-passed `title_color`, `background`, `progress`, `played_mark` |
+| Music album, track | hand-built `button` in `library_list.rs` |
+| Shows season, episode | hand-built `button` in `library_shows_list.rs` |
+| Playlists playlist, item | hand-built `button` in `playlists_panel.rs` |
 
-`LibraryItemRowProps` takes `title_color: String`, `background: Option<String>`, and `progress: Option<f32>`, so the look is a caller choice. No type stops a list from painting its own `button`.
+The play-state rules already have one home: `window/library/episode.rs` (`is_played_episode`, `episode_progress`), which the Feeds and Shows Workspace heroes also use. The row painters restate it in `name_color`, `row_name_color`, and `row_progress`.
 
-The core already derives a play state for every source through `MediaSemanticState` (`crates/mbv-ui-model/src/media_list.rs`: `from_emby`, `from_feed_entry`, `from_audiobookshelf`, `from_queue_item`). The bridge maps it to `GuiHomeRowStateFrame` (`Ordinary`, `Played`, `Active { progress }`). Home, Podcasts, Feeds, and the Shows Workspace episodes carry it. Emby rows, Audiobooks book rows, Shows flat rows, Music tracks, and Playlists items do not.
-
-Home's Recently added items are stored snapshots (`App::home_recently_added`, filled by the Latest fetch). The played and progress update paths do not touch them, so a later play never reaches those rows.
-
-Blitz renders through `anyrender_vello_hybrid` 0.11.0, whose `filters.rs` returns `None` for `FilterEffect::ColorMatrix`. `grayscale()` is a color matrix, so it paints nothing.
+The rows that carry a play state today: Home (both sections), Podcasts, Feeds, and Shows episodes. Emby, Audiobooks, Shows flat and series, Music, and Playlists rows carry none. This change adds none.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Two row painters, and the look of each derived only from the row's data and state.
-- Removing a look prop makes a bespoke restyle a compile error, not a review finding.
-- Every list row that names a playable item gets its real, current play state.
+- Two row parts paint every Library and Playlists row. No list paints a row.
+- One look for each row level in every list, taken from the Music list.
+- A list passes no look value, so a restyle in a list does not compile.
+- One derivation for each shared rule.
 
 **Non-Goals:**
 
-- The Queue rows, the Workspace tables, and the Hero tracklist.
-- Hover controls (the open change `gui-row-hover-actions` adds them to the two painters after this change).
-- Any TUI change.
+- New play state, marks, or Service data. Projection and frame changes.
+- The Queue rows, the Workspace tables, the Hero tracklist, and the TUI.
 
 ## Decisions
 
-### D1. Two primitives in one module
+### D1. One module owns row painting
 
-`crates/mbv-gui/src/window/components/list_row.rs` holds the shared state and look, with `list_row/flat.rs` (`FlatRow`), `list_row/tree.rs` (`TreeRow`), and `list_row/mark.rs` (the played mark). `library_item_row.rs` is deleted; its thumb painter moves to `list_row/flat.rs`.
+`window/components/list_row.rs` holds the shared rules (D4), the level constants, and the constants that move from `library_item_row.rs`. `list_row/flat.rs` holds `FlatRow`, `list_row/tree.rs` holds `TreeRow`, and `list_row/thumb.rs` holds the thumb painter. `library_item_row.rs` is deleted.
 
-- `FlatRow` paints every top-level row of every list, flat or tree: the art thumb, the title over its optional subtitle, the trailing text, and, on a tree parent, the open state (`tree_open`), the guide start (`tree_guide`), and `on_toggle`. This is `LibraryItemRow` minus its look props.
-- `TreeRow` paints every nested child row and every Playlists row: an optional number cell, the title, the trailing text, the indent (`inset: f32`), the open state of a nested parent, the passing guides, and the subtree's last-row divider (`tail: bool`).
+### D2. `FlatRow`: the top-level row
 
-Alternative considered: one row with a `variant` prop. Rejected: the two shapes have different props (thumb and subtitle against number and inset), and a single props struct would carry fields that one shape ignores.
+Props: `attr`, `kind`, `id`, `title`, `subtitle`, `trail`, `trail_part`, `thumb: Option<LibraryRowThumb>`, `play: Option<GuiHomeRowStateFrame>`, `selected`, `tree_open`, `tree_guide`, `on_press`, `on_play`, `on_toggle`, `on_context`. Removed: `height`, `title_color`, `background`, `progress`, `played_mark`.
 
-The guides stay the caller's input (`guides: Element`, built with the existing `tree_guide.rs` helpers). Guides are structure that depends on the tree's depth and open state, not row look.
+The look is the Music artist row's: height `LIBRARY_ROW_HEIGHT`, padding `ROW_PADDING_PX`, gap 12, the 1 px divider (none under an open parent that shows children), square corners, the 64 × 36 thumb when `thumb` is `Some`, the title in sans `TREE_ROW_FONT_PX` at `LIBRARY_ROW_TITLE_WEIGHT`, the subtitle and trailing text in muted 12. A selected row paints the `library-raise` fill. A tree parent paints `tree-parent`, `aria-expanded`, `TreeHint`, and its guide start at `TOP_GUIDE_X`.
 
-### D2. One row state, no look props
+Users: Home, Podcasts, Feeds, Emby, Audiobooks, Shows New and Upcoming, Shows series, Music artist, and Playlists playlist. A playlist has no art, so it passes `thumb: None` and its count as the trailing text.
 
-```rust
-pub struct RowState {
-    /// `None` when the item tracks no play state.
-    pub play: Option<GuiHomeRowStateFrame>,
-    pub selected: bool,
-}
-```
+### D3. `TreeRow`: the nested parent and leaf rows
 
-Both primitives take `state: RowState` and nothing else that sets a look. Removed from the props: `title_color`, `background`, `progress`, `played_mark`. A list cannot pass a colour, weight, fill, opacity, or style string. Hooks stay (`attr`, `kind`, `id`, plus `hooks: Vec<Attribute>` on `TreeRow` for marks such as `data-library-shows-open`), because tests read them and they paint nothing.
+Props: `attr`, `kind`, `id`, `level: TreeLevel`, `depth: TreeDepth`, `title`, `number: Option<String>`, `trail: Option<TreeTrail>`, `play: Option<GuiHomeRowStateFrame>`, `selected`, `open: Option<bool>` (a parent that opens), `shows_children`, `tail`, `on_press`, `on_play`, `on_toggle`, `on_context`.
 
-`GuiHomeRowStateFrame` keeps its name. Renaming it touches 79 sites for no behaviour change.
+- `TreeLevel::Parent` is the Music album look: height `NODE_ROW_HEIGHT`, sans `TREE_ROW_FONT_PX` at weight 400 (painted and measured at 400), text tone, trailing text as `TypedText` Date (repeat opacity unless selected, muted when selected), `tree-trailing`, `TreeHint` and `tree-parent` when `open` is `Some`, and its guide start when it shows children.
+- `TreeLevel::Leaf` is the Music track look: height `TRACK_ROW_HEIGHT`, the leaf face (`leaf_label_css`, `leaf_row_text`), muted tone, the 18 px right-aligned number cell in `canvas-ordinal` when `number` is `Some`, the trailing text in muted mono 12.
+- Both levels: gap 8, the `tree-subtree` fill, the `library-raise` fill and a 4 px radius while selected (0 otherwise), and the tail divider when `tail`.
+- `TreeDepth` sets the inset and the guides that pass through the row. `One` (a child of a top-level row): inset `NESTED_INSET_X` and the top guide. `Two` (a child of a nested parent): inset `LEAF_INSET_X` and both guides. The guides come from `tree_guide.rs`.
 
-`None` (not tracked) is used for: Emby folders and box sets, Music artists, albums, and tracks (`MediaSemanticState::from_emby` already treats music as `Ordinary`; the GUI shows no mark for music), Shows series and seasons, Playlists playlists, and Shows Upcoming premieres.
+| Row | Level | Depth |
+| --- | --- | --- |
+| Music album | Parent | One |
+| Music track | Leaf | Two |
+| Shows season (expandable or not) | Parent | One |
+| Shows episode | Leaf | Two |
+| Playlists item | Leaf | One |
 
-### D3. The look
+`TreeTrail` is `Date(String)` for a parent and `Duration(String)` for a leaf. An empty value paints nothing.
 
-The primitives derive the look from `RowState` with the Everforest tokens in `window/theme.rs` (`EfToken`, `ef_var`):
+### D4. One derivation for each shared rule
 
-| State | Title | Subtitle | Trailing text | Mark | Thumb |
-| --- | --- | --- | --- | --- | --- |
-| not tracked | `Fg`, 600 | `Grey2` | `Fg` | none (slot still reserved) | full |
-| unplayed | `Fg`, 600 | `Grey2` | `Fg` | 8 px filled circle, `Green`, label "Unplayed" | full |
-| partly played | as unplayed | as unplayed | as unplayed | as unplayed | full, progress run |
-| played | `Grey1`, 400 | `Grey1` | `Grey1` | 12 px Lucide `Check`, `Grey1`, label "Played" | opacity 0.35 |
+- Title tone: a row with `play: Some(state)` paints the muted tone when `is_played_episode(state)` and the text tone otherwise (the Shows rule today). A row with `play: None` paints its level's tone: text for top-level and parent rows, muted for leaf rows.
+- Progress run: `FlatRow` paints the thumb's run at `episode_progress(state)`. `TreeRow` paints no run, as no tree row does today.
+- Selection fill and radius: the part derives them from the level (D2, D3).
+- Context press: one handler in `list_row.rs` stops the default, calls `on_press`, then calls `on_context` with the pointer position.
+- Hooks: every part paints `library_attr(attr, part)` for `row`, `row-id`, `selected`, `title`, `subtitle`, `number`, the trailing part, `thumb`, and `thumb-progress`. The Music list keeps `attr: ""`, Shows `"shows"`, and Playlists `"playlists"`.
+- Shows episode state: the Shows list keeps its lookup of the carried episode, which returns the carried state (`episode_state`), and passes it as `play`.
+- Home: both sections pass `play: Some(item.state)`.
 
-- The mark slot is 12 px square with a 6 px gap before the trailing text, on every row of both types, so trailing text lines up across states and lists. A not-tracked row keeps the empty slot.
-- The mark is `role="img"` with `aria-label`. This build does not enable Blitz's accessibility feature, so the label reaches assistive technology only when that feature is turned on. That is out of scope.
-- No `grayscale()`: the renderer drops it (Context). Opacity alone.
-- The progress run: `FlatRow` keeps today's 3 px run along the thumb's bottom edge. `TreeRow` has no thumb, so it paints the same 3 px track and fill along its bottom edge, under the title-to-trailing span.
-- Selection: both types paint the `library-raise` fill. An unselected `TreeRow` paints the `tree-subtree` fill. The Playlists screen's `canvas-selected` fill and 6 px radius go.
-- Numbers (track and episode) paint in the `canvas-ordinal` tone in both states.
-- `NowPlaying` takes the partly played look: the unplayed tones and mark, with the progress run. No source in D4 produces it, but `RowState` admits it, so the derivation names it instead of defaulting.
+### D5. Tests
 
-These values replace commit `ad064a00e`'s Recently added constants, which move into `list_row.rs`.
-
-### D4. Play state from the core projections
-
-Each projection fills the state from the existing `MediaSemanticState` constructors. No new Service call.
-
-| Row | Source |
-| --- | --- |
-| `GuiEmbyRow` | `MediaSemanticState::from_emby(item)`; `None` for a folder, box set, or music item |
-| `GuiShowsRow` (flat New) | `from_emby(episode)`; `None` for an Upcoming premiere |
-| `GuiAudiobooksRow` | `from_audiobookshelf(finished, position, duration)` from the library's stored book progress (the map that `apply_audiobookshelf_catalog_progress` fills); `Ordinary` when no entry exists |
-| `GuiMusicTrack` | `None` (music) |
-| `GuiPlaylistItemProjection` | `from_emby(item)`; `None` for a music item |
-
-Each matching bridge frame gains `state: Option<GuiHomeRowStateFrame>` with the existing `MediaSemanticState` mapping.
-
-### D5. Recently added follows the live state
-
-`App` gains one helper in `crates/mbv-client-core/src/app/state/app_struct/home_recently_added.rs`:
-
-```rust
-pub(in crate::app) fn apply_home_recent_played(
-    &mut self, content: &QueueItemContentId, played: bool, position_ticks: i64,
-)
-```
-
-It updates every stored `home_recently_added` item with that content id. Every path that applies a played or progress change calls it: `apply_stopped_slot_progress` and `handle_track_completed_event` (a play that stops, or one that ends with a next item, which reports `TrackCompleted`), `context_set_played` and `set_feed_entries_played` (mark played or unplayed), `apply_audiobookshelf_socket_progress`, `handle_audiobookshelf_progress` and `handle_audiobookshelf_book_progress` (Audiobookshelf progress on the ctrl route), and `apply_audiobookshelf_catalog_progress`. The Home projection reads the stored item, so the next frame shows the change.
-
-Alternative considered: refetch Latest on every change. Rejected: one network fetch per progress event, and the order of the list could move under the pointer.
-
-### D6. Tests
-
-- `list_row/tests.rs` owns the look contract: one `#[case]` table over the two types and the four states, asserting the mark hook and its label, the dimmed thumb on played, the progress run on partly played, and an identical trailing-text x position across states.
-- Each list keeps its existing harness. One existing test per list gains one played row and one unplayed row in its fixture and asserts the mark hook on each. That proves the list passes its state. No new harness.
-- One test for D5: a stopped-slot progress that marks an item played changes its Recently added row's state.
-- Tests that assert removed props or bespoke styles are deleted with them.
+- `list_row/tests.rs` owns the part contract. `library_item_row/tests.rs` moves there for `FlatRow`. One `#[case]` table covers `TreeRow` over level and depth (inset, height, face, hint) and over `play` (`None`, unplayed, played: the title tone). No other new test.
+- Each list's tests keep their contracts (which rows paint, their hooks, their handlers). They change only for the hook names (Playlists, Shows) and for the looks this change moves to the Music look. Tests of removed behaviour go with it: the Recently added mark test, and any test that asserts a Playlists, Shows, or Recently added look that this change removes.
+- The user does the live look check.
 
 ## Risks / Trade-offs
 
-- [The change touches every Library list painter at once] -> Tasks go list by list. Each unit leaves the other lists on the old painter until its own unit runs, and `LibraryItemRow` is deleted only after the last list moves.
-- [`gui-row-hover-actions` edits the same painters] -> This change lands first. That change's group 5 is then rewritten against `FlatRow` and `TreeRow`; its other groups do not touch row painters.
-- [Music rows lose their muted track title] -> Intended: one look for every tree row.
-- [Audiobooks progress map may be empty before the catalog fetch lands] -> Rows paint `Ordinary` (unplayed) until it lands, then repaint from the next frame.
+- [Lists that differ from the Music look change their look] -> Intended. The proposal lists the visible results.
+- [The playlist row is 56 px high with no thumb] -> It takes the top-level look. A playlist thumb is a feature and out of scope.
+- [Open changes edit the same painters and hooks] -> See proposal Impact.
+- [`list_row/tree.rs` grows large] -> If it nears 800 lines, split the guide and hook derivation into `list_row/tree/` children.
 
 ## Migration Plan
 
-No data migration. Rollback is a revert of the change's commits.
+None. Rollback is a revert.
