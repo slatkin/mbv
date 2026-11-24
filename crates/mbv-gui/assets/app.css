@@ -434,36 +434,6 @@ button:disabled {
 	height: calc(20px * var(--player-scale));
 }
 
-/* The tree rows' hover tooltip (gui-tree-double-click design D3; user request
-   2026-11-20): a parent row carries `tree-parent`, which is also its
-   positioning box, and paints the shared `TreeHint` card, which carries
-   `tree-hint`, floating under the row's bottom edge. The card shows only after
-   the pointer rests on the row past the delay the browsers give their own
-   tooltips (~500ms), and hides as soon as the pointer leaves, so no pointer
-   state is kept: Blitz sets and clears the hover, and a pointer that leaves
-   the window clears the hover chain, as the stage's auto-hide rule notes. The
-   row's trailing text (`Music` album year, Playlists item count, a date)
-   carries `tree-trailing` and stays visible.
-
-   The delay is a `transition` on `visibility`, not on `display`: a card under
-   `display: none` has no before-change style, so Stylo starts no transition
-   and the card would flash at once. The delay Stylo reads is the destination
-   state's, so the hover rule carries the 500ms and the resting rule the 0s —
-   that order is load-bearing: swapped, the card would linger 500ms after the
-   pointer leaves and flash at once on entry. The card always lays out and
-   only `visibility` gates the paint (`blitz-paint::render` skips subtrees
-   with a non-visible visibility), and the 500ms rest window keeps the window
-   repainting — the accepted animation gap the Blitz table in
-   `docs/architecture/gui-client.md` names. */
-.tree-hint {
-	visibility: hidden;
-	transition: visibility 0s linear 0s;
-}
-.tree-parent:hover .tree-hint {
-	visibility: visible;
-	transition: visibility 0s linear 500ms;
-}
-
 /* The Library rows' hover controls (gui-row-hover-actions design D1, D2):
    every row painter wraps its row in a `row-hover-host` box — which is the
    part's positioning box — and paints the shared `RowHoverActions` part as
@@ -472,8 +442,7 @@ button:disabled {
    host's own `:hover`, so the window keeps no hover state: Blitz sets and
    clears the hover, and re-resolves it after every layout and scroll, which
    the Workspace table's `onpointerenter` signal could not do under a still
-   pointer. The reveal has no rest delay (unlike the tree hint's 500 ms, which
-   waited out a tooltip): a control must answer at once.
+   pointer. The reveal has no rest delay: a control must answer at once.
 
    The part overlays the row's trailing end instead of taking flow space, so
    the title keeps its width on hover, and it paints the row's own fill behind
