@@ -96,13 +96,17 @@ impl App {
     /// landing caches the detail but starts no first-season episode fetch, so
     /// an open row in view that keeps its seasons closed costs no episode
     /// request. Only a fetch this call started gets the mark, so a call that
-    /// joins a plain fetch already in flight leaves that fetch's landing plain.
-    /// A plain `fetch_series_detail` of the same id drops the mark, and the
-    /// landing then loads the first season as a pick expects.
+    /// joins a plain fetch already in flight leaves that fetch's landing plain;
+    /// a call that joins a quiet fetch keeps the mark that fetch set, because
+    /// it starts no fetch of its own. A plain `fetch_series_detail` of the same
+    /// id drops the mark, and the landing then loads the first season as a pick
+    /// expects.
     pub fn fetch_series_detail_quiet(&mut self, series_id: &str) {
         let joined = self.series_detail_loading.contains(series_id);
+        let quiet_pending = self.series_detail_quiet.contains(series_id);
         self.fetch_series_detail(series_id);
-        if !joined && self.series_detail_loading.contains(series_id) {
+        if (joined && quiet_pending) || (!joined && self.series_detail_loading.contains(series_id))
+        {
             self.series_detail_quiet.insert(series_id.to_string());
         }
     }
