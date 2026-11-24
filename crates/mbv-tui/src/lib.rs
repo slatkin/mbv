@@ -1,6 +1,6 @@
 //! The TUI Client (`mbv`): the terminal edge over `mbv-client-core`.
 //!
-//! This crate owns the TuiRealm shell `Model` and its `Application`, the
+//! This crate owns the `TuiRealm` shell `Model` and its `Application`, the
 //! terminal setup and the input edge (`neutral_edge`) that mounts the shared
 //! Keyboard Router, the listener port (`input_port`), the `--pin` pinned-panel
 //! launch, `startup`, and the Owner host in `local_daemon`. It links
