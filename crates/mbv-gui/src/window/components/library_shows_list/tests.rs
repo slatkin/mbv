@@ -392,9 +392,10 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them(
     );
 }
 
-/// Contract (gui-delineated-rows design D1): a series row is a top-level row and
-/// paints the shared part's thumb, while the season row nested under it keeps
-/// its own painter and paints none.
+/// Contract (gui-delineated-rows design D1; gui-unified-list-rows design D3):
+/// a series row is a top-level row and paints the shared part's thumb, while
+/// the season row nested under it paints through the nested row part and
+/// paints none.
 #[test]
 fn the_series_row_paints_a_thumb_and_its_nested_season_row_paints_none() {
     let mut fixture = built(shows_frame(tree()), shows_detail(None));
