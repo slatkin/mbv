@@ -12,9 +12,10 @@
 //!
 //! The Workspace keeps no cursor (`gui-pointer-target-interaction` D6): the keys
 //! act on the row the pointer marks, a press on a row does nothing, a
-//! double-click plays the row, and the hovered row paints its add-to-queue
-//! control. Every action sends the episode's stable Service id
-//! with the library index the frame carries; no control names a row position.
+//! double-click plays the row, and the row's hover controls (gui-row-hover-actions
+//! D5) play it and add it to the queue. Every action sends the episode's stable
+//! Service id with the library index the frame carries; no control names a row
+//! position.
 
 use dioxus_native::prelude::*;
 
@@ -29,8 +30,7 @@ use crate::window::components::library_dropdown::{
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{
-    LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceLoading, WorkspaceRow,
-    WorkspaceRowState,
+    LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow, WorkspaceRowState,
 };
 use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::library::hero::{
@@ -349,16 +349,11 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
         play_episode(&play_library, lib_idx, &episode_id);
     });
 
-    // The row's hover actions (design D12).
+    // The row's hover Add (gui-row-hover-actions D5).
     let queue_library = library.clone();
-    let row_actions = vec![WorkspaceAction {
-        key: "queue".to_owned(),
-        label: "Add to queue".to_owned(),
-        icon: WorkspaceActionIcon::Plus,
-        run: Callback::new(move |episode_id: String| {
-            queue_episode(&queue_library, lib_idx, &episode_id);
-        }),
-    }];
+    let on_queue = Callback::new(move |episode_id: String| {
+        queue_episode(&queue_library, lib_idx, &episode_id);
+    });
 
     // The series Hero's Workspace (design D12): the season pills, then the
     // selected season's episodes.
@@ -381,9 +376,9 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                     noun: "Episode",
                     pointer_list: PointerList::Workspace,
                     rows,
-                    actions: row_actions,
                     on_press,
                     on_play,
+                    on_queue: Some(on_queue),
                     loading,
                 }
             }

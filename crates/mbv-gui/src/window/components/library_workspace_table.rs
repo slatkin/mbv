@@ -2,31 +2,36 @@
 //! of `LibraryWorkspaceTable`; add-gui-library-panel design D15,
 //! invariant 30): the one table every destination's Workspace paints —
 //! Music's tracklist, Shows' episodes, Audiobooks' chapters, and Feeds'
-//! entries. The header row, the row grid, the playing glyph, the duration cell,
+//! entries. The header row, the row grid, the playing glyph, the trailing cell,
 //! the resume run, the hover controls, and the loading line are painted here
 //! once, so a fix lands in every list.
 //!
-//! A destination supplies its rows, its hover actions, and its hook prefix; it
-//! never restates the layout. The hover is the table's own paint: the
-//! pointer-over row swaps its number for the play control and shows its actions.
-//! The table keeps no cursor (`gui-pointer-target-interaction` D6): a press runs
-//! the destination's press act, and a double-click on a row, like the play
-//! control, plays it.
+//! A destination supplies its rows, its Add path, and its hook prefix; it never
+//! restates the layout. A row's hover controls (gui-row-hover-actions design
+//! D1, D2, D5) take no window hover state: the `li` is the `row-hover-host`,
+//! and the stylesheet reveals the part over the trailing cell, which rests as
+//! the row's duration and hides while the part shows. Play comes from the
+//! table's `on_play`, and Add from `on_queue` when the destination has one; no
+//! table row offers Shuffle or Expand. The table keeps no cursor
+//! (`gui-pointer-target-interaction` D6): a press runs the destination's press
+//! act, and a double-click or the Play control plays the row.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_attr::library_attr;
+use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::typed_text::TypedText;
-use crate::window::icons::{ListEnd, Play, Plus};
+use crate::window::icons::Play;
 use crate::window::input::f32_from_f64;
 use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The row grid the header and every row paint (the former client
-/// `grid-template-columns`).
-const GRID_COLUMNS: &str = "grid-template-columns: 40px minmax(0, 1fr) 88px 64px;";
+/// `grid-template-columns`): the number, the title, and the trailing cell that
+/// holds the duration and the hover controls.
+const GRID_COLUMNS: &str = "grid-template-columns: 40px minmax(0, 1fr) 88px;";
 
 /// One row of the table, as the destination maps its rows (the former client
 /// `WorkspaceRow` interface).
@@ -71,50 +76,6 @@ impl WorkspaceRowState {
     }
 }
 
-/// The icon a hover action paints: the
-/// Lucide glyphs the destinations' actions carry. An enum, not a function
-/// pointer: the props' derived `PartialEq` over fn pointers trips the
-/// `unpredictable_function_pointer_comparisons` lint the workspace denies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceActionIcon {
-    /// The Lucide `list-end` glyph.
-    ListEnd,
-    /// The Lucide `plus` glyph: add to queue.
-    Plus,
-}
-
-impl WorkspaceActionIcon {
-    fn paint(self, size: u16) -> Element {
-        match self {
-            Self::ListEnd => rsx! { ListEnd { size: size } },
-            Self::Plus => rsx! { Plus { size: size } },
-        }
-    }
-}
-
-/// One hover action of a row.
-#[derive(Clone, PartialEq)]
-pub struct WorkspaceAction {
-    /// The action's hook value and its accessible name's source.
-    pub key: String,
-    /// The action's accessible name.
-    pub label: String,
-    /// The action's icon.
-    pub icon: WorkspaceActionIcon,
-    /// Run the action on the row's id.
-    pub run: Callback<String>,
-}
-
-impl std::fmt::Debug for WorkspaceAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WorkspaceAction")
-            .field("key", &self.key)
-            .field("label", &self.label)
-            .field("icon", &self.icon)
-            .finish_non_exhaustive()
-    }
-}
-
 /// The loading line's facts: the line's text and
 /// the destination's own attribute for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,14 +108,15 @@ pub struct LibraryWorkspaceTableProps {
     pub pointer_list: PointerList,
     /// The rows in painted order.
     pub rows: Vec<WorkspaceRow>,
-    /// The rows' hover actions.
-    #[props(default)]
-    pub actions: Vec<WorkspaceAction>,
     /// A press on a row: the destination's press act, or a callback that does
     /// nothing on a Workspace that keeps no cursor.
     pub on_press: Callback<String>,
-    /// Play a row: the number cell's play control and the row's double-click.
+    /// Play a row: the row's Play control and the row's double-click.
     pub on_play: Callback<String>,
+    /// Add a row to the queue: the row's Add control, painted only when the
+    /// destination has an Add path (design D5).
+    #[props(default)]
+    pub on_queue: Option<Callback<String>>,
     /// A right-click on a row, with the pointer's client position and the
     /// row's id, when the destination has a row menu.
     #[props(default)]
@@ -173,7 +135,6 @@ impl std::fmt::Debug for LibraryWorkspaceTableProps {
             .field("noun", &self.noun)
             .field("pointer_list", &self.pointer_list)
             .field("rows", &self.rows)
-            .field("actions", &self.actions)
             .field("loading", &self.loading)
             .finish_non_exhaustive()
     }
@@ -191,8 +152,8 @@ fn name_color(row: &WorkspaceRow) -> &'static str {
     }
 }
 
-/// The play glyph the row's play control and the playing row paint: twelve
-/// pixels, filled in the accent.
+/// The play glyph the playing row paints beside its title: twelve pixels,
+/// filled in the accent.
 fn play_glyph() -> Element {
     rsx! {
         Play {
@@ -216,15 +177,15 @@ fn paint_loading(loading: &WorkspaceLoading) -> Element {
     }
 }
 
-/// The table facts one row's paint borrows: the destination's hooks, the hover
-/// state, the actions, and the press and play callbacks.
-struct RowPaint<'a> {
+/// The table facts one row's paint borrows: the destination's hooks and its
+/// press, play, queue, and context callbacks.
+#[derive(Clone, Copy)]
+struct RowPaint {
     hook: &'static str,
     noun: &'static str,
-    hovered: Signal<Option<String>>,
-    actions: &'a [WorkspaceAction],
     on_press: Callback<String>,
     on_play: Callback<String>,
+    on_queue: Option<Callback<String>>,
     on_context: Option<Callback<(f32, f32, String)>>,
 }
 
@@ -256,60 +217,21 @@ fn row_attrs(row: &WorkspaceRow, hook: &str) -> Vec<Attribute> {
     attrs
 }
 
-/// The hover swap's display styles, as (number span,
-/// play control): the two trade places while the pointer is over the row.
-/// The control is `display: none` off-hover — a missing style would leave it
-/// painted beside the number instead of swapping for it (the port review's
-/// hidden-control finding, which the hover-swap regression test guards).
-fn hover_styles(is_hovered: bool) -> (&'static str, &'static str) {
-    if is_hovered {
-        ("display: none;", "display: flex;")
-    } else {
-        ("", "display: none;")
-    }
-}
-
-/// The number cell: the ordinal that swaps for the
-/// play control while the pointer is over the row.
-fn paint_number_cell(
-    hook: &'static str,
-    row: &WorkspaceRow,
-    is_hovered: bool,
-    on_play: Callback<String>,
-) -> Element {
-    let (number_style, hover_display) = hover_styles(is_hovered);
+/// The number cell: the row's ordinal, always painted. The hover controls sit
+/// in the trailing cell, so the number never swaps (design D5).
+fn paint_number_cell(hook: &'static str, row: &WorkspaceRow) -> Element {
     let number_attrs = vec![Attribute::new(
         library_attr(hook, "number"),
         "",
         None,
         false,
     )];
-    let play_attrs = vec![Attribute::new(
-        library_attr(hook, "action"),
-        "play".to_owned(),
-        None,
-        false,
-    )];
-    let play_label = format!("Play {}", row.name);
-    let row_id = row.id.clone();
     rsx! {
         span {
             class: "flex-none font-mono tabular-nums",
             style: "font-size: 11px; color: var(--canvas-ordinal);",
-            span {
-                style: "{number_style}",
-                ..number_attrs,
-                "{row.number}"
-            }
-            button {
-                "type": "button",
-                class: "cursor-pointer items-center hover:drop-shadow-[0_0_4px_var(--canvas-accent)]",
-                style: "{hover_display}",
-                "aria-label": "{play_label}",
-                onclick: move |_| on_play.call(row_id.clone()),
-                ..play_attrs,
-                { play_glyph() }
-            }
+            ..number_attrs,
+            "{row.number}"
         }
     }
 }
@@ -360,66 +282,17 @@ fn paint_name_button(
     }
 }
 
-/// One hover action's button.
-fn paint_action(hook: &'static str, action: &WorkspaceAction, row_id: &str) -> Element {
-    let own_attrs = vec![Attribute::new(
-        library_attr(hook, "action"),
-        action.key.clone(),
-        None,
-        false,
-    )];
-    let icon = action.icon;
-    let label = action.label.clone();
-    let run = action.run;
-    let action_row_id = row_id.to_owned();
-    rsx! {
-        button {
-            "type": "button",
-            class: "flex items-center justify-center",
-            style: "width: 28px; height: 28px; background: none; border: 0; border-radius: 4px; color: var(--canvas-text); cursor: pointer;",
-            "aria-label": "{label}",
-            onclick: move |_| run.call(action_row_id.clone()),
-            ..own_attrs,
-            { icon.paint(14) }
-        }
-    }
-}
-
-/// The actions cell: the row's hover actions,
-/// shown only while the pointer is over the row.
-fn paint_actions_cell(
+/// The trailing cell (design D5): the row's duration at the repeat opacity,
+/// which rests as the `row-hover-trail` the stylesheet hides while the hover
+/// controls show, and the controls themselves over it. Play always paints, and
+/// Add paints only where the destination passes `on_queue`.
+fn paint_trailing_cell(
     hook: &'static str,
-    row_id: &str,
-    is_hovered: bool,
-    actions: &[WorkspaceAction],
+    row: &WorkspaceRow,
+    on_play: Callback<String>,
+    on_queue: Option<Callback<String>>,
 ) -> Element {
-    let region_attrs = vec![Attribute::new(
-        library_attr(hook, "actions"),
-        "",
-        None,
-        false,
-    )];
-    let display = if is_hovered { "flex" } else { "none" };
-    rsx! {
-        span {
-            class: "flex justify-end",
-            style: "gap: 2px;",
-            span {
-                class: "justify-end",
-                style: "gap: 2px; display: {display};",
-                ..region_attrs,
-                for action in actions.iter() {
-                    { paint_action(hook, action, row_id) }
-                }
-            }
-        }
-    }
-}
-
-/// The duration cell: the time token at
-/// the repeat opacity.
-fn paint_duration_cell(hook: &'static str, row: &WorkspaceRow) -> Element {
-    let own_attrs = vec![Attribute::new(
+    let duration_attrs = vec![Attribute::new(
         library_attr(hook, "duration"),
         "",
         None,
@@ -429,56 +302,59 @@ fn paint_duration_cell(hook: &'static str, row: &WorkspaceRow) -> Element {
         text: row.duration.clone(),
         kind: GuiMetaKindFrame::Time,
     }];
+    let play_id = row.id.clone();
+    let on_hover_play = Callback::new(move |()| on_play.call(play_id.clone()));
+    let on_hover_queue = on_queue.map(|queue| {
+        let queue_id = row.id.clone();
+        Callback::new(move |()| queue.call(queue_id.clone()))
+    });
     rsx! {
         span {
-            class: "font-mono tabular-nums",
-            style: "font-size: 12px; text-align: right;",
-            ..own_attrs,
-            TypedText {
-                segments: segments,
-                repeat: true,
+            class: "flex items-center justify-end",
+            span {
+                class: "row-hover-trail font-mono tabular-nums",
+                style: "font-size: 12px; text-align: right;",
+                ..duration_attrs,
+                TypedText {
+                    segments: segments,
+                    repeat: true,
+                }
+            }
+            RowHoverActions {
+                on_play: Some(on_hover_play),
+                on_queue: on_hover_queue,
             }
         }
     }
 }
 
-/// One row of the table: the cells over the row
-/// grid, with the hover swap and the resume run.
-fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
+/// One row of the table: the cells over the row grid, the hover host, and the
+/// resume run.
+fn paint_row(row: &WorkspaceRow, paint: &RowPaint) -> Element {
     let RowPaint {
         hook,
         noun,
-        hovered,
-        actions,
         on_press,
         on_play,
+        on_queue,
         on_context,
-    } = paint;
+    } = *paint;
     let progress_attrs = vec![Attribute::new(
         library_attr(hook, "progress"),
         "",
         None,
         false,
     )];
-    let is_hovered = hovered.cloned().as_deref() == Some(row.id.as_str());
     let row_style = format!("{GRID_COLUMNS} height: 34px; padding: 0 8px; border-radius: 4px;");
-    let row_id = row.id.clone();
-    let enter_id = row_id.clone();
-    let context_id = row_id;
-    let mut enter_hovered = *hovered;
-    let mut leave_hovered = *hovered;
-    let context_on_context = *on_context;
-    let row_play = *on_play;
+    let context_id = row.id.clone();
 
     rsx! {
         li {
             key: "{row.id}",
-            class: "relative grid items-center",
+            class: "row-hover-host relative grid items-center",
             style: "{row_style}",
-            onpointerenter: move |_| enter_hovered.set(Some(enter_id.clone())),
-            onpointerleave: move |_| leave_hovered.set(None),
             oncontextmenu: move |event: MouseEvent| {
-                if let Some(on_context) = context_on_context {
+                if let Some(on_context) = on_context {
                     event.prevent_default();
                     let coordinates = event.client_coordinates();
                     on_context.call((
@@ -489,10 +365,9 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
                 }
             },
             ..row_attrs(row, hook),
-            { paint_number_cell(hook, row, is_hovered, *on_play) }
-            { paint_name_button(hook, row, noun, *on_press, row_play) }
-            { paint_actions_cell(hook, &row.id, is_hovered, actions) }
-            { paint_duration_cell(hook, row) }
+            { paint_number_cell(hook, row) }
+            { paint_name_button(hook, row, noun, on_press, on_play) }
+            { paint_trailing_cell(hook, row, on_play, on_queue) }
             if let Some(progress) = row.progress {
                 // The resume position: a thin accent run under the row's
                 // bottom edge, at the frame's bounded percent.
@@ -509,16 +384,12 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
 /// The Hero's Workspace table.
 #[component]
 pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
-    // The row the pointer is over: the table's own paint, never shared
-    // state.
-    let hovered: Signal<Option<String>> = use_signal(|| None);
     let paint = RowPaint {
         hook: props.hook,
         noun: props.noun,
-        hovered,
-        actions: &props.actions,
         on_press: props.on_press,
         on_play: props.on_play,
+        on_queue: props.on_queue,
         on_context: props.on_context,
     };
     let root_attrs = vec![
@@ -542,7 +413,6 @@ pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
                     style: "{GRID_COLUMNS} height: 32px; padding: 0 8px; border-bottom: 1px solid var(--canvas-border); font-size: 12px; letter-spacing: 0.08em; color: var(--canvas-type-label);",
                     span { "#" }
                     span { "TITLE" }
-                    span {}
                     span { style: "text-align: right;", "TIME" }
                 }
                 ol {
