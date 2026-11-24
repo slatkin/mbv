@@ -30,4 +30,4 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 ## 5. Integration
 
 - [x] 5.1 In the foreground: `cargo build -p mbv-tui -p mbv-gui`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-client-core -p mbv-gui`, and `cargo fmt --all -- --check`. Fix every failure. Verify: all pass.
-- [ ] 5.2 Give the change to the user for a live look check of every list.
+- [x] 5.2 Give the change to the user for a live look check of every list.
