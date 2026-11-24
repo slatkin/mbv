@@ -52,11 +52,11 @@ impl EmbyRuntime {
     }
 
     /// Start a retry without discarding the last usable runtime.
-    pub fn begin_retry(&mut self) -> SetupGeneration {
+    pub(crate) fn begin_retry(&mut self) -> SetupGeneration {
         self.begin_attempt()
     }
 
-    pub fn begin_setup(&mut self) -> SetupGeneration {
+    pub(crate) fn begin_setup(&mut self) -> SetupGeneration {
         self.begin_attempt()
     }
 
@@ -69,7 +69,7 @@ impl EmbyRuntime {
         true
     }
 
-    pub fn remove_setup(&mut self) -> SetupGeneration {
+    pub(crate) fn remove_setup(&mut self) -> SetupGeneration {
         self.generation = self.generation.next();
         self.client = None;
         self.state = ServiceState::NotConfigured;
@@ -110,7 +110,7 @@ impl AudiobookshelfRuntime {
         self.generation
     }
 
-    pub fn begin_setup(&mut self) -> SetupGeneration {
+    pub(crate) fn begin_setup(&mut self) -> SetupGeneration {
         self.generation = self.generation.next();
         self.state = ServiceState::Connecting;
         self.generation
@@ -124,20 +124,24 @@ impl AudiobookshelfRuntime {
         true
     }
 
-    pub fn begin_validation(&mut self) -> SetupGeneration {
+    pub(crate) fn begin_validation(&mut self) -> SetupGeneration {
         self.generation = self.generation.next();
         self.state = ServiceState::Connecting;
         self.generation
     }
 
-    pub fn remove_setup(&mut self) -> SetupGeneration {
+    pub(crate) fn remove_setup(&mut self) -> SetupGeneration {
         self.generation = self.generation.next();
         self.user = None;
         self.state = ServiceState::NotConfigured;
         self.generation
     }
 
-    pub fn commit_ready(&mut self, generation: SetupGeneration, user: AudiobookshelfUser) -> bool {
+    pub(crate) fn commit_ready(
+        &mut self,
+        generation: SetupGeneration,
+        user: AudiobookshelfUser,
+    ) -> bool {
         if self.generation != generation {
             return false;
         }

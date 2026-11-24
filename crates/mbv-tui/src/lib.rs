@@ -49,7 +49,7 @@ pub use mbv_client_core::state::client_capabilities::{ClientCapabilities, Client
 /// drops it as soon as the real `App` comes back.
 pub use mbv_client_core::handoff_app;
 
-pub use mbv_client_core::GuiClientEvent;
+pub use mbv_client_core::LibraryFetchEvent;
 /// The connect, session-load, URL-open, and pinned-request overrides a
 /// dependent Client's tests install (design D4e): the core reads them, and a
 /// Client's test target enables the `test` feature to name them.
@@ -71,23 +71,24 @@ pub use mbv_client_core::test_seams::{
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use mbv_client_core::{
-    SeededAbsBook, card_cache_key_for_id_for_test, close_initial_services, current,
-    emby_unified_state, gui_app_with_named_queues, gui_app_with_peer, inject_local_events,
-    install_test_emby, key_chord_for_test, live_owner_channel, make_app_stub, make_audio_items,
-    make_audio_only_remote_app_stub_with_cmd_rx, make_items, make_local_daemon_app_stub,
-    make_local_daemon_app_stub_with_cmd_rx, make_local_daemon_app_stub_with_cmd_rx_and_compat,
-    make_remote_app_stub, make_remote_app_stub_at_index, make_remote_app_stub_with_cmd_rx,
-    named_queue_list, op_answer, push_movies_library_for_test, queue_card_cache_key_for_test,
-    queue_target_for_test, remote_stub_config, resting, resting_snapshot,
-    seed_queue_row_menu_rows_for_test, seed_queue_shuffle_owner_for_test,
+    SeededAbsBook, app_with_adopted_named_queues, app_with_connected_peer,
+    card_cache_key_for_id_for_test, close_initial_services, current, emby_unified_state,
+    inject_local_events, install_test_emby, key_chord_for_test, live_owner_channel, make_app_stub,
+    make_audio_items, make_audio_only_remote_app_stub_with_cmd_rx, make_items,
+    make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx,
+    make_local_daemon_app_stub_with_cmd_rx_and_compat, make_remote_app_stub,
+    make_remote_app_stub_at_index, make_remote_app_stub_with_cmd_rx, named_queue_list, op_answer,
+    push_movies_library_for_test, queue_card_cache_key_for_test, queue_target_for_test,
+    remote_stub_config, resting, resting_snapshot, seed_queue_row_menu_rows_for_test,
+    seed_queue_shuffle_owner_for_test,
 };
 #[cfg(any(test, feature = "test"))]
 pub use mbv_client_core::{
-    gui_client_capabilities, set_cast_receivers_for_test, set_subtitle_tracks_for_test,
-    stub_app_for_gui_client, stub_app_with_cached_emby_client, stub_app_with_cast_target,
+    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_for_gui_client,
+    stub_app_with_cached_emby_client, stub_app_with_cast_target,
     stub_app_with_completed_emby_startup, stub_app_with_completed_emby_startup_and_contents,
     stub_app_with_local_daemon_events, stub_app_with_pending_settings_save,
     stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_prefix_and_toast,
     stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
-    stub_app_with_track_choices, stub_app_with_unsaved_queue,
+    stub_app_with_track_choices, stub_app_with_unsaved_queue, transport_client_capabilities,
 };

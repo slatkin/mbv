@@ -367,7 +367,7 @@ impl App {
     /// (the GUI Client's own event drain, which its
     /// `ClientTickHost::drain_lib_events` loops). This entry serves the core
     /// instructions that run outside a Client drain.
-    pub fn apply_library_effects(
+    pub(crate) fn apply_library_effects(
         &mut self,
         stores: Option<&mut dyn ClientLibraryStores>,
         effects: &[ClientLibraryEffect],

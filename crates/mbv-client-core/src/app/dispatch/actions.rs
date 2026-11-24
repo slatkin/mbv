@@ -12,7 +12,7 @@ use mbv_ui_model::ui_util::natural_sort_key;
 
 /// Classification for an explicit Emby play against the attached owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PlaybackEligibility {
+pub(crate) enum PlaybackEligibility {
     Ineligible,
     WhollyUnplayable { unplayable_count: usize },
     Mixed { unplayable_count: usize },

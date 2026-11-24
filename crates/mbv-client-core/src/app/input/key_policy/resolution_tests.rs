@@ -2,7 +2,7 @@
 use super::test_support::*;
 use super::*;
 use crate::app::dispatch::action::{PanelIntent, PlaybackIntent, VisualIntent};
-use crate::app::tests::{gui_client_capabilities, make_app_stub};
+use crate::app::tests::{make_app_stub, transport_client_capabilities};
 use mbv_keybinds::{Chord, KEYBIND_ACTIONS};
 use mbv_ui_model::playback::VOLUME_STEP;
 
@@ -338,7 +338,7 @@ fn defaults_reproduce_todays_resolution() {
                 | "open_subtitle_popover"
                 | "queue_move_down"
                 | "queue_move_up" => {
-                    snap.client_capabilities = gui_client_capabilities();
+                    snap.client_capabilities = transport_client_capabilities();
                 }
                 _ => {}
             }
@@ -357,9 +357,9 @@ fn defaults_reproduce_todays_resolution() {
 /// only in the GUI Client, and only while the Queue list box is the pointer
 /// target — the Panel focus the GUI core sets from the key's target.
 #[test]
-fn gui_queue_controls_need_the_gui_queue_target() {
+fn transport_queue_controls_need_the_queue_target() {
     let gui = RouterSnapshot {
-        client_capabilities: gui_client_capabilities(),
+        client_capabilities: transport_client_capabilities(),
         panel_focus: PanelFocus::Queue,
         ..snapshot()
     };
@@ -367,10 +367,14 @@ fn gui_queue_controls_need_the_gui_queue_target() {
         (
             Key::Char('t'),
             KeyModifiers::NONE,
-            "gui_queue_chooser_toggle",
+            "transport_queue_chooser_toggle",
         ),
-        (Key::Char('t'), KeyModifiers::CONTROL, "gui_new_queue"),
-        (Key::Char('w'), KeyModifiers::CONTROL, "gui_close_queue"),
+        (Key::Char('t'), KeyModifiers::CONTROL, "transport_new_queue"),
+        (
+            Key::Char('w'),
+            KeyModifiers::CONTROL,
+            "transport_close_queue",
+        ),
     ];
     for (code, mods, name) in expected {
         assert_eq!(

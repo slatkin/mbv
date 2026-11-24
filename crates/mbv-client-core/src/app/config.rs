@@ -10,7 +10,7 @@ pub use mbv_config::{load_last_remote_connection, save_last_remote_connection};
 
 use unicode_width::UnicodeWidthStr;
 
-pub const DEFAULT_VISUALIZER_GLYPH: &str = "●";
+pub(crate) const DEFAULT_VISUALIZER_GLYPH: &str = "●";
 
 #[cfg(any(test, feature = "test"))]
 pub mod tests {
@@ -23,7 +23,7 @@ pub fn load_config() -> Result<Config, mbv_config::ConfigError> {
     mbv_config::load_config()
 }
 
-pub fn load_ui_config() -> Result<UiConfig, mbv_config::ConfigError> {
+pub(crate) fn load_ui_config() -> Result<UiConfig, mbv_config::ConfigError> {
     let path = mbv_config::config_path();
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(UiConfig::default());
@@ -77,7 +77,7 @@ pub fn save_config_section(
     mbv_config::save_config_section(cfg, section)
 }
 
-pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {
+pub(crate) fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {
     if let Err(e) = mbv_config::save_config_settings(cfg) {
         tracing::warn!(
             name: "config.save.failed",
@@ -95,7 +95,7 @@ pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {
 ///
 /// Panics when the config file's `display` key holds something other than a
 /// table.
-pub fn save_ui_config(ui: &UiConfig) {
+pub(crate) fn save_ui_config(ui: &UiConfig) {
     let path = mbv_config::config_path();
     let mut doc: toml::Value = std::fs::read_to_string(&path)
         .ok()

@@ -19,7 +19,7 @@ fn selection_for_group(counted: &[EmbyItem], group_idx: usize) -> Option<FeedHom
 }
 
 impl App {
-    pub fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
+    pub(crate) fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
         if !tracing::enabled!(target: "feedhv", tracing::Level::DEBUG) {
             return;
         }

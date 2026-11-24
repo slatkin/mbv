@@ -17,7 +17,7 @@ use crate::gui_core::gui_library::{GuiEmbyRootItems, GuiGroupAlbums};
 use mbv_client_core::App;
 use mbv_client_core::handoff_app;
 #[cfg(test)]
-use mbv_client_core::state::gui_client_events::GuiClientEvent;
+use mbv_client_core::state::library_fetch_events::LibraryFetchEvent;
 
 /// The GUI Client's own state beside the stub `App` a test holds. The state
 /// lives in `GuiCore` (design D4), and these helpers drive the `App` alone, so
@@ -116,7 +116,7 @@ pub(crate) fn core_holding_stub_gui(app: &mut App) -> GuiCore {
 #[cfg(test)]
 pub(crate) fn wait_for_client_event(app: &mut App) {
     let event = app
-        .wait_for_one_gui_client_event_for_test(std::time::Duration::from_secs(2))
+        .wait_for_one_library_fetch_event_for_test(std::time::Duration::from_secs(2))
         .expect("the Client-only fetch reported its result");
     stub_gui_state(|gui| install_client_event(gui, event));
 }
@@ -267,7 +267,7 @@ pub(crate) fn handle_gui_shows_new(
 ) {
     install_client_event(
         core.gui_state_mut(),
-        GuiClientEvent::ShowsNew {
+        LibraryFetchEvent::ShowsNew {
             library_id: library_id.to_string(),
             result,
         },

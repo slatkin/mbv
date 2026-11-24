@@ -51,7 +51,7 @@ fn app_with_rows(items: Vec<EmbyItem>) -> App {
 fn app_with_grouped_music() -> App {
     let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.set_client_capabilities_for_test(mbv_client_core::gui_client_capabilities());
+    app.set_client_capabilities_for_test(mbv_client_core::transport_client_capabilities());
     app.clear_emby_runtime_for_test();
     app.configure_image_protocol_for_test(Some("kitty".to_owned()), true);
     let mut library = make_item("Music", "CollectionFolder");

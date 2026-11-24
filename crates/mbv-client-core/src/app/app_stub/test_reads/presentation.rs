@@ -40,8 +40,8 @@ impl App {
     /// Take the launched GUI Client core's capability gate into this `App`, as the
     /// GUI Client builds it from its launch location.
     #[cfg(any(test, feature = "test"))]
-    pub fn set_gui_client_capabilities_for_test(&mut self) {
-        self.set_client_capabilities(super::super::gui_client_capabilities());
+    pub fn set_transport_client_capabilities_for_test(&mut self) {
+        self.set_client_capabilities(super::super::transport_client_capabilities());
     }
 
     /// Whether an event the answer pump deferred is still waiting: the pump

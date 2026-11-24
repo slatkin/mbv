@@ -1,4 +1,4 @@
-pub mod image_fetch;
+pub(crate) mod image_fetch;
 
 pub(in crate::app) mod open_url;
 

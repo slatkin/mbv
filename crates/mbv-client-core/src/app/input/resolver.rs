@@ -136,7 +136,7 @@ impl KeyChord {
 /// Extracted from `KeyChord::from_keybinds_chord` (issue #803); the mapping
 /// is lossless in both directions.
 #[must_use]
-pub fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
+pub(crate) fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
     use mbv_keybinds::KeyMods;
     let mut out = KeyModifiers::NONE;
     if mods.contains(KeyMods::CTRL) {

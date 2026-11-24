@@ -192,7 +192,6 @@ impl GuiClientState {
             serde_json::json!(self.player_auto_hide),
         );
     }
-
     /// Apply one effect a library event raised (design D4a (c)): this state
     /// does the store work on its own fields, in the order the event raised
     /// it, and the core `app` serves the work that stays the core's.
@@ -251,4 +250,12 @@ impl ClientLibraryStores for GuiClientState {
     fn apply(&mut self, app: &mut App, effect: ClientLibraryEffect) {
         self.apply_library_effect(app, effect);
     }
+}
+
+/// The auto-hide preference a fresh Client state starts from (design D4 leaves
+/// the `gui_player_auto_hide` key a Client key, so its reader sits beside the
+/// state it fills, beside `save_player_auto_hide`).
+#[must_use]
+pub(crate) fn player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
+    prefs["gui_player_auto_hide"].as_bool().unwrap_or(false)
 }

@@ -95,7 +95,8 @@ pub struct App {
     /// D5 of `decouple-client-core`): the workers clone the sender, and the
     /// GUI Client's core takes the receiver once it exists. The TUI Client
     /// never starts one of these fetches, so it never receives an event.
-    pub(in crate::app) gui_client_events: crate::app::state::gui_client_events::GuiClientEvents,
+    pub(in crate::app) library_fetch_events:
+        crate::app::state::library_fetch_events::LibraryFetchEvents,
     /// The `mbv` program this Client starts the Owner from (design D9 of
     /// `extract-client-core`). `None` starts this process's own executable —
     /// the TUI Client, which is `mbv` itself. The GUI Client records the
@@ -483,7 +484,6 @@ pub struct App {
     /// the beginning rather than mid-cycle. Used by all marquee callers
     /// (mini-view "On Now", standard title row, idle feed title).
     pub(in crate::app) last_nav_at: Instant,
-    pub(in crate::app) last_library_nav_at: Instant,
     /// The instant of the most recent terminal focus report, kept alongside
     /// `window_focused` (`note_focus_gained`/`note_focus_lost`): `Some` from
     /// the last `FocusGained`, `None` after `FocusLost`. No production code

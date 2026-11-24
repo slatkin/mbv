@@ -30,6 +30,7 @@ pub use self::projection::{
     RowMenuEntryProjection, TrackPopoverChoice,
 };
 pub use self::state::GuiClientState;
+pub(crate) use self::state::player_auto_hide_from_prefs;
 
 use crate::gui_core::GuiCore;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};

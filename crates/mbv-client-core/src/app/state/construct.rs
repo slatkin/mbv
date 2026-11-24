@@ -21,14 +21,6 @@ fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
 }
 
-/// Whether the GUI player's controls auto-hide: the `gui_player_auto_hide`
-/// preference the GUI Client's own state starts from (design D4 leaves the key
-/// a Client key, so its reader sits beside the state it fills).
-#[must_use]
-pub fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
-    prefs["gui_player_auto_hide"].as_bool().unwrap_or(false)
-}
-
 /// Load the legacy per-library position document with its pill fields
 /// cleared. The document is a startup migration reader only — it is never
 /// written — so its letter-filter, TV content mode, and feed-group fields
@@ -115,7 +107,7 @@ impl App {
             player: init.player,
             mpris: None,
             client_waker: client_waker.clone(),
-            gui_client_events: crate::app::state::gui_client_events::GuiClientEvents::new(
+            library_fetch_events: crate::app::state::library_fetch_events::LibraryFetchEvents::new(
                 client_waker.clone(),
             ),
             owner_exe: None,
@@ -268,9 +260,6 @@ impl App {
             tab_reveal_requested: false,
             tv_workspace_wide: std::collections::HashSet::new(),
             last_nav_at: Instant::now()
-                .checked_sub(Duration::from_secs(1))
-                .unwrap_or_else(Instant::now),
-            last_library_nav_at: Instant::now()
                 .checked_sub(Duration::from_secs(1))
                 .unwrap_or_else(Instant::now),
             refocus_at: None,

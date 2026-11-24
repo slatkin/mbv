@@ -11,7 +11,9 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, ShellRequest};
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiOverlay;
 use crate::gui_core::input::GuiInput;
-use mbv_client_core::{gui_client_capabilities, make_local_daemon_app_stub_with_cmd_rx_and_compat};
+use mbv_client_core::{
+    make_local_daemon_app_stub_with_cmd_rx_and_compat, transport_client_capabilities,
+};
 
 /// One routed key, delivered through the GUI entry.
 fn gui_key(core: &mut GuiCore, input: GuiInput) -> bool {
@@ -125,7 +127,7 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
 fn gui_context_r_opens_the_target_chooser() {
     let (mut core, _cmd_rx) = cast_target_core();
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
 
     gui_key(
         &mut core,

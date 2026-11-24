@@ -4,7 +4,7 @@ use super::support::*;
 use mbv_client_core::dispatch::action::{PlaybackIntent, VisualIntent};
 use mbv_client_core::input::resolver::KeyChord;
 use mbv_client_core::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
-use mbv_client_core::tests::gui_client_capabilities;
+use mbv_client_core::tests::transport_client_capabilities;
 use mbv_ui_msg::{ComponentId, Key, KeyModifiers, Msg, ShellRequest, TrackChipKind};
 
 #[test]
@@ -292,7 +292,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
 #[test]
 fn gui_context_seek_brackets_command_only_with_transport_chip_keys() {
     let gui = RouterSnapshot {
-        client_capabilities: gui_client_capabilities(),
+        client_capabilities: transport_client_capabilities(),
         ..active_snapshot()
     };
     assert_eq!(
@@ -335,7 +335,7 @@ fn gui_context_seek_brackets_command_only_with_transport_chip_keys() {
 #[test]
 fn gui_context_popover_chords_command_only_with_popover_chord_keys() {
     let gui = RouterSnapshot {
-        client_capabilities: gui_client_capabilities(),
+        client_capabilities: transport_client_capabilities(),
         ..active_snapshot()
     };
     assert_eq!(

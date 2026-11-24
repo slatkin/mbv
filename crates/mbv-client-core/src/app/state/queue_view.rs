@@ -99,7 +99,7 @@ impl QueueView {
 
     /// The slots in ctrl wire form, for a queue copy sent to another Owner.
     #[must_use]
-    pub fn to_unified_slots(&self) -> Vec<mbv_ctrl::UnifiedQueueSlot> {
+    pub(crate) fn to_unified_slots(&self) -> Vec<mbv_ctrl::UnifiedQueueSlot> {
         self.slots()
             .iter()
             .map(|slot| mbv_ctrl::UnifiedQueueSlot {
@@ -115,7 +115,7 @@ impl QueueView {
     }
 
     #[must_use]
-    pub fn slot_pairs(&self) -> Vec<ExecSlot> {
+    pub(crate) fn slot_pairs(&self) -> Vec<ExecSlot> {
         self.queue.slot_pairs()
     }
 
@@ -162,7 +162,7 @@ impl QueueView {
     /// The owner's observed active slot, as the latest adopted snapshot named
     /// it (invariant 25): `None` when the owner reports no active slot.
     #[must_use]
-    pub fn active_slot_id(&self) -> Option<QueueSlotId> {
+    pub(crate) fn active_slot_id(&self) -> Option<QueueSlotId> {
         self.queue.active_slot_id()
     }
 
@@ -180,7 +180,7 @@ impl QueueView {
     /// (design D4): `None` on an owner that reports no start slot, such as a
     /// peer without `named-queues`.
     #[must_use]
-    pub fn start_slot_id(&self) -> Option<QueueSlotId> {
+    pub(crate) fn start_slot_id(&self) -> Option<QueueSlotId> {
         self.start_slot
             .filter(|slot_id| self.queue.slot(*slot_id).is_some())
     }
@@ -189,7 +189,7 @@ impl QueueView {
     /// (design D4, D7): the row a play of the queue starts, and the active row
     /// the Queue panel rests on when the entry is shown.
     #[must_use]
-    pub fn start_index(&self) -> Option<usize> {
+    pub(crate) fn start_index(&self) -> Option<usize> {
         self.start_slot_id()
             .and_then(|slot_id| self.slot_index(slot_id))
     }

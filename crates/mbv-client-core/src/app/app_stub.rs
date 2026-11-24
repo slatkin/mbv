@@ -41,6 +41,23 @@ pub use self::fixtures::{
     make_remote_app_stub_at_index, make_remote_app_stub_with_cmd_rx, remote_stub_config,
     seed_queue_row_menu_rows_for_test, seed_queue_shuffle_owner_for_test,
 };
+/// The server-bytes stand-in for a test's decoded image: its PNG encode. A
+/// Client's test seeds the card image cache with it, so a read of the artwork
+/// state sees the bytes a completed fetch would have left.
+///
+/// # Panics
+///
+/// Panics when the in-memory PNG encode or the resulting sniff fails, which
+/// neither can for an encoded image on a memory cursor.
+#[cfg(any(test, feature = "test"))]
+#[must_use]
+pub fn test_source(img: &image::DynamicImage) -> mbv_images::SourceImage {
+    let mut buf = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut buf, image::ImageFormat::Png)
+        .expect("PNG encode of an in-memory cursor cannot fail");
+    mbv_images::SourceImage::sniff(buf.into_inner()).expect("an encoded PNG is a recognised image")
+}
+
 /// One seeded episode row of the GUI's Podcasts helpers: `(episode id, title,
 /// description, publish instant in unix seconds, duration seconds)`.
 #[cfg(any(test, feature = "test"))]
@@ -62,8 +79,8 @@ pub type SeededAbsBook<'a> = (
 pub(crate) use self::named_queues::{HOME_POSITION, PEER_POSITION};
 #[cfg(any(test, feature = "test"))]
 pub use self::named_queues::{
-    current, gui_app_with_named_queues, gui_app_with_peer, inject_local_events, named_queue_list,
-    op_answer, resting, resting_snapshot,
+    app_with_adopted_named_queues, app_with_connected_peer, current, inject_local_events,
+    named_queue_list, op_answer, resting, resting_snapshot,
 };
 
 pub use self::built::handoff_app;
@@ -73,7 +90,7 @@ pub use self::built::make_app_stub;
 /// The GUI `sections` bench's bench-scale seeds (design D12 of
 /// `gui-change-driven-sections`), in their own child module.
 #[cfg(any(test, feature = "test"))]
-mod gui_scale;
+mod bench_scale;
 
 /// The capabilities a GUI Client presents (design D6a of
 /// `decouple-client-core`). It is the headless stand-in for the set
@@ -81,7 +98,7 @@ mod gui_scale;
 /// this value instead of setting capability flags by hand.
 #[cfg(any(test, feature = "test"))]
 #[must_use]
-pub fn gui_client_capabilities() -> crate::ClientCapabilities {
+pub fn transport_client_capabilities() -> crate::ClientCapabilities {
     crate::ClientCapabilities::empty()
         .with(crate::ClientCapability::ShownQueueEntries)
         .with(crate::ClientCapability::TransportChipKeys)
@@ -127,7 +144,7 @@ pub fn stub_app_with_queue(n: usize) -> App {
 }
 
 /// The `App` a GUI Client's test drives with `n` queue slots, holding the
-/// [`gui_client_capabilities`] a real GUI attach records (design D6a of
+/// [`transport_client_capabilities`] a real GUI attach records (design D6a of
 /// `decouple-client-core`), over a player whose command channel stays open and
 /// the sender of its Owner-event channel. The stub capabilities are the TUI's
 /// preset, which gates every GUI-only control, and the plain stub's player
@@ -145,7 +162,7 @@ pub fn stub_app_for_gui_client(
     std::sync::mpsc::Sender<mbv_ctrl::player::PlayerEvent>,
 ) {
     let mut app = stub_app_with_queue(n);
-    app.set_client_capabilities(gui_client_capabilities());
+    app.set_client_capabilities(transport_client_capabilities());
     let (remote, _player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     remote.update_status(|status| status.volume_max = 100);

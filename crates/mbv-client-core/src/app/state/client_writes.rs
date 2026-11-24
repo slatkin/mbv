@@ -1,10 +1,11 @@
-//! The core state only the GUI Client changes.
+//! The core state only one Client changes.
 //!
 //! A Client reaches no `App` field (change `split-tui-gui-clients`, design
-//! D4/D4b rules 1 and 2). Each method here names the intent the GUI Client
-//! runs and keeps the field, its guard, and its ordering in the core: the
-//! queue filter's text-entry rules, the queue-rename hand-off it presents,
-//! the overlay hand-off it drops on a reset, the row-art cache touch, and the
+//! D4/D4b rules 1 and 2). Each method here names the intent one Client runs —
+//! the window Client, whose own core holds no mirror of the state — and keeps
+//! the field, its guard, and its ordering in the core: the queue filter's
+//! text-entry rules, the queue-rename hand-off it presents, the overlay
+//! hand-off it drops on a reset, the row-art cache touch, and the
 //! Audiobookshelf browse records its opens settle.
 
 use crate::app::App;

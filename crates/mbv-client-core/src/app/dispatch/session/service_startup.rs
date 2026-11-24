@@ -15,7 +15,7 @@ pub(in crate::app) enum AudiobookshelfCompletionKind {
 }
 
 #[derive(Debug)]
-pub struct AudiobookshelfCompletion {
+pub(crate) struct AudiobookshelfCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) kind: AudiobookshelfCompletionKind,
     pub(in crate::app) result:

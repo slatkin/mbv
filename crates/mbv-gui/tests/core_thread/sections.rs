@@ -3,7 +3,7 @@
 //! else.
 
 use mbv_client_core::{
-    App, ClientTickHost, GuiClientEvent, stub_app_with_completed_emby_startup,
+    App, ClientTickHost, LibraryFetchEvent, stub_app_with_completed_emby_startup,
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_queue,
 };
 use mbv_emby_model::EmbyItem;
@@ -405,7 +405,7 @@ fn land_group_albums(test: &mut TestCore) {
     "alb-new".clone_into(&mut album.id);
     test.core
         .app_mut()
-        .send_gui_client_event_for_test(GuiClientEvent::GroupAlbums {
+        .send_library_fetch_event_for_test(LibraryFetchEvent::GroupAlbums {
             lib_idx: 0,
             group_id: "grp-hiphop".to_owned(),
             result: Ok(vec![album]),

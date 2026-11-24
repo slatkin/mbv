@@ -1,5 +1,5 @@
 use super::*;
-use mbv_client_core::queue_card_artwork::test_source;
+use mbv_client_core::test_source;
 
 /// The GUI setting (add-gui-library-panel design D4): the GUI arranges its own
 /// panels from its measured size and always paints the Queue panel, so neither
@@ -10,7 +10,7 @@ use mbv_client_core::queue_card_artwork::test_source;
 #[test]
 fn the_gui_setting_disables_the_tui_panel_rules() {
     let mut app = make_app_stub();
-    app.set_gui_client_capabilities_for_test();
+    app.set_transport_client_capabilities_for_test();
     app.set_panel_focus_for_test(PanelFocus::Queue);
     app.set_panel_mode_for_test(PanelMode::Both);
     // A narrow terminal plus an empty queue arms both of the TUI's rules; the
@@ -79,7 +79,7 @@ fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
     let mut gui = playing_movie_app();
     gui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     gui.seed_visual_slot_hidden_for_test(true);
-    gui.set_gui_client_capabilities_for_test();
+    gui.set_transport_client_capabilities_for_test();
     let mut tui = playing_movie_app();
     tui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     tui.seed_visual_slot_hidden_for_test(true);
@@ -112,7 +112,7 @@ fn the_gui_client_leaves_the_tuis_visual_slot_controls_alone() {
     tui.set_visual_slot_hidden_for_test(true);
     let mut gui = playing_movie_app();
     gui.seed_visual_slot_hidden_for_test(true);
-    gui.set_gui_client_capabilities_for_test();
+    gui.set_transport_client_capabilities_for_test();
 
     gui.set_visual_slot_hidden_for_test(false);
     gui.set_visualizer_choice_for_test(true);

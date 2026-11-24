@@ -68,7 +68,7 @@ use mbv_emby_model::test_support::make_item;
 // The App stub construction moved to `app_stub` so the Clients' own tests
 // can build it too; the `crate::app::tests::*` paths stay working.
 pub use super::app_stub::built::make_built_app;
-pub use super::app_stub::{gui_client_capabilities, make_app_stub};
+pub use super::app_stub::{make_app_stub, transport_client_capabilities};
 // The whole-`App` fixtures moved into `app_stub` so a Client's own tests reach
 // them; the `crate::app::tests::*` prelude the TUI tests share stays working.
 pub use super::{

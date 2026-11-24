@@ -148,7 +148,7 @@ impl GuiCore {
                 focus: if self.gui.overlay.is_some() {
                     OverlayFocus::ContextMenu
                 } else if self.gui.settings_screen.is_some() {
-                    OverlayFocus::SettingsScreen
+                    OverlayFocus::FullScreenSurface
                 } else {
                     OverlayFocus::Free
                 },

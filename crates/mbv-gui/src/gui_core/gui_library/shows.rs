@@ -19,7 +19,7 @@ use super::shows_view::GuiShowsView;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
-use mbv_client_core::state::gui_client_events::GuiClientEvent;
+use mbv_client_core::state::library_fetch_events::LibraryFetchEvent;
 
 impl GuiCore {
     /// Install one Shows view (design D8).
@@ -115,10 +115,10 @@ fn spawn_shows_new(app: &mut App, gui: &mut GuiClientState, library_id: String) 
     // with landed rows, empty when the fetch fails.
     gui.shows_new
         .insert(library_id.clone(), GuiSectionRequest::Requesting);
-    let tx = app.gui_client_event_sender();
+    let tx = app.library_fetch_event_sender();
     std::thread::spawn(move || {
         let result = client.get_latest_episodes(&library_id, 30);
-        tx.send(GuiClientEvent::ShowsNew { library_id, result });
+        tx.send(LibraryFetchEvent::ShowsNew { library_id, result });
     });
 }
 

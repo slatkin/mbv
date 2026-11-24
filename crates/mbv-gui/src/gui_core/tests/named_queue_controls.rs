@@ -108,7 +108,7 @@ fn sent_close_op(rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Option<mbv_ctrl::Qu
 /// `named-queues` "A Client closes queues").
 #[test]
 fn a_rejected_close_tells_the_user_why() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_local_current_entry();
     app.edit_player_status_for_test(|status| status.active = false);
     request_close(&mut app);
@@ -141,7 +141,7 @@ fn a_rejected_close_tells_the_user_why() {
 /// "Make a queue").
 #[test]
 fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
 
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
@@ -198,7 +198,7 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
 /// shows a queue").
 #[test]
 fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     let tx = inject_local_events(&mut app);
 
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
@@ -280,7 +280,7 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
 /// `gui-queue-chooser` "The new-queue control makes and shows a queue").
 #[test]
 fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
     let created = sent_create(&cmd_rx).expect("the control asks for a new queue");
     app.clear_toasts_for_test();
@@ -305,7 +305,7 @@ fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
 /// rejection already flashed from the pump that waited for it (design D8).
 #[test]
 fn a_rejection_that_answers_no_named_queue_command_stays_silent() {
-    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    let (mut app, _cmd_rx) = app_with_adopted_named_queues();
     app.clear_toasts_for_test();
 
     app.apply_player_event_for_test(PlayerEvent::QueueOpResult {
@@ -324,7 +324,7 @@ fn a_rejection_that_answers_no_named_queue_command_stays_silent() {
 /// answer sends the close (spec `gui-queue-chooser` "Close the playing queue").
 #[test]
 fn closing_the_playing_current_queue_asks_and_then_closes() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_local_current_entry();
     app.edit_player_status_for_test(|status| {
         status.active = true;
@@ -361,7 +361,7 @@ fn closing_the_playing_current_queue_asks_and_then_closes() {
 /// (spec `gui-queue-chooser` "Close the stopped current queue").
 #[test]
 fn closing_the_stopped_current_queue_closes_at_once() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_local_current_entry();
     app.edit_player_status_for_test(|status| status.active = false);
 
@@ -383,7 +383,7 @@ fn closing_the_stopped_current_queue_closes_at_once() {
 /// "Cancel the close").
 #[test]
 fn cancelling_the_close_changes_nothing() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_local_current_entry();
     app.edit_player_status_for_test(|status| {
         status.active = true;
@@ -408,7 +408,7 @@ fn cancelling_the_close_changes_nothing() {
 /// the peer keeps playing (spec `gui-queue-chooser` "Close a peer entry").
 #[test]
 fn closing_a_peer_entry_disconnects_and_leaves_the_peer_playing() {
-    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
     assert!(
         app.shown_entry() == Some(ShownEntry::Peer),
         "the connect shows the peer entry"
@@ -438,7 +438,7 @@ fn closing_a_peer_entry_disconnects_and_leaves_the_peer_playing() {
 /// `gui-queue-chooser` "The close control closes the shown entry").
 #[test]
 fn the_only_local_queue_does_not_close() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.seed_named_queue_list_for_test(vec![named_queue_list()[0].clone()], current());
     app.show_local_current_entry();
 
@@ -451,7 +451,7 @@ fn the_only_local_queue_does_not_close() {
 /// control closes the shown entry only, never a queue the panel does not show.
 #[test]
 fn a_resting_queue_shown_closes_without_a_prompt() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
 
     request_close(&mut app);
@@ -486,7 +486,7 @@ fn the_close_control_follows_the_shown_entry_beside_a_peer(
     #[case] show: fn(&mut App),
     #[case] disabled: bool,
 ) {
-    let (mut app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, _home_cmd_rx, _peer_cmd_rx) = app_with_connected_peer();
     app.seed_named_queue_list_for_test(vec![named_queue_list()[0].clone()], current());
     show(&mut app);
 
@@ -508,7 +508,7 @@ fn the_close_control_follows_the_shown_entry_beside_a_peer(
 /// window painted rather than whatever the list's row holds now.
 #[test]
 fn a_chooser_entry_press_shows_the_painted_queue() {
-    let (app, cmd_rx) = gui_app_with_named_queues();
+    let (app, cmd_rx) = app_with_adopted_named_queues();
     let mut core = GuiCore::new(app);
     core.app.show_local_current_entry();
     core.toggle_gui_queue_chooser();
@@ -547,7 +547,7 @@ fn a_chooser_entry_press_shows_the_painted_queue() {
 /// after a close the Queue panel shows the current local queue).
 #[test]
 fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
-    let (app, cmd_rx) = gui_app_with_named_queues();
+    let (app, cmd_rx) = app_with_adopted_named_queues();
     let mut core = GuiCore::new(app);
     core.app.show_named_queue(resting());
     core.toggle_gui_queue_chooser();

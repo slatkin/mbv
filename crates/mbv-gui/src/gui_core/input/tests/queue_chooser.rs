@@ -14,7 +14,8 @@ use crate::gui_core::gui_client_state::{
 };
 use crate::gui_core::input::GuiInput;
 use mbv_client_core::{
-    emby_unified_state, gui_client_capabilities, make_items, make_local_daemon_app_stub_with_cmd_rx,
+    emby_unified_state, make_items, make_local_daemon_app_stub_with_cmd_rx,
+    transport_client_capabilities,
 };
 use mbv_ctrl::player::PlayerEvent;
 
@@ -49,7 +50,7 @@ fn resting() -> mbv_queue::NamedQueueId {
 fn app_with_queues() -> (GuiCore, Receiver<CtrlCmd>) {
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
     while cmd_rx.try_recv().is_ok() {}
-    app.set_client_capabilities_for_test(gui_client_capabilities());
+    app.set_client_capabilities_for_test(transport_client_capabilities());
     app.set_panel_focus(PanelFocus::Queue);
     app.seed_named_queue_list_for_test(
         vec![

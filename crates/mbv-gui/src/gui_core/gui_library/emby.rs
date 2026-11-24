@@ -30,7 +30,7 @@ use super::tabs::GuiDestinationKind;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
-use mbv_client_core::state::gui_client_events::GuiClientEvent;
+use mbv_client_core::state::library_fetch_events::LibraryFetchEvent;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 
 /// One plain Emby library's root list in the store (row 8.1): a library's
@@ -492,10 +492,10 @@ pub(crate) fn fetch_emby_root_items(app: &mut App, gui: &mut GuiClientState, lib
         return;
     };
     gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Loading);
-    let tx = app.gui_client_event_sender();
+    let tx = app.library_fetch_event_sender();
     std::thread::spawn(move || {
         let result = super::store::fetch_all_pages(&client, &parent_id, item_types.as_deref());
-        tx.send(GuiClientEvent::EmbyRootItems { lib_idx, result });
+        tx.send(LibraryFetchEvent::EmbyRootItems { lib_idx, result });
     });
 }
 

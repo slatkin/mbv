@@ -42,13 +42,13 @@ pub enum OverlayFocus {
     /// The context menu is open (it is a blocking overlay the policy names
     /// explicitly, so the `ClearQueuePrompt` gate can read it directly).
     ContextMenu,
-    /// The GUI Settings screen is open (`add-gui-settings-screen` design
-    /// D2): a non-blocking overlay of the GUI Client's own that holds the
-    /// keyboard over the queue and the Library panel, so the queue-scoped
-    /// gates read it directly while the global and transport actions fire.
-    /// The TUI Client never produces it — its Settings sidebar keeps the
-    /// `NonBlocking` situation.
-    SettingsScreen,
+    /// A Client surface of its own fills the frame and holds the keyboard over
+    /// the panels (`add-gui-settings-screen` design D2): the window Client's
+    /// Settings screen, whose queue keys stay behind it while the global and
+    /// transport actions still fire. It is non-blocking, like `NonBlocking`,
+    /// and the queue-scoped gates read it directly. The TUI Client never
+    /// produces it — its Settings sidebar keeps the `NonBlocking` situation.
+    FullScreenSurface,
 }
 
 impl OverlayFocus {
@@ -67,9 +67,10 @@ impl OverlayFocus {
         matches!(self, Self::ContextMenu)
     }
 
-    /// Whether the GUI Settings screen is open.
-    pub(in crate::app) fn settings_screen(self) -> bool {
-        matches!(self, Self::SettingsScreen)
+    /// Whether a Client surface of its own fills the frame and holds the
+    /// keyboard over the panels.
+    pub(in crate::app) fn full_screen_surface(self) -> bool {
+        matches!(self, Self::FullScreenSurface)
     }
 }
 

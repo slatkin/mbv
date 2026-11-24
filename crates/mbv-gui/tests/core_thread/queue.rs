@@ -6,7 +6,7 @@
 //! an entry press executing through the Client core).
 
 use mbv_client_core::{
-    gui_client_capabilities, stub_app_for_gui_client, stub_app_with_queue_and_cmd_rx,
+    stub_app_for_gui_client, stub_app_with_queue_and_cmd_rx, transport_client_capabilities,
 };
 use mbv_ctrl::player::PlayerEvent;
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
@@ -350,7 +350,7 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
 #[test]
 fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
     let (mut app, cmd_rx) = stub_app_with_queue_and_cmd_rx(3);
-    app.set_client_capabilities_for_test(gui_client_capabilities());
+    app.set_client_capabilities_for_test(transport_client_capabilities());
     let mut test = test_core_with(app);
     test.tx.send(measured_layout(3, vec![])).unwrap();
     assert!(test.core.step());

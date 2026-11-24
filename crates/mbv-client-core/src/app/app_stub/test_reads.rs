@@ -42,11 +42,11 @@ mod links;
 
 /// The Feeds destination's test seeds and pushes (row 11.1) live in their own
 /// child module so this file stays within its line ceiling.
-mod gui_feeds;
+mod feeds;
 
 /// The GUI core's mark seams (`gui-change-driven-sections` rows 2.7, 2.8) sit
 /// in their own child module for the same reason.
-mod gui_marks;
+mod marks;
 
 /// The queue surfaces' test seeds and reads (`split-tui-gui-clients` design
 /// D4b rule 5) sit in their own child module for the same reason.
@@ -61,7 +61,7 @@ mod named_queue;
 /// `Recently added` store, the TV Upcoming snapshots, and the deferred
 /// navigation landings (`split-tui-gui-clients` design D4b rule 5) — sit in
 /// their own child module for the same reason.
-mod gui_destinations;
+mod destinations;
 
 /// The Emby Service runtime's test seams (`split-tui-gui-clients` design D4b
 /// rule 5) sit in their own child module for the same reason.
@@ -240,7 +240,7 @@ impl App {
     /// with no request and no thread.
     #[cfg(any(test, feature = "test"))]
     pub fn complete_card_image_for_test(&self, key: &str, img: &image::DynamicImage) {
-        let source = crate::app::queue_card_artwork::test_source(img);
+        let source = crate::app::app_stub::test_source(img);
         let _ = self.images.card_image_tx().send((
             key.to_string(),
             mbv_images::ImageFetchOutcome::Image { img: None, source },

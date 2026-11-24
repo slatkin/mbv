@@ -9,14 +9,14 @@ use super::GuiEmbyRootItems;
 use super::request::GuiSectionRequest;
 use super::store::GuiGroupAlbums;
 use crate::gui_core::gui_client_state::GuiClientState;
-use mbv_client_core::state::gui_client_events::GuiClientEvent;
+use mbv_client_core::state::library_fetch_events::LibraryFetchEvent;
 use mbv_emby_model::EmbyItem;
 
 /// Install one drained result in the Client's own stores: the same rule the
 /// event handler applied while this result crossed the shared library channel.
-pub fn install_client_event(gui: &mut GuiClientState, event: GuiClientEvent) {
+pub fn install_client_event(gui: &mut GuiClientState, event: LibraryFetchEvent) {
     match event {
-        GuiClientEvent::GroupAlbums {
+        LibraryFetchEvent::GroupAlbums {
             lib_idx,
             group_id,
             result,
@@ -26,11 +26,11 @@ pub fn install_client_event(gui: &mut GuiClientState, event: GuiClientEvent) {
                 .or_default()
                 .insert(group_id, group_albums_mark(result));
         }
-        GuiClientEvent::EmbyRootItems { lib_idx, result } => {
+        LibraryFetchEvent::EmbyRootItems { lib_idx, result } => {
             gui.emby_roots
                 .insert(lib_idx, emby_roots_mark(lib_idx, result));
         }
-        GuiClientEvent::ShowsNew { library_id, result } => {
+        LibraryFetchEvent::ShowsNew { library_id, result } => {
             gui.shows_new.insert(library_id, shows_new_request(result));
         }
     }

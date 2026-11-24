@@ -163,12 +163,6 @@ impl App {
         self.queue_card_projection.title_site = mbv_ui_model::playback::NowPlayingTitleSite::Header;
     }
 
-    /// Hold the terminal mouse-capture preference the Settings row toggled:
-    /// the run loop applies it to the session once per tick.
-    pub fn set_mouse_capture_pending(&mut self, capture: bool) {
-        self.mouse_capture_pending = Some(capture);
-    }
-
     /// Forget the custom accent colour held while Settings was open. A fresh
     /// Settings mount starts from the configured palette value (issue #875).
     pub fn clear_accent_custom(&mut self) {

@@ -360,7 +360,7 @@ impl SectionLedger {
         // The queue's end offsets (design D5): the duration facts the summary
         // and queue sections carry in place of the clock strings the window
         // now derives from the playhead anchor.
-        let offsets = app.gui_queue_end_offsets();
+        let offsets = app.queue_end_offsets();
         // The header's chooser facts read the same shown queue and entry list
         // the projections above read, so the frame cannot disagree inside one
         // tick.

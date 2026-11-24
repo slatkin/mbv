@@ -154,16 +154,13 @@ fn an_emby_setup_command_starts_a_generation_with_the_carried_server_url() {
 
     let app = test.core.app_mut();
     assert_eq!(
-        app.gui_setup_server_url_for_test().as_deref(),
+        app.setup_server_url_for_test().as_deref(),
         Some(TEST_URL),
         "the form carries the command's server URL"
     );
+    assert!(app.setup_busy_for_test(), "the validation is in progress");
     assert!(
-        app.gui_setup_busy_for_test(),
-        "the validation is in progress"
-    );
-    assert!(
-        app.gui_setup_generation_started_for_test(),
+        app.setup_generation_started_for_test(),
         "the submit started a setup generation"
     );
 }
@@ -455,7 +452,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
 fn a_reset_returns_to_home_and_clears_the_launch_location() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut app = stub_app_with_queue(2);
-    app.set_client_capabilities_for_test(gui_client_capabilities());
+    app.set_client_capabilities_for_test(transport_client_capabilities());
     app.seed_gui_music_library_tab_for_test();
     app.seed_gui_library_groups_for_test(0, "grp-soul");
     mbv_config::save_gui_launch_state(&mbv_config::first_launch())

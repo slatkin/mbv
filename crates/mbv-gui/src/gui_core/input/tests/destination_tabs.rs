@@ -12,7 +12,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 use crate::gui_core::GuiCore;
 use crate::gui_core::input::GuiInput;
-use mbv_client_core::{gui_client_capabilities, make_app_stub};
+use mbv_client_core::{make_app_stub, transport_client_capabilities};
 
 /// A catalog with a Grouped Music library at position 1 and a Shows library
 /// at position 2, Music active: the shortest catalog in which a tab step has
@@ -50,7 +50,7 @@ fn press(core: &mut GuiCore, key: Key) {
 fn tab_from_music_opens_shows_and_starts_its_root_load() {
     let mut core = music_and_shows_core();
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
 
     press(&mut core, Key::Tab);
 
@@ -79,7 +79,7 @@ fn tab_from_music_opens_shows_and_starts_its_root_load() {
 fn a_router_step_opens_no_destination_the_gui_does_not_present() {
     let mut core = music_and_shows_core();
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
 
     // Position 3 names no tab: Home is 0 and the two libraries take 1 and 2.
     press(&mut core, Key::Char('4'));

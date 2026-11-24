@@ -102,26 +102,11 @@ impl App {
         self.images.insert_image(
             key,
             mbv_images::CachedImage {
-                source: Some(test_source(&img)),
+                source: Some(crate::app::app_stub::test_source(&img)),
                 img: Some(img),
                 cover_box: None,
                 applied_logo_key: None,
             },
         );
     }
-}
-
-/// The server-bytes stand-in for a test's decoded image: its PNG encode.
-///
-/// # Panics
-///
-/// Panics when the in-memory PNG encode or the resulting sniff fails, which
-/// neither can for an encoded image on a memory cursor.
-#[cfg(any(test, feature = "test"))]
-#[must_use]
-pub fn test_source(img: &image::DynamicImage) -> SourceImage {
-    let mut buf = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut buf, image::ImageFormat::Png)
-        .expect("PNG encode of an in-memory cursor cannot fail");
-    SourceImage::sniff(buf.into_inner()).expect("an encoded PNG is a recognised image")
 }

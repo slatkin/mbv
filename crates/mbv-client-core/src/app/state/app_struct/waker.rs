@@ -27,19 +27,19 @@ impl App {
     /// the shared library event channel, and the GUI Client's core drains it
     /// in `ClientTickHost::drain_client_events`. A TUI Client never starts one
     /// of these fetches.
-    pub fn gui_client_event_sender(
+    pub fn library_fetch_event_sender(
         &self,
-    ) -> crate::app::state::gui_client_events::GuiClientEventSender {
-        self.gui_client_events.sender()
+    ) -> crate::app::state::library_fetch_events::LibraryFetchEventSender {
+        self.library_fetch_events.sender()
     }
 
     /// Take one queued Client-only fetch result (design D5 of
     /// `decouple-client-core`), for the GUI's `ClientTickHost::drain_client_events`
     /// and for a test that drains over the `App` it holds.
-    pub fn take_one_gui_client_event(
+    pub fn take_one_library_fetch_event(
         &self,
-    ) -> Option<crate::app::state::gui_client_events::GuiClientEvent> {
-        self.gui_client_events.try_take()
+    ) -> Option<crate::app::state::library_fetch_events::LibraryFetchEvent> {
+        self.library_fetch_events.try_take()
     }
 
     /// Land one Client-only fetch result on this `App`'s channel, as a fetch
@@ -48,22 +48,22 @@ impl App {
     /// `drain_client_events` takes it from the same channel production fills.
     #[cfg(any(test, feature = "test"))]
     #[doc(hidden)]
-    pub fn send_gui_client_event_for_test(
+    pub fn send_library_fetch_event_for_test(
         &self,
-        event: crate::app::state::gui_client_events::GuiClientEvent,
+        event: crate::app::state::library_fetch_events::LibraryFetchEvent,
     ) {
-        self.gui_client_event_sender().send(event);
+        self.library_fetch_event_sender().send(event);
     }
 
     /// Wait up to `timeout` for one queued Client-only fetch result (task 8.3
     /// of `decouple-client-core`), for a test drain that has no tick to wake
     /// it.
     #[cfg(any(test, feature = "test"))]
-    pub fn wait_for_one_gui_client_event_for_test(
+    pub fn wait_for_one_library_fetch_event_for_test(
         &self,
         timeout: std::time::Duration,
-    ) -> Option<crate::app::state::gui_client_events::GuiClientEvent> {
-        self.gui_client_events.wait_take_for_test(timeout)
+    ) -> Option<crate::app::state::library_fetch_events::LibraryFetchEvent> {
+        self.library_fetch_events.wait_take_for_test(timeout)
     }
 
     /// Record the `mbv` program this Client starts the Owner from (design

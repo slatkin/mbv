@@ -12,7 +12,7 @@ use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollection
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
 use crate::gui_core::gui_client_state::GuiClientState;
-use mbv_client_core::state::gui_client_events::GuiClientEvent;
+use mbv_client_core::state::library_fetch_events::LibraryFetchEvent;
 use mbv_client_core::{App, PAGE_SIZE};
 
 /// One group's album list in the store (design D5): a group's first selection
@@ -185,10 +185,10 @@ pub(crate) fn fetch_group_albums(
         .entry(lib_idx)
         .or_default()
         .insert(group_id.clone(), GuiGroupAlbums::Loading);
-    let tx = app.gui_client_event_sender();
+    let tx = app.library_fetch_event_sender();
     std::thread::spawn(move || {
         let result = fetch_all_pages(&client, &group_id, None);
-        tx.send(GuiClientEvent::GroupAlbums {
+        tx.send(LibraryFetchEvent::GroupAlbums {
             lib_idx,
             group_id,
             result,

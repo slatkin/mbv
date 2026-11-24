@@ -60,7 +60,7 @@ impl QueueLinkResolution {
     }
 
     #[must_use]
-    pub fn local_metadata_applies(self, link: QueueLink) -> bool {
+    pub(crate) fn local_metadata_applies(self, link: QueueLink) -> bool {
         link == QueueLink::Local || !self.has_direct_remote_queue
     }
 }
@@ -123,7 +123,7 @@ impl UndoEntry {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RemoteSlotState {
+pub(crate) enum RemoteSlotState {
     DirectRemote,
     LocalDaemon,
 }
@@ -193,7 +193,7 @@ pub(in crate::app) struct SuspendedLocalSession {
 }
 
 #[derive(Debug)]
-pub enum PendingQueueAction {
+pub(crate) enum PendingQueueAction {
     PlayItems {
         items: Vec<EmbyItem>,
         start_idx: usize,
@@ -241,7 +241,7 @@ pub(in crate::app) enum RoutedReplacementPrep {
 }
 
 #[derive(Clone, Debug)]
-pub enum PlaylistMutation {
+pub(crate) enum PlaylistMutation {
     Save {
         mutation_id: u64,
         origin: QueueOrigin,
@@ -266,7 +266,7 @@ pub enum PlaylistMutation {
 
 impl PlaylistMutation {
     #[must_use]
-    pub fn mutation_id(&self) -> u64 {
+    pub(crate) fn mutation_id(&self) -> u64 {
         match self {
             Self::Save { mutation_id, .. }
             | Self::CreateAs { mutation_id, .. }

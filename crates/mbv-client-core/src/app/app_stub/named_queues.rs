@@ -13,7 +13,7 @@ use crate::app::app_stub::fixtures::{
     close_initial_services, emby_unified_state, make_items, make_local_daemon_app_stub_with_cmd_rx,
     remote_stub_config,
 };
-use crate::app::app_stub::gui_client_capabilities;
+use crate::app::app_stub::transport_client_capabilities;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{NamedQueueEntry, UnifiedQueueStateData};
 use mbv_emby_model::EmbyItem;
@@ -77,7 +77,7 @@ pub fn resting_snapshot(items: &[EmbyItem]) -> UnifiedQueueStateData {
 /// own op through [`inject_local_events`].
 #[cfg(any(test, feature = "test"))]
 #[must_use]
-pub fn gui_app_with_named_queues() -> (App, mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+pub fn app_with_adopted_named_queues() -> (App, mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(3), 0);
     let config = crate::app::config::Config {
@@ -93,7 +93,7 @@ pub fn gui_app_with_named_queues() -> (App, mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     );
     close_initial_services(&mut app);
     while cmd_rx.try_recv().is_ok() {}
-    app.set_client_capabilities(gui_client_capabilities());
+    app.set_client_capabilities(transport_client_capabilities());
     app.adopt_named_queue_list(named_queue_list(), current());
     (app, cmd_rx)
 }
@@ -136,7 +136,7 @@ pub const PEER_POSITION: i64 = 42;
 /// never happens.
 #[cfg(any(test, feature = "test"))]
 #[must_use]
-pub fn gui_app_with_peer() -> (
+pub fn app_with_connected_peer() -> (
     App,
     mpsc::Receiver<mbv_ctrl::CtrlCmd>,
     mpsc::Receiver<mbv_ctrl::CtrlCmd>,
@@ -144,7 +144,7 @@ pub fn gui_app_with_peer() -> (
     let (mut app, home_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
     while home_cmd_rx.try_recv().is_ok() {}
     app.edit_player_status_for_test(|status| status.position_ticks = HOME_POSITION);
-    app.set_client_capabilities(gui_client_capabilities());
+    app.set_client_capabilities(transport_client_capabilities());
     app.adopt_named_queue_list(named_queue_list(), current());
 
     let (peer, peer_rx, peer_cmd_rx) =

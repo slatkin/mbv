@@ -105,9 +105,7 @@ impl App {
     }
 
     pub fn stamp_navigation(&mut self) {
-        let now = Instant::now();
-        self.last_nav_at = now;
-        self.last_library_nav_at = now;
+        self.last_nav_at = Instant::now();
     }
 
     pub fn fetch_list_card_image_when_idle(

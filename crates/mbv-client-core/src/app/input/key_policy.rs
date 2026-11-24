@@ -81,38 +81,40 @@ pub(in crate::app) enum KeyPolicyBinding {
     /// against `&Keybinds` in `entry_matches` because the layer is not a
     /// registry action. Always blocking: arming swallows.
     PrefixArm,
-    /// The GUI-only key context's collapse toggle (add-tauri-gui-client row
-    /// 6.2, design D4a's ruled collision): the canvas's `z`, which the TUI
+    /// The transport-chips key context's collapse toggle (add-tauri-gui-client
+    /// row 6.2, design D4a's ruled collision): the canvas's `z`, which the TUI
     /// binds to `cycle_subtitle`. Not a registry action — the chord is
     /// canvas-fixed and the TUI never routes the layer, so the registry's
     /// configurable vocabulary stays TUI-facing.
-    GuiCollapsePanel,
-    /// The GUI-only key context's queue-fold toggle: the canvas's `q`, which
-    /// the TUI binds to `quit`.
-    GuiFoldQueue,
-    /// The GUI-only key context's cycle-subtitle chord: the canvas's `c`,
-    /// which the TUI binds to `clear_queue_prompt_c`.
-    GuiCycleSubtitle,
-    /// The GUI-only key context's Queue chooser toggle: the canvas's `t`,
-    /// which the TUI binds to nothing (its Sessions sidebar moves a queue
+    TransportCollapsePanel,
+    /// The transport-chips key context's queue-fold toggle: the canvas's `q`,
+    /// which the TUI binds to `quit`.
+    TransportFoldQueue,
+    /// The transport-chips key context's cycle-subtitle chord: the canvas's
+    /// `c`, which the TUI binds to `clear_queue_prompt_c`.
+    TransportCycleSubtitle,
+    /// The transport-chips key context's Queue chooser toggle: the canvas's
+    /// `t`, which the TUI binds to nothing (its Sessions sidebar moves a queue
     /// with the same letter inside the sidebar's own layer). It opens and
     /// closes the Queue chooser (design D8 of `gui-named-queues`).
-    GuiQueueChooserToggle,
-    /// The GUI-only key context's new-queue control: the canvas's `Ctrl+T`.
-    /// The TUI binds nothing there, and the TUI Client has no Named queue.
-    GuiNewQueue,
-    /// The GUI-only key context's close control: the canvas's `Ctrl+W`, which
-    /// the TUI binds nothing to outside a text entry.
-    GuiCloseQueue,
-    /// The GUI-only key context's queue-filter opener: the canvas's `/`,
-    /// which the TUI binds to nothing (the library's inline search is a
+    TransportQueueChooserToggle,
+    /// The transport-chips key context's new-queue control: the canvas's
+    /// `Ctrl+T`. The TUI binds nothing there, and the TUI Client has no Named
+    /// queue.
+    TransportNewQueue,
+    /// The transport-chips key context's close control: the canvas's `Ctrl+W`,
+    /// which the TUI binds nothing to outside a text entry.
+    TransportCloseQueue,
+    /// The transport-chips key context's queue-filter opener: the canvas's
+    /// `/`, which the TUI binds to nothing (the library's inline search is a
     /// leaf-local `/`).
-    GuiQueueFilterOpen,
-    /// The GUI-only key context's playback-target chooser (add-tauri-gui-
-    /// client row 6.4): `r` opens and closes the canvas's chooser, the GUI
-    /// counterpart of the TUI's F3 Sessions sidebar. No TUI default binds
-    /// `r`, so the chord collides with nothing there.
-    GuiOpenTargetChooser,
+    TransportQueueFilterOpen,
+    /// The transport-chips key context's playback-target chooser
+    /// (add-tauri-gui-client row 6.4): `r` opens and closes the canvas's
+    /// chooser, the window Client's counterpart of the TUI's F3 Sessions
+    /// sidebar. No TUI default binds `r`, so the chord collides with nothing
+    /// there.
+    TransportOpenTargetChooser,
     /// The canvas queue's row-move actions (add-tauri-gui-client row 6.5,
     /// the "a row is moved by key" spec): declared actions — rebindable —
     /// whose `TransportChipKeys` gate keeps even a rebound chord out of the TUI,
@@ -152,21 +154,25 @@ impl KeyPolicyBinding {
             Self::QueueColumnWidth => {
                 matches!(chord.code, Key::Left | Key::Right) && chord.mods == KeyModifiers::SHIFT
             }
-            // The GUI-only key context's canvas chords: unmodified single
-            // keys, so a modified chord (Ctrl+Z's undo, a text entry's
+            // The transport-chips key context's canvas chords: unmodified
+            // single keys, so a modified chord (Ctrl+Z's undo, a text entry's
             // Shift+letter) keeps its own meaning.
-            Self::GuiCollapsePanel => chord.mods.is_empty() && chord.code == Key::Char('z'),
-            Self::GuiFoldQueue => chord.mods.is_empty() && chord.code == Key::Char('q'),
-            Self::GuiCycleSubtitle => chord.mods.is_empty() && chord.code == Key::Char('c'),
-            Self::GuiQueueChooserToggle => chord.mods.is_empty() && chord.code == Key::Char('t'),
-            Self::GuiNewQueue => {
+            Self::TransportCollapsePanel => chord.mods.is_empty() && chord.code == Key::Char('z'),
+            Self::TransportFoldQueue => chord.mods.is_empty() && chord.code == Key::Char('q'),
+            Self::TransportCycleSubtitle => chord.mods.is_empty() && chord.code == Key::Char('c'),
+            Self::TransportQueueChooserToggle => {
+                chord.mods.is_empty() && chord.code == Key::Char('t')
+            }
+            Self::TransportNewQueue => {
                 chord.mods == KeyModifiers::CONTROL && chord.code == Key::Char('t')
             }
-            Self::GuiCloseQueue => {
+            Self::TransportCloseQueue => {
                 chord.mods == KeyModifiers::CONTROL && chord.code == Key::Char('w')
             }
-            Self::GuiQueueFilterOpen => chord.mods.is_empty() && chord.code == Key::Char('/'),
-            Self::GuiOpenTargetChooser => chord.mods.is_empty() && chord.code == Key::Char('r'),
+            Self::TransportQueueFilterOpen => chord.mods.is_empty() && chord.code == Key::Char('/'),
+            Self::TransportOpenTargetChooser => {
+                chord.mods.is_empty() && chord.code == Key::Char('r')
+            }
             _ => false,
         }
     }
@@ -228,13 +234,13 @@ impl KeyPolicyGate {
             Self::PanelFocusLibraryBoth => panel_focus_library_both_allowed(snapshot),
             Self::QueueColumnWidth => snapshot.panel_mode == PanelMode::Both,
             Self::ClearQueuePrompt => {
-                // The GUI Settings screen's queue keys stay behind it
-                // (`add-gui-settings-screen` design D2): the screen holds the
+                // A full-screen Client surface's queue keys stay behind it
+                // (`add-gui-settings-screen` design D2): the surface holds the
                 // keyboard over the queue, so the prompt never opens while it
                 // shows. The TUI's own sidebar situations keep today's rules.
                 !snapshot.overlays.focus.blocking()
                     && !snapshot.overlays.focus.context_menu()
-                    && !snapshot.overlays.focus.settings_screen()
+                    && !snapshot.overlays.focus.full_screen_surface()
             }
             Self::SessionsSidebarOpen => snapshot.overlays.sessions_sidebar,
             Self::Playback => playback_allowed(snapshot),
@@ -353,68 +359,68 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::NoBlockingOverlayAndHelpClosed,
         blocking: false,
     },
-    // The GUI-only key context (add-tauri-gui-client row 6.2, design D4a's
-    // ruled collision): the canvas's chords bind here, ahead of the TUI
+    // The transport-chips key context (add-tauri-gui-client row 6.2, design
+    // D4a's ruled collision): the canvas's chords bind here, ahead of the TUI
     // actions whose defaults they collide with (`quit` on `q`,
     // `cycle_subtitle` on `z`, `clear_queue_prompt_c` on `c`), so a TUI
-    // binding on those chords does not follow into the GUI. The TUI Client's
-    // snapshot never opens the gate, so the layers are inert there and the
-    // TUI's default bindings stay unchanged. Not registry actions: the
-    // chords are canvas-fixed and the TUI-facing registry would otherwise
+    // binding on those chords does not follow into the window Client. The TUI
+    // Client's snapshot never opens the gate, so the layers are inert there
+    // and the TUI's default bindings stay unchanged. Not registry actions:
+    // the chords are canvas-fixed and the TUI-facing registry would otherwise
     // list chords the TUI never routes.
     KeyPolicyEntry {
-        name: "gui_collapse_panel",
+        name: "transport_collapse_panel",
         global: true,
-        binding: KeyPolicyBinding::GuiCollapsePanel,
+        binding: KeyPolicyBinding::TransportCollapsePanel,
         gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_fold_queue",
+        name: "transport_fold_queue",
         global: true,
-        binding: KeyPolicyBinding::GuiFoldQueue,
+        binding: KeyPolicyBinding::TransportFoldQueue,
         gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_cycle_subtitle",
+        name: "transport_cycle_subtitle",
         global: true,
-        binding: KeyPolicyBinding::GuiCycleSubtitle,
+        binding: KeyPolicyBinding::TransportCycleSubtitle,
         gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_queue_chooser_toggle",
+        name: "transport_queue_chooser_toggle",
         global: true,
-        binding: KeyPolicyBinding::GuiQueueChooserToggle,
+        binding: KeyPolicyBinding::TransportQueueChooserToggle,
         gate: KeyPolicyGate::TransportChipQueueTarget,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_new_queue",
+        name: "transport_new_queue",
         global: true,
-        binding: KeyPolicyBinding::GuiNewQueue,
+        binding: KeyPolicyBinding::TransportNewQueue,
         gate: KeyPolicyGate::TransportChipQueueTarget,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_close_queue",
+        name: "transport_close_queue",
         global: true,
-        binding: KeyPolicyBinding::GuiCloseQueue,
+        binding: KeyPolicyBinding::TransportCloseQueue,
         gate: KeyPolicyGate::TransportChipQueueTarget,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_queue_filter_open",
+        name: "transport_queue_filter_open",
         global: true,
-        binding: KeyPolicyBinding::GuiQueueFilterOpen,
+        binding: KeyPolicyBinding::TransportQueueFilterOpen,
         gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_open_target_chooser",
+        name: "transport_open_target_chooser",
         global: true,
-        binding: KeyPolicyBinding::GuiOpenTargetChooser,
+        binding: KeyPolicyBinding::TransportOpenTargetChooser,
         gate: KeyPolicyGate::TransportChipKeys,
         blocking: false,
     },

@@ -27,7 +27,7 @@ fn app_with_named_queues(local_items: Vec<EmbyItem>) -> App {
 fn a_resting_snapshot_fills_the_shown_view_and_not_the_current_queue() {
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
     while cmd_rx.try_recv().is_ok() {}
-    app.set_client_capabilities(gui_client_capabilities());
+    app.set_client_capabilities(transport_client_capabilities());
     app.adopt_named_queue_list(named_queue_list(), current());
 
     app.show_named_queue(resting());
@@ -116,7 +116,7 @@ fn sent_queue(cmd: &mbv_ctrl::CtrlCmd) -> Option<NamedQueueId> {
 /// a resting queue").
 #[test]
 fn an_enqueue_to_a_resting_queue_names_it() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     let tx = inject_local_events(&mut app);
     app.show_named_queue(resting());
     while cmd_rx.try_recv().is_ok() {}
@@ -154,7 +154,7 @@ fn an_enqueue_to_a_resting_queue_names_it() {
 /// `gui-queue-chooser` "Play a stopped queue").
 #[test]
 fn play_with_nothing_playing_starts_the_shown_queue() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     let tx = inject_local_events(&mut app);
     app.show_named_queue(resting());
     while cmd_rx.try_recv().is_ok() {}
@@ -182,7 +182,7 @@ fn play_with_nothing_playing_starts_the_shown_queue() {
 /// the queue it edited").
 #[test]
 fn undo_reaches_the_queue_it_edited() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     let tx = inject_local_events(&mut app);
     app.show_named_queue(resting());
     while cmd_rx.try_recv().is_ok() {}
@@ -248,7 +248,7 @@ fn a_tui_edit_names_no_queue() {
 /// entry resets the Queue active row and marks").
 #[test]
 fn showing_another_entry_resets_the_queue_presentation() {
-    let (mut app, home_cmd_rx) = gui_app_with_named_queues();
+    let (mut app, home_cmd_rx) = app_with_adopted_named_queues();
     adopt_current_queue(&mut app, &queue_with_start(&make_items(3), 1));
     while home_cmd_rx.try_recv().is_ok() {}
 
@@ -284,7 +284,7 @@ fn showing_another_entry_resets_the_queue_presentation() {
 /// close the Queue panel shows the current local queue).
 #[test]
 fn a_closed_shown_queue_returns_to_the_current_queue() {
-    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    let (mut app, _cmd_rx) = app_with_adopted_named_queues();
     app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&make_items(2)));
     app.show_named_queue(resting());
     app.queue_filter = "kid".to_string();
@@ -330,7 +330,7 @@ fn resting_state(items: &[EmbyItem], start_index: Option<usize>) -> UnifiedQueue
 /// snapshot's start slot and never the playing queue's index (design D7, D9).
 #[test]
 fn a_resting_queue_never_focuses_the_playing_queue_s_index() {
-    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    let (mut app, _cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_state(&make_items(3), Some(2)));
 
@@ -361,7 +361,7 @@ fn play_next_on_a_resting_queue_reaches_it(
     #[case] moved: usize,
     #[case] expected_to: usize,
 ) {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_state(&make_items(3), start_index));
     drain_commands(&cmd_rx);
@@ -409,7 +409,7 @@ fn replacement_of(items: &[EmbyItem]) -> PendingQueueAction {
 /// replaced SHALL apply to the shown queue").
 #[test]
 fn a_populated_resting_queue_asks_before_the_replacement() {
-    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    let (mut app, _cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&make_items(2)));
     adopt_current_queue(&mut app, &emby_unified_state(&[], 0));
@@ -433,7 +433,7 @@ fn a_populated_resting_queue_asks_before_the_replacement() {
 /// same requirement).
 #[test]
 fn an_empty_resting_queue_takes_the_replacement_without_asking() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&[]));
     adopt_current_queue(&mut app, &emby_unified_state(&make_items(3), 0));
@@ -461,7 +461,7 @@ fn an_empty_resting_queue_takes_the_replacement_without_asking() {
 /// edits and the replacement discards the shown resting queue instead.
 #[test]
 fn a_resting_queue_replacement_skips_the_current_queue_save_prompt() {
-    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&[]));
     adopt_current_queue(&mut app, &emby_unified_state(&make_items(3), 0));

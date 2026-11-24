@@ -23,7 +23,7 @@ use mbv_emby_model::EmbyItem;
 /// Client's core owns. `pub` because a dependent Client's test scripts one
 /// onto that channel, and because the core's channel carries it.
 #[derive(Debug)]
-pub enum GuiClientEvent {
+pub enum LibraryFetchEvent {
     /// One group's album list landed.
     GroupAlbums {
         lib_idx: usize,
@@ -48,22 +48,22 @@ pub enum GuiClientEvent {
 /// result queued. The waker is a clone of the `App`'s shared handle, so it
 /// reaches the callback the Client installed at start.
 #[derive(Debug)]
-pub struct GuiClientEventSender {
-    tx: mpsc::Sender<GuiClientEvent>,
+pub struct LibraryFetchEventSender {
+    tx: mpsc::Sender<LibraryFetchEvent>,
     waker: ClientWaker,
 }
 
-impl GuiClientEventSender {
+impl LibraryFetchEventSender {
     /// Send one result and wake the Client. A send with no live receiver is
     /// dropped: no Client is left to tell.
-    pub fn send(&self, event: GuiClientEvent) {
+    pub fn send(&self, event: LibraryFetchEvent) {
         if self.tx.send(event).is_ok() {
             self.waker.wake();
         }
     }
 }
 
-impl Clone for GuiClientEventSender {
+impl Clone for LibraryFetchEventSender {
     fn clone(&self) -> Self {
         Self {
             tx: self.tx.clone(),
@@ -75,32 +75,32 @@ impl Clone for GuiClientEventSender {
 /// The Client-only fetch channel: the worker senders, and the receiver the
 /// `App` that owns it drains.
 #[derive(Debug)]
-pub struct GuiClientEvents {
-    sender: GuiClientEventSender,
+pub(crate) struct LibraryFetchEvents {
+    sender: LibraryFetchEventSender,
     /// The receiver. The `App` holds the one copy, and every GUI Client core
     /// over that `App` drains this channel through it.
-    rx: Mutex<mpsc::Receiver<GuiClientEvent>>,
+    rx: Mutex<mpsc::Receiver<LibraryFetchEvent>>,
 }
 
-impl GuiClientEvents {
+impl LibraryFetchEvents {
     /// A fresh channel with no event in flight. A result wakes the Client
     /// through `waker`, as a library event does.
     #[must_use]
     pub fn new(waker: ClientWaker) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
-            sender: GuiClientEventSender { tx, waker },
+            sender: LibraryFetchEventSender { tx, waker },
             rx: Mutex::new(rx),
         }
     }
 
     /// The sender a worker clones.
-    pub fn sender(&self) -> GuiClientEventSender {
+    pub fn sender(&self) -> LibraryFetchEventSender {
         self.sender.clone()
     }
 
     /// Take one queued result, or `None` when none is queued.
-    pub fn try_take(&self) -> Option<GuiClientEvent> {
+    pub(crate) fn try_take(&self) -> Option<LibraryFetchEvent> {
         self.lock_receiver().try_recv().ok()
     }
 
@@ -111,13 +111,13 @@ impl GuiClientEvents {
     pub(crate) fn wait_take_for_test(
         &self,
         timeout: std::time::Duration,
-    ) -> Option<GuiClientEvent> {
+    ) -> Option<LibraryFetchEvent> {
         self.lock_receiver().recv_timeout(timeout).ok()
     }
 
     /// The receiver, recovered from a poisoned lock: a poisoned channel must
     /// never silence a landed fetch.
-    fn lock_receiver(&self) -> std::sync::MutexGuard<'_, mpsc::Receiver<GuiClientEvent>> {
+    fn lock_receiver(&self) -> std::sync::MutexGuard<'_, mpsc::Receiver<LibraryFetchEvent>> {
         self.rx.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }

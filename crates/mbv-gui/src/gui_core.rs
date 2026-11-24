@@ -93,7 +93,7 @@ impl GuiCore {
     #[must_use]
     pub fn new(app: App) -> Self {
         let player_auto_hide =
-            mbv_client_core::state::construct::gui_player_auto_hide_from_prefs(&App::load_prefs());
+            self::gui_client_state::player_auto_hide_from_prefs(&App::load_prefs());
         Self {
             app,
             gui: GuiClientState::new(player_auto_hide),
@@ -144,7 +144,7 @@ impl GuiCore {
     /// it for. The channel lives on the owned `App`, so a result a worker must
     /// send outlives any one `GuiCore`.
     pub fn drain_client_event(&mut self) -> bool {
-        let Some(event) = self.app.take_one_gui_client_event() else {
+        let Some(event) = self.app.take_one_library_fetch_event() else {
             return false;
         };
         install_client_event(&mut self.gui, event);

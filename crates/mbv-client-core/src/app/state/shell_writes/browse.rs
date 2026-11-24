@@ -98,7 +98,7 @@ impl App {
 
     /// Retire the feed/home-video group's outstanding-fetch mark at `index`
     /// when it names `selection`: that target's fetch has returned.
-    pub fn retire_feed_home_video_fetch(
+    pub(crate) fn retire_feed_home_video_fetch(
         &mut self,
         index: usize,
         selection: &mbv_ui_model::feed::FeedHomeVideoSelection,

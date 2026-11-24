@@ -151,7 +151,7 @@ impl App {
     /// remaining time — and the local zone itself, so no clock string crosses
     /// the Owner edge and a paused window's time still moves.
     #[must_use]
-    pub fn gui_queue_end_offsets(&self) -> QueueEndOffsets {
+    pub fn queue_end_offsets(&self) -> QueueEndOffsets {
         let slots = self.playback_queue().slots();
         let Some(index) = self.displayed_active_index(slots) else {
             return QueueEndOffsets::default();

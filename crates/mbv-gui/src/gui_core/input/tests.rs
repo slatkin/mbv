@@ -10,7 +10,7 @@ use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::gui_core::input::GuiInput;
 use mbv_client_core::{
-    gui_client_capabilities, make_app_stub, make_items, make_remote_app_stub_with_cmd_rx,
+    make_app_stub, make_items, make_remote_app_stub_with_cmd_rx, transport_client_capabilities,
 };
 
 /// Stands in for the GUI core thread's drain of the two modal requests
@@ -117,7 +117,7 @@ fn queue_row_activate_plays_the_clicked_row_review_u17_2() {
 fn gui_context_z_toggles_the_panel_collapse() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
 
     assert!(!gui_key(
         &mut core,
@@ -140,7 +140,7 @@ fn gui_context_z_toggles_the_panel_collapse() {
 fn the_gui_panel_focus_chord_changes_no_panel_focus() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app.set_panel_focus(PanelFocus::Queue);
 
     assert!(!gui_key(
@@ -157,7 +157,7 @@ fn the_gui_panel_focus_chord_changes_no_panel_focus() {
 fn gui_context_q_toggles_the_queue_fold() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
 
     assert!(!gui_key(
         &mut core,
@@ -174,7 +174,7 @@ fn gui_context_q_toggles_the_queue_fold() {
 fn gui_context_c_cycles_the_subtitle_track() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     // The stub player starts active; the subtitle cycle's active path needs
     // tracks the stub does not carry, so the test drives the idle path the
     // mode cycle lives on.
@@ -202,7 +202,7 @@ fn gui_context_c_cycles_the_subtitle_track() {
 fn gui_queue_filter_opens_types_and_closes() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     let key = |c: char| GuiInput::Key(KeyEvent::new(Key::Char(c), KeyModifiers::NONE));
 
     gui_key(&mut core, key('/'));
@@ -426,7 +426,7 @@ fn track_popover_choose_sends_the_track_switch() {
     let _state_dir = mbv_client_core::config::TestStateDirGuard::new();
     let (mut core, cmd_rx) = core_with_cmd_rx();
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app.edit_player_status_for_test(|status| {
         status.active = true;
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
@@ -473,7 +473,7 @@ fn track_popover_choose_sends_the_track_switch() {
 fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app.edit_player_status_for_test(|status| {
         status.active = true;
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
@@ -514,7 +514,7 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
 fn seek_relative_request_matches_the_seek_chords() {
     let (mut core, cmd_rx) = core_with_cmd_rx();
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
 
     core.app
         .handle_playback_request(&PlaybackRequest::SeekRelative(-10.0));
@@ -542,7 +542,7 @@ fn seek_relative_request_matches_the_seek_chords() {
 fn gui_context_popover_chords_toggle_the_matching_popover() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app.edit_player_status_for_test(|status| {
         status.active = true;
         status.audio_tracks = vec![(1, "Stereo".to_string())];
@@ -579,7 +579,7 @@ fn gui_context_popover_chords_toggle_the_matching_popover() {
 fn queue_intent_clear_opens_the_confirm_overlay_and_enter_clears_the_queue() {
     let (mut core, cmd_rx) = core_with_cmd_rx();
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app
         .adopt_playing_queue_emby_items_for_test(make_items(2), 0);
 
@@ -622,7 +622,7 @@ fn queue_intent_clear_opens_the_confirm_overlay_and_enter_clears_the_queue() {
 fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app
         .adopt_playing_queue_emby_items_for_test(make_items(2), 0);
     let row = core
@@ -666,7 +666,7 @@ fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
 fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
     let (mut core, cmd_rx) = core_with_cmd_rx();
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app
         .adopt_playing_queue_emby_items_for_test(make_items(3), 0);
     // The stub's player reports slot 0 as the now-playing row, whose removal
@@ -718,7 +718,7 @@ fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
 fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
     let mut core = GuiCore::new(make_app_stub());
     core.app
-        .set_client_capabilities_for_test(gui_client_capabilities());
+        .set_client_capabilities_for_test(transport_client_capabilities());
     core.app
         .adopt_playing_queue_emby_items_for_test(make_items(2), 0);
 

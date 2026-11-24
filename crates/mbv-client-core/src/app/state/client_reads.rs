@@ -1,14 +1,15 @@
-//! The core facts only the GUI Client reads.
+//! The core facts only one Client reads.
 //!
 //! A Client reaches no `App` field (change `split-tui-gui-clients`, design
-//! D4/D4b rule 1). The facts here are core state that only the GUI Client's
-//! production code asks for: the shown queue entry, the Named-queue list, the
+//! D4/D4b rule 1). The facts here are core state that only one Client's
+//! production code asks for — the window Client, whose own core holds no
+//! mirror of them: the shown queue entry, the Named-queue list, the
 //! queue-shuffle and Audiobookshelf-admission capabilities, the queue
 //! filter's held bit, the peer queue's length, the configuration's autoload
 //! rule, the TV series-detail and Upcoming facts, and — in `browse` — the
 //! Emby-library and Audiobookshelf catalog facts. A fact both Clients read
 //! lives in `shell_reads` instead; the state itself stays in the core, and a
-//! write to it goes through `gui_writes` or the shared write module.
+//! write to it goes through `client_writes` or the shared write module.
 
 mod browse;
 

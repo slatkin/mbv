@@ -18,7 +18,7 @@ fn a_gui_client_connected_to_a_peer_shows_a_local_queue() {
     let sess = make_session("peer-host", "mbv");
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
     assert!(app.suspended_local.is_some(), "the local link stays held");
-    app.set_client_capabilities(gui_client_capabilities());
+    app.set_client_capabilities(transport_client_capabilities());
 
     app.show_named_queue(current());
 
@@ -64,7 +64,7 @@ const ANSWERED_POSITION: i64 = 99;
 /// `gui-queue-chooser` "The player panel follows the shown entry's owner").
 #[test]
 fn a_local_edit_answer_updates_the_local_owner_status_and_not_the_peer() {
-    let (mut app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, _home_cmd_rx, _peer_cmd_rx) = app_with_connected_peer();
     app.show_named_queue(current());
     let tx = inject_home_events(&mut app);
     let mut answered = emby_unified_state(&make_items(3), 0);
@@ -95,7 +95,7 @@ fn a_local_edit_answer_updates_the_local_owner_status_and_not_the_peer() {
 /// Owner's (design D7, ADR 0041).
 #[test]
 fn a_peer_snapshot_never_fills_the_shown_local_queue() {
-    let (mut app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, _home_cmd_rx, _peer_cmd_rx) = app_with_connected_peer();
     app.show_named_queue(current());
     app.local_view.adopt_source(mbv_queue::QueueSource::Album);
 
@@ -126,7 +126,7 @@ fn a_peer_snapshot_never_fills_the_shown_local_queue() {
 /// `gui-queue-chooser` "A resting queue is shown while another plays").
 #[test]
 fn a_shown_resting_queue_pauses_the_local_owner_not_the_peer() {
-    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
     app.show_named_queue(resting());
     assert!(
         matches!(
@@ -154,7 +154,7 @@ fn a_shown_resting_queue_pauses_the_local_owner_not_the_peer() {
 /// `gui-queue-chooser` "A peer entry is shown").
 #[test]
 fn a_shown_peer_entry_follows_the_peer_playback() {
-    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
 
     assert_eq!(app.effective_playback_state().position_ticks, PEER_POSITION);
@@ -192,7 +192,7 @@ fn confirm_key() -> mbv_ui_msg::KeyEvent {
 /// `Stopped` is what completes the deferred removal (design D7).
 #[test]
 fn confirming_the_now_playing_local_row_stops_the_local_owner_not_the_peer() {
-    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
     app.show_named_queue(current());
     drain_commands(&home_cmd_rx);
     let tx = inject_home_events(&mut app);
@@ -259,7 +259,7 @@ fn confirming_the_now_playing_local_row_stops_the_local_owner_not_the_peer() {
 /// remove wait for that owner's `Stopped` (design D7).
 #[test]
 fn confirming_the_now_playing_local_selection_stops_the_local_owner_not_the_peer() {
-    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
     app.show_named_queue(current());
     drain_commands(&home_cmd_rx);
     let slot_ids = vec![
@@ -296,7 +296,7 @@ fn confirming_the_now_playing_local_selection_stops_the_local_owner_not_the_peer
 /// switches reach the local Owner (design D7 of `gui-named-queues`).
 #[test]
 fn a_chosen_track_reaches_the_shown_owner_not_the_active_link() {
-    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
     app.show_named_queue(current());
 
     app.set_audio_track(3);
@@ -331,7 +331,7 @@ fn a_chosen_track_reaches_the_shown_owner_not_the_active_link() {
 /// `gui-named-queues`).
 #[test]
 fn a_resting_queue_play_mutes_the_shown_local_owner_not_the_peer() {
-    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
     app.show_named_queue(resting());
     drain_commands(&home_cmd_rx);
     app.mute_on = true;
@@ -394,7 +394,7 @@ fn the_tui_panel_and_transport_keep_the_connection_rule() {
 /// entry" — "The connection is lost").
 #[test]
 fn the_connection_is_lost_shows_the_current_queue() {
-    let (mut app, home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    let (mut app, home_cmd_rx, _peer_cmd_rx) = app_with_connected_peer();
     while home_cmd_rx.try_recv().is_ok() {}
     adopt_current_queue(&mut app, &queue_with_start(&make_items(3), 1));
     app.queue_filter = "kid".to_string();

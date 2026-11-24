@@ -73,7 +73,7 @@ impl App {
     /// one.
     #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn gui_setup_server_url_for_test(&self) -> Option<String> {
+    pub fn setup_server_url_for_test(&self) -> Option<String> {
         self.setup
             .emby_setup_form
             .as_ref()
@@ -90,7 +90,7 @@ impl App {
     /// (row 5.2).
     #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn gui_setup_busy_for_test(&self) -> bool {
+    pub fn setup_busy_for_test(&self) -> bool {
         self.setup
             .emby_setup_form
             .as_ref()
@@ -107,7 +107,7 @@ impl App {
     /// Whether the open setup form started a setup generation (row 5.2).
     #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn gui_setup_generation_started_for_test(&self) -> bool {
+    pub fn setup_generation_started_for_test(&self) -> bool {
         self.setup
             .emby_setup_form
             .as_ref()

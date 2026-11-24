@@ -1,8 +1,9 @@
 mod app_stub;
 
 /// The parked `App` a Client wrapper moves out of position while it holds the
-/// live one in a `GuiCore` (design D4a of `decouple-client-core`). It is a stub
-/// construction, so it compiles in every build: shipped wrappers park it too.
+/// live one in its own core (design D4a of `decouple-client-core`). It is a
+/// stub construction, so it compiles in every build: shipped wrappers park it
+/// too.
 pub use self::app_stub::handoff_app;
 
 mod client_core;
@@ -20,9 +21,9 @@ pub(crate) use self::app_stub::{HOME_POSITION, PEER_POSITION};
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use self::app_stub::{
-    SeededAbsBook, close_initial_services, current, emby_unified_state, gui_app_with_named_queues,
-    gui_app_with_peer, inject_local_events, install_test_emby, live_owner_channel, make_app_stub,
-    make_audio_only_remote_app_stub_with_cmd_rx, make_local_daemon_app_stub,
+    SeededAbsBook, app_with_adopted_named_queues, app_with_connected_peer, close_initial_services,
+    current, emby_unified_state, inject_local_events, install_test_emby, live_owner_channel,
+    make_app_stub, make_audio_only_remote_app_stub_with_cmd_rx, make_local_daemon_app_stub,
     make_local_daemon_app_stub_with_cmd_rx, make_local_daemon_app_stub_with_cmd_rx_and_compat,
     make_remote_app_stub, make_remote_app_stub_at_index, make_remote_app_stub_with_cmd_rx,
     named_queue_list, op_answer, remote_stub_config, resting, resting_snapshot,
@@ -30,13 +31,15 @@ pub use self::app_stub::{
 };
 /// The stub fixtures the crate root re-exports for a Client's own test: the
 /// Emby movie library a Service-seam leak would mutate, the card cache keys
-/// the shell seeds a cached image under, and the entries the GUI queue row
-/// menu opens with.
+/// the shell seeds a cached image under, the server-bytes stand-in a test
+/// seeds a cached image with, and the entries the GUI queue row menu opens
+/// with.
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use self::app_stub::{
-    card_cache_key_for_id_for_test, gui_client_capabilities, key_chord_for_test, make_audio_items,
-    make_items, push_movies_library_for_test, queue_card_cache_key_for_test, queue_target_for_test,
+    card_cache_key_for_id_for_test, key_chord_for_test, make_audio_items, make_items,
+    push_movies_library_for_test, queue_card_cache_key_for_test, queue_target_for_test,
+    test_source, transport_client_capabilities,
 };
 #[cfg(any(test, feature = "test"))]
 pub use self::app_stub::{
@@ -48,12 +51,17 @@ pub use self::app_stub::{
     stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
     stub_app_with_track_choices, stub_app_with_unsaved_queue,
 };
+/// The artist-artwork cache key a Client's test names when it asserts the
+/// shared image boundary's key for a typed artist artwork request.
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
+pub use self::state::music_artist_detail::artist_artwork_cache_key;
 mod image_cache;
 mod infra;
 pub mod input;
 pub mod owner_link;
 pub mod pin;
-pub mod queue_card_artwork;
+pub(crate) mod queue_card_artwork;
 mod queue_footer_projection;
 pub mod queue_playback_projection;
 mod queue_summary_projection;
@@ -92,7 +100,7 @@ pub use self::queue_playback_projection::{
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
 pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
-pub use self::state::gui_client_events::GuiClientEvent;
+pub use self::state::library_fetch_events::LibraryFetchEvent;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;
 pub(in crate::app) use self::waking_relay::spawn_waking_relay;

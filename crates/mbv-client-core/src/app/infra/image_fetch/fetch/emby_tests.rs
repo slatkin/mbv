@@ -48,7 +48,7 @@ fn an_interrupted_kind_stops_the_image_chain() {
 /// the bytes it decoded, unchanged, with the MIME type they declare.
 #[test]
 fn a_fetched_image_carries_the_servers_bytes_unchanged() {
-    let bytes = crate::app::queue_card_artwork::test_source(&image(4, 4)).bytes;
+    let bytes = crate::app::app_stub::test_source(&image(4, 4)).bytes;
 
     let outcome = decode_fetched(bytes.clone(), ImageDecode::Pixels);
 
@@ -68,7 +68,7 @@ fn a_fetch_decodes_pixels_only_in_a_pixel_client(
     #[case] decode: ImageDecode,
     #[case] decoded: bool,
 ) {
-    let bytes = crate::app::queue_card_artwork::test_source(&image(4, 3)).bytes;
+    let bytes = crate::app::app_stub::test_source(&image(4, 3)).bytes;
 
     let outcome = decode_fetched(bytes.clone(), decode);
 
@@ -86,7 +86,7 @@ fn a_fetch_decodes_pixels_only_in_a_pixel_client(
 fn a_source_only_completion_caches_the_source_and_no_pixels() {
     const KEY: &str = "gui-card:P";
     let mut app = make_app_stub();
-    let bytes = crate::app::queue_card_artwork::test_source(&image(4, 3)).bytes;
+    let bytes = crate::app::app_stub::test_source(&image(4, 3)).bytes;
     let outcome = decode_fetched(bytes, ImageDecode::SourceOnly);
     app.images
         .card_image_tx()

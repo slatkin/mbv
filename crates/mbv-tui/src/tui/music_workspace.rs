@@ -429,13 +429,13 @@ mod tests {
             "the push dispatches the typed track request with the full identity"
         );
         assert!(
-            model.app.image_loading(
-                &mbv_client_core::state::music_artist_detail::artist_artwork_cache_key(
+            model
+                .app
+                .image_loading(&mbv_client_core::artist_artwork_cache_key(
                     &destination,
                     generation.value(),
                     "artist-alpha",
-                )
-            ),
+                )),
             "the typed artwork request walks the shared image boundary by stable ID"
         );
 
