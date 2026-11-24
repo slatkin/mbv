@@ -28,11 +28,12 @@ pub struct TabWindow {
     pub right: bool,
 }
 
-/// The painted width of one tab. Every tab measures at the current tab's
-/// bold weight, so a change of the current tab never moves the window.
+/// The painted width of one tab: the mono face at the bar's one tab size,
+/// uppercased as the strip paints it. Every tab measures the same way, so a
+/// change of the current tab never moves the window.
 #[must_use]
 pub fn tab_width(tab: &GuiLibraryTabFrame) -> f32 {
-    let style = TextStyle::sans(14.0, 700.0).tracking(0.06);
+    let style = TextStyle::mono(16.0, 600.0).tracking(0.08);
     text_width(&tab.label.to_uppercase(), &style) + TAB_CHROME
 }
 

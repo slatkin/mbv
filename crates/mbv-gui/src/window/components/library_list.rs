@@ -44,7 +44,9 @@ use crate::window::components::tree_guide::{
     tail_divider_style,
 };
 use crate::window::components::tree_hint::TreeHint;
-use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
+use crate::window::components::tree_row::{
+    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text, tree_row_text,
+};
 use crate::window::components::typed_text::TypedText;
 use crate::window::input::f32_from_f64;
 use crate::window::library::list::{
@@ -102,7 +104,7 @@ fn paint_track_row(
     // The leaf inset clears both guides that pass through the row
     // (gui-tree-indent-guides design D2, D3).
     let mut style = format!(
-        "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
+        "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {LEAF_ROW_FONT_PX}px; cursor: pointer;",
         if picked_row { "4px" } else { "0" }
     );
     // The expanded area's fill under an open artist; the picked album keeps the
@@ -147,11 +149,14 @@ fn paint_track_row(
                 style: "width: 18px; font-size: 12px; color: var(--canvas-ordinal);",
                 "{number}"
             }
-            Truncate {
-                text: name.clone(),
-                class: "min-w-0 flex-1".to_owned(),
-                css: "color: var(--canvas-muted);".to_owned(),
-                style: tree_row_text(),
+            div {
+                class: "min-w-0 flex-1",
+                style: leaf_label_css(),
+                Truncate {
+                    text: name.clone(),
+                    css: "color: var(--canvas-muted);".to_owned(),
+                    style: leaf_row_text(),
+                }
             }
             span {
                 class: "flex-none font-mono tabular-nums",

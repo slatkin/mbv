@@ -37,7 +37,9 @@ use crate::window::components::tree_guide::{
     GuideTone, PLAYLIST_GUIDE_X, PLAYLIST_LABEL_X, TreeGuide, parent_guide_start,
 };
 use crate::window::components::tree_hint::TreeHint;
-use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
+use crate::window::components::tree_row::{
+    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text, tree_row_text,
+};
 use crate::window::input::f32_from_f64;
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
@@ -535,7 +537,7 @@ fn items_block(
                             key: "{item.id}",
                             "type": "button",
                             class: "relative flex w-full items-center text-left",
-                            style: row_style(selected, 24.0),
+                            style: item_row_style(selected),
                             "data-playlists-row": "item",
                             onclick: move |_| press_pick.set(Some(press.clone())),
                             ondoubleclick: move |_| {
@@ -548,11 +550,14 @@ fn items_block(
                             oncontextmenu: move |event: MouseEvent| {
                                 open_menu(&event, context.clone(), pick, menu);
                             },
-                            Truncate {
-                                text: item.name.clone(),
-                                class: "min-w-0 flex-1".to_owned(),
-                                style: tree_row_text(),
-                                css: "color: var(--canvas-text);".to_owned(),
+                            div {
+                                class: "min-w-0 flex-1",
+                                style: leaf_label_css(),
+                                Truncate {
+                                    text: item.name.clone(),
+                                    style: leaf_row_text(),
+                                    css: "color: var(--canvas-text);".to_owned(),
+                                }
                             }
                             TreeGuide {
                                 x: PLAYLIST_GUIDE_X,
@@ -579,12 +584,30 @@ fn row_style(selected: bool, indent: f32) -> String {
     format!(
         "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 {PLAYLIST_LABEL_X}px 0 {}px; border: 0; border-radius: 6px; font-size: {TREE_ROW_FONT_PX}px; background: {}; cursor: pointer;",
         PLAYLIST_LABEL_X + indent,
-        if selected {
-            "var(--canvas-selected)"
-        } else {
-            "none"
-        },
+        row_fill(selected),
     )
+}
+
+/// The indent an item row takes under its playlist, in pixels.
+const ITEM_INDENT_PX: f32 = 24.0;
+
+/// One item row's box: a leaf of the tree, so it paints the leaf look at
+/// [`ITEM_INDENT_PX`] under its open playlist, filled while picked.
+fn item_row_style(selected: bool) -> String {
+    format!(
+        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 {PLAYLIST_LABEL_X}px 0 {}px; border: 0; border-radius: 6px; font-size: {LEAF_ROW_FONT_PX}px; background: {}; cursor: pointer;",
+        PLAYLIST_LABEL_X + ITEM_INDENT_PX,
+        row_fill(selected),
+    )
+}
+
+/// A row's fill: the selection bar's fill while the row is picked.
+fn row_fill(selected: bool) -> &'static str {
+    if selected {
+        "var(--canvas-selected)"
+    } else {
+        "none"
+    }
 }
 
 /// The hero: the picked row's title and its control set, or a hint while no

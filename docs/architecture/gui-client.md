@@ -358,7 +358,7 @@ provides both as a `Clock`.
 
 The stylesheet is `assets/app.css`. It imports Tailwind CSS v4 and the vendored
 shadcn and `tw-animate-css` files (MIT, in `assets/vendor/`). It scans
-`src/window` for classes, and it declares the six `@font-face` rules. `make
+`src/window` for classes, and it declares the seven `@font-face` rules. `make
 gui-css` builds `assets/app.generated.css` from it with the Tailwind standalone
 CLI, release v4.3.5. The developer installs the release asset
 `tailwindcss-linux-x64` (SHA-256
@@ -373,7 +373,7 @@ installed.
 `Truncate` (`src/window/truncate.rs`) replaces the `truncate` text box. It keeps
 the box's `MountedData`. When the full text does not fit the content width, an
 effect writes a cut text that ends in `…`. The measure uses one process-wide
-`parley` font context with the six bundled faces, and a `TextStyle` that each
+`parley` font context with the seven bundled faces, and a `TextStyle` that each
 call site passes with the family, size, weight, and letter spacing of its class
 string. A binary search over grapheme boundaries finds the longest prefix that
 fits with the ellipsis. The `truncate` class stays, so the box still clips. A
@@ -473,8 +473,10 @@ for a parent line).
 ## Text and icons
 
 The window bundles the two canvas faces (design D8): IBM Plex Sans at
-weights 400, 500, and 600 for text, and JetBrains Mono at the same weights
-for times, key hints, chips, and counters, with tabular figures. The latin
+weights 400, 500, and 600 for text, and JetBrains Mono at those weights plus
+700 for the now-playing title (user request 2026-11-24), for times, key hints,
+chips, counters, and the queue's and Library's caps runs, with tabular figures.
+The latin
 woff2 subsets of `@fontsource/ibm-plex-sans` and `@fontsource/jetbrains-mono`
 (5.3.0) sit in `assets/fonts/`, and `src/window/net.rs` compiles them into the
 binary with `include_bytes!` and answers `mbv-asset://localhost/font/<file>`.

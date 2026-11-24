@@ -167,8 +167,8 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     // The current tab's run: the tab bar's underline role in both strokes.
     let underline = role_var(GuiRole::TabSelectedUnderline);
 
-    // The Home icon's and the tabs' painted colours and the current tab's
-    // weight, resolved before the markup. The icon tabs mark active in
+    // The Home icon's and the tabs' painted colours, resolved before the
+    // markup. The icon tabs mark active in
     // mauve — the TabSelectedUnderline role — because the near-white
     // heading colour reads too close to the muted resting grey
     // (user request 2026-11-21).
@@ -268,7 +268,6 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                         let current = Some(tab.position) == props.current_tab;
                         let position = tab.position;
                         let label = tab.label.clone();
-                        let weight = if current { "700" } else { "500" };
                         let color = if current {
                             canvas_var("heading")
                         } else {
@@ -281,7 +280,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                                 key: "{position}",
                                 "type": "button",
                                 class: "flex items-center uppercase",
-                                style: "height: 56px; padding: 0 12px; font-size: 14px; font-weight: {weight}; letter-spacing: 0.06em; color: {color};",
+                                style: "height: 56px; padding: 0 12px; font-family: var(--font-mono); font-size: 16px; font-weight: 600; letter-spacing: 0.08em; color: {color};",
                                 "aria-current": current.then_some("page"),
                                 "data-library-tab": "{position}",
                                 onclick: move |_| open_destination(&tab_library, position, tab_opened),

@@ -1,7 +1,7 @@
 //! The ellipsis in mbv (D12 of `replace-tauri-with-blitz`): the `Truncate`
 //! component and the pure cut function [`fit_text`] behind it. Blitz has no
 //! `text-overflow: ellipsis` (gap G1), so mbv measures the text itself over
-//! one process-wide parley context holding the six bundled faces, and writes
+//! one process-wide parley context holding the seven bundled faces, and writes
 //! a cut text that ends in `…` when the full text does not fit.
 //!
 //! A box mounts unmeasured: its first measure can read the layout from before
@@ -31,7 +31,8 @@ pub struct TextStyle {
     family: Family,
     /// The font size, in CSS pixels.
     size: f32,
-    /// The CSS font weight (400, 500, 600 for the bundled faces).
+    /// The CSS font weight: 400, 500, or 600 on either face, or 700 on the mono
+    /// face.
     weight: f32,
     /// The letter spacing, in em, as a Tailwind `tracking-*` value names it.
     letter_spacing: f32,
@@ -99,7 +100,7 @@ struct Measure {
 static MEASURE: LazyLock<Mutex<Measure>> = LazyLock::new(|| Mutex::new(Measure::new()));
 
 impl Measure {
-    /// A context with the six bundled faces (D11) decoded from their WOFF2
+    /// A context with the seven bundled faces (D11) decoded from their WOFF2
     /// bytes.
     fn new() -> Self {
         let mut fonts = parley::FontContext::default();
@@ -133,7 +134,7 @@ impl Measure {
     }
 }
 
-/// The six bundled face files (D11), as `net.rs` serves them.
+/// The seven bundled face files (D11), as `net.rs` serves them.
 const FACE_FILES: &[&str] = &[
     "ibm-plex-sans-latin-400-normal.woff2",
     "ibm-plex-sans-latin-500-normal.woff2",
@@ -141,6 +142,7 @@ const FACE_FILES: &[&str] = &[
     "jetbrains-mono-latin-400-normal.woff2",
     "jetbrains-mono-latin-500-normal.woff2",
     "jetbrains-mono-latin-600-normal.woff2",
+    "jetbrains-mono-latin-700-normal.woff2",
 ];
 
 /// The width of `text` at `style`, in CSS pixels, on one line: the measure

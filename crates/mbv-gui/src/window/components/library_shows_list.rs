@@ -44,7 +44,9 @@ use crate::window::components::tree_guide::{
     tail_divider_style,
 };
 use crate::window::components::tree_hint::TreeHint;
-use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
+use crate::window::components::tree_row::{
+    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text,
+};
 use crate::window::input::f32_from_f64;
 use crate::window::library::episode::is_played_episode;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
@@ -365,7 +367,7 @@ fn paint_shows_episode(
     };
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
-        "height: {}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
+        "height: {}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: {LEAF_ROW_FONT_PX}px; cursor: pointer;",
         episode.height,
         row_inset(row)
     );
@@ -410,12 +412,15 @@ fn paint_shows_episode(
                 "data-library-shows-episode-number": "",
                 "{episode.number}"
             }
-            Truncate {
-                text: episode.title.clone(),
-                class: "min-w-0 flex-1".to_owned(),
-                css: format!("color: {name_color};"),
-                style: tree_row_text(),
-                attrs: vec![Attribute::new("data-library-shows-title", "", None, false)],
+            div {
+                class: "min-w-0 flex-1",
+                style: leaf_label_css(),
+                Truncate {
+                    text: episode.title.clone(),
+                    css: format!("color: {name_color};"),
+                    style: leaf_row_text(),
+                    attrs: vec![Attribute::new("data-library-shows-title", "", None, false)],
+                }
             }
             if !episode.duration.is_empty() {
                 span {

@@ -21,11 +21,12 @@
    is what the canvas draws. */
 @custom-variant hover (&:hover);
 
-/* The six Latin faces the binary bundles (D11), served in process through
+/* The seven Latin faces the binary bundles (D11), served in process through
    the net provider's `mbv-asset` font route (D7). The package CSS of the earlier
    build resolved these through `@fontsource` relative URLs; the Dioxus window
    names the route instead. Weight 400 covers 'normal', 500 and 600 carry
-   the medium and semibold weights the Svelte class strings named. */
+   the medium and semibold weights the Svelte class strings named, and the mono
+   face adds 700 for the now-playing title (user request 2026-11-24). */
 @font-face {
 	font-family: 'IBM Plex Sans';
 	font-style: normal;
@@ -67,6 +68,13 @@
 	font-display: swap;
 	font-weight: 600;
 	src: url('mbv-asset://localhost/font/jetbrains-mono-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'JetBrains Mono';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 700;
+	src: url('mbv-asset://localhost/font/jetbrains-mono-latin-700-normal.woff2') format('woff2');
 }
 
 /* The mbv palette arrives in `mbv://frame` themes (design D7): each role
