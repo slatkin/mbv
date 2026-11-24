@@ -1,13 +1,16 @@
-//! The `mbv` library: the shell `App`, the Client core tick that every Client
-//! drives, the central keyboard router, and the Client-side Owner link
-//! (design D2 and D7 of `extract-client-core`).
+//! The TUI Client (`mbv`): the terminal edge over `mbv-client-core`.
 //!
-//! The `mbv` binary is a thin `main` over [`run`], and a GUI Client
-//! program shares the rest of this surface: the core tick, the router
-//! entry, and the Owner find, start, and attach steps. The library still
-//! carries the TUI Client's dependencies — `ratatui`, `crossterm`, and
-//! `TuiRealm` — so any Client that links it links them; it never carries a
-//! window stack.
+//! This crate owns the TuiRealm shell `Model` and its `Application`, the
+//! terminal setup and the input edge (`neutral_edge`) that mounts the shared
+//! Keyboard Router, the listener port (`input_port`), the `--pin` pinned-panel
+//! launch, `startup`, and the Owner host in `local_daemon`. It links
+//! `mbv-client-core` for the shared state and rules and never links
+//! `mbv-gui`. It re-exports the core surface its modules and tests name, so a
+//! TUI module reaches the core by one crate name.
+//!
+//! The `mbv` binary is a thin `main` over [`run`]. The terminal toolkit stays
+//! here: `ratatui`, `crossterm`, `TuiRealm`, and the terminal image protocol.
+//! No window stack enters this crate.
 
 mod local_daemon;
 mod owner_restart;
@@ -62,7 +65,7 @@ pub use mbv_client_core::test_seams::{
     DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
     DIRECT_CONNECT_TEST_LOCK, OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
 };
-/// The stub fixtures a Client's own test shares with the root package's:
+/// The stub fixtures a Client's own test shares with the core's:
 /// the Emby movie library a Service-seam leak would mutate, the card cache
 /// keys the shell seeds a cached image under, and the entries the GUI queue
 /// row menu opens with.

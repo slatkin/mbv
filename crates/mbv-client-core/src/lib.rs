@@ -6,8 +6,9 @@
 //! both Clients share. It names no terminal or window toolkit, so neither
 //! Client's dependencies reach the other's.
 //!
-//! The root package re-exports this surface under its own names until the
-//! Clients are separate crates (`2-split-tui-gui-clients` design D1 and D4c).
+//! The Clients are separate crates: `mbv-tui` and `mbv-gui` each depend on
+//! this crate and on neither the other. The root manifest is a virtual
+//! workspace with no package (`2-split-tui-gui-clients` design D1).
 
 mod app;
 
@@ -100,7 +101,7 @@ pub use self::app::{
     remote_stub_config, resting, resting_snapshot, seed_queue_row_menu_rows_for_test,
     seed_queue_shuffle_owner_for_test, test_source,
 };
-/// The stub fixtures the root package's and the GUI's tests share: the Emby
+/// The stub fixtures the TUI Client's and the GUI's tests share: the Emby
 /// movie library a Service-seam leak would mutate, the card cache keys the
 /// shell seeds a cached image under, and the entries the GUI queue row menu
 /// opens with.
