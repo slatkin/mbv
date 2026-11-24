@@ -8,11 +8,11 @@
 //! under `cfg(test)`, so a dependent crate's dev-dependency can enable it;
 //! the shipped builds never compile it.
 
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 use std::sync::{Arc, Mutex};
 
 use super::App;
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 use super::QueueView;
 
 /// The stub constructions over `App::build`, in their own child module so this
@@ -72,7 +72,7 @@ pub use self::built::make_app_stub;
 
 /// The GUI `sections` bench's bench-scale seeds (design D12 of
 /// `gui-change-driven-sections`), in their own child module.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 mod gui_scale;
 
 /// The capabilities a GUI Client presents (design D6a of
@@ -115,7 +115,7 @@ fn apply_app_stub_defaults(app: &mut App) {
 /// The `App` a Client's test drives, with `n` projected queue slots so a
 /// list surface has content. The slots are Emby movie stubs in canonical
 /// order, cursor at the first.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_queue(n: usize) -> App {
     let mut app = make_app_stub();
@@ -135,7 +135,7 @@ pub fn stub_app_with_queue(n: usize) -> App {
 /// receiver of the Owner commands it sends, and the events it injects. The
 /// Owner's two-queue list is adopted and its current queue shown, so the header
 /// controls act on a named entry (design D7 of `gui-named-queues`).
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_for_gui_client(
     n: usize,
@@ -177,7 +177,7 @@ pub fn stub_app_for_gui_client(
 /// row 6.5): a drag's release or a key move lands one slot move the test
 /// reads. The stub owner advertises no `answered-queue-ops`, so a queue edit
 /// sends without waiting for an answer.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_queue_and_cmd_rx(
     n: usize,
@@ -194,7 +194,7 @@ pub fn stub_app_with_queue_and_cmd_rx(
 /// The construction's own preference sync lands on the channel before the
 /// caller starts, so it is drained here and a test sees only what its actions
 /// send.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 fn app_with_cmd_rx() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
@@ -210,7 +210,7 @@ fn app_with_cmd_rx() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
 
 /// The projected queue view the queue stubs share: `n` Emby movie slots in
 /// canonical order, numbered from 1.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 fn queue_view(n: usize) -> QueueView {
     let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = (0..n)
         .map(|i| mbv_ctrl::UnifiedQueueSlot {
@@ -239,7 +239,7 @@ fn queue_view(n: usize) -> QueueView {
 /// The `App` a Client's test drives with `n` projected queue slots and the
 /// first one playing, so the Queue playback band shows its transport
 /// (`extract-client-core` row 6.5).
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_playing_queue(n: usize) -> App {
     let app = stub_app_with_queue(n);
@@ -257,7 +257,7 @@ pub fn stub_app_with_playing_queue(n: usize) -> App {
 /// stored facts (add-tauri-gui-client row 6.2). The playing slot starts
 /// fresh: the status carries the first item's runtime and no position, so a
 /// queued item's stored progress is the partial-progress row's own fact.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_playing_items(items: Vec<mbv_queue::QueueItem>) -> App {
     let app = stub_app_with_items(items);
@@ -276,7 +276,7 @@ pub fn stub_app_with_playing_items(items: Vec<mbv_queue::QueueItem>) -> App {
 
 /// The `App` a Client's test drives with the queue's slots built from
 /// `items` in canonical order, cursor at the first, and an idle player.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 fn stub_app_with_items(items: Vec<mbv_queue::QueueItem>) -> App {
     let mut app = make_app_stub();
@@ -307,7 +307,7 @@ fn stub_app_with_items(items: Vec<mbv_queue::QueueItem>) -> App {
 /// The `App` a Client's test drives with `n` projected queue slots and the
 /// queue marked unsaved, so the Queue footer carries its dirty pill
 /// (`extract-client-core` row 6.4).
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_unsaved_queue(n: usize) -> App {
     let mut app = stub_app_with_queue(n);
@@ -400,7 +400,7 @@ pub fn push_movies_library_for_test(app: &mut App) {
 /// `receivers` (add-tauri-gui-client row 6.5's paint/press regression): the
 /// target list the last emitted frame painted can then differ from the list
 /// a press would read, so a press must address the painted choice.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub fn set_cast_receivers_for_test(app: &mut App, receivers: Vec<(&str, &str)>) {
     app.cast_receivers = receivers
         .into_iter()
@@ -417,7 +417,7 @@ pub fn set_cast_receivers_for_test(app: &mut App, receivers: Vec<(&str, &str)>) 
 /// Replace the local player's subtitle track list (add-tauri-gui-client row
 /// 6.5's paint/press regression): the popover's painted rows then name a
 /// list that changed before the press.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub fn set_subtitle_tracks_for_test(app: &mut App, tracks: Vec<(i64, String, bool)>) {
     app.player
         .update_status(|status| status.sub_tracks = tracks);
@@ -433,7 +433,7 @@ pub fn set_subtitle_tracks_for_test(app: &mut App, tracks: Vec<(i64, String, boo
 /// Panics while arming the save when the configuration lock is poisoned: a
 /// writer panicked holding it, and the cached configuration cannot be
 /// trusted.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_pending_settings_save() -> App {
     let mut app = make_app_stub();
@@ -452,7 +452,7 @@ pub fn stub_app_with_pending_settings_save() -> App {
 ///
 /// Panics while parsing the chord when `chord` is not a chord grammar
 /// string.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_rebound_quit(chord: &str) -> App {
     use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
@@ -478,7 +478,7 @@ pub fn stub_app_with_rebound_quit(chord: &str) -> App {
 /// capability the cast row's presence is gated on, and the command channel
 /// records what a chooser selection or a transport request sends to the
 /// Owner. The receiver's id is `receiver-1`.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut remote, player_rx, cmd_rx) =
@@ -510,7 +510,7 @@ pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::
 /// password field still holds the typed secret (`add-gui-settings-screen` row
 /// 4.3): the Client opens the Settings screen itself, and the frame's Services
 /// content must carry the error and the server URL and never the password.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_failed_emby_setup_form() -> App {
     use crate::app::dispatch::session::services_settings::EmbySetupForm;
@@ -538,7 +538,7 @@ pub fn stub_app_with_failed_emby_setup_form() -> App {
 /// choice records on the command channel (add-tauri-gui-client row 6.4):
 /// the same shape `stub_app_with_track_popover` arms, over a remote stub
 /// that exposes what a track switch sends the Owner.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_track_choices() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (remote, player_rx, cmd_rx) =
@@ -564,7 +564,7 @@ pub fn stub_app_with_track_choices() -> (App, std::sync::mpsc::Receiver<mbv_ctrl
 /// holds `client`, so the shared startup step starts no Emby startup worker
 /// (add-gui-library-panel design D11). The test builds the client over an
 /// isolated mock transport, so no request leaves the process.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_cached_emby_client(client: mbv_emby::EmbyClient) -> App {
     let mut app = make_app_stub();
@@ -574,15 +574,15 @@ pub fn stub_app_with_cached_emby_client(client: mbv_emby::EmbyClient) -> App {
 }
 
 /// The library id the seeded Music library tab holds.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub const GUI_MUSIC_LIBRARY_ID: &str = "lib-music";
 
 /// The library id the seeded Shows library tab holds.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub const GUI_TV_LIBRARY_ID: &str = "lib-tv";
 
 /// A music group level: the library root's children, its cursor on the first.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 fn music_group_level(groups: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
     use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
@@ -605,7 +605,7 @@ fn music_group_level(groups: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::bro
 }
 
 /// A group's album level: the group's children, its cursor on the first.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 fn music_album_level(albums: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
     let mut level = music_group_level(albums);
     level.parent_id = "grp-hiphop".to_string();
@@ -614,7 +614,7 @@ fn music_album_level(albums: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::bro
 }
 
 /// A group row of the music group level.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 fn group_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
     let mut item = mbv_emby_model::test_support::make_item(name, "MusicArtist");
     item.id = id.to_string();
@@ -624,7 +624,7 @@ fn group_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
 
 /// An album row of a group's album level: a folder with no playable media of
 /// its own, as Emby returns a `MusicAlbum`.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 fn album_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
     let mut item = mbv_emby_model::test_support::make_item(name, "MusicAlbum");
     item.id = id.to_string();
@@ -633,7 +633,7 @@ fn album_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
     item
 }
 
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_completed_emby_startup_and_contents(
     views: Vec<mbv_emby_model::EmbyItem>,
@@ -663,7 +663,7 @@ pub fn stub_app_with_completed_emby_startup_and_contents(
 /// bootstrap's library catalog. The worker's thread never runs: the test
 /// hands the drain the one completion a worker would send (add-gui-library-panel
 /// design D11).
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>) -> App {
     stub_app_with_completed_emby_startup_and_contents(views, Vec::new())
@@ -681,7 +681,7 @@ pub(in crate::app) mod test_reads;
 /// channel, because the channel itself is behind `pub(in crate::app)` and
 /// a Client's cross-crate test injects through this seam. The constructor
 /// sends no player event, so a test's sends are the first ones.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_local_daemon_events(
     n: usize,

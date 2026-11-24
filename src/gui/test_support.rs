@@ -48,7 +48,7 @@ thread_local! {
 // that `CoreThread::step` runs. `None` until the first read or seed takes
 // the default state, so the empty `GuiClientState::new(false)` is built once
 // and only when a test needs it.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 thread_local! {
     static CLIENT_GUI_STATE: std::cell::RefCell<Option<GuiClientState>> =
         const { std::cell::RefCell::new(None) };
@@ -61,7 +61,7 @@ thread_local! {
 /// write the same state: the step takes the slot's state at its start and
 /// publishes its own back at its end, so the slot always holds the live state
 /// between steps and the first call's default is what an unseeded test reads.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub fn gui_state_for_test<R>(read: impl FnOnce(&mut GuiClientState) -> R) -> R {
     seeded_gui_state_for_test(|slot| read(slot.get_or_insert_with(|| GuiClientState::new(false))))
 }
@@ -70,7 +70,7 @@ pub fn gui_state_for_test<R>(read: impl FnOnce(&mut GuiClientState) -> R) -> R {
 /// takes the seeded state out at a step's start and puts its own back at the
 /// step's end, so it needs the slot and not the state a read gets. Empty
 /// until a test seeds one or a core call publishes one.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub fn seeded_gui_state_for_test<R>(read: impl FnOnce(&mut Option<GuiClientState>) -> R) -> R {
     CLIENT_GUI_STATE.with(|slot| read(&mut slot.borrow_mut()))
 }
@@ -81,7 +81,7 @@ pub fn seeded_gui_state_for_test<R>(read: impl FnOnce(&mut Option<GuiClientState
 fn gui<R>(_app: &App, read: impl FnOnce(&mut GuiClientState) -> R) -> R {
     #[cfg(test)]
     return stub_gui_state(read);
-    #[cfg(not(test))]
+    #[cfg(all(not(test), feature = "test"))]
     {
         gui_state_for_test(read)
     }
@@ -588,7 +588,7 @@ pub fn gui_row_menu_entries_for_test(
 ///
 /// Panics while resolving the menu's row when `items` is empty: the stub
 /// queue then has no first slot to open the menu over.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
     let app = crate::app::stub_app_with_playing_items(items);
@@ -609,7 +609,7 @@ pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
 /// and one subtitle track, and the track chip's popover open on `chip`, so a
 /// frame test reads the popover's choices with their chosen marks
 /// (add-tauri-gui-client row 6.2).
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     let mut app = crate::app::stub_app_with_playing_queue(1);
@@ -637,7 +637,7 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
 /// Services and a failed Emby setup form whose password field still holds the
 /// typed secret (`add-gui-settings-screen` row 4.3): the frame's Services
 /// content must carry the error and the server URL and never the password.
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_failed_emby_setup() -> App {
     let mut core = GuiCore::new(crate::app::stub_app_with_failed_emby_setup_form());

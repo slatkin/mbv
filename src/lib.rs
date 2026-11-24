@@ -118,7 +118,7 @@ pub use self::app::{
     queue_target_for_test, remote_stub_config, resting, resting_snapshot,
     seed_queue_row_menu_rows_for_test, seed_queue_shuffle_owner_for_test,
 };
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub use self::app::{
     gui_client_capabilities, set_cast_receivers_for_test, set_subtitle_tracks_for_test,
     stub_app_for_gui_client, stub_app_with_cached_emby_client, stub_app_with_cast_target,
@@ -136,7 +136,7 @@ pub use self::app::{
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use self::gui::test_support::{GuiStateSeams, gui_row_menu_entries_for_test};
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use self::gui::test_support::{
     gui_state_for_test, seeded_gui_state_for_test, stub_app_with_failed_emby_setup,

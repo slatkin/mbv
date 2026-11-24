@@ -68,7 +68,7 @@ fn owner_player_ready_hook(
     player_handle: std::sync::Arc<std::sync::Mutex<Option<mbv_daemon::DaemonPlayerHandle>>>,
 ) -> Box<dyn FnOnce(mbv_daemon::DaemonPlayerHandle)> {
     Box::new(move |handle| {
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test")))]
         mbv_desktop::mpris::start_owner(
             std::sync::Arc::clone(&handle.status),
             handle.transport_tx.clone(),

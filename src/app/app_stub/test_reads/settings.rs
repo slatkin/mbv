@@ -26,7 +26,7 @@ impl App {
 
     /// The configuration the Settings screen's edits land in (row 5.1): an
     /// accepted `activate` changes it, a refused one leaves it alone.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn settings_config_for_test(&self) -> mbv_config::Config {
         self.with_config(Clone::clone)
@@ -71,7 +71,7 @@ impl App {
     /// The open setup form's server URL (row 5.2), whichever form holds it.
     /// The password and API key never leave the core, so nothing here carries
     /// one.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn gui_setup_server_url_for_test(&self) -> Option<String> {
         self.setup
@@ -88,7 +88,7 @@ impl App {
 
     /// Whether the open setup form reports its validation in progress
     /// (row 5.2).
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn gui_setup_busy_for_test(&self) -> bool {
         self.setup
@@ -105,7 +105,7 @@ impl App {
     }
 
     /// Whether the open setup form started a setup generation (row 5.2).
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn gui_setup_generation_started_for_test(&self) -> bool {
         self.setup
@@ -123,7 +123,7 @@ impl App {
 
     /// Put the Emby Service in `state`, for a Client's test that asserts a
     /// Service action (row 5.2): a removal needs a configured Service.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn set_gui_emby_service_state_for_test(
         &mut self,
         state: mbv_core::service_runtime::ServiceState,
@@ -134,7 +134,7 @@ impl App {
     /// Make the Emby Service Ready with `client`, for a Client's test whose
     /// action fetches through it (row 5.5). Built over the in-memory mock
     /// transport, so no request leaves the process.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn set_gui_emby_client_for_test(&mut self, client: mbv_emby::EmbyClient) {
         self.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
             std::sync::Arc::new(std::sync::Mutex::new(client)),
@@ -147,7 +147,7 @@ impl App {
     /// # Panics
     /// Panics if the `config` lock is poisoned: a previous holder panicked
     /// while holding it.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_feed_subscriptions_for_test(&mut self, subscriptions: &[(&str, &str)]) {
         self.config.lock().unwrap().feeds = subscriptions
             .iter()
@@ -166,7 +166,7 @@ impl App {
     /// # Panics
     /// Panics if the `config` lock is poisoned: a previous holder panicked
     /// while holding it.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_my_languages_for_test(&mut self, languages: &[&str]) {
         self.config.lock().unwrap().my_languages = languages
             .iter()
@@ -187,7 +187,7 @@ impl App {
 
     /// Seed the saved playlist list with `(id, name)` rows (row 5.5), as the
     /// Playlists section lists them.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_saved_playlists_for_test(&mut self, playlists: &[(&str, &str)]) {
         self.playlists = playlists
             .iter()
@@ -206,7 +206,7 @@ impl App {
     /// # Panics
     /// Panics if the injected result's channel is closed, which it cannot be:
     /// the receiver was created with the sender in the same popup.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn inject_gui_feed_add_result_for_test(
         &mut self,
         name: &str,
@@ -237,7 +237,7 @@ impl App {
     /// `should_open_services` open, as a start with no configured Remote
     /// Service and no feed subscriptions lands it. A Client's test drains it
     /// through the production tick path.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_first_start_settings_for_test(&mut self) {
         self.open_services_settings();
     }
@@ -249,7 +249,7 @@ impl App {
     /// # Panics
     /// Panics if `chord` does not parse or `action_id` is not a declared
     /// action: a test's chord and action are literals.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn rebind_chord_for_test(&mut self, action_id: &'static str, chord: &str) {
         let parsed = mbv_keybinds::Chord::parse(chord).expect("test chord must parse");
         let action = mbv_keybinds::action_by_id(action_id)

@@ -171,7 +171,7 @@ impl App {
         {
             return Ok(Some(suspended));
         }
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test")))]
         {
             let socket_path = mbv_daemon::socket_path();
             let lock_path = mbv_config::owner_lock_path();

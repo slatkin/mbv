@@ -1,9 +1,9 @@
 //! Bench-scale seeds for the GUI `sections` bench (`gui-change-driven-
 //! sections` design D12). Each seed writes the same stores the GUI library
 //! tests seed, at the size a bench fixture names: the caller builds the
-//! items and the seed lands them as a landed fetch would. The seeds compile
-//! only under the root package's `test` feature, as the rest of this stub
-//! module does.
+//! items and the seed lands them as a landed fetch would. The seeds carry the
+//! stub module's gate, so the crate's own tests and a dependent Client's
+//! `test` build both compile them.
 
 use std::sync::{Arc, Mutex};
 
@@ -17,7 +17,7 @@ impl App {
     /// the Music tab holds one group row per item. The caller seeds each
     /// group's albums with `seed_gui_music_albums_for_test`, so the store
     /// holds what a landed set of group fetches holds.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_music_groups_for_test(
         &mut self,
         client: mbv_emby::EmbyClient,
@@ -38,7 +38,7 @@ impl App {
     /// Make the Shows library the active destination with `series` as its
     /// root level: the GUI paints the series list, so the frame's tree reads
     /// the root level's series and no mode load starts.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_tv_series_for_test(
         &mut self,
         client: mbv_emby::EmbyClient,

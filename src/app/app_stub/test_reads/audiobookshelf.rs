@@ -17,7 +17,7 @@ impl App {
     /// resolution must wait for the catalog it can still publish. A
     /// launch-location test seeds the waiting window this way, because the
     /// runtime's state is App-internal.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn mark_gui_abs_catalog_pending_for_test(&mut self) {
         self.audiobookshelf_runtime =
             crate::app::state::service_runtime::AudiobookshelfRuntime::new(true);

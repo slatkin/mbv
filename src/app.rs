@@ -38,7 +38,7 @@ pub use self::app_stub::{
     card_cache_key_for_id_for_test, gui_client_capabilities, key_chord_for_test, make_audio_items,
     make_items, push_movies_library_for_test, queue_card_cache_key_for_test, queue_target_for_test,
 };
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub use self::app_stub::{
     set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_for_gui_client,
     stub_app_with_cached_emby_client, stub_app_with_cast_target,

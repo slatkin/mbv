@@ -1,16 +1,15 @@
 //! The test-only reads and seeds a Client's test makes of an `App`'s state.
 //! The gate spans the crate's own tests and a dependent Client's `test`
-//! build, as `make_app_stub` does. The seed helpers compile only under the
-//! `test` feature: the functions they use live in `app_stub` behind the
-//! same gate.
+//! build, as `make_app_stub` does, and so do the helpers they use in
+//! `app_stub`.
 
 #[cfg(any(test, feature = "test"))]
 use super::App;
 
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 use std::sync::{Arc, Mutex};
 
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 use super::{
     GUI_MUSIC_LIBRARY_ID, GUI_TV_LIBRARY_ID, album_item, group_item, music_album_level,
     music_group_level,
@@ -119,7 +118,7 @@ impl App {
     /// after its core thread is built, because the launch Home load rebuilds
     /// the catalog from the Service's views; Music is then the active
     /// destination, as the Library panel keeps it.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_music_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
         self.emby_runtime =
             crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
@@ -131,7 +130,7 @@ impl App {
     /// launch Home load starts no Emby request and the seeded tabs survive it.
     /// The Music tab's group level holds Hip-Hop and Soul with Hip-Hop's albums
     /// above it, and Music is the active destination.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_music_library_tab_for_test(&mut self) {
         self.music_levels = vec!["group".to_string(), "album".to_string()];
         let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
@@ -161,7 +160,7 @@ impl App {
     /// first open finds before its mode's load lands — with no resolved TV
     /// mode, so the open's own default rule applies. Shows is then the
     /// active destination, as the Library panel keeps it.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_tv_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
         self.emby_runtime =
             crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
@@ -193,7 +192,7 @@ impl App {
     /// D12): a Client's test that scripts one mode load pins the total, so
     /// the root load's completion captures nothing and spawns no
     /// default-mode reload behind the scripted answers.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn pin_library_total_for_test(&mut self, lib_idx: usize, total: usize) {
         if let Some(tab) = self.libs.get_mut(lib_idx) {
             tab.library_total = Some(total);
@@ -228,7 +227,7 @@ impl App {
     /// Push `library` as another Emby library tab (add-gui-library-panel
     /// design D9): a launch-location test holds a catalog destination that
     /// the GUI Client does not present.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn push_library_tab_for_test(&mut self, library: mbv_emby_model::EmbyItem) {
         self.libs
             .push(mbv_ui_model::library_tab::LibraryTab::new(library));
@@ -239,7 +238,7 @@ impl App {
     /// keeps the source bytes and no decoded image, so the next tick's
     /// card-image drain lands it in the cache the way the GUI Client does,
     /// with no request and no thread.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn complete_card_image_for_test(&self, key: &str, img: &image::DynamicImage) {
         let source = crate::app::queue_card_artwork::test_source(img);
         let _ = self.images.card_image_tx().send((
@@ -259,7 +258,7 @@ impl App {
     ///
     /// # Panics
     /// Panics if the settings mutex is poisoned: a previous holder panicked.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_feed_view_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
         self.emby_runtime =
             crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
@@ -317,7 +316,7 @@ impl App {
     /// album-track fetch would (add-gui-library-panel): the autoload add and
     /// play rules read the cache, so a command test injects the tracks and
     /// observes the Owner request with no fetch behind it.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn seed_gui_album_tracks_for_test(
         &mut self,
         album_id: &str,
@@ -342,7 +341,7 @@ impl App {
     ///
     /// # Panics
     /// Panics if the settings mutex is poisoned: a previous holder panicked.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn set_autoload_for_test(&mut self, autoload: bool) {
         self.config.lock().unwrap().autoload = autoload;
     }
@@ -387,7 +386,7 @@ impl App {
     /// Audiobookshelf runtime generation — the hermetic arm, whose rows
     /// carry their provider timestamp in seconds and so need no date-string
     /// parse at the 14-day cutoff.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn queue_home_recently_added_for_test(&mut self, items: Vec<mbv_queue::QueueItem>) {
         use crate::app::{LibEvent, ModelContentEvent};
 
@@ -408,7 +407,7 @@ impl App {
     /// the tick's drain that applies it is the production path with no
     /// worker thread. The snapshot arrives settled (`loading` false), as
     /// every computed refresh carries.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn queue_home_content_refreshed_for_test(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
         use crate::app::{LibEvent, ModelContentEvent};
 
@@ -425,7 +424,7 @@ impl App {
     /// Queue a Home content clear for the Client tests' next tick
     /// (add-gui-library-panel row 6.2): the Service teardown event, on the
     /// lib channel, exactly as the teardown sends it.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     pub fn queue_home_content_cleared_for_test(&mut self) {
         use crate::app::{LibEvent, ModelContentEvent};
 

@@ -61,7 +61,8 @@ impl App {
 
     /// Blocking `GET /Sessions` (unfiltered), factored out only so tests
     /// can override it via `SESSIONS_LOAD_OVERRIDE` -- mirrors
-    /// `connect_daemon_route_endpoint`'s `#[cfg(test)]` seam. Callers:
+    /// `connect_daemon_route_endpoint`'s `cfg(any(test, feature = "test"))`
+    /// seam. Callers:
     /// `try_auto_reconnect`'s `DirectSession` case (#236) and the F2
     /// "Library Routes" device picker (`enter_device_stage`, #256) --
     /// library-route *resolution* itself no longer calls this (#256).
@@ -72,7 +73,7 @@ impl App {
     pub(in crate::app) fn fetch_sessions_blocking(
         &self,
     ) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test"))]
         if let Some(f) = *crate::app::test_seams::SESSIONS_LOAD_OVERRIDE
             .lock()
             .unwrap()
@@ -104,7 +105,7 @@ impl App {
         (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
         mbv_remote_player::RemotePlayerError,
     > {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test"))]
         if let Some(connect) = *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
             .lock()
             .unwrap()
@@ -135,7 +136,7 @@ impl App {
         (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
         mbv_remote_player::RemotePlayerError,
     > {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test"))]
         if let Some(connect) = *crate::app::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
             .lock()
             .unwrap()

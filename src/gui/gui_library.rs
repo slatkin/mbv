@@ -733,7 +733,7 @@ pub fn playing_track_id_for_shell(app: &App) -> Option<String> {
 /// The URL opener the `openUrl` command runs: the shared `open_url` spawn,
 /// behind the test seam that observes the open without a real browser.
 fn open_url(url: &str) -> std::io::Result<()> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     if let Some(open) = *crate::app::test_seams::OPEN_URL_OVERRIDE.lock().unwrap() {
         open(url);
         return Ok(());

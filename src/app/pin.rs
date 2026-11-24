@@ -275,7 +275,7 @@ pub(in crate::app) fn spawn_pinned_request(
     request: PinnedSettingRequest,
     tx: std::sync::mpsc::Sender<Result<(), String>>,
 ) -> Result<(), String> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     if let Some(outcome) = PINNED_REQUEST_OVERRIDE.lock().unwrap().clone() {
         PINNED_REQUESTS.lock().unwrap().push(request);
         let _ = tx.send(outcome);
