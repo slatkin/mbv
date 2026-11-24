@@ -560,16 +560,59 @@ fn the_list_reports_the_rows_in_view_under_the_views_scope(
     );
 }
 
+/// The series list's tree with a third letter group past a 300 px viewport:
+/// each letter costs a heading row and a series row, so the last series' top
+/// edge sits below the window's bottom edge and its row never paints.
+fn tree_with_a_series_past_the_window() -> Vec<GuiShowsSeriesFrame> {
+    let mut tree = tree();
+    tree.extend([
+        GuiShowsSeriesFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
+            id: "s4".to_owned(),
+            title: "Chernobyl".to_owned(),
+            sort_letter: 'C',
+            expandable: true,
+            seasons: Vec::new(),
+        },
+        GuiShowsSeriesFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
+            id: "s5".to_owned(),
+            title: "Dark".to_owned(),
+            sort_letter: 'D',
+            expandable: true,
+            seasons: Vec::new(),
+        },
+        GuiShowsSeriesFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Video,
+            id: "s6".to_owned(),
+            title: "Euphoria".to_owned(),
+            sort_letter: 'E',
+            expandable: true,
+            seasons: Vec::new(),
+        },
+    ]);
+    tree
+}
+
 /// Contract (gui-list-header-buttons design D5, spec "A Shows series that is
-/// open and in view loads its seasons when they are not loaded"): the list
-/// reports the open series of its painted window, and a closed series row
-/// beside it stays out of the report.
+/// open and in view loads its seasons when they are not loaded", proposal: "In
+/// a tree list, the children of the open parent rows in view also reload, and
+/// no load starts for an open row out of view"): the report names the open
+/// series of the painted window alone, so a closed series beside it and an
+/// open series past the window's edge both stay out.
 #[test]
-fn the_open_series_in_view_is_reported_and_a_closed_one_is_not() {
-    let mut fixture = built(shows_frame(tree()), shows_detail(None));
+fn the_open_series_in_view_is_reported_and_a_closed_or_out_of_view_one_is_not() {
+    let mut fixture = built(
+        shows_frame(tree_with_a_series_past_the_window()),
+        shows_detail(None),
+    );
     fixture.measure(300.0);
 
     toggle_row(&mut fixture, "shows-series:s1");
+    toggle_row(&mut fixture, "shows-series:s6");
 
     assert_eq!(
         fixture.reported_shows_open_in_view().last(),
@@ -578,7 +621,7 @@ fn the_open_series_in_view_is_reported_and_a_closed_one_is_not() {
             series: vec!["s1".to_owned()],
             seasons: Vec::new(),
         }),
-        "the report names the open series and not the closed one"
+        "the report names the open series in view and neither the closed series nor the open series past the window"
     );
 }
 
