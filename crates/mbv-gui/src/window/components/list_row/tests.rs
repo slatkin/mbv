@@ -572,6 +572,21 @@ fn a_nested_row_is_a_hover_host_with_the_controls_beside_it() {
     );
 }
 
+/// Contract (design D2): a row the selection does not mark still names a fill
+/// for the hover controls' cover — the column it rests on — so the cover is
+/// never transparent and the title it overlays never shows through.
+#[test]
+fn an_unselected_rows_cover_paints_the_column_it_rests_on() {
+    let fixture = flat_built(FlatSpec::default());
+
+    assert!(
+        fixture
+            .style_of(".row-hover-host")
+            .contains("--row-fill: var(--canvas-library-column)"),
+        "the host names the column's fill"
+    );
+}
+
 /// Contract (design D3): the nested row's level picks its look and its depth
 /// picks its inset — a parent paints the album look (the node height, the
 /// nested inset, the sans face, and its open state), and a leaf paints the

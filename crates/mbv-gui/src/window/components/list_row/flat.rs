@@ -147,12 +147,14 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     );
     // The row's fill (gui-row-hover-actions design D2): it lives on the host as
     // `--row-fill`, so the row button and the hover controls that cover its
-    // trailing end paint the same fill.
-    let fill = RowLevel::Top.selection_fill(props.selected);
-    if fill.is_some() {
-        let _ = write!(row_style, " background: var(--row-fill);");
-    }
-    let host_style = fill.map_or_else(String::new, |fill| format!("--row-fill: {fill};"));
+    // trailing end paint the same fill. A row the selection does not mark still
+    // names one — the column it rests on — so the cover is never transparent
+    // and the title it overlays never shows through.
+    let fill = RowLevel::Top
+        .selection_fill(props.selected)
+        .unwrap_or_else(|| canvas_var("library-column"));
+    let _ = write!(row_style, " background: var(--row-fill);");
+    let host_style = format!("--row-fill: {fill};");
 
     let title_attrs = vec![Attribute::new(library_attr(attr, "title"), "", None, false)];
     let title_css = format!(
