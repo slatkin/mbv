@@ -153,3 +153,6 @@ pub fn context_press(
     let coordinates = event.client_coordinates();
     on_context.call((f32_from_f64(coordinates.x), f32_from_f64(coordinates.y)));
 }
+
+#[cfg(test)]
+mod tests;

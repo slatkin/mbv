@@ -455,6 +455,3 @@ pub fn mark(name: &'static str, on: bool) -> Vec<Attribute> {
         .into_iter()
         .collect()
 }
-
-#[cfg(test)]
-mod tests;
