@@ -8,12 +8,13 @@
 //! The window holds no open, cursor, or rename state: the frame's `queueChooser`
 //! section carries the core's cursor, the entries, and the draft, and a press
 //! forwards like every other pointer event — the core resolves it against the
-//! hit map. The card is a child of the switcher's own anchor box, so its leading
-//! edge is the switcher's and it drops four pixels under it (design D8), and it
-//! paints the design's own card and item chrome: a queue-row-height entry in the
-//! raised fill on the cursor and under the pointer, so the two queue overlays
-//! read as one family. The card answers the pointer with those fills alone, so it sets
-//! `--hover-veil: transparent` and the shared veil does not wash them.
+//! hit map. The dropdown is a child of the switcher's own anchor box, so its
+//! leading edge is the switcher's and it drops four pixels under it (design D8).
+//! Its card and item chrome are the shared `ChooserMenu` and `ChooserRow` (change
+//! `gui-shared-chooser-menu`, D1–D3), which the target chooser paints too: a
+//! queue-row-height entry in the raised fill on the cursor and under the pointer.
+//! This module keeps the entry content: the marks, the count, and the rename
+//! draft.
 //!
 //! Each row paints, in the design's order: the shown entry's check, the name —
 //! or the name open for edit — then at the trailing end the playing mark, the
@@ -41,19 +42,13 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
-use crate::window::components::queue_panel::geometry::{MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX};
+use crate::window::components::chooser_menu::{ChooserKind, ChooserMenu, ChooserRow};
 use crate::window::icons::{AudioLines, Check};
 use crate::window::layout::region_set::MarkHandler;
 use crate::window::theme::{EfToken, ef_var};
 
 /// The current queue's mark: the dot's diameter in logical pixels.
 const CURRENT_MARK_PX: u16 = 8;
-
-/// One entry's height and the gap between two items are the queue rows' own
-/// (`ROW_HEIGHT_PX` and `ROW_GAP_PX`: the delineated row's 40 px and its 0 px
-/// gap, design D3 of `gui-delineated-rows`); the card's padding is its own
-/// inset.
-const CARD_PADDING_PX: u16 = 4;
 
 /// The open Queue chooser's dropdown facts, as the frame's overlay carries
 /// them: the core's cursor, the entries in paint order, and the rename draft
@@ -134,38 +129,21 @@ fn entry_key(entry: &GuiQueueChooserEntry) -> String {
         .map_or_else(|| "peer".to_owned(), |raw| raw.to_string())
 }
 
-/// The Queue chooser's dropdown: one entry per queue at the queue rows' height
-/// and gap, the cursor row filled, the shown entry checked, the current queue
-/// dotted, the playing queue marked in aqua, the peer entry brand-marked, each
-/// with its slot count, and the rename draft's caret after the text it edits.
-/// It fills its positioning ancestor — the switcher's anchor — dropping four
-/// pixels under it with its leading edge on the switcher's (design D8).
+/// The Queue chooser's dropdown: one entry per queue in the shared chooser
+/// card and row, the cursor row filled, the shown entry checked, the current
+/// queue dotted, the playing queue marked in aqua, the peer entry
+/// brand-marked, each with its slot count, and the rename draft's caret after
+/// the text it edits. It fills its positioning ancestor — the switcher's
+/// anchor — dropping four pixels under it with its leading edge on the
+/// switcher's (design D8).
 #[component]
 pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
     rsx! {
-        div {
-            class: "absolute z-20 flex flex-col",
-            role: "menu",
-            "aria-label": "Queue chooser",
-            style: format!(
-                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ROW_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
-                ef_var(EfToken::Bg2),
-                ef_var(EfToken::Bg4)
-            ),
-            "data-queue-chooser-menu": "",
+        ChooserMenu { kind: ChooserKind::Queue, label: Some("Queue chooser"),
             for (index, entry) in props.entries.iter().enumerate() {
                 {
                     let paint = EntryPaint::of(entry, props.renaming.as_ref());
                     let cursor = props.cursor == index;
-                    let row_background = if cursor {
-                        format!(" background: {};", ef_var(EfToken::Bg3))
-                    } else {
-                        String::new()
-                    };
-                    let row_style = format!(
-                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
-                        ef_var(EfToken::Fg)
-                    );
                     let label_align = if paint.draft {
                         " justify-content: flex-end;"
                     } else {
@@ -189,20 +167,13 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                     let peer = entry.queue.is_none();
                     let row_mark = props.row_marks.get(index).copied();
                     rsx! {
-                        button {
-                            "type": "button",
-                            class: "flex w-full items-center justify-between text-left",
-                            role: "menuitem",
-                            style: "{row_style}",
-                            "data-chooser-entry": "{key}",
-                            "aria-label": "{label}",
-                            onmounted: move |event| {
-                                // The panel marks this row: the closure records the
-                                // handle its overlay region reads.
-                                if let Some(mark) = row_mark {
-                                    mark.call(event);
-                                }
-                            },
+                        ChooserRow {
+                            entry: key,
+                            cursor,
+                            busy: false,
+                            label: Some(label),
+                            class: "justify-between".to_owned(),
+                            mark: row_mark,
                             div {
                                 class: "flex min-w-0 items-center",
                                 style: "gap: 8px;",

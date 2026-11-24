@@ -29,11 +29,15 @@ fn a_chooser_row_paints_the_brand_mark_of_its_target_kind() {
     });
 
     assert_eq!(
-        fixture.all("[data-choice='0'] [data-brand='emby']").len(),
+        fixture
+            .all("[data-chooser-entry='0'] [data-brand='emby']")
+            .len(),
         1
     );
     assert_eq!(
-        fixture.all("[data-choice='1'] [data-brand='cast']").len(),
+        fixture
+            .all("[data-chooser-entry='1'] [data-brand='cast']")
+            .len(),
         1
     );
 }

@@ -378,7 +378,7 @@ button:not(:disabled):hover,
 	background-color: var(--ef-bg-red);
 	color: var(--ef-red);
 }
-[data-queue-chooser-menu] [data-chooser-entry]:hover {
+[data-chooser-menu='queue'] [data-chooser-entry]:hover {
 	background-color: var(--ef-bg3);
 }
 

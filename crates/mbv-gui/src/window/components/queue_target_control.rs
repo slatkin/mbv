@@ -10,7 +10,9 @@
 //! or remote role.
 //!
 //! The popover hangs under the button (`top`), as the Queue chooser's dropdown
-//! hangs under its switcher. Each row reports its `targetChoice` index — the
+//! hangs under its switcher, in the shared `ChooserMenu` card over shared
+//! `ChooserRow`s (change `gui-shared-chooser-menu`, D1–D3). Each row reports its
+//! `targetChoice` index as its `data-chooser-entry` — the
 //! core resolves a row press against the same live choice list the frame
 //! carries — under the control's one overlay key, first inserted when the
 //! chooser opens, so it lands after the queue rows in the merged report: the
@@ -31,17 +33,13 @@ use crate::bridge::frame::playback::{GuiTargetChoice, GuiTargetKey};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
-use crate::window::components::queue_panel::geometry::{
-    CONTROL_PX, MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX,
-};
+use crate::window::components::chooser_menu::{ChooserKind, ChooserMenu, ChooserRow};
+use crate::window::components::queue_panel::geometry::CONTROL_PX;
 use crate::window::icons::{Check, ChevronDown, Monitor, RefreshCcwDot};
 use crate::window::layout::region_set::{MarkHandler, use_region_set};
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var, role_var};
 use crate::window::truncate::{TextStyle, Truncate};
-
-/// The popover card's padding: the Queue chooser's own inset.
-const CARD_PADDING_PX: u16 = 4;
 
 /// The glyph a target choice paints, in the chooser's rows and on the control's
 /// button alike: one function, so the two cannot drift apart.
@@ -230,64 +228,30 @@ impl std::fmt::Debug for TargetChooserPopoverProps {
 }
 
 /// The chooser's popover, hung under the button with its leading edge on the
-/// button's. Each row's `onmounted` hands its event to the control's mark for
-/// that row, under the row's `data-choice` index.
+/// button's. Each row is a shared `ChooserRow` whose mount hands its event to
+/// the control's mark for that row, under the row's `data-chooser-entry` value.
 #[component]
 fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
     rsx! {
-        div {
-            class: "absolute z-20 flex flex-col",
-            role: "menu",
-            // The card is the Queue chooser's own (it is authoritative): the
-            // same fill, border, radius, padding, drop, and 13 px type.
-            style: format!(
-                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ROW_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
-                ef_var(EfToken::Bg2),
-                ef_var(EfToken::Bg4)
-            ),
-            "data-target-chooser": "",
+        ChooserMenu { kind: ChooserKind::Target, label: None,
             for (index, choice) in props.choices.iter().enumerate() {
-                {
-                    let row_background = if index == props.cursor {
-                        format!(" background: {};", ef_var(EfToken::Bg3))
-                    } else {
-                        String::new()
-                    };
-                    let row_style = format!(
-                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
-                        ef_var(EfToken::Fg)
-                    );
-                    rsx! {
-                        button {
-                            "type": "button",
-                            class: "flex w-full items-center text-left",
-                            role: "menuitem",
-                            style: "{row_style}",
-                            "data-choice": "{index}",
-                            onmounted: {
-                                let row_mark = props.row_marks.get(index).copied();
-                                move |event| {
-                                    // The control that owns the chooser marks
-                                    // this row: the closure records the handle
-                                    // its overlay region reads.
-                                    if let Some(mark) = row_mark {
-                                        mark.call(event);
-                                    }
-                                }
-                            },
-                            span {
-                                class: "flex w-4 shrink-0 justify-center",
-                                if choice.is_active {
-                                    Check { size: 14, color: ef_var(EfToken::Green).to_owned() }
-                                }
-                            }
-                            {target_icon(choice, 14)}
-                            Truncate {
-                                text: choice.label.clone(),
-                                class: "min-w-0 flex-1".to_owned(),
-                                style: TextStyle::sans(13.0, 500.0),
-                            }
+                ChooserRow {
+                    entry: index.to_string(),
+                    cursor: index == props.cursor,
+                    busy: false,
+                    class: String::new(),
+                    mark: props.row_marks.get(index).copied(),
+                    span {
+                        class: "flex w-4 shrink-0 justify-center",
+                        if choice.is_active {
+                            Check { size: 14, color: ef_var(EfToken::Green).to_owned() }
                         }
+                    }
+                    {target_icon(choice, 14)}
+                    Truncate {
+                        text: choice.label.clone(),
+                        class: "min-w-0 flex-1".to_owned(),
+                        style: TextStyle::sans(13.0, 500.0),
                     }
                 }
             }
@@ -295,30 +259,12 @@ fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
             // and cast discovery the TUI's F3 refresh starts, and the chooser
             // stays open. While one runs the label says so and the row dims;
             // the core refuses a second discovery until it lands.
-            button {
-                "type": "button",
-                class: "flex w-full items-center text-left",
-                role: "menuitem",
-                style: if props.refreshing {
-                    format!(
-                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; margin-top: {ROW_GAP_PX}px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {}; opacity: 0.6;",
-                        ef_var(EfToken::Grey1)
-                    )
-                } else {
-                    format!(
-                        "height: {ROW_HEIGHT_PX}px; padding: 0 8px; gap: 8px; margin-top: {ROW_GAP_PX}px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};",
-                        ef_var(EfToken::Fg)
-                    )
-                },
-                "data-target-refresh": "",
-                onmounted: {
-                    let mark = props.refresh_mark;
-                    move |event| {
-                        if let Some(mark) = mark {
-                            mark.call(event);
-                        }
-                    }
-                },
+            ChooserRow {
+                entry: "refresh".to_owned(),
+                cursor: false,
+                busy: props.refreshing,
+                class: String::new(),
+                mark: props.refresh_mark,
                 // The refresh glyph spins while a discovery runs.
                 RefreshCcwDot {
                     size: 16,
