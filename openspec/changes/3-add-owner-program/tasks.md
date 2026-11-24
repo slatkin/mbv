@@ -15,7 +15,7 @@ Start only after `2-split-tui-gui-clients` is merged. Run every cargo command in
 
 ## 3. Docs
 
-- [ ] 3.1 Add *Owner program* to `CONTEXT.md` and update *Owner process* and *Local process*. Update `docs/architecture/owner-client-operation-split.md`, the root `AGENTS.md`, and `crates/mbv-tui/AGENTS.md` where they say the Owner is the `mbv` binary or `mbv --__local-daemon`. Write `docs/adr/0044-the-owner-runs-from-its-own-program.md` (follow `docs/adr/README.md`; record design D8 and D9). Verify that `rg -n "__local-daemon" AGENTS.md CONTEXT.md crates/*/AGENTS.md docs` finds nothing outside `docs/adr/` and `docs/plans/`.
+- [x] 3.1 Add *Owner program* to `CONTEXT.md` and update *Owner process* and *Local process*. Update `docs/architecture/owner-client-operation-split.md`, the root `AGENTS.md`, and `crates/mbv-tui/AGENTS.md` where they say the Owner is the `mbv` binary or `mbv --__local-daemon`. Write `docs/adr/0044-the-owner-runs-from-its-own-program.md` (follow `docs/adr/README.md`; record design D8 and D9). Verify that `rg -n "__local-daemon" AGENTS.md CONTEXT.md crates/*/AGENTS.md docs` finds nothing outside `docs/adr/` and `docs/plans/`.
 
 ## 4. Integration checks
 
