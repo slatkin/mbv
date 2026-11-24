@@ -1,7 +1,8 @@
-use rstest::rstest;
+//! The attach-refusal follow-up contract (design D6, #559).
 
-use super::{FollowUp, follow_up};
+use mbv_client_core::dispatch::session::owner_restart::{FollowUp, follow_up};
 use mbv_remote_player::RemotePlayerError;
+use rstest::rstest;
 
 fn mismatch_error(owner_app_version: &str) -> RemotePlayerError {
     RemotePlayerError::owner_mismatch_for_test(mbv_ctrl::BuildInfo {

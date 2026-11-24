@@ -38,8 +38,6 @@ mod library_navigate_reveal;
 #[cfg(test)]
 mod library_position;
 #[cfg(test)]
-mod library_route;
-#[cfg(test)]
 mod music_grouping;
 #[cfg(test)]
 mod named_queues;

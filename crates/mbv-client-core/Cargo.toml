@@ -65,6 +65,12 @@ ureq = { workspace = true, features = ["json"] }
 # The core's own tests name the providers' and leaves' test support, and the
 # fixture tables. No shipped build enables these features (design D4e).
 [dev-dependencies]
+# The `tests/core_api.rs` binary links the library without `cfg(test)`, so the
+# crate's `test`-feature fixtures and seams are only reachable through a
+# self-dependency: it is how a package enables its own feature for its test
+# targets (`2-split-tui-gui-clients` row 3.5). The features it forwards are the
+# ones the dev-dependencies below already enable, so this adds no unification.
+mbv-client-core = { path = ".", features = ["test"] }
 mbv-config = { path = "../mbv-config", features = ["test"] }
 mbv-emby = { path = "../mbv-emby", features = ["test"] }
 mbv-emby-model = { path = "../mbv-emby-model", features = ["test"] }

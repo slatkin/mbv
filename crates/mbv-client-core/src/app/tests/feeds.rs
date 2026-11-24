@@ -2,7 +2,6 @@ use crate::app::BrowseLevel;
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
-mod feeds_manage;
 mod group_loading;
 mod group_nav;
 mod mark_played_keeps_row;

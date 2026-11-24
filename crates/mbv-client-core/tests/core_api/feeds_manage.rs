@@ -1,4 +1,4 @@
-use crate::app::tests::make_app_stub;
+use mbv_client_core::make_app_stub;
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
 use mbv_ui_model::feeds_manage::{FeedAddDrain, FeedAddResult, FeedsManagePopup};
@@ -14,7 +14,7 @@ fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {
 
 /// A stub app holding the given configured subscriptions, with the Feeds tab
 /// they project.
-fn app_with_feeds(feeds: Vec<FeedSubscription>) -> crate::app::App {
+fn app_with_feeds(feeds: Vec<FeedSubscription>) -> mbv_client_core::App {
     let mut app = make_app_stub();
     app.config_for_test(|config| config.feeds = feeds);
     app.sync_feed_subscriptions();
@@ -23,7 +23,7 @@ fn app_with_feeds(feeds: Vec<FeedSubscription>) -> crate::app::App {
 
 /// A stub app holding the given Feeds management popup, as the overlay mount
 /// leaves it.
-fn app_with_feed_popup(popup: FeedsManagePopup) -> crate::app::App {
+fn app_with_feed_popup(popup: FeedsManagePopup) -> mbv_client_core::App {
     let mut app = make_app_stub();
     app.seed_feeds_manage_popup_for_test(popup);
     app

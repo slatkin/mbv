@@ -39,6 +39,3 @@ pub fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp
     }
     FollowUp::Other
 }
-
-#[cfg(test)]
-mod tests;

@@ -3545,6 +3545,7 @@ dependencies = [
  "libc",
  "mbv-audiobookshelf",
  "mbv-cast",
+ "mbv-client-core",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
