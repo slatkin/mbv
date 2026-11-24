@@ -47,6 +47,7 @@ pub mod library_tracklist;
 pub mod library_virtual_list;
 pub mod library_workspace_table;
 pub mod list_frame_notices;
+pub mod list_row;
 pub mod menu_card;
 pub mod panel;
 pub mod panel_divider;

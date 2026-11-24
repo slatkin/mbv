@@ -22,7 +22,7 @@ use std::collections::HashSet;
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_item_row::{ROW_DIVIDER_PX, ROW_PADDING_PX, THUMB_WIDTH_PX};
+use crate::window::components::list_row::{ROW_DIVIDER_PX, ROW_PADDING_PX, THUMB_WIDTH_PX};
 use crate::window::library::list::GeometryRow;
 use crate::window::theme::canvas_var;
 
