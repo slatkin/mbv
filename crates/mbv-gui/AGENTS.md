@@ -63,8 +63,10 @@ handshake refuses an Owner with a different build id.
   `resolve_router_outcome`). The GUI Library panel takes its own keys here,
   before the shared router (ADR 0036).
 - Never add a keyboard routing site in the core for the GUI. A GUI-only chord
-  gets its `KeyGate` and its capability fact, and it still resolves in the
-  core's three router files.
+  gets its `KeyPolicyGate` routing gate and its router capability fact, and it
+  still resolves in the core's three router files. `KeyGate` is the
+  presentation bucket the keybind registry carries; the routing gate is the
+  core's `KeyPolicyGate`.
 - Every action a pointer can reach keeps a key chord (the `gui-client` spec).
   A control whose TUI target the GUI has not ported is a documented no-op,
   never a wildcard.

@@ -9,7 +9,7 @@ fields the key reads (`updated_at_ms` on `AudiobookshelfShow` in
 `crates/mbv-audiobookshelf/src/catalog.rs` and on `AudiobookshelfBook` in
 `crates/mbv-audiobookshelf/src/catalog_books.rs`), and the fetch that reads the
 key's disk entry (`fetch_emby_image` and
-`fetch_audiobookshelf_image`, the core's `app::infra::image_fetch` module).
+`fetch_audiobookshelf_image`, in the core's `infra/image_fetch` module).
 
 ## The invariant
 

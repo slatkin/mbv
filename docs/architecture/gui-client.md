@@ -87,7 +87,7 @@ shutdown is announced before its socket closes (`daemon-disconnect-`
 and the announce reaches the GUI's App through the same shared drain half
 that serves the TUI: `PlayerEvent::DaemonShutdownAnnounced` sets the
 run-loop quit signal the TUI's `'outer` loop breaks on
-(`mbv_client_core::app::infra::signals`), the GUI core's `step` polls it beside the
+(`infra/signals.rs` in the core), the GUI core's `step` polls it beside the
 tick outcome, and the run ends through the quit edge — the window closes,
 and the run's exit boundary saves the GUI's launch location first
 (design D9), then runs `client_exit_teardown`. (`gui_core.run_quit` logs
@@ -688,8 +688,7 @@ the span's end is exclusive, and an empty span — an audio-part row's `0`/`0`
 — never holds one.
 
 What stays in Rust are the facts that change only on a discontinuity: the
-end offsets themselves (`App::queue_end_offsets` over
-`queue_end_offsets` in `mbv_client_core::queue_summary_projection`), the Music
+end offsets themselves (`App::queue_end_offsets`), the Music
 playing track id and the playing book id (a mark source, design D3), and
 the scrubber hover's `time_label` (the pointer drives it, not the clock).
 `GuiQueuePlayback` carries no playhead facts: its `playback`,
@@ -1107,7 +1106,7 @@ steps in one fixed order: the root list, then the selection, then the
 dependent content. A destination with no work for a step keeps the trait's
 default no-op; the driver's exhaustive match on the destination kind makes a
 new destination name its site. The driver,
-`App::ensure_gui_active_destination`, runs the steps for the active
+`GuiCore::ensure_gui_active_destination`, runs the steps for the active
 destination. Two callers reach it: `build` in
 `crates/mbv-gui/src/sections/library.rs`, which runs the pass before the parts
 are built, and the destination's open step (`open_gui_active_destination` in
@@ -1410,13 +1409,13 @@ the TUI menu builder's full entries for it, which the right-click item menu
 paints. The Hero's art (`art`) is a `GuiArtRef`: the cached artwork as an `image`
 URL, the bundled placeholder as a `placeholder` URL, or `Loading` with no URL.
 The core never re-encodes artwork: the image fetch's 1280-pixel cap bounds the
-cached bytes (`mbv_client_core::app::infra::image_fetch::fetch::emby`), the `mbv-art` scheme
+cached bytes (`infra/image_fetch/fetch/emby.rs` in the core), the `mbv-art` scheme
 answers them unchanged, and the window's `object-fit: cover` crops the Hero's
 art. The window fetches no Library image: every load goes through the
 `mbv-art` scheme to the core's image cache.
 
 The core warms that cache around the pick. Each destination's projection ends
-with `App::warm_gui_hero_neighbours`
+with `warm_hero_neighbours`
 (`src/gui_core/gui_library/artwork.rs`): it fetches the Hero art of the entries
 neighbouring the picked one in the painted order — one behind and three ahead,
 never the picked entry, whose art the Hero's own fetch covers — on the sources
@@ -1828,7 +1827,7 @@ menu, and the rename draft. Its `playlists` command carries `toggle`, `close`,
 closes the other, and a press on a destination tab closes the Playlists screen.
 
 The Client core owns whether the screen is open and which section it shows
-(`App::gui_settings`, `src/gui_core/gui_settings.rs`); the window content owns its
+(`GuiCore::gui_settings`, `src/gui_core/gui_settings.rs`); the window content owns its
 interaction state — the sidebar cursor, the keyboard pane, each list's cursor
 and scroll, the form drafts, the capture, and the Mini pane (ADR 0037). The
 frame's section is `GuiSettingsFrame`: the shown `section`, the `sections` the

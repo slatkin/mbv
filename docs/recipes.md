@@ -50,7 +50,7 @@ or for a new field on an existing message.
    (`crates/mbv-remote-player/src/lib.rs`). Decode a `CtrlEvent` in
    `crates/mbv-remote-player/src/connect.rs` and map it to a `PlayerEvent`.
    Handle the `PlayerEvent` in the core dispatch
-   (`mbv_client_core::dispatch::session::player_event`) or in the
+   (`dispatch/session/player_event.rs` in the core) or in the
    shell drain (`crates/mbv-tui/src/tui/run/drains.rs`). Give it an exhaustive
    arm or a
    documented no-op. The GUI Client needs no second arm: it drains the same
@@ -105,7 +105,7 @@ Use this recipe for a new configurable keyboard action. Read
    `crates/mbv-tui/src/tui/tests/routing_matrix/`. If the default chord needs a
    gate open,
    add the id to the snapshot setup in `defaults_reproduce_todays_resolution`
-   (`mbv_client_core::input::key_policy::resolution_tests`).
+   (`input/key_policy/resolution_tests.rs` in the core).
    *Proof:* `cargo nextest run -p mbv-tui -p mbv-client-core`.
 6. **GUI key coverage.** The GUI Client resolves chords through the same
    registry, router, and dispatch, so a shared action has one more site: the
@@ -117,7 +117,7 @@ Use this recipe for a new configurable keyboard action. Read
    needs the `KeyGate::GuiClient` gate in the registry, a `KeyPolicyBinding`
    variant with a `KeyPolicyEntry` whose `name` equals the registry `id`, an
    arm in `command_for_policy`
-   (`mbv_client_core::input::key_policy::commands`), a
+   (`input/key_policy/commands.rs` in the core), a
    `KeyPolicyGate::TransportChipKeys` gate
    (`mbv_client_core::input::key_policy`),
    and the router snapshot's capability fact (`client_capabilities` carrying
