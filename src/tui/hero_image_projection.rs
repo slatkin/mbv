@@ -5,7 +5,7 @@
 //! ratatui-image's, so the whole projection policy lives here. The fetch, the
 //! decode, the cache, and the queued encoding drop stay in the core
 //! (`App::fetch_card_image`, `App::audiobookshelf_cover_key`,
-//! `App::image_cache`, `App::clear_image_cover_box`); the radatui-image
+//! `App::image_cache`, `App::clear_image_cover_box`); the ratatui-image
 //! encoding is `crate::tui::image_protocol`.
 
 use super::Model;
