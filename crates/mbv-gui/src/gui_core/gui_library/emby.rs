@@ -175,15 +175,6 @@ impl GuiCore {
         play_emby_item(&mut self.app, &self.gui, lib_idx, item_id);
     }
 
-    /// Play the plain Emby-library row next (design D12, row 8.1).
-    pub(in crate::gui_core::gui_library) fn play_next_gui_emby_item(
-        &mut self,
-        lib_idx: usize,
-        item_id: &str,
-    ) {
-        play_next_emby_item(&mut self.app, &self.gui, lib_idx, item_id);
-    }
-
     /// Add the plain Emby-library row to the queue (design D12, row 8.1).
     pub(in crate::gui_core::gui_library) fn enqueue_gui_emby_item(
         &mut self,
@@ -515,21 +506,6 @@ pub(in crate::gui_core::gui_library) fn play_emby_item(
     match item {
         Some(item) => app.play_or_activate_lib_item(lib_idx, item),
         None => super::log_stale_library_item("embyPlay", item_id),
-    }
-}
-
-/// Play the plain Emby-library row next (design D12, row 8.1): the shared
-/// play-next admission, so the row enters directly after the active slot.
-pub(in crate::gui_core::gui_library) fn play_next_emby_item(
-    app: &mut App,
-    gui: &GuiClientState,
-    lib_idx: usize,
-    item_id: &str,
-) {
-    let item = super::emby_projection::emby_item(app, gui, lib_idx, item_id);
-    match item {
-        Some(item) => app.play_lib_item_next(lib_idx, item),
-        None => super::log_stale_library_item("embyPlayNext", item_id),
     }
 }
 

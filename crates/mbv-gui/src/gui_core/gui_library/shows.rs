@@ -222,20 +222,6 @@ pub(in crate::gui_core::gui_library) fn play_shows_item(
     }
 }
 
-/// Play the Shows episode next (design D12): the shared play-next admission, so
-/// the episode enters directly after the active slot.
-pub(in crate::gui_core::gui_library) fn play_next_shows_item(
-    app: &mut App,
-    gui: &GuiClientState,
-    lib_idx: usize,
-    item_id: &str,
-) {
-    match super::shows_projection::shows_item(app, gui, lib_idx, item_id) {
-        Some(item) => app.play_lib_item_next(lib_idx, item),
-        None => super::log_stale_library_item("showsPlayNext", item_id),
-    }
-}
-
 /// Add the Shows episode to the queue (design D12): the shared add path.
 pub(in crate::gui_core::gui_library) fn enqueue_shows_item(
     app: &mut App,
