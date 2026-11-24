@@ -323,6 +323,7 @@ fn paint_trailing_cell(
             RowHoverActions {
                 on_play: Some(on_hover_play),
                 on_queue: on_hover_queue,
+                row_name: Some(row.name.clone()),
             }
         }
     }

@@ -51,13 +51,18 @@ pub struct RowHoverActionsProps {
     /// control shows which of the two a press does now.
     #[props(default)]
     pub open: bool,
+    /// The row's own name: when it is set, the Play control's accessible name
+    /// composes as `Play {row_name}`, so a list of rows exposes a distinct Play
+    /// control per row. `None` leaves the plain `Play`.
+    #[props(default)]
+    pub row_name: Option<String>,
 }
 
 /// One control's button: the shared look, the control's label and hook, and
 /// the press that stops at the control before it runs `onpress`.
 fn action_button(
     action: &'static str,
-    label: &'static str,
+    label: &str,
     onpress: Callback<()>,
     glyph: Element,
 ) -> Element {
@@ -88,6 +93,12 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
     let on_shuffle = props.on_shuffle;
     let on_toggle = props.on_toggle;
     let open = props.open;
+    // The Play control's accessible name: the row's own name when the painter
+    // passed one, so `N` rows never expose `N` identical Play buttons.
+    let play_label = props
+        .row_name
+        .as_deref()
+        .map_or_else(|| "Play".to_owned(), |name| format!("Play {name}"));
 
     rsx! {
         div {
@@ -99,7 +110,7 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
                 {
                     action_button(
                         "play",
-                        "Play",
+                        &play_label,
                         on_play,
                         rsx! {
                             Play { size: ACTION_GLYPH_PX, fill: "currentColor".to_owned(), stroke_width: 0.0 }

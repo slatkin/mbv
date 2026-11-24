@@ -23,11 +23,19 @@ fn callback(offered: bool) -> Option<Callback<()>> {
     offered.then(|| Callback::new(|()| {}))
 }
 
-/// The part over one row's offer, mounted once per case.
+/// The part over one row's offer, mounted once per case, with the row's own
+/// name when the case carries one.
 fn painted(offer: Offer) -> DioxusDocument {
+    named(offer, None)
+}
+
+/// The part over one row's offer and that row's name, mounted once per case.
+fn named(offer: Offer, row_name: Option<&str>) -> DioxusDocument {
+    let row_name = row_name.map(str::to_owned);
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
-            move |(play, queue, shuffle, toggle): Offer| {
+            move |(offer, row_name): (Offer, Option<String>)| {
+                let (play, queue, shuffle, toggle) = offer;
                 rsx! {
                     RowHoverActions {
                         on_play: callback(play),
@@ -35,10 +43,11 @@ fn painted(offer: Offer) -> DioxusDocument {
                         on_shuffle: callback(shuffle),
                         on_toggle: callback(toggle),
                         open: false,
+                        row_name: row_name,
                     }
                 }
             },
-            offer,
+            (offer, row_name),
         ),
         DocumentConfig::default(),
     );
@@ -61,6 +70,21 @@ fn actions(doc: &DioxusDocument) -> Vec<String> {
         .collect()
 }
 
+/// The accessible name of the control the `data-row-action` value names.
+fn label_of(doc: &DioxusDocument, action: &str) -> String {
+    let dom = doc.inner();
+    let selector = format!("[data-row-action=\"{action}\"]");
+    let node = dom
+        .query_selector(&selector)
+        .expect("the selector is valid")
+        .unwrap_or_else(|| panic!("{action} paints"));
+    dom.get_node(node)
+        .expect("the node is in the document")
+        .attr(LocalName::from("aria-label"))
+        .unwrap_or_default()
+        .to_owned()
+}
+
 /// Contract (design D1, D2): only the controls the row offers paint, and they
 /// paint in the fixed order Play, Add to queue, Shuffle, Expand/collapse.
 #[rstest]
@@ -74,4 +98,17 @@ fn only_the_offered_controls_paint_in_the_fixed_order(
     let doc = painted(offer);
 
     assert_eq!(actions(&doc), expected);
+}
+
+/// Contract (gui-row-hover-actions review, unit 4): a list of rows must not
+/// expose `N` identical Play buttons, so a row name composes the Play
+/// control's accessible name as `Play {row_name}`; a row that passes no name
+/// keeps the plain `Play`.
+#[rstest]
+#[case(Some("Rhymin & Stealin"), "Play Rhymin & Stealin")]
+#[case(None, "Play")]
+fn the_play_control_names_its_row(#[case] row_name: Option<&str>, #[case] expected: &str) {
+    let doc = named((true, false, false, false), row_name);
+
+    assert_eq!(label_of(&doc, "play"), expected);
 }
