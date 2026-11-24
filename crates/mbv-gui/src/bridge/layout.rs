@@ -120,7 +120,23 @@ impl RegionTarget {
             )
             | Self::Confirm(_)
             | Self::DaemonLost(_) => true,
-            Self::Queue(_) | Self::QueuePlayback(_) | Self::StatusBar(_) | Self::Attach(_) => false,
+            // A row's own region, its hover Play control, the footer's
+            // playlist pill, and the header's controls open nothing: a press
+            // there reaches the surface, or dismisses the open overlay. The
+            // queue variants are listed one by one, so a new target is a
+            // compile error here rather than a silent pass-through.
+            Self::Queue(
+                QueueTargetId::Slot(_)
+                | QueueTargetId::RowPlay(_)
+                | QueueTargetId::PlaylistPill
+                | QueueTargetId::Filter
+                | QueueTargetId::NewQueue
+                | QueueTargetId::CloseQueue
+                | QueueTargetId::RenameQueue,
+            )
+            | Self::QueuePlayback(_)
+            | Self::StatusBar(_)
+            | Self::Attach(_) => false,
         }
     }
 }
