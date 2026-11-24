@@ -7,5 +7,5 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
-    mbv::run();
+    mbv_tui::run();
 }
