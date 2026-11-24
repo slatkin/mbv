@@ -9,8 +9,11 @@
 //! fills with `currentColor`, because usvg cannot resolve a `var()` in a
 //! `fill` attribute (`window/icons.rs` holds the reason).
 //!
-//! The Emby path lives here so that `brand_icons.rs` and this painter read
-//! one copy of it.
+//! This file is the one brand-mark table in `window/` (issue #1043): the
+//! Emby path and hex serve this painter and `brand_icons.rs`'s
+//! playback-target chooser rows from one copy, and the Cast path and hex
+//! serve the chooser's Cast row. The mpv mark is not a third-party brand,
+//! so `brand_icons.rs` keeps its path.
 
 use dioxus_native::prelude::*;
 use mbv_feed::FeedPlatform;
@@ -21,6 +24,17 @@ use crate::window::theme::canvas_var;
 /// The Emby path, on a 24 × 24 view box: the playback-target chooser's Emby
 /// row and this mark paint the same mark.
 pub(crate) const EMBY_PATH: &str = "M11.041 0c-.007 0-1.456 1.43-3.219 3.176L4.615 6.352l.512.513.512.512-2.819 2.791L0 12.961l1.83 1.848c1.006 1.016 2.438 2.46 3.182 3.209l1.351 1.359.508-.496c.28-.273.515-.498.524-.498.008 0 1.266 1.264 2.794 2.808L12.97 24l.187-.182c.23-.225 5.007-4.95 5.717-5.656l.52-.516-.502-.513c-.276-.282-.5-.52-.496-.53.003-.009 1.264-1.26 2.802-2.783 1.538-1.522 2.8-2.776 2.803-2.785.005-.012-3.617-3.684-6.107-6.193L17.65 4.6l-.505.505c-.279.278-.517.501-.53.497-.013-.005-1.27-1.267-2.793-2.805A449.655 449.655 0 0011.041 0zM9.223 7.367c.091.038 7.951 4.608 7.957 4.627.003.013-1.781 1.056-3.965 2.32a999.898 999.898 0 01-3.996 2.307c-.019.006-.026-1.266-.026-4.629 0-3.7.007-4.634.03-4.625Z";
+
+/// The Emby brand hex: the Library header's Emby mark and the chooser's Emby
+/// row paint one copy.
+pub(crate) const EMBY_COLOR: &str = "#52B54B";
+
+/// The Google Cast path, on a 24 × 24 view box: the playback-target chooser's
+/// Cast row paints it from this one copy.
+pub(crate) const CAST_PATH: &str = "M0 18.5455v3.2727h3.2727c0-1.811-1.4618-3.2727-3.2727-3.2727zm0-4.3637v2.1818c3.011 0 5.4545 2.4437 5.4545 5.4546h2.1819c0-4.2218-3.4146-7.6364-7.6364-7.6364zm0-4.3636V12c5.4218 0 9.8182 4.3964 9.8182 9.8182H12c0-6.6327-5.3782-12-12-12zm21.8182-7.6364H2.1818C.9818 2.1818 0 3.1636 0 4.3636v3.2728h2.1818V4.3636h19.6364v15.2728h-7.6364v2.1818h7.6364c1.2 0 2.1818-.9818 2.1818-2.1818V4.3636c0-1.2-.9818-2.1818-2.1818-2.1818Z";
+
+/// The Google Cast brand hex, on the playback-target chooser's Cast row.
+pub(crate) const CAST_COLOR: &str = "#4285F4";
 
 const AUDIOBOOKSHELF_PATH: &str = "M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0Zm-.023.402A11.598 11.598 0 0 1 23.575 12a11.598 11.598 0 0 1-11.598 11.598A11.598 11.598 0 0 1 .378 12 11.598 11.598 0 0 1 11.977.402Zm0 1.776a7.093 7.093 0 0 0-7.092 7.093v1.536a6.395 6.395 0 0 0-.439.33.35.35 0 0 0-.126.27v1.84a.36.36 0 0 0 .126.272c.22.182.722.564 1.504.956v.179c0 .483.31.873.694.873.384 0 .694-.392.694-.873v-4.415c0-.483-.31-.873-.694-.873-.369 0-.67.359-.694.812h-.002v-.91a6.027 6.027 0 1 1 12.054.003v.91c-.025-.454-.326-.813-.695-.813-.384 0-.694.391-.694.873v4.415c0 .483.31.873.694.873.384 0 .695-.392.695-.873v-.179a7.964 7.964 0 0 0 1.503-.956.35.35 0 0 0 .126-.272v-1.843a.342.342 0 0 0-.124-.27 5.932 5.932 0 0 0-.438-.329V9.271a7.093 7.093 0 0 0-7.092-7.093zm-3.34 5.548a.84.84 0 0 0-.84.84v9.405c0 .464.376.84.84.84h.866a.84.84 0 0 0 .84-.84V8.566a.84.84 0 0 0-.84-.84Zm2.905 0a.84.84 0 0 0-.84.84v9.405c0 .464.377.84.84.84h.867a.84.84 0 0 0 .84-.84V8.566a.84.84 0 0 0-.84-.84zm2.908 0a.84.84 0 0 0-.84.84v9.405c0 .464.376.84.84.84h.867a.84.84 0 0 0 .84-.84V8.566a.84.84 0 0 0-.84-.84zM8.112 9.983h1.915v.2H8.112Zm2.906 0h1.915v.2h-1.915Zm2.908 0h1.915v.2h-1.915zm-7.58 9.119a.633.633 0 0 0 0 1.265h11.26a.632.632 0 0 0 0-1.265z";
 
@@ -68,7 +82,7 @@ impl ServiceMark {
     /// Everything this mark paints.
     fn paint(self) -> MarkPaint {
         match self {
-            Self::Emby => MarkPaint::brand("emby", "Emby", "#52B54B", EMBY_PATH),
+            Self::Emby => MarkPaint::brand("emby", "Emby", EMBY_COLOR, EMBY_PATH),
             Self::Audiobookshelf => MarkPaint::brand(
                 "audiobookshelf",
                 "Audiobookshelf",
