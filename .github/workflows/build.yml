@@ -604,10 +604,12 @@ jobs:
 #   (a) miri-runnable pure unsafe worth gating, and
 #   (b) excluded, with a reason.
 #
-# Method: `rg "unsafe" --type rust` over the workspace (target excluded) found
-# 43 `unsafe` keyword occurrences (2 further grep hits are "thread-unsafe"
-# comments) across exactly 11 files, forming 42 distinct unsafe blocks or
-# declarations. Each site was read and classified below.
+# Method: `rg "unsafe" --type rust` over the workspace (target excluded) at
+# HEAD 37ba2fef4 (2026-10-07) found 43 `unsafe` keyword occurrences (2 further
+# grep hits are "thread-unsafe" comments) across exactly 11 files, forming 42
+# distinct unsafe blocks or declarations. Each site was read and classified
+# below. After the 2026-11-24 move, the groups below total 31 distinct unsafe
+# blocks across 10 files.
 #
 # Paths are the post-`2-split-tui-gui-clients` locations. The TUI binary's
 # package moved to `crates/mbv-tui` (package `mbv-tui`), and the module tree it
@@ -635,7 +637,7 @@ jobs:
 #      Reason: libc FFI + signal handlers.
 #    - `mbv-tui`, local_daemon.rs (1): `sigaction` SIGHUP-ignore. Reason:
 #      process/syscall FFI + signals.
-#    - `mbv-client-core`, app/pin.rs (1): `env::set_var`/`remove_var`
+#    - `mbv-client-core`, app/pin.rs (1): `env::remove_var`
 #      panel-identity scrub. Reason: environment mutation (design keeps env
 #      writes pre-thread, but the surrounding hand-over path is un-runnable
 #      under miri); the pty hand-over that made up the rest of the old pin

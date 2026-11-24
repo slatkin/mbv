@@ -25,11 +25,11 @@
 # with its reason, in the comment form the suppression policy requires.
 #
 # A re-scan at the 2026-11-24 split (same rule, re-pointed glob) reports six
-# further arms that carry no directive -- `dispatch/queue.rs` (the anchor
-# lookup), `dispatch/session/switch.rs` (twice), `dispatch/settings.rs` (the
+# arms that carry no directive -- `dispatch/queue.rs` (the anchor lookup),
+# `dispatch/session/switch.rs` (twice), `dispatch/settings.rs` (the
 # subtitle-prefs apply), `dispatch/library/browse/reset.rs`, and
-# `dispatch/library/artist_lookup.rs` -- so the census above is the
-# 2026-10-21 snapshot, not a current count.
+# `dispatch/library/artist_lookup.rs`. They were also present before the move:
+# the 2026-10-21 census missed them, so it is not a complete count.
 #
 # Blind spot (documented, deliberate): the rule matches the `_` wildcard
 # pattern only. A named catch-all binding (`other => ...`) is the same
