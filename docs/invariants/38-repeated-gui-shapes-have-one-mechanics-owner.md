@@ -35,8 +35,9 @@ GUI review found two concrete copies:
   rule, and duplicate `row_state` conversions in the Shows and Feeds Heroes,
   while flat and tree rows use `GuiHomeRowStateFrame`. The
   `gui-shared-workspace-row-state` change removed that copy.
-- `QueueChooserMenu` and `TargetChooserPopover` repeat the same card style,
-  row geometry, cursor fill, menu roles, and mounted-mark handling.
+- The Queue chooser and the playback-target chooser repeated the same card
+  style, row geometry, cursor fill, menu roles, and mounted-mark handling.
+  The `gui-shared-chooser-menu` change removed that copy.
 
 The copies pass type checks and painted-structure tests. They drift later,
 when one surface receives a fix and the other does not.
@@ -45,11 +46,15 @@ when one surface receives a fix and the other does not.
 
 - `LibraryListHeader`, `LibraryLetteredList`, `LibraryVirtualList`,
   `LibraryWorkspaceTable`, `LibraryHeroFrame`, `DialogFrame`, `QueueRowMenu`,
-  `ArtImage`, `TypedText`, `Truncate`, and `TreeGuide` each own one shape's
-  mechanics.
+  `ChooserMenu`, `ChooserRow`, `ArtImage`, `TypedText`, `Truncate`, and
+  `TreeGuide` each own one shape's mechanics.
 - `QueueRowMenu` serves the Library row menu, Queue row menu, Playlists menu,
   Settings value menus, and other context menus. Their entries differ; the
   menu shell does not.
+- `ChooserMenu` and `ChooserRow` (`chooser_menu.rs`, `gui-shared-chooser-menu`)
+  serve the Queue chooser and the playback-target chooser, Refresh row
+  included. Their entries and marks differ; the card and row mechanics do not,
+  and each owner keeps its own interaction authority (rule 5).
 - `played_title_tone` in `list_row.rs` is the one played-title derivation,
   and Workspace rows carry `GuiHomeRowStateFrame`, the frame the list rows
   carry; the Workspace table keeps its own playhead mark
@@ -63,8 +68,6 @@ when one surface receives a fix and the other does not.
 
 ## Where it currently fails
 
-- The Queue chooser and playback-target chooser still repeat their card and
-  row mechanics. Issue #1059 tracks one `ChooserMenu` and `ChooserRow`.
 - A future universal button or menu abstraction is not required. Extract a
   part when the mechanics are the same. Keep different sizes, token families,
   and interaction owners separate.
