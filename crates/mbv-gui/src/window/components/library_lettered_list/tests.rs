@@ -314,6 +314,32 @@ impl<D: Host> Fixture<D> {
         self.all_attrs(&selector, &format!("data-library-{}-row-id", D::ATTR))
     }
 
+    /// The hover controls the host of the row `row_id` offers, in paint order
+    /// (gui-row-hover-actions design D3): the actions are the row button's
+    /// later sibling in the row's hover host, so the row's own node names them.
+    fn hover_controls_of(&self, row_id: &str) -> Vec<String> {
+        let dom = self.doc.inner();
+        let row = dom
+            .query_selector(&row_selector::<D>(row_id))
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{row_id} paints"));
+        let host = dom
+            .get_node(row)
+            .expect("the row is in the document")
+            .parent
+            .expect("the row sits in its hover host");
+        dom.query_selector_all_in(host, "[data-row-action]")
+            .expect("the selector is valid")
+            .into_iter()
+            .filter_map(|action| {
+                dom.get_node(action)
+                    .expect("the control is in the document")
+                    .attr(LocalName::from("data-row-action"))
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
     /// The painted row of `id`, as the press handler takes it.
     fn row_of(&mut self, id: &str) -> LetteredRow<LetteredItemRow<D::Row>> {
         let id = id.to_owned();

@@ -18,7 +18,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiHomeRowIdFrame;
+use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowKindFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
@@ -47,6 +47,21 @@ fn home_menu_row(id: &GuiHomeRowIdFrame) -> crate::gui_core::GuiLibraryMenuRow {
         }
     };
     crate::gui_core::GuiLibraryMenuRow::Home(row)
+}
+
+/// The hover Shuffle press of a Home row (gui-row-hover-actions design D3):
+/// only a `Collection` row's menu carries the shuffle entry, so only that row
+/// offers the control. The press runs the row menu's own entry through
+/// [`LibraryState::shuffle_library_row`], as the row's right-press does.
+fn home_hover_shuffle(item: &HomeItemRow, library: &LibraryState) -> Option<Callback<()>> {
+    if item.item_kind != GuiHomeRowKindFrame::Collection {
+        return None;
+    }
+    let shuffle_library = library.clone();
+    let row = home_menu_row(&item.row_id);
+    Some(Callback::new(move |()| {
+        shuffle_library.shuffle_library_row(row.clone());
+    }))
 }
 
 /// One painted row of the flat list: the section
@@ -80,7 +95,10 @@ fn paint_home_row(
 /// One painted item row: the shared top-level row part over the carried row —
 /// its art thumb, the two-line name, the trailing text, and the resume run
 /// inside the thumb (gui-delineated-rows design D1). The row passes its own
-/// play state, so the part derives the title's tone and the run's length.
+/// play state, so the part derives the title's tone and the run's length. Its
+/// hover offers Play and Add on every row and Shuffle on a `Collection` row
+/// alone (gui-row-hover-actions design D3), each through the Home play, queue,
+/// and row-menu shuffle paths.
 fn paint_home_item_row(
     id: &str,
     item: &HomeItemRow,
@@ -96,6 +114,11 @@ fn paint_home_item_row(
     let press_library = library.clone();
     let play_id = item.row_id.clone();
     let play_library = library.clone();
+    let hover_play_id = item.row_id.clone();
+    let hover_play_library = library.clone();
+    let hover_queue_id = item.row_id.clone();
+    let hover_queue_library = library.clone();
+    let hover_shuffle = home_hover_shuffle(item, library);
     let menu_row = Some(home_menu_row(&item.row_id));
     let menu_library = library.clone();
     rsx! {
@@ -117,6 +140,13 @@ fn paint_home_item_row(
             }),
             on_press: Callback::new(move |()| press_library.press_home_row(&press_row)),
             on_play: Callback::new(move |()| play_library.play_home_row(play_id.clone())),
+            on_hover_play: Some(Callback::new(move |()| {
+                hover_play_library.play_home_row(hover_play_id.clone());
+            })),
+            on_hover_queue: Some(Callback::new(move |()| {
+                hover_queue_library.queue_home_row(hover_queue_id.clone());
+            })),
+            on_hover_shuffle: hover_shuffle,
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library.open_row_menu_at(menu_row.clone(), x, y);
             })),

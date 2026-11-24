@@ -10,7 +10,9 @@
 //! entry lists pass their carried play state so the part derives the title's
 //! tone and the thumb's run. The press and the double-click ride the adapter's
 //! command methods, so the generic component calls one press path for all
-//! four.
+//! four. The rows' hover controls ride those same methods
+//! (`gui-row-hover-actions` design D3, D4), and only an Emby `Collection`
+//! row's Shuffle reaches the row menu's own shuffle entry.
 
 use std::sync::Arc;
 
@@ -23,6 +25,7 @@ use crate::bridge::frame::library::{
     GuiPodcastsList,
 };
 use crate::bridge::library::GuiRowArtScopeFrame;
+use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::list_row::{FlatRow, LibraryRowThumb, LibraryTrailPart};
 use crate::window::library::list::LetteredRow;
@@ -145,8 +148,27 @@ fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
     }
 }
 
+/// The hover Shuffle press of an Emby row (`gui-row-hover-actions` design D3):
+/// only a `Collection` row's menu carries the shuffle entry, so only that row
+/// offers the control. The press runs the row menu's own entry through
+/// [`LibraryState::shuffle_library_row`], as the row's right-press does.
+fn emby_hover_shuffle(
+    kind: GuiEmbyRowKindFrame,
+    item_id: String,
+    library: &LibraryState,
+) -> Option<Callback<()>> {
+    if kind != GuiEmbyRowKindFrame::Collection {
+        return None;
+    }
+    let shuffle_library = library.clone();
+    Some(Callback::new(move |()| {
+        shuffle_library.shuffle_library_row(GuiLibraryMenuRow::Item(item_id.clone()));
+    }))
+}
+
 /// One painted row of the plain Emby-library list: the letter heading or the
-/// item row.
+/// item row. Its hover offers Play and Add on every row, and Shuffle on a
+/// `Collection` row alone (`gui-row-hover-actions` design D3).
 fn paint_emby_row(
     row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>,
     library: &LibraryState,
@@ -160,6 +182,11 @@ fn paint_emby_row(
             let press_library = library.clone();
             let play_id = item.row.id.clone();
             let play_library = library.clone();
+            let hover_play_id = item.row.id.clone();
+            let hover_play_library = library.clone();
+            let hover_queue_id = item.row.id.clone();
+            let hover_queue_library = library.clone();
+            let hover_shuffle = emby_hover_shuffle(item.row.kind, item.row.id.clone(), library);
             let menu_id = item.row.id.clone();
             let menu_library = library.clone();
             rsx! {
@@ -180,6 +207,13 @@ fn paint_emby_row(
                         EmbyList::select(&press_library, &press_row);
                     }),
                     on_play: Callback::new(move |()| EmbyList::play(&play_library, &play_id)),
+                    on_hover_play: Some(Callback::new(move |()| {
+                        EmbyList::play(&hover_play_library, &hover_play_id);
+                    })),
+                    on_hover_queue: Some(Callback::new(move |()| {
+                        EmbyList::queue(&hover_queue_library, &hover_queue_id);
+                    })),
+                    on_hover_shuffle: hover_shuffle,
                     on_context: Some(Callback::new(
                         move |(x, y): (f32, f32)| menu_library.open_row_menu_at(
                             Some(LibraryState::row_menu_item(menu_id.clone())),
@@ -283,7 +317,9 @@ impl LetteredDestination for AudiobooksList {
     }
 }
 
-/// One painted row of the book list: the letter heading or the book row.
+/// One painted row of the book list: the letter heading or the book row. A
+/// book is no collection, so its hover offers Play and Add and no Shuffle
+/// (`gui-row-hover-actions` design D3).
 fn paint_audiobooks_row(
     row: &LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>,
     library: &LibraryState,
@@ -297,6 +333,10 @@ fn paint_audiobooks_row(
             let press_library = library.clone();
             let play_id = item.row.id.clone();
             let play_library = library.clone();
+            let hover_play_id = item.row.id.clone();
+            let hover_play_library = library.clone();
+            let hover_queue_id = item.row.id.clone();
+            let hover_queue_library = library.clone();
             let menu_id = item.row.id.clone();
             let menu_library = library.clone();
             rsx! {
@@ -319,6 +359,12 @@ fn paint_audiobooks_row(
                     on_play: Callback::new(move |()| {
                         AudiobooksList::play(&play_library, &play_id);
                     }),
+                    on_hover_play: Some(Callback::new(move |()| {
+                        AudiobooksList::play(&hover_play_library, &hover_play_id);
+                    })),
+                    on_hover_queue: Some(Callback::new(move |()| {
+                        AudiobooksList::queue(&hover_queue_library, &hover_queue_id);
+                    })),
                     on_context: Some(Callback::new(
                         move |(x, y): (f32, f32)| menu_library.open_row_menu_at(
                             Some(LibraryState::row_menu_item(menu_id.clone())),

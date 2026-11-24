@@ -121,3 +121,23 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
         "the row-menu command names the row's item id"
     );
 }
+
+/// Contract (gui-row-hover-actions design D3, D4): an Emby collection row's
+/// menu carries Shuffle, so its hover offers Play, Add, and Shuffle; a media
+/// row offers Play and Add alone.
+#[test]
+fn a_collection_row_offers_shuffle_and_a_media_row_does_not() {
+    let mut fixture = built::<EmbyList>(emby_frame(true, feed_rows()), emby_detail(None));
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.hover_controls_of("f1"),
+        ["play", "queue", "shuffle"],
+        "the collection row offers Shuffle"
+    );
+    assert_eq!(
+        fixture.hover_controls_of("f2"),
+        ["play", "queue"],
+        "the media row offers Play and Add only"
+    );
+}
