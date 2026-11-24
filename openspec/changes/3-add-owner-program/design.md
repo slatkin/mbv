@@ -40,7 +40,7 @@ The state after `2-split-tui-gui-clients` that shapes the approach:
 
 ### D8. The Owner program
 
-`crates/mbv-owner` builds the `mbv-owner` binary. Its dependencies are `mbv-daemon`, `mbv-desktop`, `mbv-config`, `mbv-ctrl`, `mbv-core`, `mimalloc`, `nix`, and `libc`, and no Client crate. `main` installs the same allocator settings and fatal-signal handler as the `mbv` binary does, then runs today's `run_local_daemon_main`. It takes `--log-level` as today's hidden mode does, and prints its own usage. It has no other argument. Run with no Owner lock free, it exits as today's hidden mode does.
+`crates/mbv-owner` builds the `mbv-owner` binary. Its dependencies are `mbv-daemon`, `mbv-desktop`, `mbv-config`, `mbv-ctrl`, `mbv-core`, `mimalloc`, `nix`, `libc`, and `tracing`, and no Client crate. `main` installs the same allocator settings and fatal-signal handler as the `mbv` binary does, then runs today's `run_local_daemon_main`. It takes `--log-level` as today's hidden mode does, and prints its own usage. It has no other argument. Run with no Owner lock free, it exits as today's hidden mode does.
 
 A Client starts the Owner (`owner_link::start_owner`) from the sibling `mbv-owner` of its own executable, else from `mbv-owner` on `PATH` (the rule that the GUI's `owner_program` uses today, moved to the core and used by both Clients). The `owner_exe` option and `App::set_owner_exe` stay for tests and for the GUI's restart path.
 
@@ -71,7 +71,7 @@ Alternative considered: launch the sibling `mbv` path every time. Rejected: afte
 
 ### D11 (Owner part). Dependencies
 
-No new external dependency, and no version change. `mimalloc` 0.1 goes to `mbv-owner` as well as `mbv-tui` (both binaries keep the allocator). `nix` 0.31 and `libc` 0.2 go with the moved FFI sites.
+No new external dependency, and no version change. `mimalloc` 0.1 goes to `mbv-owner` as well as `mbv-tui` (both binaries keep the allocator). `nix` 0.32 and `libc` 0.2 go with the moved FFI sites, and `tracing` 0.1 goes with the moved run loop's log calls.
 
 ## Risks / Trade-offs
 
