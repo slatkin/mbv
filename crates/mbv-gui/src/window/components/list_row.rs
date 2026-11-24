@@ -3,7 +3,8 @@
 //! constants. [`RowLevel`] names the level a part paints and derives the
 //! title's tone and the selection's fill and corner radius from it, so no part
 //! and no list restates a tone; [`context_press`] is the one right-press
-//! handler. [`thumb`] holds the art thumb both parts paint.
+//! handler. [`thumb`] holds the art thumb both parts paint, [`flat`] the
+//! top-level row, and [`tree`] the nested parent and leaf rows.
 //!
 //! A part names its level and its play state, and never a look value: a
 //! destination that restyles a row changes this module, and a list that passes
@@ -16,10 +17,14 @@ use crate::window::input::f32_from_f64;
 use crate::window::library::episode::is_played_episode;
 use crate::window::theme::canvas_var;
 
+pub mod flat;
 pub mod thumb;
+pub mod tree;
 
 pub use crate::window::library::list::{LIBRARY_ROW_HEIGHT, NODE_ROW_HEIGHT, TRACK_ROW_HEIGHT};
+pub use flat::FlatRow;
 pub use thumb::{LibraryRowThumb, paint_thumb};
+pub use tree::{TreeDepth, TreeLevel, TreeRow, TreeTrail};
 
 /// The top-level row's left and right padding, in logical pixels
 /// (gui-delineated-rows design D2; `gui-tree-indent-guides` design D2): the
