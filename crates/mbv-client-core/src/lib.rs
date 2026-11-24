@@ -34,7 +34,7 @@ pub use self::app::{
 pub use self::app::config::{Config, load_config};
 pub use self::app::owner_link::{
     OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,
-    refusal_text, start_owner,
+    owner_program, refusal_text, start_owner,
 };
 pub use self::app::pin::claim_pin_swap_participant;
 

@@ -1,7 +1,7 @@
 //! The Owner attach campaign (design D9 of the archived `add-tauri-gui-client`): the core
-//! thread's pre-attach phase. It finds the Owner, starts one from the `mbv`
-//! program when none runs, and attaches — and for every outcome that cannot
-//! attach immediately, it shows the window state that
+//! thread's pre-attach phase. It finds the Owner, starts one from the
+//! `mbv-owner` program when none runs, and attaches — and for every outcome
+//! that cannot attach immediately, it shows the window state that
 //! `startup::run_local_instance` gives the TUI Client. There is no `App`
 //! before the attach, so the campaign resolves the mismatch state's own keys
 //! and button presses itself; the window interprets nothing. The campaign
@@ -11,13 +11,13 @@
 
 use std::cell::Cell;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use mbv_client_core::{
     App, ClientCapabilities, ClientCapability, Config, OwnerStartOptions, OwnerState, attach_owner,
-    exclusive_owner_refusal_text, find_owner, start_owner,
+    exclusive_owner_refusal_text, find_owner, owner_program, start_owner,
 };
 use mbv_config::owner_lock_path;
 use mbv_daemon::{SignalOwnerError, signal_owner};
@@ -79,7 +79,7 @@ pub enum OwnerWait {
 pub trait OwnerSteps {
     /// `find_owner`: the single-instance probe.
     fn find(&self) -> io::Result<OwnerState>;
-    /// `start_owner` from the `mbv` program the campaign resolved.
+    /// `start_owner` from the `mbv-owner` program the campaign resolved.
     fn start(&self, program: &Path) -> Result<(), RemotePlayerError>;
     /// `attach_owner` as a Client of the running Owner.
     fn attach(&self, program: &Path) -> Result<App, RemotePlayerError>;
@@ -494,23 +494,7 @@ fn mismatch_key(key: KeyEvent) -> Option<PromptOutcome> {
     }
 }
 
-/// The `mbv` program that becomes the Owner (design D9): the sibling of the
-/// running `mbv-gui` executable when one is installed beside it, else the
-/// `mbv` name on `PATH`. The Owner is never the GUI program.
-fn owner_program() -> PathBuf {
-    let name = format!("mbv{}", std::env::consts::EXE_SUFFIX);
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent()
-    {
-        let sibling = dir.join(&name);
-        if sibling.is_file() {
-            return sibling;
-        }
-    }
-    PathBuf::from(name)
-}
-
-/// The campaign's production steps (design D9): the `mbv` library's public
+/// The campaign's production steps (design D9): the Client core's public
 /// Owner steps, with the TUI run's one wait deadline for a shutting-down
 /// Owner.
 pub(crate) struct LibraryOwnerSteps<'a> {

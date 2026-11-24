@@ -1,7 +1,7 @@
 //! The `App`'s Client-waker and Owner-start handles (design D7 and D9 of
 //! `extract-client-core`): the shared wake handle every Owner-snapshot relay
-//! carries, the `mbv` program the Client starts its Owner from, and the
-//! waking relay an attached event channel is wrapped in.
+//! carries, the Owner program the Client starts, and the waking relay an
+//! attached event channel is wrapped in.
 //!
 //! The group is cohesive — one waker value and the two places it decides who
 //! starts the Owner and how an event reaches the drain — so it sits in its own
@@ -66,9 +66,10 @@ impl App {
         self.library_fetch_events.wait_take_for_test(timeout)
     }
 
-    /// Record the `mbv` program this Client starts the Owner from (design
-    /// D9 of `extract-client-core`). The Owner link sets it at attach time;
-    /// `None` keeps this process's own executable.
+    /// Record the Owner program this Client starts (design D9 of
+    /// `extract-client-core`). The Owner link sets it at attach time; `None`
+    /// starts [`crate::app::owner_link::owner_program`]: the `mbv-owner`
+    /// program beside the running Client, else `mbv-owner` on `PATH`.
     pub(in crate::app) fn set_owner_exe(&mut self, owner_exe: Option<std::path::PathBuf>) {
         self.owner_exe = owner_exe;
     }
@@ -96,10 +97,12 @@ impl App {
         self.client_capabilities = capabilities;
     }
 
-    /// Start this machine's Owner process from the Client's `mbv` program and
-    /// wait until its control socket accepts connections. Every App-side
-    /// Owner start goes through here so a GUI Client never starts itself as
-    /// the Owner (design D9 of `extract-client-core`).
+    /// Start this machine's Owner process from the Owner program this Client
+    /// starts — [`crate::app::owner_link::owner_program`] unless this `App`
+    /// records another — and wait until its control socket accepts
+    /// connections. Every App-side Owner start goes through here so a GUI
+    /// Client never starts itself as the Owner (design D9 of
+    /// `extract-client-core`).
     pub(in crate::app) fn start_local_daemon(
         &self,
     ) -> Result<(), mbv_remote_player::RemotePlayerError> {

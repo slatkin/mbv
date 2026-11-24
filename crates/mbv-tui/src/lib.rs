@@ -3,7 +3,7 @@
 //! This crate owns the `TuiRealm` shell `Model` and its `Application`, the
 //! terminal setup and the input edge (`neutral_edge`) that mounts the shared
 //! Keyboard Router, the listener port (`input_port`), the `--pin` pinned-panel
-//! launch, `startup`, and the Owner host in `local_daemon`. It links
+//! launch, and `startup`. It links
 //! `mbv-client-core` for the shared state and rules and never links
 //! `mbv-gui`. It re-exports the core surface its modules and tests name, so a
 //! TUI module reaches the core by one crate name.
@@ -12,7 +12,6 @@
 //! here: `ratatui`, `crossterm`, `TuiRealm`, and the terminal image protocol.
 //! No window stack enters this crate.
 
-mod local_daemon;
 mod owner_restart;
 mod pin;
 mod startup;

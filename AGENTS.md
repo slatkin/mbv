@@ -2,7 +2,8 @@
 
 mbv is a Rust media client for Emby, Audiobookshelf, and Feeds, with a terminal
 UI and a native window. It embeds mpv. Every local Client attaches to the
-per-user Owner process. That process is the only local Player-owner host.
+per-user Owner process. That process is the only local Player-owner host, and
+it runs from its own program `mbv-owner`, which carries no Client (ADR 0044).
 Stay-alive controls whether that process outlives its Clients. Packaged `mbvd`
 stays a separate Player owner. `mbvd` is a headless server daemon (a systemd
 unit, no desktop session). It never has a tray, a pinned panel, or any Client
@@ -15,6 +16,7 @@ machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*).
 - **Services**: Emby, Audiobookshelf, Feeds
 - **Playback**: embedded mpv; Google Cast receivers and Emby Sessions are output projections of the Owner
 - **Clients**: the TUI (`mbv`, TuiRealm) and the GUI Client (`mbv-gui`, Dioxus Native over Blitz, ADR 0039)
+- **Owner program**: `mbv-owner`, the separate program that hosts the Owner process; no Client crate, terminal UI library, or GUI toolkit (ADR 0044)
 - **Client core**: `mbv-client-core`, the state and rules both Clients link (ADR 0043)
 - **Player owners**: the per-user Owner process (local) and the packaged `mbvd` daemon
 - **Async**: synchronous first; `tokio` is edge-only
@@ -30,8 +32,7 @@ crates/
 │                        #   Keyboard Router, the Client tick, Owner find/start/attach. No
 │                        #   terminal or GUI toolkit in its dependency graph
 ├── mbv-tui/             # TUI Client, binary `mbv`: the TuiRealm shell, TUI projections, the
-│                        #   terminal key edge, the pinned panel, and (until `3-add-owner-program`)
-│                        #   the Owner host behind `--__local-daemon`
+│                        #   terminal key edge, and the pinned panel
 ├── mbv-gui/             # GUI Client, binary `mbv-gui`: Dioxus Native over Blitz (ADR 0039);
 │                        #   outside default-members
 ├── mbv-surfaces/        # Surface state (cursor, selection, marks, viewport), FocusStack, HitMap,
@@ -49,7 +50,9 @@ crates/
 ├── mbv-core/            # App logging; Service state and setup-generation types
 ├── mbv-remote-player/   # Remote player runtime
 ├── mbv-player/          # mpv-backed player
-├── mbv-daemon/          # Daemon library used by mbvd and the TUI in-process
+├── mbv-daemon/          # Daemon library used by mbvd and the Owner program in-process
+├── mbv-owner/           # Owner program, binary `mbv-owner`: hosts the per-user Owner process.
+│                        #   No Client crate, no terminal UI library, no GUI toolkit (ADR 0044)
 ├── mbvd/                # Packaged daemon, persistence, sockets
 ├── mbv-queue/           # Canonical queue, kinds, state, lineage
 ├── mbv-ctrl/            # Player-owner protocol vocabulary

@@ -12,10 +12,8 @@ to the TUI edge.
   the library's `run`.
 - `src/lib.rs` and the modules beside it — the program's own policy:
   - `startup` — argument handling, configuration, `--pin`, `-q`, `--toggle`,
-    the Client-side Owner link, and the TUI Client run.
-  - `local_daemon` — the Owner host behind the hidden `--__local-daemon` flag:
-    the swap launch, the tray hooks, and the run loop. It moves to the Owner
-    program when that exists.
+    the Client-side Owner link, and the TUI Client run. The Client starts the
+    Owner program (`mbv-owner`) beside this program, else on `PATH` (ADR 0044).
   - `pin` — the `--pin` launch, its failure reporting, and the running-panel
     toggle. The panel identity and every running-panel request live in the
     core's `pin` module; this module builds the launch argv from the core's

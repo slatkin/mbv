@@ -16,6 +16,7 @@ package() {
     install -Dm755 "${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
     install -Dm755 "mbvd" "${pkgdir}/usr/bin/mbvd"
     install -Dm755 "mbv-gui" "${pkgdir}/usr/bin/mbv-gui"
+    install -Dm755 "mbv-owner" "${pkgdir}/usr/bin/mbv-owner"
     install -Dm644 "mbv.desktop" "${pkgdir}/usr/share/applications/${pkgname}.desktop"
     install -Dm644 "icon.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${pkgname}.svg"
     install -Dm644 "mbv.lua" "${pkgdir}/usr/share/${pkgname}/scripts/mbv.lua"

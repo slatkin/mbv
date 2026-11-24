@@ -20,11 +20,11 @@ pub const IN_PANEL_FLAG: &str = "--in-panel";
 
 /// The variable pinwin sets on the Client it runs inside a panel: the name of
 /// that panel.
-const PINWIN_PANEL_ENV: &str = "PINWIN_PANEL";
+pub(in crate::app) const PINWIN_PANEL_ENV: &str = "PINWIN_PANEL";
 
 /// The variable pinwin sets beside [`PINWIN_PANEL_ENV`]: the daemon socket
 /// that serves that panel.
-const PINWIN_SOCKET_ENV: &str = "PINWIN_SOCKET";
+pub(in crate::app) const PINWIN_SOCKET_ENV: &str = "PINWIN_SOCKET";
 
 /// The panel identity this launch was started with.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

@@ -1,11 +1,13 @@
 # What the Owner Runs, What the TUI Runs
 
-**Status:** current as of 2026-10-15 (`main`, 9eb825ec9).
+**Status:** current as of `3-add-owner-program`.
 
 Every local launch is a Client of the per-user Owner process. The Owner
-process is the only local Player owner. The two processes split the work of
-the app. This table records which side runs each operation. The domain terms
-are defined in `CONTEXT.md`. The ownership decisions are ADR 0029 and 0030.
+process is the only local Player owner. It runs from its own program,
+`mbv-owner`, which carries no Client (ADR 0044). The two processes split the
+work of the app. This table records which side runs each operation. The
+domain terms are defined in `CONTEXT.md`. The ownership decisions are ADR
+0029, 0030, and 0044.
 
 The rule behind the table: the Owner holds playback and queue authority. The
 TUI holds presentation, Service reads, and desktop surfaces. Requests cross
@@ -25,7 +27,7 @@ ctrl. Data never does. No Service credential crosses ctrl.
 | F3 Sessions and Cast | Nothing | Direct remote control of Emby Sessions and cast receivers: discovery, dispatch, cast heartbeat (`mbv_client_core::dispatch::cast*`) |
 | Playlists | Nothing | Save-on-consume write-back to the Emby playlist (`consume_quit.rs`) |
 | Ctrl protocol | Listens, admits Clients, role-gates commands, broadcasts queue and playback events | Attaches with the Hello handshake. Receives and renders snapshots |
-| Lifetime | Stay-alive policy. Outlives Clients. Coordinated shutdown with durable queue save on `RequestShutdown` | Sends `RequestShutdown`. Spawns the Owner (`mbv --__local-daemon`), holds the single-instance flock, waits for socket ready, attaches |
+| Lifetime | Stay-alive policy. Outlives Clients. Coordinated shutdown with durable queue save on `RequestShutdown` | Sends `RequestShutdown`. Spawns the Owner program (`mbv-owner`), holds the single-instance flock, waits for socket ready, attaches |
 | Owner actions | Runs Pin swap and Open terminal on request | Nothing |
 | Tray | Shows the desktop Tray (local Owner process only; mbvd has none) | Nothing |
 | Pinned panel | Nothing | Owns the pinwin layer-shell window and its pty. A pinned launch is a Client |

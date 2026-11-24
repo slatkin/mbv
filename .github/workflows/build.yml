@@ -276,9 +276,9 @@ jobs:
 
       - name: Build GUI Client
         # `mbv-gui` sits outside `default-members`, so the step above never
-        # builds it. The GUI starts its Owner from the sibling `mbv` binary and
-        # the handshake refuses a different build id, so both ship from this
-        # one commit.
+        # builds it. The GUI starts its Owner from the sibling `mbv-owner`
+        # program and the handshake refuses a mismatched build, so all three
+        # ship from this one commit.
         run: cargo build --release -p mbv-gui
 
       - name: Test release
@@ -305,6 +305,7 @@ jobs:
           cp target/release/mbv "${DIST}/"
           cp target/release/mbvd "${DIST}/"
           cp target/release/mbv-gui "${DIST}/"
+          cp target/release/mbv-owner "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
           cp scripts/mbv_*.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"
@@ -608,8 +609,8 @@ jobs:
 # HEAD 37ba2fef4 (2026-10-07) found 43 `unsafe` keyword occurrences (2 further
 # grep hits are "thread-unsafe" comments) across exactly 11 files, forming 42
 # distinct unsafe blocks or declarations. Each site was read and classified
-# below. After the 2026-11-24 move, the groups below total 31 distinct unsafe
-# blocks across 10 files.
+# below. After the 2026-11-24 move, the groups below total 34 distinct unsafe
+# blocks across 11 files.
 #
 # Paths are the post-`2-split-tui-gui-clients` locations. The TUI binary's
 # package moved to `crates/mbv-tui` (package `mbv-tui`), and the module tree it
@@ -617,7 +618,10 @@ jobs:
 # crate and gives the file path inside that crate. Group 1's site counts are
 # re-measured at that move (the pin pty hand-over and the single-instance
 # `kill` site left the tree, and the spawn-side `setsid` now goes through
-# `nix`).
+# `nix`). The Owner-program move (2026-11-24) took `local_daemon.rs`, with its
+# `sigaction` SIGHUP-ignore, out of `mbv-tui` into `mbv-owner`, which also
+# carries its own copies of the allocator cap and the fatal-signal hooks; the
+# groups were re-counted against the post-move tree there.
 #
 # SET (a) -- EMPTY.
 # Every audited site is a libc or libmpv FFI call, a signal/pty/pipe/fd
@@ -631,12 +635,10 @@ jobs:
 # SET (b) -- excluded with reason, by group:
 #
 # 1. `mbv-tui` (the TUI Client binary) and `mbv-client-core` (the core
-#    library it links), 9 sites:
+#    library it links), 8 sites:
 #    - `mbv-tui`, startup.rs (3): `mallopt(M_ARENA_MAX)` FFI; fatal-signal
 #      handler install; async-signal-safe handler body (write/signal/raise).
 #      Reason: libc FFI + signal handlers.
-#    - `mbv-tui`, local_daemon.rs (1): `sigaction` SIGHUP-ignore. Reason:
-#      process/syscall FFI + signals.
 #    - `mbv-client-core`, app/pin.rs (1): `env::remove_var`
 #      panel-identity scrub. Reason: environment mutation (design keeps env
 #      writes pre-thread, but the surrounding hand-over path is un-runnable
@@ -668,6 +670,14 @@ jobs:
 #    `remove_test_env_var`. Reason: environment mutation is rejected by miri
 #    in the multi-threaded test harness; these helpers exist precisely
 #    because that harness is multi-threaded.
+#
+# 6. `mbv-owner` (the Owner program), 4 sites:
+#    - main.rs (3): the Owner's own copies of the `mbv-tui` hooks above —
+#      `mallopt`; fatal-signal handler install; async-signal-safe handler
+#      body (write/signal/raise). Its crash writer makes no terminal call,
+#      because the Owner holds no terminal. Reason: libc FFI + signals.
+#    - local_daemon.rs (1): `nix` `sigaction` SIGHUP-ignore, moved here with
+#      the run loop from `mbv-tui`. Reason: process/syscall FFI + signals.
 #
 # If a future unsafe site is added, extend this audit before relying on the
 # miri gate; set (a) must stay an explicit, verified list.
