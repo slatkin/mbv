@@ -11,7 +11,7 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 2. Remove the queue row menu's Play next move (design D7)
 
-- [ ] 2.1 Remove the Play next entry from `open_gui_row_menu` (`src/app/gui_client_state/row_menu.rs`), `ContextAction::PlayNext(usize)` (`crates/mbv-ui-model/src/context_menu.rs`) with every match arm on it (`src/app/dispatch/context_menu/actions.rs`), and `play_queue_item_next`, `play_next_position`, and `position_after` (`src/app/dispatch/queue.rs`). Delete their tests. Update the row menu entry-order test to the new order (Play now, then the mark and go-to entries). Verify: `cargo check --workspace` passes and `rg -n "PlayNext|play_queue_item_next" src crates` finds nothing.
+- [x] 2.1 Remove the Play next entry from `open_gui_row_menu` (`src/app/gui_client_state/row_menu.rs`), `ContextAction::PlayNext(usize)` (`crates/mbv-ui-model/src/context_menu.rs`) with every match arm on it (`src/app/dispatch/context_menu/actions.rs`), and `play_queue_item_next`, `play_next_position`, and `position_after` (`src/app/dispatch/queue.rs`). Delete their tests. Update the row menu entry-order test to the new order (Play now, then the mark and go-to entries). Verify: `cargo check --workspace` passes and `rg -n "PlayNext|play_queue_item_next" src crates` finds nothing.
 
 ## 3. Shared part and Shuffle command (design D1, D4)
 
