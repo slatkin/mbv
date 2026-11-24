@@ -4,11 +4,11 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 1. Row parts (design D1–D4)
 
-- [ ] 1.1 Add `crates/mbv-gui/src/window/components/list_row.rs` (registered in `components.rs`): the title-tone and selection rules and the context-press handler of D4, and the constants from `library_item_row.rs`. Point `tree_guide.rs` at them. Verify: `cargo check -p mbv-gui`.
-- [ ] 1.2 Add `list_row/thumb.rs`: move `LibraryRowThumb`, `paint_thumb`, and its helpers, without the played dim. Verify: `cargo check -p mbv-gui`.
-- [ ] 1.3 Add `list_row/flat.rs`: `FlatRow` with the props and look of D2. Verify: `cargo check -p mbv-gui`.
-- [ ] 1.4 Add `list_row/tree.rs`: `TreeRow`, `TreeLevel`, `TreeDepth`, and `TreeTrail` with the props and look of D3. Verify: `cargo check -p mbv-gui`.
-- [ ] 1.5 Add `list_row/tests.rs`: move `library_item_row/tests.rs` onto `FlatRow`, and add the one `TreeRow` case table of D5. Verify: `cargo nextest run -p mbv-gui list_row`.
+- [x] 1.1 Add `crates/mbv-gui/src/window/components/list_row.rs` (registered in `components.rs`): the title-tone and selection rules and the context-press handler of D4, and the constants from `library_item_row.rs`. Point `tree_guide.rs` at them. Verify: `cargo check -p mbv-gui`.
+- [x] 1.2 Add `list_row/thumb.rs`: move `LibraryRowThumb`, `paint_thumb`, and its helpers, without the played dim. Verify: `cargo check -p mbv-gui`.
+- [x] 1.3 Add `list_row/flat.rs`: `FlatRow` with the props and look of D2. Verify: `cargo check -p mbv-gui`.
+- [x] 1.4 Add `list_row/tree.rs`: `TreeRow`, `TreeLevel`, `TreeDepth`, and `TreeTrail` with the props and look of D3. Verify: `cargo check -p mbv-gui`.
+- [x] 1.5 Add `list_row/tests.rs`: move `library_item_row/tests.rs` onto `FlatRow`, and add the one `TreeRow` case table of D5. Verify: `cargo nextest run -p mbv-gui list_row`.
 
 ## 2. Flat rows onto `FlatRow`
 
