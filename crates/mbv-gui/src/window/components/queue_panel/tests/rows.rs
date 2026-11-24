@@ -270,9 +270,9 @@ fn only_a_marked_row_paints_the_raised_fill() {
 
 /// Contract (`gui-queue-panel-redesign` design D9): a hovered row paints the
 /// hover fill, while a marked row keeps its raised fill under the pointer
-/// resting on its neighbour. The hover paints no chrome of its own (user
-/// request 2026-11-23): the hovered row keeps its ordinal, its cells, and its
-/// own insets, and the row's drag starts on motion after a press.
+/// resting on its neighbour. The hovered row keeps its ordinal, and it grows
+/// its trailing pad for its Play control (design D6 of
+/// `gui-row-hover-actions`). The row's drag starts on motion after a press.
 #[test]
 fn the_hovered_row_paints_the_hover_fill() {
     let mut rows_frame = queue(vec![item(1), item(2)]);
@@ -292,7 +292,23 @@ fn the_hovered_row_paints_the_hover_fill() {
         "the marked row keeps its fill"
     );
     assert!(fixture.presents("[data-row=\"2\"] [data-ordinal]"));
-    assert!(hovered.contains("padding-inline: 10px"), "{hovered}");
+    assert!(hovered.contains("padding-inline: 10px 44px"), "{hovered}");
+}
+
+/// Contract (spec `gui-client` "A queue row shows a Play control on hover",
+/// design D6 of `gui-row-hover-actions`): the hovered row shows its Play
+/// control where its duration sat, and every other row keeps its duration and
+/// paints no control.
+#[test]
+fn the_hovered_row_shows_its_play_control_in_place_of_the_duration() {
+    let mut rows_frame = queue(vec![item(1), item(2)]);
+    rows_frame.hover = Some(2);
+    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
+
+    assert!(fixture.presents("[data-row=\"2\"] [data-row-play]"));
+    assert!(!fixture.presents("[data-row=\"2\"] [data-duration]"));
+    assert!(fixture.presents("[data-row=\"1\"] [data-duration]"));
+    assert!(!fixture.presents("[data-row=\"1\"] [data-row-play]"));
 }
 
 /// Contract (user request 2026-11-17): a list longer than its viewport paints

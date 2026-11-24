@@ -53,7 +53,21 @@ pub(crate) fn gesture_point(gesture: &PointerGesture<Position>) -> Option<Positi
 pub(crate) fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
     match target {
         RegionTarget::Queue(QueueTargetId::Slot(raw)) => Some(QueueSlotId::from_raw(*raw)),
-        RegionTarget::Queue(_)
+        // The row's hover Play control is no row region: a press on it plays
+        // the row (design D6 of `gui-row-hover-actions`), so it names no drag
+        // anchor. Every other queue target resolves to no row either.
+        RegionTarget::Queue(
+            QueueTargetId::RowPlay(_)
+            | QueueTargetId::PlaylistPill
+            | QueueTargetId::RowMenuEntry(_)
+            | QueueTargetId::Filter
+            | QueueTargetId::QueueChooser
+            | QueueTargetId::NewQueue
+            | QueueTargetId::CloseQueue
+            | QueueTargetId::RenameQueue
+            | QueueTargetId::QueueChooserEntry(_)
+            | QueueTargetId::QueueChooserPeer,
+        )
         | RegionTarget::QueuePlayback(_)
         | RegionTarget::StatusBar(_)
         | RegionTarget::Confirm(_)
@@ -141,6 +155,17 @@ impl<'a> QueueLeaf<'a> {
         }))
     }
 
+    /// Select a row and emit the activation request the double-click emits.
+    fn activate_row(&mut self, target: QueueSlotId) -> Msg {
+        self.surface.delegate_operation_with_viewport_len(
+            MediaListOperation::Select(target),
+            self.viewport_len(),
+        );
+        Msg::Shell(Box::new(ShellRequest::QueueRowActivate {
+            slot_id: self.surface.selected_target().copied(),
+        }))
+    }
+
     fn click(&mut self, at: Position, selection: ClickSelection) -> Option<Msg> {
         // The playlist pill's click opens the TUI's playlists overlay, which
         // the first slice does not present, so it resolves to nothing here —
@@ -151,6 +176,15 @@ impl<'a> QueueLeaf<'a> {
         match region_target {
             RegionTarget::Queue(QueueTargetId::Slot(raw)) => {
                 Some(self.select_row(QueueSlotId::from_raw(*raw), selection))
+            }
+            // The row's hover Play control (design D6 of
+            // `gui-row-hover-actions`): the press selects the row and emits
+            // the double-click's activation request, so the control plays the
+            // row the same way. A double-click on the control resolves to no
+            // activation (the double-click takes only a row region), so it
+            // never plays the row twice.
+            RegionTarget::Queue(QueueTargetId::RowPlay(raw)) => {
+                Some(self.activate_row(QueueSlotId::from_raw(*raw)))
             }
             // The open row menu's entry: the Client core executes the entry
             // the index names in the menu it opened. The menu carries its
@@ -222,14 +256,7 @@ impl<'a> QueueLeaf<'a> {
         let Some(RegionTarget::Queue(QueueTargetId::Slot(raw))) = self.regions.resolve(at) else {
             return None;
         };
-        let target = QueueSlotId::from_raw(*raw);
-        self.surface.delegate_operation_with_viewport_len(
-            MediaListOperation::Select(target),
-            self.viewport_len(),
-        );
-        Some(Msg::Shell(Box::new(ShellRequest::QueueRowActivate {
-            slot_id: self.surface.selected_target().copied(),
-        })))
+        Some(self.activate_row(QueueSlotId::from_raw(*raw)))
     }
 
     fn right_click(&mut self, at: Position) -> Option<Msg> {
@@ -621,23 +648,56 @@ impl GuiSurfaceLeaf for StatusBarLeaf<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PaintedChoices, PlaybackLeaf, QueuePlaybackSurface, TransportAvailability};
-    use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
+    use super::{
+        PaintedChoices, PlaybackLeaf, QueueLeaf, QueuePlaybackSurface, TransportAvailability,
+    };
+    use crate::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
     use crate::gui_core::GuiSurfaceLeaf;
-    use mbv_surfaces::gesture::PointerGesture;
+    use mbv_queue::QueueSlotId;
+    use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
+    use mbv_surfaces::queue::QueueSurface;
     use mbv_surfaces::{HitMap, HitRegion};
-    use mbv_ui_msg::{Msg, PlaybackRequest, Position};
+    use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use mbv_ui_msg::{Msg, PlaybackRequest, Position, ShellRequest};
+    use rstest::rstest;
+
+    /// A hit map holding `target` over one test rectangle.
+    fn regions_with(target: RegionTarget) -> HitMap<RegionTarget> {
+        let mut regions = HitMap::new();
+        regions.push(HitRegion::new(0.0, 0.0, 20.0, 20.0), target);
+        regions
+    }
+
+    /// One item row for `slot`.
+    fn item_row(slot: u64) -> MediaListRow<QueueSlotId> {
+        MediaListRow::Item {
+            target: QueueSlotId::from_raw(slot),
+            primary: format!("Item {slot}"),
+            secondary: None,
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Ordinary,
+        }
+    }
+
+    /// A Queue Surface holding the rows named by `slots`, in order.
+    fn queue_of(slots: &[u64]) -> QueueSurface {
+        let mut surface = QueueSurface::new();
+        surface
+            .list_mut()
+            .set_content(slots.iter().copied().map(item_row).collect());
+        surface
+    }
 
     /// A right-click anywhere on the panel opens the player menu at the
     /// pointer's whole-pixel anchor (gui-player-overlay-menu).
     #[test]
     fn a_right_click_on_the_panel_opens_the_player_menu() {
         let mut surface = QueuePlaybackSurface::new();
-        let mut regions = HitMap::new();
-        regions.push(
-            HitRegion::new(0.0, 0.0, 20.0, 20.0),
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::VisualSlot),
-        );
+        let regions = regions_with(RegionTarget::QueuePlayback(
+            QueuePlaybackTargetId::VisualSlot,
+        ));
         let painted = PaintedChoices::default();
         let mut leaf = PlaybackLeaf::new(
             &mut surface,
@@ -665,11 +725,9 @@ mod tests {
     #[test]
     fn a_press_on_the_player_menu_entry_selects_it() {
         let mut surface = QueuePlaybackSurface::new();
-        let mut regions = HitMap::new();
-        regions.push(
-            HitRegion::new(0.0, 0.0, 20.0, 20.0),
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlayerMenuEntry),
-        );
+        let regions = regions_with(RegionTarget::QueuePlayback(
+            QueuePlaybackTargetId::PlayerMenuEntry,
+        ));
         let painted = PaintedChoices::default();
         let leaf = PlaybackLeaf::new(
             &mut surface,
@@ -684,6 +742,46 @@ mod tests {
         assert_eq!(
             leaf.press(Position { x: 10.0, y: 10.0 }),
             Some(Msg::Playback(PlaybackRequest::PlayerMenuSelect))
+        );
+    }
+
+    /// Contract (spec `gui-client` "A queue row shows a Play control on
+    /// hover", design D6 of `gui-row-hover-actions`): a press on the row's
+    /// hover Play control selects the row and emits the double-click's
+    /// activation request for that slot, so the control and the double-click
+    /// run one path.
+    #[test]
+    fn a_press_on_a_row_play_control_activates_its_slot() {
+        let mut surface = queue_of(&[1, 2, 3, 4]);
+        let regions = regions_with(RegionTarget::Queue(QueueTargetId::RowPlay(4)));
+        let mut leaf = QueueLeaf::new(&mut surface, &regions);
+
+        assert_eq!(
+            leaf.pointer(PointerGesture::Click {
+                at: Position { x: 10.0, y: 10.0 },
+                selection: ClickSelection::Plain,
+            }),
+            Some(Msg::Shell(Box::new(ShellRequest::QueueRowActivate {
+                slot_id: Some(QueueSlotId::from_raw(4)),
+            })))
+        );
+    }
+
+    /// Contract (spec `gui-client` "A queue row shows a Play control on
+    /// hover", design D6 of `gui-row-hover-actions`): a double-click resolves
+    /// to an activation only on a row's own region, so the second press of a
+    /// pair on the row's chrome plays nothing a second time.
+    #[rstest]
+    #[case::row_play(QueueTargetId::RowPlay(1))]
+    #[case::filter(QueueTargetId::Filter)]
+    fn a_double_click_on_row_chrome_activates_nothing(#[case] target: QueueTargetId) {
+        let mut surface = queue_of(&[1, 2]);
+        let regions = regions_with(RegionTarget::Queue(target));
+        let mut leaf = QueueLeaf::new(&mut surface, &regions);
+
+        assert_eq!(
+            leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
+            None
         );
     }
 }

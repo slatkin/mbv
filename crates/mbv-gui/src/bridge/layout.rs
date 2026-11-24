@@ -177,6 +177,11 @@ pub(crate) fn hit_map(regions: &[LayoutRegion]) -> HitMap<RegionTarget> {
 pub enum QueueTargetId {
     /// A queue row for one stable slot. The number is `QueueSlotId::raw`.
     Slot(u64),
+    /// A queue row's hover Play control (gui-row-hover-actions design D6): a
+    /// press plays the row, as a double-click on the row does. The number is
+    /// the row's `QueueSlotId::raw`. The control paints only while the row is
+    /// hovered, so a press reaches this target only then.
+    RowPlay(u64),
     /// The playlist pill in the queue footer.
     PlaylistPill,
     /// One entry of the open row menu: the entry's index in the section's
