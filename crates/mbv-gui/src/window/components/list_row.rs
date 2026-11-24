@@ -2,8 +2,9 @@
 //! every Library and Playlists row part derives its look from, and the row
 //! constants. [`RowLevel`] names the level a part paints and derives the
 //! title's tone and the selection's fill and corner radius from it, so no part
-//! and no list restates a tone; [`context_press`] is the one right-press
-//! handler. [`thumb`] holds the art thumb both parts paint, [`flat`] the
+//! and no list restates a tone; [`played_title_tone`] is the one played-title
+//! rule, which every row part and the Workspace table reach; [`context_press`]
+//! is the one right-press handler. [`thumb`] holds the art thumb both parts paint, [`flat`] the
 //! top-level row, and [`tree`] the nested parent and leaf rows.
 //!
 //! A part names its level and its play state, and never a look value: a
@@ -99,16 +100,15 @@ pub enum RowLevel {
 
 impl RowLevel {
     /// The title's tone (`gui-unified-list-rows` design D4): a row that carries
-    /// a play state paints the muted tone when it is played and the text tone
-    /// otherwise; a row that carries none paints its level's tone, which is the
-    /// text tone on a top-level or parent row and the muted tone on a leaf.
+    /// a play state paints the tone [`played_title_tone`] derives from it; a row
+    /// that carries none paints its level's tone, which is the text tone on a
+    /// top-level or parent row and the muted tone on a leaf.
     #[must_use]
     pub fn title_tone(self, play: Option<&GuiHomeRowStateFrame>) -> String {
-        let muted = match play {
-            Some(state) => is_played_episode(state),
-            None => self == RowLevel::Leaf,
-        };
-        if muted {
+        if play.is_some() {
+            return played_title_tone(play);
+        }
+        if self == RowLevel::Leaf {
             canvas_var("muted")
         } else {
             canvas_var("text")
@@ -132,6 +132,19 @@ impl RowLevel {
         } else {
             0.0
         }
+    }
+}
+
+/// The title's tone a row's play state decides (`gui-shared-workspace-row-state`
+/// design D1): the muted tone for a played row and the text tone otherwise, and
+/// the text tone when the row carries no play state. The level's own tone is
+/// [`RowLevel::title_tone`]'s rule, not this one's.
+#[must_use]
+pub fn played_title_tone(play: Option<&GuiHomeRowStateFrame>) -> String {
+    if play.is_some_and(is_played_episode) {
+        canvas_var("muted")
+    } else {
+        canvas_var("text")
     }
 }
 

@@ -52,7 +52,6 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
             duration: track.duration.clone(),
             playing: Some(track.track_id.as_str()) == props.playing_track_id.as_deref(),
             state: None,
-            progress: None,
         })
         .collect();
 

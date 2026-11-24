@@ -18,12 +18,14 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
+use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_attr::library_attr;
+use crate::window::components::list_row::played_title_tone;
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::typed_text::TypedText;
 use crate::window::icons::Play;
 use crate::window::input::f32_from_f64;
+use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
@@ -47,33 +49,10 @@ pub struct WorkspaceRow {
     pub duration: String,
     /// Whether the row is the one playing at the playhead.
     pub playing: bool,
-    /// The row's played state, when the destination carries one.
-    pub state: Option<WorkspaceRowState>,
-    /// The resume position percent, when the row is partly played.
-    pub progress: Option<f32>,
-}
-
-/// A row's played state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceRowState {
-    /// The row is fully played.
-    Played,
-    /// The row is partly played.
-    Active,
-    /// The row carries no played state the destination marks.
-    Ordinary,
-}
-
-impl WorkspaceRowState {
-    /// The value the row's state hook paints.
-    #[must_use]
-    pub fn wire(self) -> &'static str {
-        match self {
-            Self::Played => "played",
-            Self::Active => "active",
-            Self::Ordinary => "ordinary",
-        }
-    }
+    /// The row's play state, when the destination carries one: the frame the
+    /// list row parts carry, and the one derivation of the row's title tone and
+    /// its resume run (`gui-shared-workspace-row-state` design D2).
+    pub state: Option<GuiHomeRowStateFrame>,
 }
 
 /// The loading line's facts: the line's text and
@@ -140,16 +119,35 @@ impl std::fmt::Debug for LibraryWorkspaceTableProps {
     }
 }
 
-/// A row's title colour: the playing row's heading tone, the muted tone once
-/// played, else the text tone.
-fn name_color(row: &WorkspaceRow) -> &'static str {
+/// A row's title tone (`gui-shared-workspace-row-state` design D1, D2): the
+/// playing row's own heading tone — the table's mark beside its glyph, which no
+/// carried state changes — and otherwise the shared played-title derivation
+/// every row part paints.
+fn title_tone(row: &WorkspaceRow) -> String {
     if row.playing {
-        return "var(--canvas-heading)";
+        return canvas_var("heading");
     }
-    match row.state {
-        Some(WorkspaceRowState::Played) => "var(--canvas-muted)",
-        _ => "var(--canvas-text)",
+    played_title_tone(row.state.as_ref())
+}
+
+/// The value a row's state hook paints (`gui-shared-workspace-row-state` design
+/// D3): `played` for a played row, `active` for a partly played row that
+/// carries a resume percent, and `ordinary` for every other row — including a
+/// partly played row with no percent, the unknown-runtime case.
+fn state_wire(state: &GuiHomeRowStateFrame) -> &'static str {
+    if is_played_episode(state) {
+        return "played";
     }
+    if episode_progress(state).is_some() {
+        return "active";
+    }
+    "ordinary"
+}
+
+/// The row's resume run percent (`gui-shared-workspace-row-state` design D2):
+/// the bounded percent the row's play state carries, when it carries one.
+fn resume_progress(row: &WorkspaceRow) -> Option<f32> {
+    row.state.as_ref().and_then(episode_progress).map(f32::from)
 }
 
 /// The play glyph the playing row paints beside its title: twelve pixels,
@@ -206,10 +204,10 @@ fn row_attrs(row: &WorkspaceRow, hook: &str) -> Vec<Attribute> {
             false,
         ));
     }
-    if let Some(state) = row.state {
+    if let Some(state) = row.state.as_ref() {
         attrs.push(Attribute::new(
             library_attr(hook, "state"),
-            state.wire(),
+            state_wire(state),
             None,
             false,
         ));
@@ -250,7 +248,7 @@ fn paint_name_button(
     let label = format!("{noun} {}", row.name);
     let row_id = row.id.clone();
     let double_click_id = row.id.clone();
-    let color = name_color(row);
+    let color = title_tone(row);
     rsx! {
         button {
             "type": "button",
@@ -348,6 +346,7 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint) -> Element {
     )];
     let row_style = format!("{GRID_COLUMNS} height: 34px; padding: 0 8px; border-radius: 4px;");
     let context_id = row.id.clone();
+    let resume = resume_progress(row);
 
     rsx! {
         li {
@@ -369,7 +368,7 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint) -> Element {
             { paint_number_cell(hook, row) }
             { paint_name_button(hook, row, noun, on_press, on_play) }
             { paint_trailing_cell(hook, row, on_play, on_queue) }
-            if let Some(progress) = row.progress {
+            if let Some(progress) = resume {
                 // The resume position: a thin accent run under the row's
                 // bottom edge, at the frame's bounded percent.
                 span {
