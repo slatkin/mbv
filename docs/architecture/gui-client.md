@@ -737,12 +737,15 @@ name is empty — the shown queue's slot count in a mono count chip, and a
 chevron that points up while the chooser's dropdown is open. The count is
 `GuiQueueHeaderFacts.shown_len`, the shown queue's whole slot count; the
 filter narrows the painted rows, never the count. The icon buttons are
-32×32 with the muted glyph; a hover raises the fill and brightens the
-glyph, the enabled close control hovers the destructive fill and glyph, and
-the disabled close control keeps its opacity and claims no pointer. The
-header's controls and each row report their own region: the switcher, the
-filter, the new control, and the close control report their
-`queueChooser`, `filter`, `newQueue`, and `closeQueue` targets.
+26×26 with the muted glyph; the playback-target control and the switcher
+paint one control height (user request 2026-11-24), and the target control
+keeps an 8 px trailing gap to the switcher so the two dropdowns do not
+crowd. A hover raises the fill and brightens the glyph, the enabled close
+control hovers the destructive fill and glyph, and the disabled close
+control keeps its opacity and claims no pointer. The header's controls and
+each row report their own region: the switcher, the filter, the new
+control, and the close control report their `queueChooser`, `filter`,
+`newQueue`, and `closeQueue` targets.
 
 ### The Queue chooser
 
