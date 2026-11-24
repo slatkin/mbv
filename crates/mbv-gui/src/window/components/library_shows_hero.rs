@@ -20,8 +20,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiShowsDetail, GuiShowsSeasonPillFrame,
-    GuiShowsWorkspaceFrame,
+    GuiLibraryDetail, GuiShowsDetail, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_dropdown::{
@@ -30,9 +29,8 @@ use crate::window::components::library_dropdown::{
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{
-    LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow, WorkspaceRowState,
+    LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
-use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::library::hero::{
     HeroLayoutFacts, hero_layout, join_meta_rows, label_segments, plain_segments,
 };
@@ -119,18 +117,6 @@ fn act_on(library: &LibraryState, command: ShowsAction, lib_idx: usize, target: 
         return;
     };
     send(library, command, lib_idx, item_id);
-}
-
-/// The row's played state: played, active with a
-/// resume percent, or ordinary.
-fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
-    if is_played_episode(state) {
-        return WorkspaceRowState::Played;
-    }
-    if episode_progress(state).is_none() {
-        return WorkspaceRowState::Ordinary;
-    }
-    WorkspaceRowState::Active
 }
 
 /// The season rows the open dropdown paints under `filter`: the seasons whose
@@ -291,8 +277,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
         ),
     };
 
-    // The Workspace table's rows: each episode with its played state and its
-    // resume percent.
+    // The Workspace table's rows: each episode with the play state it carries.
     let rows: Vec<WorkspaceRow> = workspace.map_or_else(Vec::new, |workspace| {
         workspace
             .episodes
@@ -303,8 +288,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                 name: episode.name.clone(),
                 duration: episode.duration.clone(),
                 playing: false,
-                state: Some(row_state(&episode.state)),
-                progress: episode_progress(&episode.state).map(f32::from),
+                state: Some(episode.state.clone()),
             })
             .collect()
     });

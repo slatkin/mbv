@@ -151,7 +151,6 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
                 duration: row.duration.clone(),
                 playing: marked.is_some_and(|marked| marked.chapter == row.chapter),
                 state: None,
-                progress: None,
             })
             .collect()
     });

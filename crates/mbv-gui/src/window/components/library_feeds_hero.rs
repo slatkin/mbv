@@ -15,15 +15,10 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{
-    GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-};
+use crate::bridge::frame::library::{GuiEntryRowFrame, GuiLibraryDetail, GuiLibraryList};
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
-use crate::window::components::library_workspace_table::{
-    LibraryWorkspaceTable, WorkspaceRow, WorkspaceRowState,
-};
-use crate::window::library::episode::{episode_progress, is_played_episode};
+use crate::window::components::library_workspace_table::{LibraryWorkspaceTable, WorkspaceRow};
 use crate::window::library::hero::{HeroLayoutFacts, hero_command, hero_layout};
 use crate::window::library::lettered::{FeedsList, LetteredDestination};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
@@ -46,18 +41,6 @@ pub struct LibraryFeedsHeroProps {
     pub list: SectionRef<GuiLibraryList>,
     /// The selected entry's Hero facts and the selection the actions name.
     pub detail: SectionRef<GuiLibraryDetail>,
-}
-
-/// The row's played state: played, active with a
-/// resume percent, or ordinary.
-fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
-    if is_played_episode(state) {
-        return WorkspaceRowState::Played;
-    }
-    if episode_progress(state).is_none() {
-        return WorkspaceRowState::Ordinary;
-    }
-    WorkspaceRowState::Active
 }
 
 /// The Feeds Hero: the frame
@@ -109,8 +92,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
                 name: row.title.clone(),
                 duration: row.date.clone().unwrap_or_default(),
                 playing: false,
-                state: Some(row_state(&row.state)),
-                progress: episode_progress(&row.state).map(f32::from),
+                state: Some(row.state.clone()),
             })
             .collect(),
     };
