@@ -1,0 +1,499 @@
+//! The test-only reads and seeds a Client's test makes of an `App`'s state.
+//! The gate spans the crate's own tests and a dependent Client's `test`
+//! build, as `make_app_stub` does, and so do the helpers they use in
+//! `app_stub`.
+
+#[cfg(any(test, feature = "test"))]
+use super::App;
+
+#[cfg(any(test, feature = "test"))]
+use std::sync::{Arc, Mutex};
+
+#[cfg(any(test, feature = "test"))]
+use super::{
+    GUI_MUSIC_LIBRARY_ID, GUI_TV_LIBRARY_ID, album_item, group_item, music_album_level,
+    music_group_level,
+};
+
+/// The action seams a Client's test drives where no Client-facing entry
+/// point reaches (`split-tui-gui-clients` design D4b rule 5).
+mod actions;
+
+/// The Audiobookshelf destinations' test seeds and their Owner admission
+/// (rows 9.1 and 10.1) live in their own child module so this file stays
+/// within its line ceiling.
+mod audiobookshelf;
+
+/// The music Workspace's artist-catalogue fixture (`split-tui-gui-clients`
+/// design D4b rule 5) lives in its own child module for the same reason.
+mod artists;
+
+/// The Emby library browse fixtures (`split-tui-gui-clients` design D4b rule
+/// 5) live in their own child module for the same reason.
+mod browse;
+
+/// The TUI shell's Home, Feeds, and status-row fixtures (`split-tui-gui-clients`
+/// design D4b rule 5) live in their own child module for the same reason.
+mod home;
+
+/// The two-Player-link fixture (row 2.3, correction round 1) lives in its own
+/// child module for the same reason.
+mod links;
+
+/// The Feeds destination's test seeds and pushes (row 11.1) live in their own
+/// child module so this file stays within its line ceiling.
+mod feeds;
+
+/// The GUI core's mark seams (`gui-change-driven-sections` rows 2.7, 2.8) sit
+/// in their own child module for the same reason.
+mod marks;
+
+/// The queue surfaces' test seeds and reads (`split-tui-gui-clients` design
+/// D4b rule 5) sit in their own child module for the same reason.
+mod queue;
+
+/// The Named queue and Player-event seams a Client's test drives where no
+/// Client-facing entry point reaches (`split-tui-gui-clients` design D4b rule
+/// 5) sit in their own child module for the same reason.
+mod named_queue;
+
+/// The GUI destinations' remaining fixtures — the Service runtimes, the Home
+/// `Recently added` store, the TV Upcoming snapshots, and the deferred
+/// navigation landings (`split-tui-gui-clients` design D4b rule 5) — sit in
+/// their own child module for the same reason.
+mod destinations;
+
+/// The Emby Service runtime's test seams (`split-tui-gui-clients` design D4b
+/// rule 5) sit in their own child module for the same reason.
+mod emby_service;
+
+/// The presentation fixtures a TUI-staying test drives — the pinned view, the
+/// visual-slot hide, the Home Latest launch window, a staged transfer, and the
+/// music grouping's terminal states (`split-tui-gui-clients` design D4b rule
+/// 5) — sit in their own child module for the same reason.
+mod presentation;
+
+/// The GUI Search data path's test seam (row 12.1) sits in its own child
+/// module for the same reason.
+mod search;
+
+/// The Settings screen's test seams (`add-gui-settings-screen` rows 3.2,
+/// 3.3) sit in their own child module for the same reason.
+mod settings;
+
+/// The visual slot's test facts and seeds (`split-tui-gui-clients` design
+/// D4b rule 5) sit in their own child module for the same reason.
+mod visualizer;
+
+impl App {
+    /// The Library tabs the catalog holds, for a Client's test that asserts a
+    /// startup landed the catalog (add-gui-library-panel design D11).
+    #[must_use]
+    pub fn libs_for_test(&self) -> &[mbv_ui_model::library_tab::LibraryTab] {
+        &self.libs
+    }
+
+    /// Home's stored content snapshot, for a Client's test that asserts the
+    /// frame the next tick carries reads the stored snapshot
+    /// (add-gui-library-panel row 6.1).
+    #[must_use]
+    pub fn home_content_for_test(&self) -> &crate::app::state::playback::HomeContent {
+        &self.home_content
+    }
+
+    /// Seed Home's content snapshot with `items` (add-gui-library-panel
+    /// design D12): the Client tests build the Home frame over it without
+    /// the bootstrap's mock transport, so the seeded snapshot is the one
+    /// the projection reads.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_home_content_for_test(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
+        self.home_content.continue_items = items;
+        self.home_content.loading = false;
+    }
+
+    /// Make the grouped Music library the GUI Library test's destination
+    /// (add-gui-library-panel row 3.1): the Emby runtime becomes Ready with
+    /// `client` (built over a mock transport), and the Music tab's group level
+    /// holds Hip-Hop and Soul with Hip-Hop's albums above it. A Client seeds it
+    /// after its core thread is built, because the launch Home load rebuilds
+    /// the catalog from the Service's views; Music is then the active
+    /// destination, as the Library panel keeps it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_music_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
+        self.emby_runtime =
+            crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+        self.seed_gui_music_library_tab_for_test();
+    }
+
+    /// The grouped Music library without a Service client (add-gui-library-panel
+    /// design D9): a launch-location test seeds the catalog this way, so the
+    /// launch Home load starts no Emby request and the seeded tabs survive it.
+    /// The Music tab's group level holds Hip-Hop and Soul with Hip-Hop's albums
+    /// above it, and Music is the active destination.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_music_library_tab_for_test(&mut self) {
+        self.music_levels = vec!["group".to_string(), "album".to_string()];
+        let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
+        library.id = GUI_MUSIC_LIBRARY_ID.to_string();
+        library.collection_type = "music".to_string();
+        library.is_folder = true;
+        let mut tab = mbv_ui_model::library_tab::LibraryTab::new(library);
+        tab.nav_stack.push(music_group_level(vec![
+            group_item("grp-hiphop", "Hip-Hop"),
+            group_item("grp-soul", "Soul"),
+        ]));
+        tab.nav_stack.push(music_album_level(vec![
+            album_item("alb-ill", "Licensed to Ill"),
+            album_item("alb-paul", "Paul's Boutique"),
+        ]));
+        self.libs = vec![tab];
+        self.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
+        for album_id in ["alb-ill", "alb-paul"] {
+            self.album_artist_cache
+                .insert(album_id.to_string(), "Beastie Boys".to_string());
+        }
+    }
+
+    /// Make the Shows library the GUI Library test's destination (design
+    /// D12): the Emby runtime becomes Ready with `client` (built over a mock
+    /// transport), and the Shows tab holds an empty root level — the state a
+    /// first open finds before its mode's load lands — with no resolved TV
+    /// mode, so the open's own default rule applies. Shows is then the
+    /// active destination, as the Library panel keeps it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_tv_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
+        self.emby_runtime =
+            crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+        let mut library = mbv_emby_model::test_support::make_item("Shows", "CollectionFolder");
+        library.id = GUI_TV_LIBRARY_ID.to_string();
+        library.collection_type = "tvshows".to_string();
+        let mut tab = mbv_ui_model::library_tab::LibraryTab::new(library);
+        tab.nav_stack.push(mbv_ui_model::browse::BrowseLevel {
+            parent_id: GUI_TV_LIBRARY_ID.to_string(),
+            title: "Shows".to_string(),
+            items: Vec::new(),
+            rows: mbv_ui_model::browse::ServerRows::new(0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: Some("Series".to_string()),
+            unplayed_only: false,
+            sort_by: "SortName".to_string(),
+            sort_order: "Ascending".to_string(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        });
+        self.libs = vec![tab];
+        self.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
+    }
+
+    /// Pin `lib_idx`'s captured library total (add-gui-library-panel design
+    /// D12): a Client's test that scripts one mode load pins the total, so
+    /// the root load's completion captures nothing and spawns no
+    /// default-mode reload behind the scripted answers.
+    #[cfg(any(test, feature = "test"))]
+    pub fn pin_library_total_for_test(&mut self, lib_idx: usize, total: usize) {
+        if let Some(tab) = self.libs.get_mut(lib_idx) {
+            tab.library_total = Some(total);
+        }
+    }
+
+    /// The root level's item ids of the Shows library `lib_idx`, for a
+    /// Client's test that asserts a mode load landed the rows
+    /// (add-gui-library-panel design D12). `None` while the library holds
+    /// no root level.
+    #[must_use]
+    pub fn tv_root_item_ids_for_test(&self, lib_idx: usize) -> Option<Vec<String>> {
+        Some(
+            self.libs
+                .get(lib_idx)?
+                .nav_stack
+                .last()?
+                .items
+                .iter()
+                .map(|item| item.id.clone())
+                .collect(),
+        )
+    }
+
+    /// The active destination, for a Client's test that asserts an open-
+    /// destination command landed (add-gui-library-panel design D2).
+    #[must_use]
+    pub fn tab_for_test(&self) -> mbv_ui_model::tab_selection::TabSelection {
+        self.tab
+    }
+
+    /// Push `library` as another Emby library tab (add-gui-library-panel
+    /// design D9): a launch-location test holds a catalog destination that
+    /// the GUI Client does not present.
+    #[cfg(any(test, feature = "test"))]
+    pub fn push_library_tab_for_test(&mut self, library: mbv_emby_model::EmbyItem) {
+        self.libs
+            .push(mbv_ui_model::library_tab::LibraryTab::new(library));
+    }
+
+    /// Deliver `key`'s image as a completed GUI fetch would (add-gui-library-panel
+    /// design D13, design D14 of `gui-change-driven-sections`): the outcome
+    /// keeps the source bytes and no decoded image, so the next tick's
+    /// card-image drain lands it in the cache the way the GUI Client does,
+    /// with no request and no thread.
+    #[cfg(any(test, feature = "test"))]
+    pub fn complete_card_image_for_test(&self, key: &str, img: &image::DynamicImage) {
+        let source = crate::app::app_stub::test_source(img);
+        let _ = self.images.card_image_tx().send((
+            key.to_string(),
+            mbv_images::ImageFetchOutcome::Image { img: None, source },
+        ));
+    }
+
+    /// Make a feed-view home-videos library the GUI Library test's
+    /// destination (add-gui-library-panel row 8.1): the Emby runtime becomes
+    /// Ready with `client` (built over a mock transport), the feed-view
+    /// config names the library, the root listing holds one folder whose
+    /// counted videos admit its pill, and the feed state is present with the
+    /// default All selection — the state a landed root listing and count
+    /// fan-out leave. A Client seeds it after its core thread is built, so
+    /// the launch Home load starts no request the test would script.
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_feed_view_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
+        self.emby_runtime =
+            crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+        self.config
+            .lock()
+            .unwrap()
+            .feed_view_libraries
+            .push("youtube".to_string());
+        let mut library = mbv_emby_model::test_support::make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".to_string();
+        library.collection_type = "homevideos".to_string();
+        library.is_folder = true;
+        let mut folder = mbv_emby_model::test_support::make_item("Channel 1", "Folder");
+        folder.id = "folder-1".to_string();
+        folder.is_folder = true;
+        let mut tab = mbv_ui_model::library_tab::LibraryTab::new(library);
+        tab.nav_stack.push(mbv_ui_model::browse::BrowseLevel {
+            parent_id: "lib-youtube".to_string(),
+            title: "YouTube".to_string(),
+            items: vec![folder],
+            rows: mbv_ui_model::browse::ServerRows::new(0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".to_string(),
+            sort_order: "Ascending".to_string(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        });
+        tab.feed_home_video = Some(mbv_ui_model::feed::FeedHomeVideoState {
+            folder_counts: [("folder-1".to_string(), 2_usize)].into_iter().collect(),
+            // The default All selection arrives cached empty, so a Client's
+            // set-feed-group test makes the folder fetch the one items fetch
+            // the mock answers.
+            items: [(mbv_ui_model::feed::FeedHomeVideoSelection::All, Vec::new())]
+                .into_iter()
+                .collect(),
+            ..mbv_ui_model::feed::FeedHomeVideoState::default()
+        });
+        self.libs = vec![tab];
+        self.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
+    }
+
+    /// Whether the album's track fetch is in flight (design D5): the open-
+    /// album command's effect before its completion lands.
+    #[must_use]
+    pub fn album_tracks_loading_for_test(&self, album_id: &str) -> bool {
+        self.album_tracks_loading.contains(album_id)
+    }
+
+    /// Seed the album track cache with `tracks` for `album_id`, as a landed
+    /// album-track fetch would (add-gui-library-panel): the autoload add and
+    /// play rules read the cache, so a command test injects the tracks and
+    /// observes the Owner request with no fetch behind it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_album_tracks_for_test(
+        &mut self,
+        album_id: &str,
+        tracks: &[(&str, &str, i64, i64)],
+    ) {
+        let tracks = tracks
+            .iter()
+            .map(|(id, name, number, seconds)| {
+                let mut track = mbv_emby_model::test_support::make_item(name, "Audio");
+                track.id = (*id).to_string();
+                track.media_type = "Audio".to_string();
+                track.index_number = *number;
+                track.runtime_ticks = seconds * mbv_emby_model::TICKS_PER_SECOND;
+                track
+            })
+            .collect();
+        self.album_tracks_cache.insert(album_id.to_string(), tracks);
+    }
+
+    /// Set the autoload setting (add-gui-library-panel): the Library's add
+    /// and play commands read it, and a Client's test has no settings UI.
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_autoload_for_test(&mut self, autoload: bool) {
+        self.config.lock().unwrap().autoload = autoload;
+    }
+
+    /// Whether the core holds no pending TUI overlay (add-gui-library-panel
+    /// row 3.6): the GUI runs an item-menu entry without arming one.
+    #[must_use]
+    pub fn pending_overlay_is_none_for_test(&self) -> bool {
+        self.pending_overlay.is_none()
+    }
+
+    /// Take the overlay request the core raised and has not handed to its
+    /// Client yet: what a menu builder left there, read once.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn take_pending_overlay_for_test(
+        &mut self,
+    ) -> Option<mbv_ui_model::overlay::OverlayRequest> {
+        self.pending_overlay.take()
+    }
+
+    /// Open the context menu of the focused row through the production
+    /// builder's row entry, as a Client's context-menu chord does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn open_row_context_menu_for_test(&mut self, item: mbv_emby_model::EmbyItem) {
+        self.open_context_menu_for(item);
+    }
+
+    /// Open the context menu the focused panel owns through the production
+    /// builder's keyboard entry, with no Home Continue Watching row selected,
+    /// as a Client without one dispatches it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn open_focused_context_menu_for_test(&mut self) {
+        self.open_context_menu(false, None);
+    }
+
+    /// Queue a Home `Recently added` fetch result for the Client tests' next
+    /// tick (add-gui-library-panel row 6.2): the event rides the lib channel
+    /// exactly as the background fetch sends it, so the tick's drain that
+    /// accepts it is the production path with no worker thread. The source
+    /// is the Audiobookshelf podcast library `pod-lib`, at this App's
+    /// Audiobookshelf runtime generation — the hermetic arm, whose rows
+    /// carry their provider timestamp in seconds and so need no date-string
+    /// parse at the 14-day cutoff.
+    #[cfg(any(test, feature = "test"))]
+    pub fn queue_home_recently_added_for_test(&mut self, items: Vec<mbv_queue::QueueItem>) {
+        use crate::app::{LibEvent, ModelContentEvent};
+
+        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::state::playback::DestinationLatestSource::Audiobookshelf(
+                    "pod-lib".to_string(),
+                ),
+                generation: self.audiobookshelf_runtime.generation(),
+                items,
+            },
+        ));
+    }
+
+    /// Queue a Home content refresh for the Client tests' next tick
+    /// (add-gui-library-panel row 6.2): the event rides the lib channel
+    /// exactly as the App-internal Continue Watching writers send it, so
+    /// the tick's drain that applies it is the production path with no
+    /// worker thread. The snapshot arrives settled (`loading` false), as
+    /// every computed refresh carries.
+    #[cfg(any(test, feature = "test"))]
+    pub fn queue_home_content_refreshed_for_test(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
+        use crate::app::{LibEvent, ModelContentEvent};
+
+        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+            ModelContentEvent::HomeContentRefreshed(Box::new(
+                crate::app::state::playback::HomeContent {
+                    continue_items: items,
+                    loading: false,
+                },
+            )),
+        ));
+    }
+
+    /// Queue a Home content clear for the Client tests' next tick
+    /// (add-gui-library-panel row 6.2): the Service teardown event, on the
+    /// lib channel, exactly as the teardown sends it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn queue_home_content_cleared_for_test(&mut self) {
+        use crate::app::{LibEvent, ModelContentEvent};
+
+        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+            ModelContentEvent::HomeContentCleared,
+        ));
+    }
+
+    /// Block until one library event lands on the lib channel, then put it
+    /// back on that channel for the next tick's drain (add-gui-library-panel
+    /// design D13): a Client test that pumps GUI ticks over a mocked fetch
+    /// waits here for the completion instead of sleeping between steps, so a
+    /// passing pump spends no real time and the fetch workers never starve
+    /// behind a spinning test. The tick's own `drain_lib_events` hook applies
+    /// the event and marks its sections (design D3 rule 2), exactly as it does
+    /// for a completion a worker sent. Returns whether an event landed within
+    /// `bound` — a safety net that fails a broken pipeline instead of hanging
+    /// the test, never a cadence a passing pump spends.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn drain_lib_event_blocking_for_test(&mut self, bound: std::time::Duration) -> bool {
+        let Ok(event) = self.channels.lib_rx.recv_timeout(bound) else {
+            return false;
+        };
+        let _ = self.channels.lib_tx.send(event);
+        true
+    }
+
+    /// Take one library event off the lib channel within `bound`, leaving the
+    /// fetch marks in place: a test that consumes a worker's own completion
+    /// raw, to assert what the next tick would drain is still armed.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn take_lib_event_for_test(
+        &mut self,
+        bound: std::time::Duration,
+    ) -> Option<crate::app::LibEvent> {
+        self.channels.lib_rx.recv_timeout(bound).ok()
+    }
+
+    /// The ids of the Home `Recently added` rows the App stores, over the
+    /// sources in store order (add-gui-library-panel row 6.2): a Client's
+    /// test reads them without the crate-internal source type. Each id is
+    /// the queue row's own stable identifier.
+    #[must_use]
+    pub fn home_recently_added_ids_for_test(&self) -> Vec<String> {
+        self.home_recently_added
+            .values()
+            .flatten()
+            .map(|item| item.id().to_string())
+            .collect()
+    }
+
+    /// Whether the `/Sessions` load a playback-target discovery starts is in
+    /// flight.
+    #[must_use]
+    pub fn sessions_load_started_for_test(&self) -> bool {
+        self.sessions_loading
+    }
+
+    /// Whether a cast discovery browse is in flight.
+    #[must_use]
+    pub fn cast_discovery_loading_for_test(&self) -> bool {
+        self.cast_discovery_loading
+    }
+
+    /// How many cast discovery browses this `App` started.
+    #[must_use]
+    pub fn cast_discovery_starts_for_test(&self) -> usize {
+        self.cast_discovery_starts
+    }
+}

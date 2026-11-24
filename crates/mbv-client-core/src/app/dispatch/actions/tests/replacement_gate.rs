@@ -1,0 +1,107 @@
+use super::*;
+
+/// Row 3.1: an album track on a populated target queue asks before the routed
+/// replacement runs; confirming plays the album through the routed path.
+#[test]
+fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
+    let (mut app, cmd_rx) = remote_playback_app();
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.adopt_direct_remote_queue_items_for_test(vec![existing], 0);
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    app.seed_album_track_items_for_test("album-1", vec![track.clone()]);
+
+    assert!(app.play_album_track("album-1", &track));
+
+    assert!(matches!(
+        app.pending_overlay(),
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal))
+            if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
+    ));
+    assert!(app.has_gated_replacement_for_test());
+    assert_eq!(queued_track_ids(&app), ["existing"]);
+    assert_eq!(app.playback_queue().cursor(), 0);
+
+    confirm_replace_queue(&mut app);
+
+    // Row 5.3: the confirmed replacement reaches the owner as a
+    // `UnifiedQueueReplace`; the Client's view follows the owner's answer.
+    assert_eq!(last_replace(&cmd_rx).0, ["track-1"]);
+    assert!(!app.has_gated_replacement_for_test());
+}
+
+/// Row 3.1 cancellation: Esc at the album-track replacement prompt changes
+/// neither the queue nor playback and leaves no stored payload.
+#[test]
+fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
+    let (mut app, _cmd_rx) = remote_playback_app();
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.adopt_direct_remote_queue_items_for_test(vec![existing], 0);
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    app.seed_album_track_items_for_test("album-1", vec![track.clone()]);
+
+    assert!(app.play_album_track("album-1", &track));
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::ReplacePopulatedQueue,
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Esc, mbv_ui_msg::KeyModifiers::NONE),
+    );
+
+    assert!(!app.has_gated_replacement_for_test());
+    assert_eq!(queued_track_ids(&app), ["existing"]);
+    assert_eq!(app.playback_queue().cursor(), 0);
+}
+
+/// Row 3.1 cancellation / design D4: a folder play on a populated queue
+/// defers the Collection source into the confirmed path, so Esc leaves
+/// `queue_source` exactly as it was (the callers used to set it before the
+/// gate).
+#[test]
+fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let http = mbv_net::mock_http::MockHttp::new();
+    let mut config = app.config_for_test(|config| config.clone());
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_client_for_test()
+        .expect("the installed test client is the runtime's")
+        .with_test_agent(http.agent());
+    app.adopt_ready_emby_client_for_test(client);
+
+    // Populated target queue + a music library holding the played folder.
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.seed_local_queue_emby_items_for_test(vec![existing], 0);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.collection_type = "music".into();
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_local_queue_source_for_test(mbv_queue::QueueSource::Album);
+
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"track-1","Name":"Track","Type":"Audio","MediaType":"Audio"}]}"#,
+    );
+    app.play_or_activate_lib_item(0, folder("album-1", "Album"));
+
+    assert!(app.has_gated_replacement_for_test());
+    assert_eq!(
+        app.local_queue_source_for_test(),
+        &mbv_queue::QueueSource::Album
+    );
+
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::ReplacePopulatedQueue,
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Esc, mbv_ui_msg::KeyModifiers::NONE),
+    );
+
+    assert!(!app.has_gated_replacement_for_test());
+    assert_eq!(
+        app.local_queue_source_for_test(),
+        &mbv_queue::QueueSource::Album
+    );
+}

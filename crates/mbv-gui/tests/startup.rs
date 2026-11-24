@@ -7,14 +7,15 @@
 
 use std::sync::mpsc;
 
-use mbv::{
-    App, ClientTickHost, Config, GuiCore, stub_app_with_cached_emby_client,
+use mbv_client_core::{
+    App, ClientTickHost, Config, stub_app_with_cached_emby_client,
     stub_app_with_completed_emby_startup,
 };
 use mbv_config::TestStateDirGuard;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_gui::core_thread::{CoreInput, CoreThread, QuitSink, SectionSink};
+use mbv_gui::gui_core::GuiCore;
 use mbv_net::mock_http::MockHttp;
 
 /// A URL that never leaves the process: the mock transport ignores it, but it

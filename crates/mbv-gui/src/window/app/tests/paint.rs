@@ -27,7 +27,7 @@ use dioxus_native::prelude::*;
 
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use kurbo::{Affine, PathEl, Vec2};
-use mbv::NowPlayingMediaKind;
+use mbv_client_core::NowPlayingMediaKind;
 use mbv_config::GuiPanelWidths;
 use rstest::rstest;
 

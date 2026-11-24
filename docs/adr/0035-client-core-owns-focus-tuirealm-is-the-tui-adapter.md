@@ -76,5 +76,9 @@ same stack derives.
   focused as the top overlay.
 - `App.panel_focus` keeps its persistence role and feeds the stack; the
   derivation lives in the stack alone.
+- The crate split carries this decision into code: `mbv_surfaces::FocusStack`
+  and the core's focus inputs live below both Clients, and each Client has its
+  own adapter over the same stack in its own crate
+  ([ADR 0043](0043-clients-are-separate-crates-over-one-client-core.md)).
 - `openspec/specs/client-interaction-core/spec.md` owns the current focus
   contract and its scenarios.

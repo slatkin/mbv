@@ -1,0 +1,198 @@
+use super::*;
+use crate::app::MusicEvent;
+use mbv_ui_model::browse::ServerRows;
+
+fn album(id: &str, name: &str) -> EmbyItem {
+    let mut item = make_item(name, "MusicAlbum");
+    item.id = id.into();
+    item.is_folder = true;
+    item.media_type = "Audio".into();
+    item
+}
+
+fn recursive_music_app() -> App {
+    let mut app = make_app_stub();
+    app.seed_music_levels_for_test(&["group", "artist", "album"]);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "music-lib".into();
+    library.collection_type = "music".into();
+    library.is_folder = true;
+    app.push_library_for_test(LibraryTab::new(library));
+    app
+}
+#[test]
+fn album_index_eligibility_requires_grouped_music_ending_in_album() {
+    assert!(recursive_album_search_eligible(
+        "music",
+        &["group".into(), "album".into()]
+    ));
+    assert!(recursive_album_search_eligible(
+        "music",
+        &["group".into(), "artist".into(), "album".into()]
+    ));
+    assert!(!recursive_album_search_eligible("music", &[]));
+    assert!(!recursive_album_search_eligible("music", &["album".into()]));
+    assert!(!recursive_album_search_eligible(
+        "music",
+        &["group".into(), "artist".into()]
+    ));
+    assert!(!recursive_album_search_eligible(
+        "movies",
+        &["group".into(), "album".into()]
+    ));
+}
+
+#[test]
+fn album_index_traverses_deep_branches_pages_and_ignores_non_albums() {
+    let mut tree = HashMap::new();
+    tree.insert(
+        "music-lib".to_string(),
+        vec![folder("group-a", "A"), folder("group-b", "B")],
+    );
+    tree.insert(
+        "group-a".to_string(),
+        vec![
+            folder("artist-empty", "Empty"),
+            folder("artist-a", "Artist A"),
+        ],
+    );
+    tree.insert("artist-empty".to_string(), Vec::new());
+    let mut many_albums: Vec<EmbyItem> = (0..201)
+        .map(|index| album(&format!("album-a-{index}"), &format!("Record {index}")))
+        .collect();
+    many_albums.push(make_item("Not an album", "Audio"));
+    tree.insert("artist-a".to_string(), many_albums);
+    tree.insert("group-b".to_string(), vec![folder("artist-b", "Artist B")]);
+    tree.insert("artist-b".to_string(), vec![album("album-b", "Record 0")]);
+    let mut calls = Vec::new();
+    let mut fetch = |parent: &str, start: usize, limit: usize| {
+        calls.push((parent.to_string(), start));
+        let all = tree.get(parent).cloned().unwrap_or_default();
+        let page = all.iter().skip(start).take(limit).cloned().collect();
+        Ok((page, all.len()))
+    };
+
+    let entries = build_album_index_with(
+        "music-lib",
+        &["group".into(), "artist".into(), "album".into()],
+        &mut fetch,
+    )
+    .unwrap();
+
+    assert_eq!(entries.len(), 202);
+    assert_eq!(
+        entries.last().unwrap().display_label,
+        "B / Artist B / Record 0"
+    );
+    assert_eq!(
+        entries.last().unwrap().ancestors,
+        vec![
+            AlbumPathPart {
+                id: "group-b".into(),
+                name: "B".into()
+            },
+            AlbumPathPart {
+                id: "artist-b".into(),
+                name: "Artist B".into()
+            }
+        ]
+    );
+    assert!(calls.contains(&("artist-a".into(), 200)));
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.album.item_type == "MusicAlbum")
+    );
+}
+
+#[test]
+fn failed_album_index_becomes_unavailable() {
+    let mut app = recursive_music_app();
+    app.seed_album_index_state_for_test(
+        "music-lib",
+        AlbumIndexState::Loading {
+            rebuild_pending: false,
+        },
+    );
+    app.handle_lib_event(
+        LibEvent::Music(MusicEvent::AlbumIndexBuilt {
+            library_id: "music-lib".into(),
+            result: Err(mbv_emby::EmbyError::resolve("index failed")),
+        }),
+        None,
+    );
+
+    assert!(matches!(
+        app.album_index("music-lib"),
+        Some(AlbumIndexState::Unavailable)
+    ));
+    assert!(app.newest_toast_text().contains("index failed"));
+}
+
+#[test]
+fn recursive_activation_keeps_panel_focus_and_installs_path() {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let mut app = recursive_music_app();
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.edit_library_for_test(0, |tab| {
+        tab.nav_stack.push(BrowseLevel {
+            rows: ServerRows::new(1),
+            parent_id: "group-a".into(),
+            title: "Group A".into(),
+            items: vec![folder("artist-a", "Artist A")],
+
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        });
+    });
+    let default_position = app.libs_for_test()[0].library_position_snapshot(&[]);
+    app.seed_library_position_for_test("music-lib", default_position.clone());
+    let level = BrowseLevel {
+        rows: ServerRows::new(1),
+        parent_id: "artist-c".into(),
+        title: "Artist C".into(),
+        items: vec![album("album-1", "Record")],
+
+        resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        tv_content_mode: None,
+        music_grouping: None,
+    };
+
+    app.handle_lib_event(
+        LibEvent::Music(MusicEvent::RecursiveAlbumActivated {
+            library_id: "music-lib".into(),
+            nav_stack: vec![level],
+        }),
+        None,
+    );
+
+    // The App handler installs the path and persists the position; entering
+    // inline track focus for the activated album is the shell's trigger into
+    // `MusicWorkspaceComponent` (asserted at the shell boundary in
+    // `shell/music_workspace.rs`).
+    assert_eq!(
+        app.libs_for_test()[0].nav_stack.last().unwrap().parent_id,
+        "artist-c"
+    );
+    let position = app.library_position_for_test("music-lib").unwrap();
+    assert_eq!(
+        position.levels.last().map(|level| level.parent_id.as_str()),
+        Some("artist-c")
+    );
+}

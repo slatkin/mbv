@@ -76,7 +76,7 @@ fn collections(selected: PillSelection) -> GuiCollections {
         checked,
     };
     GuiCollections {
-        target: mbv::GuiCollectionTarget::Feeds,
+        target: crate::gui_core::GuiCollectionTarget::Feeds,
         all: selected == PillSelection::Latest,
         entries: vec![
             entry(
@@ -86,7 +86,7 @@ fn collections(selected: PillSelection) -> GuiCollections {
             ),
             entry("https://sub.two", "Sub Two", false),
         ],
-        noun: mbv::GuiCollectionNoun::Subscriptions,
+        noun: crate::gui_core::GuiCollectionNoun::Subscriptions,
     }
 }
 
@@ -200,7 +200,7 @@ fn enter_on_the_hovered_row_plays_the_entry() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::FeedsPlay {
+        [crate::gui_core::GuiLibraryCommand::FeedsPlay {
             item_id: "s2::e2".to_owned(),
         }]
     );
@@ -218,7 +218,7 @@ fn a_on_the_hovered_row_queues_the_entry() {
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::FeedsQueue {
+        [crate::gui_core::GuiLibraryCommand::FeedsQueue {
             item_id: "s1::e1".to_owned(),
         }]
     );
@@ -367,7 +367,7 @@ fn enter_on_the_hovered_workspace_entry_plays_it() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::FeedsPlay {
+        [crate::gui_core::GuiLibraryCommand::FeedsPlay {
             item_id: "s1::e1".to_owned(),
         }]
     );
@@ -391,7 +391,7 @@ fn a_on_the_hovered_workspace_entry_queues_it_not_the_selected_one() {
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::FeedsQueue {
+        [crate::gui_core::GuiLibraryCommand::FeedsQueue {
             item_id: "s1::e1".to_owned(),
         }]
     );

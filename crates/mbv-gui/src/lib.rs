@@ -6,6 +6,9 @@ pub mod art;
 pub mod attach;
 pub mod bridge;
 pub mod core_thread;
+/// The GUI Client's own core: the `App` it owns, wrapped by composition, with
+/// the GUI modules and the GUI routing entry (`crate::gui_core::GuiCore`).
+pub mod gui_core;
 mod leaves;
 mod painted_choices;
 pub mod sections;

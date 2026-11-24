@@ -194,7 +194,7 @@ impl Fixture {
         let mut sections = self.state.sections.clone();
         self.in_runtime(move || {
             sections.row_menu.set(Some(GuiLibraryRowMenuFrame {
-                row: mbv::GuiLibraryMenuRow::Item(item_id),
+                row: crate::gui_core::GuiLibraryMenuRow::Item(item_id),
                 entries: vec![crate::bridge::frame::library::GuiMusicMenuEntryFrame {
                     label: "Play".to_owned(),
                     key_hint: None,
@@ -273,11 +273,11 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
+                CoreInput::Library(crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })

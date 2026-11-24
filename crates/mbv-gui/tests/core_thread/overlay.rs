@@ -7,7 +7,7 @@
 
 use std::sync::mpsc::Receiver;
 
-use mbv::{
+use mbv_client_core::{
     ClientTickHost, set_cast_receivers_for_test, set_subtitle_tracks_for_test,
     stub_app_with_cast_target, stub_app_with_track_choices,
 };

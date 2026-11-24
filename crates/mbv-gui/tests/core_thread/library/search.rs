@@ -9,11 +9,12 @@
 //! process and no live Service runs (design D13).
 
 use crate::Held;
-use mbv::{ClientTickHost, GuiDestinationKind};
+use mbv_client_core::ClientTickHost;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_gui::bridge::frame::library::{GuiDestinationList, GuiSearchFrame};
 use mbv_gui::bridge::library::GuiLibraryCommand;
+use mbv_gui::gui_core::GuiDestinationKind;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::tab_selection::TabSelection;
 
@@ -42,7 +43,7 @@ const MOVIE: &str = r#"{"Id":"m-blue","Name":"Blue Train","Type":"Movie","MediaT
 /// starts one request. The mock answers it with no script, so the worker stalls
 /// and its result never lands: the seam owns the result the test asserts.
 fn search_core(http: &MockHttp) -> TestCore {
-    let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, _cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
     // The query is queued before the libraries are seeded, and the step that
     // applies it runs after the seeds: every App change lands inside a tick that
@@ -57,7 +58,7 @@ fn search_core(http: &MockHttp) -> TestCore {
         .unwrap();
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(http));
-    core.push_gui_library_tab_for_test(EmbyItem::folder(
+    core.push_library_tab_for_test(EmbyItem::folder(
         "lib-movies".into(),
         "Movies".into(),
         "movies".into(),

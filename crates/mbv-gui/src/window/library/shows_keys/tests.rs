@@ -90,7 +90,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
+fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Library(command) = input {
@@ -277,7 +277,7 @@ fn shows_content(
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {
             sort: None,
-            view: mbv::GuiShowsView::All,
+            view: crate::gui_core::GuiShowsView::All,
             lib_idx: 0,
             loading: false,
             series,
@@ -366,7 +366,7 @@ fn enter_on_a_series_row_selects_it_for_the_hero() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::ShowsSelect {
+        [crate::gui_core::GuiLibraryCommand::ShowsSelect {
             lib_idx: 0,
             row: "s1".to_owned(),
         }]
@@ -439,15 +439,15 @@ fn enter_n_and_a_on_the_workspace_name_the_hovered_episode() {
     assert_eq!(
         commands(&rx),
         [
-            mbv::GuiLibraryCommand::ShowsPlay {
+            crate::gui_core::GuiLibraryCommand::ShowsPlay {
                 lib_idx: 0,
                 item_id: "ep2".to_owned(),
             },
-            mbv::GuiLibraryCommand::ShowsPlayNext {
+            crate::gui_core::GuiLibraryCommand::ShowsPlayNext {
                 lib_idx: 0,
                 item_id: "ep2".to_owned(),
             },
-            mbv::GuiLibraryCommand::ShowsQueue {
+            crate::gui_core::GuiLibraryCommand::ShowsQueue {
                 lib_idx: 0,
                 item_id: "ep2".to_owned(),
             },

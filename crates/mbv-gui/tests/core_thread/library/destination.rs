@@ -1,7 +1,7 @@
 //! The destination's contracts (add-gui-library-panel design D2): an
 //! open-destination command activates only a destination the GUI presents.
 
-use mbv::ClientTickHost;
+use mbv_client_core::ClientTickHost;
 use mbv_emby_model::EmbyItem;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
@@ -45,7 +45,7 @@ fn an_open_destination_command_for_an_unpresented_destination_is_a_no_op() {
     let (mut test, _cmd_rx) = music_core(&http);
     test.core
         .app_mut()
-        .push_gui_library_tab_for_test(EmbyItem::folder(
+        .push_library_tab_for_test(EmbyItem::folder(
             "lib-movies".into(),
             "Movies".into(),
             "movies".into(),

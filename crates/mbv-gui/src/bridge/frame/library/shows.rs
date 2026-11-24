@@ -5,7 +5,7 @@
 //! season, or an episode by the stable Service id the frame carries, never by
 //! position.
 
-use mbv::{
+use crate::gui_core::{
     GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
     GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
 };

@@ -1,0 +1,71 @@
+use super::*;
+
+#[rstest]
+#[case::render_interval_is_fast_while_a_card_image_fetch_is_in_flight(
+    true,
+    Duration::from_millis(150)
+)]
+fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
+    let mut app = make_app_stub();
+    if image_loading {
+        let req = mbv_images::ImageFetchReq {
+            cache_key: "movie-1:cmp_primary".into(),
+            item_id: "movie-1".into(),
+            series_id: String::new(),
+            types: vec!["Primary".into()],
+            source: mbv_images::ImageSource::Emby,
+            rendition: mbv_images::ImageRendition::Hero,
+        };
+        app.reserve_image_fetch_for_test(req);
+    }
+    assert_eq!(app.render_interval(), expected);
+}
+
+#[test]
+fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
+    let mut app = make_app_stub();
+    app.config_for_test(|config| config.auto_reconnect = false);
+
+    let cfg = app.config_for_test(|config| config.clone());
+    assert_eq!(
+        settings::setting_label(SettingKey::AutoReconnect),
+        "Auto reconnect"
+    );
+    assert_eq!(
+        settings::setting_value(SettingKey::AutoReconnect, &cfg, &app.ui_config_snapshot()),
+        "off"
+    );
+
+    app.handle_settings_activate(SettingKey::AutoReconnect);
+    let cfg = app.config_for_test(|config| config.clone());
+    assert!(cfg.auto_reconnect);
+    assert_eq!(
+        settings::setting_value(SettingKey::AutoReconnect, &cfg, &app.ui_config_snapshot()),
+        "on"
+    );
+    assert!(
+        app.settings_save_armed_for_test(),
+        "settings toggle must use the delayed save path"
+    );
+
+    app.handle_settings_activate(SettingKey::AutoReconnect);
+    assert!(!app.config_for_test(|config| config.auto_reconnect));
+}
+
+#[rstest]
+#[case::transport_prev_next_unavailable_when_player_inactive(false, 0, 0, (false, false))]
+#[case::transport_prev_unavailable_on_first_item(true, 3, 0, (false, true))]
+fn transport_prev_next(
+    #[case] active: bool,
+    #[case] queue_len: usize,
+    #[case] current_idx: usize,
+    #[case] expected: (bool, bool),
+) {
+    let mut app = make_app_stub();
+    app.edit_player_status_for_test(|status| {
+        status.active = active;
+        status.queue_len = queue_len;
+        status.current_idx = current_idx;
+    });
+    assert_eq!(app.transport_prev_next_available_for_test(), expected);
+}

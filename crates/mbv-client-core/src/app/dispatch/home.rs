@@ -1,0 +1,114 @@
+use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
+use mbv_ui_model::ui_util::is_playable;
+
+impl App {
+    // ── Home flat list ───────────────────────────────────────────────────────
+
+    /// Play the Home flat-list item the shell resolved at the Model boundary
+    /// (task 5.3d, Home typed-effect prep + re-homing): the effect acts on
+    /// the supplied item directly, never on a re-read App cursor. `from_cw`
+    /// distinguishes Continue Watching rows (resumed through the
+    /// item-targeted tail) from `latest` pills (played directly, or
+    /// submitted through the shared non-Emby helper). The folder guard
+    /// mirrors `home_play`'s early return.
+    pub fn home_play_target(&mut self, item: QueueItem, from_cw: bool) {
+        if matches!(&item, QueueItem::Emby(inner) if inner.is_folder) {
+            return;
+        }
+        if from_cw {
+            // CW items resume through the item-targeted tail with the
+            // already-resolved item (task 5.3d, Home effect decoupling)
+            // instead of temporarily forcing `home.section` to 0 and
+            // re-reading it via `select_home`.
+            if let QueueItem::Emby(item) = item {
+                self.play_home_cw_item(*item);
+            }
+        } else {
+            match item {
+                QueueItem::Emby(item) => {
+                    // The autoload policy fills the queue with the folder the
+                    // row names as its containing item (invariant 29 rule 3).
+                    let source = Self::flat_activation_queue_source(&item);
+                    if self.play_autoloaded_containing_folder(&item, source) {
+                        return;
+                    }
+                    self.play_item(*item);
+                }
+                // Non-Emby `latest` items (Audiobookshelf today, Feeds in
+                // Part 3) submit through the shared helper, which neither
+                // reads nor mutates the owning tab's cursor/filter.
+                other => {
+                    self.submit_queue_item(other, true);
+                }
+            }
+        }
+    }
+
+    /// Enqueue the Home flat-list item the shell resolved at the Model
+    /// boundary (task 5.3d, Home typed-effect prep). Uses the supplied item
+    /// directly instead of any App-owned cursor.
+    pub fn home_enqueue_target(&mut self, item: QueueItem, from_cw: bool) {
+        if from_cw {
+            // CW items enqueue through the item-targeted helper with the
+            // already-resolved item (task 5.3d, Home effect decoupling)
+            // instead of temporarily forcing `home.section` to 0 and
+            // re-reading it via `enqueue_selected(None)`.
+            if let QueueItem::Emby(item) = item {
+                self.enqueue_home_item(*item);
+            }
+        } else {
+            match item {
+                QueueItem::Emby(item) => self.do_enqueue_folder(&item),
+                other => {
+                    self.submit_queue_item(other, false);
+                }
+            }
+        }
+    }
+
+    /// Resume the given Continue Watching Emby item (task 5.3d, Home effect
+    /// decoupling): the playable tail of the deleted `select_home`, extracted
+    /// so the Home and CW effects pass an already-resolved item directly
+    /// instead of temporarily pointing `home.section` at section 0 and
+    /// re-reading it. Folder guards stay with the callers
+    /// (`home_play_target`/`cw_play` pre-filter them, matching today's
+    /// reachable behavior); non-playable items are a silent no-op, as in
+    /// `select_home`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
+    pub(in crate::app) fn play_home_cw_item(&mut self, item: EmbyItem) {
+        if !is_playable(&item) {
+            return;
+        }
+        let fresh = {
+            let Some(client) = self.emby_client() else {
+                self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                return;
+            };
+            let c = client.lock().unwrap();
+            c.get_items_by_ids(std::slice::from_ref(&item.id))
+                .ok()
+                .and_then(|mut v| {
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some(v.remove(0))
+                    }
+                })
+                .unwrap_or(item)
+        };
+        // A Continue Watching row is a flat row too: with the autoload policy
+        // on, the container it sits in joins the queue around it, and the item's
+        // own position still resumes it.
+        let source = Self::flat_activation_queue_source(&fresh);
+        if self.play_autoloaded_containing_folder(&fresh, source) {
+            return;
+        }
+        self.play_item(fresh);
+    }
+}

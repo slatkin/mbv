@@ -7,7 +7,7 @@
 //! add-gui-library-panel; gui-one-destination-ensure design D2). The ledger
 //! compares each section on its own.
 
-use mbv::{GuiCore, GuiDestinationKind, GuiLibraryTabs};
+use crate::gui_core::{GuiCore, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
@@ -90,7 +90,7 @@ fn music_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLi
     let menu = picked
         .map(|album_id| core.gui_library_menu(&album_id))
         .unwrap_or_default();
-    let playing_track_id = mbv::playing_track_id_for_shell(core.app());
+    let playing_track_id = crate::gui_core::playing_track_id_for_shell(core.app());
     (
         GuiDestinationList::Music(GuiMusicList::from_projection(lib_idx, &projection)),
         GuiLibraryDetail::Music(GuiMusicDetail::from_projection(

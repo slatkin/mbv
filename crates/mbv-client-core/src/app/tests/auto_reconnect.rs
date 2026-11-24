@@ -1,0 +1,88 @@
+use super::*;
+
+#[test]
+fn new_remote_does_not_auto_reconnect_for_a_non_local_endpoint() {
+    // Regression guard for the constructor's own gating: a construction on a
+    // non-local endpoint never runs the auto-reconnect replay. The replay
+    // belongs to the local-Owner attach path (issue #972 removed the explicit
+    // endpoint launch mode; the constructor guard keeps a non-local
+    // construction from attempting real connections).
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _ = crate::app::config::save_last_remote_connection(Some(
+        &crate::app::config::LastRemoteConnection::LibraryRoute {
+            library: "music".to_string(),
+        },
+    ));
+    let mut config = crate::app::config::Config {
+        auto_reconnect: true,
+        ..Default::default()
+    };
+    config
+        .library_routes
+        .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+    let client = mbv_emby::EmbyClient::new(config.clone());
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+
+    let app = App::new_remote_with_config(
+        client,
+        remote,
+        player_rx,
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
+    );
+
+    assert!(app.active_route.is_none());
+}
+
+/// emby-session-owner-output row 7.3, design D12, owner-playback-output spec
+/// "Saved record names a plain Session": launch auto-reconnect connects only
+/// when the found Session offers a direct endpoint. A saved plain-Session
+/// record selects no output and stays local. Guards commit 95a46f853 (restore
+/// only a direct endpoint at launch).
+#[test]
+fn saved_plain_session_record_stays_local_without_an_output_selection() {
+    use mbv_net::mock_http::MockHttp;
+
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _ = crate::app::config::save_last_remote_connection(Some(
+        &crate::app::config::LastRemoteConnection::DirectSession {
+            device_name: "plain-tv".to_string(),
+        },
+    ));
+    let mut app = make_app_stub();
+    let command_rx = live_owner_channel(&mut app);
+    app.config.lock().unwrap().auto_reconnect = true;
+    app.config.lock().unwrap().server_url = "http://127.0.0.1:1".into();
+    let config = app.config.lock().unwrap().clone();
+    install_test_emby(&mut app, config);
+    let http = MockHttp::new();
+    http.respond(
+        200,
+        r#"[{"Id":"sess-1","DeviceId":"device-1","DeviceName":"plain-tv","Client":"Emby","UserName":"user"}]"#,
+    );
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    app.try_auto_reconnect();
+
+    assert!(
+        !app.direct_remote_connected,
+        "a plain Session record connects no Direct remote control"
+    );
+    assert!(
+        command_rx
+            .try_iter()
+            .all(|command| !matches!(command, mbv_ctrl::CtrlCmd::SelectPlaybackOutput(_))),
+        "a plain Session record sends no output selection"
+    );
+}

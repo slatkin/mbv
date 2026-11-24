@@ -9,11 +9,12 @@
 //! channel, so no request leaves the process and no worker outlives the
 //! assertion.
 
-use mbv::{ClientTickHost, GuiCore};
+use mbv_client_core::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiFeedsDetail, GuiFeedsList, GuiLibraryDetail,
 };
+use mbv_gui::gui_core::GuiCore;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::tab_selection::TabSelection;
 
@@ -56,7 +57,7 @@ fn a_feed_fetch_result_lands_on_the_app_through_the_gui_tick() {
 
 /// The Feeds entries over the App the tick drained into: the GUI core's own
 /// read, run through a core over that App.
-fn core_entries(app: &mut mbv::App) -> Vec<mbv_queue::FeedEntry> {
+fn core_entries(app: &mut mbv_client_core::App) -> Vec<mbv_queue::FeedEntry> {
     let core = GuiCore::new(std::mem::replace(app, mbv_gui::test_support::handoff_app()));
     let entries = core.gui_feeds_entries().into_iter().cloned().collect();
     *app = core.into_app();
@@ -66,7 +67,7 @@ fn core_entries(app: &mut mbv::App) -> Vec<mbv_queue::FeedEntry> {
 /// A core over an App with no Service library and two configured
 /// subscriptions, over the recording stub Owner the queue commands' tests read.
 fn seeded_feeds_core() -> (crate::TestCore, std::sync::mpsc::Receiver<CtrlCmd>) {
-    let (app, cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = crate::test_core_with(app);
     test.core
         .app_mut()
@@ -219,7 +220,7 @@ fn the_pill_command_changes_the_rows() {
     send_library(
         &mut test,
         mbv_gui::bridge::library::GuiLibraryCommand::CollectionToggle {
-            target: mbv::GuiCollectionTarget::Feeds,
+            target: mbv_gui::gui_core::GuiCollectionTarget::Feeds,
             key: FEED_B.into(),
         },
     );
@@ -362,7 +363,7 @@ fn a_stale_feed_row_submits_nothing() {
     assert!(cmd_rx.try_recv().is_err(), "a malformed id submits nothing");
     assert!(newest_frame(&mut test).newest_toast().is_none());
 
-    let absent = mbv::GuiFeedEntryId::new(FEED_A.into(), "gone".into()).encode();
+    let absent = mbv_gui::gui_core::GuiFeedEntryId::new(FEED_A.into(), "gone".into()).encode();
     send_library(
         &mut test,
         mbv_gui::bridge::library::GuiLibraryCommand::FeedsQueue { item_id: absent },

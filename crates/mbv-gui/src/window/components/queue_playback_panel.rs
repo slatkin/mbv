@@ -33,7 +33,7 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::NowPlayingMediaKind;
+use mbv_client_core::NowPlayingMediaKind;
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiRowMenuEntry};

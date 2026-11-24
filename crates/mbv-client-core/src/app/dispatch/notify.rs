@@ -1,0 +1,93 @@
+use crate::app::App;
+use std::time::Instant;
+
+pub use mbv_ui_model::toast::ToastSeverity;
+
+impl App {
+    fn notify_system(&self, msg: &str) {
+        if self.system_notifications {
+            let tx = self.channels.notif_action_tx.clone();
+            let mut cmd = std::process::Command::new("notify-send");
+            cmd.arg("--app-name=mbv")
+                .arg("mbv")
+                .arg(msg)
+                .stderr(std::process::Stdio::null());
+            std::thread::spawn(move || {
+                if !cmd.output().is_ok_and(|o| o.status.success()) {
+                    let _ = tx.send("__notif_failed__".into());
+                }
+            });
+        }
+    }
+
+    pub(in crate::app) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+        self.clear_saved_library_position(lib_idx);
+        let Some(client) = self.emby_snapshot() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let name = self.libs[lib_idx].library.name.clone();
+        std::thread::spawn(move || {
+            let _ = client.post_library_refresh(&library_id);
+        });
+        self.flash(format!("Scanning '{name}'..."), ToastSeverity::Neutral);
+    }
+
+    /// Display a toast classified by `severity`. Duration derives from severity
+    /// (Neutral/Success → 2 s, Warning/Error → 5 s). Never rings the terminal
+    /// bell. Desktop notification is attempted only when severity is not Neutral
+    /// (preserving the existing `system_notifications` gating and the
+    /// hide-on-success behavior in the render path).
+    pub fn flash(&mut self, msg: String, severity: ToastSeverity) {
+        if severity != ToastSeverity::Neutral {
+            self.notify_system(&msg);
+        }
+        self.toasts.push(msg, severity, Instant::now());
+    }
+
+    /// Shorthand for the common `flash(format!("Error: {e}"), ToastSeverity::Error)` case.
+    pub fn flash_error(&mut self, e: impl std::fmt::Display) {
+        self.flash(format!("Error: {e}"), ToastSeverity::Error);
+    }
+
+    /// Drop the toasts whose duration has run out so the status row stops
+    /// projecting them (spec `toast-notification-semantics`: a toast expires
+    /// on its severity-derived duration). The old draw path ran this check
+    /// before every render; the sync pass calls it now.
+    pub fn expire_status_toast(&mut self) {
+        self.toasts.expire(Instant::now());
+    }
+
+    /// Enforces #223's queue-route invariant: an item whose resolved
+    /// route differs from the queue's current route (`active_route`) is
+    /// rejected with a toast instead of being appended or silently
+    /// swapping the player. Returns `true` if the enqueue was rejected --
+    /// the caller must abort without mutating the queue.
+    ///
+    /// Short-circuits `false` (no conflict) whenever the app is currently
+    /// in a thin-client mode that has nothing to do with library routing
+    /// (a non-library-route direct remote / local-daemon connection) -- it
+    /// leaves `active_route` at `None`, so without this check any item
+    /// resolving to a configured `library_routes` entry would be wrongly
+    /// rejected for a reason unrelated to library routing. Mirrors the same
+    /// condition Task 9 uses to gate `apply_route_for_playback`.
+    pub(in crate::app) fn enqueue_route_conflict(
+        &mut self,
+        resolved_name: Option<&String>,
+    ) -> bool {
+        if self.in_non_library_thin_client_mode() {
+            tracing::info!(name: "library_route.conflict_check.skipped", target: "library_route", reason = "non_library_thin_client_owns_playback", "route conflict check skipped");
+            return false;
+        }
+        if resolved_name == self.active_route.as_ref() {
+            false
+        } else {
+            self.flash(
+                "Can't mix libraries in a routed queue -- clear queue first".to_string(),
+                ToastSeverity::Error,
+            );
+            true
+        }
+    }
+}

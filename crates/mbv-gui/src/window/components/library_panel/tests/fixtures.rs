@@ -19,10 +19,10 @@ pub(super) fn music_list() -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
         collections: GuiCollections {
-            target: mbv::GuiCollectionTarget::Music(0),
+            target: crate::gui_core::GuiCollectionTarget::Music(0),
             all: true,
             entries: Vec::new(),
-            noun: mbv::GuiCollectionNoun::Groups,
+            noun: crate::gui_core::GuiCollectionNoun::Groups,
         },
         loading: false,
         failure: None,
@@ -126,7 +126,7 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
 pub(super) fn shows_list() -> GuiShowsList {
     GuiShowsList {
         sort: None,
-        view: mbv::GuiShowsView::All,
+        view: crate::gui_core::GuiShowsView::All,
         lib_idx: 0,
         loading: false,
         series: Vec::new(),
@@ -193,10 +193,10 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
                 lib_idx: 3,
                 library_name: "Movies".to_owned(),
                 collections: feed_group.then(|| GuiCollections {
-                    target: mbv::GuiCollectionTarget::EmbyFeed(3),
+                    target: crate::gui_core::GuiCollectionTarget::EmbyFeed(3),
                     all: true,
                     entries: Vec::new(),
-                    noun: mbv::GuiCollectionNoun::Folders,
+                    noun: crate::gui_core::GuiCollectionNoun::Folders,
                 }),
                 collection_names: if feed_group {
                     vec!["All".to_owned()]
@@ -308,14 +308,14 @@ pub(super) fn feeds_sections(
             destination: GuiDestinationList::Feeds(GuiFeedsList {
                 sort: None,
                 collections: GuiCollections {
-                    target: mbv::GuiCollectionTarget::Feeds,
+                    target: crate::gui_core::GuiCollectionTarget::Feeds,
                     all: true,
                     entries: vec![GuiCollectionEntry {
                         key: "https://sub.one".to_owned(),
                         name: "Sub One".to_owned(),
                         checked: false,
                     }],
-                    noun: mbv::GuiCollectionNoun::Subscriptions,
+                    noun: crate::gui_core::GuiCollectionNoun::Subscriptions,
                 },
                 loading: false,
                 failed: false,

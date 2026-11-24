@@ -1,6 +1,6 @@
 //! The `settings` command's wire form (`add-gui-settings-screen` design D5):
 //! the Settings screen's window content sends one semantic request, and the
-//! neutral [`mbv::GuiSettingsCommand`] this module builds from it is what the
+//! neutral [`crate::gui_core::GuiSettingsCommand`] this module builds from it is what the
 //! Client core applies. Identities are stable — a setting name, a playlist id,
 //! a feed URL, a chord — never row positions, so a command built from a stale
 //! window addresses what that window painted or nothing.
@@ -15,7 +15,7 @@ use crate::bridge::keys::{DomKey, neutral_key};
 
 /// One request from the Settings screen's window content (design D5). The
 /// variants and their field names are the wire vocabulary the window sends;
-/// the translation into [`mbv::GuiSettingsCommand`] is the only place the two
+/// the translation into [`crate::gui_core::GuiSettingsCommand`] is the only place the two
 /// shapes meet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiSettingsCommand {
@@ -121,71 +121,89 @@ impl From<GuiChoicesKind> for MultiSelectKind {
 /// request this build cannot address — a setting name no `SettingKey`
 /// declares — so a stale window's edit reaches nothing.
 #[must_use]
-pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
+pub fn neutral(command: GuiSettingsCommand) -> Option<crate::gui_core::GuiSettingsCommand> {
     Some(match command {
-        GuiSettingsCommand::Open => mbv::GuiSettingsCommand::Open,
-        GuiSettingsCommand::Close => mbv::GuiSettingsCommand::Close,
-        GuiSettingsCommand::SelectSection { section } => mbv::GuiSettingsCommand::SelectSection {
-            section: section.into(),
-        },
-        GuiSettingsCommand::Activate { setting } => mbv::GuiSettingsCommand::Activate {
+        GuiSettingsCommand::Open => crate::gui_core::GuiSettingsCommand::Open,
+        GuiSettingsCommand::Close => crate::gui_core::GuiSettingsCommand::Close,
+        GuiSettingsCommand::SelectSection { section } => {
+            crate::gui_core::GuiSettingsCommand::SelectSection {
+                section: section.into(),
+            }
+        }
+        GuiSettingsCommand::Activate { setting } => crate::gui_core::GuiSettingsCommand::Activate {
             setting: SettingKey::from_name(&setting)?,
         },
-        GuiSettingsCommand::SetValue { setting, value } => mbv::GuiSettingsCommand::SetValue {
-            setting: SettingKey::from_name(&setting)?,
-            value,
-        },
+        GuiSettingsCommand::SetValue { setting, value } => {
+            crate::gui_core::GuiSettingsCommand::SetValue {
+                setting: SettingKey::from_name(&setting)?,
+                value,
+            }
+        }
         GuiSettingsCommand::ApplyChoices { kind, selected } => {
-            mbv::GuiSettingsCommand::ApplyChoices {
+            crate::gui_core::GuiSettingsCommand::ApplyChoices {
                 kind: kind.into(),
                 selected,
             }
         }
         GuiSettingsCommand::AssignRoute { library, endpoint } => {
-            mbv::GuiSettingsCommand::AssignRoute { library, endpoint }
+            crate::gui_core::GuiSettingsCommand::AssignRoute { library, endpoint }
         }
         GuiSettingsCommand::RouteDevices { library } => {
-            mbv::GuiSettingsCommand::RouteDevices { library }
+            crate::gui_core::GuiSettingsCommand::RouteDevices { library }
         }
         GuiSettingsCommand::EmbySetup {
             server_url,
             username,
             password,
-        } => mbv::GuiSettingsCommand::EmbySetup {
+        } => crate::gui_core::GuiSettingsCommand::EmbySetup {
             server_url,
             username,
-            password: mbv::SetupSecret::new(password),
+            password: crate::gui_core::SetupSecret::new(password),
         },
         GuiSettingsCommand::AudiobookshelfSetup {
             server_url,
             api_key,
-        } => mbv::GuiSettingsCommand::AudiobookshelfSetup {
+        } => crate::gui_core::GuiSettingsCommand::AudiobookshelfSetup {
             server_url,
-            api_key: mbv::SetupSecret::new(api_key),
+            api_key: crate::gui_core::SetupSecret::new(api_key),
         },
-        GuiSettingsCommand::ServiceAction { action } => mbv::GuiSettingsCommand::ServiceAction {
-            action: action.into(),
-        },
-        GuiSettingsCommand::CancelSetup { service } => mbv::GuiSettingsCommand::CancelSetup {
-            service: service.into(),
-        },
+        GuiSettingsCommand::ServiceAction { action } => {
+            crate::gui_core::GuiSettingsCommand::ServiceAction {
+                action: action.into(),
+            }
+        }
+        GuiSettingsCommand::CancelSetup { service } => {
+            crate::gui_core::GuiSettingsCommand::CancelSetup {
+                service: service.into(),
+            }
+        }
         GuiSettingsCommand::FeedAdd { name, url, kind } => {
-            mbv::GuiSettingsCommand::FeedAdd { name, url, kind }
+            crate::gui_core::GuiSettingsCommand::FeedAdd { name, url, kind }
         }
         GuiSettingsCommand::FeedEdit { url, name, kind } => {
-            mbv::GuiSettingsCommand::FeedEdit { url, name, kind }
+            crate::gui_core::GuiSettingsCommand::FeedEdit { url, name, kind }
         }
-        GuiSettingsCommand::FeedRemove { url } => mbv::GuiSettingsCommand::FeedRemove { url },
-        GuiSettingsCommand::KeysCapture { target, key } => mbv::GuiSettingsCommand::KeysCapture {
-            target,
-            key: neutral_key(key),
-        },
-        GuiSettingsCommand::KeysReset { action } => mbv::GuiSettingsCommand::KeysReset { action },
-        GuiSettingsCommand::KeysClear { target } => mbv::GuiSettingsCommand::KeysClear { target },
-        GuiSettingsCommand::SelectTarget { target } => mbv::GuiSettingsCommand::SelectTarget {
-            target: chooser_target_key(&target),
-        },
-        GuiSettingsCommand::RefreshSessions => mbv::GuiSettingsCommand::RefreshSessions,
-        GuiSettingsCommand::ResetUiState => mbv::GuiSettingsCommand::ResetUiState,
+        GuiSettingsCommand::FeedRemove { url } => {
+            crate::gui_core::GuiSettingsCommand::FeedRemove { url }
+        }
+        GuiSettingsCommand::KeysCapture { target, key } => {
+            crate::gui_core::GuiSettingsCommand::KeysCapture {
+                target,
+                key: neutral_key(key),
+            }
+        }
+        GuiSettingsCommand::KeysReset { action } => {
+            crate::gui_core::GuiSettingsCommand::KeysReset { action }
+        }
+        GuiSettingsCommand::KeysClear { target } => {
+            crate::gui_core::GuiSettingsCommand::KeysClear { target }
+        }
+        GuiSettingsCommand::SelectTarget { target } => {
+            crate::gui_core::GuiSettingsCommand::SelectTarget {
+                target: chooser_target_key(&target),
+            }
+        }
+        GuiSettingsCommand::RefreshSessions => crate::gui_core::GuiSettingsCommand::RefreshSessions,
+        GuiSettingsCommand::ResetUiState => crate::gui_core::GuiSettingsCommand::ResetUiState,
     })
 }

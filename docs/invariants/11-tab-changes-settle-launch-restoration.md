@@ -74,7 +74,7 @@ then re-settle the snapshot the reset discarded. With `launch_restore` already
 One completion guard backs this up. A root-level `Loaded` whose
 `LevelFetchKey` no longer matches the reset root is dropped by
 `drop_stale_root_completion` in
-`src/app/dispatch/library/event/browse_loads.rs` (#745). The root's parent id
+`mbv_client_core::dispatch::library::event::browse_loads` (#745). The root's parent id
 survives a reset, so the parent-match check alone would accept a browse issued
 before the reset and reinstate its discarded sort/filter/scope; the fetch-key
 comparison rejects it. If that dropped completion was the unfiltered root's

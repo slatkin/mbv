@@ -1,0 +1,264 @@
+use super::*;
+
+pub(crate) fn audiobookshelf_app() -> App {
+    let mut app = make_app_stub();
+    let library = mbv_audiobookshelf::AudiobookshelfLibrary {
+        id: "abs-podcasts".into(),
+        name: "ABS Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut state =
+        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
+    state.append_page(
+        0,
+        20,
+        1,
+        vec![mbv_audiobookshelf::AudiobookshelfShow {
+            library_item_id: "show-a".into(),
+            updated_at_ms: 0,
+            title: "Show A".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        }],
+    );
+    state.detail_cache.insert(
+        "show-a".into(),
+        vec![mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            description: None,
+            published_at: None,
+            duration_seconds: None,
+        }],
+    );
+    app.audiobookshelf_libraries.push(library);
+    app.audiobookshelf_browse.push(state);
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app
+}
+
+/// The Audiobookshelf destination never opens an Emby context menu, even when
+#[test]
+fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
+    let mut app = audiobookshelf_app();
+    crate::push_movies_library_for_test(&mut app);
+
+    app.open_context_menu(false, None);
+    assert!(
+        !matches!(
+            app.pending_overlay,
+            Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(_))
+        ),
+        "Audiobookshelf must not open an Emby context menu"
+    );
+
+    // Control: selecting the Emby library with the same state does produce a
+    // menu, so the absence above is the destination guard, not an empty setup.
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.open_context_menu(false, None);
+    assert!(matches!(
+        app.pending_overlay,
+        Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(_))
+    ));
+}
+
+/// An Emby item in the queue panel still opens the queue panel menu (Remove
+/// from Queue / Go to Library), independent of the selected browse destination.
+#[test]
+fn emby_queue_item_still_opens_queue_panel_menu() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    app.local_view
+        .adopt_items(vec![make_item("Queue Movie", "Movie")], 0);
+
+    app.open_context_menu(false, None);
+    let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
+        app.pending_overlay.as_ref()
+    else {
+        panic!("queue panel must open a menu");
+    };
+    let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+    assert!(
+        labels.contains(&"Remove from Queue"),
+        "queue item menu must include Remove from Queue, got {labels:?}"
+    );
+    assert!(
+        labels.contains(&"Go to Library"),
+        "queue item menu must include Go to Library, got {labels:?}"
+    );
+}
+
+/// The provider-specific resolver seams remain read-only; task 4.3 consumes
+/// their `QueueItem` result through ordinary actions.
+#[test]
+fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
+    let mut app = audiobookshelf_app();
+    crate::push_movies_library_for_test(&mut app);
+    let before_queue = app.local_view.total_queue_len();
+    let before_nav = app.libs[0].nav_stack.len();
+    let before_active = app.player.status_snapshot().active;
+
+    app.activate_audiobookshelf_episode(0, 0);
+    app.enqueue_audiobookshelf_episode(0, 0);
+
+    assert_eq!(
+        app.local_view.total_queue_len(),
+        before_queue,
+        "activation seams must not mutate the queue"
+    );
+    assert_eq!(
+        app.libs[0].nav_stack.len(),
+        before_nav,
+        "activation seams must not navigate the Emby library"
+    );
+    assert_eq!(
+        app.player.status_snapshot().active,
+        before_active,
+        "activation seams must not change playback state"
+    );
+    assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
+    assert_ne!(
+        app.audiobookshelf_browse[0].shows,
+        [] as [mbv_audiobookshelf::AudiobookshelfShow; 0]
+    );
+}
+
+/// An absent or stale Audiobookshelf index is a silent no-op for both seams.
+/// The saved-position path no longer treats a show id as the tab's
+/// selection (task 2.3): saving writes no focused item even with a selected
+/// show, and restoring a legacy show-id position does not adopt it.
+#[test]
+fn podcast_saved_positions_do_not_record_or_restore_a_show_id() {
+    let mut app = audiobookshelf_app();
+    app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
+        "https://podcasts.example",
+    ));
+
+    // A selected show is still not recorded as the position's focused item.
+    assert_eq!(
+        app.audiobookshelf_browse[0].selected_id.as_deref(),
+        Some("show-a")
+    );
+    app.save_audiobookshelf_position(0);
+    let saved = &app.library_position_state.libraries["audiobookshelf:https://podcasts.example:abs-podcasts"];
+    assert_eq!(saved.levels[0].focused_item_id, None);
+
+    // A legacy saved position names a show id; restore ignores it instead of
+    // treating it as the tab's selection.
+    let mut app = audiobookshelf_app();
+    app.library_position_state.libraries.insert(
+        "audiobookshelf:https://podcasts.example:abs-podcasts".into(),
+        mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
+                focused_item_id: Some("show-old".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+    );
+    // Tab off the library so restore performs no episode fetch.
+    app.tab = TabSelection::Home;
+    app.activate_audiobookshelf_position(0);
+    assert_eq!(
+        app.audiobookshelf_browse[0].selected_id.as_deref(),
+        Some("show-a"),
+        "restore starts on the first show, never the saved show id"
+    );
+}
+
+/// F5 on the Audiobookshelf destination stages a catalog replacement without
+/// disturbing the published catalog: shows and episodes stay visible while the
+/// batch collects, page 0 of the replacement is marked pending, and neither
+/// the Emby library nor the queue is touched. The completed replacement
+/// publishes only when its own traversal finishes (design D2).
+#[test]
+fn audiobookshelf_f5_stages_a_replacement_without_clearing_the_catalog() {
+    let mut app = audiobookshelf_app();
+    crate::push_movies_library_for_test(&mut app);
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+
+    app.refresh_current_view(false);
+
+    let state = &app.audiobookshelf_browse[0];
+    assert_eq!(
+        state.shows.len(),
+        1,
+        "the published catalog survives a refresh"
+    );
+    assert_eq!(state.selected_id.as_deref(), Some("show-a"));
+    assert!(
+        !state.detail_cache.is_empty(),
+        "published episodes survive a refresh"
+    );
+    let replacement = state
+        .replacement
+        .as_ref()
+        .expect("refresh stages a replacement batch");
+    assert_eq!(replacement.request, state.catalog_request);
+    assert!(
+        replacement.loading_pages.contains(&0),
+        "page 0 of the replacement is marked pending"
+    );
+    assert!(
+        !app.libs[0].nav_stack[0].loading,
+        "Audiobookshelf refresh must not reload the Emby library"
+    );
+    assert_eq!(
+        app.local_view.total_queue_len(),
+        0,
+        "Audiobookshelf refresh must not touch the queue"
+    );
+}
+
+/// A completed replacement publishes only when its own traversal finishes:
+/// the staged page commits the authoritative catalog (design D2).
+#[test]
+fn audiobookshelf_f5_commits_the_staged_replacement_on_completion() {
+    let mut app = audiobookshelf_app();
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+
+    app.refresh_current_view(false);
+    let request = app.audiobookshelf_browse[0].catalog_request;
+    app.handle_lib_event(
+        LibEvent::Audiobookshelf(AudiobookshelfEvent::ShowsFetched {
+            generation: app.audiobookshelf_runtime.generation(),
+            request,
+            library_id: "abs-podcasts".into(),
+            result: Ok(mbv_audiobookshelf::AudiobookshelfShowPage {
+                page: 0,
+                limit: 20,
+                total: 1,
+                items: vec![mbv_audiobookshelf::AudiobookshelfShow {
+                    library_item_id: "show-b".into(),
+                    updated_at_ms: 0,
+                    title: "Show B".into(),
+                    author: None,
+                    description: None,
+                    cover_path: None,
+                }],
+            }),
+        }),
+        None,
+    );
+
+    let state = &app.audiobookshelf_browse[0];
+    assert!(state.replacement.is_none(), "the completed batch commits");
+    assert_eq!(
+        state
+            .shows
+            .iter()
+            .map(|show| show.library_item_id.as_str())
+            .collect::<Vec<_>>(),
+        ["show-b"],
+        "the authoritative replacement publishes"
+    );
+}
+
+mod loading;
+mod playback;

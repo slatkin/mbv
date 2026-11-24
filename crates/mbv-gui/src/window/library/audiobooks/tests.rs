@@ -85,7 +85,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
+fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Library(command) = input {
@@ -215,7 +215,7 @@ fn a_press_selects_the_book() {
     });
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsSelect {
+        [crate::gui_core::GuiLibraryCommand::AbsSelect {
             lib_idx: 4,
             row: "b3".to_owned(),
         }]
@@ -249,7 +249,7 @@ fn a_press_keeps_the_hero_overlay_dismissed_and_closes_an_open_item_menu() {
     assert!(facts[0].contains("item_menu_open=false"));
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsSelect {
+        [crate::gui_core::GuiLibraryCommand::AbsSelect {
             lib_idx: 4,
             row: "b1".to_owned(),
         }]
@@ -266,7 +266,7 @@ fn playing_a_book_sends_abs_play_with_its_id() {
     });
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsPlay {
+        [crate::gui_core::GuiLibraryCommand::AbsPlay {
             lib_idx: 4,
             item_id: "b2".to_owned(),
         }]
@@ -283,7 +283,7 @@ fn queueing_a_book_sends_abs_queue_with_its_id() {
     });
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsQueue {
+        [crate::gui_core::GuiLibraryCommand::AbsQueue {
             lib_idx: 4,
             item_id: "b3".to_owned(),
         }]

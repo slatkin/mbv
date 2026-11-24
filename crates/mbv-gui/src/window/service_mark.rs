@@ -13,7 +13,7 @@
 //! one copy of it.
 
 use dioxus_native::prelude::*;
-use mbv::FeedPlatform;
+use mbv_feed::FeedPlatform;
 
 use crate::window::icons::Rss;
 use crate::window::theme::canvas_var;

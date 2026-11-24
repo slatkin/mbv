@@ -18,7 +18,7 @@ use blitz_dom::{Document as _, local_name};
 use dioxus_native::prelude::*;
 
 use dioxus_native::{DioxusDocument, DocumentConfig};
-use mbv::NowPlayingMediaKind;
+use mbv_client_core::NowPlayingMediaKind;
 
 use super::TrackChips;
 use crate::art::GuiArtRef;

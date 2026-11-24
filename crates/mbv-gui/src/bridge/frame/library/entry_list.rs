@@ -6,7 +6,7 @@
 //! and the docs. The collection selector both destinations paint is the one
 //! `GuiCollections` (gui-collection-dropdown design D6).
 
-use mbv::GuiEntryRow;
+use crate::gui_core::GuiEntryRow;
 
 use super::{GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 

@@ -1,0 +1,222 @@
+use super::super::App;
+use crate::app::state::client_capabilities::ClientCapability;
+use mbv_visualizer::PipeWireWorker;
+
+impl App {
+    pub fn sync_visualizer(&mut self) {
+        self.drain_visualizer_worker();
+
+        let should_run = self.visualizer_should_run();
+        if !should_run {
+            self.stop_visualizer_capture();
+            return;
+        }
+        if self.visualizer.is_none() && !self.visualizer_failed {
+            self.start_visualizer_worker();
+        }
+    }
+
+    /// Pulls the newest captured window and disables the visualizer if the
+    /// `PipeWire` worker died.
+    fn drain_visualizer_worker(&mut self) {
+        let Some(worker) = self.visualizer.as_ref() else {
+            return;
+        };
+        match worker.take_latest_window() {
+            Ok(Some(window)) => self.visualizer_window = window,
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(name: "visualizer.worker.stopped", target: "visualizer", { error = %error }, "PipeWire worker stopped; visualizer disabled for this playback");
+                self.visualizer_failed = true;
+                self.stop_visualizer_capture();
+            }
+        }
+    }
+
+    /// Spawns the capture worker once; a failed start is latched in
+    /// `visualizer_failed` so it is not retried every tick.
+    fn start_visualizer_worker(&mut self) {
+        match PipeWireWorker::start() {
+            Ok(worker) => {
+                tracing::info!(name: "visualizer.worker.started", target: "visualizer", "started PipeWire system-audio worker");
+                self.visualizer = Some(worker);
+            }
+            Err(error) => {
+                tracing::warn!(name: "visualizer.capture.unavailable", target: "visualizer", { error = %error }, "system-audio visualizer unavailable");
+                self.visualizer_failed = true;
+            }
+        }
+    }
+
+    fn visualizer_should_run(&self) -> bool {
+        let audio_pipe_enabled = self.config.lock().unwrap().audio_pipe_enabled;
+        let active = self.player.status_snapshot().active;
+        self.visualizer_enabled
+            && !self.output_is_emby_session()
+            && !self.output_is_cast()
+            && active
+            && !audio_pipe_enabled
+            && !self.visual_slot_hide_in_effect()
+    }
+
+    pub fn stop_visualizer_capture(&mut self) {
+        if let Some(mut worker) = self.visualizer.take() {
+            worker.stop();
+        }
+        self.visualizer_window = mbv_visualizer::StereoSampleWindow::default();
+    }
+
+    pub(in crate::app) fn toggle_visualizer(&mut self) {
+        if self.visual_slot_hide_in_effect() {
+            return;
+        }
+        self.set_visualizer(!self.visualizer_enabled);
+    }
+
+    /// Select the artwork (`false`) or the visualizer (`true`), reconcile
+    /// capture, and persist. The visual slot menu carries the target content
+    /// directly; `toggle_visualizer` is this setter's only keyboard caller.
+    ///
+    /// The GUI Client paints no visualizer surface, and its slot paints the
+    /// item's art (`App::queue_card_artwork` answers `Hidden` while the
+    /// visualizer owns the slot), so enabling it there would blank the art with
+    /// nothing in its place: a Client without `VisualSlotControls` makes this
+    /// selection a no-op.
+    pub(in crate::app) fn set_visualizer(&mut self, enabled: bool) {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::VisualSlotControls)
+        {
+            return;
+        }
+        self.visualizer_enabled = enabled;
+        self.visualizer_failed = false;
+        if enabled {
+            self.sync_visualizer();
+        } else {
+            self.stop_visualizer_capture();
+        }
+        self.save_prefs();
+    }
+
+    /// Set the persisted visual-slot hidden state, reconcile capture, and
+    /// persist. Shared by the `h` keyboard action and the visual slot menu's
+    /// Hide entry. A Client without the `VisualSlotControls` capability
+    /// neither acts on the hide nor writes it
+    /// (`App::visual_slot_hide_in_effect`), so the state and the stored
+    /// preference stay the TUI's.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_visual_slot_hidden_for_test(&mut self, hidden: bool) {
+        self.set_visual_slot_hidden(hidden);
+    }
+
+    pub(in crate::app) fn set_visual_slot_hidden(&mut self, hidden: bool) {
+        if !self
+            .client_capabilities
+            .has(ClientCapability::VisualSlotControls)
+        {
+            return;
+        }
+        self.visual_slot_hidden = hidden;
+        self.sync_visualizer();
+        self.save_prefs();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn idle_playback_does_not_start_pipewire() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        // The shared stub status starts active; idle is the precondition
+        // this test names.
+        app.player.update_status(|status| status.active = false);
+
+        app.sync_visualizer();
+
+        assert!(!app.visualizer_should_run());
+        assert!(app.visualizer.is_none());
+    }
+
+    #[test]
+    fn hidden_slot_blocks_capture_when_visualizer_is_selected_and_playing() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        app.visual_slot_hidden = true;
+        app.player.update_status(|status| status.active = true);
+
+        app.sync_visualizer();
+
+        assert!(!app.visualizer_should_run());
+        assert!(
+            app.visualizer.is_none(),
+            "hidden slot starts no capture worker"
+        );
+    }
+
+    #[test]
+    fn direct_remote_playback_allows_local_pipewire() {
+        let mut app = crate::app::tests::make_remote_app_stub(Vec::new(), Vec::new());
+        app.visualizer_enabled = true;
+        app.player.update_status(|status| status.active = true);
+
+        assert!(app.visualizer_should_run());
+    }
+
+    #[test]
+    fn cast_output_blocks_the_visualizer_gate() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        app.player.update_status(|status| status.active = true);
+        assert!(app.visualizer_should_run());
+
+        // A receiver as the owner's output means no local audio to capture
+        // (design D13 reads `CtrlEvent::PlaybackOutput`).
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Cast {
+                receiver_id: "device-1".to_string(),
+                name: "Living Room".to_string(),
+                connection: mbv_ctrl::OutputConnection::Connected,
+            },
+        ));
+
+        assert!(!app.visualizer_should_run());
+
+        // The local owner's Emby Session output also has no local audio to
+        // capture (design D12 reads `OutputState::EmbySession`).
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Local,
+        ));
+        assert!(app.visualizer_should_run());
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::EmbySession {
+                device_id: "device-1".to_string(),
+                name: "Living Room TV".to_string(),
+                connection: mbv_ctrl::OutputConnection::Connected,
+                audio_only: false,
+                now_playing: None,
+            },
+        ));
+        assert!(!app.visualizer_should_run());
+    }
+
+    #[test]
+    fn selecting_artwork_stops_capture() {
+        let _guard = crate::app::config::TestStateDirGuard::new();
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        app.visualizer_window.samples = vec![mbv_visualizer::StereoSample {
+            left: 1.0,
+            right: 1.0,
+        }];
+
+        app.toggle_visualizer();
+
+        assert!(!app.visualizer_enabled);
+        assert!(
+            app.visualizer_window.samples.is_empty(),
+            "selecting artwork must tear down the capture sample window"
+        );
+    }
+}

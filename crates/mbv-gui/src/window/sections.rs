@@ -15,7 +15,7 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::NowPlayingMediaKind;
+use mbv_client_core::NowPlayingMediaKind;
 
 use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter, GuiStatusBar, GuiToasts};
 use crate::bridge::frame::library::{

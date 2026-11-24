@@ -5,7 +5,7 @@
 //! so no request leaves the process and no live Owner, Service, or window runs
 //! (design D13).
 
-use mbv::{ClientTickHost, stub_app_with_queue};
+use mbv_client_core::{ClientTickHost, stub_app_with_queue};
 use mbv_config::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget, GuiLaunchState,
     TabIdentity, TestStateDirGuard, gui_launch_state_path, load_gui_launch_state,
@@ -14,6 +14,7 @@ use mbv_config::{
 use mbv_emby_model::EmbyItem;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::tab_selection::TabSelection;
@@ -57,7 +58,7 @@ fn music_core(http: &MockHttp) -> TestCore {
 /// library, so the saved location's restore runs at construction: the catalog
 /// is present before the first step, and with no Service client the launch
 /// Home load starts no Emby request and leaves the seeded tabs alone.
-fn core_with_seeded_catalog(build: impl FnOnce(&mut mbv::App, &MockHttp)) -> TestCore {
+fn core_with_seeded_catalog(build: impl FnOnce(&mut mbv_client_core::App, &MockHttp)) -> TestCore {
     let http = MockHttp::new();
     let mut app = stub_app_with_queue(0);
     build(&mut app, &http);
@@ -65,20 +66,23 @@ fn core_with_seeded_catalog(build: impl FnOnce(&mut mbv::App, &MockHttp)) -> Tes
 }
 
 /// Seed the grouped Music library without a Service client.
-fn seed_music(app: &mut mbv::App, _http: &MockHttp) {
+fn seed_music(app: &mut mbv_client_core::App, _http: &MockHttp) {
     app.seed_gui_music_library_tab_for_test();
 }
 
 /// Seed the grouped Music library and one Shows library the GUI presents, and
 /// leave Home active.
-fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
+fn seed_music_and_shows(app: &mut mbv_client_core::App, http: &MockHttp) {
     seed_music(app, http);
-    app.push_gui_library_tab_for_test(EmbyItem::folder(
+    app.push_library_tab_for_test(EmbyItem::folder(
         SHOWS_LIBRARY.0.into(),
         SHOWS_LIBRARY.1.into(),
         "tvshows".into(),
     ));
-    let mut core = mbv::GuiCore::new(std::mem::replace(app, mbv_gui::test_support::handoff_app()));
+    let mut core = mbv_gui::gui_core::GuiCore::new(std::mem::replace(
+        app,
+        mbv_gui::test_support::handoff_app(),
+    ));
     core.apply_gui_library_command(GuiLibraryCommand::OpenDestination { position: 0 }.into());
     *app = core.into_app();
 }
@@ -86,7 +90,7 @@ fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
 /// Seed the grouped Music library and the Audiobookshelf catalog, whose
 /// podcast library holds no show yet, so the show list lands only after the
 /// user opens the destination.
-fn seed_music_and_podcasts(app: &mut mbv::App, http: &MockHttp) {
+fn seed_music_and_podcasts(app: &mut mbv_client_core::App, http: &MockHttp) {
     seed_music(app, http);
     app.seed_gui_abs_libraries_for_test();
 }
@@ -122,7 +126,7 @@ fn the_window_close_saves_the_launch_location_once() {
     send_library(
         &mut test,
         GuiLibraryCommand::CollectionToggle {
-            target: mbv::GuiCollectionTarget::Music(0),
+            target: mbv_gui::gui_core::GuiCollectionTarget::Music(0),
             key: "grp-soul".into(),
         },
     );
@@ -282,8 +286,8 @@ fn a_saved_resting_destination_restores_before_the_user_opens_it() {
     );
     assert_eq!(
         test.core
-            .gui_list_sort_for_test(mbv::GuiSortTarget::Podcasts(1)),
-        mbv::GuiListSort::Oldest,
+            .gui_list_sort_for_test(mbv_gui::gui_core::GuiSortTarget::Podcasts(1)),
+        mbv_gui::gui_core::GuiListSort::Oldest,
         "the resting destination installs its saved order as its sort with no show list"
     );
 

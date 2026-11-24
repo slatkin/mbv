@@ -2,8 +2,9 @@
 //! design D5, D6, D2): the collection set the core keeps, the picked item the
 //! Hero shows, and the album track load an open starts.
 
-use mbv::ClientTickHost;
+use mbv_client_core::ClientTickHost;
 use mbv_gui::bridge::library::GuiLibraryCommand;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 
 use super::{TRACKS, music_core, send_library};
@@ -20,7 +21,7 @@ fn a_press_on_the_checked_collection_returns_the_selection_to_all() {
     send_library(
         &mut test,
         GuiLibraryCommand::CollectionToggle {
-            target: mbv::GuiCollectionTarget::Music(0),
+            target: mbv_gui::gui_core::GuiCollectionTarget::Music(0),
             key: "grp-hiphop".into(),
         },
     );

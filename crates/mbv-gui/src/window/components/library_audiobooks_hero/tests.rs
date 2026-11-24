@@ -275,7 +275,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -529,7 +529,7 @@ fn a_chapter_s_play_gesture_sends_its_play_chapter_command() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::AbsPlayChapter {
+        vec![crate::gui_core::GuiLibraryCommand::AbsPlayChapter {
             lib_idx: LIB_IDX,
             book_id: "book1".to_owned(),
             chapter: 2,
@@ -554,7 +554,7 @@ fn play_sends_the_play_command_for_the_selected_book() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::AbsPlay {
+        vec![crate::gui_core::GuiLibraryCommand::AbsPlay {
             lib_idx: LIB_IDX,
             item_id: "book1".to_owned(),
         }],
@@ -577,7 +577,7 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_book() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::AbsQueue {
+        vec![crate::gui_core::GuiLibraryCommand::AbsQueue {
             lib_idx: LIB_IDX,
             item_id: "book1".to_owned(),
         }],

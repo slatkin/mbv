@@ -5,7 +5,7 @@
 //! composes no state of its own: the active destination's list part and detail
 //! part narrow on their kind.
 
-use mbv::GuiCollections;
+use crate::gui_core::GuiCollections;
 
 use crate::bridge::frame::library::{
     GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail,

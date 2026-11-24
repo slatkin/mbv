@@ -5,6 +5,10 @@
 pub mod sink;
 mod spec;
 
+mod log_level_arg;
+#[doc(inline)]
+pub use log_level_arg::{LogLevelArgError, parse_log_level_arg};
+
 mod layer;
 mod line;
 mod time;

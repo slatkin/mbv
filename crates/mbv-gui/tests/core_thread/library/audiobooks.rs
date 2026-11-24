@@ -4,7 +4,7 @@
 //! 10.1) — and the open-destination command activates the book library through
 //! the same presented-position gate every destination shares.
 
-use mbv::ClientTickHost;
+use mbv_client_core::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiLibraryDetail,
@@ -28,7 +28,7 @@ fn audiobooks_core() -> crate::TestCore {
 /// detail seeded, as landed fetches leave them, over the recording stub
 /// Owner the queue commands' tests read.
 fn seeded_audiobooks_core() -> (crate::TestCore, std::sync::mpsc::Receiver<CtrlCmd>) {
-    let (app, cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = crate::test_core_with(app);
     test.core.app_mut().seed_gui_abs_libraries_for_test();
     test.core.app_mut().seed_gui_abs_books_for_test(
@@ -145,7 +145,7 @@ fn the_open_destination_command_opens_the_audiobooks_tab() {
     assert_eq!(
         test.core
             .gui_active_destination_for_test()
-            .and_then(mbv::GuiDestinationKind::library_index),
+            .and_then(mbv_gui::gui_core::GuiDestinationKind::library_index),
         Some(0),
         "the active destination's kind is the Audiobooks one"
     );

@@ -224,7 +224,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -251,10 +251,10 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
                     destination: GuiDestinationList::Feeds(GuiFeedsList {
                         sort: None,
                         collections: GuiCollections {
-                            target: mbv::GuiCollectionTarget::Feeds,
+                            target: crate::gui_core::GuiCollectionTarget::Feeds,
                             all: true,
                             entries: Vec::new(),
-                            noun: mbv::GuiCollectionNoun::Subscriptions,
+                            noun: crate::gui_core::GuiCollectionNoun::Subscriptions,
                         },
                         loading: false,
                         failed: false,
@@ -406,7 +406,7 @@ fn play_sends_the_play_command_for_the_selected_entry() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::FeedsPlay {
+        vec![crate::gui_core::GuiLibraryCommand::FeedsPlay {
             item_id: "sub1:guid12".to_owned(),
         }],
         "the play command names the frame's selected entry"
@@ -428,7 +428,7 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_entry() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::FeedsQueue {
+        vec![crate::gui_core::GuiLibraryCommand::FeedsQueue {
             item_id: "sub1:guid12".to_owned(),
         }],
         "the enqueue command names the frame's selected entry"

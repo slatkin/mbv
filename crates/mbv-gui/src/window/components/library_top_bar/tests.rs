@@ -164,7 +164,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -315,7 +315,7 @@ fn a_press_opens_the_destination_tab_at_its_position() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::OpenDestination { position: 3 }]
+        [crate::gui_core::GuiLibraryCommand::OpenDestination { position: 3 }]
     );
 }
 
@@ -330,7 +330,7 @@ fn a_press_on_the_home_icon_opens_home() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::OpenDestination { position: 0 }]
+        [crate::gui_core::GuiLibraryCommand::OpenDestination { position: 0 }]
     );
 }
 
@@ -376,7 +376,9 @@ fn a_press_on_the_settings_control_opens_the_screen() {
     assert!(
         matches!(
             settings_commands.first(),
-            Some(CoreInput::Settings(mbv::GuiSettingsCommand::Open))
+            Some(CoreInput::Settings(
+                crate::gui_core::GuiSettingsCommand::Open
+            ))
         ),
         "the Settings control sends the open command"
     );
@@ -411,7 +413,9 @@ fn a_press_on_the_playlists_control_toggles_the_screen_at_playlists() {
     assert!(
         matches!(
             commands.first(),
-            Some(CoreInput::Playlists(mbv::GuiPlaylistsCommand::Toggle))
+            Some(CoreInput::Playlists(
+                crate::gui_core::GuiPlaylistsCommand::Toggle
+            ))
         ),
         "the Playlists control sends the toggle command"
     );

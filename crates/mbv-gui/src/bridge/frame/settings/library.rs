@@ -16,8 +16,8 @@ pub struct GuiSettingsRoute {
     pub endpoint: Option<String>,
 }
 
-impl From<&mbv::GuiSettingsRouteProjection> for GuiSettingsRoute {
-    fn from(row: &mbv::GuiSettingsRouteProjection) -> Self {
+impl From<&crate::gui_core::GuiSettingsRouteProjection> for GuiSettingsRoute {
+    fn from(row: &crate::gui_core::GuiSettingsRouteProjection) -> Self {
         Self {
             library: row.library.clone(),
             name: row.name.clone(),
@@ -36,8 +36,8 @@ pub struct GuiSettingsRouteDevice {
     pub endpoint: Option<String>,
 }
 
-impl From<&mbv::GuiSettingsRouteDeviceProjection> for GuiSettingsRouteDevice {
-    fn from(device: &mbv::GuiSettingsRouteDeviceProjection) -> Self {
+impl From<&crate::gui_core::GuiSettingsRouteDeviceProjection> for GuiSettingsRouteDevice {
+    fn from(device: &crate::gui_core::GuiSettingsRouteDeviceProjection) -> Self {
         Self {
             name: device.name.clone(),
             endpoint: device.endpoint.clone(),

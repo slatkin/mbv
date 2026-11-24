@@ -90,6 +90,15 @@ pub use named_queues::{
 };
 #[doc(inline)]
 pub use ui_state_reset::clear_saved_ui_presentation_state;
+mod image_cache;
+#[doc(inline)]
+pub use image_cache::{
+    clear_image_disk_cache_prefix, image_disk_cache_dir, read_image_disk_cache,
+    write_image_disk_cache,
+};
+#[cfg(not(test))]
+#[doc(inline)]
+pub use image_cache::{evict_old_image_cache, image_disk_cache_path};
 mod credentials;
 pub(crate) use credentials::save_service_secret_at;
 #[doc(inline)]

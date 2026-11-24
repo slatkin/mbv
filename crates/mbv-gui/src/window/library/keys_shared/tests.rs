@@ -84,7 +84,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Library commands the scenario sent, as the core thread receives them.
-pub(crate) fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
+pub(crate) fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Library(command) = input {

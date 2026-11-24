@@ -1,0 +1,743 @@
+use super::super::super::App;
+use super::notify::ToastSeverity;
+use crate::app::pin::{PanelReserveMode, PinnedSettingRequest};
+use crate::app::state::playback::HomeContent;
+use mbv_ui_model::context_menu::MultiSelectKind;
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::settings::PinnedWidth;
+use mbv_ui_model::settings::SettingKey;
+use mbv_ui_model::settings::SettingsDestination;
+use mbv_ui_model::ui_util::{cycle_lang, next_subtitle_mode};
+use std::time::{Duration, Instant};
+
+/// How a Settings row responds when the user activates it. Each row is
+/// classified exactly once, and the dispatch sites route on the kind, so
+/// a new row states its behavior once instead of once per dispatch site.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SettingRowKind {
+    /// Opens a destination: a sub-panel, a multiselect overlay, the
+    /// library-routes editor or the feeds manager.
+    Destination,
+    /// Activates through its own handler: a confirm step, a cycle, or a
+    /// toggle with a refusal rule or a live side effect.
+    OwnActivation,
+    /// Flips one stored config flag in place.
+    ConfigToggle,
+    /// Takes no activation in this dispatch: the panel geometry rows step
+    /// through `apply_panel_setting`, and `ResetUiState` runs through its
+    /// own confirm path in the shell.
+    Passive,
+    /// A value shown for reading only (the version rows). Activation changes
+    /// nothing and arms no save, unlike `Passive`.
+    ReadOnly,
+}
+
+/// Classify one Settings row. The match is exhaustive over `SettingKey`,
+/// so a new row cannot be added without stating its kind once.
+fn setting_row_kind(key: SettingKey) -> SettingRowKind {
+    use SettingKey as K;
+    match key {
+        K::Services
+        | K::Keys
+        | K::Panel
+        | K::HiddenLibraries
+        | K::MyLanguages
+        | K::FeedViewLibraries
+        | K::LibraryRoutes
+        | K::ManageFeeds => SettingRowKind::Destination,
+        K::LogOut
+        | K::ImageProtocol
+        | K::ShowSysTrayIcon
+        | K::SystemNotifications
+        | K::MouseSupport
+        | K::SubtitleMode
+        | K::SubtitleLanguage
+        | K::AudioLanguage => SettingRowKind::OwnActivation,
+        K::ClientVersion | K::OwnerVersion => SettingRowKind::ReadOnly,
+        K::StayAlive
+        | K::AutoReconnect
+        | K::SavePlaylistOnQuit
+        | K::AlwaysPlayNext
+        | K::ConsumeVideos
+        | K::ConsumeAudio
+        | K::SavePlaylistOnConsume
+        | K::SavePlaylistOnConsumeAudio
+        | K::AlwaysSkipIntro
+        | K::ShowAudioWindow
+        | K::UseMpvConfig
+        | K::NoScripts
+        | K::Autoload => SettingRowKind::ConfigToggle,
+        K::PanelSide
+        | K::PanelWidth
+        | K::PanelWidthExpanded
+        | K::PanelReserve
+        | K::PanelGutterTop
+        | K::PanelGutterBottom
+        | K::PanelGutterLeft
+        | K::PanelGutterRight
+        | K::PanelAccent
+        | K::PanelAccentColor
+        | K::PanelAccentWidth
+        | K::ResetUiState => SettingRowKind::Passive,
+    }
+}
+
+impl App {
+    pub fn close_settings(&mut self) {
+        self.flush_settings_save();
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Settings);
+        self.settings_destination = SettingsDestination::Main;
+    }
+
+    /// Activate settings row `key` (`add-gui-settings-screen` design D13):
+    /// a read-only row does nothing, a row that opens a destination opens
+    /// it, and every other row applies its value and arms the deferred save.
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned: a
+    /// writer panicked holding it, and the cached configuration cannot be
+    /// trusted.
+    pub fn handle_settings_activate(&mut self, key: SettingKey) {
+        // A read-only row arms no save: it returns before the save below.
+        if setting_row_kind(key) == SettingRowKind::ReadOnly {
+            return;
+        }
+        if self.open_settings_destination(key) {
+            return;
+        }
+        self.apply_settings_activation(key);
+        if key == SettingKey::AutoReconnect && self.config.lock().unwrap().auto_reconnect {
+            self.persist_current_auto_reconnect_target();
+        }
+        self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+        if matches!(
+            key,
+            SettingKey::StayAlive | SettingKey::ConsumeVideos | SettingKey::ConsumeAudio
+        ) {
+            self.flush_settings_save();
+        }
+    }
+
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub(in crate::app) fn flush_settings_save(&mut self) {
+        if self.settings_save_at.take().is_some() {
+            let cfg = self.config.lock().unwrap().clone();
+            crate::app::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
+        }
+    }
+
+    /// Set one value setting directly (`add-gui-settings-screen` design D13):
+    /// the chosen value lands in the configuration, the player's prefs take
+    /// it as the cycle handler's update does, and the deferred save is armed
+    /// as an activation arms it. The three cycle handlers call this with the
+    /// next value they compute, so the TUI's cycle and the GUI's pick share
+    /// one effect. A key that is no value setting changes nothing.
+    ///
+    /// # Panics
+    ///
+    /// Panics while writing the configuration when its lock is poisoned: a
+    /// writer panicked holding it, and the cached configuration cannot be
+    /// trusted.
+    pub fn set_settings_value(&mut self, key: SettingKey, value: &str) {
+        match key {
+            SettingKey::SubtitleMode => {
+                self.config.lock().unwrap().subtitle_mode = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.mode = value.to_string());
+            }
+            SettingKey::SubtitleLanguage => {
+                self.config.lock().unwrap().subtitle_lang = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.subtitle_lang = value.to_string());
+            }
+            SettingKey::AudioLanguage => {
+                self.config.lock().unwrap().audio_lang = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.audio_lang = value.to_string());
+            }
+            // The pick and cycle paths never call here for another row, and a
+            // stale GUI command for one changes nothing.
+            _ => return,
+        }
+        self.push_subtitle_prefs();
+        self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+    }
+
+    /// Apply and persist one Panel value change: an activate steps the row up
+    /// by one step (`Side`
+    /// cycles and ignores the delta), a step applies the component's signed
+    /// delta (±1, or ±10 with Shift), and a width row counts each step as 10
+    /// logical pixels while every other row counts 1.
+    ///
+    /// While pinned, the row sends one `pinwin` request and only an accepted
+    /// request is saved: a width row asks for the width it edited, a `Side`
+    /// row moves the panel, and a gutter row
+    /// changes that gutter at the panel's current width. A refusal keeps the
+    /// previous value and flashes pinwin's reason as a Warning toast.
+    ///
+    /// While pinned, the width recorded is the one the edited row belongs to:
+    /// `Width` is `width`, `Expanded width` is `width_expanded`, any other row
+    /// keeps the current width. An unpinned launch never changes the active
+    /// width.
+    ///
+    /// The accent rows are not part of the layout and the accent is fixed at
+    /// panel start, so they send no
+    /// panel request; while pinned a `Neutral` toast announces that the change
+    /// applies on the next `mbv --pin` launch. The `Reserve space` row sends
+    /// one `set-reserve` from the collapsed width and, from the expanded width,
+    /// no request at all — there a push would reserve the full expanded strip
+    /// (change `panel-reserve-space`, design D4).
+    pub fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+        self.apply_panel_setting_pinned(key, delta, crate::app::pin::is_pinned());
+    }
+
+    /// The Panel-row path with the pinned decision supplied, so a test can
+    /// drive the pinned branch without claiming the process-wide identity.
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub(in crate::app) fn apply_panel_setting_pinned(
+        &mut self,
+        key: SettingKey,
+        delta: i32,
+        pinned: bool,
+    ) {
+        // One request in flight: an F2 step while pinwin is still working is
+        // ignored, with no queue (design D4/D7).
+        if pinned && self.pinned_request_pending.is_some() {
+            return;
+        }
+        let candidate = {
+            let panel = self.config.lock().unwrap().panel.clone();
+            self.accent_custom = self
+                .accent_custom
+                .or_else(|| mbv_ui_model::settings::accent_color_outside_cycle(panel.accent_color));
+            mbv_ui_model::settings::changed_panel_config(key, panel, delta, self.accent_custom)
+        };
+        let Some(candidate) = candidate else {
+            return;
+        };
+        let request = pinned_setting_request(key, &candidate, self.pinned_width);
+        // Outside a panel, and for a row that takes no request (an accent
+        // row, or the `Reserve space` row while expanded), the candidate
+        // saves as it is.
+        if let (Some(request), true) = (request, pinned) {
+            let edited_width = request.edited_width();
+            let pending = crate::app::state::pinned_request::PinnedRequestPending::Setting {
+                key,
+                edited_width,
+                candidate: candidate.clone(),
+            };
+            if let Err(reason) = self.begin_pinned_request(pending, &candidate, request) {
+                self.apply_panel_setting_outcome(true, key, edited_width, candidate, Err(reason));
+            }
+            return;
+        }
+        let edited_width = request.and_then(PinnedSettingRequest::edited_width);
+        self.apply_panel_setting_outcome(pinned, key, edited_width, candidate, Ok(()));
+    }
+
+    /// Apply a Panel row's candidate once the panel's request outcome is known:
+    /// only an accepted request saves,
+    /// and a refusal flashes pinwin's reason and keeps both the row's value and
+    /// the panel. A width row records the width it switched the panel to (the
+    /// request already derived it), and an accent row while pinned announces
+    /// the next launch.
+    ///
+    /// # Panics
+    ///
+    /// Panics while changing the configuration when its lock is poisoned.
+    pub(in crate::app) fn apply_panel_setting_outcome(
+        &mut self,
+        pinned: bool,
+        key: SettingKey,
+        edited_width: Option<PinnedWidth>,
+        candidate: mbv_config::PanelConfig,
+        applied: Result<(), String>,
+    ) {
+        if let Err(reason) = applied {
+            self.flash(reason, ToastSeverity::Warning);
+            return;
+        }
+        let saved_reserve = candidate.reserve;
+        self.config.lock().unwrap().panel = candidate;
+        if pinned && let Some(edited) = edited_width {
+            self.note_pinned_width_applied(edited);
+        }
+        self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+        if pinned && mbv_ui_model::settings::is_panel_accent_row(key) {
+            self.flash(
+                "Accent changes apply on the next mbv --pin launch".into(),
+                ToastSeverity::Neutral,
+            );
+        }
+        // A saved `Reserve space` change tells the user when it visibly
+        // lands: a disable releases the held strip only on the next launch,
+        // and an enable while expanded reserves the strip on the next
+        // collapse (change `panel-reserve-space`, design D3/D4); while
+        // collapsed nothing announces an enable, because the strip visibly
+        // appears.
+        if pinned && key == SettingKey::PanelReserve {
+            if !saved_reserve {
+                self.flash(
+                    "The held strip is released on the next mbv --pin launch".into(),
+                    ToastSeverity::Neutral,
+                );
+            } else if self.pinned_width == PinnedWidth::Expanded {
+                self.flash(
+                    "The strip is reserved on the next collapse".into(),
+                    ToastSeverity::Neutral,
+                );
+            }
+        }
+    }
+
+    /// Record the width a running panel accepted (change
+    /// `panel-expand-toggle`): the active width only. The new terminal size
+    /// arrives as a normal `Resize` observer event and leaves the image cache
+    /// and `force_clear` alone (invariant 17). Both the width toggle and a
+    /// Panel settings step record through here.
+    pub(in crate::app) fn note_pinned_width_applied(&mut self, width: PinnedWidth) {
+        self.pinned_width = width;
+    }
+
+    fn open_settings_destination(&mut self, key: SettingKey) -> bool {
+        if setting_row_kind(key) != SettingRowKind::Destination {
+            return false;
+        }
+        // The kind gate admits Destination rows only, so each branch below
+        // is that row's own destination opener.
+        if key == SettingKey::Services {
+            self.open_services_settings();
+        }
+        if key == SettingKey::Keys {
+            self.open_keys_settings();
+        }
+        if key == SettingKey::Panel {
+            self.open_panel_settings();
+        }
+        if let Some(kind) = key.multiselect_kind() {
+            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(kind));
+        }
+        if key == SettingKey::LibraryRoutes {
+            self.pending_overlay = Some(OverlayRequest::OpenLibraryRoutes);
+        }
+        if key == SettingKey::ManageFeeds {
+            self.pending_overlay = Some(OverlayRequest::OpenFeedsManage);
+        }
+        true
+    }
+
+    fn apply_settings_activation(&mut self, key: SettingKey) {
+        match setting_row_kind(key) {
+            // open_settings_destination already routed the row, and the
+            // panel geometry rows step through `apply_panel_setting`
+            // (`ResetUiState` runs through its own confirm path in the
+            // shell), so neither reaches a config toggle.
+            SettingRowKind::Destination | SettingRowKind::Passive | SettingRowKind::ReadOnly => {}
+            SettingRowKind::OwnActivation => self.apply_own_activation(key),
+            SettingRowKind::ConfigToggle => self.toggle_config_setting(key),
+        }
+    }
+
+    /// The `OwnActivation` handlers, one per row. The caller's kind match
+    /// admits `OwnActivation` rows only, so each branch below is that row's
+    /// own activation.
+    fn apply_own_activation(&mut self, key: SettingKey) {
+        if key == SettingKey::LogOut {
+            self.confirm_logout = true;
+        }
+        if key == SettingKey::ImageProtocol {
+            self.cycle_image_protocol();
+        }
+        if key == SettingKey::SystemNotifications {
+            let new_val = {
+                let mut c = self.config.lock().unwrap();
+                c.system_notifications = !c.system_notifications;
+                c.system_notifications
+            };
+            self.system_notifications = new_val;
+        }
+        if key == SettingKey::MouseSupport {
+            let new_val = {
+                let mut c = self.config.lock().unwrap();
+                c.mouse_support = !c.mouse_support;
+                c.mouse_support
+            };
+            // Effect handoff: the run loop applies the live flip on the
+            // session stdout; persistence rides the debounced
+            // `settings_save_at` below.
+            self.mouse_capture_pending = Some(new_val);
+        }
+        if key == SettingKey::SubtitleMode {
+            self.apply_subtitle_mode();
+        }
+        if key == SettingKey::SubtitleLanguage {
+            self.cycle_subtitle_language();
+        }
+        if key == SettingKey::AudioLanguage {
+            self.cycle_audio_language();
+        }
+        // The Tray row shows `tray_enabled()` — the single source of the
+        // tray-enable rule — not the stored preference, so its toggle is
+        // refused when flipping the preference cannot change that value:
+        // while stay-alive forces the Tray on. `toggle_config_setting` holds
+        // the config lock, so the refusal is decided here where flashing
+        // is possible; a refused toggle is reverted so the stored
+        // preference stays untouched.
+        if key == SettingKey::ShowSysTrayIcon {
+            let refused = {
+                let mut c = self.config.lock().unwrap();
+                let enabled = c.tray_enabled();
+                c.show_systray_icon = !c.show_systray_icon;
+                let refused = c.tray_enabled() == enabled;
+                if refused {
+                    c.show_systray_icon = !c.show_systray_icon;
+                }
+                refused
+            };
+            if refused {
+                self.flash(
+                    "Tray stays on while Stay alive is on".into(),
+                    ToastSeverity::Neutral,
+                );
+            }
+        }
+    }
+
+    fn cycle_image_protocol(&mut self) {
+        let protocol = match self.images.protocol_override() {
+            None => Some("halfblocks".into()),
+            Some("halfblocks") => Some("sixel".into()),
+            Some("sixel") => Some("kitty".into()),
+            Some("kitty") => Some("iterm2".into()),
+            Some("iterm2") => Some("auto".into()),
+            // The protocol name is a string, so the key space is open: an
+            // unknown protocol has no next protocol.
+            // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
+            _ => None,
+        };
+        let enabled = protocol.is_some();
+        self.images.configure_protocol(protocol, enabled);
+    }
+
+    fn apply_subtitle_mode(&mut self) {
+        let next = next_subtitle_mode(&self.config.lock().unwrap().subtitle_mode).to_string();
+        self.set_settings_value(SettingKey::SubtitleMode, &next);
+    }
+
+    fn cycle_subtitle_language(&mut self) {
+        let next = {
+            let c = self.config.lock().unwrap();
+            cycle_lang(&c.my_languages, &c.subtitle_lang)
+        };
+        self.set_settings_value(SettingKey::SubtitleLanguage, &next);
+    }
+
+    fn cycle_audio_language(&mut self) {
+        let next = {
+            let c = self.config.lock().unwrap();
+            cycle_lang(&c.my_languages, &c.audio_lang)
+        };
+        self.set_settings_value(SettingKey::AudioLanguage, &next);
+    }
+
+    /// Flip the stored config flag of a `ConfigToggle` row. Rows of any
+    /// other kind keep no flag here, so the kind gate returns before the
+    /// config lock is taken.
+    fn toggle_config_setting(&mut self, key: SettingKey) {
+        if setting_row_kind(key) != SettingRowKind::ConfigToggle {
+            return;
+        }
+        let mut c = self.config.lock().unwrap();
+        if key == SettingKey::StayAlive {
+            c.stay_alive = !c.stay_alive;
+        }
+        if key == SettingKey::AutoReconnect {
+            c.auto_reconnect = !c.auto_reconnect;
+        }
+        if key == SettingKey::SavePlaylistOnQuit {
+            c.save_playlist_on_quit = !c.save_playlist_on_quit;
+        }
+        if key == SettingKey::AlwaysPlayNext {
+            c.always_play_next = !c.always_play_next;
+        }
+        if key == SettingKey::ConsumeVideos {
+            c.consume_videos = !c.consume_videos;
+        }
+        if key == SettingKey::ConsumeAudio {
+            c.consume_audio = !c.consume_audio;
+        }
+        if key == SettingKey::SavePlaylistOnConsume {
+            c.save_playlist_on_consume = !c.save_playlist_on_consume;
+        }
+        if key == SettingKey::SavePlaylistOnConsumeAudio {
+            c.save_playlist_on_consume_audio = !c.save_playlist_on_consume_audio;
+        }
+        if key == SettingKey::AlwaysSkipIntro {
+            c.always_skip_intro = !c.always_skip_intro;
+        }
+        if key == SettingKey::ShowAudioWindow {
+            c.show_audio_window = !c.show_audio_window;
+        }
+        if key == SettingKey::UseMpvConfig {
+            c.use_mpv_config = !c.use_mpv_config;
+        }
+        if key == SettingKey::NoScripts {
+            c.no_scripts = !c.no_scripts;
+        }
+        if key == SettingKey::Autoload {
+            c.autoload = !c.autoload;
+        }
+    }
+}
+
+/// The request a Panel row sends while pinned, or `None` for a row
+/// that takes none: an accent row is fixed at panel start, the
+/// `Reserve space` row sends nothing from the expanded width (a push there
+/// would reserve the full expanded strip; change `panel-reserve-space`,
+/// design D4), and any other Settings row is not a Panel layout value.
+/// `active_width` is the width the running panel shows.
+fn pinned_setting_request(
+    key: SettingKey,
+    candidate: &mbv_config::PanelConfig,
+    active_width: PinnedWidth,
+) -> Option<PinnedSettingRequest> {
+    match key {
+        SettingKey::PanelWidth | SettingKey::PanelWidthExpanded => {
+            mbv_ui_model::settings::panel_row_edited_width(key).map(PinnedSettingRequest::Width)
+        }
+        SettingKey::PanelSide => Some(PinnedSettingRequest::Side(candidate.side)),
+        SettingKey::PanelGutterTop => Some(PinnedSettingRequest::Gutter(
+            crate::app::pin::PanelGutter::Top,
+            candidate.gutter_top,
+        )),
+        SettingKey::PanelGutterBottom => Some(PinnedSettingRequest::Gutter(
+            crate::app::pin::PanelGutter::Bottom,
+            candidate.gutter_bottom,
+        )),
+        SettingKey::PanelGutterLeft => Some(PinnedSettingRequest::Gutter(
+            crate::app::pin::PanelGutter::Left,
+            candidate.gutter_left,
+        )),
+        SettingKey::PanelGutterRight => Some(PinnedSettingRequest::Gutter(
+            crate::app::pin::PanelGutter::Right,
+            candidate.gutter_right,
+        )),
+        SettingKey::PanelReserve => match active_width {
+            PinnedWidth::Collapsed => Some(PinnedSettingRequest::Reserve(
+                PanelReserveMode::for_flag(candidate.reserve),
+            )),
+            PinnedWidth::Expanded => None,
+        },
+        SettingKey::PanelAccent | SettingKey::PanelAccentColor | SettingKey::PanelAccentWidth => {
+            None
+        }
+        SettingKey::Services
+        | SettingKey::Keys
+        | SettingKey::Panel
+        | SettingKey::StayAlive
+        | SettingKey::AutoReconnect
+        | SettingKey::SavePlaylistOnQuit
+        | SettingKey::AlwaysPlayNext
+        | SettingKey::ConsumeVideos
+        | SettingKey::ConsumeAudio
+        | SettingKey::SavePlaylistOnConsume
+        | SettingKey::SavePlaylistOnConsumeAudio
+        | SettingKey::AlwaysSkipIntro
+        | SettingKey::ImageProtocol
+        | SettingKey::HiddenLibraries
+        | SettingKey::ShowAudioWindow
+        | SettingKey::UseMpvConfig
+        | SettingKey::NoScripts
+        | SettingKey::Autoload
+        | SettingKey::ShowSysTrayIcon
+        | SettingKey::SystemNotifications
+        | SettingKey::MouseSupport
+        | SettingKey::MyLanguages
+        | SettingKey::SubtitleMode
+        | SettingKey::FeedViewLibraries
+        | SettingKey::LibraryRoutes
+        | SettingKey::SubtitleLanguage
+        | SettingKey::AudioLanguage
+        | SettingKey::ManageFeeds
+        | SettingKey::ResetUiState
+        | SettingKey::LogOut
+        | SettingKey::ClientVersion
+        | SettingKey::OwnerVersion => None,
+    }
+}
+
+impl App {
+    /// Build the Settings multiselect's item list for `kind`
+    /// (add-gui-settings-screen design D7): the entries the TUI shell's
+    /// `open_multiselect` built before the move. Returns `None` when the
+    /// library-view kinds have no Emby client to enumerate.
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the configuration when its lock is poisoned.
+    pub fn settings_choices(&self, kind: MultiSelectKind) -> Option<Vec<(String, String, bool)>> {
+        if matches!(kind, MultiSelectKind::MyLanguages) {
+            const ALL_LANGS: &[&str] = &[
+                "English",
+                "French",
+                "German",
+                "Spanish",
+                "Italian",
+                "Portuguese",
+                "Japanese",
+                "Korean",
+                "Chinese",
+                "Russian",
+                "Arabic",
+                "Dutch",
+                "Swedish",
+                "Norwegian",
+                "Danish",
+                "Finnish",
+                "Polish",
+                "Czech",
+                "Turkish",
+            ];
+            let my_langs = self.config.lock().unwrap().my_languages.clone();
+            return Some(
+                ALL_LANGS
+                    .iter()
+                    .map(|&name| {
+                        let selected = my_langs.iter().any(|l| l == name);
+                        (name.to_lowercase(), name.to_string(), selected)
+                    })
+                    .collect(),
+            );
+        }
+        let client = self.emby_client()?;
+        let client = client.lock().unwrap();
+        let all = match kind {
+            MultiSelectKind::HiddenLibraries | MultiSelectKind::FeedViewLibraries => {
+                client.get_views().unwrap_or_default()
+            }
+            MultiSelectKind::MyLanguages => unreachable!(),
+        };
+        let config = self.config.lock().unwrap();
+        let selected_list = match kind {
+            MultiSelectKind::HiddenLibraries => &config.hidden_libraries,
+            MultiSelectKind::FeedViewLibraries => &config.feed_view_libraries,
+            MultiSelectKind::MyLanguages => unreachable!(),
+        };
+        Some(
+            all.iter()
+                .filter(|v| v.collection_type != "playlists")
+                .map(|v| {
+                    let lower = v.name.to_lowercase();
+                    let is_hidden = selected_list.contains(&lower);
+                    (lower, v.name.clone(), is_hidden)
+                })
+                .collect(),
+        )
+    }
+
+    /// Run the Settings multiselect's two commits for `kind`
+    /// (add-gui-settings-screen design D7): the language commit the TUI
+    /// shell's `commit_my_languages` ran, or the library-list commit its
+    /// `commit_library_list_selection` ran. For a library kind, returns the
+    /// refetched Home content the caller assigns to its Home store; the
+    /// language kind returns `None` and refetches nothing.
+    pub fn commit_settings_choices(
+        &mut self,
+        kind: MultiSelectKind,
+        selected: &[(String, String, bool)],
+    ) -> Option<HomeContent> {
+        if matches!(kind, MultiSelectKind::MyLanguages) {
+            self.commit_my_languages(selected);
+            return None;
+        }
+
+        self.commit_library_list_selection(kind, selected)
+    }
+
+    /// The `My Languages` commit (§ multiselect): the selected display names
+    /// replace `my_languages`, and the single-value subtitle/audio language
+    /// prefs clear when the user deselected them, then persist and push to
+    /// the player.
+    fn commit_my_languages(&mut self, items: &[(String, String, bool)]) {
+        let selected: Vec<String> = items
+            .iter()
+            .filter(|(_, _, is_sel)| *is_sel)
+            .map(|(_, name, _)| name.clone())
+            .collect();
+        {
+            let mut c = self.config.lock().unwrap();
+            if !selected.is_empty() {
+                if !c.subtitle_lang.is_empty() && !selected.contains(&c.subtitle_lang) {
+                    c.subtitle_lang = String::new();
+                }
+                if !c.audio_lang.is_empty() && !selected.contains(&c.audio_lang) {
+                    c.audio_lang = String::new();
+                }
+            }
+            c.my_languages = selected;
+        };
+        let cfg = self.config.lock().unwrap().clone();
+        self.player.update_subtitle_prefs(|p| {
+            p.subtitle_lang.clone_from(&cfg.subtitle_lang);
+            p.audio_lang.clone_from(&cfg.audio_lang);
+        });
+        if let Err(e) =
+            crate::app::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
+        {
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
+        }
+    }
+
+    /// The hidden-libraries / feed-view-libraries commit: the marked
+    /// (hidden) lowercased names replace the kind's config list, then
+    /// persist, and for the feed-view kind the destination nav stacks clear
+    /// so the new filter applies. Returns the refetched Home content.
+    fn commit_library_list_selection(
+        &mut self,
+        kind: MultiSelectKind,
+        items: &[(String, String, bool)],
+    ) -> Option<HomeContent> {
+        let hidden: Vec<String> = items
+            .iter()
+            .filter(|(_, _, is_hidden)| *is_hidden)
+            .map(|(lower, _, _)| lower.clone())
+            .collect();
+        {
+            let mut c = self.config.lock().unwrap();
+            match kind {
+                MultiSelectKind::HiddenLibraries => c.hidden_libraries.clone_from(&hidden),
+                MultiSelectKind::FeedViewLibraries => c.feed_view_libraries.clone_from(&hidden),
+                MultiSelectKind::MyLanguages => unreachable!(),
+            }
+        }
+        match kind {
+            MultiSelectKind::HiddenLibraries => self.hidden_libraries = hidden,
+            MultiSelectKind::FeedViewLibraries => {
+                for lib in &mut self.libs {
+                    lib.nav_stack.clear();
+                }
+            }
+            MultiSelectKind::MyLanguages => unreachable!(),
+        }
+        let cfg = self.config.lock().unwrap().clone();
+        if let Err(e) =
+            crate::app::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
+        {
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
+        }
+        // The commit runs the fetch synchronously (order-sensitive
+        // side effects); the caller assigns the computed content to
+        // its Home store.
+        self.fetch_home().ok()
+    }
+}
+
+#[cfg(test)]
+mod tests;

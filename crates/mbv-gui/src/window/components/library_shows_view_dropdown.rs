@@ -7,7 +7,7 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::GuiShowsView;
+use crate::gui_core::GuiShowsView;
 
 use crate::window::components::library_dropdown::{
     LibraryDropdown, LibraryDropdownMarker, LibraryDropdownRow,

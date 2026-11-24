@@ -6,6 +6,6 @@
 /// which the wrapper drops as soon as the real `App` comes back. The root
 /// crate's own value, so a test parks the same `App` a shipped wrapper parks.
 #[must_use]
-pub fn handoff_app() -> mbv::App {
-    mbv::handoff_app()
+pub fn handoff_app() -> mbv_client_core::App {
+    mbv_client_core::handoff_app()
 }

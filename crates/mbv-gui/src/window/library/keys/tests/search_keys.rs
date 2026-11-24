@@ -241,7 +241,10 @@ fn esc_closes_the_results_clears_the_field_and_sends_searchclose() {
         facts,
         ["escape=Handled focused=false mounted=false highlight=None"]
     );
-    assert_eq!(commands(&rx), [mbv::GuiLibraryCommand::SearchClose]);
+    assert_eq!(
+        commands(&rx),
+        [crate::gui_core::GuiLibraryCommand::SearchClose]
+    );
 }
 
 #[test]
@@ -302,7 +305,7 @@ fn enter_on_the_highlighted_row_sends_searchactivate_and_no_close() {
     );
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::SearchActivate {
+        [crate::gui_core::GuiLibraryCommand::SearchActivate {
             id: "r2".to_owned(),
             item_type: "Artist".to_owned(),
         }]
@@ -372,7 +375,10 @@ fn escape_closes_the_carried_results_after_the_field_lost_the_keyboard() {
         facts,
         ["escape=Handled focused=false mounted=false highlight=None"]
     );
-    assert_eq!(commands(&rx), [mbv::GuiLibraryCommand::SearchClose]);
+    assert_eq!(
+        commands(&rx),
+        [crate::gui_core::GuiLibraryCommand::SearchClose]
+    );
 }
 
 #[test]

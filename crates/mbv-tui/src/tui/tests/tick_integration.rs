@@ -1,0 +1,750 @@
+use std::time::{Duration, Instant};
+
+use crate::tui::test_support::{Terminal, TestBackend};
+use ratatui::layout::Rect;
+use tuirealm::application::PollStrategy;
+use tuirealm::component::AppComponent;
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
+
+use crate::tui::fold_keyboard_messages;
+use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::dispatch::action::{NavigationIntent, PanelIntent, PlaybackIntent};
+use mbv_client_core::input::router::RouterOutcome;
+use mbv_client_core::tests::make_app_stub;
+use mbv_components::SearchSidebarComponent;
+use mbv_ui_model::confirm::{ConfirmAction, ConfirmButton, ConfirmModal};
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::overlay::SidebarId;
+use mbv_ui_model::settings::{PanelFocus, PanelMode};
+use mbv_ui_model::tab_selection::TabSelection;
+use mbv_ui_msg::{
+    ComponentId, ModalId, Msg, OverlayId, ShellRequest, TerminalObserverEvent, UserEvent,
+};
+use mbv_ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
+
+fn key(code: Key) -> Event<UserEvent> {
+    Event::Keyboard(KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    })
+}
+
+/// The Ctrl chord of a key: the panel-focus switch (user decision 2026-09-20).
+fn ctrl_key(code: Key) -> Event<UserEvent> {
+    Event::Keyboard(KeyEvent {
+        code,
+        modifiers: KeyModifiers::CONTROL,
+    })
+}
+
+#[test]
+fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    // The restored launch focus is Queue, so the displayed queue must not be
+    // empty: with the empty-queue column hidden (change
+    // `hide-empty-queue-column`, D2) a sync moves the stored focus to Library.
+    app.seed_local_queue_emby_items_for_test(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
+    app.seed_launch_restore_pending_for_test(mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Queue,
+        selector: None,
+        item: None,
+    });
+    let mut harness = TickHarness::new(app);
+
+    // One production tick (no events reach the app) + the sync pass; no draw
+    // in between.
+    harness.inject(Event::User(UserEvent::Clock(Instant::now())));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(harness.model().app.tab_for_test(), TabSelection::Home);
+    assert_eq!(harness.model().app.stored_panel_focus(), PanelFocus::Queue);
+}
+
+fn queue_focused_harness() -> TickHarness {
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    // A focused queue needs a queue column: with the empty-queue column
+    // hidden (change `hide-empty-queue-column`, D2) an empty displayed queue
+    // would move the focus to the library on sync.
+    app.seed_local_queue_emby_items_for_test(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
+    TickHarness::new(app)
+}
+
+fn active_queue_harness() -> TickHarness {
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_playing_status_for_test(0, 0);
+    TickHarness::new(app)
+}
+
+/// Global transport (user decision 2026-10-15): `Space` toggles on the press
+/// itself, from any focus — the router dispatches immediately and a consumed
+/// leaf request is discarded. A focused list's active Visual selection keeps
+/// its row-local Space as a deferred candidate (see `shell/tests.rs`).
+#[test]
+fn live_tick_space_toggles_immediately_on_the_press() {
+    let mut harness = active_queue_harness();
+
+    harness.inject(key(Key::Char(' ')));
+    let first = harness.step();
+    assert_eq!(
+        first.router,
+        RouterOutcome::Command(PlaybackIntent::TogglePlayPause.into())
+    );
+    assert!(!first.deferred_fired);
+}
+
+#[test]
+fn live_tick_local_mutation_precedes_root_observation() {
+    let mut harness = TickHarness::new(make_app_stub());
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(key(Key::Char('a')));
+    let first = harness.step();
+    harness.inject(key(Key::Char('b')));
+    let second = harness.step();
+
+    assert!(matches!(second.router, RouterOutcome::FallThrough));
+    assert!(
+        second
+            .raw_messages
+            .iter()
+            .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+    );
+    assert!(second.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    assert!(second.messages.iter().all(|message| !matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    assert_eq!(
+        second.raw_messages.len(),
+        2,
+        "leaf claim and root observation"
+    );
+    assert_eq!(
+        search_component_mut(&mut harness)
+            .debounce_pending
+            .as_deref(),
+        Some("ab"),
+        "the focused search component mutated its local query before root observation"
+    );
+    assert_eq!(
+        first.raw_messages.len(),
+        2,
+        "each local key yields a leaf claim and root observation"
+    );
+}
+
+pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSidebarComponent {
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Overlay(OverlayId::Search))
+        .expect("search sidebar mounted")
+        .as_any_mut()
+        .downcast_mut::<SearchSidebarComponent>()
+        .expect("search sidebar type")
+}
+
+fn arm_search_query(harness: &mut TickHarness, query: &str) {
+    for c in query.chars() {
+        let message = search_component_mut(harness).on(&key(Key::Char(c)));
+        assert!(
+            matches!(
+                message,
+                Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+            ),
+            "typing search chars is locally consumed"
+        );
+    }
+}
+
+/// Phase 1 delivery proof (task 2.7): with Queue focused, a double-click on
+/// the seek-bar row still reaches the unfocused `LibraryPlaybackPanel` through
+/// its `mouse_sub()` subscription, and the component resolves the column
+/// against its own painted `seekbar_area` into a 0.0..=1.0 fraction. No other
+/// eligible surface claims the event (D2 exclusivity). The strip renders only
+/// where `RootFrame` places it (task 3.5), so this frame is library-only.
+#[test]
+fn tick_delivers_seekbar_double_click_to_unfocused_playback_as_a_fraction() {
+    let mut app = make_app_stub();
+    app.set_panel_mode_for_test(PanelMode::LibraryOnly);
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
+    terminal
+        .draw(|frame| {
+            harness
+                .model_mut()
+                .render_library_playback_panel_at(frame, Rect::new(10, 5, 40, 4));
+        })
+        .unwrap();
+
+    // The strip seeks on a double-click: the press that opens the pair claims
+    // nothing, and the next step delivers the seek.
+    let press = || {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 30,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    harness.inject(press());
+    let outcome = harness.step();
+
+    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Library));
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| !matches!(msg, Msg::Playback(PlaybackRequest::SeekTo(_)))),
+        "the first press of the pair claims no seek: {:?}",
+        outcome.raw_messages
+    );
+
+    harness.inject(press());
+    let outcome = harness.step();
+    let seeks: Vec<f64> = outcome
+        .raw_messages
+        .iter()
+        .filter_map(|msg| match msg {
+            Msg::Playback(PlaybackRequest::SeekTo(f)) => Some(*f),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(seeks.len(), 1, "exactly one surface claims the seek");
+    assert!(
+        (seeks[0] - 0.5).abs() < 1e-6,
+        "column 30 of x10..w40 is 0.5"
+    );
+}
+
+#[test]
+fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
+    let mut harness = queue_focused_harness();
+    harness.inject(key(Key::Char('p')));
+
+    let outcome = harness.step();
+
+    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Queue));
+    assert!(matches!(outcome.router, RouterOutcome::FallThrough));
+    assert_eq!(outcome.raw_messages.len(), 2, "one leaf and one observer");
+    assert!(matches!(
+        outcome.raw_messages.first(),
+        Some(Msg::Shell(boxed)) if matches!(**boxed, ShellRequest::QueueIntent(_))
+    ));
+    assert!(matches!(
+        outcome.raw_messages.get(1),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::Key(_)))
+    ));
+    assert_eq!(
+        outcome
+            .raw_messages
+            .iter()
+            .filter(|msg| matches!(msg, Msg::Shell(boxed) if matches!(**boxed, ShellRequest::QueueIntent(_))))
+            .count(),
+        1
+    );
+    assert_eq!(
+        outcome
+            .raw_messages
+            .iter()
+            .filter(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+            .count(),
+        1
+    );
+    assert_eq!(outcome.messages.len(), 1, "observer key is fold-only");
+
+    harness.inject(key(Key::Char('p')));
+    let next = harness.step();
+    assert_eq!(next.raw_messages.len(), 2);
+    assert_eq!(next.messages.len(), 1);
+}
+
+#[test]
+fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
+    let mut queue_harness = queue_focused_harness();
+    queue_harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        queue_harness.model().application.focus(),
+        Some(&ComponentId::Queue)
+    );
+
+    let mut library_app = mbv_client_core::tests::render_fixtures::make_movie_app();
+    library_app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    library_app.set_panel_focus_for_test(PanelFocus::Library);
+    library_app.set_panel_mode_for_test(PanelMode::Both);
+    let mut library_harness = TickHarness::new(library_app);
+    library_harness.model_mut().sync_mounted_surfaces();
+    // Task 6.1: Movies moved into the mounted `LibraryPanel` as the
+    // `EmbyLibraryContent` owner, so its library tab routes to the panel (the
+    // old-destination-child focus for un-migrated libraries is covered by
+    // `tests_tick_integration_library_panel::library_panel_focus_follows_the_active_library`).
+    assert_eq!(
+        library_harness.model().application.focus(),
+        Some(&ComponentId::Library)
+    );
+
+    let mut stub_app = make_app_stub();
+    // Task 1.1: the sync pass normalizes a stale Service-library destination
+    // before the focus pass routes, so this stub's index-0 tab (no libraries
+    // loaded) resolves to Home in the pass, and focus follows the mounted
+    // Home destination instead of falling through to UiRoot.
+    stub_app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    stub_app.set_panel_focus_for_test(PanelFocus::Library);
+    let mut stub_harness = TickHarness::new(stub_app);
+    stub_harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        stub_harness.model().app.tab_for_test(),
+        TabSelection::Home,
+        "the sync pass normalizes the stale destination before routing"
+    );
+    assert_eq!(
+        stub_harness.model().application.focus(),
+        Some(&ComponentId::Library),
+        "the Home owner is installed with the panel, so the normalized Home tab routes to the Library panel (task 5.11)"
+    );
+}
+
+/// Panel switching is the Ctrl+Left/Ctrl+Right chord (user decision
+/// 2026-09-20, replacing the bare arrows, which now reach the tree's own
+/// parent/child chords): the router fold must claim the Ctrl chords and move
+/// panel focus, proven here through the real tick + sync pass rather than a
+/// direct `Component::on`.
+#[test]
+fn tick_ctrl_arrows_switch_main_panels() {
+    // Queue focused: Ctrl+Right moves panel focus to Library.
+    let mut harness = queue_focused_harness();
+    harness.inject(ctrl_key(Key::Right));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(PanelIntent::FocusPanel(PanelFocus::Library).into())
+    );
+    if let RouterOutcome::Command(command) = outcome.router {
+        harness.model_mut().dispatch_router_command(&command);
+    }
+    assert_eq!(
+        harness.model().app.stored_panel_focus(),
+        PanelFocus::Library
+    );
+
+    // Library focused in Both mode: Ctrl+Left moves panel focus to Queue.
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::Both);
+    // The switch targets the queue column, so it must exist: with the
+    // empty-queue column hidden (change `hide-empty-queue-column`, D2) the
+    // sync would move the focus straight back to the library.
+    app.seed_local_queue_emby_items_for_test(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
+    let mut both = TickHarness::new(app);
+    both.inject(ctrl_key(Key::Left));
+    let outcome = both.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(PanelIntent::FocusPanel(PanelFocus::Queue).into())
+    );
+    if let RouterOutcome::Command(command) = outcome.router {
+        both.model_mut().dispatch_router_command(&command);
+    }
+    assert_eq!(both.model().app.stored_panel_focus(), PanelFocus::Queue);
+
+    // The bare arrows no longer move panel focus: Library focus in Both mode
+    // keeps the panel and falls through to the tree's own chord.
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_panel_mode_for_test(PanelMode::Both);
+    app.seed_local_queue_emby_items_for_test(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
+    let mut plain = TickHarness::new(app);
+    plain.inject(key(Key::Left));
+    let outcome = plain.step();
+    assert_ne!(
+        outcome.router,
+        RouterOutcome::Command(PanelIntent::FocusPanel(PanelFocus::Queue).into()),
+        "plain Left is the tree's chord, not a panel switch"
+    );
+    assert_eq!(
+        plain.model().app.stored_panel_focus(),
+        PanelFocus::Library,
+        "plain Left leaves panel focus where it was"
+    );
+}
+
+#[test]
+fn search_clock_user_event_reaches_mounted_search_component() {
+    let mut harness = TickHarness::new(make_app_stub());
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    arm_search_query(&mut harness, "ab");
+    // Expire the deadline directly instead of sleeping out the 300ms
+    // wall-clock debounce: the duration is not under test, only that a
+    // past-due deadline dispatches on Clock.
+    search_component_mut(&mut harness).debounce_deadline = Some(
+        Instant::now()
+            .checked_sub(Duration::from_millis(1))
+            .expect("a 1ms-back deadline only underflows before process start"),
+    );
+
+    harness.inject(Event::User(UserEvent::Clock(Instant::now())));
+    let raw_messages = harness
+        .model_mut()
+        .application
+        .tick(tuirealm::application::PollStrategy::Once(
+            Duration::from_millis(500),
+        ))
+        .expect("tick user clock");
+
+    assert!(raw_messages.iter().any(|msg| {
+        matches!(
+            msg,
+            Msg::Service(ServiceRequest::SearchQuery(query)) if query == "ab"
+        )
+    }));
+    let component = search_component_mut(&mut harness);
+    assert!(component.debounce_pending.is_none());
+    assert!(component.debounce_deadline.is_none());
+}
+
+#[test]
+fn search_clock_sweep_dispatches_debounce_on_step() {
+    let mut harness = TickHarness::new(make_app_stub());
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    arm_search_query(&mut harness, "ab");
+    assert!(
+        harness
+            .model_mut()
+            .tick_search_clock(Instant::now())
+            .is_none()
+    );
+
+    // Expire the deadline directly instead of sleeping out the 300ms
+    // wall-clock debounce, and invoke the run-loop sweep directly: step()'s
+    // trailing application.tick would block its full 500ms poll with no
+    // event queued, and this test asserts nothing about that tick part
+    // (raw_messages is expected empty).
+    search_component_mut(&mut harness).debounce_deadline = Some(
+        Instant::now()
+            .checked_sub(Duration::from_millis(1))
+            .expect("a 1ms-back deadline only underflows before process start"),
+    );
+    let dispatched = harness
+        .model_mut()
+        .tick_search_clock(Instant::now())
+        .expect("sweep must dispatch a past-due debounce");
+    assert!(
+        matches!(
+            dispatched,
+            Msg::Service(ServiceRequest::SearchQuery(ref query)) if query == "ab"
+        ),
+        "sweep must dispatch the armed query, got {dispatched:?}"
+    );
+    let component = search_component_mut(&mut harness);
+    assert!(component.debounce_pending.is_none());
+    assert!(component.debounce_deadline.is_none());
+}
+
+/// Mini view keeps `effective_panel_focus` on Queue, so `sync_queue` must not
+/// re-activate Queue on the tick after a sidebar mounts, stealing the Esc that
+/// would close it. The sync passes must yield focus while an overlay is up.
+#[test]
+fn esc_closes_a_sidebar_in_mini_view() {
+    let app = make_app_stub();
+    let mut harness = TickHarness::new(app);
+    crate::tui::test_support::set_terminal_width(harness.model_mut(), 70);
+    harness.model_mut().mount_sidebar(SidebarId::Sessions);
+    let id = ComponentId::Overlay(OverlayId::Sessions);
+
+    // The sync pass that previously stole focus back to Queue.
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(harness.model().application.focus(), Some(&id));
+
+    harness.inject(key(Key::Esc));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness.model().application.mounted(&id));
+}
+
+/// Task 3.7 (design D3 of `extract-client-core`, spec
+/// `client-interaction-core`): ``TuiRealm`` focus follows the core focus stack.
+/// A surface the shell pushes onto the stack is the focused ``TuiRealm``
+/// component after the sync pass, and the dismissal that drops it from the
+/// stack hands focus back to the derived Panel-focus surface — the stack is
+/// the authority, the pass only applies its derivation.
+#[test]
+fn tui_realm_focus_follows_the_core_stack() {
+    let mut harness = TickHarness::new(make_app_stub());
+    let sessions = ComponentId::Overlay(OverlayId::Sessions);
+
+    // The routed push records the overlay on the stack; the sync pass applies
+    // the stack's derived focus.
+    harness.model_mut().mount_sidebar(SidebarId::Sessions);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&sessions),
+        "the pushed overlay is the focused component after the sync pass"
+    );
+
+    // The routed dismissal drops the overlay; the derivation returns to the
+    // Panel-focus surface.
+    harness.model_mut().dismiss_sidebar(SidebarId::Sessions);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Library),
+        "the dismissal returns focus to the derived Panel-focus surface"
+    );
+}
+
+#[test]
+fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_pending_overlay_for_test(OverlayRequest::Confirm(ConfirmModal {
+        message: "Remove queued items".into(),
+        buttons: vec![
+            ConfirmButton::affirmative("Enter", "Confirm"),
+            ConfirmButton::cancel("Esc", "Cancel"),
+        ],
+        on_confirm: ConfirmAction::ClearQueue,
+    }));
+    let mut harness = TickHarness::new(app);
+
+    harness.model_mut().sync_mounted_surfaces();
+    let confirm_id = ComponentId::Modal(ModalId::Confirm);
+    assert_eq!(harness.model().application.focus(), Some(&confirm_id));
+
+    harness.inject(key(Key::Enter));
+    let outcome = harness.step();
+    assert_eq!(outcome.pre_fold_focus, Some(confirm_id.clone()));
+    assert!(matches!(outcome.router, RouterOutcome::FallThrough));
+    assert!(matches!(
+       outcome.raw_messages.first(),
+       Some(Msg::Shell(shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(
+           ConfirmIntent::Accept
+       ))));
+
+    harness
+        .model_mut()
+        .application
+        .active(&ComponentId::Queue)
+        .expect("activate lower queue for swallow guard");
+    harness.inject(key(Key::Char('c')));
+    let pre_fold_focus = harness.model().application.focus().cloned();
+    let raw_messages = harness
+        .model_mut()
+        .application
+        .tick(PollStrategy::Once(Duration::from_millis(500)))
+        .expect("tick lower focused queue");
+    let router = harness.model_mut().router_outcome(&raw_messages);
+    let messages = fold_keyboard_messages(raw_messages, pre_fold_focus.as_ref(), &router);
+    assert_eq!(pre_fold_focus, Some(ComponentId::Queue));
+    assert!(matches!(router, RouterOutcome::Swallow));
+    assert_eq!(messages, [] as [mbv_ui_msg::Msg; 0]);
+}
+
+/// Only Enter and Esc answer a confirmation: any other key is a no-op that
+/// must leave the modal mounted (issue #855 follow-up).
+#[test]
+fn stray_key_is_a_noop_on_the_confirm_modal() {
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_pending_overlay_for_test(OverlayRequest::Confirm(ConfirmModal {
+        message: "Remove queued items".into(),
+        buttons: vec![
+            ConfirmButton::affirmative("Enter", "Confirm"),
+            ConfirmButton::cancel("Esc", "Cancel"),
+        ],
+        on_confirm: ConfirmAction::ClearQueue,
+    }));
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let confirm_id = ComponentId::Modal(ModalId::Confirm);
+    assert!(harness.model().application.mounted(&confirm_id));
+
+    for code in [Key::Char('x'), Key::Char('y'), Key::Char('q')] {
+        harness.inject(key(code));
+        let outcome = harness.step();
+        assert!(
+            outcome
+                .raw_messages
+                .iter()
+                .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
+            "{code:?} must be a no-op on the confirm modal"
+        );
+        assert!(
+            harness.model().application.mounted(&confirm_id),
+            "{code:?} must leave the confirm modal mounted"
+        );
+    }
+}
+
+mod disconnect;
+pub(crate) mod harness;
+mod keybinds;
+mod mouse;
+mod mouse_sidebar;
+mod playback_title_parts;
+mod prefix_mode;
+mod queue_owner;
+mod queue_playback;
+mod sessions;
+mod settings;
+
+/// A function key pressed while the Help overlay is open must dismiss Help and
+/// open its sidebar. Help stays mounted otherwise, and (painting after
+/// Settings/Playlists in `OVERLAY_IDS`) it hid the sidebar the key just opened —
+/// F2/F4 looked dead while F3 (painted after Help) worked.
+#[test]
+fn function_keys_from_help_dismiss_help_and_open_their_sidebar() {
+    let step_with_key = |harness: &mut TickHarness, code: Key| {
+        harness.inject(key(code));
+        let outcome = harness.step();
+        if let RouterOutcome::Command(command) = &outcome.router {
+            harness.model_mut().dispatch_router_command(command);
+        }
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+        harness.model_mut().sync_mounted_surfaces();
+    };
+
+    for (code, overlay) in [
+        (Key::Function(2), OverlayId::Settings),
+        (Key::Function(3), OverlayId::Sessions),
+        (Key::Function(4), OverlayId::Playlists),
+    ] {
+        let mut harness = TickHarness::new(make_app_stub());
+        step_with_key(&mut harness, Key::Function(1));
+        let help_id = ComponentId::Overlay(OverlayId::Help);
+        assert!(
+            harness.model().application.mounted(&help_id),
+            "F1 must open Help first"
+        );
+
+        step_with_key(&mut harness, code);
+        let target_id = ComponentId::Overlay(overlay);
+        assert!(harness.model().application.mounted(&target_id));
+        assert_eq!(harness.model().application.focus(), Some(&target_id));
+        assert!(
+            !harness.model().application.mounted(&help_id),
+            "opening a sidebar from Help must dismiss Help; otherwise it paints over the sidebar"
+        );
+    }
+}
+
+/// The key that mounts a non-blocking sidebar toggles it (the F2/F3 rule):
+/// a second press of the same key dismisses the sidebar the first one
+/// mounted. F4/Playlists used to be open-only (`open_playlists_panel`), so
+/// F4 could never dismiss its own panel.
+#[test]
+fn f4_playlists_sidebar_toggles_open_and_closed() {
+    let step_with_key = |harness: &mut TickHarness, code: Key| {
+        harness.inject(key(code));
+        let outcome = harness.step();
+        assert_eq!(
+            outcome.router,
+            RouterOutcome::Command(NavigationIntent::OpenPlaylists.into())
+        );
+        harness
+            .model_mut()
+            .dispatch_router_command(&NavigationIntent::OpenPlaylists.into());
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+        harness.model_mut().sync_mounted_surfaces();
+    };
+
+    let mut harness = TickHarness::new(make_app_stub());
+    let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
+
+    step_with_key(&mut harness, Key::Function(4));
+    assert!(harness.model().application.mounted(&playlists_id));
+    assert_eq!(harness.model().application.focus(), Some(&playlists_id));
+
+    step_with_key(&mut harness, Key::Function(4));
+    assert!(
+        !harness.model().application.mounted(&playlists_id),
+        "the key that mounted Playlists must dismiss it"
+    );
+}
+
+#[test]
+fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target() {
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    // The saved focus is Queue, so the displayed queue must not be empty:
+    // with the empty-queue column hidden (change `hide-empty-queue-column`,
+    // D2) a sync moves the stored focus to Library.
+    app.seed_local_queue_emby_items_for_test(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
+    let mut harness = TickHarness::new(app);
+    harness.inject(Event::User(UserEvent::Clock(Instant::now())));
+    harness.step();
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(harness.model().app.stored_panel_focus(), PanelFocus::Queue);
+    // The tick adopts no queue content of its own: the queue still holds
+    // exactly the one seeded item.
+    assert_eq!(harness.model().app.local_queue_len_for_test(), 1);
+}

@@ -74,7 +74,7 @@ fn a_capture_swallows_f2_and_sends_keys_capture() {
     assert_eq!(facts, vec!["f2=Handled"]);
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::KeysCapture {
+        vec![crate::gui_core::GuiSettingsCommand::KeysCapture {
             target: "next_track".to_owned(),
             key: mbv_ui_msg::KeyEvent::new(Key::Function(2), KeyModifiers::NONE),
         }],
@@ -94,7 +94,10 @@ fn esc_cancels_a_capture_and_sends_nothing() {
             .push(format!("captureCleared={held}"));
     });
     assert_eq!(facts, vec!["escape=Handled", "captureCleared=true"]);
-    assert_eq!(settings_commands(&rx), [] as [mbv::GuiSettingsCommand; 0]);
+    assert_eq!(
+        settings_commands(&rx),
+        [] as [crate::gui_core::GuiSettingsCommand; 0]
+    );
 }
 
 /// Contract (`keys.test.ts`): the Esc ladder — content hands the keyboard
@@ -113,7 +116,10 @@ fn esc_moves_content_to_the_sidebar_then_sends_close() {
         press(state, facts, "esc2", "Escape", &settings());
     });
     assert_eq!(facts, vec!["esc1=Handled", "pane=Sidebar", "esc2=Handled"],);
-    assert_eq!(settings_commands(&rx), vec![mbv::GuiSettingsCommand::Close],);
+    assert_eq!(
+        settings_commands(&rx),
+        vec![crate::gui_core::GuiSettingsCommand::Close],
+    );
 }
 
 /// Contract (`keys.test.ts`): Space on the sidebar goes to the core.
@@ -128,7 +134,10 @@ fn space_on_the_sidebar_goes_to_the_core() {
         press(state, facts, "space", " ", &settings());
     });
     assert_eq!(facts, vec!["space=Core(None)"]);
-    assert_eq!(settings_commands(&rx), [] as [mbv::GuiSettingsCommand; 0]);
+    assert_eq!(
+        settings_commands(&rx),
+        [] as [crate::gui_core::GuiSettingsCommand; 0]
+    );
 }
 
 /// Contract (`keys.test.ts`): Enter on a pick row opens its value list (the
@@ -150,7 +159,10 @@ fn enter_on_a_pick_row_opens_its_menu_and_sends_nothing() {
         facts,
         vec!["enter=Handled", "menu=Some(\"subtitleLanguage\")"]
     );
-    assert_eq!(settings_commands(&rx), [] as [mbv::GuiSettingsCommand; 0]);
+    assert_eq!(
+        settings_commands(&rx),
+        [] as [crate::gui_core::GuiSettingsCommand; 0]
+    );
 }
 
 /// Contract (`keys.test.ts`): Esc from the sidebar closes the screen even
@@ -175,7 +187,10 @@ fn esc_from_the_sidebar_with_a_setup_form_open_sends_close_not_cancel_setup() {
         press(state, facts, "escape", "Escape", &setup_frame);
     });
     assert_eq!(facts, vec!["escape=Handled"]);
-    assert_eq!(settings_commands(&rx), vec![mbv::GuiSettingsCommand::Close],);
+    assert_eq!(
+        settings_commands(&rx),
+        vec![crate::gui_core::GuiSettingsCommand::Close],
+    );
 }
 
 /// Contract (`SettingsPickButton.test.ts`): Enter on a menu entry sends
@@ -199,7 +214,7 @@ fn enter_on_a_menu_entry_sends_set_value_with_that_value() {
     );
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::SetValue {
+        vec![crate::gui_core::GuiSettingsCommand::SetValue {
             setting: mbv_ui_model::settings::SettingKey::from_name("subtitleLanguage")
                 .expect("the fixture names a declared setting"),
             value: "French".to_owned(),
@@ -222,5 +237,8 @@ fn esc_closes_the_menu_and_sends_nothing() {
             .push(format!("menuOpen={open}"));
     });
     assert_eq!(facts, vec!["escape=Handled", "menuOpen=false"]);
-    assert_eq!(settings_commands(&rx), [] as [mbv::GuiSettingsCommand; 0]);
+    assert_eq!(
+        settings_commands(&rx),
+        [] as [crate::gui_core::GuiSettingsCommand; 0]
+    );
 }

@@ -89,14 +89,14 @@ fn music_list() -> GuiDestinationList {
     GuiDestinationList::Music(GuiMusicList {
         lib_idx: 0,
         collections: GuiCollections {
-            target: mbv::GuiCollectionTarget::Music(0),
+            target: crate::gui_core::GuiCollectionTarget::Music(0),
             all: false,
             entries: vec![GuiCollectionEntry {
                 key: "g1".to_owned(),
                 name: "Hip-Hop".to_owned(),
                 checked: true,
             }],
-            noun: mbv::GuiCollectionNoun::Groups,
+            noun: crate::gui_core::GuiCollectionNoun::Groups,
         },
         loading: false,
         failure: None,
@@ -370,14 +370,14 @@ fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
         sort: None,
         lib_idx: 1,
         collections: GuiCollections {
-            target: mbv::GuiCollectionTarget::Podcasts(1),
+            target: crate::gui_core::GuiCollectionTarget::Podcasts(1),
             all: false,
             entries: vec![GuiCollectionEntry {
                 key: "show1".to_owned(),
                 name: "Bits and Bites".to_owned(),
                 checked: true,
             }],
-            noun: mbv::GuiCollectionNoun::Shows,
+            noun: crate::gui_core::GuiCollectionNoun::Shows,
         },
         loading: false,
         failed: false,
@@ -456,7 +456,7 @@ fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Feeds(GuiFeedsList {
         sort: None,
         collections: GuiCollections {
-            target: mbv::GuiCollectionTarget::Feeds,
+            target: crate::gui_core::GuiCollectionTarget::Feeds,
             all: false,
             entries: vec![
                 GuiCollectionEntry {
@@ -470,7 +470,7 @@ fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
                     checked: true,
                 },
             ],
-            noun: mbv::GuiCollectionNoun::Subscriptions,
+            noun: crate::gui_core::GuiCollectionNoun::Subscriptions,
         },
         loading: false,
         failed: false,

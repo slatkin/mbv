@@ -1,6 +1,6 @@
 # Invariant 31 — Severing a target stops no playback
 
-**Scope:** `sever_connections_without_output_change` and `hand_remote_output_back_to_local` (`src/app/state/remote_slot.rs`), every attach/switch path in `src/app/dispatch/session/switch.rs` (`connect_to_session`, `activate_session_target`, `switch_to_library_route`, `connect_direct_session`), and `App::select_panel_target` (`src/app/dispatch/cast.rs`).
+**Scope:** `sever_connections_without_output_change` and `hand_remote_output_back_to_local` (`mbv_client_core::state::remote_slot`), every attach/switch path in `mbv_client_core::dispatch::session::switch` (`connect_to_session`, `activate_session_target`, `switch_to_library_route`, `connect_direct_session`), and `App::select_panel_target` (`mbv_client_core::dispatch::cast`).
 
 ## The invariant
 
@@ -18,7 +18,7 @@ Before the session-switch playback-continuity decision, every switch path called
 - `sever_connections_without_output_change` is the shared sever: it restores a library route and disconnects a remote, and sends nothing to the outgoing owner.
 - `attach_remote_owner` suspends the home link (which keeps playing) or disconnects the previous remote itself; attach paths do not pre-send output commands.
 - The hand-off fork (`ConfirmAction::HandOffPlaybackToSession`) is the only place a Session activation sends an output selection, and the user answers it first.
-- Guard tests: `connecting_to_a_session_leaves_the_local_owners_cast_output_playing`, `connecting_to_a_session_leaves_the_local_owners_emby_session_output_playing` (`src/app/tests/session_connect.rs`), and `switching_to_a_library_route_leaves_the_local_owners_remote_output_playing` (`src/app/tests/route_state.rs`) each assert the owner channel receives nothing.
+- Guard tests: `connecting_to_a_session_leaves_the_local_owners_cast_output_playing`, `connecting_to_a_session_leaves_the_local_owners_emby_session_output_playing` (`mbv_client_core::app::tests::session_connect`), and `switching_to_a_library_route_leaves_the_local_owners_remote_output_playing` (`mbv_client_core::app::tests::route_state`) each assert the owner channel receives nothing.
 
 ## Where it currently fails / how it could regress
 

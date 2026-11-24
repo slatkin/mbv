@@ -226,7 +226,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -395,7 +395,7 @@ fn the_imdb_button_paints_and_a_press_sends_the_open_url_command() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::OpenUrl {
+        vec![crate::gui_core::GuiLibraryCommand::OpenUrl {
             url: "https://www.imdb.com/title/tt0113277/".to_owned(),
         }],
         "the press sends the open-url command with the frame's url"
@@ -447,7 +447,7 @@ fn play_sends_the_play_command_for_the_selected_row() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::EmbyPlay {
+        vec![crate::gui_core::GuiLibraryCommand::EmbyPlay {
             lib_idx: LIB_IDX,
             item_id: "movie1".to_owned(),
         }],
@@ -470,7 +470,7 @@ fn play_next_sends_the_play_next_command_for_the_selected_row() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::EmbyPlayNext {
+        vec![crate::gui_core::GuiLibraryCommand::EmbyPlayNext {
             lib_idx: LIB_IDX,
             item_id: "movie1".to_owned(),
         }],
@@ -493,7 +493,7 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_row() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::EmbyQueue {
+        vec![crate::gui_core::GuiLibraryCommand::EmbyQueue {
             lib_idx: LIB_IDX,
             item_id: "movie1".to_owned(),
         }],

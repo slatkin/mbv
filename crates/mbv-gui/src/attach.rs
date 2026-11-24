@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
-use mbv::{
+use mbv_client_core::{
     App, ClientCapabilities, ClientCapability, Config, OwnerStartOptions, OwnerState, attach_owner,
     exclusive_owner_refusal_text, find_owner, start_owner,
 };
@@ -548,11 +548,11 @@ impl OwnerSteps for LibraryOwnerSteps<'_> {
         // `decouple-client-core`): it claims that before `attach_owner`, so
         // its first Owner connection already advertises a plain Hello
         // (design D9 of `extract-client-core`).
-        mbv::claim_pin_swap_participant(false);
+        mbv_client_core::claim_pin_swap_participant(false);
         attach_owner(
             self.config,
             Some(program),
-            mbv::ImageDecode::SourceOnly,
+            mbv_images::ImageDecode::SourceOnly,
             // The GUI Client shows one queue entry at a time that the user
             // picks, and paints the transport chips and their controls
             // (design D6a).
@@ -595,6 +595,6 @@ impl OwnerSteps for LibraryOwnerSteps<'_> {
     }
 
     fn refusal_text(&self) -> String {
-        mbv::refusal_text()
+        mbv_client_core::refusal_text()
     }
 }

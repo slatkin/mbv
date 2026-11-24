@@ -1,0 +1,221 @@
+//! One Central Keyboard Router (ADR 0023).
+//!
+//! `UiRoot` is the single keyboard routing authority. This module resolves a
+//! chord against the ordered policy and returns ADR 0002's three outcomes —
+//! `Command` (run this semantic command, discard the focused leaf's message),
+//! `Swallow` (run nothing, discard the leaf's message), or `FallThrough` (the
+//! leaf's own typed request stands).
+
+use mbv_keybinds::Keybinds;
+use mbv_ui_msg::Key;
+
+use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
+use super::resolver::KeyChord;
+use crate::app::dispatch::action::{AppCommand, Command, PlaybackIntent};
+use mbv_ui_msg::ComponentId;
+
+pub use super::key_policy::RouterNow;
+pub use super::key_policy::RouterSnapshot;
+
+/// ADR 0002's three routing outcomes, exactly. `Application::tick` returns the
+/// focused component's message before subscribers'; the router's outcome
+/// selects between running the leaf's request and discarding it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RouterOutcome {
+    /// Run this semantic command and discard the leaf's message for this tick.
+    Command(Command),
+    /// Run nothing and discard the leaf's message for this tick.
+    Swallow,
+    /// The leaf's message stands (if it produced one).
+    FallThrough,
+    /// A context-sensitive candidate resolved after leaf arbitration.
+    Deferred(Command),
+    /// Prefix mode (design D6, task 6.2): arm prefix mode and consume the
+    /// chord. If already armed this re-arms (the double-prefix record).
+    PrefixArm,
+    /// Armed dispatch: a mapped prefix-namespace chord whose action's
+    /// declared gate currently allows it — run the command and disarm.
+    PrefixDispatch(Command),
+    /// Armed chord resolved to nothing (unmapped, Escape, or a mapped chord
+    /// whose gate is closed): swallow and disarm. No `FallThrough` exists
+    /// while armed.
+    PrefixSwallow,
+}
+
+/// Resolve a chord against the live ordered policy, with the Client's own
+/// neutral access to the state that lives outside the snapshot (`now`).
+///
+/// This is the router's one entry (design D6 of `decouple-client-core`): a
+/// Client supplies the coordinator state through a [`RouterNow`] and reads a plain
+/// [`RouterOutcome`], so no routing site reads another Client's fields and
+/// every Client resolves through these rules. The TUI shell (through
+/// the TUI's neutral-edge `resolve_tui_key`) and the GUI Client
+/// (`super::gui`) both call it.
+///
+/// A matched command is dispatched by the Client's shell; blocking and
+/// catch-all layers swallow the leaf.
+///
+/// The two-argument form treats every chord as occurring with no text entry
+/// focused. Production routing carries the focused leaf so the policy can tell
+/// "the leaf is the blocking overlay" from "an overlay is mounted elsewhere".
+/// The rules, in the order they apply:
+///
+/// 0. **Armed prefix capture** (design D6, task 6.2): while
+///    `now.prefix_armed()` is true the chord resolves against the prefix
+///    namespace only (`resolve_armed_outcome`); no chord reaches any surface.
+/// 1. **Never swallow the focused leaf's own typed request.** When the
+///    policy would return `Swallow` and the focused leaf is the blocking
+///    overlay (`snapshot.overlays.focus.blocking()` is true and the focused id
+///    is one of the blocking-overlay `ComponentId`s), return `FallThrough`
+///    so the leaf's request stands.
+/// 2. **Text entry keeps ordinary characters.** When the policy matches a
+///    global binding and `snapshot.overlays.text_entry_focused` is true, return
+///    `FallThrough` instead of `Command` so the leaf's character input stands.
+///    The F1-F4 sidebar bindings remain router-owned so sidebars switch
+///    directly even while Settings or Search text entry is focused.
+///
+/// The `blocking_overlay_open` catch-all rules stay: they still discard the
+/// focused leaf's message when no overlay is mounted.
+/// The shell translates a terminal key into this neutral chord at the TUI edge
+/// (the TUI's neutral edge) and normalizes it with
+/// [`KeyChord::from_key`]; the router never names a toolkit type and never
+/// translates a key itself (`extract-client-core` design D4).
+pub fn resolve_router_outcome(
+    chord: KeyChord,
+    snapshot: &RouterSnapshot,
+    now: &dyn RouterNow,
+    focused: Option<&ComponentId>,
+    keybinds: &Keybinds,
+) -> RouterOutcome {
+    // Armed prefix capture (design D6): while armed, every chord resolves
+    // against the prefix namespace only — before text-entry, overlay, and
+    // leaf arbitration, none of which can see an armed chord.
+    if now.prefix_armed() {
+        return resolve_armed_outcome(chord, snapshot, keybinds);
+    }
+    let focused_is_blocking_overlay =
+        snapshot.overlays.focus.blocking() && focused.is_some_and(is_blocking_overlay);
+    match resolve_policy(chord, snapshot, keybinds) {
+        Some(entry) if entry.binding == KeyPolicyBinding::PrefixArm => RouterOutcome::PrefixArm,
+        Some(entry) if entry.blocking => RouterOutcome::Swallow,
+        Some(entry) => {
+            if snapshot.overlays.text_entry_focused
+                && entry.global
+                && !matches!(
+                    entry.binding,
+                    KeyPolicyBinding::SettingsOpen
+                        | KeyPolicyBinding::SessionsOpen
+                        | KeyPolicyBinding::PlaylistsOpen
+                        | KeyPolicyBinding::HelpOpen
+                )
+            {
+                return RouterOutcome::FallThrough;
+            }
+            match command_for_policy(entry.binding, chord) {
+                // Global transport: Space toggles from any focus unless a
+                // Visual selection owns it. Esc stays a deferred candidate for
+                // the shell's leaf arbitration; a non-Esc stop chord fires
+                // immediately.
+                Some(cmd @ Command::App(AppCommand::Playback(PlaybackIntent::TogglePlayPause)))
+                    if snapshot.visual_selection_active =>
+                {
+                    RouterOutcome::Deferred(cmd)
+                }
+                Some(cmd @ Command::App(AppCommand::Playback(PlaybackIntent::Stop)))
+                    if chord.code == Key::Esc =>
+                {
+                    RouterOutcome::Deferred(cmd)
+                }
+                Some(cmd) => RouterOutcome::Command(cmd),
+                None => {
+                    if snapshot.overlays.focus.blocking() {
+                        if focused_is_blocking_overlay {
+                            RouterOutcome::FallThrough
+                        } else {
+                            RouterOutcome::Swallow
+                        }
+                    } else {
+                        RouterOutcome::FallThrough
+                    }
+                }
+            }
+        }
+        None if snapshot.overlays.focus.blocking() => {
+            if focused_is_blocking_overlay {
+                RouterOutcome::FallThrough
+            } else {
+                RouterOutcome::Swallow
+            }
+        }
+        None => RouterOutcome::FallThrough,
+    }
+}
+
+/// Armed-dispatch resolution (design D6, task 6.2): the next chord after the
+/// prefix resolves against the prefix-namespace assignments only. The prefix
+/// chord re-arms; a mapped chord fires its action only under the action's
+/// normal eligibility gate (arming reuses each action's declared gate, never
+/// bypasses it) and disarms; Escape or an unmapped chord — including a mapped
+/// chord whose gate is closed — swallows and disarms. There is no `FallThrough`
+/// path: while armed, no chord reaches the focused component or any surface.
+pub(in crate::app) fn resolve_armed_outcome(
+    chord: KeyChord,
+    snapshot: &RouterSnapshot,
+    keybinds: &Keybinds,
+) -> RouterOutcome {
+    // The prefix chord itself re-arms and stays consumed (double prefix).
+    if keybinds.prefix.map(KeyChord::from_keybinds_chord) == Some(chord) {
+        return RouterOutcome::PrefixArm;
+    }
+    let mapped = keybinds
+        .prefix_assignments()
+        .find(|(_, configured)| KeyChord::from_keybinds_chord(*configured) == chord)
+        .map(|(action, _)| action);
+    if let Some(action) = mapped {
+        // Armed dispatch resolves the action through its own policy layer so
+        // the declared gate and the command binding stay the registry's. The
+        // gate and any chord-derived payload read the action's configured
+        // router chord — the chord that fires it outside prefix mode — not
+        // the pressed prefix chord: the two namespaces are disjoint, and the
+        // chord-sensitive gate (`open_idle_feed_link`'s IdleFeedLink)
+        // hard-codes its chord, so a pressed prefix chord could never
+        // satisfy it (R6 fix).
+        if let Some(entry) = super::key_policy::KEY_POLICY
+            .iter()
+            .find(|entry| entry.name == action.id)
+        {
+            let firing = keybinds
+                .router_chords(action)
+                .into_iter()
+                .map(KeyChord::from_keybinds_chord)
+                .find(|router| entry.gate.allows(*router, snapshot));
+            if let Some(firing) = firing
+                && let Some(command) = command_for_policy(entry.binding, firing)
+            {
+                return RouterOutcome::PrefixDispatch(command);
+            }
+        }
+    }
+    // Unmapped, Escape, or mapped-with-closed-gate: consumed, disarms,
+    // nothing executes. `stop` is not prefix-addressable (design D1), so
+    // Escape can never dispatch through this path.
+    RouterOutcome::PrefixSwallow
+}
+
+/// Whether a component id is one of the blocking overlays the policy mounts.
+/// Mirrors the shell's `blocking_overlay_active` set so the router can tell
+/// "the focused leaf is the overlay itself" from "an overlay is mounted
+/// elsewhere".
+pub(in crate::app) fn is_blocking_overlay(id: &ComponentId) -> bool {
+    use mbv_ui_msg::{ModalId, OverlayId, PopupId};
+    matches!(
+        id,
+        ComponentId::Overlay(OverlayId::ContextMenu)
+            | ComponentId::Modal(
+                ModalId::Confirm | ModalId::DaemonLost | ModalId::SavePlaylist | ModalId::TwitchUrl,
+            )
+            | ComponentId::Popup(
+                PopupId::Multiselect | PopupId::LibraryRoutes | PopupId::FeedManage,
+            )
+    )
+}

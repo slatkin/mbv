@@ -1,0 +1,207 @@
+//! Shell-invoked mouse effect handlers for migrated interactive surfaces.
+
+use crate::app::App;
+use crate::app::dispatch::action::AppCommand;
+use mbv_ctrl::player::PlayerCommand;
+use mbv_emby_model::EmbyItem;
+use mbv_ui_msg::TvHit;
+
+impl App {
+    /// Seek to a 0.0..=1.0 `fraction` of the runtime. `LibraryPlaybackPanel`
+    /// resolves the click column against its own painted `seekbar_area`, so the
+    /// shell never reads that component-owned geometry.
+    pub(in crate::app) fn seek_to_fraction(&mut self, fraction: f64) {
+        let status = self.shown_playback_status();
+        let runtime_ticks = status.runtime_ticks;
+        if runtime_ticks == 0 {
+            return;
+        }
+        let target_secs = fraction * mbv_emby_model::ticks_to_seconds(runtime_ticks);
+        let _ = self
+            .shown_queue_owner_player()
+            .send_command(PlayerCommand::SeekAbsolute(target_secs));
+        // Mark a pending Feed seek so the next OutputStarted persists
+        // the resulting position (confirmed seek completion).
+        let active_index = status.active.then_some(status.current_idx);
+        if let Some(slot) = active_index.and_then(|index| self.playback_queue().slots().get(index))
+            && matches!(&slot.item, mbv_queue::QueueItem::Feed(e) if e.feed_id.is_some())
+        {
+            self.feed_seek_pending_slot = Some(slot.slot_id);
+        }
+    }
+
+    pub fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: &str) {
+        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
+        if let Some(level) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+            && let Some(target) = level.items.iter().position(|item| item.id == target)
+        {
+            level.set_resting_cursor(target);
+            self.save_default_library_position(lib_idx);
+        }
+    }
+
+    pub fn handle_mouse_single_click_queue(
+        &mut self,
+        slot_id: Option<mbv_queue::QueueSlotId>,
+    ) -> Option<usize> {
+        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
+        let slot_id = slot_id?;
+        let index = self.displayed_queue().slot_index(slot_id)?;
+        self.mark_queue_cursor_user_active();
+        self.displayed_queue_mut().set_cursor(index);
+        Some(index)
+    }
+
+    pub fn handle_mouse_selector_click_emby(&mut self, lib_idx: usize, target: usize) {
+        if self.is_music_group_view(lib_idx) {
+            self.select_music_group(lib_idx, target);
+        } else if self.is_feed_home_video_group_view(lib_idx) {
+            self.select_feed_folder_group(lib_idx, target);
+        } else if self.should_show_letter_pills(lib_idx) {
+            self.select_letter_pill(lib_idx, target);
+        }
+    }
+
+    pub fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: &str) {
+        self.handle_mouse_single_click_emby(lib_idx, target);
+        if self.is_viewing_album_folders(lib_idx) {
+            // The mounted Music owner handles album-folder activation through
+            // its Library Hero overlay; this legacy Emby mouse path is a
+            // documented no-op for that owner.
+            return;
+        }
+        if !self.activate_selected_series(lib_idx) {
+            // The double-click already landed `target` as the level cursor;
+            // resolve the item at it and activate via the item-taking tail
+            // (task 4.3, R1: `select`'s cursor read is gone).
+            if let Some(item) = self.current_lib_item(
+                lib_idx,
+                self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.items.iter().position(|item| item.id == target))
+                    .unwrap_or(usize::MAX),
+            ) {
+                self.select_item(lib_idx, item);
+            }
+        }
+    }
+
+    pub fn handle_mouse_double_click_queue(&mut self, slot_id: Option<mbv_queue::QueueSlotId>) {
+        // The single-click resolves the clicked slot to an index; that
+        // resolved index is passed straight to the play effect (D2) instead
+        // of being recovered from `queue_cursor`, so a follow update cannot
+        // play a different row.
+        if let Some(index) = self.handle_mouse_single_click_queue(slot_id) {
+            self.dispatch(&AppCommand::QueuePlayCursor(index));
+        }
+    }
+
+    pub fn handle_mouse_right_click_queue(
+        &mut self,
+        slot_id: Option<mbv_queue::QueueSlotId>,
+        home_cw_selected: bool,
+    ) {
+        self.handle_mouse_single_click_queue(slot_id);
+        // Queue right-click renders the queue item; the Continue Watching
+        // item (for the odd Remove-from-CW coupling entry) is resolved at
+        // the Model boundary at execution time, so `None` is correct here
+        // (task 5.3d).
+        self.open_context_menu_at(home_cw_selected, None);
+    }
+
+    /// Keyboard `.` in the Queue panel (design: `.` is a selection-dependent
+    /// chord owned by the focused component, not the central router). Pins the
+    /// selection to the component-resolved slot and opens the context menu
+    /// anchored at the selected row (legacy `SelectedItem` anchor), the same
+    /// menu the right-click path builds.
+    pub fn handle_keyboard_context_menu_queue(
+        &mut self,
+        slot_id: Option<mbv_queue::QueueSlotId>,
+        home_cw_selected: bool,
+    ) {
+        self.handle_mouse_single_click_queue(slot_id);
+        self.open_context_menu(home_cw_selected, None);
+    }
+
+    fn resolve_tv_series_target(&self, lib_idx: usize, target: &str) -> Option<(usize, EmbyItem)> {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .and_then(|level| {
+                level
+                    .items
+                    .iter()
+                    .enumerate()
+                    .find(|(_, item)| item.id == target)
+                    .map(|(index, item)| (index, item.clone()))
+            })
+    }
+
+    fn resolve_tv_episode_target(&self, lib_idx: usize, target: &str) -> Option<EmbyItem> {
+        let level = self.libs.get(lib_idx)?.nav_stack.last()?;
+        if level.tv_content_mode == Some(mbv_queue::TvContentMode::Latest) {
+            return level.items.iter().find(|item| item.id == target).cloned();
+        }
+
+        self.series_detail_cache
+            .values()
+            .flat_map(|detail| detail.episodes.values())
+            .flatten()
+            .find(|episode| episode.id == target)
+            .cloned()
+    }
+
+    pub fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
+        match hit {
+            TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
+            }
+            TvHit::SeriesRow(target) => {
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
+                // The component resolved the stable ID from its painted row;
+                // persist that resolved nav index rather than re-reading the
+                // shell's previous cursor. A stale target is a no-op.
+                if let Some((index, _)) = self.resolve_tv_series_target(lib_idx, &target)
+                    && let Some(level) = self
+                        .libs
+                        .get_mut(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last_mut())
+                {
+                    level.set_resting_cursor(index);
+                    self.save_default_library_position(lib_idx);
+                }
+            }
+            TvHit::EpisodesPane => {}
+            // Narrow-only letter-pill click (task 8.1): jump directly to the
+            // clicked pill, mirroring `handle_mouse_selector_click_emby`'s
+            // letter-pill arm.
+            TvHit::LetterPill(index) => {
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
+                self.select_letter_pill(lib_idx, index);
+            }
+        }
+    }
+
+    pub fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
+        if let TvHit::SeriesRow(target) = &hit {
+            // A target can go stale between painting and delivery; in that
+            // case the double-click is intentionally ignored.
+            if let Some((_, item)) = self.resolve_tv_series_target(lib_idx, target) {
+                self.activate_selected_series_item(lib_idx, &item);
+            }
+        } else if let TvHit::EpisodeRow(target) = hit {
+            // Resolve an episode row as an episode, never as a series row.
+            // Latest rows resolve from the level; Workspace episodes use the
+            // season-detail cache. Upcoming notices never reach this path:
+            // the owner emits `TvOpenUpcomingSeries` for them.
+            let item = self.resolve_tv_episode_target(lib_idx, &target);
+            if let Some(item) = item.filter(|item| item.item_type == "Episode") {
+                self.play_item(item);
+            }
+        }
+    }
+}

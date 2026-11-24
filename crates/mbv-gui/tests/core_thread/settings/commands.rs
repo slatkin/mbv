@@ -7,18 +7,19 @@
 //! live Owner.
 
 use super::*;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 
 // ── Rows 5.1 to 5.6: the command arms ────────────────────────────────────
 
 /// Send one Settings command and run one tick: the Client's production path
 /// (`CoreInput::Settings`), which the core thread's input phase applies.
-fn send_settings(test: &mut TestCore, command: mbv::GuiSettingsCommand) {
+fn send_settings(test: &mut TestCore, command: mbv_gui::gui_core::GuiSettingsCommand) {
     test.tx.send(CoreInput::Settings(command)).unwrap();
     assert!(test.core.step(), "the core thread never quits mid-command");
 }
 
 /// Send one Playlists screen command and run one tick.
-fn send_playlists(test: &mut TestCore, command: mbv::GuiPlaylistsCommand) {
+fn send_playlists(test: &mut TestCore, command: mbv_gui::gui_core::GuiPlaylistsCommand) {
     test.tx.send(CoreInput::Playlists(command)).unwrap();
     assert!(test.core.step(), "the core thread never quits mid-command");
 }
@@ -31,10 +32,13 @@ fn send_key(test: &mut TestCore, key: Key, modifiers: KeyModifiers) {
 
 /// Open the Settings screen through F2 (the `settings_open` action) and then
 /// show `section`, so a command addresses an open screen at that section.
-fn open_settings_at(test: &mut TestCore, section: mbv::GuiSettingsSection) {
+fn open_settings_at(test: &mut TestCore, section: mbv_gui::gui_core::GuiSettingsSection) {
     send_key(test, Key::Function(2), KeyModifiers::NONE);
     assert!(test.core.gui_settings_section_for_test().is_some());
-    send_settings(test, mbv::GuiSettingsCommand::SelectSection { section });
+    send_settings(
+        test,
+        mbv_gui::gui_core::GuiSettingsCommand::SelectSection { section },
+    );
     assert_eq!(test.core.gui_settings_section_for_test(), Some(section));
 }
 
@@ -73,28 +77,28 @@ fn an_activate_of_a_toggle_changes_the_config_and_arms_the_save() {
 
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Queue);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Queue);
     let before = test
         .core
         .app_mut()
-        .gui_settings_config_for_test()
+        .settings_config_for_test()
         .always_play_next;
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::Activate {
+        mbv_gui::gui_core::GuiSettingsCommand::Activate {
             setting: SettingKey::AlwaysPlayNext,
         },
     );
 
     let app = test.core.app_mut();
     assert_eq!(
-        app.gui_settings_config_for_test().always_play_next,
+        app.settings_config_for_test().always_play_next,
         !before,
         "the toggle flipped the stored flag"
     );
     assert!(
-        app.gui_settings_save_armed_for_test(),
+        app.settings_save_armed_for_test(),
         "the accepted activation armed the deferred save"
     );
 }
@@ -108,28 +112,24 @@ fn an_activate_of_mouse_support_changes_nothing() {
 
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Services);
-    let before = test
-        .core
-        .app_mut()
-        .gui_settings_config_for_test()
-        .mouse_support;
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Services);
+    let before = test.core.app_mut().settings_config_for_test().mouse_support;
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::Activate {
+        mbv_gui::gui_core::GuiSettingsCommand::Activate {
             setting: SettingKey::MouseSupport,
         },
     );
 
     let app = test.core.app_mut();
     assert_eq!(
-        app.gui_settings_config_for_test().mouse_support,
+        app.settings_config_for_test().mouse_support,
         before,
         "a TUI-only setting is refused"
     );
     assert!(
-        !app.gui_settings_save_armed_for_test(),
+        !app.settings_save_armed_for_test(),
         "a refused activation arms no save"
     );
 }
@@ -141,29 +141,26 @@ fn an_activate_of_mouse_support_changes_nothing() {
 fn an_emby_setup_command_starts_a_generation_with_the_carried_server_url() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Services);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Services);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::EmbySetup {
+        mbv_gui::gui_core::GuiSettingsCommand::EmbySetup {
             server_url: TEST_URL.to_string(),
             username: "user".to_string(),
-            password: mbv::SetupSecret::new("secret".to_string()),
+            password: mbv_gui::gui_core::SetupSecret::new("secret".to_string()),
         },
     );
 
     let app = test.core.app_mut();
     assert_eq!(
-        app.gui_setup_server_url_for_test().as_deref(),
+        app.setup_server_url_for_test().as_deref(),
         Some(TEST_URL),
         "the form carries the command's server URL"
     );
+    assert!(app.setup_busy_for_test(), "the validation is in progress");
     assert!(
-        app.gui_setup_busy_for_test(),
-        "the validation is in progress"
-    );
-    assert!(
-        app.gui_setup_generation_started_for_test(),
+        app.setup_generation_started_for_test(),
         "the submit started a setup generation"
     );
 }
@@ -177,18 +174,18 @@ fn a_service_action_of_manage_feeds_shows_the_feeds_section() {
 
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Services);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Services);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::ServiceAction {
+        mbv_gui::gui_core::GuiSettingsCommand::ServiceAction {
             action: ServiceActionIntent::ManageFeeds,
         },
     );
 
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Feeds),
+        Some(mbv_gui::gui_core::GuiSettingsSection::Feeds),
         "the screen shows the Feeds section"
     );
     assert!(
@@ -209,11 +206,11 @@ fn a_remove_emby_action_raises_the_removal_confirm() {
     test.core
         .app_mut()
         .set_gui_emby_service_state_for_test(mbv_core::service_runtime::ServiceState::Ready);
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Services);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Services);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::ServiceAction {
+        mbv_gui::gui_core::GuiSettingsCommand::ServiceAction {
             action: ServiceActionIntent::RemoveEmby,
         },
     );
@@ -235,11 +232,11 @@ fn a_feed_edit_for_an_unknown_url_changes_nothing() {
     let mut app = stub_app_with_queue(2);
     app.seed_gui_feed_subscriptions_for_test(&[("A", "https://a")]);
     let mut test = test_core_with(app);
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Feeds);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Feeds);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::FeedEdit {
+        mbv_gui::gui_core::GuiSettingsCommand::FeedEdit {
             url: "https://unknown".to_string(),
             name: "Renamed".to_string(),
             kind: mbv_queue::FeedKind::Video,
@@ -261,7 +258,7 @@ fn an_injected_feed_add_result_appends_the_subscription() {
     let mut app = stub_app_with_queue(2);
     app.inject_gui_feed_add_result_for_test("Added", "https://added", mbv_queue::FeedKind::Video);
     let mut test = test_core_with(app);
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Feeds);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Feeds);
 
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());
@@ -279,11 +276,11 @@ fn an_injected_feed_add_result_appends_the_subscription() {
 fn a_capture_to_a_free_chord_fires_the_action_on_the_next_key() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_playing_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Keys);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Keys);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::KeysCapture {
+        mbv_gui::gui_core::GuiSettingsCommand::KeysCapture {
             target: "toggle_play_pause".to_string(),
             key: KeyEvent::new(Key::Char('j'), KeyModifiers::CONTROL),
         },
@@ -295,7 +292,7 @@ fn a_capture_to_a_free_chord_fires_the_action_on_the_next_key() {
         "the row shows the accepted chord"
     );
     assert_eq!(
-        mbv::load_config()
+        mbv_client_core::load_config()
             .expect("the configuration the save wrote loads")
             .keybinds
             .router_override("toggle_play_pause")
@@ -321,11 +318,11 @@ fn a_capture_to_a_free_chord_fires_the_action_on_the_next_key() {
 fn a_capture_to_another_actions_default_is_refused_naming_that_action() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_playing_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Keys);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Keys);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::KeysCapture {
+        mbv_gui::gui_core::GuiSettingsCommand::KeysCapture {
             target: "toggle_mute".to_string(),
             // `stop`'s declared default chord.
             key: KeyEvent::new(Key::Char('S'), KeyModifiers::SHIFT),
@@ -361,7 +358,7 @@ fn a_capture_to_another_actions_default_is_refused_naming_that_action() {
 #[test]
 fn the_keys_frame_lists_no_tui_only_action() {
     let mut test = test_core_with(stub_app_with_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Keys);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Keys);
 
     let frame = newest_frame(&mut test);
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Keys { rows, .. } =
@@ -381,18 +378,18 @@ fn the_keys_frame_lists_no_tui_only_action() {
 fn a_select_target_leaves_the_screen_open() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_playing_queue(2));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Sessions);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Sessions);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::SelectTarget {
+        mbv_gui::gui_core::GuiSettingsCommand::SelectTarget {
             target: mbv_ui_model::panel_targets::ChooserTargetKey::Local,
         },
     );
 
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Sessions),
+        Some(mbv_gui::gui_core::GuiSettingsSection::Sessions),
         "the screen stays open"
     );
 }
@@ -403,9 +400,9 @@ fn a_select_target_leaves_the_screen_open() {
 #[test]
 fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
     let _guard = mbv_config::TestStateDirGuard::new();
-    let (app, cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    send_playlists(&mut test, mbv::GuiPlaylistsCommand::Toggle);
+    send_playlists(&mut test, mbv_gui::gui_core::GuiPlaylistsCommand::Toggle);
     assert!(test.core.gui_playlists_open_for_test());
     let http = mbv_net::mock_http::MockHttp::new();
     http.respond_when(
@@ -415,11 +412,11 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
     );
     let app = test.core.app_mut();
     app.set_gui_emby_client_for_test(crate::test_emby_client(&http));
-    app.seed_gui_playlists_for_test(&[("pl", "Road Trip")]);
+    app.seed_saved_playlists_for_test(&[("pl", "Road Trip")]);
 
     send_playlists(
         &mut test,
-        mbv::GuiPlaylistsCommand::Action {
+        mbv_gui::gui_core::GuiPlaylistsCommand::Action {
             id: "pl".to_string(),
             action: mbv_ui_msg::MusicTreeAction::Play,
         },
@@ -455,7 +452,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
 fn a_reset_returns_to_home_and_clears_the_launch_location() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut app = stub_app_with_queue(2);
-    app.set_client_capabilities_for_test(gui_client_capabilities());
+    app.set_client_capabilities_for_test(transport_client_capabilities());
     app.seed_gui_music_library_tab_for_test();
     app.seed_gui_library_groups_for_test(0, "grp-soul");
     mbv_config::save_gui_launch_state(&mbv_config::first_launch())
@@ -464,7 +461,7 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
     // only through a build, so the reset's rise is what the frame shows.
     let epoch_before = 0;
     let mut test = test_core_with(app);
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Actions);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Actions);
     send_key(&mut test, Key::Char('z'), KeyModifiers::NONE);
     send_key(&mut test, Key::Char('q'), KeyModifiers::NONE);
     let toggles = test.core.gui_panel_toggles_for_test();
@@ -473,7 +470,10 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
         "the toggles were on before the reset"
     );
 
-    send_settings(&mut test, mbv::GuiSettingsCommand::ResetUiState);
+    send_settings(
+        &mut test,
+        mbv_gui::gui_core::GuiSettingsCommand::ResetUiState,
+    );
 
     let frame = newest_frame(&mut test);
     assert!(frame.settings().is_none(), "the reset closed the screen");
@@ -538,11 +538,11 @@ fn a_route_devices_command_fills_the_library_device_candidates() {
     test.core
         .app_mut()
         .set_gui_emby_client_for_test(crate::test_emby_client(&http));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Library);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Library);
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::RouteDevices {
+        mbv_gui::gui_core::GuiSettingsCommand::RouteDevices {
             library: "music".to_string(),
         },
     );
@@ -585,7 +585,7 @@ fn the_library_section_projects_no_library_routes_row() {
     test.core
         .app_mut()
         .set_gui_emby_client_for_test(crate::test_emby_client(&http));
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Library);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Library);
 
     let frame = newest_frame(&mut test);
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Library { rows, routes, .. } =
@@ -627,7 +627,7 @@ fn a_set_value_sets_a_listed_value_and_refuses_an_unlisted_one() {
     test.core
         .app_mut()
         .seed_gui_my_languages_for_test(&["English", "Chinese"]);
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Playback);
+    open_settings_at(&mut test, mbv_gui::gui_core::GuiSettingsSection::Playback);
 
     let frame = newest_frame(&mut test);
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Rows { rows } =
@@ -655,32 +655,26 @@ fn a_set_value_sets_a_listed_value_and_refuses_an_unlisted_one() {
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::SetValue {
+        mbv_gui::gui_core::GuiSettingsCommand::SetValue {
             setting: SettingKey::SubtitleLanguage,
             value: "Chinese".to_string(),
         },
     );
     assert_eq!(
-        test.core
-            .app_mut()
-            .gui_settings_config_for_test()
-            .subtitle_lang,
+        test.core.app_mut().settings_config_for_test().subtitle_lang,
         "Chinese",
         "a listed value is set"
     );
 
     send_settings(
         &mut test,
-        mbv::GuiSettingsCommand::SetValue {
+        mbv_gui::gui_core::GuiSettingsCommand::SetValue {
             setting: SettingKey::SubtitleLanguage,
             value: "Klingon".to_string(),
         },
     );
     assert_eq!(
-        test.core
-            .app_mut()
-            .gui_settings_config_for_test()
-            .subtitle_lang,
+        test.core.app_mut().settings_config_for_test().subtitle_lang,
         "Chinese",
         "a value outside the list changes nothing"
     );

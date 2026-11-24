@@ -88,7 +88,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -379,7 +379,7 @@ fn a_press_on_the_toggle_row_sends_activate_and_moves_the_cursor() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::Activate {
+        vec![crate::gui_core::GuiSettingsCommand::Activate {
             setting: mbv_ui_model::settings::SettingKey::from_name("consumeAudio")
                 .expect("the fixture names a declared setting"),
         }],

@@ -11,16 +11,25 @@
 # `ignores` before `files`.
 #
 # Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21, at main
-# e6d65e330): 17 production wildcard arms under `src/app/dispatch/`. Ten
-# of them are gone: seven `Option`/enum matches now name their variants,
-# and the three `match key` sites among them over the 40-variant
-# `SettingKey` enum in `src/app/dispatch/settings.rs` classify each row
+# e6d65e330): 17 production wildcard arms under `src/app/dispatch/`, which
+# the `2-split-tui-gui-clients` move re-homed at
+# `crates/mbv-client-core/src/app/dispatch/`. Ten of them are gone: seven
+# `Option`/enum matches now name their variants, and the three `match key`
+# sites among them over the 40-variant `SettingKey` enum in
+# `crates/mbv-client-core/src/app/dispatch/settings.rs` classify each row
 # once through `setting_row_kind` (beside the dispatch sites) and dispatch
 # on the kind. The remaining seven are open key spaces or index mappings where
 # a wildcard is the correct arm: a key chord, an Emby collection type,
 # two Emby item types, a notification action, an image protocol name,
 # and a pill index. Each carries a per-instance ignore directive comment
 # with its reason, in the comment form the suppression policy requires.
+#
+# A re-scan at the 2026-11-24 split (same rule, re-pointed glob) reports six
+# arms that carry no directive -- `dispatch/queue.rs` (the anchor lookup),
+# `dispatch/session/switch.rs` (twice), `dispatch/settings.rs` (the
+# subtitle-prefs apply), `dispatch/library/browse/reset.rs`, and
+# `dispatch/library/artist_lookup.rs`. They were also present before the move:
+# the 2026-10-21 census missed them, so it is not a complete count.
 #
 # Blind spot (documented, deliberate): the rule matches the `_` wildcard
 # pattern only. A named catch-all binding (`other => ...`) is the same
@@ -73,7 +82,7 @@ metadata:
     - mbv
     - interactive-architecture
 files:
-  - "src/app/dispatch/**"
+  - "crates/mbv-client-core/src/app/dispatch/**"
 ignores:
   - "**/*_tests/**"
   - "**/tests/**"

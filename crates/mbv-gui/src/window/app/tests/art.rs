@@ -27,7 +27,7 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use kurbo::Shape as _;
-use mbv::NowPlayingMediaKind;
+use mbv_client_core::NowPlayingMediaKind;
 use mbv_config::GuiPanelWidths;
 
 use crate::art::{ArtResponse, GuiArtRef, art_url, card_path};

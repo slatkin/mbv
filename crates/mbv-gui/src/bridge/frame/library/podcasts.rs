@@ -8,7 +8,7 @@
 //! the row frame the shared entry-list one (`entry_list.rs`); the Hero and
 //! the frame struct are the destination's own.
 
-use mbv::{GuiCollections, GuiListSortFrame, GuiPodcastsHero, GuiPodcastsProjection};
+use crate::gui_core::{GuiCollections, GuiListSortFrame, GuiPodcastsHero, GuiPodcastsProjection};
 
 use super::GuiArtShapeFrame;
 use super::entry_list::GuiEntryRowFrame;

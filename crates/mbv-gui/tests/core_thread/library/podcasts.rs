@@ -5,7 +5,7 @@
 //! Audiobookshelf admission. Every identity is the frame's own opaque row id,
 //! so a stale row changes nothing.
 
-use mbv::ClientTickHost;
+use mbv_client_core::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiLibraryDetail, GuiPodcastsDetail, GuiPodcastsList,
@@ -18,7 +18,7 @@ use super::{detail_of, list_of, send_library};
 /// The seeded podcasts core over the recording stub Owner the queue commands'
 /// tests read.
 fn seeded_podcasts_core() -> (crate::TestCore, std::sync::mpsc::Receiver<CtrlCmd>) {
-    let (app, cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = crate::test_core_with(app);
     test.core.app_mut().seed_gui_abs_libraries_for_test();
     (test, cmd_rx)
@@ -198,7 +198,7 @@ fn the_pill_command_changes_the_rows() {
     send_library(
         &mut test,
         mbv_gui::bridge::library::GuiLibraryCommand::CollectionToggle {
-            target: mbv::GuiCollectionTarget::Podcasts(1),
+            target: mbv_gui::gui_core::GuiCollectionTarget::Podcasts(1),
             key: "show-a".into(),
         },
     );

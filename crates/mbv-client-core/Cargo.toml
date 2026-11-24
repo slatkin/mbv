@@ -1,0 +1,82 @@
+[package]
+name = "mbv-client-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Shared Client core for the mbv terminal and GUI Clients."
+readme = "../../README.md"
+
+# Exposes the core's test fixtures and test-only actions to the Clients' tests;
+# the shipped builds never enable it.
+[features]
+test = [
+    "mbv-config/test",
+    "mbv-emby/test",
+    "mbv-emby-model/test",
+    "mbv-images/test",
+    "mbv-remote-player/test",
+]
+
+[lints]
+workspace = true
+
+# The core is a library below the shell, so it inherits the workspace's
+# terminal-write restriction rather than the `mbv` binary's copy of the block.
+[dependencies]
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-cast = { path = "../mbv-cast" }
+mbv-config = { path = "../mbv-config" }
+mbv-core = { path = "../mbv-core" }
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-daemon = { path = "../mbv-daemon" }
+mbv-desktop = { path = "../mbv-desktop" }
+mbv-emby = { path = "../mbv-emby" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-feed = { path = "../mbv-feed" }
+mbv-ids = { path = "../mbv-ids" }
+mbv-images = { path = "../mbv-images" }
+mbv-keybinds = { path = "../mbv-keybinds" }
+mbv-net = { path = "../mbv-net" }
+mbv-player = { path = "../mbv-player" }
+mbv-queue = { path = "../mbv-queue" }
+mbv-remote-player = { path = "../mbv-remote-player" }
+mbv-surfaces = { path = "../mbv-surfaces" }
+mbv-text = { path = "../mbv-text" }
+mbv-theme = { path = "../mbv-theme" }
+mbv-ui-model = { path = "../mbv-ui-model" }
+mbv-ui-msg = { path = "../mbv-ui-msg" }
+mbv-visualizer = { path = "../mbv-visualizer" }
+mbv-ws = { path = "../mbv-ws" }
+image = { workspace = true, features = ["jpeg", "png", "gif", "webp", "bmp"] }
+indexmap.workspace = true
+libc.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+time = { workspace = true, features = ["local-offset"] }
+toml.workspace = true
+tracing.workspace = true
+unicode-width.workspace = true
+ureq = { workspace = true, features = ["json"] }
+
+# The core's own tests name the providers' and leaves' test support, and the
+# fixture tables. No shipped build enables these features (design D4e).
+[dev-dependencies]
+# The `tests/core_api.rs` binary links the library without `cfg(test)`, so the
+# crate's `test`-feature fixtures and seams are only reachable through a
+# self-dependency: it is how a package enables its own feature for its test
+# targets (`2-split-tui-gui-clients` row 3.5). The features it forwards are the
+# ones the dev-dependencies below already enable, so this adds no unification.
+mbv-client-core = { path = ".", features = ["test"] }
+mbv-config = { path = "../mbv-config", features = ["test"] }
+mbv-emby = { path = "../mbv-emby", features = ["test"] }
+mbv-emby-model = { path = "../mbv-emby-model", features = ["test"] }
+mbv-images = { path = "../mbv-images", features = ["test"] }
+mbv-net = { path = "../mbv-net", features = ["test"] }
+mbv-remote-player = { path = "../mbv-remote-player", features = ["test"] }
+mbv-ui-model = { path = "../mbv-ui-model", features = ["test"] }
+rstest.workspace = true
+uuid = { workspace = true, features = ["v4", "fast-rng"] }

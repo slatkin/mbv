@@ -16,7 +16,8 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use mbv::{CLIENT_IDLE_CADENCE, ClientCore, GuiCore, GuiInput, load_config};
+use crate::gui_core::{GuiCore, GuiInput};
+use mbv_client_core::{CLIENT_IDLE_CADENCE, ClientCore, load_config};
 use mbv_config::ensure_runtime_dir;
 use mbv_surfaces::gesture::PointerGestureState;
 use mbv_surfaces::queue::QueueSurface;
@@ -72,14 +73,14 @@ pub enum CoreInput {
     /// window content's `library` command. The core applies it through
     /// [`GuiCore::apply_gui_library_command`], after the Panel-focus adapter sets
     /// Library focus (design D3 of `gui-pointer-target-interaction`).
-    Library(mbv::GuiLibraryCommand),
+    Library(crate::gui_core::GuiLibraryCommand),
     /// One Settings screen request (`add-gui-settings-screen` design D5): the
     /// window content's `settings` command. The core applies it through
     /// [`GuiCore::apply_gui_settings_command`].
-    Settings(mbv::GuiSettingsCommand),
+    Settings(crate::gui_core::GuiSettingsCommand),
     /// One Playlists screen request: the window content's `playlists`
     /// command, applied through [`GuiCore::apply_gui_playlists_command`].
-    Playlists(mbv::GuiPlaylistsCommand),
+    Playlists(crate::gui_core::GuiPlaylistsCommand),
     /// The window asks for a full snapshot (design D4): the core releases
     /// every section the window holds, so the next batch carries every present
     /// section at its current revision. It marks no section.
@@ -403,11 +404,11 @@ impl CoreThread {
     /// read a Client's test has.
     #[doc(hidden)]
     #[must_use]
-    pub fn gui_panel_toggles_for_test(&self) -> mbv::PanelTogglesProjection {
+    pub fn gui_panel_toggles_for_test(&self) -> crate::gui_core::PanelTogglesProjection {
         self.core.panel_toggles_projection()
     }
 
-    pub fn gui_settings_section_for_test(&self) -> Option<mbv::GuiSettingsSection> {
+    pub fn gui_settings_section_for_test(&self) -> Option<crate::gui_core::GuiSettingsSection> {
         self.core.gui_settings().map(|state| state.section)
     }
 
@@ -415,7 +416,10 @@ impl CoreThread {
     /// the sort a command or a launch restore left the destination in.
     #[doc(hidden)]
     #[must_use]
-    pub fn gui_list_sort_for_test(&self, target: mbv::GuiSortTarget) -> mbv::GuiListSort {
+    pub fn gui_list_sort_for_test(
+        &self,
+        target: crate::gui_core::GuiSortTarget,
+    ) -> crate::gui_core::GuiListSort {
         self.core.gui_list_sort(target)
     }
 
@@ -424,7 +428,7 @@ impl CoreThread {
     /// one is current.
     #[doc(hidden)]
     #[must_use]
-    pub fn gui_library_tabs_for_test(&self) -> mbv::GuiLibraryTabs {
+    pub fn gui_library_tabs_for_test(&self) -> crate::gui_core::GuiLibraryTabs {
         self.core.gui_library_tabs()
     }
 
@@ -432,7 +436,7 @@ impl CoreThread {
     /// destination a command or a drain opened.
     #[doc(hidden)]
     #[must_use]
-    pub fn gui_active_destination_for_test(&self) -> Option<mbv::GuiDestinationKind> {
+    pub fn gui_active_destination_for_test(&self) -> Option<crate::gui_core::GuiDestinationKind> {
         self.core.gui_active_destination()
     }
 
@@ -449,7 +453,7 @@ impl CoreThread {
     /// a command or a drained result left behind.
     #[doc(hidden)]
     #[must_use]
-    pub fn gui_settings_feeds_for_test(&self) -> mbv::GuiSettingsFeedsProjection {
+    pub fn gui_settings_feeds_for_test(&self) -> crate::gui_core::GuiSettingsFeedsProjection {
         self.core.gui_settings_feeds()
     }
 

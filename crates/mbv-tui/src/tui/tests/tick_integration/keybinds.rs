@@ -1,0 +1,269 @@
+//! Configured keybinds route through the live shell (task 3.3).
+//!
+//! The compiled `[keys]` configuration is read once at `Model` construction;
+//! this file proves a loaded router-scope override fires through the real
+//! `Application::tick()` path (inject port → `UiRoot` observer → router fold),
+//! not just through the pure policy seam.
+
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::dispatch::action::{NavigationIntent, PlaybackIntent, ShellCommand};
+use mbv_client_core::input::router::RouterOutcome;
+use mbv_client_core::tests::{make_app_stub, make_items, make_local_daemon_app_stub_with_cmd_rx};
+use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::browse::BrowseLevel;
+use mbv_ui_model::browse::ServerRows;
+use mbv_ui_model::library_tab::LibraryTab;
+use mbv_ui_model::settings::PanelFocus;
+use mbv_ui_model::tab_selection::TabSelection;
+use mbv_ui_msg::{OverlayId, UserEvent};
+
+fn key(code: Key) -> Event<UserEvent> {
+    Event::Keyboard(KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    })
+}
+
+/// A configured rebind fires through `Application::tick()`: `help_open`
+/// rebound from F1 to F9 opens Help on F9, and the declared default F1 is
+/// inert.
+#[test]
+fn configured_rebind_fires_through_tick() {
+    let mut app = make_app_stub();
+    let config = mbv_client_core::config::Config {
+        keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
+            prefix: None,
+            sections: vec![(
+                "global".into(),
+                mbv_keybinds::RawSection {
+                    router: vec![("help_open".into(), "F9".into())],
+                    prefix: vec![],
+                },
+            )],
+        })
+        .expect("valid keys configuration"),
+        ..Default::default()
+    };
+    app.config_for_test(|held| *held = config.clone());
+    let mut harness = TickHarness::new(app);
+
+    // The configured chord opens Help through the live tick path. The
+    // harness mirrors the run loop: `Command` outcomes are dispatched by the
+    // caller (shell_run), so the test dispatches the resolved command.
+    harness.inject(key(Key::Function(9)));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(ShellCommand::OpenHelp.into()),
+        "the configured chord fires the rebound action through tick()"
+    );
+    harness
+        .model_mut()
+        .dispatch_router_command(&ShellCommand::OpenHelp.into());
+    assert!(
+        harness
+            .model()
+            .application
+            .mounted(&mbv_ui_msg::ComponentId::Overlay(OverlayId::Help)),
+        "Help must be mounted after the configured chord"
+    );
+
+    // A fresh model with the same configuration: the declared default is
+    // inert (F1 reaches no policy layer and mounts nothing).
+    let mut app = make_app_stub();
+    app.config_for_test(|held| *held = config.clone());
+    let mut harness = TickHarness::new(app);
+    harness.inject(key(Key::Function(1)));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::FallThrough,
+        "the declared default of a rebound action is inert"
+    );
+    assert!(
+        !harness
+            .model()
+            .application
+            .mounted(&mbv_ui_msg::ComponentId::Overlay(OverlayId::Help))
+    );
+}
+
+/// Crossterm delivers Shift+Tab as `BackTab` with SHIFT set; the default
+/// `previous_library_tab` binding is the bare `BackTab` chord. The pressed
+/// chord must still fire through the live tick path (P1 regression).
+#[test]
+fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
+    let app = make_app_stub();
+    let mut harness = TickHarness::new(app);
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::BackTab,
+        modifiers: KeyModifiers::SHIFT,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(NavigationIntent::PreviousLibraryTab.into()),
+        "Shift+Tab must fire previous_library_tab through tick()"
+    );
+}
+
+/// Task 5.1: a rebound transport action fires through the live tick path on
+/// its configured chord, and its declared default becomes inert. `volume_up`
+/// is ungated, so no player state is needed.
+#[test]
+fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
+    let mut app = make_app_stub();
+    let config = mbv_client_core::config::Config {
+        keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
+            prefix: None,
+            sections: vec![(
+                "playback".into(),
+                mbv_keybinds::RawSection {
+                    router: vec![("volume_up".into(), "k".into())],
+                    prefix: vec![],
+                },
+            )],
+        })
+        .expect("valid keys configuration"),
+        ..Default::default()
+    };
+    app.config_for_test(|held| *held = config.clone());
+    let mut harness = TickHarness::new(app);
+
+    harness.inject(key(Key::Char('k')));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(PlaybackIntent::AdjustVolume(5).into()),
+        "the configured chord fires the rebound transport action through tick()"
+    );
+
+    // The declared default `+` (and its `=` alias) no longer resolves.
+    let mut app = make_app_stub();
+    app.config_for_test(|held| *held = config);
+    let mut harness = TickHarness::new(app);
+    harness.inject(key(Key::Char('+')));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::FallThrough,
+        "the declared default of a rebound transport action is inert"
+    );
+}
+
+/// Task 5.1: the crossterm-case default for `next_track` — Shift+n is
+/// delivered as `Char('N')` + SHIFT — fires through the live tick path with
+/// an active player.
+#[test]
+fn shift_n_default_fires_next_track_through_tick() {
+    let mut app = make_app_stub();
+    app.seed_playing_status_for_test(0, 0);
+    let mut harness = TickHarness::new(app);
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('N'),
+        modifiers: KeyModifiers::SHIFT,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(PlaybackIntent::NextTrack.into()),
+        "Shift+N must fire next_track through tick()"
+    );
+}
+
+/// #745: F5 is a global data refresh whose effect comes from the selected
+/// browse destination, not Panel focus. Driven through the live tick path
+/// (the harness mirrors `shell_run` by dispatching the resolved command):
+/// with Queue focused and an Emby library selected, the selected library is
+/// the refresh target and no owner Queue refresh is sent.
+#[test]
+fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
+    let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(2));
+    while cmd_rx.try_recv().is_ok() {}
+    // A non-empty viewed queue makes the removed Queue-refresh branch
+    // observable: that branch would have sent UnifiedQueueRefresh here.
+    app.seed_local_queue_emby_items_for_test(make_items(2), 0);
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.collection_type = "movies".into();
+    app.push_library_for_test(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            rows: ServerRows::new(1),
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: make_items(1),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    let mut harness = TickHarness::new(app);
+
+    harness.inject(key(Key::Function(5)));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(ShellCommand::RefreshCurrentView.into()),
+        "F5 resolves the global refresh command under Queue focus"
+    );
+    // Drop anything the tick's own sync emitted; the assertion below is about
+    // the dispatched refresh only.
+    while cmd_rx.try_recv().is_ok() {}
+    harness
+        .model_mut()
+        .dispatch_router_command(&ShellCommand::RefreshCurrentView.into());
+
+    assert!(
+        harness.model().app.library_level_loading_for_test(0),
+        "the selected Emby library is the refresh target under Queue focus"
+    );
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "F5 must not send an owner Queue refresh"
+    );
+}
+
+/// The Twitch URL opener mounts the prompt through the live tick path
+/// (twitch-url-playback task 5.5): Shift+T resolves the shell-owned mount
+/// command and the dispatch mounts the modal with the focus on it.
+#[test]
+fn twitch_url_opener_mounts_the_prompt_through_tick() {
+    let mut harness = TickHarness::new(make_app_stub());
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('T'),
+        modifiers: KeyModifiers::SHIFT,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(ShellCommand::OpenTwitchUrl.into()),
+        "Shift+T resolves the Twitch URL opener through tick()"
+    );
+    harness
+        .model_mut()
+        .dispatch_router_command(&ShellCommand::OpenTwitchUrl.into());
+
+    let prompt = mbv_ui_msg::ComponentId::Modal(mbv_ui_msg::ModalId::TwitchUrl);
+    assert!(
+        harness.model().application.mounted(&prompt),
+        "the opener must mount the Twitch URL prompt"
+    );
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&prompt),
+        "the prompt must hold the focus while it is open"
+    );
+}

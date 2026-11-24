@@ -148,8 +148,8 @@ trait Host: LetteredDestination {
     fn rows() -> Vec<Self::Row>;
     fn frame(rows: Vec<Self::Row>, loading: bool, failed: bool) -> Self::List;
     fn detail_of(selected: Option<&str>) -> Self::Detail;
-    fn select_command(id: &str) -> mbv::GuiLibraryCommand;
-    fn play_command(id: &str) -> mbv::GuiLibraryCommand;
+    fn select_command(id: &str) -> crate::gui_core::GuiLibraryCommand;
+    fn play_command(id: &str) -> crate::gui_core::GuiLibraryCommand;
 }
 
 struct Fixture<D: Host> {
@@ -284,24 +284,24 @@ impl<D: Host> Fixture<D> {
     }
 
     /// The `RowsInView` reports the core link received, in send order.
-    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn reported_rows_in_view(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
-                    Some(command)
-                }
+                CoreInput::Library(
+                    command @ crate::gui_core::GuiLibraryCommand::RowsInView { .. },
+                ) => Some(command),
                 _ => None,
             })
             .collect()
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
+                CoreInput::Library(crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -552,10 +552,10 @@ fn podcasts_frame(rows: Vec<GuiEntryRowFrame>, loading: bool, failed: bool) -> G
         sort: None,
         lib_idx: 0,
         collections: GuiCollections {
-            target: mbv::GuiCollectionTarget::Podcasts(0),
+            target: crate::gui_core::GuiCollectionTarget::Podcasts(0),
             all: true,
             entries: Vec::new(),
-            noun: mbv::GuiCollectionNoun::Shows,
+            noun: crate::gui_core::GuiCollectionNoun::Shows,
         },
         loading,
         failed,
@@ -577,10 +577,10 @@ fn feeds_frame(rows: Vec<GuiEntryRowFrame>, loading: bool, failed: bool) -> GuiF
     GuiFeedsList {
         sort: None,
         collections: GuiCollections {
-            target: mbv::GuiCollectionTarget::Feeds,
+            target: crate::gui_core::GuiCollectionTarget::Feeds,
             all: true,
             entries: Vec::new(),
-            noun: mbv::GuiCollectionNoun::Subscriptions,
+            noun: crate::gui_core::GuiCollectionNoun::Subscriptions,
         },
         loading,
         failed,
@@ -631,15 +631,15 @@ impl Host for EmbyList {
         emby_detail(selected)
     }
 
-    fn select_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::EmbySelect {
+    fn select_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::EmbySelect {
             lib_idx: 3,
             row: id.to_owned(),
         }
     }
 
-    fn play_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::EmbyPlay {
+    fn play_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::EmbyPlay {
             lib_idx: 3,
             item_id: id.to_owned(),
         }
@@ -679,15 +679,15 @@ impl Host for AudiobooksList {
         audiobooks_detail(selected)
     }
 
-    fn select_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::AbsSelect {
+    fn select_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::AbsSelect {
             lib_idx: 4,
             row: id.to_owned(),
         }
     }
 
-    fn play_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::AbsPlay {
+    fn play_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::AbsPlay {
             lib_idx: 4,
             item_id: id.to_owned(),
         }
@@ -726,15 +726,15 @@ impl Host for PodcastsList {
         podcasts_detail(selected)
     }
 
-    fn select_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::PodcastsSelect {
+    fn select_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::PodcastsSelect {
             lib_idx: 0,
             row: id.to_owned(),
         }
     }
 
-    fn play_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::PodcastsPlay {
+    fn play_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::PodcastsPlay {
             lib_idx: 0,
             item_id: id.to_owned(),
         }
@@ -777,12 +777,12 @@ impl Host for FeedsList {
         feeds_detail(selected)
     }
 
-    fn select_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::FeedsSelect { row: id.to_owned() }
+    fn select_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::FeedsSelect { row: id.to_owned() }
     }
 
-    fn play_command(id: &str) -> mbv::GuiLibraryCommand {
-        mbv::GuiLibraryCommand::FeedsPlay {
+    fn play_command(id: &str) -> crate::gui_core::GuiLibraryCommand {
+        crate::gui_core::GuiLibraryCommand::FeedsPlay {
             item_id: id.to_owned(),
         }
     }

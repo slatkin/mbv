@@ -85,7 +85,7 @@ fn a_double_click_on_a_collection_row_plays_it() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::EmbyPlay {
+        [crate::gui_core::GuiLibraryCommand::EmbyPlay {
             lib_idx: 3,
             item_id: "f1".to_owned(),
         }],
@@ -115,8 +115,8 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::RowMenu {
-            row: mbv::GuiLibraryMenuRow::Item("m2".to_owned()),
+        [crate::gui_core::GuiLibraryCommand::RowMenu {
+            row: crate::gui_core::GuiLibraryMenuRow::Item("m2".to_owned()),
         }],
         "the row-menu command names the row's item id"
     );

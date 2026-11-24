@@ -1,5 +1,5 @@
 //! The `playlists` command's wire form: the Playlists screen's window content
-//! sends one semantic request, and the neutral [`mbv::GuiPlaylistsCommand`]
+//! sends one semantic request, and the neutral [`crate::gui_core::GuiPlaylistsCommand`]
 //! this module builds from it is what the Client core applies. Identities are
 //! stable playlist and item ids, never row positions.
 
@@ -55,27 +55,31 @@ pub enum GuiPlaylistsCommand {
 
 /// Translate the wire form into the neutral command.
 #[must_use]
-pub fn neutral(command: GuiPlaylistsCommand) -> mbv::GuiPlaylistsCommand {
+pub fn neutral(command: GuiPlaylistsCommand) -> crate::gui_core::GuiPlaylistsCommand {
     match command {
-        GuiPlaylistsCommand::Toggle => mbv::GuiPlaylistsCommand::Toggle,
-        GuiPlaylistsCommand::Close => mbv::GuiPlaylistsCommand::Close,
-        GuiPlaylistsCommand::Open { id } => mbv::GuiPlaylistsCommand::Open { id },
-        GuiPlaylistsCommand::Collapse => mbv::GuiPlaylistsCommand::Collapse,
-        GuiPlaylistsCommand::Refresh { id } => mbv::GuiPlaylistsCommand::Refresh { id },
-        GuiPlaylistsCommand::Action { id, action } => mbv::GuiPlaylistsCommand::Action {
-            id,
-            action: action.into(),
-        },
+        GuiPlaylistsCommand::Toggle => crate::gui_core::GuiPlaylistsCommand::Toggle,
+        GuiPlaylistsCommand::Close => crate::gui_core::GuiPlaylistsCommand::Close,
+        GuiPlaylistsCommand::Open { id } => crate::gui_core::GuiPlaylistsCommand::Open { id },
+        GuiPlaylistsCommand::Collapse => crate::gui_core::GuiPlaylistsCommand::Collapse,
+        GuiPlaylistsCommand::Refresh { id } => crate::gui_core::GuiPlaylistsCommand::Refresh { id },
+        GuiPlaylistsCommand::Action { id, action } => {
+            crate::gui_core::GuiPlaylistsCommand::Action {
+                id,
+                action: action.into(),
+            }
+        }
         GuiPlaylistsCommand::ItemAction {
             id,
             item_id,
             action,
-        } => mbv::GuiPlaylistsCommand::ItemAction {
+        } => crate::gui_core::GuiPlaylistsCommand::ItemAction {
             id,
             item_id,
             action: action.into(),
         },
-        GuiPlaylistsCommand::Rename { id, name } => mbv::GuiPlaylistsCommand::Rename { id, name },
-        GuiPlaylistsCommand::Delete { id } => mbv::GuiPlaylistsCommand::Delete { id },
+        GuiPlaylistsCommand::Rename { id, name } => {
+            crate::gui_core::GuiPlaylistsCommand::Rename { id, name }
+        }
+        GuiPlaylistsCommand::Delete { id } => crate::gui_core::GuiPlaylistsCommand::Delete { id },
     }
 }

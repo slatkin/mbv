@@ -1,0 +1,284 @@
+use super::super::Model;
+use super::super::SidebarId;
+use mbv_components::{
+    HelpComponent, PlaylistsComponent, SearchSidebarComponent, SessionsComponent, SettingsComponent,
+};
+use mbv_tui_support::ToRatatui;
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
+use tuirealm::component::AppComponent;
+
+impl Model {
+    fn sidebar_component_id(sidebar: SidebarId) -> ComponentId {
+        ComponentId::Overlay(match sidebar {
+            SidebarId::Settings => OverlayId::Settings,
+            SidebarId::Sessions => OverlayId::Sessions,
+            SidebarId::Playlists => OverlayId::Playlists,
+            SidebarId::Search => OverlayId::Search,
+        })
+    }
+
+    fn sidebar_component(sidebar: SidebarId) -> Box<dyn AppComponent<Msg, UserEvent>> {
+        match sidebar {
+            SidebarId::Settings => Box::new(SettingsComponent::new()),
+            SidebarId::Sessions => Box::new(SessionsComponent::new()),
+            SidebarId::Playlists => Box::new(PlaylistsComponent::new()),
+            SidebarId::Search => Box::new(SearchSidebarComponent::new()),
+        }
+    }
+
+    pub(in crate::tui) fn mount_sidebar(&mut self, sidebar: SidebarId) {
+        // Help and the sidebars are one switch set: `mount_help` dismisses the
+        // sidebars, so a sidebar mount dismisses Help. Without this, Help
+        // stays mounted and (painting after Settings/Playlists in
+        // OVERLAY_IDS) hides the sidebar the function key just opened.
+        self.umount_help();
+        let id = Self::sidebar_component_id(sidebar);
+        for other in [
+            SidebarId::Settings,
+            SidebarId::Sessions,
+            SidebarId::Playlists,
+            SidebarId::Search,
+        ] {
+            let other_id = Self::sidebar_component_id(other);
+            if other_id != id && self.application.mounted(&other_id) {
+                self.dismiss_focus_overlay(&other_id);
+            }
+        }
+        if !self.application.mounted(&id) {
+            if sidebar == SidebarId::Settings {
+                // Every dismissal path (Esc, F2, another sidebar, Help) ends
+                // in a fresh mount, so the held custom colour dies here.
+                self.app.clear_accent_custom();
+            }
+            self.application
+                .mount(id.clone(), Self::sidebar_component(sidebar), vec![])
+                .expect("mount sidebar");
+        }
+        // Focus routes through the core focus stack (design D3): the push
+        // takes focus over any surface beneath it in the stack.
+        self.push_focus_overlay(&id);
+        if sidebar == SidebarId::Sessions {
+            self.app.spawn_sessions_load();
+            self.app.spawn_cast_discovery();
+        }
+        if sidebar == SidebarId::Playlists && self.app.playlists().is_empty() {
+            self.app.spawn_load_playlists();
+        }
+    }
+
+    pub(in crate::tui) fn dismiss_sidebar(&mut self, sidebar: SidebarId) {
+        let id = Self::sidebar_component_id(sidebar);
+        self.dismiss_focus_overlay(&id);
+    }
+
+    pub(in crate::tui) fn toggle_sidebar(&mut self, sidebar: SidebarId) {
+        let id = Self::sidebar_component_id(sidebar);
+        if self.application.mounted(&id) {
+            self.dismiss_sidebar(sidebar);
+        } else {
+            self.mount_sidebar(sidebar);
+        }
+    }
+
+    pub(in crate::tui) fn dismiss_sidebars(&mut self) {
+        for sidebar in [
+            SidebarId::Settings,
+            SidebarId::Sessions,
+            SidebarId::Playlists,
+            SidebarId::Search,
+        ] {
+            self.dismiss_sidebar(sidebar);
+        }
+    }
+
+    pub(in crate::tui) fn sync_sidebar_overlays(&mut self) {
+        self.update_settings_content();
+        self.update_playlists_content();
+        self.update_sessions_content();
+
+        let panel_area =
+            crate::tui::chrome_panels::sync_panel_area(&self.app, self.terminal_size());
+        let help_id = ComponentId::Overlay(OverlayId::Help);
+        if let Some(comp) = self.application.get_component_mut(&help_id)
+            && let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>()
+        {
+            help.set_panel_area(panel_area);
+            help.set_destination(self.app.effective_panel_focus(), self.app.active_tab());
+            help.set_keybinds(&self.keybinds);
+        }
+
+        let search_id = Self::search_id();
+        if let Some(comp) = self.application.get_component_mut(&search_id)
+            && let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()
+        {
+            search.set_panel_area(panel_area);
+        }
+    }
+
+    fn update_sessions_content(&mut self) {
+        let id = Self::sessions_id();
+        if !self.application.mounted(&id) {
+            return;
+        }
+        let panel_area =
+            crate::tui::chrome_panels::sync_panel_area(&self.app, self.terminal_size());
+        let direct_remote_session_id = self.app.sessions_panel_connected_id();
+        // The connection mark follows the owner's reported playback output
+        // (design D12/D13): the owner holds the output, a `Disconnected`
+        // report still names the target as the output, and an Emby Session
+        // row is marked by its `device_id`.
+        let emby_output_device_id = self.app.sessions_panel_connected_device_id();
+        let cast_attachment_id = match self.app.playback_output() {
+            Some(mbv_ctrl::OutputState::Cast { receiver_id, .. }) => Some(receiver_id.as_str()),
+            Some(mbv_ctrl::OutputState::EmbySession { .. } | mbv_ctrl::OutputState::Local)
+            | None => None,
+        };
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>()
+        {
+            sessions.set_display_context(
+                self.app.use_nerd_fonts(),
+                mbv_render::components::widgets::service_state_color(
+                    self.app.emby_service_state(),
+                    mbv_theme::Role::Accent.color().to_ratatui(),
+                ),
+            );
+            sessions.set_content(
+                &self
+                    .app
+                    .panel_targets()
+                    .iter()
+                    .map(|target| {
+                        // The per-row direct-endpoint projection (design D6):
+                        // a peer with a direct Player-owner endpoint other
+                        // than the local Owner; this device's own row and a
+                        // Cast receiver carry `false`.
+                        let has_direct_endpoint = match target {
+                            mbv_client_core::state::panel_targets::PanelTarget::Emby(session) => {
+                                self.app.session_has_direct_endpoint(session)
+                            }
+                            mbv_client_core::state::panel_targets::PanelTarget::Cast(_) => false,
+                        };
+                        target.row(has_direct_endpoint)
+                    })
+                    .collect::<Vec<_>>(),
+                self.app.sessions_loading(),
+                direct_remote_session_id,
+                emby_output_device_id,
+                cast_attachment_id,
+                self.app.can_disconnect_remote(),
+                mbv_ui_model::panel_targets::SessionTransferGates {
+                    local_owner_plays: self.app.local_owner_plays(),
+                },
+                panel_area,
+            );
+        }
+    }
+
+    // --- Help sidebar -------------------------------------------------------
+
+    /// Mount the Help overlay and make it the active component. Closes the
+    /// non-blocking overlays (settings/sessions/playlists) first, matching the
+    /// legacy F1 arms in each of their handlers.
+    pub(in crate::tui) fn mount_help(&mut self) {
+        self.dismiss_sidebars();
+        self.application
+            .mount(
+                ComponentId::Overlay(OverlayId::Help),
+                Box::new(HelpComponent::new()),
+                vec![],
+            )
+            .expect("mount Help");
+        self.push_focus_overlay(&ComponentId::Overlay(OverlayId::Help));
+    }
+
+    /// Unmount the Help overlay; the core focus stack's dismissal re-derives
+    /// the focus beneath it, and `TuiRealm`'s LIFO focus restore moves the
+    /// focus at the umount.
+    pub(in crate::tui) fn umount_help(&mut self) {
+        self.dismiss_focus_overlay(&ComponentId::Overlay(OverlayId::Help));
+    }
+
+    /// Render the Help overlay if mounted, after the legacy `App::render`.
+    pub(in crate::tui) fn render_help_overlay(&mut self, f: &mut ratatui::Frame) {
+        let help_id = ComponentId::Overlay(OverlayId::Help);
+        if !self.application.mounted(&help_id) {
+            return;
+        }
+        self.application.view(&help_id, f, f.area());
+    }
+    // --- Search sidebar -----------------------------------------------------
+    //
+    // The Search sidebar is a non-blocking overlay mounted by a shell
+    // request. The component owns the
+    // sidebar state (query, type_filter, loading, results) and the shared
+    // row-flow carrier, and the 300 ms debounce (driven by
+    // `UserEvent::Clock`); the shell owns
+    // the Emby client and spawns the search thread (design D4/D5).
+
+    fn search_id() -> ComponentId {
+        ComponentId::Overlay(OverlayId::Search)
+    }
+
+    /// Render the Search overlay if mounted.
+    pub(in crate::tui) fn render_search_overlay(&mut self, f: &mut ratatui::Frame) {
+        let id = Self::search_id();
+        if !self.application.mounted(&id) {
+            return;
+        }
+        self.application.view(&id, f, f.area());
+    }
+
+    /// Drain search results from `search_rx` into the `SearchSidebarComponent`
+    /// via downcast. The shell owns the channel; the component owns the state.
+    pub(in crate::tui) fn drain_search_results(&mut self) -> bool {
+        let id = Self::search_id();
+        let mut received = 0;
+        while let Some((query, result)) = self.app.try_recv_search_result() {
+            received += 1;
+            if let Some(comp) = self.application.get_component_mut(&id)
+                && let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()
+            {
+                search.apply_drain(
+                    &query,
+                    result.map_err(mbv_ui_model::UiModelError::operation_source),
+                );
+            }
+        }
+        received > 0
+    }
+
+    /// Sweep the search debounce deadline from the shell side. Production
+    /// never wired a `UserEvent::Clock` publisher (#609), so the shell
+    /// supplies wall-clock ticks directly via `tick_clock` on the mounted
+    /// component. Returns the `Msg` the component emits when its deadline
+    /// passes, or `None` if the search isn't mounted or the deadline hasn't
+    /// fired yet. Callers forward `Some(msg)` through the same `Msg`
+    /// router the component path uses (`handle_terminal_message`,
+    /// `handle_service_request`).
+    pub(in crate::tui) fn tick_search_clock(&mut self, now: std::time::Instant) -> Option<Msg> {
+        let id = Self::search_id();
+        if !self.application.mounted(&id) {
+            return None;
+        }
+        let comp = self.application.get_component_mut(&id)?;
+        let search = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()?;
+        search.tick_clock(now)
+    }
+
+    // --- Sessions sidebar ---------------------------------------------------
+
+    fn sessions_id() -> ComponentId {
+        ComponentId::Overlay(OverlayId::Sessions)
+    }
+
+    /// Render Sessions from shell-owned runtime data. Cursor, scroll, and hit
+    /// geometry remain private to the mounted component.
+    pub(in crate::tui) fn render_sessions_overlay(&mut self, f: &mut ratatui::Frame) {
+        let id = Self::sessions_id();
+        if !self.application.mounted(&id) {
+            return;
+        }
+        self.application.view(&id, f, f.area());
+    }
+}

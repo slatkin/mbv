@@ -90,7 +90,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
+fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Library(command) = input {
@@ -268,7 +268,7 @@ fn the_chapter_command_names_the_chapter_and_the_selected_book() {
 
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsPlayChapter {
+        [crate::gui_core::GuiLibraryCommand::AbsPlayChapter {
             lib_idx: 4,
             book_id: "book1".to_owned(),
             chapter: 2,
@@ -304,7 +304,7 @@ fn play_sends_the_play_command_for_the_selected_book() {
 
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsPlay {
+        [crate::gui_core::GuiLibraryCommand::AbsPlay {
             lib_idx: 4,
             item_id: "book1".to_owned(),
         }]
@@ -324,7 +324,7 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_book() {
 
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsQueue {
+        [crate::gui_core::GuiLibraryCommand::AbsQueue {
             lib_idx: 4,
             item_id: "book1".to_owned(),
         }]

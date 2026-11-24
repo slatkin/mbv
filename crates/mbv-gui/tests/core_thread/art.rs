@@ -7,7 +7,7 @@
 
 use std::sync::mpsc;
 
-use mbv::stub_app_with_playing_queue;
+use mbv_client_core::stub_app_with_playing_queue;
 use mbv_gui::art::{ArtRequest, ArtResponse, PLACEHOLDER_PATH, card_path};
 use mbv_gui::core_thread::CoreInput;
 use mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES;

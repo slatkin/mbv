@@ -4,7 +4,7 @@
 //! Workspace. A command names a row or a folder by the stable Service id the
 //! frame carries, never by position.
 
-use mbv::{
+use crate::gui_core::{
     GuiCollections, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
     GuiListSortFrame,
 };
@@ -58,7 +58,7 @@ pub struct GuiEmbyDetail {
     pub hero: Option<GuiEmbyHeroFrame>,
 }
 
-/// One row's kind (row 8.1), mirroring `mbv::GuiEmbyRowKind`: `collection`
+/// One row's kind (row 8.1), mirroring `crate::gui_core::GuiEmbyRowKind`: `collection`
 /// when the row is a folder or a boxset the folder-play rule expands,
 /// `media` on a playable leaf.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,7 +121,7 @@ pub struct GuiEmbyHeroFrame {
 }
 
 /// One credit of the Hero's credits table (design D17, Q7), mirroring
-/// `mbv::GuiEmbyHeroCredit`.
+/// `crate::gui_core::GuiEmbyHeroCredit`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyHeroCreditFrame {
     /// The person's name.

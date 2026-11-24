@@ -2,7 +2,7 @@
 //! the same playback targets the footer band's chooser lists, so the section's
 //! rows and the chooser cannot disagree inside one tick.
 
-use mbv::PlaybackTargetChoice;
+use mbv_client_core::PlaybackTargetChoice;
 
 use crate::bridge::frame::playback::GuiTargetChoice;
 

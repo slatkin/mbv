@@ -1,0 +1,150 @@
+//! The queue card's visual slot under the dimmed backdrop's halfblock
+//! fallback (#451). User regression: opening a modal or the queue context
+//! menu flipped the card's picker to the hardcoded-grid fallback, whose
+//! paint (a) moved the geometry checkpoint and pushed the queue rows down,
+//! and (b) measured the title overlay into a new, never-painted variant key
+//! that flashed the now-playing title back to the header row for a moment.
+
+use mbv_images::CachedImage;
+use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
+use ratatui_image::picker::{Picker, ProtocolType};
+
+use crate::tui::Model;
+use mbv_client_core::tests::make_app_stub;
+
+const CARD_KEY: &str = "card:P";
+
+fn card_image(width: u32, height: u32) -> image::DynamicImage {
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        width,
+        height,
+        image::Rgba([20, 40, 60, 255]),
+    ))
+}
+
+fn cached(img: Option<image::DynamicImage>) -> CachedImage {
+    CachedImage {
+        img,
+        source: None,
+        cover_box: None,
+        applied_logo_key: None,
+    }
+}
+
+/// An app with one decoded card image and a projected queue slot for it.
+/// The configured picker is kitty on the fallback constructor's default font
+/// grid; tests here cannot construct a differently-sized picker (the public
+/// API bakes the terminal-detected font size in at query time), so the
+/// fallback's grid coincides with the configured one — the assertions pin
+/// the decision wiring, not the font mismatch itself.
+fn app_with_card_image() -> Model {
+    let mut app = make_app_stub();
+    let mut configured = Picker::halfblocks();
+    configured.set_protocol_type(ProtocolType::Kitty);
+    app.enable_image_protocol_for_test();
+    let mut model = Model::new(app);
+    crate::tui::install_image_pickers_for_test(&mut model, configured, Picker::halfblocks());
+    model
+        .app
+        .insert_cached_image_for_test(CARD_KEY, cached(Some(card_image(4, 2))));
+    model
+        .app
+        .seed_queue_card_projection_for_test(QueueCardProjection {
+            cache_key: Some(CARD_KEY.to_owned()),
+            plain_cache_key: None,
+            images_enabled: true,
+            visualizer: false,
+            title_site: NowPlayingTitleSite::Header,
+        });
+    model
+}
+
+fn paint_slot(model: &mut Model) {
+    paint_slot_in(model, Rect::new(0, 0, 40, 24));
+}
+
+fn paint_slot_in(model: &mut Model, area: Rect) {
+    let mut terminal = Terminal::new(TestBackend::new(48, 30)).unwrap();
+    terminal
+        .draw(|frame| {
+            super::render_queue_playback_slot(model, 50, frame, area, true);
+        })
+        .unwrap();
+}
+
+/// User report 2026-10-30: a fetch that got no answer says nothing about the
+/// art, so the slot must not show the final no-image placeholder (invariant 27).
+#[test]
+fn an_interrupted_fetch_does_not_paint_the_no_image_placeholder() {
+    let mut model = app_with_card_image();
+    model.app.remove_cached_image_for_test(CARD_KEY);
+    model.app.interrupt_card_image_fetch_for_test(CARD_KEY);
+
+    paint_slot(&mut model);
+
+    assert!(
+        model
+            .app
+            .cached_image(mbv_images::QUEUE_CARD_PLACEHOLDER_KEY)
+            .is_none()
+    );
+}
+
+/// Same slot, but square artwork: its fitted size is the tier cap bounded by
+/// half the slot width, so the arithmetic is easy to reason about.
+fn app_with_square_card_image() -> Model {
+    let mut model = app_with_card_image();
+    model
+        .app
+        .insert_cached_image_for_test(CARD_KEY, cached(Some(card_image(100, 100))));
+    model
+}
+
+/// The recorded card size must not depend on the slot region's height -- the
+/// feedback loop behind the 2026-10-04 user report; the mechanism is
+/// documented at `queue_card_reserved_rect`.
+#[test]
+fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
+    let mut short = app_with_square_card_image();
+    paint_slot_in(&mut short, Rect::new(0, 0, 40, 6));
+    let mut tall = app_with_square_card_image();
+    paint_slot_in(&mut tall, Rect::new(0, 0, 40, 24));
+
+    assert_eq!(
+        short.app.last_card_size(),
+        tall.app.last_card_size(),
+        "the same artwork must record the same size whatever the slot region's height"
+    );
+}
+
+/// A dimming overlay must not move the queue card's geometry checkpoint: a
+/// fallback paint measured on the fallback's grid is not geometry-comparable
+/// with the configured protocol's, and recording it resized the reservation
+/// (`queue_playback_rows` derives the queue list's y from it) every time a
+/// modal or context menu opened, and back when it closed. Recording resumes
+/// for the configured protocol's paint once the backdrop lifts.
+#[test]
+fn dimmed_backdrop_paint_does_not_move_the_queue_card_checkpoint() {
+    let mut model = app_with_card_image();
+    // The configured protocol's last paint before any modal opened.
+    model.app.record_card_size_for_test(16, 32);
+
+    model.app.set_dim_backdrop_active_for_test(true);
+    paint_slot(&mut model);
+    assert_eq!(
+        model.app.last_card_size(),
+        (16, 32),
+        "the dimmed backdrop's fallback paint must not move the checkpoint"
+    );
+
+    model.app.set_dim_backdrop_active_for_test(false);
+    paint_slot(&mut model);
+    assert_ne!(
+        model.app.last_card_size(),
+        (16, 32),
+        "recording resumes for the configured protocol's paint"
+    );
+}

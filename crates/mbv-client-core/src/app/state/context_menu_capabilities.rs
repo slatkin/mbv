@@ -1,0 +1,78 @@
+//! Capability derivation for multi-item context menus.
+use mbv_queue::{QueueItem, QueueItemKind};
+
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independently intersected backend capabilities (playable, queue-admissible, removable, played-state-capable); all four co-occur for all-Emby selections and unit tests assert each axis independently (design analysis, issue #804)"
+)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ItemCapabilities {
+    pub playable: bool,
+    pub queue_admissible: bool,
+    pub removable: bool,
+    pub played_state_capable: bool,
+}
+
+impl ItemCapabilities {
+    pub(in crate::app) fn intersect(self, other: Self) -> Self {
+        Self {
+            playable: self.playable && other.playable,
+            queue_admissible: self.queue_admissible && other.queue_admissible,
+            removable: self.removable && other.removable,
+            played_state_capable: self.played_state_capable && other.played_state_capable,
+        }
+    }
+}
+
+pub(in crate::app) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilities {
+    ItemCapabilities {
+        playable: item.is_audio() || item.is_video(),
+        queue_admissible: true,
+        removable: true,
+        played_state_capable: item.kind() == QueueItemKind::Emby,
+    }
+}
+
+#[must_use]
+pub fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCapabilities {
+    let playable = mbv_ui_model::ui_util::is_playable(item) && !item.is_folder;
+    // Music is fire-and-forget in mbv (no resume, played state ignored), so a
+    // mixed selection containing any music item loses the played-state entry.
+    let played_state_capable = !item.is_music();
+    ItemCapabilities {
+        playable,
+        queue_admissible: playable,
+        removable: false,
+        played_state_capable,
+    }
+}
+
+pub(in crate::app) fn intersect<I>(items: I) -> Option<ItemCapabilities>
+where
+    I: IntoIterator<Item = ItemCapabilities>,
+{
+    let mut iter = items.into_iter();
+    let first = iter.next()?;
+    Some(iter.fold(first, ItemCapabilities::intersect))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn intersection_drops_capabilities_not_shared() {
+        let all = ItemCapabilities {
+            playable: true,
+            queue_admissible: true,
+            removable: true,
+            played_state_capable: true,
+        };
+        let no_played = ItemCapabilities {
+            played_state_capable: false,
+            ..all
+        };
+        let result = intersect([all, no_played]).unwrap();
+        assert!(!result.played_state_capable);
+        assert!(result.removable);
+    }
+}

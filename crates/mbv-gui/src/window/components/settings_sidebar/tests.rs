@@ -81,7 +81,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -200,8 +200,8 @@ fn a_press_on_a_section_entry_selects_it(
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::SelectSection {
-            section: mbv::GuiSettingsSection::from(section),
+        vec![crate::gui_core::GuiSettingsCommand::SelectSection {
+            section: crate::gui_core::GuiSettingsSection::from(section),
         }],
         "the press sent the section's open command"
     );
@@ -269,7 +269,7 @@ fn a_press_on_back_closes_the_screen() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::Close],
+        vec![crate::gui_core::GuiSettingsCommand::Close],
         "the back press closed the screen"
     );
 }

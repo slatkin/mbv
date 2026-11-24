@@ -12,8 +12,8 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::GuiCollections;
-use mbv::{GuiCollectionTarget, GuiListSort, GuiShowsView, GuiSortTarget};
+use crate::gui_core::GuiCollections;
+use crate::gui_core::{GuiCollectionTarget, GuiListSort, GuiShowsView, GuiSortTarget};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksRowFrame, GuiCollectionsFrame as _, GuiEmbyRowFrame, GuiEntryRowFrame,
@@ -41,7 +41,7 @@ use super::shows_list::{ShowsListRow, ShowsRowsFacts};
 #[derive(Debug, Clone, PartialEq)]
 pub struct RowMenu {
     /// The row the right-press named, by its destination identity.
-    pub row: mbv::GuiLibraryMenuRow,
+    pub row: crate::gui_core::GuiLibraryMenuRow,
     /// The pointer's client x when the menu opened.
     pub x: f32,
     /// The pointer's client y when the menu opened.
@@ -662,19 +662,19 @@ impl LibraryState {
     /// The row-menu identity of a Library destination row: the row's stable
     /// Service id, which the core resolves against its destination's stores.
     #[must_use]
-    pub fn row_menu_item(item_id: String) -> mbv::GuiLibraryMenuRow {
-        mbv::GuiLibraryMenuRow::Item(item_id)
+    pub fn row_menu_item(item_id: String) -> crate::gui_core::GuiLibraryMenuRow {
+        crate::gui_core::GuiLibraryMenuRow::Item(item_id)
     }
 
     /// Open the right-click item menu for `row` (the row-menu command): the
     /// next frame carries the row's full entries for the menu to paint at the
     /// pointer position, and a chosen entry sends its index for that row. The
     /// Hero's own menu closes with it — one menu is up at a time.
-    pub fn open_library_row_menu(&self, row: mbv::GuiLibraryMenuRow, x: f32, y: f32) {
+    pub fn open_library_row_menu(&self, row: crate::gui_core::GuiLibraryMenuRow, x: f32, y: f32) {
         self.open_row_menu(row, x, y, true);
     }
 
-    fn open_row_menu(&self, row: mbv::GuiLibraryMenuRow, x: f32, y: f32, detail: bool) {
+    fn open_row_menu(&self, row: crate::gui_core::GuiLibraryMenuRow, x: f32, y: f32, detail: bool) {
         self.link
             .library(GuiLibraryCommand::RowMenu { row: row.clone() });
         let mut ui = self.ui;
@@ -690,7 +690,12 @@ impl LibraryState {
     /// menu through this one call, so the pointer rule cannot drift between tabs.
     /// The Dioxus handler calls `prevent_default` itself and reads the event's
     /// client coordinates; the open-or-drop decision lives here.
-    pub fn open_row_menu_at(&self, row: Option<mbv::GuiLibraryMenuRow>, x: f32, y: f32) {
+    pub fn open_row_menu_at(
+        &self,
+        row: Option<crate::gui_core::GuiLibraryMenuRow>,
+        x: f32,
+        y: f32,
+    ) {
         if let Some(row) = row {
             self.open_library_row_menu(row, x, y);
         }
@@ -701,7 +706,7 @@ impl LibraryState {
     /// to show for the row.
     pub fn open_row_menu_without_detail_at(
         &self,
-        row: Option<mbv::GuiLibraryMenuRow>,
+        row: Option<crate::gui_core::GuiLibraryMenuRow>,
         x: f32,
         y: f32,
     ) {

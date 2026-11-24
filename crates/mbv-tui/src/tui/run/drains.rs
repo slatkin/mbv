@@ -1,0 +1,650 @@
+//! Per-tick drains and the terminal-message tick, extracted from `Model::run`
+//! (issue #800). Behaviour-preserving extractions; `run` keeps the ordering.
+
+use super::super::{
+    Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages, indexed,
+    right_press_cell,
+};
+use super::pin_swap::PinSwapLink;
+use super::{Duration, Instant, PollStrategy};
+use mbv_client_core::state::projection::PendingProtocolEncode;
+use mbv_client_core::{
+    BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, MusicEvent, PlayerEventDrain,
+    SeriesEvent,
+};
+use mbv_ui_msg::{Msg, TerminalObserverEvent};
+
+impl Model {
+    /// Drain the Emby startup and Emby setup worker channels through the
+    /// Client core's drain and project the Home content a completion rebuilt.
+    /// Returns whether any event was drained.
+    pub(super) fn drain_startup_workers(&mut self) -> bool {
+        let drain = self.app.drain_startup_workers();
+        if let Some(content) = drain.home {
+            self.assign_home_content(content);
+        }
+        drain.events
+    }
+
+    /// Drain queued events from the suspended home link. It has no tick of its
+    /// own, so consume every pending event before returning. The core's drain
+    /// owns the event semantics; the pin-swap handshake is this Client's.
+    pub(in crate::tui) fn drain_suspended_home_events(&mut self) -> bool {
+        let mut had_events = false;
+        loop {
+            match self.app.drain_home_event() {
+                HomeEventDrain::Empty => return had_events,
+                HomeEventDrain::Consumed => had_events = true,
+                HomeEventDrain::Client(lifecycle) => {
+                    had_events = true;
+                    self.apply_home_link_lifecycle(lifecycle);
+                }
+            }
+        }
+    }
+
+    /// Apply a Client-owned lifecycle event from the suspended home link:
+    /// the reply travels on this same home link (tray-pin-swap 4.4).
+    fn apply_home_link_lifecycle(&mut self, lifecycle: ClientLifecycle) {
+        match lifecycle {
+            ClientLifecycle::SwapPrepare => self.prepare_pin_swap(&PinSwapLink::Home),
+            ClientLifecycle::SwapQuit => self.quit_swapped_out(),
+        }
+    }
+
+    /// Drain one player event through the Client core's drain and project what
+    /// it changed. Returns whether playback requested a restart (the caller
+    /// `continue`s the run loop).
+    pub(super) fn drain_player_events(&mut self, had_events: &mut bool) -> bool {
+        match self.app.drain_player_event() {
+            PlayerEventDrain::Empty => false,
+            // Pin-swap lifecycle is this Client's (tray-pin-swap 4.4): the
+            // launch snapshot is a TUI query and the exit kind lives on the
+            // shell, so it never reaches `App` dispatch.
+            PlayerEventDrain::Client(lifecycle) => {
+                *had_events = true;
+                match lifecycle {
+                    ClientLifecycle::SwapPrepare => self.prepare_pin_swap(&PinSwapLink::Active),
+                    ClientLifecycle::SwapQuit => self.quit_swapped_out(),
+                }
+                false
+            }
+            PlayerEventDrain::Handled { restart } => {
+                *had_events = true;
+                // Playback completion refetches Home; re-project (task 5.3d,
+                // sync_home mirror deletion).
+                self.push_home_content();
+                // Emby browser content may have changed (5.3d.15/M2).
+                self.push_active_emby_library_owner_content();
+                // Player events can reconcile ABS podcast progress; re-project
+                // (5.3d.11 U6).
+                self.push_audiobookshelf_podcast_content();
+                // Player events can reconcile ABS book progress; re-project.
+                self.push_audiobookshelf_book_content();
+                self.push_music_workspace_content();
+                restart
+            }
+        }
+    }
+
+    /// Drain pending library events. Returns whether any event was drained.
+    ///
+    /// This Client joins its own per-event work to the core's App-side
+    /// handler, because it keeps the library content state the GUI does not.
+    pub(super) fn drain_lib_events(&mut self) -> bool {
+        let mut had_events = false;
+        let mut fetched_recently_added = false;
+        while let Some(ev) = self.app.try_recv_lib_event() {
+            had_events = true;
+            match ev {
+                // The App applies the write; this Client's half is the snapshot
+                // store and the projections (`apply_model_content_event`).
+                LibEvent::ModelContent(event) => {
+                    fetched_recently_added |= self.apply_model_content_event(event);
+                }
+                LibEvent::Browse(BrowseEvent::Loaded {
+                    lib_idx,
+                    parent_id,
+                    level,
+                }) => {
+                    let tv_snapshot = Self::capture_tv_root_completion(
+                        self.app.emby_libraries(),
+                        lib_idx,
+                        &parent_id,
+                        &level,
+                    );
+                    self.app.handle_lib_event(
+                        LibEvent::Browse(BrowseEvent::Loaded {
+                            lib_idx,
+                            parent_id,
+                            level,
+                        }),
+                        None,
+                    );
+                    if let Some((library_id, mode, items)) = tv_snapshot {
+                        self.apply_tv_root_completion(&library_id, mode.as_ref(), items);
+                    }
+                }
+                // Recursive album activation used to write `Some(0)` on
+                // the deleted inline track-focus field directly; the
+                // component owns the cursor now, so the shell delivers
+                // the same trigger as a one-shot request consumed at the
+                // next sync (wide only -- narrow keeps track focus off).
+                LibEvent::Music(MusicEvent::RecursiveAlbumActivated {
+                    library_id,
+                    nav_stack,
+                }) => {
+                    self.on_recursive_album_activated(library_id, nav_stack);
+                }
+                // Position restore used to clear the deleted track-focus
+                // field; route the same reset to the component at the
+                // next sync.
+                LibEvent::Browse(BrowseEvent::RestoreLibraryPosition { .. }) => {
+                    self.handle_restored_library_position_event(ev);
+                    self.music_track_focus_request = Some(MusicTrackFocusRequest::Clear);
+                    // A saved nav-stack position is not a Music selection
+                    // source: the mounted owner's local selection is
+                    // authoritative, and startup restores only through
+                    // `reanchor_launch_state`. The stale album cursor this
+                    // event carries must never re-point the tree.
+                    self.push_inline_search_content();
+                }
+                LibEvent::Series(SeriesEvent::DetailFetched { .. }) => {
+                    self.app.handle_lib_event(ev, None);
+                    self.push_tv_workspace_content();
+                }
+                // Artist detail completions (tasks 6.1/6.2): the App arms
+                // own the stale-guard and cache writes; the drain tail's
+                // Music re-push projects whatever is now current. Kept as
+                // explicit arms so the variants are never wildcard-hidden.
+                LibEvent::Music(
+                    MusicEvent::ArtistTracksFetched { .. }
+                    | MusicEvent::ArtistArtworkFetched { .. },
+                ) => {
+                    self.app.handle_lib_event(ev, None);
+                }
+                ev => self.handle_inline_search_lib_event(ev),
+            }
+            self.reproject_drained_lib_content();
+        }
+        if fetched_recently_added {
+            // Stored `Recently added` rows only reach the Home owner through
+            // a projection, and the loop tail never re-projects Home: one
+            // push covers every acceptance in this drain.
+            self.push_home_content();
+        }
+        had_events
+    }
+
+    /// Captures one TV root completion's per-session snapshot payload before
+    /// the App consumes the `Loaded` event: which library, which TV mode owns
+    /// the root, and the rows as `QueueItem`s. The root check (`parent_id` ==
+    /// the library id) keeps every non-root fetch (drill-in, search) out of
+    /// the stores; the mode falls back to the library's selected pill mode
+    /// because the pill spawn's built level carries no mode of its own.
+    fn capture_tv_root_completion(
+        libs: &[mbv_ui_model::library_tab::LibraryTab],
+        lib_idx: usize,
+        parent_id: &str,
+        level: &mbv_ui_model::browse::BrowseLevel,
+    ) -> Option<(
+        String,
+        Option<mbv_queue::TvContentMode>,
+        Vec<mbv_queue::QueueItem>,
+    )> {
+        let lib = libs.get(lib_idx)?;
+        if lib.library.collection_type != "tvshows" || *parent_id != lib.library.id {
+            return None;
+        }
+        if level.tv_content_mode.is_none() && lib.tv_content_mode.is_none() {
+            return None;
+        }
+        let items = level
+            .items
+            .iter()
+            .cloned()
+            .map(Box::new)
+            .map(mbv_queue::QueueItem::Emby)
+            .collect();
+        Some((
+            lib.library.id.clone(),
+            level
+                .tv_content_mode
+                .clone()
+                .or_else(|| lib.tv_content_mode.clone()),
+            items,
+        ))
+    }
+
+    /// Applies one captured TV root completion to its per-session snapshot:
+    /// the Latest arm refreshes the shell-owned latest snapshot. An Upcoming
+    /// completion carries no items: its premieres arrive as
+    /// `TvUpcomingSnapshotFetched`.
+    fn apply_tv_root_completion(
+        &mut self,
+        library_id: &str,
+        mode: Option<&mbv_queue::TvContentMode>,
+        items: Vec<mbv_queue::QueueItem>,
+    ) {
+        if mode == Some(&mbv_queue::TvContentMode::Latest) {
+            self.store_emby_latest_snapshot(library_id, items);
+        }
+    }
+
+    /// The per-event content tail of `drain_lib_events`: a drained lib event
+    /// may have changed any of these owners, so the drain re-projects them
+    /// once per event. Home is separate: only a fetched `Recently added`
+    /// acceptance needs a projection (see `drain_lib_events`'s own tail),
+    /// and assignment arms project themselves.
+    fn reproject_drained_lib_content(&mut self) {
+        self.push_audiobookshelf_podcast_content();
+        // Emby browser content may have changed (5.3d.15/M2).
+        self.push_active_emby_library_owner_content();
+        // ABS book async completions (BooksFetched / BookDetailFetched)
+        // and saved-position restore arrive via lib events; re-project (5.3d).
+        self.push_audiobookshelf_book_content();
+        self.push_music_workspace_content();
+        self.push_tv_workspace_content();
+    }
+
+    /// Drain idle-feed items and trigger the 30-minute refetch through the
+    /// Client core's drain.
+    pub(super) fn drain_idle_feed(&mut self) -> bool {
+        self.app.drain_idle_feed()
+    }
+
+    /// Drain resized-image worker responses into the matching protocol of
+    /// the bare-key cache entry (#164). Returns whether any response was
+    /// drained. A response for an evicted/replaced/absent key is silently
+    /// dropped here; `update_resized_protocol` also guards on
+    /// `ThreadProtocol`'s internal id, so a stale response racing a newer
+    /// resize request for the same (still-present) key is a no-op too.
+    ///
+    /// A disconnected response channel is the only owner-visible sign that
+    /// the worker exited after a caught `resize_encode` panic
+    /// (M-PANIC-CONTINUATION, issue #895); the drain respawns the worker
+    /// and drops cached protocols so entries re-register with it lazily.
+    pub(super) fn drain_resize_responses(&mut self) -> bool {
+        let mut had_events = false;
+        loop {
+            match self.image_protocols.try_recv_resize_response() {
+                Ok((key, response)) => {
+                    had_events = true;
+                    // Responses are tagged with the per-suffix mem-key
+                    // ("bare@suffix"); route them into the matching protocol of
+                    // the bare-key cache entry.
+                    let Some((bare_key, suffix)) = key.rsplit_once('@') else {
+                        continue;
+                    };
+                    if let Some(state) =
+                        self.image_protocols
+                            .protocol_mut(self.app.image_cache(), bare_key, suffix)
+                    {
+                        state.update_resized_protocol(response);
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.image_protocols.respawn_resize_worker();
+                    had_events = true;
+                    break;
+                }
+            }
+        }
+        had_events
+    }
+
+    /// Drop every stored image protocol whose cache entry the cache has since
+    /// replaced, evicted, or cleared (invariant 38). A completed fetch stores
+    /// its entry under its key, so a sync point after a drain keeps the store
+    /// from holding encodings of entries the cache no longer has.
+    pub(super) fn prune_image_protocols(&mut self) {
+        self.image_protocols.prune(self.app.image_cache());
+    }
+
+    /// Perform the protocol work the core queued (design D2 rule 3 of
+    /// `split-tui-gui-clients`), in this order: first encode every completed
+    /// fetch's entry, then drop the encodings the projections re-keyed. An
+    /// encode is skipped when its pixels are already stored, and a re-keyed
+    /// key re-encodes lazily from the retained source at its next paint. The
+    /// store needs a picker, so a Client whose pickers never initialized drops
+    /// the records without encoding.
+    ///
+    /// A queued encoding whose entry the cache replaced or cleared in the same
+    /// tick is skipped, and one whose pixels the store already holds for that
+    /// key and suffix is not encoded again: a completion always records the
+    /// pixels it built the encoding from (invariant 38).
+    pub(super) fn drain_protocol_work(&mut self) {
+        if self.image_protocols.image_picker().is_none() {
+            while self.app.next_pending_protocol_encode().is_some() {}
+            self.app.take_pending_protocol_clears();
+            return;
+        }
+        while let Some(pending) = self.app.next_pending_protocol_encode() {
+            // The entry the completion stored: a key the cache replaced or
+            // cleared since encodes nothing (invariant 38).
+            let Some(img) = self.app.cached_image_pixels(&pending.cache_key) else {
+                continue;
+            };
+            let pixels = mbv_images::hash_image_bytes(&img);
+            if self.image_protocols.has_pixels(
+                self.app.image_cache(),
+                &pending.cache_key,
+                pending.suffix,
+                pixels,
+            ) {
+                continue;
+            }
+            self.encode_completed_fetch(&pending, img, pixels);
+        }
+        for cache_key in self.app.take_pending_protocol_clears() {
+            self.image_protocols.clear_key(&cache_key);
+        }
+    }
+
+    /// Encode one completed fetch's decoded source under the suffix its cache
+    /// key carries and store it, tagged with the pixel hash the caller already
+    /// computed: the bitmap moves into the encode, so neither side clones or
+    /// hashes it twice.
+    fn encode_completed_fetch(
+        &mut self,
+        pending: &PendingProtocolEncode,
+        img: image::DynamicImage,
+        pixels: u64,
+    ) {
+        let protocol = {
+            let Some(picker) = self
+                .image_protocols
+                .picker_for_suffix(pending.suffix)
+                .cloned()
+            else {
+                return;
+            };
+            self.image_protocols
+                .build_protocol(&pending.cache_key, pending.suffix, &picker, img)
+        };
+        self.image_protocols.insert_protocol(
+            self.app.image_cache(),
+            &pending.cache_key,
+            pending.suffix,
+            protocol,
+        );
+        self.image_protocols
+            .set_pixels(&pending.cache_key, pending.suffix, pixels);
+    }
+
+    /// Drain ctrl transport commands through the Client core's drain.
+    pub(crate) fn drain_transport_events(&mut self) -> bool {
+        self.app.drain_transport_events()
+    }
+
+    /// Drain Emby websocket events through the Client core's drain, projecting
+    /// the content each event can change. Returns whether any event was
+    /// drained.
+    pub(super) fn drain_ws_events(&mut self) -> bool {
+        let mut had_events = false;
+        while self.app.drain_ws_event() {
+            had_events = true;
+            // Emby browser content may have changed (5.3d.15/M2).
+            self.push_active_emby_library_owner_content();
+            self.push_music_workspace_content();
+        }
+        // `UserDataChanged` refetches Continue Watching inside the handler.
+        // Home projects once per drain, not once per event.
+        if had_events {
+            self.push_home_content();
+        }
+        had_events
+    }
+
+    /// Drain Audiobookshelf socket events through the Client core's drain,
+    /// projecting the content each event can change. Returns whether any event
+    /// was drained.
+    pub(super) fn drain_audiobookshelf_socket_events(&mut self) -> bool {
+        let mut had_events = false;
+        while self.app.drain_audiobookshelf_socket_event() {
+            had_events = true;
+            // Socket events reconcile ABS podcast episode progress;
+            // re-project (5.3d.11 U6).
+            self.push_audiobookshelf_podcast_content();
+            // Socket events reconcile ABS book progress; re-project (5.3d).
+            self.push_audiobookshelf_book_content();
+            self.push_music_workspace_content();
+        }
+        had_events
+    }
+
+    /// Periodic maintenance between ticks, run by the Client core.
+    pub(super) fn run_periodic_maintenance(&mut self) {
+        self.app.run_periodic_maintenance();
+    }
+
+    /// Record this tick's right-press cell as the context-menu pointer and
+    /// scope it to the right-click's own request (design D6), before any of
+    /// the tick's messages is drained.
+    ///
+    /// `Application::tick` returns the focused component's message first and
+    /// the `UiRoot` observer's second, and both folds keep that order. A
+    /// right-click on a row of the *focused* panel therefore raises its menu
+    /// request before the observer reports the press, so a shell that learned
+    /// the pointer only from the observer would open that menu at the
+    /// keyboard anchor. Reading the raw tick messages here makes every
+    /// right-click raise pointer-anchored regardless of delivery order.
+    ///
+    /// The flag is scoped to that request: it stays false for every message
+    /// that arrives before the right-press report, so a keyboard-raised menu
+    /// request dispatched earlier in the same tick keeps the selected-item
+    /// anchor. It stays false for a tick without a right press, so a keyboard
+    /// opening anchors as before.
+    pub(in crate::tui) fn record_right_press(&mut self, messages: &[Msg]) {
+        let press = messages.iter().position(|msg| {
+            matches!(
+                msg,
+                Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { .. })
+            )
+        });
+        self.menu_pointer_press_at = press;
+        self.menu_pointer_current = false;
+        if let Some(press) = press
+            && let Some((column, row)) = messages.get(press).and_then(right_press_cell)
+        {
+            self.menu_pointer = Some((column, row));
+            self.menu_pointer_current = true;
+        }
+    }
+
+    /// Set whether the message now being dispatched counts as raised by this
+    /// tick's right-click (see [`Model::record_right_press`]). Both folds keep
+    /// the tick's message order, and the dispatcher indexes each message with
+    /// its position in the raw tick list, so a menu request dispatches as this
+    /// tick's pointer raise only when it arrived no earlier than the
+    /// right-press report.
+    pub(in crate::tui) fn scope_menu_pointer(&mut self, index: usize) {
+        self.menu_pointer_current = self
+            .menu_pointer_press_at
+            .is_some_and(|press| index >= press);
+    }
+
+    /// Poll the terminal, arbitrate the keyboard router, and dispatch the
+    /// resulting messages. Returns whether the session asked to quit.
+    pub(super) fn tick_terminal_messages(
+        &mut self,
+        had_events: &mut bool,
+        music_resize: &mut bool,
+        tv_resize: &mut bool,
+    ) -> bool {
+        // Terminal event poll is now driven by TuiRealm. `tick` polls the
+        // crossterm listener (a background worker) for one event within
+        // the same timeout the legacy loop used (8 ms with the visualizer,
+        // 50 ms otherwise). UiRoot observes every event independently of
+        // the active component's `Option<Msg>`; its typed event signal is
+        // only handed to the legacy fallback when UiRoot has focus. This
+        // preserves D12 redraws for local mutations without duplicating
+        // legacy handling on converted surfaces. When the terminal closes
+        // (SIGHUP), the listener's failed poll/read surfaces as a tick
+        // error; breaking here lets post-loop cleanup run (player.stop +
+        // join) — same contract as the legacy direct poll/read path.
+        let poll_timeout = if self.app.visualizer_worker().is_some() {
+            Duration::from_millis(8)
+        } else {
+            mbv_client_core::CLIENT_IDLE_CADENCE
+        };
+        let tick_started = Instant::now();
+        let ticked = self.application.tick(PollStrategy::Once(poll_timeout));
+        super::warn_slow_phase("tick", tick_started);
+        // Issue #940: the input port forwards one mouse move at a time. This
+        // tick took its event, so the port may forward the next move.
+        self.move_gate.release();
+        let Ok(messages) = ticked else {
+            return true;
+        };
+        // Design D6: record this tick's right press before any message is
+        // drained, so a menu request the focused panel raises is anchored at
+        // the pointer whatever order the tick delivered the messages in.
+        self.record_right_press(&messages);
+        // Design D6b: a tab change raised by this tick requests the reveal, and
+        // the tab strip is shell-presentation state, so the request is taken
+        // before a pointer press among these messages resolves against the
+        // painted tabs.
+        self.reveal_requested_tab();
+        // ADR 0024: fold the mouse-derived messages (one per eligible
+        // subscribed component) down to at most one before the keyboard
+        // router fold and `handle_terminal_message` dispatch. A keyboard
+        // tick passes through untouched.
+        let messages = indexed(fold_mouse_messages(messages));
+        if messages.is_empty() {
+            return false;
+        }
+        *had_events = true;
+        // `PollStrategy::Once` delivers at most one terminal event per
+        // tick, so this runs 0 or 1 times; `quit` handles the legacy
+        // `handle_key`-returns-true loop break without a labelled
+        // break inside the fold.
+        let mut quit = false;
+        // Snapshot focus before handling any messages. A legacy key can
+        // mount or dismiss an overlay, changing focus before UiRoot's
+        // observer message is folded; routing by the live focus then
+        // double-delivers that same terminal event.
+        let focused = self.application.focus().cloned();
+        // ADR 0023: the Keyboard Router fold. `Application::tick`
+        // returns the focused component's message first, then the
+        // UiRoot observer's. With `PollStrategy::Once` there is at
+        // most one terminal event per tick, so the leaf's request and
+        // the router's resolution for the same chord arrive together.
+        // The router's outcome selects between them: `Command` runs the
+        // semantic command and discards the leaf's message, `Swallow`
+        // runs nothing and discards it, `FallThrough` lets the leaf's
+        // own request stand.
+        let raw = messages
+            .iter()
+            .map(|(_, msg)| msg.clone())
+            .collect::<Vec<_>>();
+        let router = self.router_outcome(&raw);
+        let positions: Vec<usize> = messages.iter().map(|(index, _)| *index).collect();
+        let (messages, diagnostic) = arbitrate_key(
+            messages.into_iter().map(|(_, msg)| msg).collect(),
+            focused.as_ref(),
+            &router,
+        );
+        // Issue #940: name every arbitrated key tick, so a swallowed or
+        // deferred chord is visible in the log at debug level. Mouse-only
+        // ticks (no chord) stay silent.
+        if diagnostic.chord.is_some() {
+            tracing::debug!(
+                name: "input_router.key_tick",
+                target: "input_router",
+                {
+                    chord = ?diagnostic.chord,
+                    focus = ?diagnostic.captured_focus,
+                    router = diagnostic.router_result,
+                    leaf = diagnostic.leaf_disposition,
+                    final = diagnostic.final_disposition,
+                    dispatch = diagnostic.dispatch_kind
+                },
+                "key tick arbitrated"
+            );
+        }
+        // A prefix-namespace dispatch (design D6, task 6.2) runs the
+        // mapped action and disarms, like an immediate `Command`.
+        if let RouterOutcome::Command(command) | RouterOutcome::PrefixDispatch(command) = &router {
+            quit |= self.dispatch_router_command(command);
+        }
+        // A deferred candidate fires on an unhandled press; its
+        // commands never quit, so it does not feed the loop's quit
+        // flag.
+        self.apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
+        // Design D6: `menu_pointer_current` is set per message, so only the
+        // request this tick's right-click raised anchors at the pointer; a
+        // keyboard request in the same tick keeps the selected-item anchor.
+        // Both folds keep the tick's order, so the raw positions stay aligned
+        // with the messages that survived them.
+        for (index, msg) in positions.into_iter().zip(messages) {
+            self.scope_menu_pointer(index);
+            if self.handle_terminal_message(msg, music_resize, tv_resize) {
+                quit = true;
+            }
+        }
+        quit
+    }
+
+    /// Render a frame when the render cadence allows it. Sets `last_render`
+    /// after a successful draw. Terminal-clear or draw failures surface the
+    /// original error (the run loop returns it).
+    pub(super) fn draw_frame_if_due(
+        &mut self,
+        had_events: bool,
+        last_render: &mut Instant,
+        music_resize: bool,
+        tv_resize: bool,
+        terminal: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // See `render_interval`'s doc comment for the fast/slow cadence rules.
+        let render_interval = self.app.render_interval();
+        if !self
+            .app
+            .wants_terminal_render(had_events, *last_render, render_interval)
+        {
+            return Ok(());
+        }
+        if self.app.take_force_clear()
+            && let Err(e) = terminal.clear()
+        {
+            tracing::error!(
+                name: "run_loop.terminal_clear.failed",
+                target: "run_loop",
+                { error = %e, error.kind = ?e.kind() },
+                "terminal clear failed"
+            );
+            return Err(e.into());
+        }
+        if self.app.visualizer_worker().is_some() {
+            self.app.sync_visualizer();
+        }
+        // Design D6b: never paint a tab strip that a pending reveal request
+        // would move on the next pass.
+        self.reveal_requested_tab();
+        let draw_started = Instant::now();
+        if let Err(e) = terminal.draw(|f| self.draw_frame(f, music_resize, tv_resize)) {
+            tracing::error!(
+                name: "run_loop.terminal_draw.failed",
+                target: "run_loop",
+                { error = %e, error.kind = ?e.kind() },
+                "terminal draw failed"
+            );
+            return Err(e.into());
+        }
+        super::warn_slow_phase("draw", draw_started);
+        *last_render = Instant::now();
+        Ok(())
+    }
+
+    /// Start the configured Remote Service workers after the first TUI frame
+    /// has rendered, kick off the startup feed fetch, create the idle feed,
+    /// and register client capabilities. The shared step is
+    /// `App::start_client_services` (add-gui-library-panel design D11); the
+    /// TUI runs it at the same point it always has, so its order and timing
+    /// do not change.
+    pub(super) fn spawn_startup_services(&mut self) {
+        self.app.start_client_services();
+    }
+}

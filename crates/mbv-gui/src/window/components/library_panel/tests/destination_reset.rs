@@ -23,7 +23,11 @@ fn a_new_carried_current_tab_closes_the_row_menu_and_dismisses_the_narrow_hero()
     fixture.pick();
     let state = fixture.state.clone();
     fixture.in_runtime(move || {
-        state.open_library_row_menu(mbv::GuiLibraryMenuRow::Item("al1".to_owned()), 10.0, 12.0);
+        state.open_library_row_menu(
+            crate::gui_core::GuiLibraryMenuRow::Item("al1".to_owned()),
+            10.0,
+            12.0,
+        );
     });
     assert!(
         fixture.presents("[data-library-region=\"heroOverlay\"]"),

@@ -14,7 +14,7 @@ pub mod queue;
 pub mod settings;
 pub mod theme;
 
-use mbv::QueuePlaybackProjection;
+use mbv_client_core::QueuePlaybackProjection;
 
 use self::playback::GuiScrubberHover;
 
@@ -85,7 +85,7 @@ impl GuiPanelToggles {
     /// The panel section's value: the projection's toggles and the App's
     /// UI-reset counter, read in the same tick.
     #[must_use]
-    pub fn new(toggles: &mbv::PanelTogglesProjection, ui_reset_epoch: u64) -> Self {
+    pub fn new(toggles: &crate::gui_core::PanelTogglesProjection, ui_reset_epoch: u64) -> Self {
         Self {
             collapsed: toggles.collapsed,
             queue_folded: toggles.queue_folded,

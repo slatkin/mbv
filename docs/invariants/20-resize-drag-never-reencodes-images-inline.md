@@ -2,12 +2,12 @@
 
 **Scope:** every image compose/encode whose input changes while a pointer drag
 moves panel geometry — the queue card's title-overlay variant
-(`src/app/state/projection/card.rs::title_site_skip_reason`), the hero's
-cover-fit protocol (`src/app/infra/image_fetch/protocol.rs::ensure_hero_cover_protocol`),
+(`mbv_client_core::state::projection::card::title_site::title_site_skip_reason`), the hero's
+cover-fit protocol (`crates/mbv-tui/src/tui/image_protocol.rs::ensure_hero_cover_protocol`),
 and any future image path keyed on panel geometry. The drag-owning components
 are `QueueBoundaryComponent::is_resizing` and
 `LibraryPanel::is_resizing`; the shell resolves them into one hold flag in
-`src/app/shell/library_panel.rs::refresh_resize_drag_hold`, which also owns
+`crates/mbv-tui/src/tui/library_panel.rs::refresh_resize_drag_hold`, which also owns
 the settle window (`RESIZE_DRAG_SETTLE`, stamped into
 `App::resize_drag_activity`).
 

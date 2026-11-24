@@ -2,8 +2,8 @@
 //! a tick sends the sections it changed, each under its revision, and nothing
 //! else.
 
-use mbv::{
-    App, ClientTickHost, GuiClientEvent, stub_app_with_completed_emby_startup,
+use mbv_client_core::{
+    App, ClientTickHost, LibraryFetchEvent, stub_app_with_completed_emby_startup,
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_queue,
 };
 use mbv_emby_model::EmbyItem;
@@ -12,6 +12,7 @@ use mbv_gui::bridge::frame::library::GuiLibraryDetail;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
 use mbv_gui::core_thread::CoreInput;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_gui::sections::{Section, SentRevisions};
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
@@ -169,7 +170,7 @@ fn show_album(test: &mut TestCore) {
     test.tx
         .send(CoreInput::Library(
             GuiLibraryCommand::CollectionToggle {
-                target: mbv::GuiCollectionTarget::Music(0),
+                target: mbv_gui::gui_core::GuiCollectionTarget::Music(0),
                 key: "grp-hiphop".into(),
             }
             .into(),
@@ -300,7 +301,7 @@ fn seed_six_albums(test: &mut TestCore) {
     test.tx
         .send(CoreInput::Library(
             GuiLibraryCommand::CollectionToggle {
-                target: mbv::GuiCollectionTarget::Music(0),
+                target: mbv_gui::gui_core::GuiCollectionTarget::Music(0),
                 key: "grp-hiphop".into(),
             }
             .into(),
@@ -357,8 +358,10 @@ fn playing_track(id: &str) -> mbv_queue::QueueItem {
 #[test]
 fn a_playing_track_change_with_no_input_sends_the_library_section() {
     let http = MockHttp::new();
-    let app =
-        mbv::stub_app_with_playing_items(vec![playing_track("trk-1"), playing_track("trk-2")]);
+    let app = mbv_client_core::stub_app_with_playing_items(vec![
+        playing_track("trk-1"),
+        playing_track("trk-2"),
+    ]);
     let mut test = test_core_with(app);
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(&http));
@@ -402,7 +405,7 @@ fn land_group_albums(test: &mut TestCore) {
     "alb-new".clone_into(&mut album.id);
     test.core
         .app_mut()
-        .send_gui_client_event_for_test(GuiClientEvent::GroupAlbums {
+        .send_library_fetch_event_for_test(LibraryFetchEvent::GroupAlbums {
             lib_idx: 0,
             group_id: "grp-hiphop".to_owned(),
             result: Ok(vec![album]),

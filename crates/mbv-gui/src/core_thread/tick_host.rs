@@ -9,7 +9,9 @@
 
 use std::time::Instant;
 
-use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
+use mbv_client_core::{
+    App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome,
+};
 use mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
@@ -363,7 +365,7 @@ impl ClientTickHost for CoreThread {
                     // thread (design D10), so it runs here in one place.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
-                    if matches!(command, mbv::GuiSettingsCommand::ResetUiState) {
+                    if matches!(command, crate::gui_core::GuiSettingsCommand::ResetUiState) {
                         self.reset_gui_ui_state();
                     } else {
                         self.core.apply_gui_settings_command(command);

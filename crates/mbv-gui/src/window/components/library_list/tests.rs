@@ -195,24 +195,24 @@ impl Fixture {
     }
 
     /// The `RowsInView` reports the core link received, in send order.
-    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn reported_rows_in_view(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
-                    Some(command)
-                }
+                CoreInput::Library(
+                    command @ crate::gui_core::GuiLibraryCommand::RowsInView { .. },
+                ) => Some(command),
                 _ => None,
             })
             .collect()
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
+                CoreInput::Library(crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -314,7 +314,7 @@ fn music(collection_names: &[&str]) -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
         collections: GuiCollections {
-            target: mbv::GuiCollectionTarget::Music(0),
+            target: crate::gui_core::GuiCollectionTarget::Music(0),
             all: collection_names.is_empty(),
             entries: collection_names
                 .iter()
@@ -324,7 +324,7 @@ fn music(collection_names: &[&str]) -> GuiMusicList {
                     checked: true,
                 })
                 .collect(),
-            noun: mbv::GuiCollectionNoun::Groups,
+            noun: crate::gui_core::GuiCollectionNoun::Groups,
         },
         loading: false,
         failure: None,
@@ -398,7 +398,7 @@ fn a_double_click_on_an_album_without_its_tracklist_opens_it_and_asks_for_the_tr
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::OpenAlbum {
+        [crate::gui_core::GuiLibraryCommand::OpenAlbum {
             album_id: "al2".to_owned(),
         }]
     );
@@ -424,7 +424,7 @@ fn a_press_on_an_album_picks_it_and_leaves_it_closed() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowDetail {
+        [crate::gui_core::GuiLibraryCommand::ShowDetail {
             item_id: "al2".to_owned(),
         }]
     );
@@ -460,8 +460,8 @@ fn a_right_press_on_a_row_requests_the_items_menu_for_its_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::RowMenu {
-            row: mbv::GuiLibraryMenuRow::Item("al1".to_owned()),
+        [crate::gui_core::GuiLibraryCommand::RowMenu {
+            row: crate::gui_core::GuiLibraryMenuRow::Item("al1".to_owned()),
         }]
     );
 }
@@ -557,7 +557,7 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::Play {
+        [crate::gui_core::GuiLibraryCommand::Play {
             item_id: "t1".to_owned(),
         }]
     );
@@ -628,8 +628,8 @@ fn the_list_reports_the_artist_rows_in_view_under_the_music_scope() {
 
     assert_eq!(
         fixture.reported_rows_in_view().last(),
-        Some(&mbv::GuiLibraryCommand::RowsInView {
-            scope: mbv::GuiRowArtScope::Music,
+        Some(&crate::gui_core::GuiLibraryCommand::RowsInView {
+            scope: crate::gui_core::GuiRowArtScope::Music,
             ids: vec!["artist:a1".to_owned(), "artist:a2".to_owned()],
         }),
         "the report names the painted artist rows under the Music scope"
@@ -650,7 +650,7 @@ fn a_press_on_a_track_row_picks_its_album_and_marks_no_row() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowDetail {
+        [crate::gui_core::GuiLibraryCommand::ShowDetail {
             item_id: "al1".to_owned(),
         }]
     );

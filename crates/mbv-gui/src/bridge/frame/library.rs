@@ -10,7 +10,7 @@
 //! in its own store. The art is part of its section's value, so a landed image
 //! bumps that section's revision.
 
-use mbv::{
+use crate::gui_core::{
     GuiArtShape, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryTab, GuiRowArt, GuiRowMediaKind,
 };
 
@@ -83,7 +83,7 @@ impl From<GuiLibraryTab> for GuiLibraryTabFrame {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiLibraryRowMenuFrame {
     /// The row's destination identity the command named.
-    pub row: mbv::GuiLibraryMenuRow,
+    pub row: crate::gui_core::GuiLibraryMenuRow,
     /// The TUI menu builder's entries for the row.
     pub entries: Vec<GuiMusicMenuEntryFrame>,
 }
@@ -100,8 +100,8 @@ pub struct GuiMusicMenuEntryFrame {
     pub index: usize,
 }
 
-impl From<&mbv::GuiLibraryRowMenu> for GuiLibraryRowMenuFrame {
-    fn from(menu: &mbv::GuiLibraryRowMenu) -> Self {
+impl From<&crate::gui_core::GuiLibraryRowMenu> for GuiLibraryRowMenuFrame {
+    fn from(menu: &crate::gui_core::GuiLibraryRowMenu) -> Self {
         Self {
             row: menu.row.clone(),
             entries: menu
@@ -138,7 +138,7 @@ impl From<&GuiLibraryArtwork> for GuiArtRef {
 }
 
 /// The art one top-level Library row shows (gui-delineated-rows design D4),
-/// mirroring `mbv::GuiRowArt`: the row's cached image and the fit its own
+/// mirroring `crate::gui_core::GuiRowArt`: the row's cached image and the fit its own
 /// pixels ask for, a fetch in flight, a source that gave no image, or a row
 /// kind with no art source.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,7 +171,7 @@ impl From<&GuiRowArt> for GuiRowArtFrame {
 }
 
 /// The media kind a row without an image shows (design D4), mirroring
-/// `mbv::GuiRowMediaKind`.
+/// `crate::gui_core::GuiRowMediaKind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiRowMediaKindFrame {
     Audio,
@@ -187,7 +187,7 @@ impl From<GuiRowMediaKind> for GuiRowMediaKindFrame {
     }
 }
 
-/// The Hero artwork's box shape, mirroring `mbv::GuiArtShape` (the artwork
+/// The Hero artwork's box shape, mirroring `crate::gui_core::GuiArtShape` (the artwork
 /// policy's arms).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiArtShapeFrame {

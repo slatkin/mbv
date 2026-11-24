@@ -7,17 +7,18 @@
 //! or window runs (design D13).
 
 use crate::Held;
-use mbv::ClientTickHost;
+use mbv_client_core::ClientTickHost;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiLibraryDetail, GuiMetaKindFrame,
     GuiMetaSegmentFrame,
 };
 use mbv_gui::bridge::library::GuiLibraryCommand;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 
-use super::{TestCore, detail_of, list_of, pump_until, send_library};
+use super::{TestCore, detail_of, list_of, pump_until, pump_until_client_fetch, send_library};
 use crate::{test_core_with, test_emby_client};
 
 /// The library's one listing, as the mock transport returns it: the body the
@@ -60,6 +61,16 @@ fn pump_until_emby(
     );
 }
 
+/// Pump until the Emby list shows its root-list fetch failure. That result is a
+/// Client-only fetch, so this waits on the Client-only channel.
+fn pump_until_emby_root_failure(test: &mut TestCore) {
+    pump_until_client_fetch(
+        test,
+        |frame| emby_parts(frame).is_some_and(|(list, _)| list.failed),
+        "the failed root fetch",
+    );
+}
+
 /// The mocked bootstrap's catalog presents the Movies destination, and the
 /// restore's open finds the `emby` frame (row 8.1, design D12): the plain
 /// mode's section names the library and carries no pill, and the root-list
@@ -72,7 +83,9 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
         "Movies".to_string(),
         "movies".to_string(),
     );
-    let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
+    let mut test = test_core_with(mbv_client_core::stub_app_with_completed_emby_startup(vec![
+        view,
+    ]));
 
     // The mocked bootstrap drains on the first tick; the catalog's one
     // presented destination is the Movies library, and the start stays on
@@ -97,7 +110,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     // The no-URL stub client's root-list fetch fails; the frame names the
     // failure once it lands, and a later frame build re-issues nothing
     // behind the seed below.
-    pump_until_emby(&mut test, |list, _| list.failed, "the failed root fetch");
+    pump_until_emby_root_failure(&mut test);
 
     test.core
         .app_mut()
@@ -133,7 +146,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
 fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     let http = MockHttp::new();
     http.respond_repeated(200, LIBRARY_BODY, 12);
-    let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, _cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
     // The All selection arrives cached (empty), so the folder fetch the
     // switched group starts is the one items fetch the mock answers.
@@ -157,7 +170,7 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     send_library(
         &mut test,
         GuiLibraryCommand::CollectionToggle {
-            target: mbv::GuiCollectionTarget::EmbyFeed(0),
+            target: mbv_gui::gui_core::GuiCollectionTarget::EmbyFeed(0),
             key: "folder-1".into(),
         },
     );
@@ -201,13 +214,15 @@ fn movies_hero_frame(items: Vec<EmbyItem>) -> Held {
         "Movies".to_string(),
         "movies".to_string(),
     );
-    let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
+    let mut test = test_core_with(mbv_client_core::stub_app_with_completed_emby_startup(vec![
+        view,
+    ]));
     assert!(test.core.step());
     send_library(
         &mut test,
         GuiLibraryCommand::OpenDestination { position: 1 },
     );
-    pump_until_emby(&mut test, |list, _| list.failed, "the failed root fetch");
+    pump_until_emby_root_failure(&mut test);
     test.core.app_mut().seed_gui_emby_roots_for_test(0, items);
     send_library(
         &mut test,

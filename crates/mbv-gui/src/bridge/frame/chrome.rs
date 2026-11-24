@@ -2,7 +2,7 @@
 //! mirrors one library projection, so the window paints what the Clients
 //! paint from the same rules.
 
-use mbv::{FooterPill, QueueFooterProjection, StatusBarProjection};
+use mbv_client_core::{FooterPill, QueueFooterProjection, StatusBarProjection};
 use mbv_ui_model::toast::{ToastCard, ToastId, ToastSeverity};
 
 use super::theme::GuiRole;

@@ -129,14 +129,14 @@ fn hero_app(props: FixtureProps) -> Element {
             destination: GuiDestinationList::Music(GuiMusicList {
                 lib_idx: 0,
                 collections: GuiCollections {
-                    target: mbv::GuiCollectionTarget::Music(0),
+                    target: crate::gui_core::GuiCollectionTarget::Music(0),
                     all: false,
-                    entries: vec![mbv::GuiCollectionEntry {
+                    entries: vec![crate::gui_core::GuiCollectionEntry {
                         key: "g1".to_owned(),
                         name: "Hip-Hop".to_owned(),
                         checked: true,
                     }],
-                    noun: mbv::GuiCollectionNoun::Groups,
+                    noun: crate::gui_core::GuiCollectionNoun::Groups,
                 },
                 loading: false,
                 failure: None,
@@ -332,7 +332,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -400,7 +400,7 @@ fn play_sends_the_picked_album_s_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::Play {
+        vec![crate::gui_core::GuiLibraryCommand::Play {
             item_id: "al1".to_owned(),
         }],
         "the play command names the picked album"
@@ -418,7 +418,7 @@ fn play_next_sends_the_picked_album_s_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::PlayNext {
+        vec![crate::gui_core::GuiLibraryCommand::PlayNext {
             item_id: "al1".to_owned(),
         }],
         "the play-next command names the picked album"
@@ -437,7 +437,7 @@ fn add_to_queue_sends_the_picked_album_s_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::AddToQueue {
+        vec![crate::gui_core::GuiLibraryCommand::AddToQueue {
             item_id: "al1".to_owned(),
         }],
         "the add-to-queue command names the picked album"
@@ -457,7 +457,7 @@ fn shuffle_artist_sends_the_union_s_albums() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::ShuffleArtist {
+        vec![crate::gui_core::GuiLibraryCommand::ShuffleArtist {
             album_ids: vec!["al1".to_owned(), "al2".to_owned()],
         }],
         "the shuffle command names the union's albums"
@@ -476,8 +476,8 @@ fn a_menu_entry_sends_its_index_for_the_picked_item() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::MenuEntry {
-            row: mbv::GuiLibraryMenuRow::Item("al1".to_owned()),
+        vec![crate::gui_core::GuiLibraryCommand::MenuEntry {
+            row: crate::gui_core::GuiLibraryMenuRow::Item("al1".to_owned()),
             index: 1,
         }],
         "the menu-entry command names the picked item and the entry's index"
@@ -500,8 +500,8 @@ fn a_menu_press_sends_the_shared_builder_index_past_the_filtered_lists_end() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::MenuEntry {
-            row: mbv::GuiLibraryMenuRow::Item("al1".to_owned()),
+        vec![crate::gui_core::GuiLibraryCommand::MenuEntry {
+            row: crate::gui_core::GuiLibraryMenuRow::Item("al1".to_owned()),
             index: 3,
         }],
         "the index passes through as received, past the filtered list's end"
@@ -576,7 +576,7 @@ fn a_track_s_play_gesture_sends_that_track_play() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::Play {
+        vec![crate::gui_core::GuiLibraryCommand::Play {
             item_id: "t2".to_owned(),
         }],
         "the play command names the played track"

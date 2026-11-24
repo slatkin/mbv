@@ -1,8 +1,8 @@
 # Invariant 34 — The client resolves the playing row by slot identity, never by a status ordinal
 
 **Scope:** `App::effective_playback_state` and `App::displayed_playback_state`
-(`src/app/state/playback_target.rs`), the queue projection's
-`projected_active_target` (`src/app/shell/queue.rs`), and every presentation
+(`mbv_client_core::state::playback_target`), the queue projection's
+`projected_active_target` (`crates/mbv-tui/src/tui/queue.rs`), and every presentation
 consumer of `PlaybackState::active_idx` (queue rows, cards, now-playing
 derivation).
 
@@ -35,12 +35,12 @@ user's mental model. Identity survives every one of those edits.
   observed active slot on every snapshot (`unified_queue_state_for_peer`,
   invariant 25).
 - The now-playing removal guard (`queue_slot_needs_active_confirm`,
-  `src/app/dispatch/queue.rs`) asks "stop playback?" by the same rule: the
+  `mbv_client_core::dispatch::queue`) asks "stop playback?" by the same rule: the
   removed slot is the owner's observed active slot, falling back to the
   status ordinal only while no snapshot has named one. An ordinal
   comparison there would skip the confirmation — and stop playback as a
   plain edit — right after an ordinal-shifting delete.
-- Guard tests (`src/app/shell/queue.rs`):
+- Guard tests (`crates/mbv-tui/src/tui/queue.rs`):
   `deleting_before_playing_row_keeps_highlight_on_playing_slot` adopts a
   post-delete snapshot while the status still names the pre-delete ordinal
   and asserts the highlight stays on the playing slot;

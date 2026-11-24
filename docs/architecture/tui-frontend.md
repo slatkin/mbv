@@ -9,9 +9,9 @@ Covered elsewhere, not repeated here:
 
 * Component/shell boundary and one-way projection — `AGENTS.md` "Interactive
   architecture", ADR 0022.
-* Keyboard routing (one site: `src/app/input/router.rs` + `key_policy.rs`) —
-  ADR 0023, including why a second resolution site or `SubClause` precedence
-  fails.
+* Keyboard routing (one site, in the core: `mbv_client_core::input::router`
+  + `key_policy`) — ADR 0023, including why a second resolution site or
+  `SubClause` precedence fails.
 * Mouse delivery — ADR 0024, `openspec/specs/mouse-input/spec.md`.
 * Embedded canonical media lists — `openspec/specs/canonical-media-lists/spec.md`.
 * Current surface ownership — `docs/architecture/interactive-surface-ledger.md`.
@@ -89,8 +89,9 @@ B of `decouple-client-core`; ADR 0042):
 
 - **The single-panel fact.** The shell calls `App::set_single_panel` at every
   point where it records the terminal size — the resize observer
-  (`src/app/shell.rs`) and the per-frame size on the draw path
-  (`compute_frame_layout`, `src/app/shell/draw.rs`) — so the first frame of a
+  (`crates/mbv-tui/src/tui.rs`) and the per-frame size on the draw path
+  (`compute_frame_layout`, `crates/mbv-tui/src/tui/draw.rs`) — so the first
+  frame of a
   narrow terminal is already in Mini view. The TUI owns the breakpoint
   (`single_panel_for_width` over `MINI_VIEW_THRESHOLD`); the core reads only
   the fact, together with the attached Client's `TerminalPanelRules`
@@ -111,7 +112,7 @@ B of `decouple-client-core`; ADR 0042):
   the current tab must scroll into view (`dispatch/library/cw_library_tab.rs`);
   the shell takes the request after every update step and tick drain, before
   it paints or resolves a pointer press (`Model::reveal_requested_tab`,
-  `src/app/shell/tab_strip.rs`), so every `tab_scroll` reader sees the
+  `crates/mbv-tui/src/tui/tab_strip.rs`), so every `tab_scroll` reader sees the
   revealed value.
 
 ## Panel and slot composition
@@ -214,7 +215,8 @@ existing test owns, or reproduces a real bug.
 - Semantic glyph assertions only in the owning painter's test; no whole-frame
   equality or snapshots.
 - Mounting/focus/subscription/routing changes need real `Application::tick()`
-  tests (`src/app/tests/tick_integration/`) through the shell sync pass; direct
+  tests (`crates/mbv-tui/src/tui/tests/tick_integration/`) through the shell
+  sync pass; direct
   `Component::on` tests don't verify composition. These assert composition and
   delivery, never painter appearance.
 
@@ -224,7 +226,7 @@ existing test owns, or reproduces a real bug.
 - [ ] Checked at the narrow breakpoint, not only default width.
 - [ ] Hit-geometry arithmetic still matches any moved/resized painting.
 - [ ] Nothing shell-owned reached a component; boundary crossings are typed `Msg`s.
-- [ ] No chord resolved outside `src/app/input/`.
+- [ ] No chord resolved outside `mbv_client_core::input`.
 - [ ] One owner and one painter per surface per breakpoint.
 - [ ] Each assertion sits in its owning test layer; removed assertions name
       their surviving owner.

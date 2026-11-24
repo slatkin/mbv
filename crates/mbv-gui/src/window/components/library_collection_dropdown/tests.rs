@@ -119,7 +119,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -175,28 +175,28 @@ fn entry(key: &str, name: &str, checked: bool) -> GuiCollectionEntry {
 /// The Music frame: All selected, three groups.
 fn music_all() -> GuiCollections {
     GuiCollections {
-        target: mbv::GuiCollectionTarget::Music(2),
+        target: crate::gui_core::GuiCollectionTarget::Music(2),
         all: true,
         entries: vec![
             entry("g1", "Hip-Hop", false),
             entry("g2", "Jazz", false),
             entry("g3", "Soul", false),
         ],
-        noun: mbv::GuiCollectionNoun::Groups,
+        noun: crate::gui_core::GuiCollectionNoun::Groups,
     }
 }
 
 /// The Feeds frame: two subscriptions checked.
 fn feeds_two_checked() -> GuiCollections {
     GuiCollections {
-        target: mbv::GuiCollectionTarget::Feeds,
+        target: crate::gui_core::GuiCollectionTarget::Feeds,
         all: false,
         entries: vec![
             entry("https://example.test/tifo", "Tifo Football", true),
             entry("https://example.test/off-menu", "Off Menu", true),
             entry("https://example.test/other", "Other Show", false),
         ],
-        noun: mbv::GuiCollectionNoun::Subscriptions,
+        noun: crate::gui_core::GuiCollectionNoun::Subscriptions,
     }
 }
 
@@ -331,8 +331,8 @@ fn the_all_row_press_sends_all_without_opening_the_dropdown() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::CollectionAll {
-            target: mbv::GuiCollectionTarget::Feeds,
+        [crate::gui_core::GuiLibraryCommand::CollectionAll {
+            target: crate::gui_core::GuiCollectionTarget::Feeds,
         }]
     );
     assert!(fixture.state.ui.peek().collections.is_none());
@@ -352,8 +352,8 @@ fn a_row_press_toggles_and_leaves_the_dropdown_open() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::CollectionToggle {
-            target: mbv::GuiCollectionTarget::Music(2),
+        [crate::gui_core::GuiLibraryCommand::CollectionToggle {
+            target: crate::gui_core::GuiCollectionTarget::Music(2),
             key: "g3".to_owned(),
         }]
     );

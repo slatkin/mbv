@@ -4,7 +4,7 @@
 //! the destination into a list part ([`GuiHomeList`]) and a detail part
 //! ([`GuiHomeDetail`]). The `libraryList` and `libraryDetail` sections carry them.
 
-use mbv::{
+use crate::gui_core::{
     GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind,
 };
 use mbv_queue::QueueItemContentId;
@@ -103,7 +103,7 @@ pub struct GuiHomeItemRowFrame {
     pub media: GuiRowMediaKindFrame,
 }
 
-/// One Home row's stable identity, mirroring `mbv::GuiHomeRowId` (design
+/// One Home row's stable identity, mirroring `crate::gui_core::GuiHomeRowId` (design
 /// D12): the identity `App::home_stable_target` resolves. `Recent` carries
 /// the queue item's content id, whose wire form is itself (`provider` and
 /// `value`).
@@ -131,7 +131,7 @@ pub enum GuiHomeRowStateFrame {
 }
 
 /// The kind one item row paints (design D12), mirroring
-/// `mbv::GuiHomeRowKind`.
+/// `crate::gui_core::GuiHomeRowKind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiHomeRowKindFrame {
     Collection,
@@ -202,7 +202,8 @@ impl GuiHomeRowIdFrame {
     /// row its queue item's content id, provider first.
     #[must_use]
     pub fn rows_in_view_id(&self) -> String {
-        mbv::GuiHomeRowId::from(&crate::bridge::library::GuiHomeRowId::from(self)).rows_in_view_id()
+        crate::gui_core::GuiHomeRowId::from(&crate::bridge::library::GuiHomeRowId::from(self))
+            .rows_in_view_id()
     }
 }
 

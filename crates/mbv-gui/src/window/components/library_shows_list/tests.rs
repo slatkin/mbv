@@ -199,24 +199,24 @@ impl Fixture {
     }
 
     /// The `RowsInView` reports the core link received, in send order.
-    fn reported_rows_in_view(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn reported_rows_in_view(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
-                    Some(command)
-                }
+                CoreInput::Library(
+                    command @ crate::gui_core::GuiLibraryCommand::RowsInView { .. },
+                ) => Some(command),
                 _ => None,
             })
             .collect()
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
+                CoreInput::Library(crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -267,7 +267,7 @@ fn built(list: GuiShowsList, detail: GuiShowsDetail) -> Fixture {
 fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
     GuiShowsList {
         sort: None,
-        view: mbv::GuiShowsView::All,
+        view: crate::gui_core::GuiShowsView::All,
         lib_idx: 0,
         loading: false,
         series: tree,
@@ -436,7 +436,7 @@ fn new_view_rows() -> Vec<GuiShowsRowFrame> {
 fn the_date_sorted_view_paints_no_rail() {
     let frame = GuiShowsList {
         sort: None,
-        view: mbv::GuiShowsView::New,
+        view: crate::gui_core::GuiShowsView::New,
         rows: new_view_rows(),
         ..shows_frame(Vec::new())
     };
@@ -463,12 +463,12 @@ fn the_date_sorted_view_paints_no_rail() {
 /// resolves — a series row's raw Emby id, and no row key the list itself adds —
 /// so the core queues their row art without a coordinate.
 #[rstest::rstest]
-#[case(mbv::GuiShowsView::All, mbv::GuiRowArtScope::ShowsSeries, &["s1", "s3"])]
-#[case(mbv::GuiShowsView::New, mbv::GuiRowArtScope::ShowsNew, &["new:e1"])]
-#[case(mbv::GuiShowsView::Upcoming, mbv::GuiRowArtScope::ShowsUpcoming, &["new:e1"])]
+#[case(crate::gui_core::GuiShowsView::All, crate::gui_core::GuiRowArtScope::ShowsSeries, &["s1", "s3"])]
+#[case(crate::gui_core::GuiShowsView::New, crate::gui_core::GuiRowArtScope::ShowsNew, &["new:e1"])]
+#[case(crate::gui_core::GuiShowsView::Upcoming, crate::gui_core::GuiRowArtScope::ShowsUpcoming, &["new:e1"])]
 fn the_list_reports_the_rows_in_view_under_the_views_scope(
-    #[case] view: mbv::GuiShowsView,
-    #[case] scope: mbv::GuiRowArtScope,
+    #[case] view: crate::gui_core::GuiShowsView,
+    #[case] scope: crate::gui_core::GuiRowArtScope,
     #[case] ids: &[&str],
 ) {
     let frame = GuiShowsList {
@@ -482,7 +482,7 @@ fn the_list_reports_the_rows_in_view_under_the_views_scope(
 
     assert_eq!(
         fixture.reported_rows_in_view().last(),
-        Some(&mbv::GuiLibraryCommand::RowsInView {
+        Some(&crate::gui_core::GuiLibraryCommand::RowsInView {
             scope,
             ids: ids.iter().map(|id| (*id).to_owned()).collect(),
         }),
@@ -573,7 +573,7 @@ fn a_press_on_a_series_node_selects_it_and_leaves_it_closed() {
     );
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowsSelect {
+        [crate::gui_core::GuiLibraryCommand::ShowsSelect {
             lib_idx: 0,
             row: "s1".to_owned(),
         }],
@@ -613,7 +613,7 @@ fn a_press_sends_the_select_command_with_the_row_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowsSelect {
+        [crate::gui_core::GuiLibraryCommand::ShowsSelect {
             lib_idx: 0,
             row: "s3".to_owned(),
         }],

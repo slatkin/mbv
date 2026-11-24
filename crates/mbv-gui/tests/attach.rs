@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use mbv::{App, OwnerState, exclusive_owner_refusal_text, stub_app_with_queue};
+use mbv_client_core::{App, OwnerState, exclusive_owner_refusal_text, stub_app_with_queue};
 use mbv_daemon::SignalOwnerError;
 use mbv_gui::attach::{AttachCampaign, CampaignEnd, OwnerSteps, OwnerWait};
 use mbv_gui::bridge::frame::GuiAttachState;

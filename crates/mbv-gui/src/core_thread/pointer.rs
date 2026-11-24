@@ -7,7 +7,7 @@
 
 use std::time::Instant;
 
-use mbv::GuiInput;
+use crate::gui_core::GuiInput;
 
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::PointerGesture;

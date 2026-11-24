@@ -2,10 +2,10 @@
 
 **Scope:** `select_item`, `play_tv_episode`, `play_autoloaded_siblings`,
 `play_autoloaded_containing_folder`, and `play_autoloaded_children`
-(`src/app/dispatch/navigation.rs`); `home_play_target` and `play_home_cw_item`
-(`src/app/dispatch/home.rs`); the `TvEpisodeActivate` arm
-(`src/app/shell/tv_workspace.rs`); the `EmbyLibraryActivate` arm
-(`src/app/shell/emby_library.rs`).
+(`mbv_client_core::dispatch::navigation`); `home_play_target` and `play_home_cw_item`
+(`mbv_client_core::dispatch::home`); the `TvEpisodeActivate` arm
+(`crates/mbv-tui/src/tui/tv_workspace.rs`); the `EmbyLibraryActivate` arm
+(`crates/mbv-tui/src/tui/emby_library.rs`).
 
 ## The invariant
 
@@ -51,11 +51,11 @@ generic browser kept autoloading.
   item) take that resolution before `play_item`, so a Home row autoloads its
   container in both Clients. A resuming item still starts at its position,
   because the queue's start item carries it.
-- `play_tv_episode` supplies the episode's season, resolved from the shell's
-  cached series detail — the same cache the TV Workspace renders from — and
+- `play_tv_episode` supplies the episode's season, resolved from the client
+  core's cached series detail — the same cache the TV Workspace renders from — and
   from the episode's own containing item when no cache entry holds the
   series, which is every Latest row. It passes `QueueSource::Series`.
-- Guard tests in `src/app/dispatch/actions/route_tests/library_routing.rs`:
+- Guard tests in `mbv_client_core::app::dispatch::actions::route_tests::library_routing`:
   `tv_episode_play_queues_the_cached_season_when_autoload_is_on` and
   `tv_episode_play_queues_only_that_episode_when_autoload_is_off`, plus the
   browse-path gate test `library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal`.

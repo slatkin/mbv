@@ -49,12 +49,14 @@ or for a new field on an existing message.
 6. **Client handling.** Send a `CtrlCmd` through `RemotePlayer::send_ctrl_cmd`
    (`crates/mbv-remote-player/src/lib.rs`). Decode a `CtrlEvent` in
    `crates/mbv-remote-player/src/connect.rs` and map it to a `PlayerEvent`.
-   Handle the `PlayerEvent` in the shell (`src/app/dispatch/session/player_event.rs`
-   or `src/app/shell/run/drains.rs`). Give it an exhaustive arm or a
+   Handle the `PlayerEvent` in the core dispatch
+   (`dispatch/session/player_event.rs` in the core) or in the
+   shell drain (`crates/mbv-tui/src/tui/run/drains.rs`). Give it an exhaustive
+   arm or a
    documented no-op. The GUI Client needs no second arm: it drains the same
    `App`-side handling through `ClientCore::tick`
    (`crates/mbv-gui/src/core_thread.rs`).
-   *Proof:* `cargo check -p mbv`.
+   *Proof:* `cargo check -p mbv-client-core -p mbv-tui -p mbv-gui`.
 7. **Packaged `mbvd` parity.** `mbvd` runs the `mbv-daemon` library, so step 5
    covers its Owner path. Also check the `CtrlEvent` decode in
    `crates/mbvd/src/main.rs` (Service-setup reconcile and Hello). It must
@@ -79,18 +81,20 @@ Use this recipe for a new configurable keyboard action. Read
    the config key. Add the id to the identifier list and the default-chord
    table in `crates/mbv-keybinds/src/tests.rs`.
    *Proof:* `cargo nextest run -p mbv-keybinds`.
-2. **Routing policy.** In `src/app/input/key_policy.rs`, add a
+2. **Routing policy.** In `mbv_client_core::input::key_policy`,
+   add a
    `KeyPolicyBinding` variant, a `KeyPolicyEntry` whose `name` equals the
    registry `id`, and an arm in `command_for_policy`. Routing stays in
-   `src/app/input/`. Never route keys anywhere else.
-   *Proof:* `cargo check -p mbv`.
+   `mbv_client_core::input`. Never route keys anywhere else.
+   *Proof:* `cargo check -p mbv-client-core`.
 3. **Dispatch.** The UI command is nested. Add the variant to the intent enum
-   of its domain in `src/app/dispatch/action.rs` (`VisualIntent`,
+   of its domain in `mbv_client_core::dispatch::action`
+   (`VisualIntent`,
    `PlaybackIntent`, `NavigationIntent`, or `PanelIntent`) and give it an arm
    in the matching sub-dispatcher. A shell-owned action goes to
    `ShellCommand` instead. If a component also requests the action,
    add the typed request in `crates/mbv-ui-msg/` and map it to the UI command
-   in the shell (for example `src/app/shell/playback.rs`).
+   in the shell (for example `crates/mbv-tui/src/tui/playback.rs`).
    *Proof:* `cargo clippy --workspace --all-targets -- -D warnings`.
 4. **Help label.** A Playback-section action needs a label in
    `playback_label` (`crates/mbv-render/src/components/help.rs`). A missing
@@ -98,10 +102,11 @@ Use this recipe for a new configurable keyboard action. Read
    *Proof:* no unit test paints every label. Ask the user to open help (F1)
    in a live run.
 5. **Routing tests.** Add the expected outcome to the routing matrix in
-   `src/app/tests/routing_matrix/`. If the default chord needs a gate open,
+   `crates/mbv-tui/src/tui/tests/routing_matrix/`. If the default chord needs a
+   gate open,
    add the id to the snapshot setup in `defaults_reproduce_todays_resolution`
-   (`src/app/input/key_policy/resolution_tests.rs`).
-   *Proof:* `cargo nextest run -p mbv`.
+   (`input/key_policy/resolution_tests.rs` in the core).
+   *Proof:* `cargo nextest run -p mbv-tui -p mbv-client-core`.
 6. **GUI key coverage.** The GUI Client resolves chords through the same
    registry, router, and dispatch, so a shared action has one more site: the
    DOM key translation. Every key the default chord uses must resolve in
@@ -111,12 +116,16 @@ Use this recipe for a new configurable keyboard action. Read
    chord is canvas-scoped and must not resolve in the TUI Client — also
    needs the `KeyGate::GuiClient` gate in the registry, a `KeyPolicyBinding`
    variant with a `KeyPolicyEntry` whose `name` equals the registry `id`, an
-   arm in `command_for_policy` (`src/app/input/key_policy/commands.rs`), a
-   `KeyPolicyGate::TransportChipKeys` gate (`src/app/input/key_policy.rs`),
+   arm in `command_for_policy`
+   (`input/key_policy/commands.rs` in the core), a
+   `KeyPolicyGate::TransportChipKeys` gate
+   (`mbv_client_core::input::key_policy`),
    and the router snapshot's capability fact (`client_capabilities` carrying
-   `ClientCapability::TransportChipKeys`, set in `src/app/input/gui.rs`).
+   `ClientCapability::TransportChipKeys`, set in
+   `crates/mbv-gui/src/gui_core/input.rs`).
    *Proof:* a `#[case]` row in `crates/mbv-gui/tests/bridge/keys.rs`, and a
-   routing case in `src/app/input/gui/tests.rs` for a GUI-only action.
+   routing case in `crates/mbv-gui/src/gui_core/input/tests.rs` for a GUI-only
+   action.
 
 To retire an action, remove its sites in the reverse order and add its id to
 `RETIRED_ACTION_IDS` in `crates/mbv-keybinds/src/config.rs`. An old config

@@ -15,7 +15,7 @@
 use std::sync::mpsc::Receiver;
 
 use crate::Held;
-use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
+use mbv_client_core::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::art::{GuiArtRef, PLACEHOLDER_PATH, art_url};
 use mbv_gui::bridge::frame::library::{
@@ -23,6 +23,7 @@ use mbv_gui::bridge::frame::library::{
 };
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;
 
@@ -67,6 +68,29 @@ fn pump_until(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
         );
         // The next step drains the requeued completion, which marks its sections
         // (design D3 rule 2), and the wake makes that step run at once.
+        test.waker.wake();
+    }
+}
+
+/// Pump GUI ticks until the newest frame satisfies `want`, waiting for the next
+/// Client-only fetch result instead of a library completion. The Emby root-list
+/// fetch reports on that channel (design D5), so a wait on the library channel
+/// never sees its result. The wait blocks for the outcome, as `pump_until` does.
+fn pump_until_client_fetch(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
+    loop {
+        assert!(test.core.step(), "the core thread never quits mid-drain");
+        if want(&test.held()) {
+            return;
+        }
+        let event = test
+            .core
+            .app_mut()
+            .wait_for_one_library_fetch_event_for_test(LIB_EVENT_BOUND)
+            .unwrap_or_else(|| {
+                panic!("no Client-only fetch result landed while waiting for {what}")
+            });
+        // Requeue the result, so the next step's drain applies it (design D3 rule 2).
+        test.core.app_mut().send_library_fetch_event_for_test(event);
         test.waker.wake();
     }
 }

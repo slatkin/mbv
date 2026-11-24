@@ -3,7 +3,7 @@
 //! progress and error. No field carries a password, an API key, or any other
 //! Service credential — the setup form carries the server URL only.
 
-use mbv::GuiSettingsServiceProjection;
+use crate::gui_core::GuiSettingsServiceProjection;
 
 /// The Services section's content (design D9).
 #[derive(Debug, Clone, PartialEq)]
@@ -130,8 +130,8 @@ pub struct GuiSettingsSetup {
     pub error: String,
 }
 
-impl From<&mbv::GuiSettingsSetupProjection> for GuiSettingsSetup {
-    fn from(setup: &mbv::GuiSettingsSetupProjection) -> Self {
+impl From<&crate::gui_core::GuiSettingsSetupProjection> for GuiSettingsSetup {
+    fn from(setup: &crate::gui_core::GuiSettingsSetupProjection) -> Self {
         Self {
             service: GuiSetupService::from(setup.service),
             server_url: setup.server_url.clone(),
@@ -148,16 +148,16 @@ pub enum GuiSetupService {
     Audiobookshelf,
 }
 
-impl From<mbv::GuiSetupService> for GuiSetupService {
-    fn from(service: mbv::GuiSetupService) -> Self {
+impl From<crate::gui_core::GuiSetupService> for GuiSetupService {
+    fn from(service: crate::gui_core::GuiSetupService) -> Self {
         match service {
-            mbv::GuiSetupService::Emby => Self::Emby,
-            mbv::GuiSetupService::Audiobookshelf => Self::Audiobookshelf,
+            crate::gui_core::GuiSetupService::Emby => Self::Emby,
+            crate::gui_core::GuiSetupService::Audiobookshelf => Self::Audiobookshelf,
         }
     }
 }
 
-impl From<GuiSetupService> for mbv::GuiSetupService {
+impl From<GuiSetupService> for crate::gui_core::GuiSetupService {
     fn from(service: GuiSetupService) -> Self {
         match service {
             GuiSetupService::Emby => Self::Emby,

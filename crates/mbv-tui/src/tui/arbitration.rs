@@ -1,0 +1,481 @@
+use super::Model;
+use mbv_client_core::dispatch::action::Command;
+use mbv_client_core::dispatch::action::ShellCommand;
+use mbv_client_core::input::router::{RouterNow, RouterOutcome, RouterSnapshot};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
+
+impl RouterNow for Model {
+    /// The App-owned armed bit, read through the router's neutral access
+    /// rather than handed to it as a snapshot field (design D6): the TUI
+    /// shell keeps the owner too, because arming also holds focus off and
+    /// disarming releases it (`self::prefix_mode`).
+    fn prefix_armed(&self) -> bool {
+        self.app.prefix_armed()
+    }
+}
+
+/// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
+/// tick's message list and return the messages that survive.
+///
+/// `Application::tick` returns the focused component's message first, then the
+/// `UiRoot` observer's `TerminalEvent`. With `PollStrategy::Once` there is at
+/// most one terminal event per tick, so the messages for a key chord are:
+///
+/// * **`UiRoot` focused** — only the observer's `TerminalEvent(Key)`. This is
+///   the active component's own message; `FallThrough` keeps it, while
+///   `Command`/`Swallow` replace it (the command is dispatched by the caller).
+/// * **Leaf focused** — the leaf's request (or `None`) plus the observer's
+///   `TerminalEvent(Key)`. The router's outcome selects between them:
+///   `FallThrough` keeps the leaf's request; `Command`/`Swallow` discard it.
+///
+/// Non-key observer signals (`Resize`, `FocusGained/Lost`, `NoOp`) always pass
+/// through: they are redraw/layout signals, not chords.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::tui) struct ArbitrationDiagnostic {
+    pub chord: Option<String>,
+    pub captured_focus: Option<String>,
+    pub router_result: String,
+    pub leaf_disposition: &'static str,
+    pub final_disposition: &'static str,
+    pub dispatch_kind: &'static str,
+}
+
+/// Test seam over `arbitrate_key`: the folded message list without the
+/// diagnostic record. Production routes through `arbitrate_key` directly.
+#[cfg(test)]
+pub(in crate::tui) fn fold_keyboard_messages(
+    messages: Vec<Msg>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+) -> Vec<Msg> {
+    arbitrate_key(messages, focused, router).0
+}
+
+/// Pure arbitration seam, returning both surviving messages and its compact
+/// diagnostic record (never containing request payloads).
+pub(in crate::tui) fn arbitrate_key(
+    messages: Vec<Msg>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+) -> (Vec<Msg>, super::ArbitrationDiagnostic) {
+    let (chord, observed_key, claims) = observe_key_messages(&messages);
+    let out = retain_arbitrated_messages(messages, focused, router, observed_key);
+    let diagnostic = arbitration_diagnostic(chord, focused, router, claims, &out);
+    (out, diagnostic)
+}
+
+fn observe_key_messages(messages: &[Msg]) -> (Option<String>, bool, usize) {
+    let chord = messages.iter().find_map(|m| match m {
+        Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(format!("{key:?}")),
+        _ => None,
+    });
+    let key_count = messages
+        .iter()
+        .filter(|m| matches!(m, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+        .count();
+    debug_assert!(
+        key_count <= 1,
+        "malformed arbitration: duplicate router observations"
+    );
+    let claims = messages
+        .iter()
+        .filter(|m| matches!(m, Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
+        .count();
+    debug_assert!(
+        claims <= 1,
+        "malformed arbitration: multiple focused key claims"
+    );
+    (chord, key_count == 1, claims)
+}
+
+fn retain_arbitrated_messages(
+    messages: Vec<Msg>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+    observed_key: bool,
+) -> Vec<Msg> {
+    let mut out = Vec::with_capacity(messages.len());
+    for msg in messages {
+        match msg {
+            Msg::TerminalEvent(TerminalObserverEvent::Key(_)) => {
+                if focused == Some(&ComponentId::UiRoot)
+                    && matches!(
+                        router,
+                        RouterOutcome::FallThrough | RouterOutcome::Deferred(_)
+                    )
+                {
+                    out.push(msg);
+                }
+            }
+            Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed) => {
+                debug_assert!(
+                    observed_key,
+                    "malformed arbitration: key claim without observer event"
+                );
+            }
+            Msg::TerminalEvent(_) => out.push(msg),
+            leaf => {
+                if !observed_key
+                    || matches!(
+                        router,
+                        RouterOutcome::FallThrough | RouterOutcome::Deferred(_)
+                    )
+                {
+                    out.push(leaf);
+                }
+            }
+        }
+    }
+    out
+}
+
+fn arbitration_diagnostic(
+    chord: Option<String>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+    claims: usize,
+    out: &[Msg],
+) -> ArbitrationDiagnostic {
+    let leaf_disposition = if claims > 0 || out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_)))
+    {
+        "consumed"
+    } else {
+        "unhandled"
+    };
+    let final_disposition = match router {
+        RouterOutcome::Command(_) => "command",
+        RouterOutcome::PrefixDispatch(_) => "prefix-dispatch",
+        RouterOutcome::PrefixArm => "prefix-arm",
+        RouterOutcome::PrefixSwallow => "prefix-swallow",
+        RouterOutcome::Swallow => "swallow",
+        RouterOutcome::FallThrough => {
+            if leaf_disposition == "consumed" {
+                "fall-through-consumed"
+            } else {
+                "fall-through"
+            }
+        }
+        RouterOutcome::Deferred(_) => "deferred",
+    };
+    let dispatch_kind = match router {
+        RouterOutcome::Command(_) | RouterOutcome::PrefixDispatch(_) => "command",
+        _ if out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_))) => "request",
+        _ => "none",
+    };
+    ArbitrationDiagnostic {
+        chord,
+        captured_focus: focused.map(|f| format!("{f:?}")),
+        router_result: format!("{router:?}"),
+        leaf_disposition,
+        final_disposition,
+        dispatch_kind,
+    }
+}
+
+/// Attach each message's position in its own list, so a later fold that keeps
+/// the order still names where a message arrived (design D6 scopes the
+/// context-menu pointer to the request the tick's right-click raised, which
+/// sits at or after the right-press report's position).
+pub(in crate::tui) fn indexed(messages: Vec<Msg>) -> Vec<(usize, Msg)> {
+    messages.into_iter().enumerate().collect()
+}
+
+/// The cell of a `UiRoot` right-press report.
+pub(in crate::tui) fn right_press_cell(msg: &Msg) -> Option<(u16, u16)> {
+    match msg {
+        Msg::TerminalEvent(TerminalObserverEvent::MouseRightClick { column, row }) => {
+            Some((*column, *row))
+        }
+        _ => None,
+    }
+}
+
+/// ADR 0024: the mouse fold, applied to a `tick()` message list beside the
+/// ADR 0023 keyboard router fold.
+///
+/// `tuirealm` forwards `Event::Mouse` to the focused component *and* to every
+/// subscriber, so a mouse tick can yield several `Msg`s. `sync_mouse_subscriptions`
+/// keeps only components painted this frame mouse-eligible, and those paint
+/// disjoint rectangles and each emits only for points inside its own geometry,
+/// so at most one should claim any event. This fold applies the first claim in
+/// `tick()` order and `debug_assert!`s that no more than one was produced — two
+/// claims for one event is a geometry defect, not a ranking problem, so the fold
+/// deliberately has no `Msg`-variant → surface table.
+///
+/// Keyboard ticks carry a `TerminalObserverEvent::Key` marker (the permanent
+/// `UiRoot` observer emits it for every `Event::Keyboard`); those pass through
+/// untouched for the keyboard router to resolve.
+///
+/// Load-bearing invariant: `UiRootComponent` is the *only* component that mounts
+/// with a non-mouse (`EventClause::Any`) subscription — every other `.mount(`
+/// site passes `vec![]`, and mouse eligibility is added later by
+/// `sync_mouse_subscriptions`. The structural mouse-tick detection here (a tick
+/// with no `TerminalEvent` marker is a mouse tick) depends on that: if a future
+/// component mounts its own non-mouse subscription, a non-mouse tick could reach
+/// this fold with no marker and be mistaken for a mouse claim — release builds
+/// drop it silently, debug builds trip the `debug_assert!` below (ADR 0024).
+pub(in crate::tui) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
+    let observed_key = messages
+        .iter()
+        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))));
+    if observed_key {
+        return messages;
+    }
+    let claims = messages
+        .iter()
+        .filter(|msg| {
+            !matches!(
+                msg,
+                Msg::TerminalEvent(
+                    TerminalObserverEvent::NoOp
+                        | TerminalObserverEvent::Key(_)
+                        | TerminalObserverEvent::Resize { .. }
+                        | TerminalObserverEvent::FocusGained
+                        | TerminalObserverEvent::FocusLost
+                        | TerminalObserverEvent::Mouse
+                        | TerminalObserverEvent::MouseClick { .. }
+                        | TerminalObserverEvent::MouseRightClick { .. }
+                        | TerminalObserverEvent::MouseClaimed
+                        | TerminalObserverEvent::KeyClaimed
+                )
+            )
+        })
+        .count();
+    debug_assert!(
+        claims <= 1,
+        "mouse fold: {claims} components claimed one mouse event; eligible \
+         surfaces paint disjoint regions (ADR 0024)"
+    );
+    let mut kept_claim = false;
+    messages
+        .into_iter()
+        .filter(|msg| {
+            if matches!(msg, Msg::TerminalEvent(_)) {
+                return true;
+            }
+            let first = !kept_claim;
+            kept_claim = true;
+            first
+        })
+        .collect()
+}
+impl Model {
+    /// Build the router snapshot and resolve the terminal chord. The router
+    /// reads a plain-data snapshot, never component attributes (ADR 0023).
+    pub(in crate::tui) fn router_outcome(&mut self, messages: &[Msg]) -> RouterOutcome {
+        let Some(neutral_key) = messages.iter().find_map(|msg| match msg {
+            Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(*key),
+            _ => None,
+        }) else {
+            return RouterOutcome::FallThrough;
+        };
+        // The TUI edge translates the terminal key into the neutral
+        // vocabulary (`super::neutral_edge`) and the router normalizes the
+        // neutral chord (`extract-client-core` design D4); the core never
+        // names a terminal type, and no back-conversion exists.
+        // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
+        // initializers below call `effective_playback_state()`, which locks it
+        // again. A temporary created anywhere inside the struct literal lives
+        // until the whole `let snapshot = ...;` statement ends, so taking that
+        // lock inline self-deadlocked the run loop on the first key press in
+        // any QueueOnly/mini-view frame. Read it in its own statement.
+        let player_active = self.app.shown_playback_status().active;
+        let snapshot = RouterSnapshot {
+            playback: mbv_client_core::input::RouterPlaybackState {
+                player_active,
+                remote_target: mbv_client_core::input::RemoteControlTarget::DirectRemote,
+                queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
+                    && !self.app.effective_playback_state().active,
+                idle_feed_link_available: self.app.idle_feed_link_available(),
+            },
+            overlays: mbv_client_core::input::RouterOverlayState {
+                focus: if self
+                    .application
+                    .mounted(&ComponentId::Overlay(OverlayId::ContextMenu))
+                {
+                    mbv_client_core::input::OverlayFocus::ContextMenu
+                } else if self.blocking_overlay_active() {
+                    mbv_client_core::input::OverlayFocus::Blocking
+                } else if self.overlay_holds_focus() {
+                    mbv_client_core::input::OverlayFocus::NonBlocking
+                } else {
+                    mbv_client_core::input::OverlayFocus::Free
+                },
+                help: self
+                    .application
+                    .mounted(&ComponentId::Overlay(OverlayId::Help)),
+                sessions_sidebar: self
+                    .application
+                    .mounted(&ComponentId::Overlay(OverlayId::Sessions)),
+                text_entry_focused: matches!(
+                    self.application.focus(),
+                    Some(ComponentId::Overlay(
+                        OverlayId::Search | OverlayId::Settings
+                    ))
+                ) || self.active_inline_search_is_open(),
+            },
+            panel_mode: self.app.effective_panel_mode(),
+            panel_focus: self.app.effective_panel_focus(),
+            visual_selection_active: self.visual_selection.is_some(),
+            // The TUI Client holds no `TransportChipKeys`, so the transport
+            // chips' key layers (add-tauri-gui-client row 6.2) stay inert
+            // here and the TUI's default bindings on the canvas chords keep
+            // their own actions.
+            client_capabilities: *self.app.client_capabilities(),
+        };
+
+        let outcome = super::neutral_edge::resolve_tui_key(
+            neutral_key,
+            &snapshot,
+            self,
+            self.application.focus(),
+            &self.keybinds,
+        );
+        // Arm/disarm transitions come from the router's outcome (design D6,
+        // task 6.1): the arming layer arms, an armed dispatch (mapped or
+        // swallowed) disarms. The prefix chord re-arms through `PrefixArm`.
+        match outcome {
+            RouterOutcome::PrefixArm => self.arm_prefix_mode(),
+            RouterOutcome::PrefixDispatch(_) | RouterOutcome::PrefixSwallow => {
+                self.disarm_prefix_mode();
+            }
+            _ => {}
+        }
+        outcome
+    }
+
+    /// Arm prefix mode (design D6, task 6.1): set the App-owned bit and hold
+    /// focus off through the core focus stack for the armed ticks.
+    /// tuirealm forwards every chord to the focused component before the
+    /// router fold (`Application::tick` → `forward_to_active_component`),
+    /// so armed capture — no chord reaches any component — holds focus off
+    /// for the armed ticks, exactly how blocking overlays withhold underlying
+    /// input. The hold applies through the one focus step immediately, so the
+    /// arm tick never leaves a leaf focused; the disarm releases the hold and
+    /// the same step re-derives the focus the arm displaced. The arm tick's
+    /// own chord was already delivered to the leaf before this runs —
+    /// unavoidable, and the prefix chord performs no other action at the
+    /// router.
+    pub(in crate::tui) fn arm_prefix_mode(&mut self) {
+        if !self.app.arm_prefix_mode() {
+            return;
+        }
+        self.focus_stack.hold_focus();
+        self.apply_focus_stack();
+    }
+
+    /// Disarm prefix mode: clear the App-owned bit and release the core
+    /// focus stack's hold; the focus step re-derives and restores what the
+    /// arm displaced. A mouse-event disarm restores it too, so the event is
+    /// handled exactly as if prefix mode had never been armed.
+    pub(in crate::tui) fn disarm_prefix_mode(&mut self) {
+        if !self.app.disarm_prefix_mode() {
+            return;
+        }
+        self.focus_stack.release_focus();
+        self.apply_focus_stack();
+    }
+
+    /// Apply a deferred candidate after the focused leaf has been arbitrated.
+    ///
+    /// A deferred candidate carries no timing state (semantic-input-arbitration):
+    /// an unhandled press dispatches the command on that press; a consumed press
+    /// cancels the candidate and records nothing, so a later unhandled press
+    /// behaves as a first press. Returns whether the candidate fired. The
+    /// shell's quit signal is unaffected: a deferred candidate is a transport
+    /// command (`TogglePlayPause` for a Visual-selection Space, `Stop` for an
+    /// `Esc` stop chord), and none of them quits.
+    pub(in crate::tui) fn apply_deferred_candidate(
+        &mut self,
+        router: &RouterOutcome,
+        leaf_consumed: bool,
+    ) -> bool {
+        let RouterOutcome::Deferred(command) = router else {
+            return false;
+        };
+        if leaf_consumed {
+            tracing::debug!(
+                name: "input_router.deferred_cancelled",
+                target: "input_router",
+                { command = ?command },
+                "deferred candidate cancelled: the press was consumed"
+            );
+            return false;
+        }
+        let quit = self.dispatch_router_command(command);
+        debug_assert!(!quit, "deferred candidates never quit");
+        true
+    }
+
+    pub(in crate::tui) fn dispatch_router_command(&mut self, command: &Command) -> bool {
+        match command {
+            Command::Shell(shell) => match shell {
+                ShellCommand::OpenHelp => {
+                    self.mount_help();
+                    false
+                }
+                // The Twitch URL prompt is shell-owned like Help: the mount
+                // happens on the `TuiRealm` focus stack (twitch-url-playback
+                // D7, task 5.5).
+                ShellCommand::OpenTwitchUrl => {
+                    self.mount_twitch_url_modal();
+                    false
+                }
+                // The podcast Latest pill is component-local state; the refresh
+                // carries the owner's pill answer so the destination shelf is
+                // fetched only while Latest is selected (spec
+                // `destination-latest-modes`, "Destination Latest lists load lazily").
+                ShellCommand::RefreshCurrentView => {
+                    let podcast_latest_selected = self.abs_podcast_latest_selected();
+                    self.app.refresh_current_view(podcast_latest_selected);
+                    false
+                }
+            },
+            Command::App(app_command) => self.app.dispatch(app_command),
+        }
+    }
+}
+#[cfg(test)]
+mod mouse_fold_tests {
+    use super::*;
+    use mbv_ui_msg::PlaybackRequest;
+
+    #[test]
+    fn fold_keeps_one_mouse_claim_and_the_observer_signal() {
+        let msgs = vec![
+            Msg::Playback(PlaybackRequest::TogglePlayPause),
+            Msg::TerminalEvent(TerminalObserverEvent::NoOp),
+        ];
+        assert_eq!(
+            fold_mouse_messages(msgs),
+            vec![
+                Msg::Playback(PlaybackRequest::TogglePlayPause),
+                Msg::TerminalEvent(TerminalObserverEvent::NoOp),
+            ]
+        );
+    }
+
+    #[test]
+    fn duplicate_mouse_observer_markers_do_not_hide_a_claim() {
+        let marker = Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed);
+        let claim = Msg::Playback(PlaybackRequest::TogglePlayPause);
+        assert_eq!(
+            fold_mouse_messages(vec![marker.clone(), marker.clone(), claim.clone()]),
+            vec![marker.clone(), marker, claim]
+        );
+    }
+
+    #[test]
+    fn fold_passes_a_keyboard_tick_through_untouched() {
+        use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+        let key = Msg::TerminalEvent(TerminalObserverEvent::Key(KeyEvent::new(
+            Key::Down,
+            KeyModifiers::NONE,
+        )));
+        let leaf = Msg::Playback(PlaybackRequest::TogglePlayPause);
+        assert_eq!(
+            fold_mouse_messages(vec![leaf.clone(), key.clone()]),
+            vec![leaf, key]
+        );
+    }
+}

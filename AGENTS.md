@@ -1,43 +1,46 @@
 # mbv Agent Guide
 
-mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embeds mpv. Every local TUI is a Client of the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients. Packaged `mbvd` stays a separate Player owner. `mbvd` is a headless server daemon (a systemd unit, no desktop session). It never has a tray, a pinned panel, or any Client functionality. Connection to it still leaves a Local process on the user machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*).
+mbv is a Rust media client for Emby, Audiobookshelf, and Feeds, with a terminal
+UI and a native window. It embeds mpv. Every local Client attaches to the
+per-user Owner process. That process is the only local Player-owner host.
+Stay-alive controls whether that process outlives its Clients. Packaged `mbvd`
+stays a separate Player owner. `mbvd` is a headless server daemon (a systemd
+unit, no desktop session). It never has a tray, a pinned panel, or any Client
+functionality. Connection to it still leaves a Local process on the user
+machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*).
 
 ## Quick Overview
 
 - **Language**: Rust (stock edition-2024 `cargo fmt`, max-width-100)
 - **Services**: Emby, Audiobookshelf, Feeds
 - **Playback**: embedded mpv; Google Cast receivers and Emby Sessions are output projections of the Owner
-- **Clients**: the TUI (TuiRealm) and the GUI Client (Dioxus Native over Blitz, ADR 0039)
+- **Clients**: the TUI (`mbv`, TuiRealm) and the GUI Client (`mbv-gui`, Dioxus Native over Blitz, ADR 0039)
+- **Client core**: `mbv-client-core`, the state and rules both Clients link (ADR 0043)
 - **Player owners**: the per-user Owner process (local) and the packaged `mbvd` daemon
 - **Async**: synchronous first; `tokio` is edge-only
 
 ## Workspace Structure
 
-```
-src/
-├── main.rs                  # Thin binary entry; calls startup
-├── startup.rs               # The one entry main calls: args, config, pinned panel launch, Owner link, TUI Client run
-├── lib.rs                   # Library target: shell App, Client core tick, keyboard router, Client-side Owner find/start/attach
-├── app.rs + app/            # App module: Client core, dispatch, GUI client state, projections, playback presentation
-│   ├── shell/               # Interactive shell + TuiRealm Model: App, mount/focus, runtime lifecycle,
-│   │                        #   projections, dispatch, effects; single tick + draw path (run.rs, draw.rs)
-│   └── input/               # The ONLY keyboard routing site (see Notes for Agents)
-├── config.rs                # Re-exports mbv-config; adds app-side config helpers
-├── owner_link.rs (+owner_link/)       # Client-side Owner find, start, attach (lib.rs re-exports it)
-├── owner_restart.rs (+owner_restart/) # Owner build mismatch at startup
-├── single_instance.rs       # Single instance: flock + socket (ADR 0006)
-├── launch.rs (+launch/)     # The binary path a launcher starts
-├── pin.rs (+pin/)           # Only pinwin caller: builds every pinwin argv and runs the program
-└── local_daemon.rs          # Local-daemon bootstrap
+The root `Cargo.toml` is a virtual workspace: it holds no package and no
+`src/`. The shared core and each Client are crates.
 
+```
 crates/
-├── mbv-surfaces/        # Surface state (cursor, selection, marks, viewport), core FocusStack, HitMap,
+├── mbv-client-core/     # The Client core: App, dispatch, neutral state and events, the one
+│                        #   Keyboard Router, the Client tick, Owner find/start/attach. No
+│                        #   terminal or GUI toolkit in its dependency graph
+├── mbv-tui/             # TUI Client, binary `mbv`: the TuiRealm shell, TUI projections, the
+│                        #   terminal key edge, the pinned panel, and (until `3-add-owner-program`)
+│                        #   the Owner host behind `--__local-daemon`
+├── mbv-gui/             # GUI Client, binary `mbv-gui`: Dioxus Native over Blitz (ADR 0039);
+│                        #   outside default-members
+├── mbv-surfaces/        # Surface state (cursor, selection, marks, viewport), FocusStack, HitMap,
 │                        #   per-list capacity. No ratatui, TuiRealm, crossterm, or GUI toolkit
 ├── mbv-components/      # TuiRealm Interactive Components
 ├── mbv-render/          # screens/ prepare content, arrangements/ place it, components/ paint it, layout.rs composes
+├── mbv-tui-support/     # TUI-only support: theme colour conversion and the terminal image protocol
 ├── mbv-ui-model/        # Plain presentation models shared by UI crates
 ├── mbv-ui-msg/          # Typed messages crossing the interactive-component boundary
-├── mbv-gui/             # GUI Client, Dioxus Native binary (mbv-gui); outside default-members
 ├── mbv-audiobookshelf/  # Audiobookshelf provider client
 ├── mbv-emby/            # Emby provider client
 ├── mbv-emby-model/      # Emby DTOs and tick units
@@ -62,13 +65,26 @@ crates/
 └── mbv-images/          # Image cache, loading and processing, terminal image protocol support
 ```
 
-`src/lib.rs` is the root package's library target. The `mbv` binary is a thin `main` over `run`. The rest of `src/` is the shared `mbv` library and the thin `mbv` binary over it. `lib.rs` exposes the Client-side Owner find, start, and attach steps that every Client shares.
+`crates/mbv-client-core/` is the shared core. It holds `App` and the
+shell-free domain: dispatch, neutral state and events, the Keyboard Router, the
+Client tick, and the Client-side Owner find, start, and attach. A Client reads
+and changes `App` only through `pub` methods, and the core names no Client
+(ADR 0042, ADR 0043).
 
-`crates/mbv-components/`: a component over a shared surface (Queue, Queue playback, Status bar) is an adapter over its Surface state. It forwards neutral events, paints from that state, and reports geometry. Other components still own their local interaction state. Both kinds send typed `Msg`s (`Msg`s live in `mbv-ui-msg`).
+Each Client has its own guide. Read `crates/mbv-tui/AGENTS.md` before a TUI
+change and `crates/mbv-gui/AGENTS.md` before a GUI change. The architecture
+docs those guides name hold the current behaviour.
 
-`crates/mbv-gui/` renders with Blitz and links the `mbv` library (ADR 0039). Its synchronous core thread owns the `App` and the Client core tick (`src/core_thread.rs`, `src/attach.rs`). `src/window/` is the Dioxus component tree, in the same process, with one module for each former front-end file. `src/bridge/` holds the DOM-input translation. `assets/` holds the embedded CSS and fonts.
+`crates/mbv-components/`: a component over a shared surface (Queue, Queue
+playback, Status bar) is an adapter over its Surface state. It forwards neutral
+events, paints from that state, and reports geometry. Other components still
+own their local interaction state. Both kinds send typed `Msg`s (`Msg`s live in
+`mbv-ui-msg`).
 
-`pinwin` is an external Rust program (Wayland layer-shell panel, separate repo `slatkin/pinwin`, minimum version 0.4.1). It docks the mbv pinned panel beside tiled windows. mbv links no pinwin library. Fix pinwin bugs upstream, never here.
+`pinwin` is an external Rust program (Wayland layer-shell panel, separate repo
+`slatkin/pinwin`, minimum version 0.4.1). It docks the mbv pinned panel beside
+tiled windows. mbv links no pinwin library. Fix pinwin bugs upstream, never
+here.
 
 ## Architecture Documentation
 
@@ -76,17 +92,18 @@ crates/
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Naming any domain concept                                  | `CONTEXT.md`                                                                                                             |
 | Accepted decisions (the why)                               | `docs/adr/` (read `docs/adr/README.md` before you write or amend an ADR)                                                 |
+| The shared core and the crate boundary                     | ADR 0042, ADR 0043                                                                                                       |
 | Current behavior                                           | `openspec/specs/`                                                                                                        |
 | In-progress work                                           | The full `openspec/changes/<name>/` directory                                                                            |
 | Queue, progress, or playback-lifecycle state               | `docs/invariants/`                                                                                                       |
 | A ctrl protocol variant, a keybind action, a Service capability | `docs/recipes.md`                                                                                                   |
-| Any TUI change                                             | `docs/architecture/tui-frontend.md`                                                                                      |
+| Any TUI change                                             | `crates/mbv-tui/AGENTS.md`, then `docs/architecture/tui-frontend.md`                                                     |
 | Interactive Components                                     | ADRs 0022–0024, `openspec/specs/interactive-component-framework/spec.md`, `docs/architecture/interactive-surface-ledger.md` |
 | TUI component map                                          | `docs/architecture/interactive-tui-component-map.md`                                                                     |
 | mpv-owned playback prompts                                 | `docs/architecture/mpv-owned-playback-prompts.md`                                                                        |
 | Owner and Client operation split                           | `docs/architecture/owner-client-operation-split.md`                                                                      |
 | Performance                                                | `docs/architecture/performance.md`                                                                                       |
-| The GUI Client                                             | `docs/architecture/gui-client.md`                                                                                        |
+| The GUI Client                                             | `crates/mbv-gui/AGENTS.md`, then `docs/architecture/gui-client.md`                                                       |
 | Coding standards                                           | `docs/standards/README.md`                                                                                               |
 | Dated plans / cross-session handoffs                       | `docs/plans/` / `openspec/handoffs/`                                                                                     |
 
@@ -94,10 +111,11 @@ For docs and concept discovery (ADRs, openspec, `CONTEXT.md`), run `qmd query ".
 
 ## Key Concepts
 
-- **Shell `Model`**: Owns terminal and worker lifecycle, Services, Player and queue authority, persistence, protocols, external effects, and the TuiRealm `Application`. It projects owned presentation models. It is not a second store of component-local UI state.
-- **`App`**: Stays the shell domain and effect state and base-frame geometry composer. `Model::draw_frame` composes that frame one time. Then mounted components paint their owned surfaces.
+- **Client core**: `crates/mbv-client-core`. It holds `App` and every state and rule both Clients share (ADR 0043). It names no Client and no terminal or GUI toolkit.
+- **Shell `Model`**: The TUI Client's shell state. It owns terminal and worker lifecycle, Services, Player and queue authority, persistence, protocols, external effects, and the TuiRealm `Application`. It projects owned presentation models. It is not a second store of component-local UI state.
+- **`App`**: The core's domain and effect state. The TUI shell composes its base frame one time with `Model::draw_frame`; then mounted components paint their owned surfaces. The GUI Client reads it through `GuiCore`.
 - **`AppComponent`**: A mounted component (`crates/mbv-components/`). It owns cursor, scroll, local focus and selection, filters, drafts, viewport, event interpretation, `view()`, and hit geometry. It mutates local state directly. It sends typed `Msg` only for work outside its authority.
-- **Projection**: One-way. `sync_*` and `push_*` carry shell-owned content, not cursor, scroll, or selection mirrors.
+- **Projection**: One-way. `sync_*` and `push_*` carry core-owned content, not cursor, scroll, or selection mirrors.
 - **Composed / Bound queue**: One canonical ordered sequence of `QueueItem` slots. Use stable `QueueSlotId` for occurrences.
 - **Player owner**: Authoritative for Bound queue state, the active slot, and the playback lifecycle.
 - **Output projection**: mpv, a Cast receiver, and an Emby Session. Each is an output of the Owner, never queue authority.
@@ -105,12 +123,15 @@ For docs and concept discovery (ADRs, openspec, `CONTEXT.md`), run `qmd query ".
 
 ## Common Patterns
 
-**Interactive data flow**:
+**Client data flow**:
 
 ```text
-App/runtime -> shell sync/push -> Interactive Component -> Render Component
-App/runtime <- shell handles typed Msg with resolved target <- component update
+Owner/ctrl or Service worker -> App -> Client projection -> Client paint
+Client input -> neutral event -> router/Command -> App
 ```
+
+The TUI's component-level flow (sync/push into an Interactive Component, typed
+`Msg` back to the shell) is in `crates/mbv-tui/AGENTS.md`.
 
 **Commands**:
 
@@ -142,12 +163,12 @@ make check-code-file-lines                            # just before you push
 11. Keep no file over 800 lines at push time. Split along responsibility seams. Run `make check-code-file-lines` just before you push. Never use it as a per-task, CI, or acceptance gate.
 12. A pre-existing gate failure is still a failing gate. Before you push, every red gate is yours to fix or to put in front of the user for a decision, whoever introduced it and however unrelated the line looks. "Not from this work" never green-lights a push; it names the next fix, not a deferral. This is not a blame game — it is how the standards stay real.
 
-### Interactive architecture
+### Shared core
 
-1. Components and painters cannot name `App`. Their crates sit below the TUI crate, so a break of this boundary is a compile error.
-2. Components never receive `App`, Service clients, credentials, `Config`, `PlayerProxy`, protocol objects, integration locks, or channels. Msgs carry semantic intent and stable opaque identities. They never carry raw events or coordinates for shell re-resolution.
-3. Local movement that drives persistence or effects sends the resolved value from the component. The shell never recomputes it. Re-anchor only on discrete navigation or responsive transition.
-4. Destination components stay mounted while their Service library is in the catalog. Local state then survives tab and breakpoint changes. Mounted, focused, active, and painted stay distinct. Overlays mount and unmount through the TuiRealm focus stack.
+1. The dependency edge is one way. A Client depends on `mbv-client-core`; the core depends on neither Client. The core carries no `ratatui`, `crossterm`, `tuirealm`, `ratatui-image`, `tui-scrollbar`, `mbv-components`, `mbv-render`, `mbv-tui-support`, Dioxus, or Blitz. A break is a compile error.
+2. `App` fields stay `pub(in crate::app)`. A Client reads and changes `App` through `pub` methods. Prefer an intent method that keeps the logic in the core over a setter, and never return `&mut` to a field. Never make a field `pub`, also not under the `test` feature.
+3. The core's fixtures and seams are `pub use` behind `cfg(any(test, feature = "test"))` and `#[doc(hidden)]`. A Client's test target reaches them through its dev-dependency with the `test` feature. Never widen a core item only for a test.
+4. The one Keyboard Router is in the core, in `mbv_client_core::input`. Each Client mounts it and resolves no precedence, order, or chord of its own. Never add a second routing site.
 5. Give every boundary-crossing request variant an exhaustive dispatch arm or a documented no-op. Never hide a variant with a wildcard.
 
 ### Playback and queue authority
@@ -157,12 +178,6 @@ make check-code-file-lines                            # just before you push
 3. A Cast receiver, like mpv, holds only the active item. The Owner keeps the canonical queue and the active slot.
 4. An Emby Session, like mpv and a Cast receiver: the Owner drives the device through the Emby Sessions API, keeps the canonical queue and the active slot, and the Session holds the active item and the next item, never more. The TUI is a picker and has no attached-session play path.
 5. Components can edit Composed content. They never perform admission and never mutate the canonical queue directly. Shell and Player paths do that work.
-
-### TUI work
-
-1. Before any TUI change, read `docs/architecture/tui-frontend.md`. It covers the two UI trees, Panel and slot composition, the reuse workflow, the test-layer matrix, and the completion checklist.
-2. These tripwires apply even when the work does not look like TUI work. Use one owner and one painter per surface per breakpoint. Route keyboard precedence only in `src/app/input/`.
-3. `src/app/input/` is the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords) for the TUI and for the surfaces that both Clients share. Per-surface key modules sit beside them (`browse_dispatch.rs`, `confirm_keys`, `gui`, `lib_keys.rs`, `playlist_keys.rs`, `queue_keys.rs`, `search_sidebar_keys.rs`); precedence, order, and chords still resolve only in the three named files. Never add another routing site. The GUI Library panel takes its own keys in the GUI window (`crates/mbv-gui/src/window/`), before they reach this router (ADR 0036).
 
 ### Code
 
@@ -178,8 +193,8 @@ make check-code-file-lines                            # just before you push
 ### Tests
 
 1. Prevent test inflation. Do not cover every execution path for every addition. Small additions need few tests, if any.
-2. A test owns a contract or it does not exist. Before you add a test, name the contract and the layer that owns it (`docs/architecture/tui-frontend.md`, Tests matrix). If another test already covers the claim, extend that test or add nothing. Keep in `#[case]` tables only cases with different expected outcomes. Cite in a regression test the issue or commit it guards, in its name or a comment. A plan item that only says "add tests" is not sufficient. Name the contract. Test count and coverage are never goals (`docs/invariants/14-test-ownership.md`).
-3. Public-API tests of a library crate go in that crate's `tests/<name>.rs` binary (one binary per crate, `<name>/` submodules); `src/` tests are for private items. Never widen visibility to keep a test in `src/` (`docs/standards/rules/M-INTEGRATION-TESTS.md`).
+2. A test owns a contract or it does not exist. Before you add a test, name the contract and the layer that owns it (`crates/mbv-tui/AGENTS.md` for the TUI matrix, else `docs/invariants/14-test-ownership.md`). If another test already covers the claim, extend that test or add nothing. Keep in `#[case]` tables only cases with different expected outcomes. Cite in a regression test the issue or commit it guards, in its name or a comment. A plan item that only says "add tests" is not sufficient. Name the contract. Test count and coverage are never goals.
+3. Public-API tests of a library crate go in that crate's `tests/<name>.rs` binary (one binary per crate, `<name>/` submodules); `src/` tests are for private items. Never widen visibility to keep a test in `src/` (`docs/standards/rules/M-INTEGRATION-TESTS.md`). A crate whose test target needs its own `test`-feature seams takes a self dev-dependency on itself with that feature (`mbv-gui`, `mbv-client-core`); that is how a package enables its own feature for its test target.
 4. Unit tests are hermetic mocks with no live or smoke tests. Use no live mpv handle (`init_mpv`/`test_mpv`), no real configuration or state directories, and no live servers. Mock the boundary. Anything that needs the real external system needs a manual run.
 5. Live-test debugging needs the approval of the user. The user does live testing. Before you run anything live on the user machine, ask first.
 6. Use no real sleeps in tests (`thread::sleep`, timeouts, retry backoff). Inject the outcome, not the delay (mock returning the terminal state, zeroed timeout, seam observing attempts). If a test cannot run fast without a change to production timing, it asserts the wrong thing. Delete it.

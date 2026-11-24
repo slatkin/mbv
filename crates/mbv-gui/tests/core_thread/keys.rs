@@ -4,7 +4,7 @@
 //! keeping one of its own. `ComponentId::Library` stays mounted, so a key with
 //! no Queue target meets only the leafless global and transport chords.
 
-use mbv::stub_app_with_playing_queue;
+use mbv_client_core::stub_app_with_playing_queue;
 use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::core_thread::CoreInput;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};

@@ -3,7 +3,8 @@
 //! `layout.rs` does. The summary section carries the queue header's chooser
 //! facts, tail offset, filter text, and totals.
 
-use mbv::{QueueEndOffsets, QueueHeaderProjection, QueueSummaryProjection};
+use crate::gui_core::QueueHeaderProjection;
+use mbv_client_core::{QueueEndOffsets, QueueSummaryProjection};
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::{QueueRowDrag, QueueRowInsertion, QueueSurface};
 use mbv_text::fuzzy_match::{WordMatcher, word_match_score};

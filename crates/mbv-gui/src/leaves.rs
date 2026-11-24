@@ -16,7 +16,7 @@
 //! window painted, so a change between paint and press selects the
 //! painted choice or nothing.
 
-use mbv::GuiSurfaceLeaf;
+use crate::gui_core::GuiSurfaceLeaf;
 use mbv_queue::{NamedQueueId, QueueSlotId};
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_surfaces::media_list::{MediaListOperation, RowIntent};
@@ -623,7 +623,7 @@ impl GuiSurfaceLeaf for StatusBarLeaf<'_> {
 mod tests {
     use super::{PaintedChoices, PlaybackLeaf, QueuePlaybackSurface, TransportAvailability};
     use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
-    use mbv::GuiSurfaceLeaf;
+    use crate::gui_core::GuiSurfaceLeaf;
     use mbv_surfaces::gesture::PointerGesture;
     use mbv_surfaces::{HitMap, HitRegion};
     use mbv_ui_msg::{Msg, PlaybackRequest, Position};

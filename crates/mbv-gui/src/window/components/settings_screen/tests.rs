@@ -75,7 +75,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {

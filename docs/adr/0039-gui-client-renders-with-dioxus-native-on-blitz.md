@@ -80,5 +80,9 @@ batch from another thread, and the window repainted after one poll.
   the program.
 - Without a GPU, the surface cannot start. The packages depend on the Vulkan
   loader.
+- The crate split changes what the GUI links: `mbv-gui` depends on
+  `mbv-client-core`, not on the TUI crate, so the core thread and the window
+  build without `ratatui`, `crossterm`, or TuiRealm
+  ([ADR 0043](0043-clients-are-separate-crates-over-one-client-core.md)).
 - The core thread's behaviour and the TUI Client do not change. The
   `openspec/specs/gui-client/spec.md` spec owns the window's contract.
