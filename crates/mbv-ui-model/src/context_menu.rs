@@ -139,6 +139,53 @@ pub enum ContextAction {
     HideVisualSlot,
 }
 
+impl ContextAction {
+    /// Whether the action shuffles the row's items (gui-row-hover-actions
+    /// design D4): a row's hover Shuffle control runs the row menu's own
+    /// shuffle entry, so it finds that entry by this question rather than by
+    /// its label or its index. Every variant is named, so a new action has to
+    /// say whether it shuffles.
+    #[must_use]
+    pub fn is_shuffle(&self) -> bool {
+        match self {
+            Self::ShuffleSelection(_)
+            | Self::ShuffleFolder(_)
+            | Self::FeedsShuffle(_)
+            | Self::AudiobookshelfShuffle(_) => true,
+            Self::Play
+            | Self::PlaySelection(_)
+            | Self::EnqueueSelection(_)
+            | Self::RemoveSelection(_)
+            | Self::MarkPlayedSelection(_)
+            | Self::MarkUnplayedSelection(_)
+            | Self::PlayQueue(_)
+            | Self::PlayFolder(_)
+            | Self::Enqueue
+            | Self::EnqueueFolder(_)
+            | Self::MarkPlayed(_)
+            | Self::MarkUnplayed(_)
+            | Self::RemoveFromContinueWatching
+            | Self::RemoveFromQueue(_)
+            | Self::ClearQueue
+            | Self::GoToLibrary(..)
+            | Self::FeedsPlay(_)
+            | Self::FeedsEnqueue(_)
+            | Self::FeedsMarkPlayed(_)
+            | Self::FeedsMarkUnplayed(_)
+            | Self::AudiobookshelfPlay(_)
+            | Self::AudiobookshelfEnqueue(_)
+            | Self::AudiobookshelfMarkPlayed(_)
+            | Self::AudiobookshelfMarkUnplayed(_)
+            | Self::HomePlaySelection(_)
+            | Self::HomeEnqueueSelection(_)
+            | Self::ShuffleQueue
+            | Self::ShowVisualizer
+            | Self::ShowMediaArt
+            | Self::HideVisualSlot => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ContextMenuEntry {
     pub label: &'static str,

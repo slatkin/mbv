@@ -205,6 +205,11 @@ pub enum GuiLibraryCommand {
     /// TUI menu builder's entries for it, and a chosen entry runs through the
     /// same `MenuEntry` command as the Hero's menu carries.
     RowMenu { row: GuiLibraryMenuRow },
+    /// Shuffle the row (gui-row-hover-actions design D4): the row's hover
+    /// Shuffle control runs the row menu's own shuffle entry, so the two
+    /// cannot disagree. A row whose menu carries no shuffle entry changes
+    /// nothing.
+    Shuffle { row: GuiLibraryMenuRow },
     /// Select a Home row (design D2, D12, the USER-APPROVED GUI Home design):
     /// the row the Hero shows. The core owns the selection, as the Music
     /// collection groups own their pick (`showDetail`), so the hero re-arms
@@ -376,6 +381,9 @@ impl GuiCore {
             GuiLibraryCommand::RowMenu { row } => {
                 self.gui.library_row_menu_target = Some(row);
             }
+            GuiLibraryCommand::Shuffle { row } => {
+                self.shuffle_gui_library_row(&row);
+            }
             // The Home rows and every command after them are the second
             // pass's arms: the dispatch names them here, one per variant, so
             // a new variant is a compile error rather than a silent handover.
@@ -495,7 +503,8 @@ impl GuiCore {
             | GuiLibraryCommand::AddToQueue { .. }
             | GuiLibraryCommand::ShuffleArtist { .. }
             | GuiLibraryCommand::MenuEntry { .. }
-            | GuiLibraryCommand::RowMenu { .. } => log_ignored_library_command(
+            | GuiLibraryCommand::RowMenu { .. }
+            | GuiLibraryCommand::Shuffle { .. } => log_ignored_library_command(
                 "dispatch",
                 format_args!("{command:?} is no destination command of the second pass"),
             ),

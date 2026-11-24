@@ -59,6 +59,7 @@ pub mod queue_panel;
 pub mod queue_playback_panel;
 pub mod queue_row_menu;
 pub mod queue_target_control;
+pub mod row_hover_actions;
 pub mod settings_button;
 pub mod settings_card;
 pub mod settings_checkbox_grid;

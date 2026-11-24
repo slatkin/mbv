@@ -464,6 +464,48 @@ button:disabled {
 	transition: visibility 0s linear 500ms;
 }
 
+/* The Library rows' hover controls (gui-row-hover-actions design D1, D2):
+   every row painter wraps its row in a `row-hover-host` box — which is the
+   part's positioning box — and paints the shared `RowHoverActions` part as
+   the row's later sibling, so no control nests inside the row's button and
+   the button keeps its own semantics. The part rests hidden and shows on the
+   host's own `:hover`, so the window keeps no hover state: Blitz sets and
+   clears the hover, and re-resolves it after every layout and scroll, which
+   the Workspace table's `onpointerenter` signal could not do under a still
+   pointer. The reveal has no rest delay (unlike the tree hint's 500 ms, which
+   waited out a tooltip): a control must answer at once.
+
+   The part overlays the row's trailing end instead of taking flow space, so
+   the title keeps its width on hover, and it paints the row's own fill behind
+   it — the host's `--row-fill`, the same custom property the row button reads
+   — so it covers the row's trailing text cleanly. `Truncate` measures in
+   Rust, so a CSS reveal cannot shorten the title, and the cover is the
+   accepted look. The host also hides the trailing text (`row-hover-trail`)
+   while the part shows. `z-index` puts the part over the row button; the
+   Library's dropdowns and popovers are later siblings over list content for
+   the same reason. */
+.row-hover-host {
+	position: relative;
+}
+.row-hover-actions {
+	display: none;
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 1;
+	align-items: center;
+	gap: 2px;
+	padding-inline: 4px;
+	background: var(--row-fill, transparent);
+}
+.row-hover-host:hover .row-hover-actions {
+	display: flex;
+}
+.row-hover-host:hover .row-hover-trail {
+	visibility: hidden;
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;

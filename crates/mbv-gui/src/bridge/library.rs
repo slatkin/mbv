@@ -61,6 +61,11 @@ pub enum GuiLibraryCommand {
     RowMenu {
         row: crate::gui_core::GuiLibraryMenuRow,
     },
+    /// Shuffle the row: the row's hover Shuffle control runs the row menu's
+    /// own shuffle entry, so the two cannot disagree.
+    Shuffle {
+        row: crate::gui_core::GuiLibraryMenuRow,
+    },
     /// Select a Home row (add-gui-library-panel design D12): the row the
     /// Hero shows. The core keeps the selection, so the window paints it.
     HomeSelect { row: GuiHomeRowId },
@@ -209,6 +214,7 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
             GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
             GuiLibraryCommand::MenuEntry { row, index } => Self::MenuEntry { row, index },
             GuiLibraryCommand::RowMenu { row } => Self::RowMenu { row },
+            GuiLibraryCommand::Shuffle { row } => Self::Shuffle { row },
             GuiLibraryCommand::HomeSelect { row } => Self::HomeSelect { row: row.into() },
             GuiLibraryCommand::HomePlay { row } => Self::HomePlay { row: row.into() },
             GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue { row: row.into() },
