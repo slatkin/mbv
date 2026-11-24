@@ -33,13 +33,13 @@ fn cast_target_core() -> (GuiCore, Receiver<CtrlCmd>) {
     let mut compat = mbv_ctrl::CtrlCompatibility::current();
     compat.supports_playback_output = true;
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx_and_compat(Vec::new(), compat);
-    app.cast_receivers = vec![mbv_cast::discovery::CastReceiver {
+    app.seed_cast_receivers_for_test(vec![mbv_cast::discovery::CastReceiver {
         id: "receiver-1".to_string(),
         friendly_name: "Living Room".to_string(),
         host: "192.168.0.5".to_string(),
         port: 8009,
-    }];
-    app.rebuild_panel_targets();
+    }]);
+    app.rebuild_panel_targets_for_test();
     while cmd_rx.try_recv().is_ok() {}
     (GuiCore::new(app), cmd_rx)
 }
@@ -91,11 +91,8 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
         name: "Living Room".to_string(),
         connection: mbv_ctrl::OutputConnection::Connected,
     };
-    core.app
-        .player
-        .remote()
-        .update_playback_output_for_test(output.clone());
-    core.app.playback_output = Some(output);
+    core.app.set_player_output_for_test(output.clone());
+    core.app.seed_playback_output_for_test(Some(output));
 
     gui_msg(
         &mut core,
@@ -129,7 +126,8 @@ fn the_local_chooser_row_returns_a_cast_output_to_local() {
 #[test]
 fn gui_context_r_opens_the_target_chooser() {
     let (mut core, _cmd_rx) = cast_target_core();
-    core.app.set_client_capabilities(gui_client_capabilities());
+    core.app
+        .set_client_capabilities_for_test(gui_client_capabilities());
 
     gui_key(
         &mut core,

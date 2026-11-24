@@ -10,9 +10,7 @@
 //! `feed_fetch` child module.
 
 use super::*;
-use std::sync::Mutex;
 
-use crate::app::state::service_runtime::EmbyRuntime;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
@@ -84,25 +82,20 @@ fn folder_item(id: &str, name: &str) -> EmbyItem {
 /// open finds it.
 fn emby_app(http: &MockHttp, collection_type: &str, library_id: &str, name: &str) -> App {
     let mut app = make_app_stub();
-    let mut config = app.config.lock().unwrap().clone();
+    let mut config = app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
     install_test_emby(&mut app, config);
     let client = app
-        .emby_runtime
-        .client
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap()
-        .clone()
+        .cached_emby_client_for_test()
+        .expect("the installed setup holds a client")
         .with_test_agent(http.agent());
-    app.emby_runtime = EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+    app.adopt_ready_emby_client_for_test(client);
     let mut library = make_item(name, "CollectionFolder");
     library.id = library_id.to_string();
     library.collection_type = collection_type.to_string();
     library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app
 }
 
@@ -114,7 +107,7 @@ fn emby_app(http: &MockHttp, collection_type: &str, library_id: &str, name: &str
 /// `App::drain_lib_event` is this with no stores. One event per call keeps a
 /// pump from swallowing an event that the step it lands starts a fetch for.
 fn drain_one(app: &mut App) -> bool {
-    let Ok(event) = app.channels.lib_rx.try_recv() else {
+    let Some(event) = app.try_recv_lib_event() else {
         return false;
     };
     crate::app::tests::stub_gui_state(|gui| app.handle_lib_event(event, Some(gui)));
@@ -126,12 +119,10 @@ fn land(app: &mut App) {
     if drain_one(app) {
         return;
     }
-    let event = app
-        .channels
-        .lib_rx
-        .recv_timeout(Duration::from_secs(2))
-        .expect("the fetch completed");
-    let _ = app.channels.lib_tx.send(event);
+    assert!(
+        app.drain_lib_event_blocking_for_test(Duration::from_secs(2)),
+        "the fetch completed"
+    );
     assert!(drain_one(app), "the event the fetch completed is queued");
 }
 
@@ -139,7 +130,7 @@ fn land(app: &mut App) {
 /// the folder listing and the destination Latest snapshot together, so the
 /// listing's completion may follow the snapshot's event.
 fn land_root_listing(app: &mut App) {
-    while app.libs[0].nav_stack[0].loading {
+    while app.libs_for_test()[0].nav_stack[0].loading {
         land(app);
     }
 }
@@ -163,7 +154,7 @@ fn land_until_fetched(app: &mut App) {
 
 /// Whether the shown selection holds no items yet.
 fn shown_selection_unloaded(app: &App) -> bool {
-    app.libs[0]
+    app.libs_for_test()[0]
         .feed_home_video
         .as_ref()
         .is_some_and(|state| state.selected_len() == 0)
@@ -171,7 +162,7 @@ fn shown_selection_unloaded(app: &App) -> bool {
 
 /// Whether a feed-group target's fetch is outstanding.
 fn shown_selection_fetching(app: &App) -> bool {
-    app.libs[0]
+    app.libs_for_test()[0]
         .feed_home_video
         .as_ref()
         .is_some_and(|state| state.fetching.is_some())
@@ -180,7 +171,7 @@ fn shown_selection_fetching(app: &App) -> bool {
 /// The ids one checked folder's cached list holds, as the merged list reads
 /// it.
 fn checked_folder_ids<'a>(app: &'a App, folder_id: &str) -> Vec<&'a str> {
-    app.libs[0]
+    app.libs_for_test()[0]
         .feed_home_video
         .as_ref()
         .and_then(|state| {
@@ -218,7 +209,7 @@ fn opening_a_movies_library_lands_its_root_rows_on_the_app() {
         "the root-list store holds the Movies rows"
     );
     assert!(
-        app.libs[0]
+        app.libs_for_test()[0]
             .nav_stack
             .last()
             .is_some_and(|root| !root.loading),
@@ -242,11 +233,7 @@ fn opening_a_feed_view_library_loads_its_default_selection() {
     // and the selection's items are the video.
     http.respond_repeated(200, VIDEO_BODY, 6);
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
 
     gui_emby_open(&mut app, 0);
     land_root_listing(&mut app);
@@ -275,21 +262,21 @@ fn checking_a_feed_folder_loads_its_items_without_moving_the_tui_selection() {
     let http = MockHttp::new();
     http.respond_repeated(200, VIDEO_BODY, 4);
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
     let folder = folder_item("folder-1", "Channel 1");
-    app.libs[0]
-        .nav_stack
-        .push(level(FEED_ID, "YouTube", vec![folder]));
-    app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
+    app.edit_library_for_test(0, |library| {
+        library
+            .nav_stack
+            .push(level(FEED_ID, "YouTube", vec![folder]));
+    });
+    app.edit_library_for_test(0, |library| {
+        library.feed_home_video = Some(FeedHomeVideoState::default());
+    });
 
     toggle_folder(&mut app, "folder-1");
     // A completion for a folder the checked set does not hold: the stale-drop
     // rule drops it whatever order it arrives in.
-    let _ = app.channels.lib_tx.send(LibEvent::Browse(
+    app.send_lib_event_for_test(LibEvent::Browse(
         crate::app::BrowseEvent::FeedHomeVideoSelectionLoaded {
             lib_idx: 0,
             parent_id: "gone".into(),
@@ -299,7 +286,7 @@ fn checking_a_feed_folder_loads_its_items_without_moving_the_tui_selection() {
     ));
     land_until_fetched(&mut app);
 
-    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    let state = app.libs_for_test()[0].feed_home_video.as_ref().unwrap();
     assert_eq!(
         state.selection,
         FeedHomeVideoSelection::All,
@@ -332,38 +319,50 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
     http.respond_when("ParentId=folder-1", 200, FIRST_FOLDER_BODY);
     http.respond_when("ParentId=folder-2", 200, SECOND_FOLDER_BODY);
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
-    app.libs[0].nav_stack.push(level(
-        FEED_ID,
-        "YouTube",
-        vec![
-            folder_item("folder-1", "Channel 1"),
-            folder_item("folder-2", "Channel 2"),
-        ],
-    ));
-    app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack.push(level(
+            FEED_ID,
+            "YouTube",
+            vec![
+                folder_item("folder-1", "Channel 1"),
+                folder_item("folder-2", "Channel 2"),
+            ],
+        ));
+    });
+    app.edit_library_for_test(0, |library| {
+        library.feed_home_video = Some(FeedHomeVideoState::default());
+    });
 
     toggle_folder(&mut app, "folder-1");
     toggle_folder(&mut app, "folder-2");
     assert_eq!(
-        app.libs[0].feed_home_video.as_ref().unwrap().fetching,
+        app.libs_for_test()[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .fetching,
         Some(FeedHomeVideoSelection::Folder("folder-1".into())),
         "the first checked folder's fetch runs while the second waits"
     );
 
     land(&mut app);
     assert_eq!(
-        app.libs[0].feed_home_video.as_ref().unwrap().fetching,
+        app.libs_for_test()[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .fetching,
         None,
         "the first fetch retired its mark"
     );
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     assert_eq!(
-        app.libs[0].feed_home_video.as_ref().unwrap().fetching,
+        app.libs_for_test()[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .fetching,
         Some(FeedHomeVideoSelection::Folder("folder-2".into())),
         "the second folder's fetch starts once the first lands"
     );
@@ -412,8 +411,8 @@ fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = MOVIES_ID.into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     let mut first = make_item("A Movie", "Movie");
     first.id = "m-1".into();
     crate::app::tests::stub_gui_state(|gui| {
@@ -447,23 +446,23 @@ fn the_select_action_stores_the_picked_row_and_ignores_a_stale_id() {
 fn the_presented_tabs_include_the_plain_emby_libraries() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.music_levels = vec!["group".to_string(), "album".to_string()];
+    app.seed_music_levels_for_test(&["group", "album"]);
     let mut music = make_item("Music", "CollectionFolder");
     music.id = "lib-music".into();
     music.collection_type = "music".into();
     music.is_folder = true;
-    app.libs.push(LibraryTab::new(music));
+    app.push_library_for_test(LibraryTab::new(music));
     let mut movies = make_item("Movies", "CollectionFolder");
     movies.id = MOVIES_ID.into();
     movies.collection_type = "movies".into();
     movies.is_folder = true;
-    app.libs.push(LibraryTab::new(movies));
+    app.push_library_for_test(LibraryTab::new(movies));
     let mut youtube = make_item("YouTube", "CollectionFolder");
     youtube.id = FEED_ID.into();
     youtube.collection_type = "homevideos".into();
     youtube.is_folder = true;
-    app.libs.push(LibraryTab::new(youtube));
-    app.tab = TabSelection::EmbyLibrary(1);
+    app.push_library_for_test(LibraryTab::new(youtube));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(1));
 
     let tabs = gui_library_tabs(&app);
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
@@ -502,8 +501,8 @@ fn plain_movies_app(items: Vec<EmbyItem>) -> App {
     library.id = MOVIES_ID.into();
     library.collection_type = "movies".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     crate::app::tests::stub_gui_state(|gui| {
         gui.emby_roots
             .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
@@ -636,21 +635,19 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     library.id = FEED_ID.into();
     library.collection_type = "homevideos".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
-    app.libs[0].nav_stack.push(level(
-        FEED_ID,
-        "YouTube",
-        vec![
-            folder_item("folder-1", "Channel 1"),
-            folder_item("folder-2", "Empty"),
-        ],
-    ));
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack.push(level(
+            FEED_ID,
+            "YouTube",
+            vec![
+                folder_item("folder-1", "Channel 1"),
+                folder_item("folder-2", "Empty"),
+            ],
+        ));
+    });
     let mut first = make_item("Old Clip", "Video");
     first.id = "vid-1".into();
     first.production_year = 2020;
@@ -660,12 +657,14 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     second.id = "vid-2".into();
     second.parent_id = "folder-1".into();
     second.date_added = "2026-01-01T10:00:00.0000000Z".into();
-    app.libs[0].feed_home_video = Some(FeedHomeVideoState {
-        folder_counts: [("folder-1".to_string(), 2_usize)].into_iter().collect(),
-        items: [(FeedHomeVideoSelection::All, vec![first, second])]
-            .into_iter()
-            .collect(),
-        ..FeedHomeVideoState::default()
+    app.edit_library_for_test(0, |library| {
+        library.feed_home_video = Some(FeedHomeVideoState {
+            folder_counts: [("folder-1".to_string(), 2_usize)].into_iter().collect(),
+            items: [(FeedHomeVideoSelection::All, vec![first, second])]
+                .into_iter()
+                .collect(),
+            ..FeedHomeVideoState::default()
+        });
     });
 
     let projection = crate::app::tests::gui_emby_projection(&mut app, 0);

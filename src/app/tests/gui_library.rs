@@ -64,22 +64,15 @@ fn level(parent_id: &str, title: &str, items: Vec<mbv_emby_model::EmbyItem>) -> 
 /// level holds Hip-Hop's.
 fn app_with_music_groups(http: &MockHttp) -> App {
     let mut app = make_app_stub();
-    let mut config = app.config.lock().unwrap().clone();
+    let mut config = app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
     install_test_emby(&mut app, config);
     let client = app
-        .emby_runtime
-        .client
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap()
-        .clone()
+        .cached_emby_client_for_test()
+        .expect("the installed setup holds a client")
         .with_test_agent(http.agent());
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
-    app.music_levels = vec!["group".to_string(), "album".to_string()];
+    app.adopt_ready_emby_client_for_test(client);
+    app.seed_music_levels_for_test(&["group", "album"]);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = LIB_ID.into();
     library.collection_type = "music".into();
@@ -90,8 +83,8 @@ fn app_with_music_groups(http: &MockHttp) -> App {
         vec![group_item(HIPHOP, "Hip-Hop"), group_item(SOUL, "Soul")],
     ));
     tab.nav_stack.push(level(HIPHOP, "Hip-Hop", Vec::new()));
-    app.libs.push(tab);
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(tab);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app
 }
 
@@ -174,7 +167,7 @@ fn selecting_a_group_lands_its_albums_in_the_store_without_touching_the_nav_stac
     let http = MockHttp::new();
     http.respond(200, ALBUMS);
     let mut app = app_with_music_groups(&http);
-    let stack_before: Vec<String> = app.libs[0]
+    let stack_before: Vec<String> = app.libs_for_test()[0]
         .nav_stack
         .iter()
         .map(|level| level.parent_id.clone())
@@ -188,7 +181,7 @@ fn selecting_a_group_lands_its_albums_in_the_store_without_touching_the_nav_stac
         Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
         "the selected group's whole album list lands in the store"
     );
-    let stack_after: Vec<String> = app.libs[0]
+    let stack_after: Vec<String> = app.libs_for_test()[0]
         .nav_stack
         .iter()
         .map(|level| level.parent_id.clone())
@@ -214,7 +207,7 @@ fn reselecting_a_loaded_group_starts_no_fetch() {
 
     assert_eq!(http.request_count(), requests, "a loaded group: no fetch");
     assert!(
-        app.channels.lib_rx.try_recv().is_err(),
+        app.try_recv_lib_event().is_none(),
         "a loaded group's reselect lands no event"
     );
 }
@@ -310,7 +303,7 @@ fn an_ensure_call_does_not_refetch_a_failed_group() {
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
 
     assert!(
-        app.channels.lib_rx.try_recv().is_err(),
+        app.try_recv_lib_event().is_none(),
         "a failed group's ensure starts no new fetch"
     );
 }
@@ -593,23 +586,22 @@ fn all_fetches_once_the_client_appears() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    let ready = std::mem::replace(
-        &mut app.emby_runtime,
-        crate::app::state::service_runtime::EmbyRuntime::new(true),
-    );
+    let client = app
+        .withhold_emby_client_for_test()
+        .expect("the stub holds a client");
     crate::app::tests::stub_gui_state(|state| {
         install_library_collection(&mut app, state, 0, GuiCollectionSet::All);
     });
 
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     assert!(
-        app.channels.lib_rx.try_recv().is_err(),
+        app.try_recv_lib_event().is_none(),
         "no client starts no fetch"
     );
 
     http.respond(200, ALBUMS);
     http.respond(200, SOUL_ALBUMS);
-    app.emby_runtime = ready;
+    app.restore_emby_client_for_test(client);
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });
     land_one_group(&mut app);
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Music { lib_idx: 0 });

@@ -79,6 +79,14 @@ impl App {
         self.queue_filter_active
     }
 
+    /// The text the queue filter's entry holds, as the user typed it: the
+    /// entry's own draft, which only a test reads back.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn queue_filter_text_for_test(&self) -> &str {
+        &self.queue_filter
+    }
+
     /// Whether a played album expands to its full tracklist.
     #[must_use]
     pub fn autoload_enabled(&self) -> bool {

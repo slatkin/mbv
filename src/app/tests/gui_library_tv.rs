@@ -7,9 +7,7 @@
 //! assertion.
 
 use super::*;
-use std::sync::Mutex;
 
-use crate::app::state::service_runtime::EmbyRuntime;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
@@ -48,27 +46,22 @@ fn level(parent_id: &str, title: &str, items: Vec<EmbyItem>) -> BrowseLevel {
 /// it before its mode's load lands, with no resolved TV mode yet.
 fn tv_app(http: &MockHttp) -> App {
     let mut app = make_app_stub();
-    let mut config = app.config.lock().unwrap().clone();
+    let mut config = app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
     install_test_emby(&mut app, config);
     let client = app
-        .emby_runtime
-        .client
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap()
-        .clone()
+        .cached_emby_client_for_test()
+        .expect("the installed setup holds a client")
         .with_test_agent(http.agent());
-    app.emby_runtime = EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+    app.adopt_ready_emby_client_for_test(client);
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = TV_ID.into();
     library.collection_type = "tvshows".into();
     let mut tab = LibraryTab::new(library);
     tab.library_total = Some(0);
     tab.nav_stack.push(level(TV_ID, "Shows", Vec::new()));
-    app.libs.push(tab);
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(tab);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app
 }
 
@@ -77,16 +70,14 @@ fn tv_app(http: &MockHttp) -> App {
 /// `App::drain_lib_event`'s handler applies the App-side half.
 fn land(app: &mut App) {
     let event = app
-        .channels
-        .lib_rx
-        .recv_timeout(Duration::from_secs(2))
+        .recv_lib_event_within_for_test(Duration::from_secs(2))
         .expect("the fetch completed");
     app.handle_lib_event(event, None);
 }
 
 /// The root level's item ids, in order.
 fn root_ids(app: &App) -> Vec<String> {
-    app.libs[0]
+    app.libs_for_test()[0]
         .nav_stack
         .last()
         .expect("the root level exists")
@@ -119,7 +110,7 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows() {
         ["series-a".to_string(), "series-b".to_string()],
         "the series root rows land on the App"
     );
-    let root = &app.libs[0].nav_stack[0];
+    let root = &app.libs_for_test()[0].nav_stack[0];
     assert!(!root.loading);
     assert_eq!(
         root.tv_content_mode.as_ref(),
@@ -148,10 +139,14 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
         r#"{"Items":[{"Id":"ep-2a","Name":"Episode one","Type":"Episode"},{"Id":"ep-2b","Name":"Episode two","Type":"Episode"}],"TotalRecordCount":2}"#,
     );
     let mut app = tv_app(&http);
-    app.libs[0].nav_stack[0].items = vec![series_item("series-a", "Alfred")];
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack[0].items = vec![series_item("series-a", "Alfred")];
+    });
     // The series list is already the library's mode, so the open asks for no
     // load and the scripted answers belong to the detail fetch alone.
-    app.libs[0].tv_content_mode = Some(TvContentMode::All);
+    app.edit_library_for_test(0, |library| {
+        library.tv_content_mode = Some(TvContentMode::All);
+    });
     gui_tv_open(&mut app, 0);
 
     gui_tv_select_series(&mut app, 0, "series-a");
@@ -161,8 +156,7 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
     land(&mut app);
 
     let detail = app
-        .series_detail_cache
-        .get("series-a")
+        .series_detail("series-a")
         .expect("the series detail landed");
     let seasons: Vec<&str> = detail
         .seasons
@@ -215,8 +209,12 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
     let mut app = tv_app(&http);
     // The destination's settled root mode: the open step forces All before
     // any frame pass runs, so the frame ensure starts no root reload here.
-    app.libs[0].tv_content_mode = Some(TvContentMode::All);
-    app.libs[0].nav_stack[0].items = vec![series_item("series-a", "Alfred")];
+    app.edit_library_for_test(0, |library| {
+        library.tv_content_mode = Some(TvContentMode::All);
+    });
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack[0].items = vec![series_item("series-a", "Alfred")];
+    });
     crate::app::tests::stub_gui_state(|gui| {
         gui.tv_shows.insert(
             0,
@@ -228,8 +226,8 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
     });
     let mut season = make_item("Season 1", "Season");
     season.id = "season-1".into();
-    app.series_detail_cache.insert(
-        "series-a".into(),
+    app.seed_series_detail_for_test(
+        "series-a",
         SeriesDetail {
             seasons: vec![season],
             episodes: std::collections::HashMap::new(),
@@ -239,7 +237,10 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
     land(&mut app);
 
-    let episodes = &app.series_detail_cache["series-a"].episodes["season-1"];
+    let episodes = &app
+        .series_detail("series-a")
+        .expect("the series detail landed")
+        .episodes["season-1"];
     assert_eq!(
         episodes
             .iter()
@@ -258,10 +259,12 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
 fn a_failed_upcoming_fetch_clears_the_waiting_levels_loading_mark() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = tv_app(&MockHttp::new());
-    let root = &mut app.libs[0].nav_stack[0];
-    root.tv_content_mode = Some(TvContentMode::Upcoming);
-    root.loading = true;
-    let _ = app.channels.lib_tx.send(LibEvent::ModelContent(
+    app.edit_library_for_test(0, |library| {
+        let root = &mut library.nav_stack[0];
+        root.tv_content_mode = Some(TvContentMode::Upcoming);
+        root.loading = true;
+    });
+    app.send_lib_event_for_test(LibEvent::ModelContent(
         ModelContentEvent::TvUpcomingSnapshotFailed {
             library_id: TV_ID.to_string(),
         },
@@ -269,13 +272,12 @@ fn a_failed_upcoming_fetch_clears_the_waiting_levels_loading_mark() {
 
     while app.drain_lib_event() {}
 
-    assert_eq!(
-        app.tv_upcoming_fetches.get(TV_ID),
-        Some(&crate::app::state::app_struct::TvUpcomingFetchState::Failed),
+    assert!(
+        app.tv_upcoming_fetch_failed(TV_ID),
         "the failed fetch is the retryable mark a later pill reselect retries"
     );
     assert!(
-        !app.libs[0].nav_stack[0].loading,
+        !app.libs_for_test()[0].nav_stack[0].loading,
         "the waiting level's loading flag unsets"
     );
 }
@@ -307,8 +309,10 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
     let mut app = tv_app(&http);
     // The live launch shape: no root level and no captured total, as the
     // destination opens before any browse fetch has run.
-    app.libs[0].nav_stack.clear();
-    app.libs[0].library_total = None;
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack.clear();
+        library.library_total = None;
+    });
 
     // The launch open step pushes the root and starts its fetch.
     app.activate_library_position(0);
@@ -317,7 +321,7 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
     // The landing's default-mode resolution swaps the landed series for the
     // Latest episodes list, and that fetch's completion settles it.
     assert_eq!(
-        app.libs[0].tv_content_mode.as_ref(),
+        app.libs_for_test()[0].tv_content_mode.as_ref(),
         Some(&TvContentMode::Latest),
         "the first landing resolves the library's default TV mode"
     );
@@ -344,7 +348,7 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
         "the All series list the destination presents paints after the reload"
     );
     assert!(
-        app.channels.lib_rx.try_recv().is_err(),
+        app.try_recv_lib_event().is_none(),
         "a settled All root starts no second request"
     );
 }

@@ -107,7 +107,7 @@ fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
         "the open's show-list chain is collecting"
     );
 
-    let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
+    app.send_lib_event_for_test(LibEvent::Audiobookshelf(
         AudiobookshelfEvent::ShowsFetched {
             generation: generation(),
             request,
@@ -187,7 +187,9 @@ fn pass_catalog_request(app: &mut App) -> u64 {
 fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
-    app.audiobookshelf_browse[1].loading_pages.insert(0);
+    app.edit_audiobookshelf_browse_state_for_test(1, |state| {
+        state.loading_pages.insert(0);
+    });
 
     assert_eq!(
         pass_catalog_request(&mut app),
@@ -195,8 +197,11 @@ fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
         "the startup chain's in-flight page started no second chain"
     );
 
-    app.audiobookshelf_browse[1].loading_pages.clear();
-    let armed = app.audiobookshelf_browse[1].begin_catalog_replacement();
+    app.edit_audiobookshelf_browse_state_for_test(1, |state| state.loading_pages.clear());
+    let armed = app.edit_audiobookshelf_browse_state_for_test(
+        1,
+        AudiobookshelfBrowseState::begin_catalog_replacement,
+    );
     assert_eq!(
         pass_catalog_request(&mut app),
         armed,
@@ -213,7 +218,9 @@ fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
 fn a_failed_show_list_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
-    app.audiobookshelf_browse[1].error = Some("the show list failed to load".into());
+    app.edit_audiobookshelf_browse_state_for_test(1, |state| {
+        state.error = Some("the show list failed to load".into());
+    });
 
     assert_eq!(
         pass_catalog_request(&mut app),
@@ -238,8 +245,10 @@ fn a_failed_show_list_load_is_not_retried_by_a_repaint_but_an_open_retries_it() 
 fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
-    app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
-    app.audiobookshelf_browse[1].total = 2;
+    app.edit_audiobookshelf_browse_state_for_test(1, |state| {
+        state.shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
+        state.total = 2;
+    });
 
     select_all_shows(&mut app, 1);
 
@@ -266,7 +275,7 @@ fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
     consume_detail_completions(&mut app, marks.len());
 
     for (show_id, request) in &marks {
-        let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
+        app.send_lib_event_for_test(LibEvent::Audiobookshelf(
             AudiobookshelfEvent::DetailFetched {
                 generation: generation(),
                 request: *request,
@@ -299,8 +308,10 @@ fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
 fn a_checked_show_lands_only_that_shows_episodes() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
-    app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
-    app.audiobookshelf_browse[1].total = 2;
+    app.edit_audiobookshelf_browse_state_for_test(1, |state| {
+        state.shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
+        state.total = 2;
+    });
 
     toggle_show(&mut app, 1, "show-b");
 
@@ -320,7 +331,7 @@ fn a_checked_show_lands_only_that_shows_episodes() {
     assert_eq!(marks[0].0, "show-b");
     consume_detail_completions(&mut app, 1);
 
-    let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
+    app.send_lib_event_for_test(LibEvent::Audiobookshelf(
         AudiobookshelfEvent::DetailFetched {
             generation: generation(),
             request: marks[0].1,
@@ -349,9 +360,10 @@ fn a_checked_show_lands_only_that_shows_episodes() {
 fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
-    app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A")];
-    app.audiobookshelf_browse[1]
-        .cache_detail("show-a".into(), vec![episode("show-a", "ep-1", None)]);
+    app.edit_audiobookshelf_browse_state_for_test(1, |state| {
+        state.shows = vec![show("show-a", "Show A")];
+        state.cache_detail("show-a".into(), vec![episode("show-a", "ep-1", None)]);
+    });
 
     let target = PodcastEpisodeTarget::new("show-a".into(), "ep-1".into());
     gui_podcast_select(&mut app, 1, &target);
@@ -407,7 +419,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_applies_no_
         "the active podcast destination's kind is the Podcasts one"
     );
 
-    app.tab = TabSelection::AudiobookshelfLibrary(1);
+    app.seed_active_tab_for_test(TabSelection::AudiobookshelfLibrary(1));
     let saved = GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::ServiceLibrary {
@@ -444,10 +456,7 @@ fn the_latest_shelfs_shared_guard_requests_once() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = podcast_app();
 
-    assert!(
-        !app.audiobookshelf_shelf_requested
-            .contains("lib-abs-podcasts")
-    );
+    assert!(!app.audiobookshelf_shelf_requested_for_test("lib-abs-podcasts"));
     assert!(
         app.ensure_audiobookshelf_latest_shelf("lib-abs-podcasts"),
         "the first call started the shelf fetch"
@@ -456,8 +465,5 @@ fn the_latest_shelfs_shared_guard_requests_once() {
         !app.ensure_audiobookshelf_latest_shelf("lib-abs-podcasts"),
         "the request set is single-flight"
     );
-    assert!(
-        app.audiobookshelf_shelf_requested
-            .contains("lib-abs-podcasts")
-    );
+    assert!(app.audiobookshelf_shelf_requested_for_test("lib-abs-podcasts"));
 }

@@ -30,7 +30,7 @@ const GENERIC_FEED: &str = "https://example.test/generic";
 fn fetched_feeds_app() -> App {
     let mut app = make_app_stub();
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A), ("Feed B", FEED_B)]);
-    app.tab = TabSelection::Feeds;
+    app.seed_active_tab_for_test(TabSelection::Feeds);
     app.send_gui_feed_fetch_result_for_test(
         0,
         &[
@@ -50,7 +50,7 @@ fn fetched_feeds_app() -> App {
 fn platform_feeds_app() -> App {
     let mut app = make_app_stub();
     app.seed_gui_feeds_for_test(&[("YouTube", YOUTUBE_FEED), ("Podcast", GENERIC_FEED)]);
-    app.tab = TabSelection::Feeds;
+    app.seed_active_tab_for_test(TabSelection::Feeds);
     app
 }
 
@@ -86,7 +86,7 @@ fn the_feeds_platform_follows_the_checked_subscriptions(
 fn all_over_youtube_only_subscriptions_shares_no_feeds_platform() {
     let mut app = make_app_stub();
     app.seed_gui_feeds_for_test(&[("YouTube A", YOUTUBE_FEED), ("YouTube B", YOUTUBE_FEED_B)]);
-    app.tab = TabSelection::Feeds;
+    app.seed_active_tab_for_test(TabSelection::Feeds);
 
     let collections = gui_feeds_projection_seeded(&app).collections;
 
@@ -206,7 +206,7 @@ fn the_presented_tabs_include_the_feeds_destination() {
 #[test]
 fn a_saved_feeds_location_applies_no_saved_selection() {
     let mut app = fetched_feeds_app();
-    app.tab = TabSelection::Feeds;
+    app.seed_active_tab_for_test(TabSelection::Feeds);
     let saved = GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::Feeds,
@@ -528,7 +528,7 @@ fn the_oldest_sort_sets_the_oldest_order() {
 fn two_subscriptions_publishing_the_same_guid_name_different_entries() {
     let mut app = make_app_stub();
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A), ("Feed B", FEED_B)]);
-    app.tab = TabSelection::Feeds;
+    app.seed_active_tab_for_test(TabSelection::Feeds);
     app.send_gui_feed_fetch_result_for_test(0, &[("dup", Some(100))]);
     app.send_gui_feed_fetch_result_for_test(1, &[("dup", Some(200))]);
     assert!(app.drain_feed_tab_results(), "both results drained");
@@ -561,7 +561,7 @@ fn two_subscriptions_publishing_the_same_guid_name_different_entries() {
 fn a_resume_position_without_a_duration_stays_active_with_no_percent() {
     let mut app = make_app_stub();
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
-    app.tab = TabSelection::Feeds;
+    app.seed_active_tab_for_test(TabSelection::Feeds);
     let entry = mbv_queue::FeedEntry {
         guid: "half-played".to_string(),
         title: "half-played".to_string(),
@@ -618,11 +618,11 @@ fn a_feed_row_paints_no_art_and_its_declared_media_kind() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
-    app.feed_tab.all_entries = vec![
+    app.seed_feed_entries_for_test(vec![
         seeded_entry("audio-entry", 300, Some(mbv_queue::FeedKind::Audio)),
         seeded_entry("video-entry", 200, Some(mbv_queue::FeedKind::Video)),
-    ];
-    app.tab = TabSelection::Feeds;
+    ]);
+    app.seed_active_tab_for_test(TabSelection::Feeds);
 
     let projection = gui_feeds_projection_seeded(&app);
 
@@ -634,7 +634,7 @@ fn a_feed_row_paints_no_art_and_its_declared_media_kind() {
     assert_eq!(projection.rows[0].media, GuiRowMediaKind::Audio);
     assert_eq!(projection.rows[1].media, GuiRowMediaKind::Video);
     assert_eq!(
-        app.images.card_image_fetch_calls(),
+        app.card_image_fetch_count_for_test(),
         0,
         "a row with no source reserves no fetch"
     );

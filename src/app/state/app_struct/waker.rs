@@ -58,8 +58,8 @@ impl App {
     /// Wait up to `timeout` for one queued Client-only fetch result (task 8.3
     /// of `decouple-client-core`), for a test drain that has no tick to wake
     /// it.
-    #[cfg(test)]
-    pub(in crate::app) fn wait_for_one_gui_client_event_for_test(
+    #[cfg(any(test, feature = "test"))]
+    pub fn wait_for_one_gui_client_event_for_test(
         &self,
         timeout: std::time::Duration,
     ) -> Option<crate::app::gui_library::client_events::GuiClientEvent> {
@@ -87,7 +87,7 @@ impl App {
     /// (`decouple-client-core` design D6a): the GUI Client's headless tests
     /// drive an `App` without an Owner attach, so they set the set the
     /// attach would record.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[doc(hidden)]
     pub fn set_client_capabilities_for_test(
         &mut self,

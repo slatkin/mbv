@@ -28,7 +28,7 @@ impl App {
     /// accepted `activate` changes it, a refused one leaves it alone.
     #[cfg(feature = "test")]
     #[must_use]
-    pub fn gui_settings_config_for_test(&self) -> mbv_config::Config {
+    pub fn settings_config_for_test(&self) -> mbv_config::Config {
         self.with_config(Clone::clone)
     }
 
@@ -64,7 +64,7 @@ impl App {
     /// `activate` arms it, a refused one does not.
     #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn gui_settings_save_armed_for_test(&self) -> bool {
+    pub fn settings_save_armed_for_test(&self) -> bool {
         self.settings_save_at.is_some()
     }
 
@@ -188,7 +188,7 @@ impl App {
     /// Seed the saved playlist list with `(id, name)` rows (row 5.5), as the
     /// Playlists section lists them.
     #[cfg(feature = "test")]
-    pub fn seed_gui_playlists_for_test(&mut self, playlists: &[(&str, &str)]) {
+    pub fn seed_saved_playlists_for_test(&mut self, playlists: &[(&str, &str)]) {
         self.playlists = playlists
             .iter()
             .map(|(id, name)| {

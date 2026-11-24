@@ -73,9 +73,8 @@ fn each_pill_reopens_on_its_own_last_pick() {
 /// the process.
 fn app_with_warm_albums(albums: Vec<mbv_emby_model::EmbyItem>) -> App {
     let mut app = app_with_stored_groups(albums, Vec::new());
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
-    app.images
-        .configure_protocol(Some("kitty".to_string()), true);
+    app.clear_emby_runtime_for_test();
+    app.configure_image_protocol_for_test(Some("kitty".to_string()), true);
     app
 }
 
@@ -109,9 +108,7 @@ fn the_picked_albums_neighbours_are_warmed() {
         },
     );
     // The pick's own move closed the warm gate; the next idle pass opens it.
-    app.last_nav_at = std::time::Instant::now()
-        .checked_sub(std::time::Duration::from_secs(1))
-        .unwrap();
+    app.backdate_navigation_for_test(std::time::Duration::from_secs(1));
 
     let projection = gui_music_projection(&mut app, 0);
 
@@ -125,7 +122,7 @@ fn the_picked_albums_neighbours_are_warmed() {
     );
     let warmed: Vec<String> = (0..6)
         .map(|index| format!("alb-{index}:P"))
-        .filter(|key| app.images.is_loading(key))
+        .filter(|key| app.card_image_loading_for_test(key))
         .collect();
     assert_eq!(
         warmed,
@@ -141,9 +138,7 @@ fn the_picked_albums_neighbours_are_warmed() {
 fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = app_with_warm_albums(six_warm_albums());
-    app.last_nav_at = std::time::Instant::now()
-        .checked_sub(std::time::Duration::from_secs(1))
-        .unwrap();
+    app.backdate_navigation_for_test(std::time::Duration::from_secs(1));
 
     apply_gui_library_command(
         &mut app,
@@ -156,7 +151,7 @@ fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
     assert!(projection.hero.is_some(), "the pick still heroes its album");
     let warmed: Vec<String> = (0..6)
         .map(|index| format!("alb-{index}:P"))
-        .filter(|key| app.images.is_loading(key))
+        .filter(|key| app.card_image_loading_for_test(key))
         .collect();
     assert!(
         warmed.is_empty(),
@@ -176,15 +171,15 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
         ],
         Vec::new(),
     );
-    app.album_tracks_cache.insert(
-        "alb-ill".to_string(),
+    app.seed_album_track_items_for_test(
+        "alb-ill",
         vec![
             cached_track("trk-1", "Rhymin & Stealin", 1, 248),
             cached_track("trk-2", "The New Style", 2, 275),
         ],
     );
-    app.album_tracks_cache.insert(
-        "alb-paul".to_string(),
+    app.seed_album_track_items_for_test(
+        "alb-paul",
         vec![cached_track("trk-3", "Shake Your Rump", 1, 195)],
     );
     apply_gui_library_command(
@@ -246,8 +241,8 @@ fn the_artist_total_waits_for_every_albums_tracklist() {
         ],
         Vec::new(),
     );
-    app.album_tracks_cache.insert(
-        "alb-ill".to_string(),
+    app.seed_album_track_items_for_test(
+        "alb-ill",
         vec![cached_track("trk-1", "Rhymin & Stealin", 1, 248)],
     );
     apply_gui_library_command(
@@ -335,9 +330,11 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
     );
     // The catalog refresh dropped Soul while the stored set still checks
     // both groups: the effective selection is one group.
-    app.libs[0].nav_stack[0]
-        .items
-        .retain(|group| group.id == HIPHOP);
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack[0]
+            .items
+            .retain(|group| group.id == HIPHOP);
+    });
     crate::app::tests::stub_gui_state(|gui| {
         gui.library_groups.insert(
             0,

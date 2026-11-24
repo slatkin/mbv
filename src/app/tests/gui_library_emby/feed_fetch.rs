@@ -17,23 +17,23 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
     // No client: the shown pass claims the library and starts no fetch, so the
     // test observes the restore alone.
-    app.emby_runtime.client = None;
-    app.libs[0].nav_stack.push(level(
-        FEED_ID,
-        "YouTube",
-        vec![
-            folder_item("folder-1", "Channel 1"),
-            folder_item("folder-2", "Channel 2"),
-        ],
-    ));
-    app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
+    app.disconnect_emby_client_for_test();
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack.push(level(
+            FEED_ID,
+            "YouTube",
+            vec![
+                folder_item("folder-1", "Channel 1"),
+                folder_item("folder-2", "Channel 2"),
+            ],
+        ));
+    });
+    app.edit_library_for_test(0, |library| {
+        library.feed_home_video = Some(FeedHomeVideoState::default());
+    });
 
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Library { lib_idx: 0 });
     assert!(
@@ -92,26 +92,26 @@ fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
     http.respond_when("ParentId=folder-1", 500, "");
     http.respond_when("ParentId=folder-2", 200, VIDEO_BODY);
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
-    app.libs[0].nav_stack.push(level(
-        FEED_ID,
-        "YouTube",
-        vec![
-            folder_item("folder-1", "Channel 1"),
-            folder_item("folder-2", "Channel 2"),
-        ],
-    ));
-    app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack.push(level(
+            FEED_ID,
+            "YouTube",
+            vec![
+                folder_item("folder-1", "Channel 1"),
+                folder_item("folder-2", "Channel 2"),
+            ],
+        ));
+    });
+    app.edit_library_for_test(0, |library| {
+        library.feed_home_video = Some(FeedHomeVideoState::default());
+    });
 
     toggle_folder(&mut app, "folder-1");
     land(&mut app);
     let fetched = http.request_count();
     assert!(
-        app.libs[0]
+        app.libs_for_test()[0]
             .feed_home_video
             .as_ref()
             .is_some_and(|state| state.fetching.is_none()),
@@ -145,19 +145,19 @@ fn a_failed_feed_folder_fetch_disarms_deferred_navigation() {
     let http = MockHttp::new();
     http.respond_when("ParentId=folder-1", 500, "");
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
-    app.libs[0].nav_stack.push(level(
-        FEED_ID,
-        "YouTube",
-        vec![folder_item("folder-1", "Channel 1")],
-    ));
-    app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
-    app.pending_navigate_tab_switch = Some(0);
-    app.pending_series_landing = Some(PendingSeriesLanding {
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack.push(level(
+            FEED_ID,
+            "YouTube",
+            vec![folder_item("folder-1", "Channel 1")],
+        ));
+    });
+    app.edit_library_for_test(0, |library| {
+        library.feed_home_video = Some(FeedHomeVideoState::default());
+    });
+    app.seed_pending_navigate_tab_switch_for_test(Some(0));
+    app.seed_pending_series_landing_for_test(PendingSeriesLanding {
         lib_idx: 0,
         reveal: Box::new(make_item("Show", "Series")),
         switch_tab: true,
@@ -168,11 +168,12 @@ fn a_failed_feed_folder_fetch_disarms_deferred_navigation() {
     land_until_fetched(&mut app);
 
     assert_eq!(
-        app.pending_navigate_tab_switch, None,
+        app.pending_navigate_tab_switch_for_test(),
+        None,
         "the failure disarms the deferred tab switch"
     );
     assert!(
-        app.pending_series_landing.is_none(),
+        app.pending_series_landing_is_none_for_test(),
         "the failure disarms the deferred series landing"
     );
 }

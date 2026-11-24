@@ -57,17 +57,19 @@ fn checked_names(projection: &GuiPodcastsProjection) -> Vec<&str> {
 fn podcast_app() -> App {
     let mut app = make_app_stub();
     app.seed_gui_abs_libraries_for_test();
-    app.config.lock().unwrap().audiobookshelf_setup =
-        Some(mbv_config::AudiobookshelfSetup::new("http://127.0.0.1:1"));
+    app.config_for_test(|config| {
+        config.audiobookshelf_setup =
+            Some(mbv_config::AudiobookshelfSetup::new("http://127.0.0.1:1"));
+    });
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "test-token")
         .expect("the secret is written under the test state dir");
-    app.tab = TabSelection::AudiobookshelfLibrary(1);
+    app.seed_active_tab_for_test(TabSelection::AudiobookshelfLibrary(1));
     app
 }
 
 /// The podcast browse state the seeded catalog holds for library 1.
 fn podcast_state(app: &App) -> &AudiobookshelfBrowseState {
-    &app.audiobookshelf_browse[1]
+    &app.audiobookshelf_browse_states_for_test()[1]
 }
 
 /// A stub `App` whose podcast library 1 holds `shows` in the list's title
@@ -257,9 +259,7 @@ fn add_second_podcast_library(app: &mut App) {
         name: "Podcasts B".into(),
         media_type: "podcast".into(),
     };
-    app.audiobookshelf_libraries.push(library.clone());
-    app.audiobookshelf_browse
-        .push(AudiobookshelfBrowseState::new(library));
+    app.push_audiobookshelf_podcast_library_for_test(library);
 }
 
 /// A collection command that names a podcast library other than the active
@@ -275,7 +275,7 @@ fn a_collection_command_on_another_podcast_library_starts_no_load() {
 
     toggle_show(&mut app, 2, "show-a");
 
-    let stale = &app.audiobookshelf_browse[2];
+    let stale = &app.audiobookshelf_browse_states_for_test()[2];
     assert_eq!(
         stale.catalog_request, 0,
         "the stale library started no catalog chain"
@@ -289,8 +289,7 @@ fn a_collection_command_on_another_podcast_library_starts_no_load() {
         "no per-show fetch started"
     );
     assert!(
-        !app.audiobookshelf_shelf_requested
-            .contains("lib-abs-podcasts-b"),
+        !app.audiobookshelf_shelf_requested_for_test("lib-abs-podcasts-b"),
         "no shelf fetch started"
     );
 }
@@ -326,9 +325,9 @@ fn a_vanished_checked_show_falls_back_to_all() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = projection_app();
     toggle_show(&mut app, 1, "show-a");
-    app.audiobookshelf_browse[1]
-        .shows
-        .retain(|show| show.library_item_id != "show-a");
+    app.edit_audiobookshelf_browse_state_for_test(1, |state| {
+        state.shows.retain(|show| show.library_item_id != "show-a");
+    });
 
     let projection = gui_podcasts_projection(&mut app, 1);
 

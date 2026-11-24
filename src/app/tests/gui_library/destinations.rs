@@ -15,7 +15,7 @@ use super::*;
 /// client: the tab projection reads the catalog alone.
 fn app_with_two_music_libraries() -> App {
     let mut app = make_app_stub();
-    app.music_levels = vec!["group".to_string(), "album".to_string()];
+    app.seed_music_levels_for_test(&["group", "album"]);
     for (name, collection_type) in [
         ("Music A", "music"),
         ("Movies", "movies"),
@@ -24,9 +24,9 @@ fn app_with_two_music_libraries() -> App {
         let mut library = make_item(name, "CollectionFolder");
         library.collection_type = collection_type.to_string();
         library.is_folder = true;
-        app.libs.push(LibraryTab::new(library));
+        app.push_library_for_test(LibraryTab::new(library));
     }
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app
 }
 
@@ -64,7 +64,7 @@ fn the_tabs_present_every_emby_library_in_catalog_order() {
 #[test]
 fn the_current_tab_names_the_active_presented_destination() {
     let mut app = app_with_two_music_libraries();
-    app.tab = TabSelection::EmbyLibrary(2);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(2));
 
     assert_eq!(gui_library_tabs(&app).current, Some(3));
 }
@@ -75,7 +75,7 @@ fn the_current_tab_names_the_active_presented_destination() {
 #[test]
 fn the_current_tab_names_the_movies_destination() {
     let mut app = app_with_two_music_libraries();
-    app.tab = TabSelection::EmbyLibrary(1);
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(1));
 
     assert_eq!(gui_library_tabs(&app).current, Some(2));
 }
@@ -162,7 +162,7 @@ fn an_interrupted_art_retry_comes_due_in_the_window_that_holds_it() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let start = std::time::Instant::now();
-    app.images.fetch_interrupted("alb-1:P".to_owned());
+    app.interrupt_card_image_fetch_for_test("alb-1:P");
     let hour = std::time::Duration::from_secs(3600);
     let later = start + hour;
 

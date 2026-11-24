@@ -67,16 +67,16 @@ fn recent_feed_entry(guid: &str, pub_date_secs: u64) -> mbv_queue::FeedEntry {
 /// accepts at land time).
 fn seed_recently_added(app: &mut App) {
     let now = mbv_ui_model::feed_age::current_time_secs();
-    app.home_recently_added.insert(
+    app.seed_home_recently_added_for_test(
         DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
         vec![recent_episode("recent-episode", now - 3600)],
     );
-    app.feed_tab.subscriptions.push(FeedSubscription {
+    app.push_feed_subscription_for_test(FeedSubscription {
         name: "Tone Feed".into(),
         url: "https://feed.example/rss".into(),
         kind: mbv_queue::FeedKind::Audio,
     });
-    app.feed_tab.all_entries = vec![recent_feed_entry("feed-entry", now - 2 * 3600)];
+    app.seed_feed_entries_for_test(vec![recent_feed_entry("feed-entry", now - 2 * 3600)]);
 }
 
 /// The stub `App` with `items` as the Continue Watching snapshot, Home the
@@ -84,7 +84,7 @@ fn seed_recently_added(app: &mut App) {
 fn home_app(items: Vec<EmbyItem>) -> App {
     let mut app = make_app_stub();
     app.seed_home_content_for_test(items);
-    app.tab = TabSelection::Home;
+    app.seed_active_tab_for_test(TabSelection::Home);
     app
 }
 
@@ -127,8 +127,8 @@ fn seed_relocated_tv_lists(app: &mut App) {
             )]),
         );
     });
-    app.tv_upcoming_snapshots.insert(
-        "lib-tv".into(),
+    app.seed_tv_upcoming_snapshot_for_test(
+        "lib-tv",
         vec![UpcomingPremiere {
             series_id: mbv_ids::ItemId::new("series-a"),
             series_name: "Show A".into(),
@@ -339,18 +339,19 @@ fn home_rows_paint_their_row_art_and_fetch_nothing_before_rows_in_view() {
     movie.image_tags.thumb = "t1".into();
     let movie_key = mbv_images::row::emby_row_request(&movie, false).cache_key;
     let mut app = home_app(vec![movie]);
-    app.config.lock().unwrap().audiobookshelf_setup =
-        Some(mbv_config::AudiobookshelfSetup::new(server));
-    app.home_recently_added.insert(
+    app.config_for_test(|config| {
+        config.audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(server));
+    });
+    app.seed_home_recently_added_for_test(
         DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
         vec![covered_episode("recent-episode", now - 3600)],
     );
-    app.feed_tab.subscriptions.push(FeedSubscription {
+    app.push_feed_subscription_for_test(FeedSubscription {
         name: "Tone Feed".into(),
         url: "https://feed.example/rss".into(),
         kind: mbv_queue::FeedKind::Audio,
     });
-    app.feed_tab.all_entries = vec![recent_feed_entry("feed-entry", now - 2 * 3600)];
+    app.seed_feed_entries_for_test(vec![recent_feed_entry("feed-entry", now - 2 * 3600)]);
     app.seed_card_image_for_test(movie_key.clone(), landscape_row_image());
     let episode_key = mbv_images::abs_row_cache_key(server, "pod-lib", 0);
     app.seed_card_image_for_test(episode_key.clone(), square_row_image());
@@ -390,7 +391,8 @@ fn home_rows_paint_their_row_art_and_fetch_nothing_before_rows_in_view() {
     );
     assert_eq!(items[2].media, GuiRowMediaKind::Video);
     assert!(
-        !app.images.is_loading(&movie_key) && !app.images.is_loading(&episode_key),
+        !app.card_image_loading_for_test(&movie_key)
+            && !app.card_image_loading_for_test(&episode_key),
         "the projection queues no row fetch before RowsInView names the row"
     );
 }
@@ -433,7 +435,7 @@ fn a_recently_added_row_keeps_its_date() {
     let _guard = TestStateDirGuard::new();
     let now = mbv_ui_model::feed_age::current_time_secs();
     let mut app = home_app(Vec::new());
-    app.home_recently_added.insert(
+    app.seed_home_recently_added_for_test(
         DestinationLatestSource::Audiobookshelf("pod-lib".to_string()),
         vec![recent_episode("recent-episode", now - 3600)],
     );

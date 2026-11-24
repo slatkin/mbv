@@ -77,7 +77,7 @@ fn an_activate_of_a_toggle_changes_the_config_and_arms_the_save() {
     let before = test
         .core
         .app_mut()
-        .gui_settings_config_for_test()
+        .settings_config_for_test()
         .always_play_next;
 
     send_settings(
@@ -89,12 +89,12 @@ fn an_activate_of_a_toggle_changes_the_config_and_arms_the_save() {
 
     let app = test.core.app_mut();
     assert_eq!(
-        app.gui_settings_config_for_test().always_play_next,
+        app.settings_config_for_test().always_play_next,
         !before,
         "the toggle flipped the stored flag"
     );
     assert!(
-        app.gui_settings_save_armed_for_test(),
+        app.settings_save_armed_for_test(),
         "the accepted activation armed the deferred save"
     );
 }
@@ -109,11 +109,7 @@ fn an_activate_of_mouse_support_changes_nothing() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let mut test = test_core_with(stub_app_with_queue(2));
     open_settings_at(&mut test, mbv::GuiSettingsSection::Services);
-    let before = test
-        .core
-        .app_mut()
-        .gui_settings_config_for_test()
-        .mouse_support;
+    let before = test.core.app_mut().settings_config_for_test().mouse_support;
 
     send_settings(
         &mut test,
@@ -124,12 +120,12 @@ fn an_activate_of_mouse_support_changes_nothing() {
 
     let app = test.core.app_mut();
     assert_eq!(
-        app.gui_settings_config_for_test().mouse_support,
+        app.settings_config_for_test().mouse_support,
         before,
         "a TUI-only setting is refused"
     );
     assert!(
-        !app.gui_settings_save_armed_for_test(),
+        !app.settings_save_armed_for_test(),
         "a refused activation arms no save"
     );
 }
@@ -415,7 +411,7 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
     );
     let app = test.core.app_mut();
     app.set_gui_emby_client_for_test(crate::test_emby_client(&http));
-    app.seed_gui_playlists_for_test(&[("pl", "Road Trip")]);
+    app.seed_saved_playlists_for_test(&[("pl", "Road Trip")]);
 
     send_playlists(
         &mut test,
@@ -661,10 +657,7 @@ fn a_set_value_sets_a_listed_value_and_refuses_an_unlisted_one() {
         },
     );
     assert_eq!(
-        test.core
-            .app_mut()
-            .gui_settings_config_for_test()
-            .subtitle_lang,
+        test.core.app_mut().settings_config_for_test().subtitle_lang,
         "Chinese",
         "a listed value is set"
     );
@@ -677,10 +670,7 @@ fn a_set_value_sets_a_listed_value_and_refuses_an_unlisted_one() {
         },
     );
     assert_eq!(
-        test.core
-            .app_mut()
-            .gui_settings_config_for_test()
-            .subtitle_lang,
+        test.core.app_mut().settings_config_for_test().subtitle_lang,
         "Chinese",
         "a value outside the list changes nothing"
     );

@@ -158,7 +158,7 @@ fn settings_reset_ui_state_row_runs_the_coordinator_and_dismisses_settings() {
         "the reset coordinator must restore the default focus"
     );
     assert!(
-        !harness.model().app.gui_settings_save_armed_for_test(),
+        !harness.model().app.settings_save_armed_for_test(),
         "the reset must bypass the configuration-edit/save path"
     );
 }

@@ -73,7 +73,7 @@ fn seed_music(app: &mut mbv::App, _http: &MockHttp) {
 /// leave Home active.
 fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
     seed_music(app, http);
-    app.push_gui_library_tab_for_test(EmbyItem::folder(
+    app.push_library_tab_for_test(EmbyItem::folder(
         SHOWS_LIBRARY.0.into(),
         SHOWS_LIBRARY.1.into(),
         "tvshows".into(),

@@ -57,7 +57,7 @@ fn search_core(http: &MockHttp) -> TestCore {
         .unwrap();
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(http));
-    core.push_gui_library_tab_for_test(EmbyItem::folder(
+    core.push_library_tab_for_test(EmbyItem::folder(
         "lib-movies".into(),
         "Movies".into(),
         "movies".into(),

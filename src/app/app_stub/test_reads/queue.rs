@@ -38,25 +38,7 @@ impl App {
         items: Vec<mbv_queue::QueueItem>,
         cursor: usize,
     ) {
-        let state = mbv_ctrl::UnifiedQueueStateData {
-            queue: None,
-            start_slot: None,
-            status: mbv_ctrl::player::PlayerStatus::default(),
-            active_slot: None,
-            slots: items
-                .into_iter()
-                .enumerate()
-                .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
-                    slot_id: u64::try_from(index).unwrap_or(u64::MAX) + 1,
-                    item,
-                })
-                .collect(),
-            revision: 1,
-            source: mbv_queue::QueueSource::Unknown,
-            lineage: mbv_queue::QueueLineage::default(),
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        };
+        let state = seeded_queue_state(items, None);
         self.local_view = crate::app::QueueView::from_snapshot(&state);
         self.local_view.set_cursor(cursor);
     }
@@ -70,31 +52,63 @@ impl App {
         cursor: usize,
         active: usize,
     ) {
-        let slots: Vec<_> = items
-            .into_iter()
-            .enumerate()
-            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
-                slot_id: u64::try_from(index).unwrap_or(u64::MAX) + 1,
-                item,
-            })
-            .collect();
-        let state = mbv_ctrl::UnifiedQueueStateData {
-            queue: None,
-            start_slot: None,
-            status: mbv_ctrl::player::PlayerStatus {
-                current_idx: active,
-                ..Default::default()
-            },
-            active_slot: slots.get(active).map(|slot| slot.slot_id),
-            slots,
-            revision: 1,
-            source: mbv_queue::QueueSource::Unknown,
-            lineage: mbv_queue::QueueLineage::default(),
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        };
+        let state = seeded_queue_state(items, Some(active));
         self.local_view = crate::app::QueueView::from_snapshot(&state);
         self.local_view.set_cursor(cursor);
+    }
+
+    /// Adopt `items` as the playing queue's slots, cursor at `cursor`, through
+    /// the replacement adoption an Owner update runs: the queue the shipped
+    /// playback link names, whichever view that is.
+    #[cfg(any(test, feature = "test"))]
+    pub fn adopt_playing_queue_items_for_test(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+    ) {
+        let state = seeded_queue_state(items, None);
+        let queue = self.playback_queue_mut();
+        queue.adopt(
+            &state,
+            crate::app::state::queue_view::AdoptCause::Replacement,
+        );
+        queue.set_cursor(cursor);
+    }
+
+    /// Adopt `items` as the playing queue's Emby slots, cursor at `cursor`, as
+    /// [`Self::adopt_playing_queue_items_for_test`] does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn adopt_playing_queue_emby_items_for_test(
+        &mut self,
+        items: Vec<mbv_emby_model::EmbyItem>,
+        cursor: usize,
+    ) {
+        self.adopt_playing_queue_items_for_test(
+            items
+                .into_iter()
+                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
+            cursor,
+        );
+    }
+
+    /// Adopt `items` as the playing queue's slots with `active` as the active
+    /// slot, cursor at `cursor`, as
+    /// [`Self::adopt_playing_queue_items_for_test`] does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn adopt_playing_queue_items_with_active_for_test(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+        active: usize,
+    ) {
+        let state = seeded_queue_state(items, Some(active));
+        let queue = self.playback_queue_mut();
+        queue.adopt(
+            &state,
+            crate::app::state::queue_view::AdoptCause::Replacement,
+        );
+        queue.set_cursor(cursor);
     }
 
     /// Hold `items` as the local queue view's Emby slots, cursor at `cursor`,
@@ -363,6 +377,24 @@ impl App {
         self.images.configure_protocol(protocol, enabled);
     }
 
+    /// Hold `entry` as what the artwork fetch for `key` landed, as the fetch's
+    /// own completion leaves the store.
+    #[cfg(any(test, feature = "test"))]
+    pub fn complete_card_image_fetch_for_test(
+        &mut self,
+        key: &str,
+        entry: mbv_images::CachedImage,
+    ) {
+        self.images.complete_fetch(key.to_owned(), entry);
+    }
+
+    /// Let every interrupted artwork fetch's retry time pass, as the retry
+    /// clock would once its backoff elapses.
+    #[cfg(any(test, feature = "test"))]
+    pub fn pass_interrupted_fetch_retries_for_test(&mut self) {
+        self.images.pass_interrupted_fetch_retries_for_test();
+    }
+
     /// Drop the artwork entry stored under `key`, as a generation change or a
     /// logged-out session does.
     #[cfg(any(test, feature = "test"))]
@@ -566,5 +598,38 @@ impl App {
         origin: crate::app::state::queue_owner::QueueOrigin,
     ) -> bool {
         self.apply_saved_playlist_source(source, origin)
+    }
+}
+
+/// The owner snapshot that adopts `items` as slots, `active` naming the active
+/// slot and the playhead: the state both the local view's seed and the playing
+/// queue's adoption are built from.
+#[cfg(any(test, feature = "test"))]
+fn seeded_queue_state(
+    items: Vec<mbv_queue::QueueItem>,
+    active: Option<usize>,
+) -> mbv_ctrl::UnifiedQueueStateData {
+    let slots: Vec<_> = items
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: u64::try_from(index).unwrap_or(u64::MAX) + 1,
+            item,
+        })
+        .collect();
+    mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
+        status: mbv_ctrl::player::PlayerStatus {
+            current_idx: active.unwrap_or_default(),
+            ..Default::default()
+        },
+        active_slot: active.and_then(|index| slots.get(index).map(|slot| slot.slot_id)),
+        slots,
+        revision: 1,
+        source: mbv_queue::QueueSource::Unknown,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
     }
 }

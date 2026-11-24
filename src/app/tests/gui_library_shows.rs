@@ -55,8 +55,8 @@ fn empty_shows_app() -> App {
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-tv".into();
     library.collection_type = "tvshows".into();
-    app.libs.push(crate::app::LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app
 }
 
@@ -64,7 +64,7 @@ fn empty_shows_app() -> App {
 /// series list's root level.
 fn shows_app(items: Vec<EmbyItem>) -> App {
     let mut app = empty_shows_app();
-    app.libs[0].nav_stack.push(level(items));
+    app.edit_library_for_test(0, |library| library.nav_stack.push(level(items)));
     app
 }
 
@@ -99,8 +99,7 @@ fn series_tree_app() -> App {
             .into_iter()
             .collect(),
     };
-    app.series_detail_cache
-        .insert("series-a".to_string(), detail);
+    app.seed_series_detail_for_test("series-a", detail);
     app
 }
 
@@ -173,8 +172,12 @@ fn presenting_an_empty_shows_root_starts_the_root_load_once_without_an_open_dest
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
     crate::app::tests::ensure_gui_destination(&mut app, GuiDestinationKind::Shows { lib_idx: 0 });
 
-    assert_eq!(app.libs[0].nav_stack.len(), 1, "one root level is started");
-    let root = &app.libs[0].nav_stack[0];
+    assert_eq!(
+        app.libs_for_test()[0].nav_stack.len(),
+        1,
+        "one root level is started"
+    );
+    let root = &app.libs_for_test()[0].nav_stack[0];
     assert!(
         root.loading,
         "the root level is loading, so the next frame does not re-request it"
@@ -286,8 +289,8 @@ fn the_series_heroes_art_box_follows_the_fetched_images_own_aspect() {
         300,
         image::Rgba([20, 40, 60, 255]),
     ));
-    app.images.insert_image(
-        mbv_images::series_image_cache_key("series-a", &["Primary"]),
+    app.insert_cached_image_for_test(
+        &mbv_images::series_image_cache_key("series-a", &["Primary"]),
         mbv_images::CachedImage {
             source: Some(crate::app::queue_card_artwork::test_source(&still)),
             img: Some(still),
@@ -402,10 +405,8 @@ fn the_upcoming_view_paints_display_only_premieres() {
     let mut app = empty_shows_app();
     let later = premiere("series-a", "Show A", "2026-12-01T00:00:00.0000000Z");
     let sooner = premiere("series-b", "Show B", "2026-11-20T00:00:00.0000000Z");
-    app.tv_upcoming_snapshots
-        .insert("lib-a".into(), vec![later.clone()]);
-    app.tv_upcoming_snapshots
-        .insert("lib-b".into(), vec![sooner.clone()]);
+    app.seed_tv_upcoming_snapshot_for_test("lib-a", vec![later.clone()]);
+    app.seed_tv_upcoming_snapshot_for_test("lib-b", vec![sooner.clone()]);
     apply_gui_library_command(
         &mut app,
         GuiLibraryCommand::ShowsSetView {
@@ -432,8 +433,8 @@ fn the_upcoming_view_paints_display_only_premieres() {
 fn an_upcoming_row_resolves_no_playable_item() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
-    app.tv_upcoming_snapshots.insert(
-        "lib-a".into(),
+    app.seed_tv_upcoming_snapshot_for_test(
+        "lib-a",
         vec![premiere(
             "series-a",
             "Show A",
@@ -498,8 +499,8 @@ fn an_upcoming_row_shows_its_series_image() {
     series.image_tags.thumb = "t1".into();
     let key = mbv_images::row::emby_row_request(&series, false).cache_key;
     let mut app = shows_app(vec![series]);
-    app.tv_upcoming_snapshots.insert(
-        "lib-a".into(),
+    app.seed_tv_upcoming_snapshot_for_test(
+        "lib-a",
         vec![premiere(
             "series-a",
             "Show A",

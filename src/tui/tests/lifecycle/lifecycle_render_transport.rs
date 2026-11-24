@@ -44,7 +44,7 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
         "on"
     );
     assert!(
-        app.gui_settings_save_armed_for_test(),
+        app.settings_save_armed_for_test(),
         "settings toggle must use the delayed save path"
     );
 

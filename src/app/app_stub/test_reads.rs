@@ -46,6 +46,17 @@ mod gui_marks;
 /// D4b rule 5) sit in their own child module for the same reason.
 mod queue;
 
+/// The Named queue and Player-event seams a Client's test drives where no
+/// Client-facing entry point reaches (`split-tui-gui-clients` design D4b rule
+/// 5) sit in their own child module for the same reason.
+mod named_queue;
+
+/// The GUI destinations' remaining fixtures — the Service runtimes, the Home
+/// `Recently added` store, the TV Upcoming snapshots, and the deferred
+/// navigation landings (`split-tui-gui-clients` design D4b rule 5) — sit in
+/// their own child module for the same reason.
+mod gui_destinations;
+
 /// The Emby Service runtime's test seams (`split-tui-gui-clients` design D4b
 /// rule 5) sit in their own child module for the same reason.
 mod emby_service;
@@ -270,7 +281,7 @@ impl App {
     /// the root load's completion captures nothing and spawns no
     /// default-mode reload behind the scripted answers.
     #[cfg(feature = "test")]
-    pub fn pin_gui_library_total_for_test(&mut self, lib_idx: usize, total: usize) {
+    pub fn pin_library_total_for_test(&mut self, lib_idx: usize, total: usize) {
         if let Some(tab) = self.libs.get_mut(lib_idx) {
             tab.library_total = Some(total);
         }
@@ -305,7 +316,7 @@ impl App {
     /// design D9): a launch-location test holds a catalog destination that
     /// the GUI Client does not present.
     #[cfg(feature = "test")]
-    pub fn push_gui_library_tab_for_test(&mut self, library: mbv_emby_model::EmbyItem) {
+    pub fn push_library_tab_for_test(&mut self, library: mbv_emby_model::EmbyItem) {
         self.libs
             .push(mbv_ui_model::library_tab::LibraryTab::new(library));
     }
@@ -664,7 +675,7 @@ impl App {
     /// for a completion a worker sent. Returns whether an event landed within
     /// `bound` — a safety net that fails a broken pipeline instead of hanging
     /// the test, never a cadence a passing pump spends.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn drain_lib_event_blocking_for_test(&mut self, bound: std::time::Duration) -> bool {
         let Ok(event) = self.channels.lib_rx.recv_timeout(bound) else {

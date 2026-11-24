@@ -116,12 +116,12 @@ fn sent_close_op(rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Option<mbv_ctrl::Qu
 fn a_rejected_close_tells_the_user_why() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
     app.show_local_current_entry();
-    app.player.update_status(|status| status.active = false);
+    app.edit_player_status_for_test(|status| status.active = false);
     request_close(&mut app);
     let op = sent_close_op(&cmd_rx).expect("the close reaches the Owner");
-    app.toasts.clear();
+    app.clear_toasts_for_test();
 
-    app.handle_player_event(PlayerEvent::QueueOpResult {
+    app.apply_player_event_for_test(PlayerEvent::QueueOpResult {
         op,
         outcome: mbv_ctrl::QueueOpOutcome::Rejected("The last queue cannot be closed".into()),
     });
@@ -137,7 +137,7 @@ fn a_rejected_close_tells_the_user_why() {
         "a refusal is an error, not a neutral status"
     );
     assert!(
-        app.pending_named_queue_ops.is_empty(),
+        app.pending_named_queue_ops_is_empty_for_test(),
         "the answered close ends its request"
     );
 }
@@ -161,11 +161,11 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
     );
     // The Owner publishes the queue list and then answers the request with the
     // new queue's own snapshot, under the request's `op`.
-    app.adopt_named_queue_list(list_with_new_queue(), current());
-    app.handle_player_event(op_answer(op.0, new_queue_snapshot()));
+    app.seed_named_queue_list_for_test(list_with_new_queue(), current());
+    app.apply_player_event_for_test(op_answer(op.0, new_queue_snapshot()));
 
     assert_eq!(
-        app.shown_entry,
+        app.shown_entry(),
         Some(ShownEntry::Local(new_queue())),
         "the Queue panel shows the queue the Owner reported"
     );
@@ -222,7 +222,7 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
     tx.send(op_answer(created.0 + 1, new_queue_with(&make_items(1))))
         .unwrap();
 
-    let appended = app.append_on_owner(
+    let appended = app.append_on_owner_for_test(
         make_items(1)
             .into_iter()
             .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
@@ -232,16 +232,16 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
 
     assert!(appended, "the edit's own answer still applies");
     assert!(
-        app.pending_new_queue.is_none(),
+        app.pending_new_queue_is_none_for_test(),
         "the create's answer ends its request"
     );
     assert_eq!(
-        app.shown_entry,
+        app.shown_entry(),
         Some(ShownEntry::Local(new_queue())),
         "the Queue panel shows the queue the Owner made"
     );
     assert_eq!(
-        app.shown_resting_queue_id(),
+        app.shown_resting_queue_id_for_test(),
         Some(new_queue()),
         "the new queue is shown as the resting queue it is, never as the current one"
     );
@@ -255,7 +255,7 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         "the shown queue holds the appended item"
     );
     assert_eq!(
-        app.local_view.slots().len(),
+        app.local_queue_len(),
         3,
         "the current queue's rows are never the shown queue's"
     );
@@ -289,15 +289,15 @@ fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
     let created = sent_create(&cmd_rx).expect("the control asks for a new queue");
-    app.toasts.clear();
+    app.clear_toasts_for_test();
 
-    app.handle_player_event(PlayerEvent::QueueOpResult {
+    app.apply_player_event_for_test(PlayerEvent::QueueOpResult {
         op: created,
         outcome: mbv_ctrl::QueueOpOutcome::Rejected("named queues unavailable".into()),
     });
 
     assert!(
-        app.pending_new_queue.is_none(),
+        app.pending_new_queue_is_none_for_test(),
         "the refusal ends the request"
     );
     assert_eq!(
@@ -312,9 +312,9 @@ fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
 #[test]
 fn a_rejection_that_answers_no_named_queue_command_stays_silent() {
     let (mut app, _cmd_rx) = gui_app_with_named_queues();
-    app.toasts.clear();
+    app.clear_toasts_for_test();
 
-    app.handle_player_event(PlayerEvent::QueueOpResult {
+    app.apply_player_event_for_test(PlayerEvent::QueueOpResult {
         op: mbv_ctrl::QueueOpId(42),
         outcome: mbv_ctrl::QueueOpOutcome::Rejected("MISSING_SLOT".into()),
     });
@@ -332,7 +332,7 @@ fn a_rejection_that_answers_no_named_queue_command_stays_silent() {
 fn closing_the_playing_current_queue_asks_and_then_closes() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
     app.show_local_current_entry();
-    app.player.update_status(|status| {
+    app.edit_player_status_for_test(|status| {
         status.active = true;
         status.current_idx = 0;
     });
@@ -343,7 +343,7 @@ fn closing_the_playing_current_queue_asks_and_then_closes() {
         cmd_rx.try_recv().is_err(),
         "nothing closes before the user confirms"
     );
-    let Some(OverlayRequest::Confirm(modal)) = app.pending_overlay.take() else {
+    let Some(OverlayRequest::Confirm(modal)) = app.take_pending_overlay_for_test() else {
         panic!("the playing current queue asks before it closes");
     };
     assert_eq!(modal.on_confirm, ConfirmAction::CloseNamedQueue(current()));
@@ -369,12 +369,12 @@ fn closing_the_playing_current_queue_asks_and_then_closes() {
 fn closing_the_stopped_current_queue_closes_at_once() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
     app.show_local_current_entry();
-    app.player.update_status(|status| status.active = false);
+    app.edit_player_status_for_test(|status| status.active = false);
 
     request_close(&mut app);
 
     assert!(
-        app.pending_overlay.is_none(),
+        app.pending_overlay_is_none_for_test(),
         "a stopped queue closes without a prompt"
     );
     assert_eq!(
@@ -391,20 +391,20 @@ fn closing_the_stopped_current_queue_closes_at_once() {
 fn cancelling_the_close_changes_nothing() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
     app.show_local_current_entry();
-    app.player.update_status(|status| {
+    app.edit_player_status_for_test(|status| {
         status.active = true;
         status.current_idx = 0;
     });
 
     request_close(&mut app);
-    let Some(OverlayRequest::Confirm(modal)) = app.pending_overlay.take() else {
+    let Some(OverlayRequest::Confirm(modal)) = app.take_pending_overlay_for_test() else {
         panic!("the playing current queue asks before it closes");
     };
     app.apply_confirm_action(modal.on_confirm, answer_key(Key::Esc));
 
     assert_eq!(sent_close(&cmd_rx), None, "no queue closes");
     assert_eq!(
-        app.shown_entry,
+        app.shown_entry(),
         Some(ShownEntry::Local(current())),
         "the Queue panel still shows the playing queue"
     );
@@ -416,15 +416,18 @@ fn cancelling_the_close_changes_nothing() {
 fn closing_a_peer_entry_disconnects_and_leaves_the_peer_playing() {
     let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
     assert!(
-        app.shown_entry == Some(ShownEntry::Peer),
+        app.shown_entry() == Some(ShownEntry::Peer),
         "the connect shows the peer entry"
     );
 
     request_close(&mut app);
 
-    assert!(!app.direct_remote_connected, "the Client disconnects");
+    assert!(
+        !app.direct_remote_connected_for_test(),
+        "the Client disconnects"
+    );
     assert_eq!(
-        app.shown_entry,
+        app.shown_entry(),
         Some(ShownEntry::Local(current())),
         "the Queue panel falls back to the current local queue"
     );
@@ -442,7 +445,7 @@ fn closing_a_peer_entry_disconnects_and_leaves_the_peer_playing() {
 #[test]
 fn the_only_local_queue_does_not_close() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
-    app.adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
+    app.seed_named_queue_list_for_test(vec![named_queue_list()[0].clone()], current());
     app.show_local_current_entry();
 
     request_close(&mut app);
@@ -460,7 +463,7 @@ fn a_resting_queue_shown_closes_without_a_prompt() {
     request_close(&mut app);
 
     assert!(
-        app.pending_overlay.is_none(),
+        app.pending_overlay_is_none_for_test(),
         "a resting queue asks nothing"
     );
     assert_eq!(sent_close(&cmd_rx), Some(resting()));
@@ -490,7 +493,7 @@ fn the_close_control_follows_the_shown_entry_beside_a_peer(
     #[case] disabled: bool,
 ) {
     let (mut app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
-    app.adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
+    app.seed_named_queue_list_for_test(vec![named_queue_list()[0].clone()], current());
     show(&mut app);
 
     let core = GuiCore::new(app);
@@ -525,7 +528,7 @@ fn a_chooser_entry_press_shows_the_painted_queue() {
     );
 
     assert_eq!(
-        core.app.shown_entry,
+        core.app.shown_entry(),
         Some(ShownEntry::Local(resting())),
         "the press shows the entry it painted"
     );
@@ -555,7 +558,7 @@ fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
     core.app.show_named_queue(resting());
     core.toggle_gui_queue_chooser();
     core.app
-        .adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
+        .seed_named_queue_list_for_test(vec![named_queue_list()[0].clone()], current());
     while cmd_rx.try_recv().is_ok() {}
 
     gui_msg(
@@ -564,7 +567,7 @@ fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
     );
 
     assert_eq!(
-        core.app.shown_entry,
+        core.app.shown_entry(),
         Some(ShownEntry::Local(current())),
         "the panel falls back to the current local queue"
     );

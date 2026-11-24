@@ -116,12 +116,12 @@ fn shows_command_core(http: &MockHttp) -> TestCore {
     core.seed_gui_music_library_for_test(test_emby_client(http));
     core.seed_gui_library_groups_for_test(0, "grp-hiphop");
     core.seed_gui_music_albums_for_test(0, "grp-hiphop", &[("alb-ill", "Licensed to Ill")]);
-    core.push_gui_library_tab_for_test(mbv_emby_model::EmbyItem::folder(
+    core.push_library_tab_for_test(mbv_emby_model::EmbyItem::folder(
         "lib-tv".to_string(),
         "Shows".to_string(),
         "tvshows".to_string(),
     ));
-    core.pin_gui_library_total_for_test(1, 0);
+    core.pin_library_total_for_test(1, 0);
     // The launch restore's first-presented open (design D9): the seeded
     // catalog's first presented destination is the Music library, whose
     // activation loads nothing.

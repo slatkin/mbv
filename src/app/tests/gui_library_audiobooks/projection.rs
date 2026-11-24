@@ -293,7 +293,7 @@ fn the_playing_book_rides_the_projection() {
         &[],
         None,
     );
-    app.playback_queue_mut().adopt_queue_items_with_active(
+    app.adopt_playing_queue_items_with_active_for_test(
         vec![mbv_queue::QueueItem::Audiobookshelf(
             mbv_queue::AudiobookshelfItem::Book(mbv_queue::AudiobookshelfBookQueueItem {
                 library_item_id: "book-a".into(),
@@ -309,7 +309,7 @@ fn the_playing_book_rides_the_projection() {
         0,
         0,
     );
-    app.player.update_status(|status| {
+    app.edit_player_status_for_test(|status| {
         status.active = true;
         status.current_idx = 0;
         status.position_ticks = mbv_emby_model::seconds_to_ticks(2000.0);
@@ -437,7 +437,7 @@ fn the_chapter_command_seeks_on_the_active_book() {
         &[],
     );
     let cmd_rx = super::live_owner_channel(&mut app);
-    app.playback_queue_mut().adopt_queue_items_with_active(
+    app.adopt_playing_queue_items_with_active_for_test(
         vec![mbv_queue::QueueItem::Audiobookshelf(
             mbv_queue::AudiobookshelfItem::Book(mbv_queue::AudiobookshelfBookQueueItem {
                 library_item_id: "book-a".into(),
@@ -453,7 +453,7 @@ fn the_chapter_command_seeks_on_the_active_book() {
         0,
         0,
     );
-    app.player.update_status(|status| {
+    app.edit_player_status_for_test(|status| {
         status.active = true;
         status.current_idx = 0;
     });
@@ -639,10 +639,12 @@ fn the_book_hero_restores_the_narrator_year_and_description() {
         &[],
         None,
     );
-    let book = &mut app.audiobookshelf_book_browse[0].books[0];
-    book.narrator = Some("Anna Fields".into());
-    book.published_year = Some("1999".into());
-    book.description = Some("A novel of manners. https://example.test/x".into());
+    app.edit_audiobookshelf_book_state_for_test(0, |state| {
+        let book = &mut state.books[0];
+        book.narrator = Some("Anna Fields".into());
+        book.published_year = Some("1999".into());
+        book.description = Some("A novel of manners. https://example.test/x".into());
+    });
 
     let projection = crate::app::tests::gui_audiobooks_projection(&mut app, 0);
 

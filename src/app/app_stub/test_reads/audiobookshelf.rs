@@ -376,3 +376,77 @@ impl App {
         self.drain_audiobookshelf_events()
     }
 }
+
+impl App {
+    /// Rewrite the Podcasts library's browse state at `index` through `edit`,
+    /// as a landed page, a committed scope, or an armed replacement batch
+    /// leaves it.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index` names no browse state.
+    #[cfg(any(test, feature = "test"))]
+    pub fn edit_audiobookshelf_browse_state_for_test<R>(
+        &mut self,
+        index: usize,
+        edit: impl FnOnce(&mut mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState) -> R,
+    ) -> R {
+        let state = self
+            .audiobookshelf_browse
+            .get_mut(index)
+            .expect("the browse state index is in range");
+        edit(state)
+    }
+
+    /// Rewrite the Audiobooks library's book browse state at `index` through
+    /// `edit`, as a landed catalog page or an armed replacement batch leaves
+    /// it.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index` names no browse state.
+    #[cfg(any(test, feature = "test"))]
+    pub fn edit_audiobookshelf_book_state_for_test<R>(
+        &mut self,
+        index: usize,
+        edit: impl FnOnce(&mut mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState) -> R,
+    ) -> R {
+        let state = self
+            .audiobookshelf_book_browse
+            .get_mut(index)
+            .expect("the book browse state index is in range");
+        edit(state)
+    }
+
+    /// Append `library` as a Podcasts library, with its own browse state, as a
+    /// landed catalog that grew one library leaves them.
+    #[cfg(any(test, feature = "test"))]
+    pub fn push_audiobookshelf_podcast_library_for_test(
+        &mut self,
+        library: mbv_audiobookshelf::AudiobookshelfLibrary,
+    ) {
+        self.audiobookshelf_libraries.push(library.clone());
+        self.audiobookshelf_browse
+            .push(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(library));
+    }
+
+    /// Append `library` as an Audiobooks library, with its own book browse
+    /// state, as a landed catalog that grew one library leaves them.
+    #[cfg(any(test, feature = "test"))]
+    pub fn push_audiobookshelf_book_library_for_test(
+        &mut self,
+        library: mbv_audiobookshelf::AudiobookshelfLibrary,
+    ) {
+        self.audiobookshelf_libraries.push(library.clone());
+        self.audiobookshelf_book_browse
+            .push(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState::new(library));
+    }
+
+    /// Whether the library `library_id` has an unabandoned Latest shelf
+    /// request in flight.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn audiobookshelf_shelf_requested_for_test(&self, library_id: &str) -> bool {
+        self.audiobookshelf_shelf_requested.contains(library_id)
+    }
+}

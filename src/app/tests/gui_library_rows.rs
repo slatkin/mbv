@@ -7,7 +7,6 @@
 //! passes through the cache's own test hook instead of a sleep.
 
 use super::*;
-use crate::app::state::service_runtime::EmbyRuntime;
 
 const LIB_ID: &str = "lib-movies";
 
@@ -29,27 +28,19 @@ fn row_key(item: &EmbyItem) -> String {
 fn app_with_rows(items: Vec<EmbyItem>) -> App {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.emby_runtime = EmbyRuntime::default();
-    app.images
-        .configure_protocol(Some("kitty".to_owned()), true);
+    app.clear_emby_runtime_for_test();
+    app.configure_image_protocol_for_test(Some("kitty".to_owned()), true);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = LIB_ID.to_owned();
     library.collection_type = "movies".to_owned();
     library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     crate::app::tests::stub_gui_state(|gui| {
         gui.emby_roots
             .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
     });
     app
-}
-
-/// A past instant the navigation-idle gate reads as idle: no sleep.
-fn idle_at() -> Instant {
-    Instant::now()
-        .checked_sub(Duration::from_secs(1))
-        .expect("a past instant")
 }
 
 /// A stub `App` on a grouped Music library, with the image cache enabled and
@@ -58,16 +49,15 @@ fn idle_at() -> Instant {
 fn app_with_grouped_music() -> App {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.set_client_capabilities(app_stub::gui_client_capabilities());
-    app.emby_runtime = EmbyRuntime::default();
-    app.images
-        .configure_protocol(Some("kitty".to_owned()), true);
+    app.set_client_capabilities_for_test(app_stub::gui_client_capabilities());
+    app.clear_emby_runtime_for_test();
+    app.configure_image_protocol_for_test(Some("kitty".to_owned()), true);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".to_owned();
     library.collection_type = "music".to_owned();
-    app.music_levels = vec!["group".to_string(), "album".to_string()];
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.seed_music_levels_for_test(&["group", "album"]);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app
 }
 
@@ -87,19 +77,19 @@ fn a_set_sent_during_navigation_fetches_only_its_rows_once_idle() {
         },
     );
     assert!(
-        !app.images.is_loading(&row_key(&shown)),
+        !app.card_image_loading_for_test(&row_key(&shown)),
         "a set sent during navigation queues nothing"
     );
 
-    app.last_nav_at = idle_at();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
     gui_queue_in_view_row_fetches(&mut app);
 
     assert!(
-        app.images.is_loading(&row_key(&shown)),
+        app.card_image_loading_for_test(&row_key(&shown)),
         "the in-view row's fetch is queued once navigation is idle"
     );
     assert!(
-        !app.images.is_loading(&row_key(&hidden)),
+        !app.card_image_loading_for_test(&row_key(&hidden)),
         "a row outside the set is never fetched"
     );
 }
@@ -111,7 +101,7 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
     let row = tagged_movie("m-1", "t1");
     let mut app = app_with_rows(vec![row.clone()]);
     let key = row_key(&row);
-    app.last_nav_at = idle_at();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
     apply_gui_library_command(
         &mut app,
         GuiLibraryCommand::RowsInView {
@@ -119,25 +109,25 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
             ids: vec![row.id.clone()],
         },
     );
-    app.images.fetch_interrupted(key.clone());
+    app.interrupt_card_image_fetch_for_test(&key);
     let checked = Instant::now();
 
-    app.last_nav_at = idle_at();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
     gui_queue_in_view_row_fetches(&mut app);
     assert!(
         gui_art_retry_due(&app, checked, checked + Duration::from_secs(3600)),
         "the interrupted key holds a retry time"
     );
     assert!(
-        !app.images.is_loading(&key),
+        !app.card_image_loading_for_test(&key),
         "a key still waiting out its retry is not fetched again"
     );
 
-    app.images.pass_interrupted_fetch_retries_for_test();
-    app.last_nav_at = idle_at();
+    app.pass_interrupted_fetch_retries_for_test();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
     gui_queue_in_view_row_fetches(&mut app);
     assert!(
-        app.images.is_loading(&key),
+        app.card_image_loading_for_test(&key),
         "the passed retry queues the in-view key again"
     );
 
@@ -148,12 +138,12 @@ fn an_interrupted_in_view_key_is_queued_again_only_while_it_stays_in_the_set() {
             ids: Vec::new(),
         },
     );
-    app.images.fetch_interrupted(key.clone());
-    app.images.pass_interrupted_fetch_retries_for_test();
-    app.last_nav_at = idle_at();
+    app.interrupt_card_image_fetch_for_test(&key);
+    app.pass_interrupted_fetch_retries_for_test();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
     gui_queue_in_view_row_fetches(&mut app);
     assert!(
-        !app.images.is_loading(&key),
+        !app.card_image_loading_for_test(&key),
         "a key whose row left the set is not queued again"
     );
 }
@@ -165,7 +155,7 @@ fn an_in_view_row_without_a_source_queues_nothing() {
     let mut row = make_item("Plain", "BoxSet");
     row.id = "m-plain".to_owned();
     let mut app = app_with_rows(vec![row.clone()]);
-    app.last_nav_at = idle_at();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
 
     apply_gui_library_command(
         &mut app,
@@ -176,7 +166,7 @@ fn an_in_view_row_without_a_source_queues_nothing() {
     );
 
     assert_eq!(
-        app.images.card_image_fetch_calls(),
+        app.card_image_fetch_count_for_test(),
         0,
         "a row with no declared image and an absent id reserve no fetch"
     );
@@ -188,7 +178,7 @@ fn an_in_view_row_without_a_source_queues_nothing() {
 fn a_set_of_another_list_queues_nothing() {
     let row = tagged_movie("m-1", "t1");
     let mut app = app_with_rows(vec![row.clone()]);
-    app.last_nav_at = idle_at();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
 
     apply_gui_library_command(
         &mut app,
@@ -197,11 +187,11 @@ fn a_set_of_another_list_queues_nothing() {
             ids: vec![row.id.clone()],
         },
     );
-    app.last_nav_at = idle_at();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
     gui_queue_in_view_row_fetches(&mut app);
 
     assert!(
-        !app.images.is_loading(&row_key(&row)),
+        !app.card_image_loading_for_test(&row_key(&row)),
         "the Emby row is not in the Feeds list's set"
     );
 }
@@ -226,10 +216,9 @@ fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
     let painted = tagged_movie("m-1", "t1");
     let mut app = app_with_rows(vec![painted.clone()]);
     let key = row_key(&painted);
-    app.images.complete_fetch(key.clone(), cached_pixel());
+    app.complete_card_image_fetch_for_test(&key, cached_pixel());
     for index in 0..511 {
-        app.images
-            .complete_fetch(format!("row:filler:{index}"), cached_pixel());
+        app.complete_card_image_fetch_for_test(&format!("row:filler:{index}"), cached_pixel());
     }
 
     apply_gui_library_command(
@@ -239,12 +228,11 @@ fn a_set_keeps_its_cached_rows_when_the_row_budget_overflows() {
             ids: vec![painted.id.clone()],
         },
     );
-    app.images
-        .complete_fetch("row:filler:overflow".to_owned(), cached_pixel());
+    app.complete_card_image_fetch_for_test("row:filler:overflow", cached_pixel());
 
-    assert!(app.images.is_cached(&key), "the in-view row stays cached");
+    assert!(app.image_cached(&key), "the in-view row stays cached");
     assert!(
-        !app.images.is_cached("row:filler:0"),
+        !app.image_cached("row:filler:0"),
         "the oldest untouched row is evicted instead"
     );
 }
@@ -265,10 +253,10 @@ fn an_artist_search_answer_queues_the_row_art_it_unblocks() {
             ids: vec![format!("artist-name:{name}")],
         },
     );
-    app.last_nav_at = idle_at();
+    app.backdate_navigation_for_test(Duration::from_secs(1));
     let key = mbv_images::row::emby_row_primary_request("artist-9").cache_key;
     assert!(
-        !app.images.is_loading(&key),
+        !app.card_image_loading_for_test(&key),
         "the row has no source until its name resolves"
     );
 
@@ -283,7 +271,7 @@ fn an_artist_search_answer_queues_the_row_art_it_unblocks() {
     });
 
     assert!(
-        app.images.is_loading(&key),
+        app.card_image_loading_for_test(&key),
         "the answer re-queues the in-view row art"
     );
 }

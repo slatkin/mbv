@@ -64,17 +64,19 @@ fn one_book_page(id: &str, title: &str) -> AudiobookshelfBookPage {
 fn abs_app() -> App {
     let mut app = make_app_stub();
     app.seed_gui_abs_libraries_for_test();
-    app.config.lock().unwrap().audiobookshelf_setup =
-        Some(mbv_config::AudiobookshelfSetup::new("http://127.0.0.1:1"));
+    app.config_for_test(|config| {
+        config.audiobookshelf_setup =
+            Some(mbv_config::AudiobookshelfSetup::new("http://127.0.0.1:1"));
+    });
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "test-token")
         .expect("the secret is written under the test state dir");
-    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    app.seed_active_tab_for_test(TabSelection::AudiobookshelfLibrary(0));
     app
 }
 
 /// The book browse state the seeded catalog holds for library 0.
 fn book_state(app: &App) -> &AudiobookshelfBookBrowseState {
-    &app.audiobookshelf_book_browse[0]
+    &app.audiobookshelf_book_states_for_test()[0]
 }
 
 /// Opening an unloaded book catalog starts the TUI's own catalog load and the
@@ -92,12 +94,10 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
     // stub's worker reports the failure class; the event is dropped raw, so
     // the failure mark never applies and the page below carries the catalog.
     let _ = app
-        .channels
-        .lib_rx
-        .recv_timeout(Duration::from_secs(2))
+        .recv_lib_event_within_for_test(Duration::from_secs(2))
         .expect("the open's load sent its request");
     let request = book_state(&app).catalog_request;
-    let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
+    app.send_lib_event_for_test(LibEvent::Audiobookshelf(
         AudiobookshelfEvent::BooksFetched {
             generation: generation(),
             request,
@@ -152,7 +152,9 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
 fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
-    app.audiobookshelf_book_browse[0].books = vec![book("book-a", "A Book")];
+    app.edit_audiobookshelf_book_state_for_test(0, |state| {
+        state.books = vec![book("book-a", "A Book")];
+    });
 
     gui_abs_select(&mut app, 0, "book-a");
     assert_eq!(
@@ -168,7 +170,7 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
         .recv_timeout(Duration::from_secs(2))
         .expect("the select's detail load sent its request");
     let request = book_state(&app).next_detail_request;
-    let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
+    app.send_lib_event_for_test(LibEvent::Audiobookshelf(
         AudiobookshelfEvent::BookDetailLoaded {
             generation: generation(),
             request,
@@ -211,7 +213,9 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
 fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
-    app.audiobookshelf_book_browse[0].books = vec![book("book-a", "A Book")];
+    app.edit_audiobookshelf_book_state_for_test(0, |state| {
+        state.books = vec![book("book-a", "A Book")];
+    });
 
     crate::app::tests::ensure_gui_destination(
         &mut app,
@@ -223,7 +227,7 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
         .recv_timeout(Duration::from_secs(2))
         .expect("the ensure's detail load sent its request");
     let request = book_state(&app).next_detail_request;
-    let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
+    app.send_lib_event_for_test(LibEvent::Audiobookshelf(
         AudiobookshelfEvent::BookDetailLoaded {
             generation: generation(),
             request,
@@ -253,9 +257,7 @@ fn add_second_book_library(app: &mut App) {
         name: "Audiobooks B".into(),
         media_type: "book".into(),
     };
-    app.audiobookshelf_libraries.push(library.clone());
-    app.audiobookshelf_book_browse
-        .push(AudiobookshelfBookBrowseState::new(library));
+    app.push_audiobookshelf_book_library_for_test(library);
 }
 
 /// The open entry stays inert for a book library that is not the active
@@ -270,7 +272,7 @@ fn the_open_entry_on_another_book_library_starts_no_load() {
 
     gui_abs_open(&mut app, 2);
 
-    let stale = &app.audiobookshelf_book_browse[2];
+    let stale = &app.audiobookshelf_book_states_for_test()[2];
     assert_eq!(
         stale.catalog_request, 0,
         "the stale library started no catalog chain"
@@ -320,7 +322,7 @@ fn a_restored_audiobooks_destination_starts_its_catalog_load() {
 /// serial it left: an armed replacement batch bumps the serial.
 fn pass_catalog_request(app: &mut App) -> u64 {
     crate::app::tests::ensure_gui_destination(app, GuiDestinationKind::Audiobooks { lib_idx: 0 });
-    app.audiobookshelf_book_browse[0].catalog_request
+    app.audiobookshelf_book_states_for_test()[0].catalog_request
 }
 
 /// A repaint beside an in-flight catalog starts no second chain
@@ -333,7 +335,9 @@ fn pass_catalog_request(app: &mut App) -> u64 {
 fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
-    app.audiobookshelf_book_browse[0].loading_pages.insert(0);
+    app.edit_audiobookshelf_book_state_for_test(0, |state| {
+        state.loading_pages.insert(0);
+    });
 
     assert_eq!(
         pass_catalog_request(&mut app),
@@ -341,8 +345,11 @@ fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
         "the startup chain's in-flight page started no second chain"
     );
 
-    app.audiobookshelf_book_browse[0].loading_pages.clear();
-    let armed = app.audiobookshelf_book_browse[0].begin_catalog_replacement();
+    app.edit_audiobookshelf_book_state_for_test(0, |state| state.loading_pages.clear());
+    let armed = app.edit_audiobookshelf_book_state_for_test(
+        0,
+        AudiobookshelfBookBrowseState::begin_catalog_replacement,
+    );
     assert_eq!(
         pass_catalog_request(&mut app),
         armed,
@@ -359,7 +366,9 @@ fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
 fn a_failed_catalog_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
-    app.audiobookshelf_book_browse[0].error = Some("the catalog failed to load".into());
+    app.edit_audiobookshelf_book_state_for_test(0, |state| {
+        state.error = Some("the catalog failed to load".into());
+    });
 
     assert_eq!(
         pass_catalog_request(&mut app),
@@ -386,7 +395,9 @@ fn a_failed_catalog_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
 fn opening_a_catalog_with_a_page_in_flight_starts_no_second_chain() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = abs_app();
-    app.audiobookshelf_book_browse[0].loading_pages.insert(0);
+    app.edit_audiobookshelf_book_state_for_test(0, |state| {
+        state.loading_pages.insert(0);
+    });
 
     gui_abs_open(&mut app, 0);
 
@@ -430,7 +441,7 @@ fn the_presented_tabs_include_a_book_library_and_a_podcast_library() {
         "the active book destination's kind is the Audiobooks one"
     );
 
-    app.tab = TabSelection::AudiobookshelfLibrary(1);
+    app.seed_active_tab_for_test(TabSelection::AudiobookshelfLibrary(1));
     assert_eq!(
         gui_active_destination(&app),
         Some(crate::app::gui_library::GuiDestinationKind::Podcasts { lib_idx: 1 }),

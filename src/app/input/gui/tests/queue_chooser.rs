@@ -47,9 +47,9 @@ fn resting() -> mbv_queue::NamedQueueId {
 fn app_with_queues() -> (GuiCore, Receiver<CtrlCmd>) {
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
     while cmd_rx.try_recv().is_ok() {}
-    app.set_client_capabilities(gui_client_capabilities());
+    app.set_client_capabilities_for_test(gui_client_capabilities());
     app.set_panel_focus(PanelFocus::Queue);
-    app.adopt_named_queue_list(
+    app.seed_named_queue_list_for_test(
         vec![
             mbv_ctrl::NamedQueueEntry {
                 id: current(),
@@ -207,9 +207,8 @@ fn an_open_name_is_selected_so_enter_keeps_it_and_backspace_clears_it() {
 fn a_peer_entry_cannot_be_renamed() {
     let (mut core, cmd_rx) = app_with_queues();
     let (peer, peer_rx) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
-    let sess = mbv_emby::test_support::make_session("peer-host", "mbv");
-    core.app.switch_to_direct_remote(
-        &sess,
+    core.app.attach_direct_remote_for_test(
+        "peer-host",
         peer,
         peer_rx,
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().expect("a test address")),
@@ -272,9 +271,8 @@ fn the_chooser_projects_its_entries_and_rename_draft() {
 fn the_chooser_counts_the_current_resting_and_peer_queues() {
     let (mut core, _cmd_rx) = app_with_queues();
     let (peer, peer_rx) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
-    let sess = mbv_emby::test_support::make_session("peer-host", "mbv");
-    core.app.switch_to_direct_remote(
-        &sess,
+    core.app.attach_direct_remote_for_test(
+        "peer-host",
         peer,
         peer_rx,
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().expect("a test address")),
@@ -303,7 +301,7 @@ fn the_current_queues_count_follows_a_removal() {
     core.app.show_local_current_entry();
 
     core.app
-        .handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        .apply_player_event_for_test(PlayerEvent::UnifiedQueueUpdated(Box::new(
             emby_unified_state(&make_items(2), 0),
         )));
 

@@ -255,6 +255,17 @@ impl App {
         self.channels.lib_rx.recv().ok()
     }
 
+    /// The next queued library event, waiting at most `bound`: the bounded
+    /// form a test uses, so a broken fetch fails the test instead of hanging
+    /// it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn recv_lib_event_within_for_test(
+        &self,
+        bound: std::time::Duration,
+    ) -> Option<crate::app::LibEvent> {
+        self.channels.lib_rx.recv_timeout(bound).ok()
+    }
+
     /// Whether the active tab shows the Feeds destination.
     #[must_use]
     pub fn active_tab_is_feeds(&self) -> bool {

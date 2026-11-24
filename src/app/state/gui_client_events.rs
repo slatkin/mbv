@@ -81,8 +81,8 @@ impl GuiClientEvents {
     /// Wait up to `timeout` for one queued result, for a test that has no tick
     /// to wake it (task 8.3 of `decouple-client-core`). `None` when none
     /// arrives in time.
-    #[cfg(test)]
-    pub(in crate::app) fn wait_take_for_test(
+    #[cfg(any(test, feature = "test"))]
+    pub(crate) fn wait_take_for_test(
         &self,
         timeout: std::time::Duration,
     ) -> Option<GuiClientEvent> {

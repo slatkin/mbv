@@ -24,29 +24,29 @@ fn launch_roundtrip_app(target: &GuiCollectionTarget) -> App {
         GuiCollectionTarget::Music(_) => {
             let http = MockHttp::new();
             let mut app = app_with_music_groups(&http);
-            app.emby_runtime.client = None;
+            app.disconnect_emby_client_for_test();
             app
         }
         GuiCollectionTarget::Podcasts(_) => {
             let mut app = make_app_stub();
             app.seed_gui_abs_libraries_for_test();
             app.seed_gui_podcast_shows_for_test(1, &[("show-a", "Show A"), ("show-b", "Show B")]);
-            app.tab = TabSelection::AudiobookshelfLibrary(1);
+            app.seed_active_tab_for_test(TabSelection::AudiobookshelfLibrary(1));
             app
         }
         GuiCollectionTarget::Feeds => {
             let mut app = make_app_stub();
             app.seed_gui_feeds_for_test(&[("Feed A", FEED_A), ("Feed B", FEED_B)]);
-            app.tab = TabSelection::Feeds;
+            app.seed_active_tab_for_test(TabSelection::Feeds);
             app
         }
         GuiCollectionTarget::EmbyFeed(_) => {
             let mut app = make_app_stub();
-            let mut config = app.config.lock().unwrap().clone();
+            let mut config = app.config_for_test(|config| config.clone());
             config.server_url = "http://127.0.0.1:1".into();
             install_test_emby(&mut app, config);
-            app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
-            app.emby_runtime.client = None;
+            app.config_for_test(|config| config.feed_view_libraries = vec!["youtube".into()]);
+            app.disconnect_emby_client_for_test();
             let mut library = make_item("YouTube", "CollectionFolder");
             library.id = "lib-feed".into();
             library.collection_type = "homevideos".into();
@@ -60,8 +60,8 @@ fn launch_roundtrip_app(target: &GuiCollectionTarget) -> App {
                     folder_item("folder-b", "Folder B"),
                 ],
             ));
-            app.libs.push(tab);
-            app.tab = TabSelection::EmbyLibrary(0);
+            app.push_library_for_test(tab);
+            app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
             app
         }
     }
@@ -190,7 +190,7 @@ fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.emby_runtime.client = None;
+    app.disconnect_emby_client_for_test();
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A), ("Feed B", FEED_B)]);
     let destination = saved_music_identity();
     let state = mbv_config::GuiLaunchState {
@@ -231,12 +231,12 @@ fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
 fn a_saved_resting_music_set_installs_without_a_group_list() {
     let _guard = crate::app::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.music_levels = vec!["group".to_string(), "album".to_string()];
+    app.seed_music_levels_for_test(&["group", "album"]);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = LIB_ID.into();
     library.collection_type = "music".into();
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     let destination = saved_music_identity();
     let state = mbv_config::GuiLaunchState {
         version: mbv_config::GUI_LAUNCH_STATE_VERSION,
@@ -284,8 +284,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
     let mut app = app_with_music_groups(&http);
     app.seed_gui_abs_libraries_for_test();
     app.seed_gui_podcast_shows_for_test(1, &[("show-a", "Show A")]);
-    app.audiobookshelf_runtime =
-        crate::app::state::service_runtime::AudiobookshelfRuntime::new(true);
+    app.seed_audiobookshelf_runtime_starting_for_test(true);
     let destination = saved_music_identity();
     let state = mbv_config::GuiLaunchState {
         version: mbv_config::GUI_LAUNCH_STATE_VERSION,
@@ -310,9 +309,8 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
     );
 
     // The user opens Podcasts, and the Audiobookshelf catalog settles.
-    app.tab = TabSelection::AudiobookshelfLibrary(1);
-    app.audiobookshelf_runtime =
-        crate::app::state::service_runtime::AudiobookshelfRuntime::new(false);
+    app.seed_active_tab_for_test(TabSelection::AudiobookshelfLibrary(1));
+    app.seed_audiobookshelf_runtime_starting_for_test(false);
 
     assert!(
         crate::app::tests::restore_launch_collections(&mut app, &state, &destination),
@@ -357,10 +355,7 @@ fn a_saved_group_no_longer_held_restores_as_all() {
         !crate::app::tests::stub_gui_state(|state| state.library_groups.contains_key(&0)),
         "the vanished group restores as All: no entry is stored"
     );
-    assert!(
-        app.channels.lib_rx.try_recv().is_err(),
-        "All fetches nothing"
-    );
+    assert!(app.try_recv_lib_event().is_none(), "All fetches nothing");
 }
 
 /// Contract (design D14): the Shows view saves in its own launch field and an
@@ -372,8 +367,8 @@ fn the_shows_view_survives_a_restart() {
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-tv".into();
     library.collection_type = "tvshows".into();
-    app.libs.push(crate::app::LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
+    app.push_library_for_test(crate::app::LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     crate::app::tests::stub_gui_state(|state| state.shows_views.insert(0, GuiShowsView::Upcoming));
 
     let saved = crate::app::tests::with_stub_gui(&mut app, |core| core.gui_launch_state());
