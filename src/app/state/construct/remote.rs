@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex, mpsc};
 /// `mpris::start` serves a D-Bus connection from a thread with no shutdown
 /// path -- leaked into every test process that constructs a remote App, where
 /// process teardown races it (issue #757). Tests leave `mpris` unset.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test")))]
 fn start_mpris(
     remote: &mbv_remote_player::RemotePlayer,
     endpoint: &DaemonEndpoint,
@@ -221,7 +221,7 @@ impl App {
         // D-Bus connection on the real session bus from a thread that has no
         // shutdown path -- leaked into every test process that constructs a
         // remote App, where process teardown races it.
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test")))]
         mbv_config::evict_old_image_cache();
         // EmbyClient retains this snapshot only for constructing Emby API
         // requests. App general state owns the independent application copy;
@@ -231,9 +231,9 @@ impl App {
         let config = Arc::new(Mutex::new(app_config));
         let snapshot = RemoteSnapshot::take(&remote);
         let local_daemon_bootstrap = endpoint.is_local().then(|| snapshot.local_bootstrap());
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test")))]
         let mpris_handle = Some(start_mpris(&remote, endpoint));
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test"))]
         let mpris_handle = None;
         let player = PlayerProxy::from_remote(remote, always_play_next);
         let audiobookshelf_startup_requested =

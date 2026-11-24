@@ -46,7 +46,7 @@ impl App {
     /// worker would (design D5 of `decouple-client-core`): a dependent Client's
     /// test scripts the result instead of starting a worker, so the next tick's
     /// `drain_client_events` takes it from the same channel production fills.
-    #[cfg(feature = "test")]
+    #[cfg(any(test, feature = "test"))]
     #[doc(hidden)]
     pub fn send_gui_client_event_for_test(
         &self,
