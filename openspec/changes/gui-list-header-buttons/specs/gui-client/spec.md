@@ -90,11 +90,6 @@ In the Shows All view, an open series row in view whose seasons are not loaded S
 
 The list header of every GUI Library destination SHALL show a refresh button on its title line: Home, Music, Shows in all three views, each plain Emby library, an Emby library in feed-group mode, Audiobooks, Podcasts, and Feeds. On a tree list it SHALL sit directly to the left of Expand all. On another list it SHALL sit directly to the left of the dropdown trigger, or of the sort control where there is no trigger, and it SHALL be the line's rightmost item where there is neither.
 
-#### Scenario: A plain library title line
-
-- **WHEN** a Movies library paints
-- **THEN** the title line shows the Service mark at the left, then the refresh button directly left of the sort control at the right end
-
 #### Scenario: Home title line
 
 - **WHEN** Home paints
@@ -107,7 +102,7 @@ The list header of every GUI Library destination SHALL show a refresh button on 
 
 ### Requirement: A refresh reloads the list and keeps its rows until the new ones arrive
 
-A press on the refresh button SHALL reload the shown destination's list from its Service, as the TUI refresh does for that destination. The list SHALL keep its rows until the new rows arrive. In a tree list, the children of open parent rows SHALL reload too. A failed refresh SHALL keep the rows the list showed. A refresh SHALL NOT change the pick, the filter, the scroll position, or which rows are open.
+A press on the refresh button SHALL reload the shown destination's list from its Service, as the TUI refresh does for that destination. The list SHALL keep its rows until the new rows arrive. A failed refresh SHALL keep the rows the list showed. A refresh SHALL NOT change the pick, the filter, the scroll position, or which rows are open.
 
 #### Scenario: A refresh brings a new item
 
@@ -115,12 +110,6 @@ A press on the refresh button SHALL reload the shown destination's list from its
 - **WHEN** the user presses the refresh button
 - **THEN** the rows stay on screen while the refresh runs
 - **AND** the new movie shows when the refresh lands
-
-#### Scenario: A refresh of an open album
-
-- **GIVEN** the Music list shows an open album with its tracks
-- **WHEN** the user presses the refresh button
-- **THEN** the album stays open and its tracks reload in place
 
 #### Scenario: A failed refresh
 
@@ -132,6 +121,28 @@ A press on the refresh button SHALL reload the shown destination's list from its
 
 - **WHEN** the user presses the refresh button in the Shows New view
 - **THEN** the latest-episodes list reloads and the view stays New
+
+### Requirement: A tree refresh reloads the children of the open rows in view
+
+In a tree list, a refresh SHALL also reload the children of each open parent row in view: the tracks of an open Music album, the seasons of an open Shows series, and the episodes of an open Shows season. A refresh SHALL start no load for the children of an open parent row that is out of view.
+
+#### Scenario: A refresh of an open album in view
+
+- **GIVEN** the Music list shows an open album with its tracks in view
+- **WHEN** the user presses the refresh button
+- **THEN** the album stays open and its tracks reload in place
+
+#### Scenario: An open album out of view
+
+- **GIVEN** the Music list holds an open album that is scrolled out of view
+- **WHEN** the user presses the refresh button
+- **THEN** no track load starts for that album
+
+#### Scenario: A refresh of an open series in view
+
+- **GIVEN** the Shows All view shows an open series with its seasons in view
+- **WHEN** the user presses the refresh button
+- **THEN** the series stays open and its seasons reload in place
 
 ## MODIFIED Requirements
 
@@ -154,3 +165,17 @@ The GUI Library panel SHALL show no pill row and no selector row between the top
 
 - **WHEN** the user presses the trigger
 - **THEN** the dropdown opens directly under the trigger, over the list rows
+
+### Requirement: The sort control is the rightmost item of the title line
+
+The sort control SHALL sit on the list header's title line as its rightmost item. Where the title line holds a dropdown trigger, the collection dropdown or the Shows view dropdown, the sort control SHALL sit directly to the right of that trigger. The sort control SHALL NOT add a row between the top bar and the list.
+
+#### Scenario: Podcasts title line
+
+- **WHEN** the Podcasts destination paints
+- **THEN** the title line shows the Service mark at the left, then the refresh button, then the collection dropdown trigger, then the sort control at the right end
+
+#### Scenario: A plain library title line
+
+- **WHEN** a Movies library paints
+- **THEN** the title line shows the Service mark at the left, then the refresh button, then the sort control at the right end
