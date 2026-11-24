@@ -151,6 +151,10 @@ uuid = { workspace = true, features = ["v4", "fast-rng"] }
 rstest.workspace = true
 
 [package.metadata.deb]
+# The .deb keeps the `mbv` package name (not the crate name): it ships the
+# `mbv` and `mbv-gui` binaries, and the release workflow uploads
+# `target/debian/mbv_*.deb`.
+name = "mbv"
 maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["../../LICENSE", "0"]

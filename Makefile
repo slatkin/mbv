@@ -74,13 +74,13 @@ clean-dev:
 # refuses an Owner whose build id differs. `cargo run -p mbv-gui` alone leaves
 # `mbv` stale after a commit, so build both before the window starts.
 dev:
-	cargo build -p mbv -p mbv-gui
+	cargo build -p mbv-tui -p mbv-gui
 	cargo run -p mbv-gui
 
 # The same as `dev`, with the release profile: an optimized build that maps
 # far less code than the debug binary, for memory and speed checks.
 dev-release:
-	cargo build --release -p mbv -p mbv-gui
+	cargo build --release -p mbv-tui -p mbv-gui
 	cargo run --release -p mbv-gui
 
 # The GUI's stylesheet builds from `assets/app.css` through the Tailwind
