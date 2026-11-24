@@ -30,15 +30,14 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX,
-};
+use crate::window::components::library_item_row::ROW_PADDING_PX;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
+use crate::window::components::list_row::{FlatRow, LibraryRowThumb, LibraryTrailPart};
 use crate::window::components::tree_guide::{
     LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides, subtree_tails,
     tail_divider_style,
@@ -187,8 +186,8 @@ fn paint_library_row(
     }
 }
 
-/// A top-level artist row (gui-delineated-rows design D1): the shared row part
-/// over the artist's name and its art thumb. It is a tree parent
+/// A top-level artist row (gui-delineated-rows design D1): the shared top-level
+/// row part over the artist's name and its art thumb. It is a tree parent
 /// (gui-tree-double-click design D2, D4), so it paints no caret: its
 /// double-click toggles the node and its hover shows the hint. A press picks
 /// nothing (the Hero is album-scoped), and a double-click only opens it, so the
@@ -214,19 +213,15 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
     rsx! {
-        LibraryItemRow {
+        FlatRow {
             attr: "",
             kind: "artist".to_owned(),
             id: base.id.clone(),
-            height: base.height,
             title: name.clone(),
             subtitle: None,
             trail: None,
             trail_part: LibraryTrailPart::Date,
-            title_color: canvas_var("text"),
-            background: picked_row.then(|| canvas_var("library-raise")),
             selected: picked_row,
-            progress: None,
             thumb: Some(LibraryRowThumb {
                 art: art.clone(),
                 media: *media,

@@ -18,21 +18,18 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowStateFrame};
+use crate::bridge::frame::library::GuiHomeRowIdFrame;
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, RowPlayedMark, name_color,
-};
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
+use crate::window::components::list_row::{FlatRow, LibraryRowThumb, LibraryTrailPart};
 use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
 use crate::window::library::parts::{library_home_detail, library_home_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
-use crate::window::theme::canvas_var;
 
 /// The row one item row's right-click menu opens for (design D8, D15): the
 /// Home row's stable identity, which the core resolves through the Home
@@ -50,29 +47,6 @@ fn home_menu_row(id: &GuiHomeRowIdFrame) -> crate::gui_core::GuiLibraryMenuRow {
         }
     };
     crate::gui_core::GuiLibraryMenuRow::Home(row)
-}
-
-/// The row's state as the shared part reads it: the resume percent of an
-/// active row.
-fn row_progress(state: &GuiHomeRowStateFrame) -> Option<f32> {
-    match state {
-        GuiHomeRowStateFrame::Active { progress } => progress.map(f32::from),
-        _ => None,
-    }
-}
-
-/// The played treatment a `Recently added` row paints: played, or unplayed
-/// (which a partly played row also paints, with its resume run). A `Continue
-/// watching` row paints none.
-fn recent_played_mark(item: &HomeItemRow) -> Option<RowPlayedMark> {
-    match (&item.row_id, &item.state) {
-        (GuiHomeRowIdFrame::Continue(_), _) => None,
-        (GuiHomeRowIdFrame::Recent(_), GuiHomeRowStateFrame::Played) => Some(RowPlayedMark::Played),
-        (
-            GuiHomeRowIdFrame::Recent(_),
-            GuiHomeRowStateFrame::Ordinary | GuiHomeRowStateFrame::Active { .. },
-        ) => Some(RowPlayedMark::Unplayed),
-    }
 }
 
 /// One painted row of the flat list: the section
@@ -97,21 +71,18 @@ fn paint_home_row(
         HomeListRow::Spacer { height, .. } => rsx! {
             div { style: "height: {height}px;", "aria-hidden": "true" }
         },
-        HomeListRow::Item {
-            id,
-            height,
-            row: item,
-            ..
-        } => paint_home_item_row(id, *height, item, row, library, selected),
+        HomeListRow::Item { id, row: item, .. } => {
+            paint_home_item_row(id, item, row, library, selected)
+        }
     }
 }
 
 /// One painted item row: the shared top-level row part over the carried row —
 /// its art thumb, the two-line name, the trailing text, and the resume run
-/// inside the thumb (gui-delineated-rows design D1).
+/// inside the thumb (gui-delineated-rows design D1). The row passes its own
+/// play state, so the part derives the title's tone and the run's length.
 fn paint_home_item_row(
     id: &str,
-    height: f32,
     item: &HomeItemRow,
     row: &HomeListRow,
     library: &LibraryState,
@@ -128,22 +99,18 @@ fn paint_home_item_row(
     let menu_row = Some(home_menu_row(&item.row_id));
     let menu_library = library.clone();
     rsx! {
-        LibraryItemRow {
+        FlatRow {
             attr: "home",
             kind: "item".to_owned(),
             id: id.to_owned(),
-            height,
             title: item.title.clone(),
             subtitle: item.subtitle.clone(),
             // The trailing text rides the row's right-hand gutter: the Continue
             // watching time left, or the Recently added row's date (design D9).
             trail: item.trailing.clone(),
             trail_part: LibraryTrailPart::Date,
-            title_color: name_color(&item.state),
-            background: selected_row.then(|| canvas_var("library-raise")),
+            play: Some(item.state.clone()),
             selected: selected_row,
-            progress: row_progress(&item.state),
-            played_mark: recent_played_mark(item),
             thumb: Some(LibraryRowThumb {
                 art: item.art.clone(),
                 media: item.media,

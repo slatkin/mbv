@@ -29,9 +29,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiShowsList;
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, mark,
-};
+use crate::window::components::library_item_row::{ROW_PADDING_PX, mark};
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
@@ -39,6 +37,7 @@ use crate::window::components::library_list_column::{
 };
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
+use crate::window::components::list_row::{FlatRow, LibraryRowThumb, LibraryTrailPart};
 use crate::window::components::tree_guide::{
     LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides, subtree_tails,
     tail_divider_style,
@@ -127,15 +126,14 @@ fn row_background(row: &ShowsListRow, selected: Option<&str>) -> Option<String> 
     is_selected_row(row, selected).then(|| canvas_var("library-raise"))
 }
 
-/// A top-level series row (gui-delineated-rows design D1): the shared row part
-/// over the series' name and its art thumb. An expandable series is a tree
-/// parent (gui-tree-double-click design D1, D2, D4), so it paints no caret: its
-/// press selects it, its double-click toggles the node, and its hover shows the
-/// hint. A series that does not expand takes no double-click.
+/// A top-level series row (gui-delineated-rows design D1): the shared top-level
+/// row part over the series' name and its art thumb. An expandable series is a
+/// tree parent (gui-tree-double-click design D1, D2, D4), so it paints no caret:
+/// its press selects it, its double-click toggles the node, and its hover shows
+/// the hint. A series that does not expand takes no double-click.
 fn paint_shows_series(
     row: &ShowsListRow,
     library: &LibraryState,
-    shows: Option<&GuiShowsList>,
     selected: Option<&str>,
 ) -> Element {
     let ShowsListRow::Series(series) = row else {
@@ -154,19 +152,15 @@ fn paint_shows_series(
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
     rsx! {
-        LibraryItemRow {
+        FlatRow {
             attr: "shows",
             kind: "series".to_owned(),
             id: row.id().to_owned(),
-            height: series.height,
             title: series.title.clone(),
             subtitle: None,
             trail: None,
             trail_part: LibraryTrailPart::Date,
-            title_color: row_name_color(shows, row),
-            background: row_background(row, selected),
             selected: selected_row,
-            progress: None,
             thumb: Some(LibraryRowThumb {
                 art: series.art.clone(),
                 media: series.media,
@@ -317,19 +311,15 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
     let menu_id = (!display_only).then(|| LibraryState::row_menu_item(id.clone()));
     let menu_library = library.clone();
     rsx! {
-        LibraryItemRow {
+        FlatRow {
             attr: "shows",
             kind: "flat".to_owned(),
             id,
-            height: row.height,
             title: row.title.clone(),
             subtitle: row.subtitle.clone(),
             trail: row.date.clone(),
             trail_part: LibraryTrailPart::Date,
-            title_color: canvas_var("text"),
-            background: selected_row.then(|| canvas_var("library-raise")),
             selected: selected_row,
-            progress: None,
             thumb: Some(LibraryRowThumb {
                 art: row.art.clone(),
                 media: row.media,
@@ -447,7 +437,7 @@ fn paint_shows_row(
     let tail = tails.contains(row.id());
     match row {
         ShowsListRow::Heading(heading) => paint_letter_heading("shows", heading),
-        ShowsListRow::Series(_) => paint_shows_series(row, library, shows, selected),
+        ShowsListRow::Series(_) => paint_shows_series(row, library, selected),
         ShowsListRow::Season(_) => paint_shows_season(row, library, shows, selected, tail),
         ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected, tail),
         ShowsListRow::Flat(flat) => paint_shows_flat(flat, library, selected),

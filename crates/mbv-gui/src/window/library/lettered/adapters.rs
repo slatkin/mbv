@@ -5,9 +5,10 @@
 //! [`LetteredDestination`] has one generic body over the four and each
 //! destination keeps only its data and its paint code.
 //!
-//! The row painters are the four former list components' own painters, moved
-//! unchanged: each destination's rows keep their attributes, their kinds, and
-//! their trail parts. The press and the double-click ride the adapter's
+//! The row painters paint the shared top-level row part: each destination's
+//! rows keep their attributes, their kinds, and their trail parts, and the two
+//! entry lists pass their carried play state so the part derives the title's
+//! tone and the thumb's run. The press and the double-click ride the adapter's
 //! command methods, so the generic component calls one press path for all
 //! four.
 
@@ -22,10 +23,8 @@ use crate::bridge::frame::library::{
     GuiPodcastsList,
 };
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::window::components::library_item_row::{
-    ItemRowPaint, LibraryItemRow, LibraryRowThumb, LibraryTrailPart, paint_item_row,
-};
 use crate::window::components::library_letter_heading::paint_letter_heading;
+use crate::window::components::list_row::{FlatRow, LibraryRowThumb, LibraryTrailPart};
 use crate::window::library::list::LetteredRow;
 use crate::window::library::list_state::ListUiState;
 use crate::window::library::parts::{
@@ -36,7 +35,6 @@ use crate::window::library::scroll::ListScroll;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
-use crate::window::theme::canvas_var;
 
 use super::{
     LetteredDestination, LetteredHeader, LetteredItemRow, LetteredLoadFacts, LetteredNotices,
@@ -162,7 +160,6 @@ fn paint_emby_row(
         LetteredRow::Heading(heading) => paint_letter_heading("emby", heading),
         LetteredRow::Item(item) => {
             let selected_row = selected == Some(item.id.as_str());
-            let background = selected_row.then(|| canvas_var("library-raise"));
             let press_row = row.clone();
             let press_library = library.clone();
             let play_id = item.row.id.clone();
@@ -170,19 +167,15 @@ fn paint_emby_row(
             let menu_id = item.row.id.clone();
             let menu_library = library.clone();
             rsx! {
-                LibraryItemRow {
+                FlatRow {
                     attr: "emby",
                     kind: kind_word(item.row.kind).to_owned(),
                     id: item.id.clone(),
-                    height: item.height,
                     title: item.row.title.clone(),
                     subtitle: item.row.subtitle.clone(),
                     trail: item.row.date.clone(),
                     trail_part: LibraryTrailPart::Date,
-                    title_color: canvas_var("text"),
-                    background,
                     selected: selected_row,
-                    progress: None,
                     thumb: Some(LibraryRowThumb {
                         art: item.row.art.clone(),
                         media: item.row.media,
@@ -311,19 +304,15 @@ fn paint_audiobooks_row(
             let menu_id = item.row.id.clone();
             let menu_library = library.clone();
             rsx! {
-                LibraryItemRow {
+                FlatRow {
                     attr: "abs",
                     kind: "book".to_owned(),
                     id: item.id.clone(),
-                    height: item.height,
                     title: item.row.title.clone(),
                     subtitle: item.row.subtitle.clone(),
                     trail: Some(item.row.duration.clone()),
                     trail_part: LibraryTrailPart::Duration,
-                    title_color: canvas_var("text"),
-                    background: selected_row.then(|| canvas_var("library-raise")),
                     selected: selected_row,
-                    progress: None,
                     thumb: Some(LibraryRowThumb {
                         art: item.row.art.clone(),
                         media: item.row.media,
@@ -466,21 +455,29 @@ fn paint_podcasts_item(
     let menu_id = row.row.id.clone();
     let menu_library = library.clone();
     let pressed_row = LetteredRow::Item(press_item);
-    paint_item_row(
-        ItemRowPaint {
+    rsx! {
+        FlatRow {
             attr: "podcasts",
-            kind: "episode",
-            height: PodcastsList::ROW_HEIGHT,
-            id: &row.id,
-            entry: &row.row,
+            kind: "episode".to_owned(),
+            id: row.id.clone(),
+            title: row.row.title.clone(),
+            subtitle: row.row.subtitle.clone(),
+            trail: row.row.date.clone(),
+            trail_part: LibraryTrailPart::Date,
+            play: Some(row.row.state.clone()),
             selected: Some(row.id.as_str()) == selected,
-        },
-        Callback::new(move |()| PodcastsList::select(&press_library, &pressed_row)),
-        Callback::new(move |()| PodcastsList::play(&play_library, &play_id)),
-        Some(Callback::new(move |(x, y): (f32, f32)| {
-            menu_library.open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);
-        })),
-    )
+            thumb: Some(LibraryRowThumb {
+                art: row.row.art.clone(),
+                media: row.row.media,
+            }),
+            on_press: Callback::new(move |()| PodcastsList::select(&press_library, &pressed_row)),
+            on_play: Callback::new(move |()| PodcastsList::play(&play_library, &play_id)),
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
+                menu_library
+                    .open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);
+            })),
+        }
+    }
 }
 
 /// The Feeds destination's adapter (design D4): its carried rows are the entry
@@ -600,19 +597,27 @@ fn paint_feeds_item(
     let menu_id = row.row.id.clone();
     let menu_library = library.clone();
     let pressed_row = LetteredRow::Item(press_item);
-    paint_item_row(
-        ItemRowPaint {
+    rsx! {
+        FlatRow {
             attr: "feeds",
-            kind: "entry",
-            height: FeedsList::ROW_HEIGHT,
-            id: &row.id,
-            entry: &row.row,
+            kind: "entry".to_owned(),
+            id: row.id.clone(),
+            title: row.row.title.clone(),
+            subtitle: row.row.subtitle.clone(),
+            trail: row.row.date.clone(),
+            trail_part: LibraryTrailPart::Date,
+            play: Some(row.row.state.clone()),
             selected: Some(row.id.as_str()) == selected,
-        },
-        Callback::new(move |()| FeedsList::select(&press_library, &pressed_row)),
-        Callback::new(move |()| FeedsList::play(&play_library, &play_id)),
-        Some(Callback::new(move |(x, y): (f32, f32)| {
-            menu_library.open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);
-        })),
-    )
+            thumb: Some(LibraryRowThumb {
+                art: row.row.art.clone(),
+                media: row.row.media,
+            }),
+            on_press: Callback::new(move |()| FeedsList::select(&press_library, &pressed_row)),
+            on_play: Callback::new(move |()| FeedsList::play(&play_library, &play_id)),
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
+                menu_library
+                    .open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);
+            })),
+        }
+    }
 }
