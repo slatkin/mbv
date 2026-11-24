@@ -12,6 +12,7 @@ use mbv_text::html::decode_entities;
 mod date;
 mod error;
 mod platform;
+mod url;
 #[doc(inline)]
 pub use self::date::parse_pub_date_secs;
 #[doc(inline)]
@@ -37,16 +38,14 @@ fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
     mbv_net::native_tls_agent(mbv_net::HttpService::Feeds, None, global_timeout)
 }
 pub fn normalize_feed_url(input: &str) -> Result<String, FeedError> {
-    let Some((host, path_and_query)) = url_authority_and_path(input) else {
+    let Some((host, path_and_query)) = url::host_and_path(input) else {
         return Ok(input.to_string());
     };
     if !matches!(host, "youtube.com" | "www.youtube.com" | "m.youtube.com") {
         return Ok(input.to_string());
     }
 
-    let (path, query) = path_and_query
-        .split_once('?')
-        .map_or((path_and_query, ""), |(path, query)| (path, query));
+    let (path, query) = url::split_query(path_and_query);
     if path == "/feeds/videos.xml"
         && query.split('&').any(|param| {
             param
@@ -81,15 +80,6 @@ pub fn normalize_feed_url(input: &str) -> Result<String, FeedError> {
         .read_to_string()
         .map_err(|e| FeedError::read_body("Failed to read YouTube channel page", e))?;
     extract_rss_link(&body).ok_or_else(FeedError::missing_youtube_feed)
-}
-
-fn url_authority_and_path(input: &str) -> Option<(&str, &str)> {
-    let rest = input
-        .strip_prefix("https://")
-        .or_else(|| input.strip_prefix("http://"))?;
-    let slash = rest.find('/')?;
-    let host = rest[..slash].split('@').next()?.split(':').next()?;
-    Some((host, &rest[slash..]))
 }
 
 /// Tags matching `<link ...>` in `text`, in order, as their inner text

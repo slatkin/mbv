@@ -47,6 +47,8 @@ use rstest::rstest;
 #[case::peer_tube_instance_wide("https://video.example.com/feeds/videos.xml", None)]
 #[case::youtube_lookalike("https://notyoutube.com/feed", None)]
 #[case::userinfo_naming_youtube("https://youtube.com@evil.example/feed", None)]
+#[case::query_naming_youtube("https://evil.example?@youtube.com/feed", None)]
+#[case::no_path("https://www.youtube.com?si=x", None)]
 #[case::userinfo_before_youtube(
     "https://user:pass@www.youtube.com/feeds/videos.xml?channel_id=UCabc",
     Some(FeedPlatform::YouTube)

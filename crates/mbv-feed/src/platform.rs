@@ -74,7 +74,7 @@ impl FeedPlatform {
     /// instead.
     #[must_use]
     pub fn of_url(url: &str) -> Option<Self> {
-        let (host, path_and_query) = host_and_path(url)?;
+        let (host, path_and_query) = crate::url::host_and_path(url)?;
         if let Some(platform) = host_platform(host) {
             return Some(platform);
         }
@@ -82,26 +82,7 @@ impl FeedPlatform {
     }
 }
 
-/// The host and the path with query of an `http(s)` URL, or `None` when the URL
-/// has no such scheme or no path.
-///
-/// The host is the authority's part after any userinfo and before any port, so
-/// `https://user:pass@www.youtube.com/feed` reads `www.youtube.com` and
-/// `https://youtube.com@evil.example/feed` reads `evil.example`.
-fn host_and_path(url: &str) -> Option<(&str, &str)> {
-    let rest = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))?;
-    let slash = rest.find('/')?;
-    let authority = &rest[..slash];
-    let host = authority
-        .rsplit_once('@')
-        .map_or(authority, |(_, host)| host);
-    let host = host.split_once(':').map_or(host, |(host, _)| host);
-    Some((host, &rest[slash..]))
-}
-
-/// The platform that owns `host` by its domain, or `None`.
+/// The host platform that owns `host` by its domain, or `None`.
 fn host_platform(host: &str) -> Option<FeedPlatform> {
     HOST_DOMAINS
         .iter()
@@ -121,9 +102,7 @@ fn host_matches(host: &str, domain: &str) -> bool {
 /// Whether `path_and_query` is a `PeerTube` feed narrowed to a channel or a
 /// playlist.
 fn peer_tube_feed(path_and_query: &str) -> bool {
-    let (path, query) = path_and_query
-        .split_once('?')
-        .unwrap_or((path_and_query, ""));
+    let (path, query) = crate::url::split_query(path_and_query);
     PEER_TUBE_PATHS.contains(&path) && query.split('&').any(has_peer_tube_filter)
 }
 
