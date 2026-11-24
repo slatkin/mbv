@@ -25,7 +25,7 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 4. Remove the bespoke paths
 
-- [ ] 4.1 Delete `library_item_row.rs` and its directory, `RowPlayedMark`, `name_color`, `paint_item_row`, `ItemRowPaint`, and `mark` when no caller remains. Verify: `rg -n "LibraryItemRow|RowPlayedMark|ItemRowPaint|paint_item_row|name_color|row_style|item_row_style|row_fill|PLAYLIST_ROW_HEIGHT_PX|PLAYLIST_GUIDE_X|data-playlists-row" crates/mbv-gui/src` finds nothing, and `rg -n "border-radius|canvas-selected|library-raise|tree-subtree" crates/mbv-gui/src/window/components/library_home_list.rs crates/mbv-gui/src/window/components/library_list.rs crates/mbv-gui/src/window/components/library_shows_list.rs crates/mbv-gui/src/window/components/playlists_panel.rs crates/mbv-gui/src/window/library/lettered/adapters.rs` finds no row style.
+- [ ] 4.1 Delete `library_item_row.rs` and its directory, `RowPlayedMark`, `name_color`, `paint_item_row`, `ItemRowPaint`, and `mark` once no caller remains. Verify: `cargo clippy -p mbv-gui --all-targets -- -D warnings` passes (a surviving caller fails to compile, and a leftover helper fails as dead code).
 
 ## 5. Integration
 
