@@ -53,7 +53,6 @@ mod infra;
 pub mod input;
 pub mod owner_link;
 pub mod pin;
-pub mod projection;
 pub mod queue_card_artwork;
 mod queue_footer_projection;
 pub mod queue_playback_projection;

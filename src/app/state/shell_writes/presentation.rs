@@ -207,6 +207,21 @@ impl App {
         }
     }
 
+    /// Drop the hero cover crop the artwork entry under `key` carries, so the
+    /// plain fit protocol rebuilds: the stored encoding is dropped with it, and
+    /// the presenting Client re-encodes from the retained source at its next
+    /// drain (design D2 rule 3). An entry that carries no cover crop, or that
+    /// is already gone, is left alone.
+    pub fn clear_image_cover_box(&mut self, key: &str) {
+        let dropped = self
+            .images
+            .image_mut(key)
+            .is_some_and(|entry| entry.cover_box.take().is_some());
+        if dropped {
+            self.queue_protocol_clear(key);
+        }
+    }
+
     /// Hold `entry` as the artwork composed and encoded under `key`: a derived
     /// entry the presenting Client builds from a source image, stored where the
     /// cache's eviction and derived-variant rules reach it.
