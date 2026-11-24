@@ -123,7 +123,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
         div {
             class: "flex items-center whitespace-nowrap",
             style: format!(
-                "height: {HEADER_HEIGHT_PX}px; padding: 0 12px; gap: 4px; background: {}; border-bottom: 1px solid {}; margin-inline: calc(var(--mbv-cell-col) * -2); --hover-veil: transparent;",
+                "height: {HEADER_HEIGHT_PX}px; padding: 0 8px; gap: 2px; background: {}; border-bottom: 1px solid {}; margin-inline: calc(var(--mbv-cell-col) * -2); --hover-veil: transparent;",
                 ef_var(EfToken::Bg1),
                 ef_var(EfToken::Bg3)
             ),
@@ -145,13 +145,13 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 {
                     let switcher_style = if chooser_open {
                         format!(
-                            "height: {CONTROL_PX}px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: {}; background: {};",
+                            "height: {CONTROL_PX}px; padding: 0 6px 0 8px; gap: 6px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: {}; background: {};",
                             ef_var(EfToken::Grey0),
                             ef_var(EfToken::Bg3)
                         )
                     } else {
                         format!(
-                            "height: {CONTROL_PX}px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;"
+                            "height: {CONTROL_PX}px; padding: 0 6px 0 8px; gap: 6px; border-radius: 6px; border-width: 1px; border-style: solid;"
                         )
                     };
                     rsx! {
@@ -220,7 +220,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 "data-new-queue": "",
                 onmounted: new_queue,
                 Plus {
-                    size: 16,
+                    size: 14,
                     stroke_width: 1.6,
                 }
             }
@@ -244,7 +244,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     "data-close-queue": "",
                     onmounted: close_mark,
                     X {
-                        size: 16,
+                        size: 14,
                         stroke_width: 1.6,
                     }
                 }
@@ -259,7 +259,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     "data-close-queue": "",
                     disabled: true,
                     X {
-                        size: 16,
+                        size: 14,
                         stroke_width: 1.6,
                     }
                 }
@@ -280,7 +280,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     "data-rename-queue": "",
                     onmounted: rename_mark,
                     SquarePen {
-                        size: 16,
+                        size: 14,
                         stroke_width: 1.6,
                     }
                 }
@@ -295,7 +295,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     "data-rename-queue": "",
                     disabled: true,
                     SquarePen {
-                        size: 16,
+                        size: 14,
                         stroke_width: 1.6,
                     }
                 }
@@ -325,13 +325,13 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                         span {
                             class: "flex shrink-0 items-center",
                             style: format!(
-                                "height: {CONTROL_PX}px; padding-inline: 8px; border-radius: 6px; gap: 6px; font-size: 12px;"
+                                "height: {CONTROL_PX}px; padding-inline: 6px; border-radius: 6px; gap: 4px; font-size: 12px;"
                             ),
                             title: "Filter (/)",
                             "data-filter": "",
                             onmounted: filter,
                             Search {
-                                size: 16,
+                                size: 14,
                                 stroke_width: 1.6,
                                 color: ef_var(EfToken::Grey2).to_owned(),
                             }
@@ -364,7 +364,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             "data-filter": "",
                             onmounted: filter,
                             Search {
-                                size: 16,
+                                size: 14,
                                 stroke_width: 1.6,
                             }
                         }

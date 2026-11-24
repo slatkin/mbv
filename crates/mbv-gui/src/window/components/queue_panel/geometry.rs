@@ -10,15 +10,17 @@
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow};
 
 /// The Queue header bar's height in logical pixels (design D7): one row of
-/// 32 px controls in a 48 px bar. `assets/app.css` defines the same value as
+/// 26 px controls in a 48 px bar. `assets/app.css` defines the same value as
 /// `--canvas-queue-header-height`, because the stylesheet must carry it before
 /// the first theme writes `:root`; `queue_panel/tests/header.rs` keeps the two
 /// equal.
 pub(in crate::window::components) const HEADER_HEIGHT_PX: u16 = 48;
 
-/// The Queue header's control size in logical pixels (design D7): the icon
-/// buttons are square at this size and the switcher is this tall.
-pub(in crate::window::components) const CONTROL_PX: u16 = 32;
+/// The Queue header's control size in logical pixels (user request 2026-11-24,
+/// tightened from the canvas's 32 px): the icon buttons are square at this size
+/// and the switcher is this tall, so the bar's controls take less of the row's
+/// width.
+pub(in crate::window::components) const CONTROL_PX: u16 = 26;
 
 /// The canvas's fixed queue row height in logical pixels (design D3).
 pub(in crate::window::components) const ROW_HEIGHT_PX: u16 = 40;
