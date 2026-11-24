@@ -44,7 +44,7 @@ The GUI window (package `mbv-gui`):
 The GUI core (package `mbv-gui`):
 
 - `crates/mbv-gui/src/gui_core/gui_library.rs` and `crates/mbv-gui/src/bridge/library.rs`: two new Library commands (`Refresh`, `ShowsOpenInView`).
-- `crates/mbv-gui/src/gui_core/gui_library/`: a new `refresh.rs` (per-destination refresh) and `shows_open_loads.rs` (the bounded in-view Shows loader); replacement-fetch paths in `store.rs`, `emby.rs`, `shows.rs`; the refresh landing rule in `client_events.rs`.
+- `crates/mbv-gui/src/gui_core/gui_library/`: a new `refresh.rs` (per-destination refresh) and `shows_open_loads.rs` (the bounded in-view Shows loader); replacement-fetch paths in `store.rs`, `emby.rs`, `shows.rs`; the feed-group refresh queue that the ensure step takes first; the refresh landing rule in `client_events.rs`.
 - `crates/mbv-gui/src/gui_core/gui_client_state/state.rs`: the loader's report and started-load sets, the refresh in-flight sets, and the store-effect arm that runs the loader.
 
 The Client core (package `mbv-client-core`):

@@ -29,7 +29,8 @@ See `proposal.md` for the motivation and the user decisions. The requirements ar
 
 - No keybind, no status bar hint, no TUI change.
 - The Music tree loads no tracks for albums in view. Expand all does not open albums, so no Music in-view loader is needed.
-- The existing refresh paths that this change reuses (Home, Audiobooks, Podcasts, Feeds, feed-group Emby, the Shows root level) keep their own loading and failure behavior.
+- The existing refresh paths that this change reuses (Home, Audiobooks, Podcasts, Feeds, the Shows root level) keep their own loading and failure behavior.
+- A feed-group refresh does not re-read the folder pills or their counts (D7a).
 - No busy state on any refresh button, the Playlists one included.
 - The Hero's Workspace reloads only through the tree rows: when its series is an open row in view, its seasons reload with that row.
 
@@ -122,13 +123,25 @@ The cache cap stays at 128. The view never shows more than 128 open series, so a
 | `Shows` in All | `App::refresh_lib(lib_idx)` (the root level's in-place refresh), then `App::mark_series_detail_stale(id)` for each series and `App::mark_series_season_stale(series_id, season_id)` for each season in `gui.shows_open_in_view`, then the pump (D5) |
 | `Shows` in New | `shows::refetch_shows_new(app, gui, library_id)` |
 | `Shows` in Upcoming | `App::refetch_tv_upcoming_snapshot(lib_idx)` |
-| `Library` in feed-group mode | `App::refresh_lib(lib_idx)`, the TUI F5 path, which re-reads the shared `feed_home_video` state the GUI paints |
+| `Library` in feed-group mode | `GuiCore::refresh_gui_feed_group(lib_idx)`, which refetches the checked targets and keeps their rows (D7a) |
 | `Library` plain | `emby::refetch_emby_root_items(app, gui, lib_idx)` |
 | `Audiobooks { lib_idx }` | `App::audiobookshelf_book_refresh()`, under the same active-tab guard that `ensure_gui_destination` uses |
 | `Podcasts { lib_idx }` | `App::audiobookshelf_refresh(false)`, under that guard, with the same argument the GUI root step passes |
 | `Feeds` | `App::refresh_feeds()` |
 
 The F5 key stays TUI-only. The GUI gets no key for refresh.
+
+### D7a. A feed-group refresh refetches its items and keeps the rows it paints
+
+The TUI's path is wrong for this destination. `App::refresh_lib` refreshes the hidden root folder listing, and `App::complete_feed_home_video_refresh` (`crates/mbv-client-core/src/app/dispatch/feeds/feed.rs`) then clears `feed_home_video.items`. The GUI paints its feed-group rows from that map, so the press would blank the list until its ensure pass refetched every target. The user rejected that blank. The GUI therefore refetches the targets themselves and never clears the map.
+
+`GuiClientState` gets `emby_feed_refresh_targets: HashMap<usize, Vec<FeedHomeVideoSelection>>`, the targets one library's refresh wants, in paint order. `GuiCore::refresh_gui_feed_group(lib_idx)` fills that queue with the targets `emby::emby_feed_effective_set` names (All, or each checked folder) and clears the library's failed claims, so the press retries a target that failed before.
+
+`ensure_emby_feed_fetch` (`gui_library/emby.rs`) takes a queued target before its walk over the uncached targets, and it takes it even while `feed_home_video.items` holds that target's list, which the uncached walk skips. The fetch starts through the existing `App::spawn_feed_home_video_fetch`, and the queue drops the target when the fetch starts. The one-fetch-at-a-time rule stays: `feed_home_video.fetching` holds one target, and the next queued target starts on a later frame.
+
+A landing replaces that target's items through the existing `FeedHomeVideoSelectionLoaded` arm, so the painted rows change only when the new rows arrive. A failure keeps the old items, the existing `FeedHomeVideoSelectionFailed` arm marks the target failed through `ClientLibraryEffect::FeedTargetFailed`, and both that arm and `FeedTargetLanded` remove the target from the refresh queue.
+
+This refresh does not re-read the folder pills or their counts; a folder added on the server appears at the destination's next own listing load. Refreshing the listing would clear the items and bring the blank back.
 
 ### D8. GUI store refetches keep loaded content and report a failure
 
@@ -156,13 +169,10 @@ Every new `MusicEvent` and `SeriesEvent` variant gets an explicit arm in `handle
 ## Risks / Trade-offs
 
 - [Many failures in one refresh show many toasts.] → Every refresh failure flashes the same text and severity, and a toast equal to a live one replaces it (`toast-notification-semantics`), so a failed refresh shows one toast.
-- [The reused refresh paths (Home, Audiobooks, Podcasts, Feeds, feed-group Emby, the Shows root level) keep their own failure reporting, which differs.] → The spec promises only that a failed refresh keeps the rows. Each reused path keeps its published rows on failure.
+- [The reused refresh paths (Home, Audiobooks, Podcasts, Feeds, the Shows root level) keep their own failure reporting, which differs.] → The spec promises only that a failed refresh keeps the rows. Each reused path keeps its published rows on failure.
+- [A feed-group refresh does not re-read the folder pills.] → Accepted: the alternative clears the painted rows (D7a), and a new folder appears at the next listing load.
 - [Feeds' refresh flashes "Refreshing feeds..." and the others do not.] → Accepted. It is the existing Feeds refresh text, and the TUI shows it too.
 - [A Shows refresh replaces a stale series detail while its season rows are open.] → The old episodes stay until the new ones land (D9), so open seasons do not empty.
 - [The Playlists button loses its "Refreshing…" text.] → The user asked for the icon to match the Library buttons, which show no busy state.
 - [`window/library/state.rs` is 755 lines, and `gui_core/gui_library.rs` is 745 lines.] → The new Music methods go in `state/rows.rs`, and the new GUI core code goes in the new modules `shows_open_loads.rs` and `refresh.rs`. The two new variants add their docs and arms to `gui_library.rs`. If that file passes 800 lines, the implementer moves the destination pass into its own module along that seam.
 - [`ShowsOpenInView` fires on each scroll and logs at info, as `RowsInView` does.] → Accepted. The report is small, and the log matches the existing row-art report.
-
-## Open questions
-
-- **The feed-group refresh blanks its rows for a moment.** `refresh_lib` reaches `App::complete_feed_home_video_refresh` (`crates/mbv-client-core/src/app/dispatch/feeds/feed.rs`), which clears `feed_home_video.items` when the listing refresh lands. The GUI then shows the loading line until the ensure pass refetches the checked targets. This breaks the spec sentence "The list SHALL keep its rows until the new rows arrive" for an Emby library in feed-group mode. The user must decide: accept the blink for this one destination (and say so in the spec), or make the GUI's feed-group refresh refetch the checked targets' items without the listing refresh.

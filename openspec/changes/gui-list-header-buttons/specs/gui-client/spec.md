@@ -102,7 +102,7 @@ The list header of every GUI Library destination SHALL show a refresh button on 
 
 ### Requirement: A refresh reloads the list and keeps its rows until the new ones arrive
 
-A press on the refresh button SHALL reload the shown destination's list from its Service, as the TUI refresh does for that destination. The list SHALL keep its rows until the new rows arrive. A failed refresh SHALL keep the rows the list showed. A refresh SHALL NOT change the pick, the filter, the scroll position, or which rows are open.
+A press on the refresh button SHALL reload the shown destination's list from its Service. The list SHALL keep its rows until the new rows arrive. A failed refresh SHALL keep the rows the list showed. A refresh SHALL NOT change the pick, the filter, the scroll position, or which rows are open.
 
 #### Scenario: A refresh brings a new item
 
