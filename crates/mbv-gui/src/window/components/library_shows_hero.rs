@@ -271,6 +271,9 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                 duration_row: hero.duration_row,
                 progress_row: hero.progress_row,
                 overview: hero.overview.as_deref(),
+                // A Latest Hero's item is an episode, whose name line paints one
+                // step smaller than a season's.
+                episode: true,
             },
             kicker,
         )
@@ -291,6 +294,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                 label: hero.title.clone(),
                 eyebrow: None,
                 name: Some(season_name),
+                name_episode: false,
                 facts: Some(plain_segments(&season_facts)),
                 meta: Vec::new(),
                 overview: hero.overview.clone(),

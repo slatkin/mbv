@@ -34,6 +34,7 @@ fn props() -> LibraryHeroFrameProps {
             label: "The Long Road Home".to_owned(),
             eyebrow: None,
             name: None,
+            name_episode: false,
             facts: None,
             meta: Vec::new(),
             overview: None,

@@ -104,6 +104,9 @@ pub struct HeroBlock {
     pub eyebrow: Option<Segments>,
     /// The selected item's name, only when a parent took the header.
     pub name: Option<String>,
+    /// Whether the name line names an episode, which paints one step smaller
+    /// than a series-level item (user request 2026-11-24).
+    pub name_episode: bool,
     /// The plain facts on one line.
     pub facts: Option<Segments>,
     /// The meta rows that carry a role, for a Hero whose facts are rows.
@@ -139,6 +142,23 @@ pub(super) fn own(attr: &'static str, part: &str) -> &'static str {
     library_attr(&prefix, part)
 }
 
+/// The Hero's heading look (user request 2026-11-24): the queue now-playing
+/// block's mono caps, so a Hero's title and the name line under it read as one
+/// heading. Both carry the case in CSS, because neither box is a `Truncate`
+/// measure.
+const HERO_HEADING_STYLE: &str = "margin: 0; font-family: var(--font-mono); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--canvas-heading);";
+
+/// The Hero title's size, in CSS pixels (user request 2026-11-24).
+const HERO_TITLE_PX: f32 = 18.0;
+
+/// The name line's size, in CSS pixels, while it names the series-level item:
+/// a season, an album, a book (user request 2026-11-24).
+const HERO_NAME_PX: f32 = 18.0;
+
+/// The name line's size, in CSS pixels, while it names an episode
+/// (user request 2026-11-24).
+const HERO_EPISODE_NAME_PX: f32 = 16.0;
+
 /// The header facts line's own attribute.
 fn facts_attrs(attr: &'static str) -> Vec<Attribute> {
     vec![Attribute::new(own(attr, "facts"), "", None, false)]
@@ -171,6 +191,7 @@ impl From<crate::window::library::hero::HeroLayoutBlock> for HeroBlock {
             label: block.label,
             eyebrow: None,
             name: block.name,
+            name_episode: block.name_episode,
             facts: None,
             meta: block.meta,
             overview: block.overview,
@@ -211,6 +232,13 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
     let kicker_attrs = vec![Attribute::new(own(attr, "kicker"), "", None, false)];
     let title_attrs = vec![Attribute::new(own(attr, "title"), "", None, false)];
     let overview_attrs = vec![Attribute::new(own(attr, "overview"), "", None, false)];
+    // The name line's size (user request 2026-11-24): an episode's name paints
+    // one step under a series-level item's.
+    let name_px = if block.name_episode {
+        HERO_EPISODE_NAME_PX
+    } else {
+        HERO_NAME_PX
+    };
 
     rsx! {
         div {
@@ -230,7 +258,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                         TypedText { segments: header.kicker.clone() }
                     }
                     h1 {
-                        style: "margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.01em; color: var(--canvas-heading);",
+                        style: format!("{HERO_HEADING_STYLE} font-size: {HERO_TITLE_PX}px;"),
                         ..title_attrs,
                         "{header.title}"
                     }
@@ -272,7 +300,9 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                         }
                         if let Some(name) = block.name.as_ref().filter(|name| !name.is_empty()) {
                             h2 {
-                                style: "margin: 0; font-size: 24px; font-weight: 600; color: var(--canvas-heading);",
+                                style: format!(
+                                    "{HERO_HEADING_STYLE} font-size: {name_px}px;"
+                                ),
                                 ..vec![Attribute::new(
                                     own(attr, "block-name"),
                                     "",

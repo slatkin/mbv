@@ -59,6 +59,8 @@ pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
         duration_row: hero.duration_row,
         progress_row: hero.progress_row,
         overview: hero.overview.as_deref(),
+        // A Podcasts Hero's item is always an episode.
+        episode: true,
     };
     let layout = hero_layout(&facts, "podcast");
 

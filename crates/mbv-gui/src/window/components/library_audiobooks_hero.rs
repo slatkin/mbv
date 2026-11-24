@@ -132,6 +132,8 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
         duration_row: hero.duration_row,
         progress_row: hero.progress_row,
         overview: hero.overview.as_deref(),
+        // A book is the Hero's own largest unit, so it titles the header.
+        episode: false,
     };
     let layout = hero_layout(&facts, "audiobook");
 

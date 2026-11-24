@@ -234,6 +234,7 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
                     kind: GuiMetaKindFrame::Date,
                 }]),
                 name: Some(hero.album.name.clone()),
+                name_episode: false,
                 facts: Some(album_facts(hero)),
                 meta: Vec::new(),
                 overview: None,

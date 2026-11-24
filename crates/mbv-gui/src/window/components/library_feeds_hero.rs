@@ -86,6 +86,8 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
         duration_row: hero.duration_row,
         progress_row: hero.progress_row,
         overview: None,
+        // A Feeds Hero's item is an entry, which paints as an episode does.
+        episode: true,
     };
     let layout = hero_layout(&facts, "feed");
 

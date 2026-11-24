@@ -142,6 +142,8 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
         duration_row,
         progress_row,
         overview: hero.overview.as_deref(),
+        // An Emby item is its own largest unit, so it titles the header.
+        episode: false,
     };
     let layout = hero_layout(&facts, &hero.kind.to_uppercase());
 

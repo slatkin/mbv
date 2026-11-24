@@ -285,6 +285,10 @@ pub struct HeroLayoutFacts<'a> {
     pub progress_row: Option<usize>,
     /// The item's overview.
     pub overview: Option<&'a str>,
+    /// Whether the item is an episode. An episode titles the block's name line
+    /// under its parent, and that line paints one step smaller
+    /// (user request 2026-11-24).
+    pub episode: bool,
 }
 
 /// The Hero's painted header and block (`add-gui-library-panel` design D15).
@@ -314,6 +318,9 @@ pub struct HeroLayoutBlock {
     pub label: String,
     /// The selected item's name, only when a parent took the header.
     pub name: Option<String>,
+    /// Whether the name names an episode: the Hero paints an episode's name one
+    /// step smaller than a series-level item's (user request 2026-11-24).
+    pub name_episode: bool,
     /// The duration and progress rows.
     pub meta: Vec<HeroMetaRow>,
     /// The item's overview.
@@ -344,6 +351,7 @@ pub fn hero_layout(facts: &HeroLayoutFacts<'_>, kicker: &str) -> HeroLayout {
         block: HeroLayoutBlock {
             label: facts.title.to_owned(),
             name: parent.map(|_| facts.title.to_owned()),
+            name_episode: facts.episode,
             meta: rows
                 .into_iter()
                 .filter(|row| row.role != HeroMetaRole::Meta)
