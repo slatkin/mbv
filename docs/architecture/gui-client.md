@@ -2059,9 +2059,9 @@ credits table and the IMDb button).
 `LibraryHeroActions` the Play, Play next, and Add to queue buttons,
 `LibraryDropdown` the Shows Workspace's season dropdown (a radio row per
 season and a filter field, one open state in `LibraryUiState.shows_seasons`),
-`LibraryItemRow` the
-top-level rows of every list, `LibraryLetterHeading` the letter and section
-headings, and `LibraryVirtualList` the scroller of every list. Home still
+`FlatRow` and `TreeRow` the rows of
+every list, `LibraryLetterHeading` the letter and section headings, and
+`LibraryVirtualList` the scroller of every list. Home still
 paints `LibraryHeroSummary`. The episode row state is one module
 (`src/window/library/episode.rs`): `is_played_episode` and
 `episode_progress` read the played state and the resume percent an episode
@@ -2070,11 +2070,14 @@ destination's Hero imports Shows logic.
 
 ### The top-level Library row and its art
 
-`LibraryItemRow`
-(`crates/mbv-gui/src/window/components/library_item_row.rs`) is the one
-top-level row part of every destination (`gui-delineated-rows` design D1, D2):
-Home, the Emby lists, the Music artist rows, the Shows series rows, the New and
-Upcoming rows, Audiobooks, Podcasts, and Feeds. A destination supplies its hook
+`FlatRow`
+(`crates/mbv-gui/src/window/components/list_row/flat.rs`) is the top-level row
+part of every destination (`gui-delineated-rows` design D1, D2): Home, the Emby
+lists, the Music artist rows, the Shows series rows, the New and Upcoming rows,
+Audiobooks, Podcasts, and Feeds. `TreeRow`
+(`crates/mbv-gui/src/window/components/list_row/tree.rs`) paints the nested
+parent and leaf rows, and `list_row.rs` and `list_row/thumb.rs` hold the shared
+rules, the level constants, and the thumb painter. A destination supplies its hook
 prefix (`data-library-<attr>-*`), its text, its thumb, and its handlers, and
 never restates the look. The row is 56 px high with square corners, an 8 px
 inline padding, a 12 px gap, and a 1 px `--canvas-border` divider under it;
@@ -2093,7 +2096,7 @@ nothing; its double-click opens the row when it is closed and closes it when
 it is open, and plays nothing. No tree row paints an open-or-closed glyph or
 keeps a spacer where one stood: the nested rows' indent comes only from the
 row inset (Music artist 8 px, album 56 px, track 68 px; Shows series 8 px,
-season 56 px, episode 68 px; Playlists playlist 8 px, item 32 px). Every open
+season 56 px, episode 68 px; Playlists playlist 8 px, item 56 px). Every open
 tree parent that shows child rows hangs a 1 px guide under its leading element
 through its subtree, painted per row by the shared `TreeGuide` part
 (`crates/mbv-gui/src/window/components/tree_guide.rs`), so the guide stays
@@ -2109,12 +2112,11 @@ class and the `.tree-parent:hover` rule in `assets/app.css`. The row is the
 card's positioning box and does not clip it, and the row's trailing text stays
 visible. The rule is one for
 every GUI tree parent: a Music album, a Shows season, and a Playlists
-playlist paint their own rows and take the same press, the same double-click,
+playlist paint through `TreeRow` and take the same press, the same double-click,
 the same `aria-expanded`, and the same hint, while a leaf row — a track, an
 episode, or a playlist item — takes none of them. A double-click on a leaf
-row still plays the row's item, as its Enter play does. Nested rows keep
-their own painters and heights: a Music album or track, and a Shows season
-or episode.
+row still plays the row's item, as its Enter play does. Nested rows paint
+through `TreeRow`: a Music album or track, and a Shows season or episode.
 
 Every row frame carries `GuiRowArtFrame` — the cached image and the fit its own
 pixels ask for, a fetch in flight, a source that answered with no image, or a

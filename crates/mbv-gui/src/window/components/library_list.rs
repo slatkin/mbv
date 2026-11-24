@@ -6,9 +6,10 @@
 //! letter rail beside it. The rows paint at the canvas's fixed heights over
 //! native scroll, and only the rows in view paint, so a long artist list
 //! stays fast. The artist rows are top-level rows and paint through the shared
-//! row part with their art thumb; the album and track rows under them keep
-//! their own painters (gui-delineated-rows design D1). The rows it paints are
-//! also the row art set the core fetches (design D7).
+//! row part with their art thumb; the album and track rows under them paint
+//! through the nested row part at the first and second depth (gui-unified-list-
+//! rows design D3). The rows it paints are also the row art set the core
+//! fetches (design D7).
 //!
 //! The open nodes and the filter text are window-content state in
 //! [`crate::window::library::state`] (design D1), the scroll offset and the
@@ -23,41 +24,27 @@
 
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::fmt::Write as _;
 use std::rc::Rc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX,
-};
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
-use crate::window::components::tree_guide::{
-    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides, subtree_tails,
-    tail_divider_style,
+use crate::window::components::list_row::{
+    FlatRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, TreeDepth, TreeLevel, TreeRow,
+    TreeTrail,
 };
-use crate::window::components::tree_hint::TreeHint;
-use crate::window::components::tree_row::{
-    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text, tree_row_text,
-};
-use crate::window::components::typed_text::TypedText;
-use crate::window::input::f32_from_f64;
-use crate::window::library::list::{
-    LETTER_ROW_HEIGHT, LibraryRow, NODE_ROW_HEIGHT, TRACK_ROW_HEIGHT, letter_rail,
-};
+use crate::window::components::tree_guide::subtree_tails;
+use crate::window::library::list::{LETTER_ROW_HEIGHT, LibraryRow, letter_rail};
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
-use crate::window::theme::canvas_var;
-use crate::window::truncate::Truncate;
 
 /// Whether the row is the album the Hero shows.
 fn is_picked(row: &LibraryRow, picked: Option<&str>) -> bool {
@@ -80,10 +67,10 @@ fn paint_letter_row(letter: char) -> Element {
     }
 }
 
-/// The track row under an open album: the number,
-/// the muted name, and the runtime. It is a leaf of the tree, so it paints both
-/// guides that pass through it — the artist's and its album's
-/// (gui-tree-indent-guides design D3).
+/// The track row under an open album: the number, the muted name, and the
+/// runtime. It is a leaf of the tree at the second depth, so it paints both
+/// guides that pass through it — the artist's and its album's — and the mono
+/// leaf face (gui-unified-list-rows design D3).
 fn paint_track_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -101,76 +88,42 @@ fn paint_track_row(
     else {
         return rsx! {};
     };
-    // The leaf inset clears both guides that pass through the row
-    // (gui-tree-indent-guides design D2, D3).
-    let mut style = format!(
-        "height: {TRACK_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {LEAF_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {LEAF_ROW_FONT_PX}px; cursor: pointer;",
-        if picked_row { "4px" } else { "0" }
-    );
-    // The expanded area's fill under an open artist; the picked album keeps the
-    // raised fill its rounded corners were cut for.
-    let fill = if picked_row {
-        canvas_var("library-raise")
-    } else {
-        canvas_var("tree-subtree")
-    };
-    let _ = write!(style, " background: {fill};");
-    style.push_str(&tail_divider_style(tail));
     let press_row = row.clone();
     let press_library = library.clone();
-    let menu_row = row.clone();
     let menu_library = library.clone();
     let play_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
     let track_id = track_id.clone();
     rsx! {
-        button {
-            "type": "button",
-            class: "relative flex w-full items-center overflow-hidden",
-            style: "{style}",
-            "data-library-row": "track",
-            "data-library-row-id": "{base.id}",
-            onclick: move |_| press_library.press_library_row(&press_row),
-            oncontextmenu: move |event: MouseEvent| {
-                event.prevent_default();
-                // A right-click selects the row first, as a press does, so the
-                // menu's View Detail opens the Hero for this row.
-                menu_library.press_library_row(&menu_row);
-                let coordinates = event.client_coordinates();
+        TreeRow {
+            attr: "",
+            kind: "track".to_owned(),
+            id: base.id.clone(),
+            level: TreeLevel::Leaf,
+            depth: TreeDepth::Two,
+            title: name.clone(),
+            number: Some(number.to_string()),
+            trail: Some(TreeTrail::Duration(duration.clone())),
+            selected: picked_row,
+            tail,
+            on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
+            on_play: Callback::new(move |()| play_library.play_library_track(track_id.clone())),
+            // The part presses the row first, so the menu's View Detail opens
+            // the Hero for this row.
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library.open_row_menu_at(
                     item_id.clone().map(LibraryState::row_menu_item),
-                    f32_from_f64(coordinates.x),
-                    f32_from_f64(coordinates.y),
+                    x,
+                    y,
                 );
-            },
-            ondoubleclick: move |_| play_library.play_library_track(track_id.clone()),
-            span {
-                class: "flex flex-none items-center justify-end font-mono tabular-nums",
-                style: "width: 18px; font-size: 12px; color: var(--canvas-ordinal);",
-                "{number}"
-            }
-            div {
-                class: "min-w-0 flex-1",
-                style: leaf_label_css(),
-                Truncate {
-                    text: name.clone(),
-                    css: "color: var(--canvas-muted);".to_owned(),
-                    style: leaf_row_text(),
-                }
-            }
-            span {
-                class: "flex-none font-mono tabular-nums",
-                style: "font-size: 12px; color: var(--canvas-muted);",
-                "{duration}"
-            }
-            {leaf_guides()}
+            })),
         }
     }
 }
 
-/// One painted row of the canvas tree: the letter heading, the track row, the
-/// shared part's artist row (gui-delineated-rows design D1), or the nested
-/// album node.
+/// One painted row of the canvas tree: the letter heading, the nested track
+/// row, the shared part's artist row (gui-delineated-rows design D1), or the
+/// nested album row (gui-unified-list-rows design D3).
 fn paint_library_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -187,8 +140,8 @@ fn paint_library_row(
     }
 }
 
-/// A top-level artist row (gui-delineated-rows design D1): the shared row part
-/// over the artist's name and its art thumb. It is a tree parent
+/// A top-level artist row (gui-delineated-rows design D1): the shared top-level
+/// row part over the artist's name and its art thumb. It is a tree parent
 /// (gui-tree-double-click design D2, D4), so it paints no caret: its
 /// double-click toggles the node and its hover shows the hint. A press picks
 /// nothing (the Hero is album-scoped), and a double-click only opens it, so the
@@ -214,19 +167,15 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
     rsx! {
-        LibraryItemRow {
+        FlatRow {
             attr: "",
             kind: "artist".to_owned(),
             id: base.id.clone(),
-            height: base.height,
             title: name.clone(),
             subtitle: None,
             trail: None,
             trail_part: LibraryTrailPart::Date,
-            title_color: canvas_var("text"),
-            background: picked_row.then(|| canvas_var("library-raise")),
             selected: picked_row,
-            progress: None,
             thumb: Some(LibraryRowThumb {
                 art: art.clone(),
                 media: *media,
@@ -251,13 +200,10 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
     }
 }
 
-/// A nested album row under an open artist: the canvas's tree node, which keeps
-/// its own painter and height (gui-delineated-rows design D1). It is a tree
-/// parent (gui-tree-double-click design D2, D4): its press picks the album, its
-/// double-click opens or closes the node, its year gives way to the hover hint,
-/// and its indent is the row inset alone — no caret column. It passes the
-/// artist's guide through and, while it shows track rows, starts its own under
-/// its label (gui-tree-indent-guides design D2, D3).
+/// A nested album row under an open artist: a tree parent at the first depth,
+/// so it paints the Music album look — its press picks the album, its
+/// double-click opens or closes the node, its year paints the parent trail's
+/// date, and the hover hint replaces it (gui-unified-list-rows design D3).
 fn paint_album_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -275,82 +221,39 @@ fn paint_album_row(
     else {
         return rsx! {};
     };
-    let color = canvas_var("text");
-    let year = (!year.is_empty()).then(|| year.clone());
-    // The nested inset clears the artist's guide that passes through the row
-    // (gui-tree-indent-guides design D2).
-    let mut style = format!(
-        "height: {NODE_ROW_HEIGHT}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {NESTED_INSET_X}px; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
-        if picked_row { "4px" } else { "0" }
-    );
-    // The expanded area's fill under an open artist; the picked album keeps the
-    // raised fill its rounded corners were cut for.
-    let fill = if picked_row {
-        canvas_var("library-raise")
-    } else {
-        canvas_var("tree-subtree")
-    };
-    let _ = write!(style, " background: {fill};");
-    style.push_str(&tail_divider_style(tail));
     let press_row = row.clone();
     let press_library = library.clone();
     let toggle_row = row.clone();
     let toggle_library = library.clone();
-    let menu_row = row.clone();
     let menu_library = library.clone();
     let item_id = LibraryState::action_item_id(row);
     rsx! {
-        button {
-            "type": "button",
-            class: "tree-parent relative flex w-full items-center",
-            style: "{style}",
-            "aria-expanded": "{open}",
-            "data-library-row": "album",
-            "data-library-row-id": "{base.id}",
-            onclick: move |_| press_library.press_library_row(&press_row),
-            oncontextmenu: move |event: MouseEvent| {
-                event.prevent_default();
-                // A right-click selects the row first, as a press does, so the
-                // menu's View Detail opens the Hero for this row.
-                menu_library.press_library_row(&menu_row);
-                let coordinates = event.client_coordinates();
+        TreeRow {
+            attr: "",
+            kind: "album".to_owned(),
+            id: base.id.clone(),
+            level: TreeLevel::Parent,
+            depth: TreeDepth::One,
+            title: name.clone(),
+            trail: Some(TreeTrail::Date(year.clone())),
+            selected: picked_row,
+            open: Some(*open),
+            shows_children: *shows_children,
+            tail,
+            on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
+            on_play: Callback::new(|()| {}),
+            on_toggle: Some(Callback::new(move |()| {
+                toggle_library.toggle_library_node(&toggle_row);
+            })),
+            // The part presses the row first, so the menu's View Detail opens
+            // the Hero for this row.
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library.open_row_menu_at(
                     item_id.clone().map(LibraryState::row_menu_item),
-                    f32_from_f64(coordinates.x),
-                    f32_from_f64(coordinates.y),
+                    x,
+                    y,
                 );
-            },
-            ondoubleclick: move |_| toggle_library.toggle_library_node(&toggle_row),
-            Truncate {
-                text: name.clone(),
-                class: "min-w-0 flex-1".to_owned(),
-                css: format!("color: {color}; font-weight: 400.0;"),
-                style: tree_row_text(),
-            }
-            if let Some(year) = year {
-                // A year repeats down the tree, so it paints the date
-                // token at the repeat opacity; the picked album keeps
-                // its own ink (design D14). The hover hint replaces it while
-                // the pointer rests on the row (gui-tree-double-click D3).
-                span {
-                    class: "tree-trailing flex-none font-mono tabular-nums",
-                    style: if picked_row {
-                        "font-size: 12px; color: var(--canvas-muted);"
-                    } else {
-                        "font-size: 12px;"
-                    },
-                    "data-library-row-year": "",
-                    TypedText {
-                        segments: vec![GuiMetaSegmentFrame {
-                            text: year,
-                            kind: GuiMetaKindFrame::Date,
-                        }],
-                        repeat: !picked_row,
-                    }
-                }
-            }
-            {nested_parent_guides(NODE_ROW_HEIGHT, *shows_children)}
-            TreeHint { open: *open }
+            })),
         }
     }
 }

@@ -19,19 +19,16 @@
 //! list keeps no cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2). The series rows are top-level rows and
 //! paint through the shared row part with their art thumb; their season and
-//! episode rows keep their own painters (gui-delineated-rows design D1). The
-//! rows the list paints are also the row art set the core fetches (design D7).
+//! episode rows paint through the nested row part at the first and second depth
+//! (gui-unified-list-rows design D3). The rows the list paints are also the row
+//! art set the core fetches (design D7).
 
 use std::collections::HashSet;
-use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiShowsList;
+use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiShowsList};
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, mark,
-};
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
@@ -39,23 +36,15 @@ use crate::window::components::library_list_column::{
 };
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
-use crate::window::components::tree_guide::{
-    LEAF_INSET_X, NESTED_INSET_X, leaf_guides, nested_parent_guides, subtree_tails,
-    tail_divider_style,
+use crate::window::components::list_row::{
+    FlatRow, LibraryRowThumb, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow, TreeTrail,
 };
-use crate::window::components::tree_hint::TreeHint;
-use crate::window::components::tree_row::{
-    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text,
-};
-use crate::window::input::f32_from_f64;
-use crate::window::library::episode::is_played_episode;
+use crate::window::components::tree_guide::subtree_tails;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
 use crate::window::library::shows_list::{ShowsFlatRow, ShowsListRow, shows_letter_rail};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
-use crate::window::theme::canvas_var;
-use crate::window::truncate::{TextStyle, Truncate};
 
 /// The stable Service id a row names, or `None` on a heading: the item the
 /// menu and the double-click act on.
@@ -74,68 +63,31 @@ fn is_selected_row(row: &ShowsListRow, selected: Option<&str>) -> bool {
     row_source_id(row).is_some_and(|source_id| Some(source_id) == selected)
 }
 
-/// The row's indentation (gui-tree-double-click design D2): the Music tree's
-/// depths — the season under its series and the episode under its season, each
-/// inset far enough to clear the guides that pass through the row
-/// (gui-tree-indent-guides design D2). A series row is a top-level row and
-/// paints through the shared row part, so its own inset is never read.
-fn row_inset(row: &ShowsListRow) -> f32 {
-    match row {
-        ShowsListRow::Season(_) => NESTED_INSET_X,
-        ShowsListRow::Episode(_) => LEAF_INSET_X,
-        // The top-level rows: a series paints through the shared row part, so
-        // its own inset is never read, and a heading and a flat row sit at the
-        // list's own inset.
-        ShowsListRow::Series(_) | ShowsListRow::Heading(_) | ShowsListRow::Flat(_) => 8.0,
-    }
-}
-
-/// Whether an episode leaf names a played episode: its carried row carries
-/// the shared media state (the Workspace rows' rule).
-fn episode_played(shows: &GuiShowsList, row: &ShowsListRow) -> bool {
+/// The carried play state of an episode leaf (`gui-unified-list-rows` design
+/// D4): the shared media state of the carried episode row, which picks the
+/// title's tone through the row part. `None` while the frame carries no such
+/// episode.
+fn episode_state(shows: &GuiShowsList, row: &ShowsListRow) -> Option<GuiHomeRowStateFrame> {
     let ShowsListRow::Episode(episode) = row else {
-        return false;
-    };
-    for series in &shows.series {
-        for season in &series.seasons {
-            for carried in season.episodes.iter().flatten() {
-                if carried.episode_id == episode.source_id {
-                    return is_played_episode(&carried.state);
-                }
-            }
-        }
-    }
-    false
-}
-
-/// The row's name colour: the canvas's text tone, dimmed once an episode is
-/// played, as the Workspace's rows are.
-fn row_name_color(shows: Option<&GuiShowsList>, row: &ShowsListRow) -> String {
-    if shows.is_some_and(|shows| episode_played(shows, row)) {
-        canvas_var("muted")
-    } else {
-        canvas_var("text")
-    }
-}
-
-/// A row's painted fill (design D14): the core's selected row paints the raised
-/// fill — the selection is what the Hero shows, so its row stays marked.
-fn row_background(row: &ShowsListRow, selected: Option<&str>) -> Option<String> {
-    if matches!(row, ShowsListRow::Heading(_)) {
         return None;
-    }
-    is_selected_row(row, selected).then(|| canvas_var("library-raise"))
+    };
+    shows
+        .series
+        .iter()
+        .flat_map(|series| &series.seasons)
+        .flat_map(|season| season.episodes.iter().flatten())
+        .find(|carried| carried.episode_id == episode.source_id)
+        .map(|carried| carried.state.clone())
 }
 
-/// A top-level series row (gui-delineated-rows design D1): the shared row part
-/// over the series' name and its art thumb. An expandable series is a tree
-/// parent (gui-tree-double-click design D1, D2, D4), so it paints no caret: its
-/// press selects it, its double-click toggles the node, and its hover shows the
-/// hint. A series that does not expand takes no double-click.
+/// A top-level series row (gui-delineated-rows design D1): the shared top-level
+/// row part over the series' name and its art thumb. An expandable series is a
+/// tree parent (gui-tree-double-click design D1, D2, D4), so it paints no caret:
+/// its press selects it, its double-click toggles the node, and its hover shows
+/// the hint. A series that does not expand takes no double-click.
 fn paint_shows_series(
     row: &ShowsListRow,
     library: &LibraryState,
-    shows: Option<&GuiShowsList>,
     selected: Option<&str>,
 ) -> Element {
     let ShowsListRow::Series(series) = row else {
@@ -154,19 +106,15 @@ fn paint_shows_series(
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
     rsx! {
-        LibraryItemRow {
+        FlatRow {
             attr: "shows",
             kind: "series".to_owned(),
             id: row.id().to_owned(),
-            height: series.height,
             title: series.title.clone(),
             subtitle: None,
             trail: None,
             trail_part: LibraryTrailPart::Date,
-            title_color: row_name_color(shows, row),
-            background: row_background(row, selected),
             selected: selected_row,
-            progress: None,
             thumb: Some(LibraryRowThumb {
                 art: series.art.clone(),
                 media: series.media,
@@ -183,119 +131,53 @@ fn paint_shows_series(
     }
 }
 
-/// A nested season node row under an open series (design D1): the name and the
-/// press that selects it. An expandable season is a tree parent
-/// (gui-tree-double-click design D1, D2), so it paints no caret: its
-/// double-click toggles the node and its hover shows the hint. It keeps its own
-/// painter and height. It passes the series' guide through and, while it shows
-/// episode rows, starts its own under its label (gui-tree-indent-guides design
-/// D2, D3).
+/// A nested season node row under an open series (gui-unified-list-rows design
+/// D3): the nested row part at the first depth, so it paints the Music album
+/// look. An expandable season is a tree parent (gui-tree-double-click design
+/// D1, D2), so it paints no caret: its press selects it, its double-click
+/// toggles the node, and its hover shows the hint. It passes the series' guide
+/// through and, while it shows episode rows, starts its own under its label
+/// (gui-tree-indent-guides design D2, D3).
 fn paint_shows_season(
     row: &ShowsListRow,
     library: &LibraryState,
-    shows: Option<&GuiShowsList>,
     selected: Option<&str>,
     tail: bool,
 ) -> Element {
-    let (kind, title, open, expandable, shows_children, height) = match row {
-        ShowsListRow::Season(season) => (
-            "season",
-            &season.title,
-            season.open,
-            season.expandable,
-            season.shows_children(),
-            season.height,
-        ),
-        _ => return rsx! {},
+    let ShowsListRow::Season(season) = row else {
+        return rsx! {};
     };
     let selected_row = is_selected_row(row, selected);
-    let mut style = format!(
-        "height: {height}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: {TREE_ROW_FONT_PX}px; cursor: pointer;",
-        row_inset(row)
-    );
-    // The expanded area's fill under an open series, unless the row is the
-    // selected one.
-    let fill = row_background(row, selected).unwrap_or_else(|| canvas_var("tree-subtree"));
-    let _ = write!(style, " background: {fill};");
-    style.push_str(&tail_divider_style(tail));
-    let weight = if selected_row { 600.0 } else { 400.0 };
-    let name_color = row_name_color(shows, row);
     let press_row = row.clone();
     let press_library = library.clone();
-    let toggle_node = expandable.then(|| row.id().to_owned());
+    let toggle_node = season.expandable.then(|| row.id().to_owned());
     let toggle_library = library.clone();
-    let row_class = if expandable {
-        "tree-parent relative flex w-full items-center"
-    } else {
-        // A season that does not expand still paints the series' guide
-        // through, so it carries the span's containing block
-        // (gui-tree-indent-guides design D1).
-        "relative flex w-full items-center overflow-hidden"
-    };
     let menu_id = row_source_id(row)
         .map(str::to_owned)
         .map(LibraryState::row_menu_item);
-    let menu_row = row.clone();
     let menu_library = library.clone();
-    // The expandable node's `aria-expanded` names the open state (the former client
-    // `undefined` painted none); the marks beyond it paint only while they
-    // hold.
-    let mut row_marks = Vec::new();
-    if selected_row {
-        row_marks.push(Attribute::new(
-            "data-library-shows-selected",
-            "",
-            None,
-            false,
-        ));
-    }
-    if open {
-        row_marks.push(Attribute::new("data-library-shows-open", "", None, false));
-    }
-    if expandable {
-        row_marks.push(Attribute::new(
-            "aria-expanded",
-            if open { "true" } else { "false" },
-            None,
-            false,
-        ));
-    }
     rsx! {
-        button {
-            "type": "button",
-            class: "{row_class}",
-            style: "{style}",
-            "data-library-shows-row": "{kind}",
-            "data-library-shows-row-id": "{row.id()}",
-            onclick: move |_| press_library.press_shows_row(&press_row),
-            ondoubleclick: move |_| {
-                if let Some(node_id) = toggle_node.as_deref() {
-                    toggle_library.toggle_shows_node(node_id);
-                }
-            },
-            oncontextmenu: move |event: MouseEvent| {
-                event.prevent_default();
-                // A right-click selects the row first, as a press does, so the
-                // menu's View Detail opens the Hero for this row.
-                menu_library.press_shows_row(&menu_row);
-                let coordinates = event.client_coordinates();
-                menu_library.open_row_menu_at(
-                    menu_id.clone(),
-                    f32_from_f64(coordinates.x),
-                    f32_from_f64(coordinates.y),
-                );
-            },
-            ..row_marks,
-            Truncate {
-                text: title.clone(),
-                class: "min-w-0 flex-1".to_owned(),
-                css: format!("color: {name_color}; font-weight: {weight};"),
-                style: TextStyle::sans(TREE_ROW_FONT_PX, weight),
-            }
-            {nested_parent_guides(height, shows_children)}
-            if expandable {
-                TreeHint { open }
-            }
+        TreeRow {
+            attr: "shows",
+            kind: "season".to_owned(),
+            id: row.id().to_owned(),
+            level: TreeLevel::Parent,
+            depth: TreeDepth::One,
+            title: season.title.clone(),
+            selected: selected_row,
+            open: season.expandable.then_some(season.open),
+            shows_children: season.shows_children(),
+            tail,
+            on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
+            on_play: Callback::new(|()| {}),
+            on_toggle: toggle_node.map(|node_id| {
+                Callback::new(move |()| toggle_library.toggle_shows_node(&node_id))
+            }),
+            // The part presses the row first, so the menu's View Detail opens
+            // the Hero for this row.
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
+                menu_library.open_row_menu_at(menu_id.clone(), x, y);
+            })),
         }
     }
 }
@@ -317,19 +199,15 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
     let menu_id = (!display_only).then(|| LibraryState::row_menu_item(id.clone()));
     let menu_library = library.clone();
     rsx! {
-        LibraryItemRow {
+        FlatRow {
             attr: "shows",
             kind: "flat".to_owned(),
             id,
-            height: row.height,
             title: row.title.clone(),
             subtitle: row.subtitle.clone(),
             trail: row.date.clone(),
             trail_part: LibraryTrailPart::Date,
-            title_color: canvas_var("text"),
-            background: selected_row.then(|| canvas_var("library-raise")),
             selected: selected_row,
-            progress: None,
             thumb: Some(LibraryRowThumb {
                 art: row.art.clone(),
                 media: row.media,
@@ -351,10 +229,11 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
     }
 }
 
-/// An episode leaf row: the number, the name,
-/// and the runtime, with the double-click's play. It is a leaf of the tree, so
-/// it paints both guides that pass through it — the series' and its season's
-/// (gui-tree-indent-guides design D3).
+/// An episode leaf row (gui-unified-list-rows design D3): the nested row part at
+/// the second depth, so it paints the Music track look — the number cell, the
+/// muted name, and the runtime — with the double-click's play. It is a leaf of
+/// the tree, so it paints both guides that pass through it — the series' and its
+/// season's (gui-tree-indent-guides design D3).
 fn paint_shows_episode(
     row: &ShowsListRow,
     library: &LibraryState,
@@ -366,71 +245,35 @@ fn paint_shows_episode(
         return rsx! {};
     };
     let selected_row = is_selected_row(row, selected);
-    let mut style = format!(
-        "height: {}px; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: {LEAF_ROW_FONT_PX}px; cursor: pointer;",
-        episode.height,
-        row_inset(row)
-    );
-    // The expanded area's fill under an open series, unless the row is the
-    // selected one.
-    let fill = row_background(row, selected).unwrap_or_else(|| canvas_var("tree-subtree"));
-    let _ = write!(style, " background: {fill};");
-    style.push_str(&tail_divider_style(tail));
-    let name_color = row_name_color(shows, row);
+    // The carried episode names the row's play state, which picks the title's
+    // tone (design D4).
+    let play = shows.and_then(|shows| episode_state(shows, row));
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = episode.source_id.clone();
     let play_library = library.clone();
-    let menu_id = episode.source_id.clone();
-    let menu_row = row.clone();
+    let menu_id = LibraryState::row_menu_item(episode.source_id.clone());
     let menu_library = library.clone();
     rsx! {
-        button {
-            "type": "button",
-            class: "relative flex w-full items-center overflow-hidden",
-            style: "{style}",
-            "data-library-shows-row": "episode",
-            "data-library-shows-row-id": "{episode.id}",
-            onclick: move |_| press_library.press_shows_row(&press_row),
-            ondoubleclick: move |_| play_library.play_shows_row(&play_id),
-            oncontextmenu: move |event: MouseEvent| {
-                event.prevent_default();
-                // A right-click selects the row first, as a press does, so the
-                // menu's View Detail opens the Hero for this row.
-                menu_library.press_shows_row(&menu_row);
-                let coordinates = event.client_coordinates();
-                menu_library.open_row_menu_at(
-                    Some(LibraryState::row_menu_item(menu_id.clone())),
-                    f32_from_f64(coordinates.x),
-                    f32_from_f64(coordinates.y),
-                );
-            },
-            ..mark("data-library-shows-selected", selected_row),
-            span {
-                class: "flex-none font-mono tabular-nums",
-                style: "font-size: 12px; color: var(--canvas-ordinal);",
-                "data-library-shows-episode-number": "",
-                "{episode.number}"
-            }
-            div {
-                class: "min-w-0 flex-1",
-                style: leaf_label_css(),
-                Truncate {
-                    text: episode.title.clone(),
-                    css: format!("color: {name_color};"),
-                    style: leaf_row_text(),
-                    attrs: vec![Attribute::new("data-library-shows-title", "", None, false)],
-                }
-            }
-            if !episode.duration.is_empty() {
-                span {
-                    class: "flex-none font-mono tabular-nums",
-                    style: "font-size: 12px; color: var(--canvas-muted);",
-                    "data-library-shows-episode-duration": "",
-                    "{episode.duration}"
-                }
-            }
-            {leaf_guides()}
+        TreeRow {
+            attr: "shows",
+            kind: "episode".to_owned(),
+            id: episode.id.clone(),
+            level: TreeLevel::Leaf,
+            depth: TreeDepth::Two,
+            title: episode.title.clone(),
+            number: Some(episode.number.to_string()),
+            trail: Some(TreeTrail::Duration(episode.duration.clone())),
+            play,
+            selected: selected_row,
+            tail,
+            on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
+            on_play: Callback::new(move |()| play_library.play_shows_row(&play_id)),
+            // The part presses the row first, so the menu's View Detail opens
+            // the Hero for this row.
+            on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
+                menu_library.open_row_menu_at(Some(menu_id.clone()), x, y);
+            })),
         }
     }
 }
@@ -447,8 +290,8 @@ fn paint_shows_row(
     let tail = tails.contains(row.id());
     match row {
         ShowsListRow::Heading(heading) => paint_letter_heading("shows", heading),
-        ShowsListRow::Series(_) => paint_shows_series(row, library, shows, selected),
-        ShowsListRow::Season(_) => paint_shows_season(row, library, shows, selected, tail),
+        ShowsListRow::Series(_) => paint_shows_series(row, library, selected),
+        ShowsListRow::Season(_) => paint_shows_season(row, library, selected, tail),
         ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected, tail),
         ShowsListRow::Flat(flat) => paint_shows_flat(flat, library, selected),
     }
