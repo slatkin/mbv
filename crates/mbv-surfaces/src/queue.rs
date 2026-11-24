@@ -218,7 +218,7 @@ impl QueueSurface {
     }
 
     /// The row the pointer rests on (the canvas row hover): the frame paints
-    /// that row's grip and actions button.
+    /// that row's hover Play control mark.
     #[must_use]
     pub const fn hover(&self) -> Option<QueueSlotId> {
         self.hover

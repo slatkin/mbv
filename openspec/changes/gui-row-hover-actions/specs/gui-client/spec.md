@@ -106,7 +106,7 @@ A GUI tree parent row SHALL show an Expand/collapse control with its other hover
 
 ### Requirement: A queue row shows a Play control on hover
 
-While the pointer rests on a queue row, the row SHALL show a Play control in its right column, in place of the item's duration, beside the row-actions button. A press on the control SHALL play that slot, as a double-click on the row does. A double-click on the control SHALL NOT play the row a second time.
+While the pointer rests on a queue row, the row SHALL show a Play control in its right column, in place of the item's duration, at the row's trailing end. A press on the control SHALL play that slot, as a double-click on the row does. A double-click on the control SHALL NOT play the row a second time.
 
 #### Scenario: A hovered queue row plays from its control
 
@@ -185,12 +185,12 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 #### Scenario: A row is hovered
 
 - **WHEN** the pointer is over a queue row
-- **THEN** the row paints the canvas's hovered row: the grip replaces the row's ordinal, the Play control takes the place of the duration, and the row-actions button shows at the row's end
+- **THEN** the row paints the canvas's hovered row: it keeps its ordinal, and the hover Play control takes the place of the duration at the row's trailing end
 
 #### Scenario: The row menu opens
 
-- **WHEN** the row-actions button is pressed
-- **THEN** the menu opens with Play now (`⏎`), Mark watched (`w`), Go to episode (`g`), and Remove from queue (`dd`)
+- **WHEN** the user right-clicks the row or its hover Play control
+- **THEN** the menu opens with Play now (`⏎`), Mark watched (`w`), Go to episode (`g`), Shuffle, Remove from queue (`dd`), and Clear queue (`c`)
 - **AND** the menu shows no Play next entry
 
 #### Scenario: The destructive entry is distinct
