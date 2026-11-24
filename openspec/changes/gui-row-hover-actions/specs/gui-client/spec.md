@@ -22,6 +22,17 @@ While the pointer rests on a GUI Library row, the row SHALL show its hover contr
 - **WHEN** the pointer rests on a Hero tracklist row
 - **THEN** the row shows its track number and its hover controls, and the controls take the place of its duration
 
+#### Scenario: The pointer moves onto a control
+
+- **GIVEN** the pointer rests on a selected Music album row
+- **WHEN** the pointer moves from the row onto one of its hover controls
+- **THEN** the row keeps its hover look and its selection fill, and the controls carry the same look as the rest of the row
+
+#### Scenario: The controls leave the row's divider
+
+- **WHEN** a row that paints a divider under itself shows its hover controls
+- **THEN** the divider still shows under the controls, as under the rest of the row
+
 ### Requirement: A row's hover controls follow its kind
 
 A collection row SHALL show Play, Add to queue, and Shuffle. A collection row is an Emby folder or boxset, a Music artist or album, a Shows series or season, a Home row that names a collection, or a saved playlist. A media row SHALL show Play and Add to queue. An Audiobooks chapter row SHALL show Play only. A row that cannot play, such as a Shows Upcoming row, SHALL show no hover controls. No row SHALL show a Play next control.
@@ -30,6 +41,17 @@ A collection row SHALL show Play, Add to queue, and Shuffle. A collection row is
 
 - **WHEN** the pointer rests on a Shows series row
 - **THEN** the row shows Play, Add to queue, and Shuffle
+
+#### Scenario: A top-level tree parent's controls
+
+- **WHEN** the pointer rests on a top-level Music artist row that names an item
+- **THEN** the row shows Play, Add to queue, Shuffle, and Expand/collapse
+- **AND** a top-level Shows series row and a Playlists screen playlist row show the same four controls
+
+#### Scenario: A top-level tree parent with no item
+
+- **WHEN** the pointer rests on a Music artist row that names no item
+- **THEN** the row shows Expand/collapse alone
 
 #### Scenario: An episode row's controls
 

@@ -20,8 +20,8 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_attr::library_attr;
 use crate::window::components::list_row::{
-    LibraryTrailPart, NODE_ROW_HEIGHT, ROW_PADDING_PX, RowLevel, TRACK_ROW_HEIGHT, context_press,
-    hover_trail_class,
+    LibraryTrailPart, NODE_ROW_HEIGHT, ROW_DIVIDER_PX, ROW_PADDING_PX, RowLevel, TRACK_ROW_HEIGHT,
+    context_press, hover_trail_class, row_host_style,
 };
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{
@@ -265,7 +265,7 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
         .unwrap_or_else(|| canvas_var("tree-subtree"));
     row_style.push_str(" background: var(--row-fill);");
     row_style.push_str(&tail_divider_style(props.tail));
-    let host_style = format!("--row-fill: {fill};");
+    let host_style = row_host_style(&fill, if props.tail { ROW_DIVIDER_PX } else { 0.0 });
 
     let title_css = row_level.title_tone(props.play.as_ref());
     let title_attrs = vec![Attribute::new(library_attr(attr, "title"), "", None, false)];
@@ -309,9 +309,9 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     // A parent that opens toggles on a double-click; a leaf, and a parent that
     // opens nothing, plays.
     let row_class = if props.open.is_some() {
-        "relative flex w-full items-center"
+        "row-hover-face relative flex w-full items-center"
     } else {
-        "relative flex w-full items-center overflow-hidden"
+        "row-hover-face relative flex w-full items-center overflow-hidden"
     };
     let on_double_click = props.on_toggle.unwrap_or(props.on_play);
     let on_press = props.on_press;
@@ -323,7 +323,7 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     // semantics, and the controls are its later sibling, never a child.
     rsx! {
         div {
-            class: "row-hover-host",
+            class: "row-hover-host row-hover-row",
             style: "{host_style}",
             button {
                 "type": "button",

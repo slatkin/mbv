@@ -48,6 +48,10 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 - [x] 8.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and fix every failure. Verify: all three pass.
 
+## 9. Live-run follow-ups (PR 1062)
+
+- [x] 9.1 Keep the row's hover veil while the pointer rests on a control, and stop the cover above the row's divider: `row-hover-row` on the host, `row-hover-face` on the row button, `--row-divider` on the host (`list_row::row_host_style`), and the rules in `assets/app.css` (design D2). Verify: `cargo nextest run -p mbv-gui row_hover` passes.
+
 ## Workflow follow-up
 
 - Sync the delta into `openspec/specs/gui-client/spec.md` and archive the change only when the user approves the PR for merge.

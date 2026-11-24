@@ -148,6 +148,15 @@ pub fn hover_trail_class(paints_actions: bool) -> &'static str {
     }
 }
 
+/// The host's `style` (`gui-row-hover-actions` design D2): the row's fill as
+/// `--row-fill`, which the row button and the hover controls' cover both read,
+/// and the width of the divider the row paints under itself as `--row-divider`,
+/// which the cover stops above so its fill never blanks the line.
+#[must_use]
+pub fn row_host_style(fill: &str, divider_px: f32) -> String {
+    format!("--row-fill: {fill}; --row-divider: {divider_px}px;")
+}
+
 /// The one right-press handler every row part shares (`gui-unified-list-rows`
 /// design D4): a right-press on a row that names a menu stops the window's
 /// default, presses the row first — so the menu's View Detail opens the Hero

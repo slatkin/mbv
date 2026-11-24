@@ -35,6 +35,7 @@ mod art;
 mod header;
 mod paint;
 mod resize;
+mod row_hover;
 
 /// The pass bound for the idle assertion: a settling effect goes `Pending`
 /// within a few passes; a self-triggering one never does.

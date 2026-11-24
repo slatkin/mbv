@@ -20,7 +20,7 @@ use crate::bridge::frame::library::GuiHomeRowStateFrame;
 use crate::window::components::library_attr::library_attr;
 use crate::window::components::list_row::{
     LIBRARY_ROW_HEIGHT, LibraryRowThumb, LibraryTrailPart, ROW_DIVIDER_PX, ROW_PADDING_PX,
-    RowLevel, context_press, hover_trail_class, paint_thumb,
+    RowLevel, context_press, hover_trail_class, paint_thumb, row_host_style,
 };
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
@@ -154,7 +154,7 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
         .selection_fill(props.selected)
         .unwrap_or_else(|| canvas_var("library-column"));
     let _ = write!(row_style, " background: var(--row-fill);");
-    let host_style = format!("--row-fill: {fill};");
+    let host_style = row_host_style(&fill, divider_width);
 
     let title_attrs = vec![Attribute::new(library_attr(attr, "title"), "", None, false)];
     let title_css = format!(
@@ -206,9 +206,9 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
         || on_hover_shuffle.is_some()
         || on_toggle.is_some();
     let row_class = if props.tree_open.is_some() {
-        "relative flex w-full items-center"
+        "row-hover-face relative flex w-full items-center"
     } else {
-        "relative flex w-full items-center overflow-hidden"
+        "row-hover-face relative flex w-full items-center overflow-hidden"
     };
     let trail_class = hover_trail_class(paints_actions);
     let on_double_click = props.on_toggle.unwrap_or(props.on_play);
@@ -221,7 +221,7 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     // semantics, and the controls are its later sibling, never a child.
     rsx! {
         div {
-            class: "row-hover-host",
+            class: "row-hover-host row-hover-row",
             style: "{host_style}",
             button {
                 "type": "button",

@@ -49,6 +49,8 @@ A control must not nest inside the row's `<button>`. That is the queue's rule, a
 
 A tree parent row's `tree-parent` class and `tree-trailing` marker go with `TreeHint`. The trailing text carries `row-hover-trail` on every row that paints the part.
 
+The row keeps its hover look while the pointer rests on the part. The shared button rule paints the pointer veil on the row's own button only while the pointer is over that button, and the part is a sibling, so the part's cover carries the veil itself: a host that paints a fill (`row-hover-row`) shows the veil on its button (`row-hover-face`) and on the cover while the host is hovered, over the same `--row-fill`. The Workspace table's rows paint no fill and take no veil. The part stops above the row's divider: the host carries the divider's width as `--row-divider` (`0` where the row paints none), and the cover's `bottom` reads it, so the cover's fill never blanks the line.
+
 *Alternative:* swapping the trailing cell in flow would change the title width on hover and make the row jump.
 
 ### D3. Which controls a row gets is the window's choice, from facts it already holds

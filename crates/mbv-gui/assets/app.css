@@ -452,7 +452,19 @@ button:disabled {
    accepted look. The host also hides the trailing text (`row-hover-trail`)
    while the part shows. `z-index` puts the part over the row button; the
    Library's dropdowns and popovers are later siblings over list content for
-   the same reason. */
+   the same reason.
+
+   The part stops above the row's divider: the host's `--row-divider` names the
+   divider's width (`0` where the row paints none), so the cover's fill never
+   blanks the line under the row.
+
+   A row that paints its own fill (`row-hover-row`: the top-level and nested
+   Library rows) keeps its pointer veil while the pointer rests on the part. The
+   veil is the shared button rule's, and it lands on the row's own button
+   (`row-hover-face`) only while the pointer is over that button, so the host's
+   `:hover` carries it to the button and to the part's cover together: the row
+   reads as one hovered row, whichever of its two boxes the pointer is on. The
+   Workspace table's rows paint no fill, so they take no veil of their own. */
 .row-hover-host {
 	position: relative;
 }
@@ -461,7 +473,7 @@ button:disabled {
 	position: absolute;
 	top: 0;
 	right: 0;
-	bottom: 0;
+	bottom: var(--row-divider, 0px);
 	z-index: 1;
 	align-items: center;
 	gap: 2px;
@@ -473,6 +485,13 @@ button:disabled {
 }
 .row-hover-host:hover .row-hover-trail {
 	visibility: hidden;
+}
+.row-hover-row:hover .row-hover-face,
+.row-hover-row:hover .row-hover-actions {
+	background-image: linear-gradient(
+		var(--hover-veil, var(--canvas-hover-veil)),
+		var(--hover-veil, var(--canvas-hover-veil))
+	) !important;
 }
 
 @layer base {

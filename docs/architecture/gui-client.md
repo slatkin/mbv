@@ -2130,6 +2130,11 @@ sibling of the row button at the row's trailing end, and
 `.row-hover-host:hover .row-hover-trail` covers the trailing text. The part
 paints the row's own fill behind it, so it covers the trailing end of a long
 title cleanly, and `Truncate` measures in Rust, so the title does not reflow.
+The hovered row keeps one look across its two boxes: a host that paints a fill
+(`row-hover-row`) carries the pointer veil on its button (`row-hover-face`) and
+on the part's cover while the host is hovered, so the veil does not drop when
+the pointer moves onto a control, and the cover stops above the row's divider
+(the host's `--row-divider`) so its fill does not blank the line.
 Each control calls `stop_propagation` in its `onclick` and `ondoubleclick`,
 so a press never picks or double-clicks the row. Every control runs a path a
 gesture already runs; Shuffle sends `GuiLibraryCommand::Shuffle { row }`,
