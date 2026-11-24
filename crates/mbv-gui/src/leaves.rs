@@ -276,11 +276,13 @@ impl<'a> QueueLeaf<'a> {
 
     fn right_click(&mut self, at: Position) -> Option<Msg> {
         // Legacy parity with the TUI: a right-click on blank queue space
-        // opens no menu, so only a resolved row produces one. The context
-        // menu is a surface the first slice does not present, so the
-        // dispatched request stays undelivered (the GUI dispatch's
-        // documented no-op).
-        let target = self.row_at(at)?;
+        // opens no menu, so only a resolved row produces one. A right-click on
+        // the row's hover Play control is a right-click on its row, so the
+        // control opens the same menu as the rest of the row (design D6 of
+        // `gui-row-hover-actions`). The context menu is a surface the first
+        // slice does not present, so the dispatched request stays undelivered
+        // (the GUI dispatch's documented no-op).
+        let target = row_hover_at(self.regions, at)?;
         let outcome = self.surface.delegate_operation_with_viewport_len(
             MediaListOperation::Context(target),
             self.viewport_len(),

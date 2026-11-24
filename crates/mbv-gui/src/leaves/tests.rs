@@ -8,6 +8,7 @@ use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::{HitMap, HitRegion};
+use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 use mbv_ui_msg::{Msg, PlaybackRequest, Position, ShellRequest};
 use rstest::rstest;
@@ -133,5 +134,22 @@ fn a_double_click_on_row_chrome_activates_nothing(#[case] target: QueueTargetId)
     assert_eq!(
         leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
         None
+    );
+}
+
+/// Contract (design D6 of `gui-row-hover-actions`): a right-click on the row's
+/// hover Play control is a right-click on its row, so it opens that row's menu
+/// as a right-click on the rest of the row does.
+#[test]
+fn a_right_click_on_the_row_play_control_opens_its_row_menu() {
+    let mut surface = queue_of(&[1, 2]);
+    let regions = regions_with(RegionTarget::Queue(QueueTargetId::RowPlay(2)));
+    let mut leaf = QueueLeaf::new(&mut surface, &regions);
+
+    assert_eq!(
+        leaf.pointer(PointerGesture::RightClick(Position { x: 10.0, y: 10.0 })),
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            ContextMenuTargets::Queue(vec![QueueSlotId::from_raw(2)])
+        ))))
     );
 }
