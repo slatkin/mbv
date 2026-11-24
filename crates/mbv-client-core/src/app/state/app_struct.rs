@@ -97,11 +97,13 @@ pub struct App {
     /// never starts one of these fetches, so it never receives an event.
     pub(in crate::app) library_fetch_events:
         crate::app::state::library_fetch_events::LibraryFetchEvents,
-    /// The `mbv` program this Client starts the Owner from (design D9 of
-    /// `extract-client-core`). `None` starts this process's own executable —
-    /// the TUI Client, which is `mbv` itself. The GUI Client records the
-    /// `mbv` program it resolved, so an Owner restart never starts the GUI
-    /// program as the Owner.
+    /// The Owner program this Client starts (design D9 of
+    /// `extract-client-core`). `None` starts
+    /// [`crate::app::owner_link::owner_program`]: the `mbv-owner` program
+    /// beside the running Client, else `mbv-owner` on `PATH`, so the Owner is
+    /// never the running Client's own program. The GUI Client records the
+    /// program it resolved, so an Owner restart never starts the GUI program
+    /// as the Owner.
     pub(in crate::app) owner_exe: Option<std::path::PathBuf>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
