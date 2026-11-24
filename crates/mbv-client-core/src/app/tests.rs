@@ -52,6 +52,8 @@ pub mod render_fixtures;
 /// The daemon endpoint and reconnect stubs the queue-link tests share.
 pub mod route_state;
 #[cfg(test)]
+mod series_refetch;
+#[cfg(test)]
 mod services_settings_lifecycle;
 #[cfg(test)]
 mod session_connect;

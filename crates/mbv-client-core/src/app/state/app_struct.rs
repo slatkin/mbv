@@ -569,6 +569,10 @@ pub struct App {
     /// oldest entry.
     pub(in crate::app) series_detail_cache: IndexMap<String, SeriesDetail>,
     pub(in crate::app) series_detail_loading: std::collections::HashSet<String>,
+    /// Series ids whose running detail fetch is a quiet in-view load (design
+    /// D6): its landing caches the detail but starts no first-season episode
+    /// fetch. A plain `fetch_series_detail` for the same id drops the mark.
+    pub(in crate::app) series_detail_quiet: std::collections::HashSet<String>,
     pub(in crate::app) series_season_loading: std::collections::HashSet<(String, String)>,
     /// Season expansions received before their show's detail has arrived.
     pub(in crate::app) pending_series_season_expansions:

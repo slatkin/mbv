@@ -63,6 +63,9 @@ impl App {
         if series_id.is_empty() {
             return;
         }
+        // A plain fetch supersedes a quiet in-view load of the same id (design
+        // D6): its landing starts the first season as any pick expects.
+        self.series_detail_quiet.remove(series_id);
         if self.series_detail_loading.contains(series_id)
             || self.series_detail_cache.contains_key(series_id)
         {
@@ -87,6 +90,18 @@ impl App {
                 episodes,
             }));
         });
+    }
+
+    /// Fetches `series_id`'s detail as a quiet in-view load (design D6): the
+    /// landing caches the detail but starts no first-season episode fetch, so
+    /// an open row in view that keeps its seasons closed costs no episode
+    /// request. A plain `fetch_series_detail` of the same id drops the mark,
+    /// and the landing then loads the first season as a pick expects.
+    pub fn fetch_series_detail_quiet(&mut self, series_id: &str) {
+        self.fetch_series_detail(series_id);
+        if self.series_detail_loading.contains(series_id) {
+            self.series_detail_quiet.insert(series_id.to_string());
+        }
     }
 
     /// Fetches one season only after the complete ordered Series detail is

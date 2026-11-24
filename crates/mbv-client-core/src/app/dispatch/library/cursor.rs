@@ -285,6 +285,10 @@ impl App {
         // example, a refresh that completed while this request was in flight).
         self.cache_series_detail(series_id, detail);
         self.series_detail_loading.remove(series_id);
+        // A quiet in-view load (design D6) caches the detail without the first
+        // season's episodes: the seasons stay closed until a pick or an
+        // expansion asks for them. Pending expansions still run.
+        let quiet = self.series_detail_quiet.remove(series_id);
         let pending_seasons = self
             .pending_series_season_expansions
             .iter()
@@ -299,7 +303,7 @@ impl App {
             .get(series_id)
             .and_then(|detail| detail.seasons.first())
             .map(|season| season.id.clone());
-        if let Some(season_id) = first_season_id {
+        if !quiet && let Some(season_id) = first_season_id {
             self.fetch_series_season_episodes(series_id.to_string(), season_id);
         }
         for (_, season_id) in pending_seasons {
