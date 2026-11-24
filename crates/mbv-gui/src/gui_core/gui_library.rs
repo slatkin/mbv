@@ -66,9 +66,7 @@ pub(crate) use self::feeds::feeds_picked_entry;
 pub(crate) use self::feeds::{feeds_effective_set, feeds_entries};
 #[cfg(test)]
 pub(crate) use self::feeds_projection::feeds_projection;
-pub use self::feeds_projection::{
-    GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, gui_feeds_platform,
-};
+pub use self::feeds_projection::{GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,

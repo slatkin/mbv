@@ -84,12 +84,17 @@ impl GuiFeedsList {
     /// The Feeds list part for `projection` (row 11.1).
     pub(crate) fn from_projection(projection: &GuiFeedsProjection) -> Self {
         Self {
-            collections: projection.collections.clone(),
-            loading: projection.loading,
-            failed: projection.failed,
-            platform: crate::gui_core::gui_feeds_platform(&projection.collections),
-            rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),
-            sort: projection.sort.clone(),
+            collections: projection.list.collections.clone(),
+            loading: projection.list.loading,
+            failed: projection.list.failed,
+            platform: projection.platform,
+            rows: projection
+                .list
+                .rows
+                .iter()
+                .map(GuiEntryRowFrame::from)
+                .collect(),
+            sort: projection.list.sort.clone(),
         }
     }
 }
@@ -98,8 +103,8 @@ impl GuiFeedsDetail {
     /// The Feeds detail part for `projection` (row 11.1).
     pub(crate) fn from_projection(projection: &GuiFeedsProjection) -> Self {
         Self {
-            selected: projection.selected.clone(),
-            hero: projection.hero.as_ref().map(GuiFeedsHeroFrame::from),
+            selected: projection.list.selected.clone(),
+            hero: projection.list.hero.as_ref().map(GuiFeedsHeroFrame::from),
         }
     }
 }

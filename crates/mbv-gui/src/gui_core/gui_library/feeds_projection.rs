@@ -138,9 +138,10 @@ pub struct GuiFeedsHero {
 /// service-marks design D2): `None` for All, for no checked subscription, for
 /// subscriptions of different platforms, and for a checked subscription whose
 /// URL shows no known platform. The header's Feed mark follows this one answer,
-/// so a Client paints it and no other site derives the rule.
-#[must_use]
-pub fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform> {
+/// so a Client paints it and no other site derives the rule. The projection
+/// computes it once, when it builds (issue #1042): the frame copies it and
+/// re-parses no subscription URL.
+fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform> {
     if collections.all {
         return None;
     }
@@ -153,18 +154,32 @@ pub fn gui_feeds_platform(collections: &GuiCollections) -> Option<FeedPlatform> 
 
 /// The Feeds projection the GUI Library panel paints (row 11.1) — the
 /// shared collection-scoped entry-list projection over the collection selector
-/// and Hero: All and the subscriptions with their checked state, the
-/// selection's entry rows, the core's selected entry, and its Hero. No
-/// Workspace and no state filter ride here.
-pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedsHero>;
+/// and Hero, with the Feed platform the checked set decides: All and the
+/// subscriptions with their checked state, the selection's entry rows, the
+/// core's selected entry, and its Hero. No Workspace and no state filter ride
+/// here. The platform is the projection's own field (issue #1042): the frame
+/// copies it and re-parses no subscription URL, and the Client state's memo
+/// re-parses the URLs only when the checked set changes.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GuiFeedsProjection {
+    /// The shared collection-scoped entry-list projection: the collection
+    /// selector, the selection's entry rows, the core's selected entry, and
+    /// its Hero.
+    pub list: GuiEntryListProjection<GuiFeedsHero>,
+    /// The Feed platform every checked subscription shares
+    /// (gui-library-header-service-marks design D2): `None` for All, for a
+    /// mixed or generic check set, and for an empty one, where the header
+    /// keeps the RSS mark.
+    pub platform: Option<FeedPlatform>,
+}
 
 impl GuiCore {
     /// The Feeds projection the GUI Library panel paints (row 11.1): the
     /// collection selector, the selection's entry rows in the list's sort
     /// order, the selected entry, and its Hero.
     #[must_use]
-    pub fn gui_feeds_projection(&self) -> GuiFeedsProjection {
-        feeds_projection(&self.app, &self.gui)
+    pub fn gui_feeds_projection(&mut self) -> GuiFeedsProjection {
+        feeds_projection(&self.app, &mut self.gui)
     }
 }
 
@@ -176,13 +191,29 @@ impl GuiCore {
 /// once; the rows and the Hero lookup read the sorted list, so the frame never
 /// rebuilds it.
 #[must_use]
-pub(crate) fn feeds_projection(app: &App, gui: &GuiClientState) -> GuiFeedsProjection {
+pub(crate) fn feeds_projection(app: &App, gui: &mut GuiClientState) -> GuiFeedsProjection {
     if !super::feeds::feeds_present(app) {
         return GuiFeedsProjection::default();
     }
     let sort_frame = super::list_sort::list_sort_frame(app, gui, GuiSortTarget::Feeds);
     let sort = sort_frame.active;
     let collections = super::collection_command::collections(app, gui, GuiCollectionTarget::Feeds);
+    // The platform the checked set decides (issue #1042): recomputed only
+    // when the set changes — a set the memo answers is not re-parsed. The
+    // set is the memo's whole key, so an equal set cannot have a different
+    // platform.
+    let cached_platform = gui
+        .feeds_platform
+        .as_ref()
+        .filter(|(cached, _)| *cached == collections)
+        .map(|(_, platform)| *platform);
+    let platform = if let Some(platform) = cached_platform {
+        platform
+    } else {
+        let platform = gui_feeds_platform(&collections);
+        gui.feeds_platform = Some((collections.clone(), platform));
+        platform
+    };
     let mut entries = super::feeds::feeds_entries(app, gui);
     if sort.is_name_sort() {
         // The entry title leads under Title, and the date newest follows it,
@@ -218,13 +249,16 @@ pub(crate) fn feeds_projection(app: &App, gui: &GuiClientState) -> GuiFeedsProje
         .and_then(GuiFeedEntryId::decode)
         .and_then(|entry| feeds_hero(app, &entry, &entries));
     GuiFeedsProjection {
-        collections,
-        loading: app.feeds_state().loading,
-        failed: false,
-        rows,
-        sort: Some(sort_frame),
-        selected,
-        hero,
+        list: GuiEntryListProjection {
+            collections,
+            loading: app.feeds_state().loading,
+            failed: false,
+            rows,
+            sort: Some(sort_frame),
+            selected,
+            hero,
+        },
+        platform,
     }
 }
 

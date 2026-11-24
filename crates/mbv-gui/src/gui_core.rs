@@ -49,7 +49,7 @@ pub use self::gui_library::{
     GuiLibraryTab, GuiLibraryTabs, GuiListSort, GuiListSortFrame, GuiMusicAlbum, GuiMusicArtist,
     GuiMusicHero, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPlayheadMarks,
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
-    GuiSearchProjection, GuiSearchRow, GuiSortTarget, gui_feeds_platform,
+    GuiSearchProjection, GuiSearchRow, GuiSortTarget,
 };
 pub use self::gui_library::{
     GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,

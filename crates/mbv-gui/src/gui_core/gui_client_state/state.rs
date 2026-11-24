@@ -15,14 +15,15 @@ use crate::gui_core::gui_client_state::GuiOverlay;
 use crate::gui_core::gui_library::GuiLibraryMenuRow;
 use crate::gui_core::gui_library::emby_feed_wants_target_in_set;
 use crate::gui_core::gui_library::{
-    GuiAudiobooksSelection, GuiCollectionSelection, GuiEmbyLibrarySelection, GuiEmbyRootItems,
-    GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiListSort, GuiPodcastsSelection,
-    GuiSearchStore, GuiSectionRequest, GuiShowsView, GuiTvShowsSelection,
+    GuiAudiobooksSelection, GuiCollectionSelection, GuiCollections, GuiEmbyLibrarySelection,
+    GuiEmbyRootItems, GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiListSort,
+    GuiPodcastsSelection, GuiSearchStore, GuiSectionRequest, GuiShowsView, GuiTvShowsSelection,
 };
 use crate::gui_core::gui_settings::GuiSettingsState;
 use mbv_client_core::App;
 use mbv_client_core::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use mbv_config::TabIdentity;
+use mbv_feed::FeedPlatform;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 
 /// The canvas panel's two toggles: `z` collapses the panel to its rail, and
@@ -89,6 +90,11 @@ pub struct GuiClientState {
     pub(crate) podcast_libs: std::collections::HashMap<usize, GuiPodcastsSelection>,
     /// The Feeds surface's selection.
     pub(crate) feeds_selection: GuiFeedsSelection,
+    /// The Feeds platform's memo (issue #1042): the collection set the cached
+    /// platform was computed from, with that platform. The platform re-parses
+    /// the checked subscriptions' URLs only when the set changes; a
+    /// projection over an equal set reuses the cached answer.
+    pub(crate) feeds_platform: Option<(GuiCollections, Option<FeedPlatform>)>,
     /// The chosen list sort per destination, keyed by the destination's
     /// stable identity and held in the order the destinations were first
     /// sorted.
@@ -155,6 +161,7 @@ impl GuiClientState {
             abs_libs: std::collections::HashMap::new(),
             podcast_libs: std::collections::HashMap::new(),
             feeds_selection: GuiFeedsSelection::default(),
+            feeds_platform: None,
             list_sorts: Vec::new(),
             search: GuiSearchStore::default(),
             panel_toggles: PanelToggles::default(),
