@@ -13,7 +13,10 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use mbv_ctrl::SWAP_TOKEN_ENV;
 use mbv_desktop::launch::detach;
+
+use crate::app::pin::{PINWIN_PANEL_ENV, PINWIN_SOCKET_ENV};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const READY_POLL_INTERVAL: Duration = Duration::from_millis(20);
@@ -31,6 +34,12 @@ pub(in crate::app) fn local_daemon_args(
 }
 
 const DISPLAY_VARS: [&str; 3] = ["WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY"];
+
+/// The panel identity and Pin-swap variables a launching Client claims for
+/// itself at start-up. The Owner and every process it starts must not inherit
+/// them (design D9 of `3-add-owner-program`): Pin swap, Unpin, and Open launch
+/// a TUI of the Owner's own build, and that launch builds its own claim.
+const CLAIMED_ENV: [&str; 3] = [PINWIN_PANEL_ENV, PINWIN_SOCKET_ENV, SWAP_TOKEN_ENV];
 
 /// Display variables from `systemctl --user show-environment` output; `None`
 /// unless it names a Wayland or X11 display.
@@ -102,6 +111,13 @@ pub(in crate::app) fn spawn_detached(
 ) -> Result<(), mbv_remote_player::RemotePlayerError> {
     let mut cmd = Command::new(exe);
     cmd.args(local_daemon_args(log_level));
+    // The TUI Client empties these from its own environment at start-up; the
+    // GUI Client claims none, so an Owner it starts from a shell inside a
+    // pinned panel would otherwise pass the panel identity and the swap token
+    // on to its own Pin, Unpin, and Open launches.
+    for name in CLAIMED_ENV {
+        cmd.env_remove(name);
+    }
     if let Some(display_env) = session_display_env() {
         for name in DISPLAY_VARS {
             cmd.env_remove(name);
