@@ -31,9 +31,10 @@ GUI has the same rule.
 Without it, one rule reaches only the surfaces that were wired by hand. The
 GUI review found two concrete copies:
 
-- `LibraryWorkspaceTable` has `WorkspaceRowState`, its own played-title rule,
-  and duplicate `row_state` conversions in the Shows and Feeds Heroes, while
-  flat and tree rows use `GuiHomeRowStateFrame`.
+- `LibraryWorkspaceTable` had `WorkspaceRowState`, its own played-title
+  rule, and duplicate `row_state` conversions in the Shows and Feeds Heroes,
+  while flat and tree rows use `GuiHomeRowStateFrame`. The
+  `gui-shared-workspace-row-state` change removed that copy.
 - `QueueChooserMenu` and `TargetChooserPopover` repeat the same card style,
   row geometry, cursor fill, menu roles, and mounted-mark handling.
 
@@ -49,6 +50,10 @@ when one surface receives a fix and the other does not.
 - `QueueRowMenu` serves the Library row menu, Queue row menu, Playlists menu,
   Settings value menus, and other context menus. Their entries differ; the
   menu shell does not.
+- `played_title_tone` in `list_row.rs` is the one played-title derivation,
+  and Workspace rows carry `GuiHomeRowStateFrame`, the frame the list rows
+  carry; the Workspace table keeps its own playhead mark
+  (`gui-shared-workspace-row-state`).
 - The open `gui-unified-list-rows` change makes `FlatRow` and `TreeRow` the
   canonical Library row painters and removes their caller-supplied look props.
 - The open `gui-row-hover-actions` change makes `RowHoverActions` the one
@@ -58,9 +63,6 @@ when one surface receives a fix and the other does not.
 
 ## Where it currently fails
 
-- Workspace rows still derive play state and the played-title look separately
-  from flat and tree rows. Issue #1058 tracks the shared derivation. The
-  Workspace table keeps its own layout; only the common state and look move.
 - The Queue chooser and playback-target chooser still repeat their card and
   row mechanics. Issue #1059 tracks one `ChooserMenu` and `ChooserRow`.
 - A future universal button or menu abstraction is not required. Extract a
