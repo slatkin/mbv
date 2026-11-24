@@ -2,7 +2,7 @@
 
 ## The invariant
 
-`QueueDeferrals` in `src/app/state/queue_deferrals.rs` owns the three deferred
+`QueueDeferrals` in `mbv_client_core::state::queue_deferrals` owns the three deferred
 queue mutations: the save/discard deferral, the gated populated-queue
 replacement, and the local-play deferral. Its private fields and transition
 methods keep each payload in its own lifecycle: save completion requires the

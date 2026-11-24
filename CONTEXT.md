@@ -136,7 +136,7 @@ The Client kind that presents a native window. It is a separate program. It atta
 _Avoid_: windowed client, desktop client, GUI (bare, for the app)
 
 Client core:
-The layer of interaction behaviour that the TUI Client and the GUI Client share for the surfaces that both present. It holds each of their interaction rules one time: Surface state, the focus stack, neutral key and pointer events, the one Keyboard Router, list capacity, and the semantic hit map. For those surfaces a Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events, and it never reimplements an interaction rule. A surface that one Client presents alone, such as the *GUI Library panel*, keeps its rules in that Client.
+The crate `mbv-client-core`. It holds the state and behaviour that the TUI Client and the GUI Client share: each of their interaction rules one time — `App`, dispatch, the neutral state and events, Surface state, the focus stack, the one Keyboard Router, list capacity, and the semantic hit map — together with the Client tick and the Client-side Owner find, start, and attach. It names no terminal library, no terminal UI framework, and no GUI toolkit, and no Client crate names another Client (ADR 0043). For the surfaces both Clients present a Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events, and it never reimplements an interaction rule. A surface that one Client presents alone, such as the *GUI Library panel*, keeps its rules in that Client.
 _Avoid_: core (bare), shared UI layer, interaction layer (bare)
 
 Client capability:

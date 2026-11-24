@@ -47,7 +47,7 @@ only chooses the header row's content, never its visibility.
 
 ## How the code maintains it today
 
-- `title_site_skip_reason` in `src/app/state/projection/card.rs` returns a
+- `title_site_skip_reason` in `mbv_client_core::state::projection::card::title_site` returns a
   `TitleSiteGate`: mode gates force `Header`, transient gates return early
   and leave the carried site untouched.
 - `refresh_queue_card_image` starts each sync from the previous projection's
@@ -68,7 +68,7 @@ only chooses the header row's content, never its visibility.
   (the slot-hide revert), `header_rows_are_always_reserved_while_the_title_lives_on_the_artwork`
   (geometry) and `header_row_paints_the_brand_row_while_the_title_lives_on_the_artwork`
   (panel paint content); `building_title_overlay_leaves_shared_plain_card_bitmap_unchanged`
-  in `src/app/infra/image_fetch/protocol/protocol_tests.rs` (the variant never
+  in `crates/mbv-tui/src/tui/image_protocol/tests.rs` (the variant never
   mutates the plain entry, so the painter's plain fallback cannot alias the
   overlay variant).
 

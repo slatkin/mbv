@@ -27,7 +27,7 @@ pill switch.
 
 ## How the code upholds it today
 
-`tv_mode_fetch_fields` (`src/app/dispatch/library/browse/tv.rs`) is the single source for each
+`tv_mode_fetch_fields` (`mbv_client_core::dispatch::library::browse::tv`) is the single source for each
 `TvContentMode`'s fetch fields. `build_tv_latest_level`/`build_tv_upcoming_level` stamp their
 levels from it, `spawn_tv_latest`/`spawn_tv_upcoming` align the root level from it before
 spawning, `refresh_tv_letter_mode` stamps both the level and the `LevelFetchKey` from it (so

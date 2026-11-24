@@ -1,7 +1,7 @@
 # Invariant 17 — A terminal resize neither blanks the terminal nor wipes the image cache
 
-**Scope:** the terminal-resize paths `src/app/shell.rs::apply_terminal_observer` and
-`src/app/shell/run.rs::Model::sync_terminal_resize`, and the image cache they used to
+**Scope:** the terminal-resize paths `crates/mbv-tui/src/tui.rs::apply_terminal_observer` and
+`crates/mbv-tui/src/tui/run.rs::Model::sync_terminal_resize`, and the image cache they used to
 touch (`crates/mbv-images/src/cache.rs::clear_images_and_loading`). Landed by the
 `panel-expand-toggle` change.
 

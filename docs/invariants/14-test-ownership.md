@@ -82,7 +82,12 @@ authoring and review time.
   helpers in production files. Delete them with the tests (AGENTS.md
   forbids `allow`/`expect`, so they surface as `dead_code` — that warning
   is the sweep mechanism, not a nuisance).
-- **`mbv-config` public-API tests that need `TestStateDirGuard`,
-  `TestTempDir`, or `SYS_ENV_LOCK` still live in `src/`.** Those helpers are
-  `cfg(any(test, feature = "test"))`-gated and unreachable from the crate's own
-  integration binary, which cannot take a self dev-dependency.
+- **`mbv-config` splits its public-API tests from its guard-only tests.**
+  The tests that use only the public API live in `tests/config.rs`. The tests
+  that need `SYS_ENV_LOCK` or `TEST_DEFAULT_STATE_DIR` stay in `src/tests/`,
+  because those two helpers are `cfg(test)`-only. The public guards
+  (`TestStateDirGuard`, `TestTempDir`, `set_test_env_var`) are
+  `feature = "test"`-gated, and a crate's own integration binary reaches them
+  through a self dev-dependency with that feature: the lever `mbv-gui` and
+  `mbv-client-core` take, and `mbv-config` does not take because its guard
+  tests read private test support.

@@ -22,7 +22,7 @@ ctrl. Data never does. No Service credential crosses ctrl.
 | Service setup | Rereads committed owner-local setup on `ApplyServiceSetup`. Setup values and credentials never cross ctrl | Validates the server and Service credential against the remote. Commits setup owner-locally. Sends the apply request |
 | Service reads | Resolves playback streams for the run | All browsing: library fetches, pagination, search, Home sections, feed refresh, artwork cache |
 | Emby websocket | Runs the Emby websocket and obeys remote play, stop, and pause commands from other Emby clients (`mbv-daemon` ws) | Nothing |
-| F3 Sessions and Cast | Nothing | Direct remote control of Emby Sessions and cast receivers: discovery, dispatch, cast heartbeat (`src/app/dispatch/cast*`) |
+| F3 Sessions and Cast | Nothing | Direct remote control of Emby Sessions and cast receivers: discovery, dispatch, cast heartbeat (`mbv_client_core::dispatch::cast*`) |
 | Playlists | Nothing | Save-on-consume write-back to the Emby playlist (`consume_quit.rs`) |
 | Ctrl protocol | Listens, admits Clients, role-gates commands, broadcasts queue and playback events | Attaches with the Hello handshake. Receives and renders snapshots |
 | Lifetime | Stay-alive policy. Outlives Clients. Coordinated shutdown with durable queue save on `RequestShutdown` | Sends `RequestShutdown`. Spawns the Owner (`mbv --__local-daemon`), holds the single-instance flock, waits for socket ready, attaches |
