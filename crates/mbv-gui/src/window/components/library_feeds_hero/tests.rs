@@ -2,9 +2,8 @@
 //! `LibraryFeedsHero.test.ts` — the placeholder artwork box takes the arm
 //! every Hero shares (a feed entry has no artwork source), the feed titles
 //! the header with the entry in the block and the duration beside the art, no
-//! overview paints, no Workspace and no tracklist paint, no play-next control
-//! paints (there is no Feeds play-next command), the actions send the Feeds
-//! commands for the frame's selected entry with no library index, and the
+//! overview paints, no Workspace and no tracklist paint, the actions send the
+//! Feeds commands for the frame's selected entry with no library index, and the
 //! list band holds the Hero's feed's entries alone. The IPC of the earlier
 //! tests is the mock core link here;
 //! the asserted commands are the same neutral shapes. A headless document
@@ -432,24 +431,6 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_entry() {
             item_id: "sub1:guid12".to_owned(),
         }],
         "the enqueue command names the frame's selected entry"
-    );
-}
-
-/// Contract (`LibraryFeedsHero.test.ts`): there is no play-next command for
-/// Feeds (row 11.1), so no control paints it.
-#[test]
-fn the_hero_paints_no_play_next_control() {
-    let fixture = built_hero();
-
-    assert!(
-        !fixture.presents("[data-library-feeds-hero-play-next]"),
-        "no play-next control paints"
-    );
-    assert!(
-        !fixture
-            .text_of("[data-library-feeds-hero-block]")
-            .contains("Play next"),
-        "the block names no play-next"
     );
 }
 

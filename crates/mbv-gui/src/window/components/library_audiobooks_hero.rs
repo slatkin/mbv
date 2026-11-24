@@ -10,8 +10,8 @@
 //! the tracklist's play glyph. The Workspace keeps no cursor
 //! (`gui-pointer-target-interaction` D6): the keys act on the chapter the
 //! pointer marks, a press on a row does nothing, a double-click plays or seeks
-//! from the chapter, and the hovered row paints its play control. Books have no
-//! play next, and a chapter enqueues nothing: only the play control paints.
+//! from the chapter, and the hovered row paints its play control. A chapter
+//! enqueues nothing: only the play control paints.
 //!
 //! Play, and Add to queue (`a`), send the Audiobooks destination's commands
 //! with the frame's selected book (design D12) — the core owns the selection,
@@ -157,7 +157,7 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     });
 
     // The actions' sends (design D12, row 9.1): the picked book's own stable
-    // id. Books have no play next.
+    // id.
     let lib_idx = props.lib_idx;
     let play_library = library.clone();
     let play_detail = props.detail.clone();

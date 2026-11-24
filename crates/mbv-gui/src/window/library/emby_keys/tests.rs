@@ -2,7 +2,7 @@
 //! `emby-keys.test.ts`, on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2) — the movement keys scroll the list
 //! under the pointer, Enter and the double-click's play command play every row
-//! (a collection row too), `n` and `a` play next and queue, and `/` is taken.
+//! (a collection row too), `a` queues, `/` is taken, and `n` goes to the core.
 //! The router under test is the panel's one routing site,
 //! [`super::super::keys::route_library_key`], so these assertions cover the
 //! Emby dispatch it hands to [`super::route_emby_panel_key`]. The harness builds
@@ -199,9 +199,9 @@ fn enter_on_a_collection_row_plays_it() {
     );
 }
 
-// `n` and `a` play the hovered row next and queue it.
+// `a` queues the hovered row, and `n` is not a Library key.
 #[test]
-fn n_and_a_play_the_hovered_row_next_and_queue_it() {
+fn a_queues_the_hovered_row_and_n_is_the_cores() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_emby(state, content.clone());
@@ -209,19 +209,13 @@ fn n_and_a_play_the_hovered_row_next_and_queue_it() {
         route_row(state, facts, "n", "n", PointerList::Emby, "m1");
         route_row(state, facts, "a", "a", PointerList::Emby, "m1");
     });
-    assert_eq!(facts, ["n=Handled", "a=Handled"]);
+    assert_eq!(facts, ["n=Core(None)", "a=Handled"]);
     assert_eq!(
         commands(&rx),
-        [
-            crate::gui_core::GuiLibraryCommand::EmbyPlayNext {
-                lib_idx: 3,
-                item_id: "m1".to_owned(),
-            },
-            crate::gui_core::GuiLibraryCommand::EmbyQueue {
-                lib_idx: 3,
-                item_id: "m1".to_owned(),
-            },
-        ]
+        [crate::gui_core::GuiLibraryCommand::EmbyQueue {
+            lib_idx: 3,
+            item_id: "m1".to_owned(),
+        }]
     );
 }
 
@@ -237,7 +231,7 @@ fn enter_n_and_a_with_no_hovered_row_send_nothing() {
         route(state, facts, "n", "n", false);
         route(state, facts, "a", "a", false);
     });
-    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(facts, ["enter=Handled", "n=Core(None)", "a=Handled"]);
     assert_eq!(commands(&rx), []);
 }
 

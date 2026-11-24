@@ -6,9 +6,9 @@
 //! facts — the frame, the rows, and the item commands.
 //! [`super::keys`] routes the vocabulary for Music and Home;
 //! [`route_panel_list_key`] serves the other five destinations, which copy
-//! nothing but their own extras — Emby's play-next, the Audiobooks chapter
-//! Workspace, and the Shows tree's open, close, and toggle hooks and episode
-//! Workspace. The Hero's own controls — the tracklist and the Workspaces — are
+//! nothing but their own extras — the Audiobooks chapter Workspace, and the
+//! Shows tree's open, close, and toggle hooks and episode Workspace. The Hero's
+//! own controls — the tracklist and the Workspaces — are
 //! the lists the pointer marks, so the key under the pointer is the control the
 //! key acts on (design D2 of `gui-pointer-target-interaction`).
 //!
@@ -50,8 +50,9 @@ pub fn pointer_on_hero(pointer: &PointerTarget) -> bool {
 /// `gui-pointer-target-interaction`): the movements, Right and Left's open and
 /// close, and Enter. Each list acts on the ones it owns — the destination's
 /// list under the pointer, the Hero's tracklist or Workspace, or the series
-/// list — and the others change nothing but still never reach the core. `n` and
-/// `a` are the Library's too, and each destination's item key answers them.
+/// list — and the others change nothing but still never reach the core. `a` is
+/// the Library's too, and each destination's item key answers it. `n` is not,
+/// so it falls through to the core's router.
 #[must_use]
 pub fn is_list_and_hero_key(key: &str) -> bool {
     matches!(
@@ -149,17 +150,10 @@ pub trait PanelKeys {
     /// Add the item `a` names to the queue's tail.
     fn queue_item(&self, item_id: &str);
 
-    /// Play the item `n` names next; `false` on a destination with no
-    /// play-next, where `n` is consumed and does nothing.
-    fn play_next_item(&self, item_id: &str) -> bool {
-        let _ = item_id;
-        false
-    }
-
     /// The Hero's own router, on a destination whose Hero carries a control —
     /// the Audiobooks chapter Workspace and the Shows episode Workspace. `None`
     /// routes the Hero's default: the movements and Enter change nothing but
-    /// are consumed, and `n` and `a` act on the selected item. A `Core` answer
+    /// are consumed, and `a` acts on the selected item. A `Core` answer
     /// names `target`: the panel the key's pointer resolved (design D2 of
     /// `gui-pointer-target-interaction`).
     fn route_hero(
@@ -178,11 +172,12 @@ pub trait PanelKeys {
 /// opens the list's filter, Space stays the core's play and pause, and the
 /// control the pointer marks takes the key. On a Hero control — the tracklist
 /// or a Workspace — the destination's own Hero router runs, or the Hero's
-/// default: the movements and Enter change nothing but are consumed, and `n`
-/// and `a` act on the item the core selected. Anywhere else Enter plays the row
-/// the pointer marks, Right and Left act on that row through the destination's
-/// hooks, and `n` and `a` play it next or queue it. Every one of them is consumed, so no Library key reaches the
-/// core's playback chords from the list.
+/// default: the movements and Enter change nothing but are consumed, and `a`
+/// acts on the item the core selected. Anywhere else Enter plays the row the
+/// pointer marks, Right and Left act on that row through the destination's
+/// hooks, and `a` queues it. Every one of them is consumed, so no Library key
+/// reaches the core's playback chords from the list. `n` is not a Library key,
+/// so it goes to the core.
 pub fn route_panel_list_key<K: PanelKeys>(
     key: &DomKey,
     state: &LibraryState,
@@ -232,19 +227,19 @@ fn or_remaining<K: PanelKeys>(
     }
 }
 
-/// The Library's own keys no control claims (design D3, step 4): `n` and `a`
-/// act on the row the pointer marks, as the Music router's item key acts, and
-/// the movements and Enter change nothing at all. Every one of them is
-/// consumed, so a playback chord never runs.
+/// The Library's own keys no control claims (design D3, step 4): `a` acts on
+/// the row the pointer marks, as the Music router's item key acts, and the
+/// movements and Enter change nothing at all. Every one of them is consumed, so
+/// a playback chord never runs.
 fn route_remaining_key<K: PanelKeys>(
     key: &DomKey,
     keys: &K,
     pointer: &PointerTarget,
     target: KeyTarget,
 ) -> KeyOutcome {
-    if key.key == "n" || key.key == "a" {
+    if key.key == "a" {
         let item = keys.row(pointer).and_then(|row| keys.item_id(&row));
-        route_item_key(key, item.as_deref(), keys);
+        route_item_key(item.as_deref(), keys);
         return KeyOutcome::Handled;
     }
     if is_list_and_hero_key(&key.key) {
@@ -258,8 +253,8 @@ fn route_remaining_key<K: PanelKeys>(
 /// the arrows, Page Up, Page Down, Home, and End move the list on, Right, Left,
 /// and Enter act on the row the pointer marks through the destination's hooks
 /// (a tree opens, closes, or toggles a node; a flat list plays the item), and
-/// `n` and `a` play it next or queue it. With no row the keys are consumed and
-/// do nothing, and a movement key over another control is the core's.
+/// `a` queues it. With no row the keys are consumed and do nothing, and a
+/// movement key over another control is the core's.
 fn route_list_key<K: PanelKeys>(
     key: &DomKey,
     keys: &K,
@@ -294,9 +289,9 @@ fn route_list_key<K: PanelKeys>(
         }
         _ => {}
     }
-    if key.key == "n" || key.key == "a" {
+    if key.key == "a" {
         let item = row.as_ref().and_then(|row| keys.item_id(row));
-        route_item_key(key, item.as_deref(), keys);
+        route_item_key(item.as_deref(), keys);
         return KeyOutcome::Handled;
     }
     if is_list_and_hero_key(&key.key) {
@@ -307,17 +302,17 @@ fn route_list_key<K: PanelKeys>(
 }
 
 /// Route a key to the Hero (design D12): it carries no cursor of its own, so
-/// the movements and Enter change nothing but are consumed, and `n` and `a`
-/// act on the item the core selected — the one the Hero paints. A destination
-/// whose Hero holds a control names its own router on [`PanelKeys::route_hero`].
+/// the movements and Enter change nothing but are consumed, and `a` acts on the
+/// item the core selected — the one the Hero paints. A destination whose Hero
+/// holds a control names its own router on [`PanelKeys::route_hero`].
 fn route_hero_key<K: PanelKeys>(
     key: &DomKey,
     frame: &K::Frame,
     keys: &K,
     target: KeyTarget,
 ) -> KeyOutcome {
-    if key.key == "n" || key.key == "a" {
-        route_item_key(key, keys.selected_item_id(frame).as_deref(), keys);
+    if key.key == "a" {
+        route_item_key(keys.selected_item_id(frame).as_deref(), keys);
         return KeyOutcome::Handled;
     }
     if is_list_and_hero_key(&key.key) {
@@ -327,18 +322,12 @@ fn route_hero_key<K: PanelKeys>(
     }
 }
 
-/// Route `n` and `a` to one item (design D12): the row the pointer marks, or
-/// the one the Hero paints. `n` plays next where the destination has a
-/// play-next and sends nothing where it has none; `a` sends the queue command.
-/// No item sends nothing.
-fn route_item_key<K: PanelKeys>(key: &DomKey, item_id: Option<&str>, keys: &K) {
+/// Route `a` to one item (design D12): the row the pointer marks, or the one
+/// the Hero paints. No item sends nothing.
+fn route_item_key<K: PanelKeys>(item_id: Option<&str>, keys: &K) {
     let Some(item_id) = item_id else {
         return;
     };
-    if key.key == "n" {
-        keys.play_next_item(item_id);
-        return;
-    }
     keys.queue_item(item_id);
 }
 

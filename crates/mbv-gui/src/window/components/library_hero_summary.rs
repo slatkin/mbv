@@ -33,9 +33,6 @@ pub struct LibraryHeroSummaryProps {
     /// Play the selected row; a destination that paints no play omits it.
     #[props(default)]
     pub on_play: Option<Callback<()>>,
-    /// Play the selected row next in the queue.
-    #[props(default)]
-    pub on_play_next: Option<Callback<()>>,
     /// Add the selected row to the queue.
     #[props(default)]
     pub on_queue: Option<Callback<()>>,
@@ -116,7 +113,6 @@ pub fn LibraryHeroSummary(props: LibraryHeroSummaryProps) -> Element {
             }
             if let Some(on_play) = props.on_play {
                 {
-                    let on_play_next = props.on_play_next;
                     let on_queue = props.on_queue;
                     rsx! {
                         div {
@@ -125,7 +121,6 @@ pub fn LibraryHeroSummary(props: LibraryHeroSummaryProps) -> Element {
                             LibraryHeroActions {
                                 attr: props.attr,
                                 on_play: Some(on_play),
-                                on_play_next,
                                 on_queue,
                             }
                         }

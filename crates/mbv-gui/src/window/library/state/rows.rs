@@ -84,7 +84,7 @@ impl LibraryState {
 
     /// The item an action on the hovered row names (design D3, D8): an artist
     /// row's Service item, an album's own id, and a track's id, so the
-    /// play-next and add-to-queue keys act on what the pointer marks.
+    /// add-to-queue key acts on what the pointer marks.
     #[must_use]
     pub fn action_item_id(row: &LibraryRow) -> Option<String> {
         match row {

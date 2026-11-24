@@ -5,9 +5,7 @@
 //! progress roles, and the episode description as the overview.
 //!
 //! A podcast Hero is episode information only: it carries no Workspace and no
-//! tracklist. There is no play-next either: `n` is consumed by the window
-//! and does nothing for podcast episodes (design D12, row 10.1), so only Play
-//! and Add to queue paint.
+//! tracklist, so only Play and Add to queue paint.
 //!
 //! Play and Add to queue send the Podcasts destination's commands with the
 //! frame's selected episode (design D12) — the core owns the selection, so the
@@ -36,8 +34,8 @@ pub struct LibraryPodcastsHeroProps {
     pub detail: SectionRef<GuiLibraryDetail>,
 }
 
-/// The Podcasts Hero: the frame
-/// over the selected episode, with no Workspace and no play-next control.
+/// The Podcasts Hero: the frame over the selected episode, with no
+/// Workspace.
 #[component]
 pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
@@ -65,8 +63,7 @@ pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
     let layout = hero_layout(&facts, "podcast");
 
     // The actions' sends (design D12, row 10.1): the Podcasts destination's
-    // commands over the picked episode's own stable id. There is no play-next
-    // command for podcast episodes.
+    // commands over the picked episode's own stable id.
     let play_library = library.clone();
     let play_detail = props.detail.clone();
     let on_play = Callback::new(move |()| {

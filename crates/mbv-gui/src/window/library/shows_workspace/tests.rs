@@ -1,10 +1,10 @@
 //! Headless tests of the Shows Hero's Workspace (D16): the contracts of
 //! `shows-workspace.test.ts` — the pointer's episode resolving against the
 //! frame, the season step that sends the select-season command and stops at the
-//! pills' ends, and the episode the Hero's play, play-next, and queue commands
-//! name. The harness builds a `DioxusDocument` whose root creates the store and
-//! runs each scenario in one effect over a recording core link, so no test opens
-//! a window or sleeps, and no IPC runs.
+//! pills' ends, and the episode the Hero's play and queue commands name. The
+//! harness builds a `DioxusDocument` whose root creates the store and runs each
+//! scenario in one effect over a recording core link, so no test opens a window
+//! or sleeps, and no IPC runs.
 
 use std::sync::{Arc, Mutex, mpsc};
 
@@ -21,10 +21,7 @@ use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::sections::Sections;
 
-use super::{
-    play_next_shows_episode, play_shows_episode, queue_shows_episode, shows_episode_at,
-    step_shows_season,
-};
+use super::{play_shows_episode, queue_shows_episode, shows_episode_at, step_shows_season};
 use crate::window::library::state::LibraryState;
 
 /// The facts one scenario recorded, in its run order.
@@ -223,25 +220,18 @@ fn the_play_command_names_the_episode_it_is_given() {
     );
 }
 
-// `n` and `a` play the episode next and queue it.
+// The queue command names the episode it is given.
 #[test]
-fn play_next_and_queue_name_the_episode_they_are_given() {
+fn the_queue_command_names_the_episode_it_is_given() {
     let (_facts, rx) = run(|state, _facts| {
-        play_next_shows_episode(state, LIB_IDX, "ep1");
         queue_shows_episode(state, LIB_IDX, "ep1");
     });
 
     assert_eq!(
         commands(&rx),
-        [
-            crate::gui_core::GuiLibraryCommand::ShowsPlayNext {
-                lib_idx: 2,
-                item_id: "ep1".to_owned(),
-            },
-            crate::gui_core::GuiLibraryCommand::ShowsQueue {
-                lib_idx: 2,
-                item_id: "ep1".to_owned(),
-            },
-        ]
+        [crate::gui_core::GuiLibraryCommand::ShowsQueue {
+            lib_idx: 2,
+            item_id: "ep1".to_owned(),
+        }]
     );
 }

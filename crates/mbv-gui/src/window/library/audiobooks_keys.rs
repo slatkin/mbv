@@ -11,8 +11,8 @@
 //! menu handling runs before this, `/` opens the list's filter, and Space
 //! stays the core's play and pause — Audiobooks paints no pill row. This
 //! module keeps only the Audiobooks facts it routes over: Enter on the hovered
-//! chapter, and `a`'s queue command. A book has no play-next: `n` is consumed
-//! and does nothing.
+//! chapter, and `a`'s queue command. `n` is not a Library key, so it goes to
+//! the core's router.
 
 use dioxus_native::prelude::*;
 
@@ -47,8 +47,8 @@ impl AudiobooksFrame {
 }
 
 /// The Audiobooks facts the shared panel key handler routes over (row 7C.2):
-/// the item the play and queue commands name is the book the pointer marks, the
-/// Hero routes its own chapter Workspace, and there is no play-next.
+/// the item the play and queue commands name is the book the pointer marks, and
+/// the Hero routes its own chapter Workspace.
 struct AudiobooksKeys<'a> {
     state: &'a LibraryState,
 }
@@ -117,8 +117,8 @@ impl PanelKeys for AudiobooksKeys<'_> {
 
 /// Route a key to the Hero's chapter Workspace (row 9.1): Enter plays or seeks
 /// from the chapter the pointer marks, and `a` queues the selected book. No
-/// movement key moves a row, because the Workspace keeps no cursor; `n` is
-/// consumed and does nothing, because books have no play-next.
+/// movement key moves a row, because the Workspace keeps no cursor; `n` goes to
+/// the core.
 fn route_workspace_key(
     state: &LibraryState,
     key: &DomKey,
@@ -146,7 +146,6 @@ fn route_workspace_key(
             queue_abs_book(state, lib_idx, detail);
             KeyOutcome::Handled
         }
-        "n" => KeyOutcome::Handled,
         _ if is_list_and_hero_key(&key.key) => KeyOutcome::Handled,
         _ => KeyOutcome::Core(target),
     }

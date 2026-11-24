@@ -1,5 +1,5 @@
 //! Headless tests of the Music Hero (D16): the contracts of
-//! `LibraryHero.test.ts` — the album's Play, Play next, Add to queue, and
+//! `LibraryHero.test.ts` — the album's Play, Add to queue, and
 //! Shuffle artist sends name the item's own stable id, the More actions menu
 //! paints the entries the frame carries under their shared-builder indexes
 //! and a chosen entry sends its index, an album whose menu remainder is empty
@@ -7,10 +7,10 @@
 //! first track before any key moves it, a track's play gestures send that
 //! track's id, the playing row marks the play glyph and keeps its own fill,
 //! and the album's facts line types its count and its time at the repeated
-//! tracklist durations. The track row's Play-next and Add-to-queue sends ride
-//! the tracklist's action closures, which a headless document cannot fire; the
-//! commands they build are the same shapes the album's Play-next and
-//! Add-to-queue tests assert, and the track ids they carry are the rows' own
+//! tracklist durations. The track row's Add-to-queue send rides
+//! the tracklist's action closure, which a headless document cannot fire; the
+//! command it builds is the same shape the album's
+//! Add-to-queue test asserts, and the track id it carries is the row's own
 //! data the press contract (`play_library_track`) asserts. The IPC of
 //! the earlier tests is the mock core link here; the asserted commands are the
 //! same neutral shapes. A headless document cannot fire a DOM click, so the
@@ -28,10 +28,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryHero;
-use super::{
-    add_album_to_queue, play_album, play_next_album, press_menu_entry, run_menu_entry,
-    shuffle_artist,
-};
+use super::{add_album_to_queue, play_album, press_menu_entry, run_menu_entry, shuffle_artist};
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
     GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
@@ -404,24 +401,6 @@ fn play_sends_the_picked_album_s_id() {
             item_id: "al1".to_owned(),
         }],
         "the play command names the picked album"
-    );
-}
-
-/// Contract (`LibraryHero.test.ts`): Play next sends the picked album's id.
-#[test]
-fn play_next_sends_the_picked_album_s_id() {
-    let mut fixture = built_hero();
-
-    let album_id = "al1".to_owned();
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || play_next_album(&state, &album_id));
-
-    assert_eq!(
-        fixture.library_commands(),
-        vec![crate::gui_core::GuiLibraryCommand::PlayNext {
-            item_id: "al1".to_owned(),
-        }],
-        "the play-next command names the picked album"
     );
 }
 

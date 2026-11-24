@@ -135,10 +135,6 @@ impl LetteredDestination for EmbyList {
     fn queue(state: &LibraryState, item_id: &str) {
         state.queue_emby_row(item_id);
     }
-
-    fn play_next(state: &LibraryState, item_id: &str) {
-        state.play_emby_row_next(item_id);
-    }
 }
 
 /// The row kind word the item row's hook paints (`data-library-emby-row`).

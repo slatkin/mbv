@@ -6,8 +6,7 @@
 //!
 //! A feed entry has no artwork source and no overview, so the box paints the
 //! window's placeholder for the shape and no overview paragraph paints. There
-//! is no Workspace and no tracklist. Play next is not a Feeds command
-//! (row 11.1), so only Play and Add to queue paint.
+//! is no Workspace and no tracklist, so only Play and Add to queue paint.
 //!
 //! Play and Add to queue send the Feeds destination's commands with the
 //! frame's selected entry (design D12) — the core owns the selection, so the
@@ -117,8 +116,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     };
 
     // The actions' sends (design D12, row 11.1): the Feeds destination's
-    // commands over the picked entry's own stable id. There is no play-next
-    // command for Feeds.
+    // commands over the picked entry's own stable id.
     let play_library = library.clone();
     let play_detail = props.detail.clone();
     let on_play = Callback::new(move |()| {

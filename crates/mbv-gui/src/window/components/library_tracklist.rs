@@ -1,12 +1,12 @@
 //! The Hero's tracklist (`replace-tauri-with-blitz` task 7.3, the port of
 //! `LibraryTracklist`; add-gui-library-panel design D5, D8, D15): the
 //! picked album's cached tracks, painted by the one Workspace table every
-//! destination shares. The tracklist keeps no cursor: Enter, `n`, and `a` act
+//! destination shares. The tracklist keeps no cursor: Enter and `a` act
 //! on the row the pointer marks (`gui-pointer-target-interaction` D2), and a
 //! press on a row changes nothing.
 //!
-//! The two hover controls run play next and add to queue on that track
-//! (design D8); a press on either sends the track's own id. A track plays
+//! The hover control runs add to queue on that track
+//! (design D8); a press on it sends the track's own id. A track plays
 //! from its row's play button, which replaces the track number on hover, and
 //! from a double-click on the row: the queue is replaced, and under autoload
 //! the album plays from that track onward. The row of the track playing at
@@ -58,32 +58,18 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
         })
         .collect();
 
-    // The hover actions (design D8): play next enters directly after the
-    // active slot, and add to queue appends to the tail.
-    let next_library = library.clone();
+    // The hover actions (design D8): add to queue appends to the tail.
     let queue_library = library.clone();
-    let actions = vec![
-        WorkspaceAction {
-            key: "playNext".to_owned(),
-            label: "Play next".to_owned(),
-            icon: WorkspaceActionIcon::ListEnd,
-            run: Callback::new(move |track_id: String| {
-                next_library
-                    .link
-                    .library(GuiLibraryCommand::PlayNext { item_id: track_id });
-            }),
-        },
-        WorkspaceAction {
-            key: "addToQueue".to_owned(),
-            label: "Add to queue".to_owned(),
-            icon: WorkspaceActionIcon::Plus,
-            run: Callback::new(move |track_id: String| {
-                queue_library
-                    .link
-                    .library(GuiLibraryCommand::AddToQueue { item_id: track_id });
-            }),
-        },
-    ];
+    let actions = vec![WorkspaceAction {
+        key: "addToQueue".to_owned(),
+        label: "Add to queue".to_owned(),
+        icon: WorkspaceActionIcon::Plus,
+        run: Callback::new(move |track_id: String| {
+            queue_library
+                .link
+                .library(GuiLibraryCommand::AddToQueue { item_id: track_id });
+        }),
+    }];
 
     // A press on a row changes nothing (design D2): the keys act on the row
     // under the pointer, and the row's own controls run its actions. A play —

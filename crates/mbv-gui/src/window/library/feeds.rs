@@ -6,9 +6,9 @@
 //! selected entry (the frame's `collections` and `selected`), so nothing here
 //! mirrors them: a press sends the select command, and the frame carries the
 //! choice back. The row model is [`super::lettered`]'s; the Hero overlay stays
-//! in [`super::state`]'s shared store. There is no play-next: `n` is consumed
-//! and does nothing. A Client holds one feed tab, so no library index rides the
-//! commands.
+//! in [`super::state`]'s shared store. `n` is not a Library key, so it goes to
+//! the core's router. A Client holds one feed tab, so no library index rides
+//! the commands.
 //!
 //! The list keeps no cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
@@ -131,8 +131,6 @@ impl LibraryState {
     }
 
     /// Add an entry to the queue's tail (design D12): `a` on the hovered row.
-    /// There is no play-next on the destination, so `n` is consumed and does
-    /// nothing here.
     pub fn queue_feeds_row(&self, item_id: &str) {
         self.link.library(GuiLibraryCommand::FeedsQueue {
             item_id: item_id.to_owned(),

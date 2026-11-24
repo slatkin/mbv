@@ -243,28 +243,6 @@ impl LibraryState {
         });
     }
 
-    /// Play a Shows episode next (design D12): `n` on a flat row.
-    pub fn play_shows_row_next(&self, row_id: &str) {
-        let Some(lib_idx) = self.shows_lib_idx() else {
-            return;
-        };
-        if self.shows_row_at(row_id).is_some_and(|row| {
-            matches!(
-                row,
-                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
-                    display_only: true,
-                    ..
-                })
-            )
-        }) {
-            return;
-        }
-        self.link.library(GuiLibraryCommand::ShowsPlayNext {
-            lib_idx,
-            item_id: row_id.to_owned(),
-        });
-    }
-
     /// Add a Shows episode to the queue's tail (design D12): `a` on a flat
     /// row.
     pub fn queue_shows_row(&self, row_id: &str) {

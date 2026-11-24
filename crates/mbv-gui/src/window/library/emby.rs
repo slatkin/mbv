@@ -15,8 +15,8 @@
 //!
 //! The state, the filter, and the scroll store are the filtered-list
 //! controller's ([`super::list_state`], row 7C.1); this module keeps the Emby
-//! frame, the Emby rows and their letter headings, the letter rail, the
-//! play-next command, the Emby command shapes, and the Emby names.
+//! frame, the Emby rows and their letter headings, the letter rail, the Emby
+//! command shapes, and the Emby names.
 
 use std::sync::Arc;
 
@@ -118,17 +118,6 @@ impl LibraryState {
             return;
         };
         self.link.library(GuiLibraryCommand::EmbyPlay {
-            lib_idx,
-            item_id: row_id.to_owned(),
-        });
-    }
-
-    /// Play a row next (row 8.1): `n` on the hovered row.
-    pub fn play_emby_row_next(&self, row_id: &str) {
-        let Some(lib_idx) = self.emby_lib_idx() else {
-            return;
-        };
-        self.link.library(GuiLibraryCommand::EmbyPlayNext {
             lib_idx,
             item_id: row_id.to_owned(),
         });

@@ -77,7 +77,7 @@ impl WorkspaceRowState {
 /// `unpredictable_function_pointer_comparisons` lint the workspace denies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceActionIcon {
-    /// The Lucide `list-end` glyph: play next.
+    /// The Lucide `list-end` glyph.
     ListEnd,
     /// The Lucide `plus` glyph: add to queue.
     Plus,

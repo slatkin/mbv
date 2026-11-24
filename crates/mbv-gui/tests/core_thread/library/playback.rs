@@ -237,31 +237,6 @@ fn the_shuffle_artist_command_plays_the_artists_albums_shuffled() {
     assert_eq!(source, QueueSource::Shuffle);
 }
 
-/// Play next asks the Owner to admit the album's tracks next (design D8):
-/// with no active slot the append has no anchor, so the tracks land at the
-/// tail.
-#[test]
-fn the_play_next_command_asks_the_owner_to_admit_the_album_next() {
-    let http = MockHttp::new();
-    // One answer for the launch restore's first-group fetch (design D9) and
-    // one for the admission's own expansion; the answers are identical, so
-    // the order they arrive in does not matter.
-    http.respond_repeated(200, TRACKS, 2);
-    let (mut test, cmd_rx) = music_core(&http);
-
-    send_library(
-        &mut test,
-        GuiLibraryCommand::PlayNext {
-            item_id: "alb-ill".into(),
-        },
-    );
-
-    assert_eq!(
-        appended_ids(&cmd_rx),
-        (None, vec!["trk-1".into(), "trk-2".into()])
-    );
-}
-
 /// The explicit Library shuffle replaces the queue directly (the
 /// replace-confirm behaviour change): over a populated queue it replaces it
 /// without confirming, exactly as the Library play does.
