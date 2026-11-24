@@ -108,8 +108,12 @@ _Avoid_: script source (bare), active script, script lookup
 
 ## Processes
 
+Owner program:
+The `mbv-owner` program that hosts the Owner process. It is a separate program installed beside `mbv` and `mbv-gui`. It carries no Client: its dependency graph holds no terminal UI library and no GUI toolkit. A Client that finds no Owner process starts it from beside its own program, else the `mbv-owner` name on `PATH`. For Pin swap, Unpin, and Open, it launches the sibling `mbv` program of its own build; it holds that file open from start, so a package upgrade cannot change the build it launches (ADR 0044). It differs from `mbvd`, which is a separately packaged daemon.
+_Avoid_: owner binary, the Owner in `mbv`, local daemon program, hidden daemon flag
+
 Owner process:
-The part of the mbv app that is the Player owner for every terminal UI on this machine. Every such UI is a Client. The Owner process stays the local playback authority across route switches. With Stay-alive disabled, it is part of the running app. It is not a background process or service. With Stay-alive enabled, it is a background process. It survives its last Client.
+The part of the mbv app that is the Player owner for every terminal UI on this machine. It runs only from the *Owner program*, `mbv-owner`. Every such UI is a Client. The Owner process stays the local playback authority across route switches. With Stay-alive disabled, it is part of the running app. It is not a background process or service. With Stay-alive enabled, it is a background process. It survives its last Client.
 _Avoid_: local daemon, home daemon, daemon, session, background service, relay, backend, server
 
 mpv child process:
@@ -148,7 +152,7 @@ The interaction state of one interactive surface, held one time where both Clien
 _Avoid_: widget state, UI state (bare), duplicate state
 
 Local process:
-Any mbv process on the user machine. It is a Client or the Owner process. Control of mbvd or another device from F3 happens inside an already running Local process. Its Owner process and Tray keep running. Desktop features belong to Local processes and never to mbvd. The Tray and the pinned panel are examples.
+Any mbv process on the user machine. It runs one of the three programs `mbv`, `mbv-gui`, or `mbv-owner`. It is a Client or the Owner process. Control of mbvd or another device from F3 happens inside an already running Local process. Its Owner process and Tray keep running. Desktop features belong to Local processes and never to mbvd. The Tray and the pinned panel are examples.
 _Avoid_: client side (of mbvd), frontend, desktop daemon
 
 Tray:
