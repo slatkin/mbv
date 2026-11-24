@@ -42,7 +42,7 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 7. Docs (design D8)
 
-- [ ] 7.1 Update `docs/architecture/gui-client.md`: the queue row menu entry list (no Play next, plus the hover Play control), the `LibraryHeroActions` description (no Play next), and the `TreeHint` paragraph, which a `RowHoverActions` paragraph replaces (D1, D2, D3). In `CONTEXT.md`, remove "play next" from the Direct remote control entry's list of queue operations. Verify: `rg -n -i "play next|TreeHint" docs/architecture/gui-client.md CONTEXT.md` finds nothing.
+- [x] 7.1 Update `docs/architecture/gui-client.md`: the queue row menu entry list (no Play next, plus the hover Play control), the `LibraryHeroActions` description (no Play next), and the `TreeHint` paragraph, which a `RowHoverActions` paragraph replaces (D1, D2, D3). In `CONTEXT.md`, remove "play next" from the Direct remote control entry's list of queue operations. Verify: `rg -n -i "play next|TreeHint" docs/architecture/gui-client.md CONTEXT.md` finds nothing.
 
 ## 8. Integration
 
