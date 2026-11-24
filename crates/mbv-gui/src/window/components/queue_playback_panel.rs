@@ -281,7 +281,9 @@ pub fn QueuePlaybackPanel() -> Element {
             if let Some(title) = title {
                 {art_section}
                 // The title block of the canvas's layering (design D2): the
-                // panel fill, its 16/20/18 insets, the rule that separates it
+                // panel fill, its 9/20/11 insets (user request 2026-11-24,
+                // tightened from the canvas's 16/20/18 so the block sits
+                // shorter), the rule that separates it
                 // from the queue header, the title in the mono face's 18 px/700
                 // caps, and the parent line under it in the mono face's 14 px/400
                 // (user request 2026-11-24). The title is uppercased here, not by
@@ -295,18 +297,18 @@ pub fn QueuePlaybackPanel() -> Element {
                 div {
                     class: "flex items-center",
                     style: format!(
-                        "padding: 16px 20px 18px; gap: 12px; background: {}; border-bottom: 1px solid {};",
+                        "padding: 9px 20px 11px; gap: 10px; background: {}; border-bottom: 1px solid {};",
                         ef_var(EfToken::Bg0),
                         ef_var(EfToken::Bg3)
                     ),
                     {kind_icon(playback.now_playing_media)}
                     div {
                         class: "flex min-w-0 flex-1 flex-col",
-                        style: "gap: 2px;",
+                        style: "gap: 0;",
                         Truncate {
                             text: title.to_uppercase(),
                             css: format!(
-                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; letter-spacing: 0.06em; color: {};",
+                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; line-height: 1.15; letter-spacing: 0.06em; color: {};",
                                 ef_var(EfToken::Fg)
                             ),
                             style: TextStyle::mono(18.0, 700.0).tracking(0.06),
@@ -315,7 +317,7 @@ pub fn QueuePlaybackPanel() -> Element {
                             Truncate {
                                 text: parent_line.clone(),
                                 css: format!(
-                                    "font-family: var(--font-mono); font-size: 14px; font-weight: 400; line-height: 1.65; color: {};",
+                                    "font-family: var(--font-mono); font-size: 14px; font-weight: 400; line-height: 1.35; color: {};",
                                     ef_var(EfToken::Red)
                                 ),
                                 style: TextStyle::mono(14.0, 400.0),
