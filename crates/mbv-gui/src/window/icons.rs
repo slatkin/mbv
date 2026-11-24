@@ -1,5 +1,5 @@
-//! The Lucide icons (D13 of `replace-tauri-with-blitz`): the 36 icons the
-//! former front end imported, as inline `svg` components over the child elements of
+//! The Lucide icons (D13 of `replace-tauri-with-blitz`): the 46 icons the window
+//! paints, as inline `svg` components over the child elements of
 //! `@lucide/svelte` 1.70.0. Lucide is ISC-licensed; the notice is
 //! `assets/vendor/lucide-ISC.txt`.
 //!
@@ -191,6 +191,12 @@ lucide_icons! {
         path { d: "m9 18 6-6-6-6" }
     }
 
+    /// The Lucide `chevrons-down-up` icon: the tree lists' Collapse all.
+    ChevronsDownUp("chevrons-down-up") {
+        path { d: "m7 20 5-5 5 5" }
+        path { d: "m7 4 5 5 5-5" }
+    }
+
     /// The Lucide `chevrons-left` icon.
     ChevronsLeft("chevrons-left") {
         path { d: "m11 17-5-5 5-5" }
@@ -201,6 +207,12 @@ lucide_icons! {
     ChevronsRight("chevrons-right") {
         path { d: "m6 17 5-5-5-5" }
         path { d: "m13 17 5-5-5-5" }
+    }
+
+    /// The Lucide `chevrons-up-down` icon: the tree lists' Expand all.
+    ChevronsUpDown("chevrons-up-down") {
+        path { d: "m7 15 5 5 5-5" }
+        path { d: "m7 9 5-5 5 5" }
     }
 
     /// The Lucide `clock` icon.
@@ -336,6 +348,15 @@ lucide_icons! {
     Plus("plus") {
         path { d: "M5 12h14" }
         path { d: "M12 5v14" }
+    }
+
+    /// The Lucide `refresh-ccw` icon: the list headers' and the Playlists
+    /// screen's Refresh control.
+    RefreshCcw("refresh-ccw") {
+        path { d: "M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" }
+        path { d: "M3 3v5h5" }
+        path { d: "M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" }
+        path { d: "M16 16h5v5" }
     }
 
     /// The Lucide `refresh-ccw-dot` icon: the playback targets' Refresh

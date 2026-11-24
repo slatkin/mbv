@@ -124,6 +124,8 @@ pub fn LibraryLetteredList<D: LetteredDestination>() -> Element {
         collections: header.collections.clone(),
         view: None,
         sort: header.sort.clone(),
+        on_refresh: Callback::new(|()| {}),
+        tree: None,
         filter: ui.filter.clone(),
         placeholder: header.placeholder.clone(),
         aria_label: header.aria_label.to_owned(),

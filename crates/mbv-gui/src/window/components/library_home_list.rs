@@ -210,6 +210,8 @@ pub fn LibraryHomeList() -> Element {
         collections: None,
         view: None,
         sort: None,
+        on_refresh: Callback::new(|()| {}),
+        tree: None,
         filter: filter.clone(),
         placeholder: "Filter home".to_owned(),
         aria_label: "Filter home".to_owned(),

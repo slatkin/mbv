@@ -397,6 +397,8 @@ pub fn LibraryList() -> Element {
         collections,
         view: None,
         sort: None,
+        on_refresh: Callback::new(|()| {}),
+        tree: None,
         filter: ui.filter.clone(),
         placeholder: filter_placeholder,
         aria_label: "Filter artists".to_owned(),

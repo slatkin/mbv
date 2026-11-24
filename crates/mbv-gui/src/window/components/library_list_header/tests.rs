@@ -77,6 +77,8 @@ fn header_app(props: FixtureProps) -> Element {
             heading,
             label,
             collections,
+            on_refresh: move |()| {},
+            tree: None,
             filter: String::new(),
             placeholder: "Filter All".to_owned(),
             aria_label: "Filter episodes".to_owned(),

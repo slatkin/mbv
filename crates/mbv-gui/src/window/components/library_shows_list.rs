@@ -433,6 +433,8 @@ pub fn LibraryShowsList() -> Element {
         collections: None,
         view: frame.map(|frame| frame.view),
         sort,
+        on_refresh: Callback::new(|()| {}),
+        tree: None,
         filter: shows_ui.filter.clone(),
         placeholder: filter_placeholder,
         aria_label: "Filter series".to_owned(),

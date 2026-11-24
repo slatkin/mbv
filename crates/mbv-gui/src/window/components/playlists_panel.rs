@@ -34,6 +34,9 @@ use crate::bridge::frame::playlists::{GuiOpenPlaylist, GuiPlaylistRow, GuiPlayli
 use crate::bridge::playlists::{GuiPlaylistAction, GuiPlaylistsCommand};
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
+use crate::window::components::header_icon_button::{
+    HEADER_ICON_SIZE, HEADER_ICON_STROKE_WIDTH, HeaderIconButton,
+};
 use crate::window::components::library_hero_actions::{
     ACCENT_STYLE, DESTRUCTIVE_STYLE, RAISED_STYLE,
 };
@@ -42,8 +45,8 @@ use crate::window::components::list_row::{
 };
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
-use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
 use crate::window::components::tree_guide::{GuideTone, NESTED_INSET_X, TOP_GUIDE_X, TreeGuide};
+use crate::window::icons::RefreshCcw;
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
@@ -429,11 +432,6 @@ fn tree_column(
     menu: Signal<Option<RowMenu>>,
 ) -> Element {
     let refresh_link = link.clone();
-    let refresh_label = if frame.loading {
-        "Refreshing…"
-    } else {
-        "Refresh"
-    };
     rsx! {
         div {
             class: "flex flex-none items-center justify-between",
@@ -442,12 +440,16 @@ fn tree_column(
                 style: "font-size: 15px; font-weight: 600; color: var(--canvas-heading);",
                 "Playlists"
             }
-            SettingsButton {
-                variant: SettingsButtonVariant::Ghost,
-                onpress: Some(Callback::new(move |()| {
+            HeaderIconButton {
+                label: "Refresh",
+                hook: "data-playlists-refresh",
+                onpress: Callback::new(move |()| {
                     refresh_link.playlists(GuiPlaylistsCommand::Refresh { id: None });
-                })),
-                "{refresh_label}"
+                }),
+                RefreshCcw {
+                    size: HEADER_ICON_SIZE,
+                    stroke_width: HEADER_ICON_STROKE_WIDTH,
+                }
             }
         }
         div {
