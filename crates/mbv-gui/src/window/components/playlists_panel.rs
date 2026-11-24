@@ -40,7 +40,7 @@ use crate::window::components::list_row::{
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
-use crate::window::components::tree_guide::{GuideTone, TOP_GUIDE_X, TreeGuide};
+use crate::window::components::tree_guide::{GuideTone, NESTED_INSET_X, TOP_GUIDE_X, TreeGuide};
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
@@ -626,7 +626,8 @@ fn hero_pane(
 /// `focus_on_mount`, which arms the rename hold and focuses the input. It
 /// carries its playlist's guide while `guide` holds — the playlist is open and
 /// shows item rows — so the guide has no gap during a rename, and paints none
-/// under a closed playlist (`gui-tree-indent-guides` design D3).
+/// under a closed playlist (`gui-tree-indent-guides` design D3). Its left
+/// padding is the nested row's label inset, so the input clears the guide.
 fn rename_field(settings: &SettingsState, name: Option<String>, guide: bool) -> Element {
     let focus_settings = settings.clone();
     let blur_settings = settings.clone();
@@ -635,7 +636,7 @@ fn rename_field(settings: &SettingsState, name: Option<String>, guide: bool) -> 
     rsx! {
         div {
             class: "relative flex",
-            style: "padding: 4px 8px 4px 28px;",
+            style: format!("padding: 4px 8px 4px {NESTED_INSET_X}px;"),
             "data-playlists-rename": "",
             onfocusin: move |_| focus_settings.focus_settings_field(SettingsForm::Rename),
             onfocusout: move |_| blur_settings.blur_settings_field(SettingsForm::Rename),
