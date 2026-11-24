@@ -4,8 +4,8 @@
 //! Client's headless tests build their `App` here, exactly as the TUI
 //! Client's tests build theirs in `app::tests`.
 //!
-//! The module compiles under the root package's `test` feature as well as
-//! under `cfg(test)`, so a dependent crate's dev-dependency can enable it;
+//! The module compiles under `cfg(any(test, feature = "test"))`, so a
+//! dependent crate's dev-dependency can enable the `test` feature for it;
 //! the shipped builds never compile it.
 
 #[cfg(any(test, feature = "test"))]
