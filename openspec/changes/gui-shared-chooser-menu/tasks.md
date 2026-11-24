@@ -2,7 +2,7 @@
 
 ## 1. Shared components
 
-- [ ] 1.1 Create `crates/mbv-gui/src/window/components/chooser_menu.rs` with `ChooserKind`, `ChooserMenu`, and `ChooserRow` as design D1–D3 state, with a module doc that says what each owns and that cursor and dispatch stay with the chooser's owner. Register `pub mod chooser_menu;` in `components.rs`. Verify: `cargo check -p mbv-gui` passes.
+- [x] 1.1 Create `crates/mbv-gui/src/window/components/chooser_menu.rs` with `ChooserKind`, `ChooserMenu`, and `ChooserRow` as design D1–D3 state, with a module doc that says what each owns and that cursor and dispatch stay with the chooser's owner. Register `pub mod chooser_menu;` in `components.rs`. Verify: `cargo check -p mbv-gui` passes.
 
 ## 2. Move both choosers onto them
 
