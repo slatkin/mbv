@@ -12,8 +12,8 @@
 
 ## 3. Contracts and docs
 
-- [ ] 3.1 Run `cargo nextest run -p mbv-gui queue_panel::tests::chooser queue_panel::tests::cross_panel gui_core::input::tests::queue_chooser gui_core::input::tests::target_chooser` and verify it passes with the same tests green as before the change.
-- [ ] 3.2 Read `an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions` in `cross_panel.rs`. If it asserts no Refresh-row region, extend it to assert the Refresh row reports last (extend the test; add no new one). Verify: the extended test passes.
+- [x] 3.1 Run `cargo nextest run -p mbv-gui queue_panel::tests::chooser queue_panel::tests::cross_panel gui_core::input::tests::queue_chooser gui_core::input::tests::target_chooser` and verify it passes with the same tests green as before the change.
+- [x] 3.2 Read `an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions` in `cross_panel.rs`. If it asserts no Refresh-row region, extend it to assert the Refresh row reports last (extend the test; add no new one). Verify: the extended test passes.
 - [ ] 3.3 Update `docs/invariants/38-repeated-gui-shapes-have-one-mechanics-owner.md`: remove the Queue-chooser bullet from the failure list and the "still repeat" note, and add `ChooserMenu` and `ChooserRow` to the upheld list. Update the Queue chooser and target chooser prose in `docs/architecture/gui-client.md` only where it names the old markers or two cards. Verify: `rg -n 'TargetChooserPopover' docs` shows no claim of a copied card.
 
 ## 4. Gates
