@@ -4,8 +4,8 @@
 //! control socket.
 //!
 //! Both Clients reach this through [`super::start_owner`]. The Owner itself
-//! is `mbv --__local-daemon`, whose host half stays in the TUI Client's
-//! `crate::local_daemon` until `3-add-owner-program` moves it to `mbv-owner`.
+//! is the `mbv-owner` program ([`super::owner_program`], design D8 of
+//! `3-add-owner-program`).
 
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
@@ -18,12 +18,12 @@ use mbv_desktop::launch::detach;
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const READY_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
-/// The argv that makes a fresh `mbv` the Owner process, forwarding only an
-/// explicit log level.
+/// The argv that makes a fresh `mbv-owner` the Owner process, forwarding only
+/// an explicit log level.
 pub(in crate::app) fn local_daemon_args(
     log_level: Option<mbv_core::applog::LogSpec>,
 ) -> Vec<String> {
-    let mut args = vec!["--__local-daemon".to_string()];
+    let mut args = Vec::new();
     if let Some(spec) = log_level {
         args.extend(["--log-level".to_string(), spec.to_string()]);
     }
@@ -89,12 +89,11 @@ fn session_display_env() -> Option<Vec<(&'static str, String)>> {
     env
 }
 
-/// Fork+detach a local daemon (`mbv --__local-daemon`) and wait until its
-/// control socket is ready. `exe` is the `mbv` program that becomes the
-/// Owner; the TUI Client passes its own executable and the GUI Client passes
-/// the `mbv` program it resolved. On failure -- including the daemon exiting
+/// Fork+detach the Owner program and wait until its control socket is ready.
+/// `exe` is the `mbv-owner` program that becomes the Owner
+/// ([`super::owner_program`]). On failure -- including the Owner exiting
 /// early because the cached token is missing/invalid -- returns the reason
-/// so the still-live launching Client can report it, rather than the daemon
+/// so the still-live launching Client can report it, rather than the Owner
 /// failing silently in the background.
 pub(in crate::app) fn spawn_detached(
     exe: &Path,
@@ -111,7 +110,7 @@ pub(in crate::app) fn spawn_detached(
     }
     // Detach into its own session (equivalent to `setsid <cmd>`), and
     // ignore SIGHUP so closing the launching terminal can't kill it --
-    // belt-and-suspenders with the daemon's own SIGHUP-ignore below.
+    // belt-and-suspenders with the Owner's own SIGHUP ignore.
     detach(&mut cmd, Stdio::piped());
     let mut child = cmd
         .spawn()

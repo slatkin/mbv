@@ -23,11 +23,11 @@ fn display_env_is_read_from_the_user_manager(
 
 #[test]
 fn spawn_args_forward_only_an_explicit_log_level() {
-    assert_eq!(local_daemon_args(None), ["--__local-daemon"]);
+    assert_eq!(local_daemon_args(None), Vec::<String>::new());
     assert_eq!(
         local_daemon_args(Some(
             mbv_core::applog::LogSpec::parse("debug,player=trace").expect("valid spec"),
         )),
-        ["--__local-daemon", "--log-level", "debug,player=trace"]
+        ["--log-level", "debug,player=trace"]
     );
 }

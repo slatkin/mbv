@@ -10,8 +10,9 @@
 //! find, start, and attach code.
 //!
 //! A Client never holds the Owner lock and never becomes a Player owner. The
-//! Owner the Client starts is always `mbv`: the TUI Client's own executable,
-//! or the `mbv` program the GUI Client resolved ([`OwnerStartOptions`]).
+//! Owner the Client starts is the `mbv-owner` program beside the running
+//! Client ([`owner_program`]); a Client that must name another program passes
+//! it in [`OwnerStartOptions::owner_exe`].
 //!
 //! The start step itself — the Owner's argv, the graphical session's display
 //! environment, and the detached spawn that waits for the control socket —
@@ -21,7 +22,7 @@
 mod start;
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::app::App;
 use crate::app::config::Config;
@@ -47,10 +48,9 @@ pub enum OwnerState {
 /// How [`start_owner`] launches the Owner process.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OwnerStartOptions<'a> {
-    /// The `mbv` program that becomes the Owner. `None` starts this process's
-    /// own executable — the TUI Client, which is `mbv` itself. The GUI Client
-    /// names the `mbv` program it resolved, so the Owner is never the GUI
-    /// program.
+    /// The program that becomes the Owner. `None` starts [`owner_program`],
+    /// the `mbv-owner` program beside this Client, so the Owner is never the
+    /// running Client's own program.
     pub owner_exe: Option<&'a Path>,
     /// The log level to forward to the Owner process.
     pub log_level: Option<&'a mbv_core::applog::LogSpec>,
@@ -72,29 +72,57 @@ pub fn find_owner() -> io::Result<OwnerState> {
     })
 }
 
-/// Start the Owner process from the `mbv` program and wait until its control
-/// socket accepts connections.
+/// Start the Owner process from [`owner_program`], or from the program
+/// `options` names, and wait until its control socket accepts connections.
 pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerError> {
-    let exe = match options.owner_exe {
-        Some(exe) => exe.to_path_buf(),
-        None => std::env::current_exe()
-            .map_err(|e| io::Error::new(e.kind(), format!("cannot locate binary: {e}")))?,
-    };
+    let exe = options
+        .owner_exe
+        .map_or_else(owner_program, Path::to_path_buf);
     let socket = mbv_daemon::socket_path();
     spawn_detached(&exe, &socket.to_string_lossy(), options.log_level.cloned())
+}
+
+/// The file name of the Owner program (design D8 of `3-add-owner-program`).
+fn owner_program_name() -> String {
+    format!("mbv-owner{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// The Owner program a Client starts (design D8 of `3-add-owner-program`):
+/// the `mbv-owner` file in `dir`, the running executable's own directory,
+/// when `sibling_present` says it is there, else the bare `mbv-owner` name
+/// that `PATH` resolves.
+fn owner_program_in(dir: Option<&Path>, sibling_present: bool) -> PathBuf {
+    match dir {
+        Some(dir) if sibling_present => dir.join(owner_program_name()),
+        _ => PathBuf::from(owner_program_name()),
+    }
+}
+
+/// The `mbv-owner` program beside the running Client's executable, else the
+/// `mbv-owner` name on `PATH`: the one rule both Clients start an Owner with
+/// (design D8 of `3-add-owner-program`).
+#[must_use]
+pub fn owner_program() -> PathBuf {
+    let dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+    let sibling_present = dir
+        .as_deref()
+        .is_some_and(|dir| dir.join(owner_program_name()).is_file());
+    owner_program_in(dir.as_deref(), sibling_present)
 }
 
 /// Attach to this machine's Owner as a Client and return the `App` the Client
 /// drives through [`crate::ClientCore`].
 ///
-/// `owner_exe` is the `mbv` program this Client starts an Owner from when
-/// none runs, and again after an Owner restart: `None` for the TUI Client,
-/// which is `mbv` itself; the `mbv` program the GUI Client resolved, so the
-/// Owner is never the GUI program (design D9). The Hello claims every
-/// connection sends follow `capabilities` and this process's Pin-swap
-/// participation claim: the TUI Client advertises `pin-swap`, the GUI Client
-/// sends a plain Hello and claims `named-queues` on its local link (design
-/// D6a).
+/// `owner_exe` is the program this Client starts an Owner from when none
+/// runs, and again after an Owner restart: `None` starts [`owner_program`],
+/// and a Client that resolves the program itself names it, so the Owner is
+/// never the running Client's own program (design D8 and D9 of
+/// `3-add-owner-program`). The Hello claims every connection sends follow
+/// `capabilities` and this process's Pin-swap participation claim: the TUI
+/// Client advertises `pin-swap`, the GUI Client sends a plain Hello and
+/// claims `named-queues` on its local link (design D6a).
 ///
 /// The Owner link starts MPRIS from `App` construction (#160, moved there from
 /// `startup` in #175 so `App` owns the resulting handle and can `rebind` it
@@ -205,6 +233,24 @@ fn cached_emby_client(config: &Config) -> Option<EmbyClient> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
+
+    /// The Owner program is the sibling of the running Client when one is
+    /// installed beside it, else the `mbv-owner` name on `PATH` (contract:
+    /// `owner-program` "Clients start the Owner program beside them").
+    #[rstest]
+    #[case::sibling_present("/opt/mbv/bin", true, "/opt/mbv/bin/mbv-owner")]
+    #[case::sibling_absent("/opt/mbv/bin", false, "mbv-owner")]
+    fn owner_program_is_the_sibling_when_present_else_the_bare_name(
+        #[case] dir: &str,
+        #[case] sibling_present: bool,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            owner_program_in(Some(Path::new(dir)), sibling_present),
+            PathBuf::from(expected)
+        );
+    }
 
     /// A client missing `user_id` builds `/Users//Views`-shaped paths --
     /// Emby throws on the empty GUID segment rather than rejecting cleanly.
