@@ -148,9 +148,16 @@ fn audiobookshelf_library(id: &str, media_type: &str) -> AudiobookshelfLibrary {
 }
 
 /// Reads exactly `expected` library-fetch events off the shell's library-event
-/// channel, through the read the shell's own drains take. The stub config makes
-/// the spawned fetchers do no I/O — they send a single `Err` completion and
-/// exit — so every expected event is already queued when the test reads it.
+/// channel through `App::recv_lib_event`, the blocking test read (the shell's
+/// drains take the non-blocking `try_recv_lib_event` instead). The stub config
+/// makes the spawned fetchers do no I/O — they send a single `Err` completion
+/// and exit — so every expected event is already queued when the test reads it.
+///
+/// A regression that skips a fetcher's send therefore HANGS this test rather
+/// than failing it: the read blocks on a channel nobody will fill, with no
+/// timeout to turn that into an assertion (the test rules forbid a real
+/// timeout). The suite's own timeout is the only bound, so read a hang here as
+/// "an expected fetch event never arrived".
 fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
     let mut events = Vec::new();
     for _ in 0..expected {
@@ -492,9 +499,7 @@ fn deliver_music_stale_pf_restore(model: &mut Model) {
 fn music_launch_state_first_artist_root_survives_a_stale_saved_position_restore() {
     let mut app = music_two_artist_stale_pf();
     app.seed_emby_service_state_for_test(mbv_core::service_runtime::ServiceState::Ready);
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::Pending(
-        music_launch_state_aaliyah(),
-    ));
+    app.seed_launch_restore_pending_for_test(music_launch_state_aaliyah());
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     // The snapshot's saved item is legacy (a launch snapshot no longer

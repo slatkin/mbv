@@ -561,21 +561,58 @@ impl App {
             .insert(library_id.to_string(), position);
     }
 
-    /// Hold `state` as the launch restore the shell settles.
+    /// Hold a saved launch as the restore the shell still has to resolve.
     #[cfg(any(test, feature = "test"))]
-    pub fn seed_launch_restore_for_test(
-        &mut self,
-        state: crate::app::state::app_struct::LaunchRestore,
-    ) {
-        self.launch_restore = state;
+    pub fn seed_launch_restore_pending_for_test(&mut self, state: mbv_config::TuiLaunchState) {
+        self.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(state);
     }
 
-    /// The launch restore the shell holds: whether a saved launch is still
-    /// pending, settled onto a tab, or spent.
+    /// Hold a saved launch as resolved onto `tab`, as the sync that bound the
+    /// destination to a tab leaves the restore.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_launch_restore_tab_settled_for_test(
+        &mut self,
+        state: mbv_config::TuiLaunchState,
+        tab: mbv_ui_model::tab_selection::TabSelection,
+    ) {
+        self.launch_restore =
+            crate::app::state::app_struct::LaunchRestore::TabSettled { state, tab };
+    }
+
+    /// Hold the launch restore spent, as a restore that already opened its
+    /// destination (or none) leaves it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_launch_restore_done_for_test(&mut self) {
+        self.launch_restore = crate::app::state::app_struct::LaunchRestore::Done;
+    }
+
+    /// The saved launch the shell still has to resolve: `None` once the
+    /// restore settled its tab or spent itself.
     #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn launch_restore_for_test(&self) -> crate::app::state::app_struct::LaunchRestore {
-        self.launch_restore.clone()
+    pub fn launch_restore_pending_state_for_test(&self) -> Option<&mbv_config::TuiLaunchState> {
+        match &self.launch_restore {
+            crate::app::state::app_struct::LaunchRestore::Pending(state) => Some(state),
+            _ => None,
+        }
+    }
+
+    /// The saved launch and the tab it resolved onto: `None` while the
+    /// restore is still pending or already spent.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn launch_restore_tab_settled_for_test(
+        &self,
+    ) -> Option<(
+        &mbv_config::TuiLaunchState,
+        mbv_ui_model::tab_selection::TabSelection,
+    )> {
+        match &self.launch_restore {
+            crate::app::state::app_struct::LaunchRestore::TabSettled { state, tab } => {
+                Some((state, *tab))
+            }
+            _ => None,
+        }
     }
 
     /// Empty the Emby catalog, as a Service teardown that dropped every view

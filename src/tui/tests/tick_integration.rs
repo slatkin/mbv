@@ -53,15 +53,13 @@ fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
         )],
         0,
     );
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::Pending(
-        mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::Home,
-            panel_focus: mbv_config::LaunchPanelFocus::Queue,
-            selector: None,
-            item: None,
-        },
-    ));
+    app.seed_launch_restore_pending_for_test(mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Queue,
+        selector: None,
+        item: None,
+    });
     let mut harness = TickHarness::new(app);
 
     // One production tick (no events reach the app) + the sync pass; no draw

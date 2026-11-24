@@ -26,8 +26,8 @@ pub use self::app_stub::stub_app_with_prefix_and_toast;
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use self::app_stub::{
-    card_cache_key_for_id_for_test, gui_row_menu_entries_for_test, push_movies_library_for_test,
-    queue_card_cache_key_for_test,
+    card_cache_key_for_id_for_test, gui_row_menu_entries_for_test, key_chord_for_test,
+    push_movies_library_for_test, queue_card_cache_key_for_test, queue_target_for_test,
 };
 #[cfg(feature = "test")]
 pub use self::app_stub::{

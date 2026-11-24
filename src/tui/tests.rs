@@ -232,7 +232,6 @@ fn music_artist_play_replaces_once_with_ordered_album_tracks() {
 // through `use super::*`, as it did while it sat inside `crate::app::tests`.
 // These re-exports keep that spelling path-only after the move.
 
-pub(crate) use crate::app::state::playback::QueueTarget;
 pub(crate) use crate::app::tests::*;
 pub(crate) use crate::app::{App, AppCommand, Command, PanelIntent, QueueCardArtwork};
 pub(crate) use crate::tui::Model;

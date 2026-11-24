@@ -284,6 +284,27 @@ pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
     app
 }
 
+/// The queue a mutation addresses on `link`: the link's own queue target, as
+/// the dispatch arms and the queue-op seams build it.
+#[cfg(any(test, feature = "test"))]
+#[must_use]
+pub fn queue_target_for_test(
+    link: mbv_ui_model::playback::QueueLink,
+) -> crate::app::state::playback::QueueTarget {
+    crate::app::state::playback::QueueTarget::current(link)
+}
+
+/// The resolver's normalized chord for a pressed key, as the TUI's neutral
+/// input edge builds it before the router resolves it against the policy.
+#[cfg(any(test, feature = "test"))]
+#[must_use]
+pub fn key_chord_for_test(
+    code: mbv_ui_msg::Key,
+    mods: mbv_ui_msg::KeyModifiers,
+) -> crate::app::input::resolver::KeyChord {
+    crate::app::input::resolver::KeyChord::new(code, mods)
+}
+
 /// The queue card's cache key for the playing queue's item at `index`: the
 /// key the card projection fetches and paints that row's artwork under.
 #[cfg(any(test, feature = "test"))]

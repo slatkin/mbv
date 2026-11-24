@@ -23,7 +23,6 @@
 //! candidate policy: a consumed chord falls through to the leaf, and the
 //! candidate resolves as `Deferred`.
 
-use crate::app::input::resolver::KeyChord;
 use crate::app::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 use crate::tui::fold_keyboard_messages;
 use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
@@ -65,7 +64,7 @@ pub(crate) fn fold_tick(
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
     let outcome = resolve_router_outcome(
-        KeyChord::new(key.code, key.modifiers),
+        crate::key_chord_for_test(key.code, key.modifiers),
         &snapshot,
         &disarmed(),
         None,
@@ -109,7 +108,7 @@ pub(crate) fn fold_tick_focused(
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
     let outcome = resolve_router_outcome(
-        KeyChord::new(key.code, key.modifiers),
+        crate::key_chord_for_test(key.code, key.modifiers),
         &snapshot,
         &disarmed(),
         focused,

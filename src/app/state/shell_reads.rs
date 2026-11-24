@@ -245,7 +245,12 @@ impl App {
             .map_or(&[], Vec::as_slice)
     }
 
-    /// The next queued library event, waiting until one arrives.
+    /// The next queued library event, waiting until one arrives: the
+    /// blocking form a test uses to read a fetch's own completion. The
+    /// shell's drains take [`Self::try_recv_lib_event`] instead, so this
+    /// read compiles only for the tests (`split-tui-gui-clients` design
+    /// D4b rule 5).
+    #[cfg(any(test, feature = "test"))]
     pub fn recv_lib_event(&self) -> Option<crate::app::LibEvent> {
         self.channels.lib_rx.recv().ok()
     }

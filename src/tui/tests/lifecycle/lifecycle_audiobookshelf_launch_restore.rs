@@ -16,12 +16,10 @@ fn pending_audiobookshelf_launch() -> App {
         )],
         0,
     );
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::Pending(
-        launch_state(
-            ServiceKind::Audiobookshelf,
-            "abs-books",
-            mbv_config::LaunchPanelFocus::Queue,
-        ),
+    app.seed_launch_restore_pending_for_test(launch_state(
+        ServiceKind::Audiobookshelf,
+        "abs-books",
+        mbv_config::LaunchPanelFocus::Queue,
     ));
     app
 }
@@ -76,8 +74,5 @@ fn stale_audiobookshelf_catalog_worker_disconnect_keeps_launch_pending() {
     assert!(app.drain_audiobookshelf_events_for_test());
 
     assert_eq!(app.tab_for_test(), TabSelection::Home);
-    assert!(matches!(
-        app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Pending(_)
-    ));
+    assert!(app.launch_restore_pending_state_for_test().is_some());
 }

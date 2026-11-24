@@ -450,7 +450,7 @@ fn multi_delete_including_active_confirms_whole_selection_before_any_removal() {
         app.playback_queue().slot_id_at(2).unwrap(),
     ];
 
-    app.remove_slots_from_queue_for_test(QueueTarget::current(QueueLink::Local), &slot_ids);
+    app.remove_slots_from_queue_for_test(crate::queue_target_for_test(QueueLink::Local), &slot_ids);
 
     assert_eq!(
         app.queue_for_link(QueueLink::Local).emby_items().len(),
@@ -505,7 +505,7 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
         .copied()
         .map(mbv_ctrl::slot_id_to_u64)
         .collect();
-    app.remove_slots_from_queue_for_test(QueueTarget::current(QueueLink::Local), &slot_ids);
+    app.remove_slots_from_queue_for_test(crate::queue_target_for_test(QueueLink::Local), &slot_ids);
     app.clear_pending_overlay_for_test();
     app.apply_confirm_action(
         ConfirmAction::RemoveActiveQueueSelection {
@@ -574,7 +574,7 @@ fn cancelled_multi_delete_with_active_removes_nothing() {
         app.playback_queue().slot_id_at(0).unwrap(),
         app.playback_queue().slot_id_at(2).unwrap(),
     ];
-    app.remove_slots_from_queue_for_test(QueueTarget::current(QueueLink::Local), &slot_ids);
+    app.remove_slots_from_queue_for_test(crate::queue_target_for_test(QueueLink::Local), &slot_ids);
     app.clear_pending_overlay_for_test();
     app.apply_confirm_action(
         ConfirmAction::RemoveActiveQueueSelection {

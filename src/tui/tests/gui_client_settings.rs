@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::queue_card_artwork::test_source;
-use crate::app::state::app_struct::LaunchRestore;
 
 /// The GUI setting (add-gui-library-panel design D4): the GUI arranges its own
 /// panels from its measured size and always paints the Queue panel, so neither
@@ -44,14 +43,11 @@ fn the_gui_setting_starts_with_the_launch_restore_done() {
     })
     .unwrap();
     let mut app = make_app_stub();
-    assert!(matches!(
-        app.launch_restore_for_test(),
-        LaunchRestore::Pending(_)
-    ));
+    assert!(app.launch_restore_pending_state_for_test().is_some());
 
     app.skip_launch_restore();
 
-    assert_eq!(app.launch_restore_for_test(), LaunchRestore::Done);
+    assert!(app.launch_restore_settled_for_test());
 }
 
 /// The card key a playing Movie row resolves to: the landscape key the card

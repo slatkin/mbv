@@ -7,7 +7,6 @@
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
-use crate::app::state::playback::QueueTarget;
 use crate::app::tests::{
     close_initial_services, emby_unified_state, make_items, make_local_daemon_app_stub,
     make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
@@ -109,7 +108,7 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
     .unwrap();
 
     app.queue_op_for_test(
-        QueueTarget::current(QueueLink::Local),
+        crate::queue_target_for_test(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
@@ -160,7 +159,7 @@ fn suspended_home_queue_op_disconnect_is_drained_as_a_home_event() {
     tx.send(applied(1, snapshot(2))).unwrap();
 
     app.queue_op_for_test(
-        QueueTarget::current(QueueLink::Local),
+        crate::queue_target_for_test(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
@@ -399,7 +398,7 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
     let _tx = inject_player_rx(&mut app);
 
     app.queue_op_for_test(
-        QueueTarget::current(QueueLink::Local),
+        crate::queue_target_for_test(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
@@ -435,7 +434,10 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
     // The owner answers Applied at once with the refreshed queue.
     tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
 
-    app.queue_op_for_test(QueueTarget::current(QueueLink::Local), QueueOp::Refresh);
+    app.queue_op_for_test(
+        crate::queue_target_for_test(QueueLink::Local),
+        QueueOp::Refresh,
+    );
 
     assert!(
         matches!(

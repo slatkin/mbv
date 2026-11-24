@@ -21,8 +21,10 @@ pub(super) fn launch_state(
 fn pending_emby_launch_at(library_id: &str, panel_focus: mbv_config::LaunchPanelFocus) -> App {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.seed_emby_service_state_for_test(mbv_core::service_runtime::ServiceState::Connecting);
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::Pending(
-        launch_state(ServiceKind::Emby, library_id, panel_focus),
+    app.seed_launch_restore_pending_for_test(launch_state(
+        ServiceKind::Emby,
+        library_id,
+        panel_focus,
     ));
     app
 }
@@ -49,21 +51,16 @@ pub(super) fn rebuild_tabs(app: &mut App) {
 
 pub(super) fn assert_expired_launch_restores_saved_focus(app: App) {
     assert_eq!(app.active_tab(), TabSelection::Home);
-    assert!(matches!(
-        app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::TabSettled {
-            tab: TabSelection::Home,
-            ..
-        }
-    ));
+    assert_eq!(
+        app.launch_restore_tab_settled_for_test()
+            .map(|(_, tab)| tab),
+        Some(TabSelection::Home)
+    );
 
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     assert_eq!(model.app.stored_panel_focus(), PanelFocus::Queue);
-    assert_eq!(
-        model.app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Done
-    );
+    assert!(model.app.launch_restore_settled_for_test());
 }
 
 /// #859: every Emby Service failure outcome expires the pending launch the
@@ -118,20 +115,14 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
         TabSelection::Home,
         "catalog has not arrived yet"
     );
-    assert!(matches!(
-        app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Pending(_)
-    ));
+    assert!(app.launch_restore_pending_state_for_test().is_some());
 
     rebuild_tabs(&mut app);
     assert_eq!(app.active_tab(), TabSelection::EmbyLibrary(0));
     // #810: catalog arrival binds the destination to the selected tab.
     assert_eq!(
-        app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::TabSettled {
-            state: saved,
-            tab: TabSelection::EmbyLibrary(0),
-        }
+        app.launch_restore_tab_settled_for_test(),
+        Some((&saved, TabSelection::EmbyLibrary(0)))
     );
 }
 
@@ -168,10 +159,7 @@ fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
     rebuild_tabs(&mut app);
 
     assert_eq!(app.active_tab(), TabSelection::Home);
-    assert_eq!(
-        app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Done
-    );
+    assert!(app.launch_restore_settled_for_test());
 }
 
 #[test]
@@ -180,14 +168,14 @@ fn reanchor_does_not_apply_to_a_tab_changed_by_stale_destination_normalization()
     // destination's remaining focus state onto the normalized Home tab.
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.set_panel_focus_for_test(PanelFocus::Library);
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::TabSettled {
-        state: launch_state(
+    app.seed_launch_restore_tab_settled_for_test(
+        launch_state(
             ServiceKind::Emby,
             "lib-movies",
             mbv_config::LaunchPanelFocus::Queue,
         ),
-        tab: TabSelection::EmbyLibrary(0),
-    });
+        TabSelection::EmbyLibrary(0),
+    );
     let mut model = Model::new(app);
     model.app.clear_libraries_for_test();
 
@@ -196,10 +184,7 @@ fn reanchor_does_not_apply_to_a_tab_changed_by_stale_destination_normalization()
 
     assert_eq!(model.app.active_tab(), TabSelection::Home);
     assert_eq!(model.app.stored_panel_focus(), PanelFocus::Library);
-    assert_eq!(
-        model.app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Done
-    );
+    assert!(model.app.launch_restore_settled_for_test());
 }
 
 #[test]
@@ -297,18 +282,12 @@ fn reset_ui_state_abandons_pending_launch_restore() {
     model.reset_ui_state();
 
     assert_eq!(model.app.active_tab(), TabSelection::Home);
-    assert_eq!(
-        model.app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Done
-    );
+    assert!(model.app.launch_restore_settled_for_test());
 
     // The late catalog arrival must not restore the discarded location.
     rebuild_tabs(&mut model.app);
     assert_eq!(model.app.active_tab(), TabSelection::Home);
-    assert_eq!(
-        model.app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Done
-    );
+    assert!(model.app.launch_restore_settled_for_test());
 }
 
 /// 2026-10-05 user rule: a pinned launch's default screen is always the
@@ -324,13 +303,11 @@ fn pinned_launch_overrides_saved_focus_with_queue() {
     app.pin_launch_focus_to_queue();
 
     assert_eq!(app.stored_panel_focus(), PanelFocus::Queue);
-    assert!(matches!(
-        app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
-            panel_focus: mbv_config::LaunchPanelFocus::Queue,
-            ..
-        })
-    ));
+    assert_eq!(
+        app.launch_restore_pending_state_for_test()
+            .map(|state| state.panel_focus),
+        Some(mbv_config::LaunchPanelFocus::Queue)
+    );
 }
 
 /// The same rule when no launch snapshot exists: the persisted prefs focus
@@ -339,15 +316,12 @@ fn pinned_launch_overrides_saved_focus_with_queue() {
 fn pinned_launch_without_snapshot_still_starts_on_queue() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.set_panel_focus_for_test(PanelFocus::Library);
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::Done);
+    app.seed_launch_restore_done_for_test();
 
     app.pin_launch_focus_to_queue();
 
     assert_eq!(app.stored_panel_focus(), PanelFocus::Queue);
-    assert_eq!(
-        app.launch_restore_for_test(),
-        crate::app::state::app_struct::LaunchRestore::Done
-    );
+    assert!(app.launch_restore_settled_for_test());
 }
 
 /// Spec `destination-latest-modes`, scenario "Restart selects Latest"
@@ -384,10 +358,7 @@ fn restart_after_a_letter_pill_session_selects_latest() {
     // letter pill does not reappear.
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.set_library_total_for_test(0, 400);
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::TabSettled {
-        state: saved,
-        tab: TabSelection::EmbyLibrary(0),
-    });
+    app.seed_launch_restore_tab_settled_for_test(saved, TabSelection::EmbyLibrary(0));
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     assert!(
@@ -407,14 +378,14 @@ fn restart_after_a_letter_pill_session_selects_latest() {
 fn restart_with_an_absent_recorded_scope_selects_latest() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.set_library_total_for_test(0, 400);
-    app.seed_launch_restore_for_test(crate::app::state::app_struct::LaunchRestore::TabSettled {
-        state: launch_state(
+    app.seed_launch_restore_tab_settled_for_test(
+        launch_state(
             ServiceKind::Emby,
             "lib-movies",
             mbv_config::LaunchPanelFocus::Library,
         ),
-        tab: TabSelection::EmbyLibrary(0),
-    });
+        TabSelection::EmbyLibrary(0),
+    );
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
 

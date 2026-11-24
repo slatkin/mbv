@@ -83,7 +83,7 @@ impl QueueTarget {
     /// The target that names `link`'s current queue: the default for every
     /// path that does not edit the GUI Client's shown queue (design D7).
     #[must_use]
-    pub fn current(link: QueueLink) -> Self {
+    pub(in crate::app) fn current(link: QueueLink) -> Self {
         Self { link, queue: None }
     }
 }
