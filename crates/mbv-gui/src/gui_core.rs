@@ -27,7 +27,7 @@ pub use self::gui_client_state::{
     QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
-pub use self::gui_library::client_events::install_client_event;
+pub use self::gui_library::client_events::{ClientEventLanding, install_client_event};
 pub use self::gui_library::{
     GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
     GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,
@@ -73,6 +73,7 @@ pub use self::gui_settings::{
 pub use self::input::{GuiInput, GuiSurfaceLeaf};
 
 use mbv_client_core::App;
+use mbv_client_core::dispatch::notify::ToastSeverity;
 
 /// The GUI Client's core state: the `App` it owns and its own Client state.
 /// Every GUI `impl` block becomes `impl GuiCore` and reads its core state as
@@ -139,15 +140,20 @@ impl GuiCore {
     }
 
     /// Take one Client-only fetch result and install it in this Client's own
-    /// stores (design D5): the GUI's tick host calls this once per queued
+    /// stores (design D5, D8): the GUI's tick host calls this once per queued
     /// result, looping, after the library drain, for the waker to have woken
-    /// it for. The channel lives on the owned `App`, so a result a worker must
-    /// send outlives any one `GuiCore`.
+    /// it for. A failed refresh kept the store's loaded value, so this drain
+    /// reports it as the error toast the refresh path promises. The channel
+    /// lives on the owned `App`, so a result a worker must send outlives any
+    /// one `GuiCore`.
     pub fn drain_client_event(&mut self) -> bool {
         let Some(event) = self.app.take_one_library_fetch_event() else {
             return false;
         };
-        install_client_event(&mut self.gui, event);
+        if install_client_event(&mut self.gui, event) == ClientEventLanding::RefreshFailed {
+            self.app
+                .flash("Refresh failed".to_string(), ToastSeverity::Error);
+        }
         true
     }
 

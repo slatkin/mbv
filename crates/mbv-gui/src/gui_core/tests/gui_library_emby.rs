@@ -15,6 +15,7 @@ use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 mod feed_fetch;
+mod root_refetch;
 
 const MOVIES_ID: &str = "lib-movies";
 const FEED_ID: &str = "lib-youtube";

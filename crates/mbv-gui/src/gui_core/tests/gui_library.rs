@@ -2,9 +2,11 @@
 //! (add-gui-library-panel design D5, rows 3.2 and 3.3): a selected group's
 //! albums land in the store outside `nav_stack`, a loaded group is not fetched
 //! again, one failing group keeps the other groups' albums, and the projection
-//! unions the selected groups' artists with their facts. The Emby boundary is
-//! the in-memory mock transport, so no request leaves the process. The Hero's
-//! and the warm window's tests live in the `projection` child module, and the
+//! unions the selected groups' artists with their facts. The group store's
+//! refetches (gui-list-header-buttons design D8) keep a loaded group's albums
+//! until their landing and report a failed refresh. The Emby boundary is the
+//! in-memory mock transport, so no request leaves the process. The Hero's and
+//! the warm window's tests live in the `projection` child module, and the
 //! presented destinations' tests in the `destinations` child module.
 
 use std::io::ErrorKind;
@@ -236,6 +238,111 @@ fn one_failing_group_keeps_the_other_groups_albums() {
         Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
         "the other group keeps its albums"
     );
+}
+
+/// Refetch one group's album list over the store the tests keep beside `app`
+/// (design D8).
+fn refetch_group(app: &mut App, group_id: &str) {
+    crate::gui_core::test_support::stub_gui_state(|state| {
+        crate::gui_core::gui_library::store::refetch_group_albums(
+            app,
+            state,
+            0,
+            group_id.to_string(),
+        );
+    });
+}
+
+/// Land one started fetch's completion through the GUI core's own drain (design
+/// D8): the drain installs the result and, on a failed refresh, reports it as
+/// production's tick does.
+fn land_one_group_through_core(app: &mut App) {
+    let event = app
+        .wait_for_one_library_fetch_event_for_test(std::time::Duration::from_secs(2))
+        .expect("the Client-only fetch reported its result");
+    app.send_library_fetch_event_for_test(event);
+    let drained = crate::gui_core::test_support::with_stub_gui(app, GuiCore::drain_client_event);
+    assert!(drained, "the core's drain takes the result");
+}
+
+/// A refetch of a loaded group keeps that group's albums until the new list
+/// lands (design D8): the paint reads the list it already had while the fetch
+/// runs, so a refresh never empties the rows.
+#[test]
+fn a_refetch_of_a_loaded_group_keeps_its_albums_until_the_landing() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    app.seed_gui_music_albums_for_test(0, HIPHOP, &[("alb-old", "Old Album")]);
+    http.respond(200, ALBUMS);
+
+    refetch_group(&mut app, HIPHOP);
+
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-old".to_string()]),
+        "the loaded albums stay in place while the refetch runs"
+    );
+
+    land_one_group_through_core(&mut app);
+
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
+        "the landing replaces the group's albums"
+    );
+}
+
+/// A failed refetch keeps a loaded group's albums and reports the failure
+/// (design D8): the store keeps the list it held, and the drain flashes the
+/// error toast.
+#[test]
+fn a_failed_refetch_keeps_a_groups_albums_and_flashes() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    app.seed_gui_music_albums_for_test(0, HIPHOP, &[("alb-old", "Old Album")]);
+    http.fail(ErrorKind::ConnectionRefused);
+
+    refetch_group(&mut app, HIPHOP);
+    land_one_group_through_core(&mut app);
+
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-old".to_string()]),
+        "the failed refetch keeps the group's albums"
+    );
+    assert_eq!(
+        app.newest_toast_text(),
+        "Refresh failed",
+        "the drain flashes the refresh failure"
+    );
+    assert_eq!(
+        app.newest_toast_severity(),
+        ToastSeverity::Error,
+        "the refresh failure is an error toast"
+    );
+}
+
+/// A second refetch of a loaded group while one runs starts nothing (design
+/// D8): the in-flight mark skips it, so the store's fetch count stays one.
+#[test]
+fn a_second_refetch_of_a_loaded_group_starts_nothing() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    app.seed_gui_music_albums_for_test(0, HIPHOP, &[("alb-old", "Old Album")]);
+    http.respond(200, ALBUMS);
+
+    refetch_group(&mut app, HIPHOP);
+    assert!(
+        http.wait_for_requests(1, std::time::Duration::from_secs(2)),
+        "the first refetch starts its fetch"
+    );
+
+    refetch_group(&mut app, HIPHOP);
+
+    assert_eq!(http.request_count(), 1, "the second refetch starts nothing");
 }
 
 /// A failed group's album list refetches when the user presses All

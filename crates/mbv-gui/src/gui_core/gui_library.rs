@@ -12,7 +12,7 @@ mod audiobooks_projection;
 pub(crate) mod client_events;
 mod collection;
 mod collection_command;
-mod emby;
+pub(crate) mod emby;
 mod emby_projection;
 pub(crate) mod ensure;
 mod entry_list;
@@ -34,7 +34,7 @@ mod shows;
 pub(crate) mod shows_open_loads;
 pub(crate) mod shows_projection;
 mod shows_view;
-mod store;
+pub(crate) mod store;
 mod tabs;
 mod tv;
 

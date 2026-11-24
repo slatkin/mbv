@@ -58,6 +58,11 @@ pub struct GuiClientState {
     /// key.
     pub(crate) music_albums:
         std::collections::HashMap<usize, std::collections::HashMap<String, GuiGroupAlbums>>,
+    /// The groups whose refetch is in flight (gui-list-header-buttons design
+    /// D8), by library index and group key: a refetch of a loaded group keeps
+    /// its albums in place because of this mark, and a second refetch of the
+    /// same group starts nothing.
+    pub(crate) music_albums_refreshing: std::collections::HashSet<(usize, String)>,
     /// The chosen collection-group key, by library index and group key.
     pub(crate) library_picks: std::collections::HashMap<(usize, String), String>,
     /// The chosen Music union-group key, by library index.
@@ -94,6 +99,11 @@ pub struct GuiClientState {
     pub(crate) emby_feed_sets: std::collections::HashMap<usize, GuiCollectionSelection>,
     /// The Emby library's root items, by library index.
     pub(crate) emby_roots: std::collections::HashMap<usize, GuiEmbyRootItems>,
+    /// The libraries whose root-list refetch is in flight (gui-list-header-
+    /// buttons design D8), by library index: a refetch of a loaded list keeps
+    /// it in place because of this mark, and a second refetch of the same
+    /// library starts nothing.
+    pub(crate) emby_roots_refreshing: std::collections::HashSet<usize>,
     /// The Audiobookshelf library selection, by library index.
     pub(crate) abs_libs: std::collections::HashMap<usize, GuiAudiobooksSelection>,
     /// The podcast library selection, by library index.
@@ -156,6 +166,7 @@ impl GuiClientState {
             player_auto_hide,
             library_groups: std::collections::HashMap::new(),
             music_albums: std::collections::HashMap::new(),
+            music_albums_refreshing: std::collections::HashSet::new(),
             library_picks: std::collections::HashMap::new(),
             music_union_picks: std::collections::HashMap::new(),
             library_row_menu_target: None,
@@ -171,6 +182,7 @@ impl GuiClientState {
             emby_libs: std::collections::HashMap::new(),
             emby_feed_sets: std::collections::HashMap::new(),
             emby_roots: std::collections::HashMap::new(),
+            emby_roots_refreshing: std::collections::HashSet::new(),
             abs_libs: std::collections::HashMap::new(),
             podcast_libs: std::collections::HashMap::new(),
             feeds_selection: GuiFeedsSelection::default(),

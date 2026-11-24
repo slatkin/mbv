@@ -471,6 +471,56 @@ pub(crate) fn fetch_emby_root_items(app: &mut App, gui: &mut GuiClientState, lib
         gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Failed);
         return;
     };
+    let Some(listing) = emby_root_listing(app, lib_idx) else {
+        return;
+    };
+    gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Loading);
+    spawn_emby_root_items_fetch(app, client, lib_idx, listing);
+}
+
+/// Refetch `lib_idx`'s root list over the `App` the GUI core owns (design D8):
+/// with no loaded list the refetch clears the failed mark and takes the
+/// first-load path, and with a loaded list it keeps that list in place and
+/// starts the fetch, recording the library in the in-flight set so a second
+/// refetch while that fetch runs starts nothing. No Emby client starts nothing
+/// at all.
+pub(crate) fn refetch_emby_root_items(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
+    let Some(client) = app.emby_snapshot() else {
+        // The no-client condition is not a fetch failure (design D8): the
+        // refetch stores no mark and starts nothing.
+        return;
+    };
+    let loaded = matches!(
+        gui.emby_roots.get(&lib_idx),
+        Some(GuiEmbyRootItems::Loaded(_))
+    );
+    if !loaded {
+        clear_failed_emby_roots(gui, lib_idx);
+        fetch_emby_root_items(app, gui, lib_idx);
+        return;
+    }
+    let Some(listing) = emby_root_listing(app, lib_idx) else {
+        return;
+    };
+    if !gui.emby_roots_refreshing.insert(lib_idx) {
+        return;
+    }
+    spawn_emby_root_items_fetch(app, client, lib_idx, listing);
+}
+
+/// Clear `lib_idx`'s failed mark (design D8): a refetch of a store with no
+/// loaded list is the user's retry, so the first-load path starts the fetch
+/// again.
+fn clear_failed_emby_roots(gui: &mut GuiClientState, lib_idx: usize) {
+    if matches!(gui.emby_roots.get(&lib_idx), Some(GuiEmbyRootItems::Failed)) {
+        gui.emby_roots.remove(&lib_idx);
+    }
+}
+
+/// The root-list request `lib_idx` reads (row 8.1): the library level's item
+/// type filter and the library's own parent id, from the level fields the TUI
+/// root listing also reads.
+fn emby_root_listing(app: &App, lib_idx: usize) -> Option<(String, Option<String>)> {
     let (item_types, _unplayed_only, sort_by, sort_order) =
         app.default_library_level_fields(lib_idx);
     debug_assert_eq!(
@@ -479,17 +529,27 @@ pub(crate) fn fetch_emby_root_items(app: &mut App, gui: &mut GuiClientState, lib
         "the root-list store reads the name sort"
     );
     debug_assert_eq!(sort_order.as_str(), "Ascending");
-    let Some(parent_id) = app.emby_library_id(lib_idx).map(str::to_string) else {
-        return;
-    };
-    gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Loading);
+    app.emby_library_id(lib_idx)
+        .map(|parent_id| (parent_id.to_string(), item_types))
+}
+
+/// Start `lib_idx`'s root-list fetch worker (row 8.1, design D8): the one
+/// spawn body the first load and the refetch share, so both send the same
+/// result event, whose landing replaces the store's value or reports a failed
+/// refresh.
+fn spawn_emby_root_items_fetch(
+    app: &App,
+    client: mbv_emby::EmbyClient,
+    lib_idx: usize,
+    listing: (String, Option<String>),
+) {
+    let (parent_id, item_types) = listing;
     let tx = app.library_fetch_event_sender();
     std::thread::spawn(move || {
         let result = super::store::fetch_all_pages(&client, &parent_id, item_types.as_deref());
         tx.send(LibraryFetchEvent::EmbyRootItems { lib_idx, result });
     });
 }
-
 /// Play the plain Emby-library row a command names (design D12, row 8.1): the
 /// shared library play path, whose folder-play rule expands a folder or a
 /// boxset into its playable content and whose admission and route checks are
