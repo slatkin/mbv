@@ -72,6 +72,29 @@ fn pump_until(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
     }
 }
 
+/// Pump GUI ticks until the newest frame satisfies `want`, waiting for the next
+/// Client-only fetch result instead of a library completion. The Emby root-list
+/// fetch reports on that channel (design D5), so a wait on the library channel
+/// never sees its result. The wait blocks for the outcome, as `pump_until` does.
+fn pump_until_client_fetch(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
+    loop {
+        assert!(test.core.step(), "the core thread never quits mid-drain");
+        if want(&test.held()) {
+            return;
+        }
+        let event = test
+            .core
+            .app_mut()
+            .wait_for_one_library_fetch_event_for_test(LIB_EVENT_BOUND)
+            .unwrap_or_else(|| {
+                panic!("no Client-only fetch result landed while waiting for {what}")
+            });
+        // Requeue the result, so the next step's drain applies it (design D3 rule 2).
+        test.core.app_mut().send_library_fetch_event_for_test(event);
+        test.waker.wake();
+    }
+}
+
 /// One album's playable tracks, as the album expansion's fetch returns them.
 const TRACKS: &str = r#"{"Items":[{"Id":"trk-1","Name":"Rhymin & Stealin","Type":"Audio","MediaType":"Audio","RunTimeTicks":2160000000},{"Id":"trk-2","Name":"The New Style","Type":"Audio","MediaType":"Audio","RunTimeTicks":2100000000}],"TotalRecordCount":2}"#;
 
