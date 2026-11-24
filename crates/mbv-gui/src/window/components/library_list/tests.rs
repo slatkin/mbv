@@ -563,12 +563,12 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
     );
 }
 
-/// Contract (gui-tree-double-click design D2, D4): the Music artist row is a
-/// tree parent — its open state paints as `aria-expanded`, its button carries
-/// the `tree-parent` class the hover hint rides, and the shared hint paints at
-/// its trailing end.
+/// Contract (gui-tree-double-click design D2, D4; gui-row-hover-actions design
+/// D1-D3): the Music artist row is a tree parent — its open state paints as
+/// `aria-expanded` and its hover offers the Expand control, which reuses the
+/// row's toggle. The hint the row used to paint is gone.
 #[test]
-fn the_artist_row_paints_as_a_tree_parent_with_its_hint() {
+fn the_artist_row_paints_its_open_state_and_the_expand_control() {
     let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     measure(&mut fixture, 240.0);
 
@@ -579,14 +579,12 @@ fn the_artist_row_paints_as_a_tree_parent_with_its_hint() {
         "the closed artist paints its open state"
     );
     assert!(
-        fixture
-            .attr_of(row, blitz_dom::LocalName::from("class"))
-            .is_some_and(|class| class.contains("tree-parent")),
-        "the artist row is a tree parent"
+        fixture.presents(".row-hover-actions [data-row-action=\"toggle\"]"),
+        "the artist row offers the hover Expand control"
     );
     assert!(
-        fixture.presents("[data-library-row-id=\"artist:service:a1\"] [data-tree-hint]"),
-        "the artist row paints the shared hint"
+        !fixture.presents("[data-tree-hint]"),
+        "the artist row paints no tree hint"
     );
 }
 

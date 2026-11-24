@@ -438,7 +438,8 @@ fn paint_podcasts_row(
 }
 
 /// One painted episode row: the row's press selects the episode the Hero
-/// shows, a double-click plays it, and a right-press opens the row menu.
+/// shows, a double-click plays it, and a right-press opens the row menu. Its
+/// hover controls run the destination's play and queue paths (design D4).
 fn paint_podcasts_item(
     row: &LetteredItemRow<GuiEntryRowFrame>,
     library: &LibraryState,
@@ -448,6 +449,10 @@ fn paint_podcasts_item(
     let press_library = library.clone();
     let play_id = row.row.id.clone();
     let play_library = library.clone();
+    let hover_play_id = row.row.id.clone();
+    let hover_play_library = library.clone();
+    let queue_id = row.row.id.clone();
+    let queue_library = library.clone();
     let menu_id = row.row.id.clone();
     let menu_library = library.clone();
     let pressed_row = LetteredRow::Item(press_item);
@@ -468,6 +473,12 @@ fn paint_podcasts_item(
             }),
             on_press: Callback::new(move |()| PodcastsList::select(&press_library, &pressed_row)),
             on_play: Callback::new(move |()| PodcastsList::play(&play_library, &play_id)),
+            on_hover_play: Some(Callback::new(move |()| {
+                PodcastsList::play(&hover_play_library, &hover_play_id);
+            })),
+            on_hover_queue: Some(Callback::new(move |()| {
+                PodcastsList::queue(&queue_library, &queue_id);
+            })),
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library
                     .open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);
@@ -580,7 +591,8 @@ fn paint_feeds_row(
 }
 
 /// One painted entry row: a press selects the entry the Hero shows, a
-/// double-click plays it, and a right-press opens the row menu.
+/// double-click plays it, and a right-press opens the row menu. Its hover
+/// controls run the destination's play and queue paths (design D4).
 fn paint_feeds_item(
     row: &LetteredItemRow<GuiEntryRowFrame>,
     library: &LibraryState,
@@ -590,6 +602,10 @@ fn paint_feeds_item(
     let press_library = library.clone();
     let play_id = row.row.id.clone();
     let play_library = library.clone();
+    let hover_play_id = row.row.id.clone();
+    let hover_play_library = library.clone();
+    let queue_id = row.row.id.clone();
+    let queue_library = library.clone();
     let menu_id = row.row.id.clone();
     let menu_library = library.clone();
     let pressed_row = LetteredRow::Item(press_item);
@@ -610,6 +626,12 @@ fn paint_feeds_item(
             }),
             on_press: Callback::new(move |()| FeedsList::select(&press_library, &pressed_row)),
             on_play: Callback::new(move |()| FeedsList::play(&play_library, &play_id)),
+            on_hover_play: Some(Callback::new(move |()| {
+                FeedsList::play(&hover_play_library, &hover_play_id);
+            })),
+            on_hover_queue: Some(Callback::new(move |()| {
+                FeedsList::queue(&queue_library, &queue_id);
+            })),
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library
                     .open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);

@@ -93,6 +93,17 @@ struct TreeSpec {
     open: Option<bool>,
 }
 
+/// The contexts the top-level row's art thumb and clocks read.
+fn provide_row_contexts() {
+    let events = use_hook(ArtEvents::new);
+    let fired = use_hook(FiredTimers::new);
+    provide_context(events);
+    provide_context(fired);
+    provide_context(ScaleFactor(Signal::new(1.0)));
+    let clock: std::sync::Arc<dyn Clock> = std::sync::Arc::new(RecordingClock::new());
+    provide_context(clock);
+}
+
 /// The root: provides the art painter's contexts and paints one top-level row.
 fn flat_app(spec: FlatSpec) -> Element {
     let FlatSpec {
@@ -102,13 +113,7 @@ fn flat_app(spec: FlatSpec) -> Element {
         subtitle,
         trail,
     } = spec;
-    let events = use_hook(ArtEvents::new);
-    let fired = use_hook(FiredTimers::new);
-    provide_context(events);
-    provide_context(fired);
-    provide_context(ScaleFactor(Signal::new(1.0)));
-    let clock: std::sync::Arc<dyn Clock> = std::sync::Arc::new(RecordingClock::new());
-    provide_context(clock);
+    provide_row_contexts();
     rsx! {
         FlatRow {
             attr: "test",
@@ -123,6 +128,31 @@ fn flat_app(spec: FlatSpec) -> Element {
             selected: false,
             on_press: Callback::new(|()| {}),
             on_play: Callback::new(|()| {}),
+        }
+    }
+}
+
+/// The root: paints one selected top-level row that offers every hover
+/// control and is a tree parent.
+fn flat_hover_app() -> Element {
+    provide_row_contexts();
+    rsx! {
+        FlatRow {
+            attr: "test",
+            kind: "item".to_owned(),
+            id: "row-1".to_owned(),
+            title: "Sabrosito".to_owned(),
+            subtitle: None,
+            trail: Some("2026-11-24".to_owned()),
+            trail_part: LibraryTrailPart::Date,
+            selected: true,
+            tree_open: Some(false),
+            on_press: Callback::new(|()| {}),
+            on_play: Callback::new(|()| {}),
+            on_toggle: Some(Callback::new(|()| {})),
+            on_hover_play: Some(Callback::new(|()| {})),
+            on_hover_queue: Some(Callback::new(|()| {})),
+            on_hover_shuffle: Some(Callback::new(|()| {})),
         }
     }
 }
@@ -239,6 +269,15 @@ fn flat_built(spec: FlatSpec) -> Fixture {
         VirtualDom::new_with_props(|spec: FlatSpec| flat_app(spec), spec),
         config(),
     );
+    doc.initial_build();
+    let mut fixture = Fixture { doc };
+    fixture.poll_until_idle();
+    fixture
+}
+
+/// Paint one row that offers the hover controls and let its first render land.
+fn flat_hover_built() -> Fixture {
+    let mut doc = DioxusDocument::new(VirtualDom::new(flat_hover_app), config());
     doc.initial_build();
     let mut fixture = Fixture { doc };
     fixture.poll_until_idle();
@@ -422,6 +461,57 @@ fn a_title_only_row_is_complete() {
     );
     assert!(!fixture.presents(SUBTITLE));
     assert!(!fixture.presents(DATE));
+}
+
+/// Contract (gui-row-hover-actions design D1, D2): the hover controls are the
+/// host's later sibling — never a child of the row button — the host carries
+/// the row's fill as `--row-fill` for the button and the controls to read, the
+/// trailing text rests as the trail the stylesheet hides, and the Play control
+/// is named after its row.
+#[test]
+fn the_hover_controls_are_the_hosts_sibling_and_the_play_is_named_after_the_row() {
+    let fixture = flat_hover_built();
+
+    assert!(
+        fixture.presents(".row-hover-host [data-library-test-row]"),
+        "the row button sits in the hover host"
+    );
+    assert!(
+        !fixture.presents("[data-library-test-row] [data-row-hover-actions]"),
+        "no control nests inside the row button"
+    );
+    assert!(
+        fixture.presents(".row-hover-host [data-row-hover-actions]"),
+        "the controls paint in the host"
+    );
+    assert!(
+        fixture.style_of(".row-hover-host").contains("--row-fill:"),
+        "the host carries the row's fill"
+    );
+    assert!(
+        fixture
+            .style_of(ROW)
+            .contains("background: var(--row-fill)"),
+        "the row button paints the host's fill"
+    );
+    assert!(
+        fixture.class_of(DATE).contains("row-hover-trail"),
+        "the trailing text rests as the trail"
+    );
+    assert_eq!(
+        fixture
+            .attr_of("[data-row-action=\"play\"]", "aria-label")
+            .as_deref(),
+        Some("Play Sabrosito"),
+        "the Play control is named after its row"
+    );
+    assert_eq!(
+        fixture
+            .attr_of("[data-row-action=\"toggle\"]", "aria-label")
+            .as_deref(),
+        Some("Expand"),
+        "a closed tree parent offers Expand"
+    );
 }
 
 /// Contract (design D3): the nested row's level picks its look and its depth
