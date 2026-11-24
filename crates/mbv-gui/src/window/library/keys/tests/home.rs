@@ -86,13 +86,13 @@ fn home_facts(state: &LibraryState) -> String {
 }
 
 /// The Home commands the core's row ids ride in.
-fn recent_row() -> mbv::GuiHomeRowId {
-    mbv::GuiHomeRowId::Recent(QueueItemContentId::Feed("f1".to_owned()))
+fn recent_row() -> crate::gui_core::GuiHomeRowId {
+    crate::gui_core::GuiHomeRowId::Recent(QueueItemContentId::Feed("f1".to_owned()))
 }
 
 /// The Home commands the core's row ids ride in.
-fn continued_row_id() -> mbv::GuiHomeRowId {
-    mbv::GuiHomeRowId::Continue("e1".to_owned())
+fn continued_row_id() -> crate::gui_core::GuiHomeRowId {
+    crate::gui_core::GuiHomeRowId::Continue("e1".to_owned())
 }
 
 /// The row key the `Continue watching` row paints.
@@ -122,7 +122,7 @@ fn enter_on_home_plays_the_hovered_row_by_its_opaque_id() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::HomePlay {
+        [crate::gui_core::GuiLibraryCommand::HomePlay {
             row: continued_row_id()
         }]
     );
@@ -138,7 +138,7 @@ fn n_on_home_sends_play_next_for_the_hovered_row() {
     assert_eq!(facts, ["n=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::HomePlayNext {
+        [crate::gui_core::GuiLibraryCommand::HomePlayNext {
             row: continued_row_id()
         }]
     );
@@ -154,7 +154,7 @@ fn a_on_home_adds_the_hovered_row_to_the_queue() {
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::HomeQueue {
+        [crate::gui_core::GuiLibraryCommand::HomeQueue {
             row: continued_row_id()
         }]
     );
@@ -178,7 +178,7 @@ fn enter_on_home_plays_the_hovered_row_not_the_selected_one() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::HomePlay { row: recent_row() }]
+        [crate::gui_core::GuiLibraryCommand::HomePlay { row: recent_row() }]
     );
 }
 

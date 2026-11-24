@@ -260,7 +260,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -511,7 +511,7 @@ fn a_season_press_sends_the_select_season_command() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::ShowsSelectSeason {
+        vec![crate::gui_core::GuiLibraryCommand::ShowsSelectSeason {
             lib_idx: LIB_IDX,
             season_id: "s2".to_owned(),
         }],
@@ -532,7 +532,7 @@ fn a_double_click_on_an_episode_sends_its_play_command() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::ShowsPlay {
+        vec![crate::gui_core::GuiLibraryCommand::ShowsPlay {
             lib_idx: LIB_IDX,
             item_id: "ep2".to_owned(),
         }],
@@ -552,7 +552,7 @@ fn a_hovered_row_plays_its_episode_next() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::ShowsPlayNext {
+        vec![crate::gui_core::GuiLibraryCommand::ShowsPlayNext {
             lib_idx: LIB_IDX,
             item_id: "ep2".to_owned(),
         }],
@@ -572,7 +572,7 @@ fn a_hovered_row_adds_its_episode_to_the_queue() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::ShowsQueue {
+        vec![crate::gui_core::GuiLibraryCommand::ShowsQueue {
             lib_idx: LIB_IDX,
             item_id: "ep2".to_owned(),
         }],
@@ -596,7 +596,7 @@ fn the_series_hero_play_sends_the_play_command_for_the_selected_season() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::ShowsPlay {
+        vec![crate::gui_core::GuiLibraryCommand::ShowsPlay {
             lib_idx: LIB_IDX,
             item_id: "s1".to_owned(),
         }],
@@ -620,7 +620,7 @@ fn the_latest_hero_add_to_queue_sends_the_queue_command_for_the_selected_episode
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::ShowsQueue {
+        vec![crate::gui_core::GuiLibraryCommand::ShowsQueue {
             lib_idx: LIB_IDX,
             item_id: "series1".to_owned(),
         }],

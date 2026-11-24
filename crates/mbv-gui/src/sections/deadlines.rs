@@ -6,7 +6,8 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
-use mbv::{GuiCore, GuiPlayheadMarks, PlaybackTargetChoice, QueuePlaybackProjection};
+use crate::gui_core::{GuiCore, GuiPlayheadMarks};
+use mbv_client_core::{PlaybackTargetChoice, QueuePlaybackProjection};
 
 use super::Section;
 

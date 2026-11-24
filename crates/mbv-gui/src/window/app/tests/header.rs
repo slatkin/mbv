@@ -227,10 +227,10 @@ impl Fixture {
                         crate::bridge::frame::library::GuiMusicList {
                             lib_idx: 0,
                             collections: crate::bridge::frame::library::GuiCollections {
-                                target: mbv::GuiCollectionTarget::Music(0),
+                                target: crate::gui_core::GuiCollectionTarget::Music(0),
                                 all: true,
                                 entries: Vec::new(),
-                                noun: mbv::GuiCollectionNoun::Groups,
+                                noun: crate::gui_core::GuiCollectionNoun::Groups,
                             },
                             loading: false,
                             failure: None,

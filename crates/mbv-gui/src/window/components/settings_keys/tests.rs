@@ -70,7 +70,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -224,7 +224,7 @@ fn a_reset_sends_keys_reset_with_the_action_id() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::KeysReset {
+        vec![crate::gui_core::GuiSettingsCommand::KeysReset {
             action: "stop".to_owned(),
         }],
         "the reset named the action"
@@ -245,7 +245,7 @@ fn a_press_on_a_clear_sends_keys_clear_with_the_target(#[case] id: &str, #[case]
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::KeysClear {
+        vec![crate::gui_core::GuiSettingsCommand::KeysClear {
             target: target.to_owned(),
         }],
         "the clear named the target"

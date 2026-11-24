@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
+use crate::gui_core::{GuiCollections, GuiListSortFrame};
 use dioxus_native::prelude::*;
-use mbv::{GuiCollections, GuiListSortFrame};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksRowFrame, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail, GuiLibraryList,

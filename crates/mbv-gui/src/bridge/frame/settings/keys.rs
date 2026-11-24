@@ -2,7 +2,7 @@
 //! prefix chord, one row for each `AllClients` action with its effective
 //! chords, and the last refused edit.
 
-use mbv::{GuiSettingsKeyRefusalProjection, GuiSettingsKeyRowProjection};
+use crate::gui_core::{GuiSettingsKeyRefusalProjection, GuiSettingsKeyRowProjection};
 
 /// One Keys row (design D9).
 #[derive(Debug, Clone, PartialEq, Eq)]

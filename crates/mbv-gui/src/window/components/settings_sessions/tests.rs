@@ -68,7 +68,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -173,7 +173,7 @@ fn a_press_on_a_target_sends_select_target_with_its_key(
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::SelectTarget { target: key }],
+        vec![crate::gui_core::GuiSettingsCommand::SelectTarget { target: key }],
         "the press named the target's stable key"
     );
     assert_eq!(

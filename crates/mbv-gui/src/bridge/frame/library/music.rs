@@ -4,7 +4,7 @@
 //! into a list part ([`GuiMusicList`]) and a detail part ([`GuiMusicDetail`]).
 //! Both ride the `libraryList` and `libraryDetail` sections.
 
-use mbv::{
+use crate::gui_core::{
     GuiCollections, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
     GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
@@ -152,7 +152,7 @@ pub struct GuiMusicTrackFrame {
     pub duration: String,
 }
 
-/// A track count with its total time, mirroring `mbv::GuiMusicTrackTotal`.
+/// A track count with its total time, mirroring `crate::gui_core::GuiMusicTrackTotal`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicTrackTotalFrame {
     pub count: usize,
@@ -208,7 +208,7 @@ impl From<&GuiMusicAlbum> for GuiMusicAlbumFrame {
 }
 
 impl From<&GuiMusicTrack> for GuiMusicTrackFrame {
-    fn from(track: &mbv::GuiMusicTrack) -> Self {
+    fn from(track: &crate::gui_core::GuiMusicTrack) -> Self {
         Self {
             track_id: track.track_id.clone(),
             name: track.name.clone(),

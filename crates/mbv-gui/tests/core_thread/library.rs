@@ -15,7 +15,7 @@
 use std::sync::mpsc::Receiver;
 
 use crate::Held;
-use mbv::{ClientTickHost, GuiStateSeams, stub_app_with_queue_and_cmd_rx};
+use mbv_client_core::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::art::{GuiArtRef, PLACEHOLDER_PATH, art_url};
 use mbv_gui::bridge::frame::library::{
@@ -23,6 +23,7 @@ use mbv_gui::bridge::frame::library::{
 };
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;
 

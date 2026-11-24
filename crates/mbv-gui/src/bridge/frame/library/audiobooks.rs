@@ -4,7 +4,7 @@
 //! book by its stable `library_item_id` and a chapter by the Service
 //! discriminator the Workspace row carries, never by position.
 
-use mbv::{
+use crate::gui_core::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
     GuiAudiobooksWorkspace, GuiListSortFrame,
 };

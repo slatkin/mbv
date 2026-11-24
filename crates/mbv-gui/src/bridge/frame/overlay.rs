@@ -6,7 +6,7 @@
 //! popover's choices and the track chips, and the chooser's choices and the
 //! header's target fact, cannot disagree inside one tick.
 
-use mbv::{
+use crate::gui_core::{
     GuiOverlayProjection, QueueChooserEntryProjection, QueueChooserRenameProjection,
     RowMenuEntryProjection, TrackPopoverChoice,
 };
@@ -157,10 +157,12 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
                         label: button.label.clone(),
                         keys: button.keys.clone(),
                         tone: match button.tone {
-                            mbv::GuiConfirmButtonTone::Affirmative => {
+                            crate::gui_core::GuiConfirmButtonTone::Affirmative => {
                                 GuiConfirmButtonTone::Affirmative
                             }
-                            mbv::GuiConfirmButtonTone::Cancel => GuiConfirmButtonTone::Cancel,
+                            crate::gui_core::GuiConfirmButtonTone::Cancel => {
+                                GuiConfirmButtonTone::Cancel
+                            }
                         },
                     })
                     .collect(),
@@ -180,10 +182,12 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
                         label: button.label.clone(),
                         keys: button.keys.clone(),
                         tone: match button.tone {
-                            mbv::GuiConfirmButtonTone::Affirmative => {
+                            crate::gui_core::GuiConfirmButtonTone::Affirmative => {
                                 GuiConfirmButtonTone::Affirmative
                             }
-                            mbv::GuiConfirmButtonTone::Cancel => GuiConfirmButtonTone::Cancel,
+                            crate::gui_core::GuiConfirmButtonTone::Cancel => {
+                                GuiConfirmButtonTone::Cancel
+                            }
                         },
                     })
                     .collect(),

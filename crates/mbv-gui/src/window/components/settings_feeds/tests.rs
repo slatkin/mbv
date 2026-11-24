@@ -74,7 +74,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -208,7 +208,7 @@ fn the_kind_field_shows_the_chosen_kind_and_the_menu_sets_the_other() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::FeedAdd {
+        vec![crate::gui_core::GuiSettingsCommand::FeedAdd {
             name: String::new(),
             url: String::new(),
             kind: FeedKind::Video,
@@ -279,7 +279,7 @@ fn a_press_on_a_remove_row_sends_feed_remove_with_the_url() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::FeedRemove {
+        vec![crate::gui_core::GuiSettingsCommand::FeedRemove {
             url: "https://a".to_owned(),
         }],
         "the remove named the subscription's URL"
@@ -313,7 +313,7 @@ fn the_add_form_submit_sends_feed_add_with_the_typed_fields() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::FeedAdd {
+        vec![crate::gui_core::GuiSettingsCommand::FeedAdd {
             name: "C feed".to_owned(),
             url: "https://c".to_owned(),
             kind: FeedKind::Audio,

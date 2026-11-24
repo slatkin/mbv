@@ -43,7 +43,7 @@ fn an_edit_sends_feed_edit_with_the_subscription_url_as_identity() {
     assert_eq!(*facts, [] as [&str; 0]);
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::FeedEdit {
+        vec![crate::gui_core::GuiSettingsCommand::FeedEdit {
             url: "https://sub.one/feed".to_owned(),
             name: "Renamed".to_owned(),
             kind: FeedKind::Video,

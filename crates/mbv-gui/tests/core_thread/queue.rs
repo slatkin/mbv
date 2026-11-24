@@ -5,7 +5,9 @@
 //! and the row menu (a right-click opener, and
 //! an entry press executing through the Client core).
 
-use mbv::{gui_client_capabilities, stub_app_for_gui_client, stub_app_with_queue_and_cmd_rx};
+use mbv_client_core::{
+    gui_client_capabilities, stub_app_for_gui_client, stub_app_with_queue_and_cmd_rx,
+};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::queue::{GuiQueueInsertion, GuiQueueRow};

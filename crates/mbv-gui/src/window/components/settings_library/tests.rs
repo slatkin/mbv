@@ -67,7 +67,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -170,12 +170,12 @@ fn built(content: GuiSettingsContent) -> Fixture {
 /// Automatic entry, or a routable device sends its command and moves the
 /// content cursor onto it.
 #[rstest]
-#[case("route:shows", mbv::GuiSettingsCommand::RouteDevices { library: "shows".to_owned() })]
-#[case("routeClear:music", mbv::GuiSettingsCommand::AssignRoute { library: "music".to_owned(), endpoint: None })]
-#[case("routeDevice:music:Phone", mbv::GuiSettingsCommand::AssignRoute { library: "music".to_owned(), endpoint: Some("dlna:phone".to_owned()) })]
+#[case("route:shows", crate::gui_core::GuiSettingsCommand::RouteDevices { library: "shows".to_owned() })]
+#[case("routeClear:music", crate::gui_core::GuiSettingsCommand::AssignRoute { library: "music".to_owned(), endpoint: None })]
+#[case("routeDevice:music:Phone", crate::gui_core::GuiSettingsCommand::AssignRoute { library: "music".to_owned(), endpoint: Some("dlna:phone".to_owned()) })]
 fn a_press_on_a_route_entry_sends_its_command(
     #[case] id: &str,
-    #[case] command: mbv::GuiSettingsCommand,
+    #[case] command: crate::gui_core::GuiSettingsCommand,
 ) {
     let content = library_content();
     let mut fixture = built(content.clone());

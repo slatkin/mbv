@@ -11,11 +11,11 @@
 //! helpers ride an extension trait over it, because the core type sits below
 //! this crate and cannot carry the window's command vocabulary.
 
-use mbv::GuiCollectionTarget;
+use crate::gui_core::GuiCollectionTarget;
 
 use crate::bridge::library::GuiLibraryCommand;
 
-pub use mbv::{GuiCollectionEntry, GuiCollections};
+pub use crate::gui_core::{GuiCollectionEntry, GuiCollections};
 
 /// The paint key the All row carries: no collection's stable Service id is
 /// empty, so the row keeps All and the entries in one key space and a press
@@ -46,7 +46,7 @@ impl GuiCollectionsFrame for GuiCollections {
         if self.all {
             return "All".to_owned();
         }
-        let checked: Vec<&mbv::GuiCollectionEntry> =
+        let checked: Vec<&crate::gui_core::GuiCollectionEntry> =
             self.entries.iter().filter(|entry| entry.checked).collect();
         match checked.as_slice() {
             [one] => one.name.clone(),

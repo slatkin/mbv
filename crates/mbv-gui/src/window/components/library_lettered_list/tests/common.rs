@@ -107,7 +107,7 @@ fn reports_rows_in_view<D: Host>() {
 
     assert_eq!(
         fixture.reported_rows_in_view().last(),
-        Some(&mbv::GuiLibraryCommand::RowsInView {
+        Some(&crate::gui_core::GuiLibraryCommand::RowsInView {
             scope: D::ART_SCOPE.into(),
             ids: D::IDS.map(str::to_owned).to_vec(),
         }),

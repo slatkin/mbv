@@ -1,7 +1,7 @@
 //! The Feeds section's content (`add-gui-settings-screen` design D9):
 //! the subscriptions, addressed by URL, and whether an add is in flight.
 
-use mbv::GuiSettingsFeedProjection;
+use crate::gui_core::GuiSettingsFeedProjection;
 
 /// One feed subscription (design D9).
 #[derive(Debug, Clone, PartialEq, Eq)]

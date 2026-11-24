@@ -9,41 +9,12 @@
 //! `TuiRealm` — so any Client that links it links them; it never carries a
 //! window stack.
 
-mod gui;
 mod local_daemon;
 mod owner_restart;
 mod pin;
 mod startup;
 mod tui;
 
-pub use self::gui::{
-    GuiArtShape, GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection,
-    GuiAudiobooksRow, GuiAudiobooksWorkspace, GuiCollectionEntry, GuiCollectionNoun,
-    GuiCollectionSelection, GuiCollectionSet, GuiCollectionTarget, GuiCollections,
-    GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiDateOrder, GuiDestinationKind,
-    GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
-    GuiEntryListProjection, GuiEntryRow, GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection,
-    GuiFeedsRow, GuiFeedsSelection, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow,
-    GuiHomeRowId, GuiHomeRowKind, GuiInput, GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryCommand,
-    GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs,
-    GuiListSort, GuiListSortFrame, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection,
-    GuiMusicTrack, GuiMusicTrackTotal, GuiOpenPlaylistProjection, GuiOverlayProjection,
-    GuiPlayheadMarks, GuiPlaylistItemProjection, GuiPlaylistRowProjection, GuiPlaylistsCommand,
-    GuiPlaylistsProjection, GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection,
-    GuiPodcastsRow, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource, GuiSearchProjection,
-    GuiSearchRow, GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
-    GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
-    GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsLibraryProjection,
-    GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection, GuiSettingsRowKind,
-    GuiSettingsRowProjection, GuiSettingsSection, GuiSettingsServiceProjection,
-    GuiSettingsServicesProjection, GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
-    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
-    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace, GuiSortTarget,
-    GuiSurfaceLeaf, PanelTogglesProjection, QueueChooserEntryProjection,
-    QueueChooserRenameProjection, QueueHeaderProjection, RowMenuEntryProjection, SetupSecret,
-    TrackPopoverChoice, artist_rows_in_view_id, compare_gui_date_order, gui_feeds_platform,
-    playing_track_id_for_shell,
-};
 pub use mbv_client_core::{
     App, AppCommand, CLIENT_IDLE_CADENCE, CardImageDrain, ClientCore, ClientLifecycle,
     ClientTickHost, ClientWaker, Command, FooterPill, HomeContent, HomeEventDrain,
@@ -55,15 +26,6 @@ pub use mbv_client_core::{
     TrackChips, TrackChoice, VisualIntent, WorkspaceRelayout,
 };
 
-/// The GUI Client's own state (design D4 of `decouple-client-core`): the
-/// library stores, the open overlay, and the screens only the GUI presents. A
-/// Client names it here and seeds it through `GuiCore`; every other name stays
-/// inside the root package.
-pub use self::gui::GuiClientState;
-/// The GUI Client's core state (design D4 of `decouple-client-core`): the
-/// shared `App` it owns, wrapped by composition. A Client outside the core
-/// names it here.
-pub use self::gui::GuiCore;
 pub use self::startup::run;
 pub use mbv_client_core::config::{Config, load_config};
 pub use mbv_client_core::owner_link::{
@@ -87,20 +49,6 @@ pub use mbv_client_core::state::client_capabilities::{ClientCapabilities, Client
 /// drops it as soon as the real `App` comes back.
 pub use mbv_client_core::handoff_app;
 
-/// The GUI Client's own state a dependent Client's test seeds and reads
-/// (`2-split-tui-gui-clients` design D4c): the state belongs to `GuiCore`, and
-/// these seams drive an `App` alone, so the state is held in the support
-/// module's sidecar. A GUI Client's test names the trait and calls the seams
-/// as `app.<seam>(..)`; the free functions reach the sidecar itself.
-#[cfg(any(test, feature = "test"))]
-#[doc(hidden)]
-pub use self::gui::test_support::{GuiStateSeams, gui_row_menu_entries_for_test};
-#[cfg(any(test, feature = "test"))]
-#[doc(hidden)]
-pub use self::gui::test_support::{
-    gui_state_for_test, seeded_gui_state_for_test, stub_app_with_failed_emby_setup,
-    stub_app_with_open_row_menu, stub_app_with_track_popover,
-};
 pub use mbv_client_core::GuiClientEvent;
 /// The connect, session-load, URL-open, and pinned-request overrides a
 /// dependent Client's tests install (design D4e): the core reads them, and a

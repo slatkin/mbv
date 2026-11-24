@@ -9,8 +9,8 @@
 //! 9.2) live in `settings/commands.rs`, which resolves under
 //! `tests/core_thread/settings/` (one binary per crate; no `mod.rs`).
 
-use mbv::ClientTickHost;
-use mbv::{gui_client_capabilities, stub_app_with_playing_queue, stub_app_with_queue};
+use mbv_client_core::ClientTickHost;
+use mbv_client_core::{gui_client_capabilities, stub_app_with_playing_queue, stub_app_with_queue};
 use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
 use mbv_gui::core_thread::CoreInput;
@@ -34,11 +34,11 @@ fn press(key: Key, modifiers: KeyModifiers) -> CoreInput {
 /// The open action each function key carries: F2 opens the Settings screen's
 /// F2 group, F3 its Sessions section (the spec's open-action requirement).
 #[rstest]
-#[case::f2(Key::Function(2), mbv::GuiSettingsSection::Services)]
-#[case::f3(Key::Function(3), mbv::GuiSettingsSection::Sessions)]
+#[case::f2(Key::Function(2), mbv_gui::gui_core::GuiSettingsSection::Services)]
+#[case::f3(Key::Function(3), mbv_gui::gui_core::GuiSettingsSection::Sessions)]
 fn a_function_key_opens_the_screen_at_its_section(
     #[case] key: Key,
-    #[case] section: mbv::GuiSettingsSection,
+    #[case] section: mbv_gui::gui_core::GuiSettingsSection,
 ) {
     let mut test = test_core_with(stub_app_with_queue(2));
 
@@ -85,7 +85,7 @@ fn a_rebound_settings_open_chord_opens_the_screen() {
 
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Services)
+        Some(mbv_gui::gui_core::GuiSettingsSection::Services)
     );
 }
 
@@ -103,7 +103,7 @@ fn a_first_start_opens_the_screen_at_services() {
 
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Services)
+        Some(mbv_gui::gui_core::GuiSettingsSection::Services)
     );
 }
 
@@ -117,13 +117,15 @@ fn the_open_command_opens_at_services_and_leaves_an_open_screen_alone() {
     let mut test = test_core_with(stub_app_with_queue(2));
 
     test.tx
-        .send(CoreInput::Settings(mbv::GuiSettingsCommand::Open))
+        .send(CoreInput::Settings(
+            mbv_gui::gui_core::GuiSettingsCommand::Open,
+        ))
         .unwrap();
     assert!(test.core.step());
 
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Services),
+        Some(mbv_gui::gui_core::GuiSettingsSection::Services),
         "the closed screen opened at Services"
     );
     assert!(
@@ -133,25 +135,27 @@ fn the_open_command_opens_at_services_and_leaves_an_open_screen_alone() {
 
     test.tx
         .send(CoreInput::Settings(
-            mbv::GuiSettingsCommand::SelectSection {
-                section: mbv::GuiSettingsSection::Queue,
+            mbv_gui::gui_core::GuiSettingsCommand::SelectSection {
+                section: mbv_gui::gui_core::GuiSettingsSection::Queue,
             },
         ))
         .unwrap();
     assert!(test.core.step());
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Queue)
+        Some(mbv_gui::gui_core::GuiSettingsSection::Queue)
     );
 
     test.tx
-        .send(CoreInput::Settings(mbv::GuiSettingsCommand::Open))
+        .send(CoreInput::Settings(
+            mbv_gui::gui_core::GuiSettingsCommand::Open,
+        ))
         .unwrap();
     assert!(test.core.step());
 
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Queue),
+        Some(mbv_gui::gui_core::GuiSettingsSection::Queue),
         "the open screen stayed where it was"
     );
 }
@@ -183,7 +187,7 @@ fn space_toggles_playback_behind_the_screen() {
     );
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Services),
+        Some(mbv_gui::gui_core::GuiSettingsSection::Services),
         "the screen stays open"
     );
 }
@@ -214,7 +218,7 @@ fn the_clear_queue_chord_opens_no_prompt_behind_the_screen() {
     assert!(frame.overlay().is_none(), "no clear-queue prompt opened");
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Services),
+        Some(mbv_gui::gui_core::GuiSettingsSection::Services),
         "the screen stays open"
     );
 }
@@ -265,7 +269,7 @@ fn a_press_at_a_retracted_queue_row_runs_no_queue_action() {
     assert!(frame.settings().is_some(), "the screen stays open");
     assert_eq!(
         test.core.gui_settings_section_for_test(),
-        Some(mbv::GuiSettingsSection::Services),
+        Some(mbv_gui::gui_core::GuiSettingsSection::Services),
         "the Settings focus stays on the shown section"
     );
 }

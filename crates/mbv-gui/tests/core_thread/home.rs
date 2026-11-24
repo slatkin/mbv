@@ -6,7 +6,7 @@
 //! `TestStateDirGuard` scratch path (design D13).
 
 use crate::Held;
-use mbv::{ClientTickHost, stub_app_with_completed_emby_startup_and_contents};
+use mbv_client_core::{ClientTickHost, stub_app_with_completed_emby_startup_and_contents};
 use mbv_emby_model::test_support::make_item;
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail,

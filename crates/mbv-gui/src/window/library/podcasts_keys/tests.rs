@@ -75,13 +75,13 @@ fn collections(selected: PillSelection) -> GuiCollections {
         checked,
     };
     GuiCollections {
-        target: mbv::GuiCollectionTarget::Podcasts(0),
+        target: crate::gui_core::GuiCollectionTarget::Podcasts(0),
         all: selected == PillSelection::Latest,
         entries: vec![
             entry("sh1", "Show One", selected == PillSelection::Show),
             entry("sh2", "Show Two", false),
         ],
-        noun: mbv::GuiCollectionNoun::Shows,
+        noun: crate::gui_core::GuiCollectionNoun::Shows,
     }
 }
 
@@ -171,7 +171,7 @@ fn enter_on_the_hovered_row_plays_the_episode() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::PodcastsPlay {
+        [crate::gui_core::GuiLibraryCommand::PodcastsPlay {
             lib_idx: 0,
             item_id: "e2:ep2".to_owned(),
         }]
@@ -190,7 +190,7 @@ fn a_on_the_hovered_row_queues_the_episode() {
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::PodcastsQueue {
+        [crate::gui_core::GuiLibraryCommand::PodcastsQueue {
             lib_idx: 0,
             item_id: "e1:ep1".to_owned(),
         }]

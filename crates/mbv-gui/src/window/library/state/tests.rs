@@ -86,7 +86,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
+fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Library(command) = input {
@@ -107,14 +107,14 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
             collections: GuiCollections {
-                target: mbv::GuiCollectionTarget::Music(0),
+                target: crate::gui_core::GuiCollectionTarget::Music(0),
                 all: false,
-                entries: vec![mbv::GuiCollectionEntry {
+                entries: vec![crate::gui_core::GuiCollectionEntry {
                     key: "g1".to_owned(),
                     name: "Rock".to_owned(),
                     checked: true,
                 }],
-                noun: mbv::GuiCollectionNoun::Groups,
+                noun: crate::gui_core::GuiCollectionNoun::Groups,
             },
             loading: false,
             failure: None,

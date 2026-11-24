@@ -175,14 +175,14 @@ fn built(collections: Option<GuiCollections>) -> Fixture {
 /// The Podcasts frame: All selected, one show, newest first.
 fn podcasts_frame() -> GuiCollections {
     GuiCollections {
-        target: mbv::GuiCollectionTarget::Podcasts(0),
+        target: crate::gui_core::GuiCollectionTarget::Podcasts(0),
         all: true,
         entries: vec![GuiCollectionEntry {
             key: "s1".to_owned(),
             name: "Tifo Football".to_owned(),
             checked: false,
         }],
-        noun: mbv::GuiCollectionNoun::Shows,
+        noun: crate::gui_core::GuiCollectionNoun::Shows,
     }
 }
 

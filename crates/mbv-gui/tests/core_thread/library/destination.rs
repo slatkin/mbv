@@ -1,7 +1,7 @@
 //! The destination's contracts (add-gui-library-panel design D2): an
 //! open-destination command activates only a destination the GUI presents.
 
-use mbv::ClientTickHost;
+use mbv_client_core::ClientTickHost;
 use mbv_emby_model::EmbyItem;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;

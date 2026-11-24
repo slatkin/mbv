@@ -80,10 +80,10 @@ fn podcasts_library_list() -> GuiLibraryList {
         destination: GuiDestinationList::Podcasts(GuiPodcastsList {
             lib_idx: LIB_IDX,
             collections: GuiCollections {
-                target: mbv::GuiCollectionTarget::Podcasts(LIB_IDX),
+                target: crate::gui_core::GuiCollectionTarget::Podcasts(LIB_IDX),
                 all: true,
                 entries: Vec::new(),
-                noun: mbv::GuiCollectionNoun::Shows,
+                noun: crate::gui_core::GuiCollectionNoun::Shows,
             },
             loading: false,
             failed: false,
@@ -241,7 +241,7 @@ impl Fixture {
     }
 
     /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -400,7 +400,7 @@ fn play_sends_the_play_command_for_the_selected_episode() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::PodcastsPlay {
+        vec![crate::gui_core::GuiLibraryCommand::PodcastsPlay {
             lib_idx: LIB_IDX,
             item_id: "show1:ep12".to_owned(),
         }],
@@ -423,7 +423,7 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_episode() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::PodcastsQueue {
+        vec![crate::gui_core::GuiLibraryCommand::PodcastsQueue {
             lib_idx: LIB_IDX,
             item_id: "show1:ep12".to_owned(),
         }],

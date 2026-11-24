@@ -111,14 +111,14 @@ fn emby_content(
             lib_idx: 3,
             library_name: "Movies".to_owned(),
             collections: feed_group.then(|| GuiCollections {
-                target: mbv::GuiCollectionTarget::EmbyFeed(3),
+                target: crate::gui_core::GuiCollectionTarget::EmbyFeed(3),
                 all: true,
                 entries: vec![GuiCollectionEntry {
                     key: "folder-1".to_owned(),
                     name: "Family".to_owned(),
                     checked: false,
                 }],
-                noun: mbv::GuiCollectionNoun::Folders,
+                noun: crate::gui_core::GuiCollectionNoun::Folders,
             }),
             collection_names: if feed_group {
                 vec!["All".to_owned()]
@@ -172,7 +172,7 @@ fn enter_on_the_hovered_row_plays_it() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::EmbyPlay {
+        [crate::gui_core::GuiLibraryCommand::EmbyPlay {
             lib_idx: 3,
             item_id: "m2".to_owned(),
         }]
@@ -192,7 +192,7 @@ fn enter_on_a_collection_row_plays_it() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::EmbyPlay {
+        [crate::gui_core::GuiLibraryCommand::EmbyPlay {
             lib_idx: 3,
             item_id: "f1".to_owned(),
         }]
@@ -213,11 +213,11 @@ fn n_and_a_play_the_hovered_row_next_and_queue_it() {
     assert_eq!(
         commands(&rx),
         [
-            mbv::GuiLibraryCommand::EmbyPlayNext {
+            crate::gui_core::GuiLibraryCommand::EmbyPlayNext {
                 lib_idx: 3,
                 item_id: "m1".to_owned(),
             },
-            mbv::GuiLibraryCommand::EmbyQueue {
+            crate::gui_core::GuiLibraryCommand::EmbyQueue {
                 lib_idx: 3,
                 item_id: "m1".to_owned(),
             },

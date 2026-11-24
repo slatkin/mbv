@@ -222,11 +222,11 @@ impl Fixture {
     /// art report the list sends (gui-delineated-rows design D7) rides its own
     /// test, so a caller that asserts the command its press sends reads it
     /// alone.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(mbv::GuiLibraryCommand::RowsInView { .. }) => None,
+                CoreInput::Library(crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -451,8 +451,8 @@ fn a_press_sends_the_select_command_with_the_rows_opaque_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::HomeSelect {
-            row: mbv::GuiHomeRowId::Recent(QueueItemContentId::Feed("f1".to_owned())),
+        [crate::gui_core::GuiLibraryCommand::HomeSelect {
+            row: crate::gui_core::GuiHomeRowId::Recent(QueueItemContentId::Feed("f1".to_owned())),
         }],
         "the select command names the row's opaque id"
     );
@@ -470,8 +470,8 @@ fn a_double_click_sends_the_play_command_with_the_rows_opaque_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::HomePlay {
-            row: mbv::GuiHomeRowId::Continue("e1".to_owned()),
+        [crate::gui_core::GuiLibraryCommand::HomePlay {
+            row: crate::gui_core::GuiHomeRowId::Continue("e1".to_owned()),
         }],
         "the play command names the row's opaque id"
     );
@@ -531,11 +531,11 @@ fn the_list_reports_the_rows_in_view_with_the_cores_ids() {
     let mut fixture = built(home_frame(), home_detail());
     fixture.measure(300.0);
 
-    let reported: Vec<mbv::GuiLibraryCommand> = fixture
+    let reported: Vec<crate::gui_core::GuiLibraryCommand> = fixture
         .receiver
         .try_iter()
         .filter_map(|input| match input {
-            CoreInput::Library(command @ mbv::GuiLibraryCommand::RowsInView { .. }) => {
+            CoreInput::Library(command @ crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => {
                 Some(command)
             }
             _ => None,
@@ -543,8 +543,8 @@ fn the_list_reports_the_rows_in_view_with_the_cores_ids() {
         .collect();
     assert_eq!(
         reported.last(),
-        Some(&mbv::GuiLibraryCommand::RowsInView {
-            scope: mbv::GuiRowArtScope::Home,
+        Some(&crate::gui_core::GuiLibraryCommand::RowsInView {
+            scope: crate::gui_core::GuiRowArtScope::Home,
             ids: vec![
                 "continue:e1".to_owned(),
                 "continue:e2".to_owned(),
@@ -618,9 +618,9 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
     let state = fixture.state.clone();
     fixture.in_runtime(move || {
         state.open_row_menu_at(
-            Some(mbv::GuiLibraryMenuRow::Home(mbv::GuiHomeRowId::Continue(
-                "e1".to_owned(),
-            ))),
+            Some(crate::gui_core::GuiLibraryMenuRow::Home(
+                crate::gui_core::GuiHomeRowId::Continue("e1".to_owned()),
+            )),
             5.0,
             6.0,
         );
@@ -628,8 +628,10 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::RowMenu {
-            row: mbv::GuiLibraryMenuRow::Home(mbv::GuiHomeRowId::Continue("e1".to_owned())),
+        [crate::gui_core::GuiLibraryCommand::RowMenu {
+            row: crate::gui_core::GuiLibraryMenuRow::Home(crate::gui_core::GuiHomeRowId::Continue(
+                "e1".to_owned()
+            )),
         }],
         "the row-menu command names the row's item id"
     );

@@ -5,7 +5,7 @@
 //! emits (`client-interaction-core`: pointer targets resolve from a
 //! semantic hit map).
 
-use mbv::{
+use mbv_client_core::{
     gui_client_capabilities, stub_app_with_cast_target, stub_app_with_prefix_and_toast,
     stub_app_with_track_choices,
 };

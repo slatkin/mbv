@@ -25,7 +25,8 @@ pub(crate) use marks::{DrainHook, marks_for_hook};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use mbv::{GuiCore, QueuePlaybackProjection};
+use crate::gui_core::GuiCore;
+use mbv_client_core::QueuePlaybackProjection;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 

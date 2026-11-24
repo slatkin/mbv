@@ -19,14 +19,29 @@ workspace = true
 
 # Exact pins per openspec/changes/replace-tauri-with-blitz/design.md D2.
 [dependencies]
-mbv = { path = "../.." }
+mbv-client-core = { path = "../mbv-client-core" }
+# The GUI Library's Audiobookshelf store rows and its Podcasts and Audiobooks
+# projections read the provider's book and show types directly, as the GUI
+# modules did inside the root package before the split.
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-config = { path = "../mbv-config" }
 mbv-core = { path = "../mbv-core" }
+# The queue-control store names the owner protocol's queue operation id, and
+# the Library's fetches answer the provider's error type, as those modules did
+# inside the root package before the split.
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-emby = { path = "../mbv-emby" }
 mbv-daemon = { path = "../mbv-daemon" }
 # The scrubber hover preview resolves the pointer fraction to the Emby
 # tick position it names (the `ticks_to_seconds`/`seconds_to_ticks` pair).
 mbv-emby-model = { path = "../mbv-emby-model" }
+# The Service mark's `FeedPlatform` variants: the GUI's client core names the
+# type directly, as it named the root package's re-export before the split.
+mbv-feed = { path = "../mbv-feed" }
 mbv-images = { path = "../mbv-images" }
+# The Settings screen's key rows list the keybinding registry's actions, and
+# the GUI Client state serializes one preference through `serde_json`.
+mbv-keybinds = { path = "../mbv-keybinds" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-remote-player = { path = "../mbv-remote-player" }
 mbv-surfaces = { path = "../mbv-surfaces" }
@@ -35,6 +50,7 @@ mbv-theme = { path = "../mbv-theme" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mimalloc.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 
 # The window dependencies (replace-tauri-with-blitz design D2): exact pins on
@@ -80,26 +96,33 @@ num-traits = { version = "0.2", default-features = false }
 time = { workspace = true, features = ["local-offset"] }
 
 [features]
-# The Client's test sidecar (row 8.1 of `decouple-client-core`): a dependent
-# Client's test build keeps the GUI state beside the `App` its seams write, so
-# a seed, the step that adopts it, and the test's `*_for_test` reads share one
-# state. `cfg(test)` covers this crate's own tests; nothing else enables it.
-test = ["mbv/test"]
+# The Client's test sidecar (row 8.1 of `decouple-client-core`): a test build
+# keeps the GUI state beside the `App` its seams write, so a seed, the step
+# that adopts it, and the test's `*_for_test` reads share one state. In this
+# crate `cfg(test)` covers the unit tests, and the self dev-dependency below
+# turns the feature on for this crate's own test and bench targets; no shipped
+# build enables it.
+test = ["mbv-client-core/test"]
 
 [dev-dependencies]
-mbv = { path = "../..", features = ["test"] }
+# This crate's own test and bench targets link its library, which Cargo
+# compiles without `cfg(test)`, so the GUI state seams in
+# `gui_core::test_support` need the `test` feature: the self-dependency is how a
+# package enables its own feature for those targets. A library-only build
+# (`cargo build -p mbv-gui`, `cargo rustc --lib -- --print cfg`) carries no
+# `feature="test"`, so a shipped binary keeps the seams out.
+mbv-gui = { path = ".", features = ["test"] }
+mbv-client-core = { path = "../mbv-client-core", features = ["test"] }
 # The painted svg tree the headless tests read: Blitz parses an inline `svg`
 # with usvg, so a test that asserts what the painter paints reads that tree.
 # The same version Blitz parses with, default features off so Cargo unifies
 # the copy the window stack already builds.
 usvg = { version = "=0.48.1", default-features = false }
-# The core-thread tests assert the ctrl commands a selection or transport
-# request records on the stub player's command channel.
-mbv-ctrl = { path = "../mbv-ctrl" }
-# The startup tests build the attach's cached client and answer its Emby
-# requests from the in-memory mock transport, so no request leaves the
-# process.
-mbv-emby = { path = "../mbv-emby" }
+# The moved GUI tests name the item ids the GUI's stores key on, the cast
+# receiver list a target-chooser test seeds, and the provider's in-memory mock
+# transport (`mbv-net`), so no request leaves the process.
+mbv-cast = { path = "../mbv-cast" }
+mbv-ids = { path = "../mbv-ids" }
 mbv-net = { path = "../mbv-net", features = ["test"] }
 # The paint recorder the headless frame test reads: the window paints a frame
 # by pushing `anyrender` drawing commands out of `blitz_paint::paint_scene`,

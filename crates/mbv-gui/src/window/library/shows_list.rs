@@ -9,7 +9,7 @@
 //! (`gui-pointer-target-interaction` D2), which is never a heading. The model is
 //! plain data over fixed heights, so the geometry is asserted without a layout.
 
-use mbv::GuiShowsView;
+use crate::gui_core::GuiShowsView;
 
 use crate::bridge::frame::library::{
     GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsEpisodeRowFrame, GuiShowsRowFrame,

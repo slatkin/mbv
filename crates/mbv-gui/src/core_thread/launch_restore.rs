@@ -5,7 +5,7 @@
 //! landed keeps its saved keys; a later effective read drops vanished keys.
 //! The orderly exit's save runs from the core's run loop here too.
 
-use mbv::GuiLaunchOpen;
+use crate::gui_core::GuiLaunchOpen;
 use mbv_config::TabIdentity;
 
 use super::CoreThread;

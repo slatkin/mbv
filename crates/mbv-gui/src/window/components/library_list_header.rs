@@ -31,7 +31,7 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::{GuiCollections, GuiListSortFrame, GuiShowsView};
+use crate::gui_core::{GuiCollections, GuiListSortFrame, GuiShowsView};
 
 use crate::window::components::library_collection_dropdown::LibraryCollectionDropdown;
 use crate::window::components::library_filter_field::LibraryFilterField;

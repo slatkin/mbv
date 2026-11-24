@@ -7,7 +7,8 @@
 //! The row frame is the shared entry-list one (`entry_list.rs`); the Hero and
 //! the frame struct are the destination's own.
 
-use mbv::{FeedPlatform, GuiCollections, GuiFeedsHero, GuiFeedsProjection, GuiListSortFrame};
+use crate::gui_core::{GuiCollections, GuiFeedsHero, GuiFeedsProjection, GuiListSortFrame};
+use mbv_feed::FeedPlatform;
 
 use super::GuiArtShapeFrame;
 use super::entry_list::GuiEntryRowFrame;
@@ -86,7 +87,7 @@ impl GuiFeedsList {
             collections: projection.collections.clone(),
             loading: projection.loading,
             failed: projection.failed,
-            platform: mbv::gui_feeds_platform(&projection.collections),
+            platform: crate::gui_core::gui_feeds_platform(&projection.collections),
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),
             sort: projection.sort.clone(),
         }

@@ -17,7 +17,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 fn the_close_command_carries_no_payload() {
     assert_eq!(
         neutral(GuiSettingsCommand::Close),
-        Some(mbv::GuiSettingsCommand::Close)
+        Some(mbv_gui::gui_core::GuiSettingsCommand::Close)
     );
 }
 
@@ -31,7 +31,7 @@ fn the_activate_command_names_its_setting_key() {
 
     assert_eq!(
         neutral(command),
-        Some(mbv::GuiSettingsCommand::Activate {
+        Some(mbv_gui::gui_core::GuiSettingsCommand::Activate {
             setting: SettingKey::ConsumeAudio
         })
     );
@@ -57,7 +57,7 @@ fn the_select_target_command_carries_the_nested_target_key() {
     };
     assert_eq!(
         neutral(command),
-        Some(mbv::GuiSettingsCommand::SelectTarget {
+        Some(mbv_gui::gui_core::GuiSettingsCommand::SelectTarget {
             target: ChooserTargetKey::Target(SessionTargetKey::Emby("session-2".to_string()))
         })
     );
@@ -67,7 +67,7 @@ fn the_select_target_command_carries_the_nested_target_key() {
     };
     assert_eq!(
         neutral(command),
-        Some(mbv::GuiSettingsCommand::SelectTarget {
+        Some(mbv_gui::gui_core::GuiSettingsCommand::SelectTarget {
             target: ChooserTargetKey::Local
         })
     );
@@ -90,7 +90,7 @@ fn the_keys_capture_command_translates_its_dom_key() {
 
     assert_eq!(
         neutral(command),
-        Some(mbv::GuiSettingsCommand::KeysCapture {
+        Some(mbv_gui::gui_core::GuiSettingsCommand::KeysCapture {
             target: "settings_open".to_string(),
             key: KeyEvent::new(Key::Function(3), KeyModifiers::NONE),
         })
@@ -108,7 +108,7 @@ fn the_route_devices_command_names_its_library() {
 
     assert_eq!(
         neutral(command),
-        Some(mbv::GuiSettingsCommand::RouteDevices {
+        Some(mbv_gui::gui_core::GuiSettingsCommand::RouteDevices {
             library: "music".to_string()
         })
     );

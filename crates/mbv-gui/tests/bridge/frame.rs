@@ -1,9 +1,8 @@
 mod settings_screen;
 
-use mbv::{
-    App, GuiCore, gui_client_capabilities, stub_app_with_open_row_menu,
-    stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_queue,
-    stub_app_with_track_popover, stub_app_with_unsaved_queue,
+use mbv_client_core::{
+    App, gui_client_capabilities, stub_app_with_playing_items, stub_app_with_playing_queue,
+    stub_app_with_queue, stub_app_with_unsaved_queue,
 };
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
@@ -17,6 +16,8 @@ use mbv_gui::bridge::frame::queue::{
 use mbv_gui::bridge::frame::settings::GuiSettingsFrame;
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
+use mbv_gui::gui_core::GuiCore;
+use mbv_gui::gui_core::test_support::{stub_app_with_open_row_menu, stub_app_with_track_popover};
 use mbv_gui::sections::{SectionLedger, SectionSources};
 use mbv_queue::QueueItem;
 use mbv_surfaces::queue::{QueueCursorUpdate, QueueSurface};
@@ -134,7 +135,7 @@ fn frame_after_keys(app: &mut App, keys: &[mbv_ui_msg::Key]) -> Built {
         let key = mbv_ui_msg::KeyEvent::new(*code, mbv_ui_msg::KeyModifiers::NONE);
         let mut core = GuiCore::new(std::mem::replace(app, stub_app_with_queue(0)));
         core.take_seeded_gui_state_for_test();
-        let _ = core.route_gui_input(mbv::GuiInput::Key(key), None);
+        let _ = core.route_gui_input(mbv_gui::gui_core::GuiInput::Key(key), None);
         core.publish_seeded_gui_state_for_test();
         *app = core.into_app();
     }
@@ -451,7 +452,7 @@ fn queue_filter_narrows_projected_rows_only() {
 /// lists Off first and marks it while subtitles are off.
 #[test]
 fn track_popover_frame_carries_choices_with_the_chosen_mark() {
-    let mut app = stub_app_with_track_popover(mbv::TrackChipKind::Subtitles);
+    let mut app = stub_app_with_track_popover(mbv_ui_msg::TrackChipKind::Subtitles);
     let frame = frame_after_tick(&mut app);
 
     let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::TrackPopover {
@@ -490,7 +491,7 @@ fn track_popover_frame_carries_choices_with_the_chosen_mark() {
 /// playing one marked, and no Off entry — the audio chip has no off state.
 #[test]
 fn track_popover_frame_marks_the_playing_audio_track() {
-    let mut app = stub_app_with_track_popover(mbv::TrackChipKind::Audio);
+    let mut app = stub_app_with_track_popover(mbv_ui_msg::TrackChipKind::Audio);
     let frame = frame_after_tick(&mut app);
 
     let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::TrackPopover {

@@ -202,7 +202,7 @@ fn enter_on_the_hovered_book_plays_it_from_its_saved_position() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsPlay {
+        [crate::gui_core::GuiLibraryCommand::AbsPlay {
             lib_idx: 4,
             item_id: "b2".to_owned(),
         }]
@@ -220,7 +220,7 @@ fn a_on_the_hovered_book_queues_it() {
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsQueue {
+        [crate::gui_core::GuiLibraryCommand::AbsQueue {
             lib_idx: 4,
             item_id: "b3".to_owned(),
         }]
@@ -357,7 +357,7 @@ fn enter_on_the_hovered_chapter_plays_it() {
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsPlayChapter {
+        [crate::gui_core::GuiLibraryCommand::AbsPlayChapter {
             lib_idx: 4,
             book_id: "b1".to_owned(),
             chapter: 2,
@@ -403,7 +403,7 @@ fn the_hero_workspace_queues_the_selected_book_on_a() {
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::AbsQueue {
+        [crate::gui_core::GuiLibraryCommand::AbsQueue {
             lib_idx: 4,
             item_id: "b1".to_owned(),
         }]

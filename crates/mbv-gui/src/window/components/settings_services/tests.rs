@@ -73,7 +73,7 @@ impl Fixture {
     }
 
     /// The Settings commands the core link received, in send order.
-    fn settings_commands(&self) -> Vec<mbv::GuiSettingsCommand> {
+    fn settings_commands(&self) -> Vec<crate::gui_core::GuiSettingsCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -266,10 +266,10 @@ fn a_submit_sends_emby_setup_then_the_password_field_is_empty() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::EmbySetup {
+        vec![crate::gui_core::GuiSettingsCommand::EmbySetup {
             server_url: "http://emby".to_owned(),
             username: "user@x".to_owned(),
-            password: mbv::SetupSecret::new("s3cret".to_owned()),
+            password: crate::gui_core::SetupSecret::new("s3cret".to_owned()),
         }],
         "the submit carried the three fields"
     );
@@ -319,7 +319,7 @@ fn a_press_on_a_service_action_sends_its_service_action(
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::ServiceAction { action: intent }],
+        vec![crate::gui_core::GuiSettingsCommand::ServiceAction { action: intent }],
         "the press sent the action"
     );
     let ui = fixture.state.ui.peek().clone();
@@ -351,8 +351,8 @@ fn the_setup_form_cancel_sends_cancel_setup_for_the_form_service() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![mbv::GuiSettingsCommand::CancelSetup {
-            service: mbv::GuiSetupService::Emby,
+        vec![crate::gui_core::GuiSettingsCommand::CancelSetup {
+            service: crate::gui_core::GuiSetupService::Emby,
         }],
         "the cancel named the form's service"
     );

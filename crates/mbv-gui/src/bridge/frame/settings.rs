@@ -14,7 +14,8 @@ pub mod rows;
 pub mod services;
 pub mod sessions;
 
-use mbv::{GuiCore, GuiSettingsSection as CoreSettingsSection, QueuePlaybackProjection};
+use crate::gui_core::{GuiCore, GuiSettingsSection as CoreSettingsSection};
+use mbv_client_core::QueuePlaybackProjection;
 
 use self::feeds::GuiSettingsFeed;
 use self::keys::{GuiSettingsKeyRefusal, GuiSettingsKeyRow};

@@ -51,7 +51,7 @@ fn music_list() -> GuiLibraryList {
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
             collections: GuiCollections {
-                target: mbv::GuiCollectionTarget::Music(0),
+                target: crate::gui_core::GuiCollectionTarget::Music(0),
                 all: false,
                 entries: vec![
                     GuiCollectionEntry {
@@ -65,7 +65,7 @@ fn music_list() -> GuiLibraryList {
                         checked: true,
                     },
                 ],
-                noun: mbv::GuiCollectionNoun::Groups,
+                noun: crate::gui_core::GuiCollectionNoun::Groups,
             },
             loading: false,
             failure: None,
@@ -134,7 +134,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
             lib_idx: 2,
             library_name: "Movies".to_owned(),
             collections: Some(GuiCollections {
-                target: mbv::GuiCollectionTarget::EmbyFeed(2),
+                target: crate::gui_core::GuiCollectionTarget::EmbyFeed(2),
                 all: false,
                 entries: vec![
                     GuiCollectionEntry {
@@ -148,7 +148,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
                         checked: true,
                     },
                 ],
-                noun: mbv::GuiCollectionNoun::Folders,
+                noun: crate::gui_core::GuiCollectionNoun::Folders,
             }),
             collection_names: vec!["Home videos".to_owned(), "Holiday clips".to_owned()],
             feed_group: true,
@@ -222,14 +222,14 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
         destination: GuiDestinationList::Feeds(GuiFeedsList {
             sort: None,
             collections: GuiCollections {
-                target: mbv::GuiCollectionTarget::Feeds,
+                target: crate::gui_core::GuiCollectionTarget::Feeds,
                 all: false,
                 entries: vec![GuiCollectionEntry {
                     key: "sub1".to_owned(),
                     name: "Bits and Bites".to_owned(),
                     checked: true,
                 }],
-                noun: mbv::GuiCollectionNoun::Subscriptions,
+                noun: crate::gui_core::GuiCollectionNoun::Subscriptions,
             },
             loading: false,
             failed: false,
@@ -285,7 +285,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         current_tab: None,
         destination: GuiDestinationList::Shows(GuiShowsList {
             sort: None,
-            view: mbv::GuiShowsView::All,
+            view: crate::gui_core::GuiShowsView::All,
             lib_idx: 0,
             loading: false,
             series: Vec::new(),

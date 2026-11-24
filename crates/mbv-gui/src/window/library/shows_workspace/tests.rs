@@ -88,7 +88,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
+fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Library(command) = input {
@@ -189,7 +189,7 @@ fn a_season_step_sends_the_neighbouring_season() {
 
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::ShowsSelectSeason {
+        [crate::gui_core::GuiLibraryCommand::ShowsSelectSeason {
             lib_idx: 2,
             season_id: "s2".to_owned(),
         }]
@@ -216,7 +216,7 @@ fn the_play_command_names_the_episode_it_is_given() {
 
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::ShowsPlay {
+        [crate::gui_core::GuiLibraryCommand::ShowsPlay {
             lib_idx: 2,
             item_id: "ep2".to_owned(),
         }]
@@ -234,11 +234,11 @@ fn play_next_and_queue_name_the_episode_they_are_given() {
     assert_eq!(
         commands(&rx),
         [
-            mbv::GuiLibraryCommand::ShowsPlayNext {
+            crate::gui_core::GuiLibraryCommand::ShowsPlayNext {
                 lib_idx: 2,
                 item_id: "ep1".to_owned(),
             },
-            mbv::GuiLibraryCommand::ShowsQueue {
+            crate::gui_core::GuiLibraryCommand::ShowsQueue {
                 lib_idx: 2,
                 item_id: "ep1".to_owned(),
             },

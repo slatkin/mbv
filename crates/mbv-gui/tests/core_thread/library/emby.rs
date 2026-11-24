@@ -7,13 +7,14 @@
 //! or window runs (design D13).
 
 use crate::Held;
-use mbv::{ClientTickHost, GuiStateSeams};
+use mbv_client_core::ClientTickHost;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiLibraryDetail, GuiMetaKindFrame,
     GuiMetaSegmentFrame,
 };
 use mbv_gui::bridge::library::GuiLibraryCommand;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 
@@ -72,7 +73,9 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
         "Movies".to_string(),
         "movies".to_string(),
     );
-    let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
+    let mut test = test_core_with(mbv_client_core::stub_app_with_completed_emby_startup(vec![
+        view,
+    ]));
 
     // The mocked bootstrap drains on the first tick; the catalog's one
     // presented destination is the Movies library, and the start stays on
@@ -133,7 +136,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
 fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     let http = MockHttp::new();
     http.respond_repeated(200, LIBRARY_BODY, 12);
-    let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, _cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
     // The All selection arrives cached (empty), so the folder fetch the
     // switched group starts is the one items fetch the mock answers.
@@ -157,7 +160,7 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     send_library(
         &mut test,
         GuiLibraryCommand::CollectionToggle {
-            target: mbv::GuiCollectionTarget::EmbyFeed(0),
+            target: mbv_gui::gui_core::GuiCollectionTarget::EmbyFeed(0),
             key: "folder-1".into(),
         },
     );
@@ -201,7 +204,9 @@ fn movies_hero_frame(items: Vec<EmbyItem>) -> Held {
         "Movies".to_string(),
         "movies".to_string(),
     );
-    let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
+    let mut test = test_core_with(mbv_client_core::stub_app_with_completed_emby_startup(vec![
+        view,
+    ]));
     assert!(test.core.step());
     send_library(
         &mut test,

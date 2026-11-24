@@ -16,7 +16,7 @@ use blitz_dom::local_name;
 use dioxus_native::prelude::*;
 
 use dioxus_native::{DioxusDocument, DocumentConfig};
-use mbv::NowPlayingMediaKind;
+use mbv_client_core::NowPlayingMediaKind;
 
 use super::super::art_stage::{ControlRow, ControlRowHandles};
 use crate::bridge::frame::playback::{

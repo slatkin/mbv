@@ -2,7 +2,7 @@
 //! row's stable setting name, its label, how it is edited, its value text, its
 //! toggle flag, and its choice list once loaded.
 
-use mbv::GuiSettingsRowProjection;
+use crate::gui_core::GuiSettingsRowProjection;
 
 use crate::bridge::settings::GuiChoicesKind;
 
@@ -60,15 +60,15 @@ pub enum GuiSettingRowKind {
     Info,
 }
 
-impl From<mbv::GuiSettingsRowKind> for GuiSettingRowKind {
-    fn from(kind: mbv::GuiSettingsRowKind) -> Self {
+impl From<crate::gui_core::GuiSettingsRowKind> for GuiSettingRowKind {
+    fn from(kind: crate::gui_core::GuiSettingsRowKind) -> Self {
         match kind {
-            mbv::GuiSettingsRowKind::Toggle => Self::Toggle,
-            mbv::GuiSettingsRowKind::Cycle => Self::Cycle,
-            mbv::GuiSettingsRowKind::Pick => Self::Pick,
-            mbv::GuiSettingsRowKind::ChoiceList => Self::ChoiceList,
-            mbv::GuiSettingsRowKind::Action => Self::Action,
-            mbv::GuiSettingsRowKind::Info => Self::Info,
+            crate::gui_core::GuiSettingsRowKind::Toggle => Self::Toggle,
+            crate::gui_core::GuiSettingsRowKind::Cycle => Self::Cycle,
+            crate::gui_core::GuiSettingsRowKind::Pick => Self::Pick,
+            crate::gui_core::GuiSettingsRowKind::ChoiceList => Self::ChoiceList,
+            crate::gui_core::GuiSettingsRowKind::Action => Self::Action,
+            crate::gui_core::GuiSettingsRowKind::Info => Self::Info,
         }
     }
 }
@@ -82,8 +82,8 @@ pub struct GuiSettingChoice {
     pub selected: bool,
 }
 
-impl From<&mbv::GuiSettingsChoiceProjection> for GuiSettingChoice {
-    fn from(choice: &mbv::GuiSettingsChoiceProjection) -> Self {
+impl From<&crate::gui_core::GuiSettingsChoiceProjection> for GuiSettingChoice {
+    fn from(choice: &crate::gui_core::GuiSettingsChoiceProjection) -> Self {
         Self {
             id: choice.id.clone(),
             label: choice.label.clone(),

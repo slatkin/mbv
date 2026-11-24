@@ -14,9 +14,9 @@
 use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
-use mbv::{
-    App, GuiCore, load_config, stub_app_with_local_daemon_events,
-    stub_app_with_pending_settings_save, stub_app_with_playing_queue, stub_app_with_queue,
+use mbv_client_core::{
+    App, load_config, stub_app_with_local_daemon_events, stub_app_with_pending_settings_save,
+    stub_app_with_playing_queue, stub_app_with_queue,
 };
 use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
@@ -38,6 +38,7 @@ use mbv_gui::bridge::layout::{
 };
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
 use mbv_gui::core_thread::{CoreInput, CoreThread, QuitSink, SectionSink};
+use mbv_gui::gui_core::GuiCore;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
@@ -299,7 +300,7 @@ pub(crate) struct TestCore {
     _state_dir: Option<TestStateDirGuard>,
     pub(crate) core: CoreThread,
     pub(crate) tx: mpsc::Sender<CoreInput>,
-    waker: mbv::ClientWaker,
+    waker: mbv_client_core::ClientWaker,
     batches: mpsc::Receiver<GuiSectionBatch>,
     held: Held,
     quits: mpsc::Receiver<()>,
@@ -332,9 +333,9 @@ pub(crate) fn test_core(slots: usize) -> TestCore {
 /// The Emby client the GUI Music tests seed their library with (design D13):
 /// built over the in-memory mock transport, so no request leaves the process.
 pub(crate) fn test_emby_client(http: &MockHttp) -> EmbyClient {
-    EmbyClient::new(mbv::Config {
+    EmbyClient::new(mbv_client_core::Config {
         server_url: TEST_URL.into(),
-        ..mbv::Config::default()
+        ..mbv_client_core::Config::default()
     })
     .with_test_agent(http.agent())
 }
@@ -449,7 +450,7 @@ fn a_reported_capacity_sets_the_paging_stride() {
 /// configured-`[keys]`-override path a user's rebind takes.
 #[test]
 fn a_routed_quit_key_fires_the_quit_edge_and_ends_the_run() {
-    let mut test = test_core_with(mbv::stub_app_with_rebound_quit("Shift+Q"));
+    let mut test = test_core_with(mbv_client_core::stub_app_with_rebound_quit("Shift+Q"));
     test.tx
         .send(queue_key(KeyEvent::new(
             Key::Char('Q'),

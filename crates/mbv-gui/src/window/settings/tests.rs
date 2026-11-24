@@ -79,7 +79,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Settings commands the scenario sent, as the core thread receives them.
-fn settings_commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiSettingsCommand> {
+fn settings_commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiSettingsCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Settings(command) = input {

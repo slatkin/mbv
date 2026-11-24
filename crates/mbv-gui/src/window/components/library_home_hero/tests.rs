@@ -193,7 +193,7 @@ impl Fixture {
     }
 
     /// The Home commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -321,8 +321,8 @@ fn play_sends_the_play_command_for_the_selected_row() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::HomePlay {
-            row: mbv::GuiHomeRowId::Continue("e1".to_owned()),
+        vec![crate::gui_core::GuiLibraryCommand::HomePlay {
+            row: crate::gui_core::GuiHomeRowId::Continue("e1".to_owned()),
         }],
         "the play command names the frame's selected row"
     );
@@ -341,8 +341,8 @@ fn play_next_sends_the_play_next_command_for_the_selected_row() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::HomePlayNext {
-            row: mbv::GuiHomeRowId::Continue("e1".to_owned()),
+        vec![crate::gui_core::GuiLibraryCommand::HomePlayNext {
+            row: crate::gui_core::GuiHomeRowId::Continue("e1".to_owned()),
         }],
         "the play-next command names the frame's selected row"
     );
@@ -361,8 +361,8 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_row() {
 
     assert_eq!(
         fixture.library_commands(),
-        vec![mbv::GuiLibraryCommand::HomeQueue {
-            row: mbv::GuiHomeRowId::Continue("e1".to_owned()),
+        vec![crate::gui_core::GuiLibraryCommand::HomeQueue {
+            row: crate::gui_core::GuiHomeRowId::Continue("e1".to_owned()),
         }],
         "the enqueue command names the frame's selected row"
     );

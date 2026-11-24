@@ -3,7 +3,7 @@
 //! playhead facts: they ride the `playhead` anchor section (design D5), which
 //! the window predicts from between anchors.
 
-use mbv::{
+use mbv_client_core::{
     NowPlayingMediaKind, PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection,
     TrackChip, TrackChips, TrackChoice,
 };

@@ -1,7 +1,7 @@
 //! The Playlists screen's section: the saved playlists with their item
 //! counts, the open playlist and its items, and the two loading flags.
 
-use mbv::{
+use crate::gui_core::{
     GuiCore, GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,
 };
 

@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-use mbv::{ClientTickHost, stub_app_with_playing_items};
+use mbv_client_core::{ClientTickHost, stub_app_with_playing_items};
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
 use rstest::rstest;

@@ -7,11 +7,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
+use crate::gui_core::GuiShowsView;
 use blitz_dom::Document as _;
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
-use mbv::GuiShowsView;
 
 use super::LibraryShowsViewDropdown;
 use crate::bridge::frame::library::{GuiDestinationList, GuiLibraryList, GuiShowsList};
@@ -102,7 +102,7 @@ impl Fixture {
         dom.get_node(id).unwrap().text_content().trim().to_owned()
     }
 
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
+    fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
@@ -186,7 +186,7 @@ fn a_view_press_replaces_the_choice_and_closes_the_popover() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowsSetView {
+        [crate::gui_core::GuiLibraryCommand::ShowsSetView {
             lib_idx: 3,
             view: GuiShowsView::New,
         }]

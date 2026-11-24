@@ -1,16 +1,18 @@
 //! The `library` command's wire form (add-gui-library-panel design D2): the
 //! Library panel's window content sends one semantic request, and the neutral
-//! [`mbv::GuiLibraryCommand`] this module builds from it is what the Client
+//! [`crate::gui_core::GuiLibraryCommand`] this module builds from it is what the Client
 //! core applies. Item identities are stable Service ids, never row positions,
 //! so a command built from a stale paint addresses the item that paint showed
 //! or nothing.
 
-use mbv::{GuiCollectionTarget, GuiListSort, GuiRowArtScope, GuiShowsView, GuiSortTarget};
+use crate::gui_core::{
+    GuiCollectionTarget, GuiListSort, GuiRowArtScope, GuiShowsView, GuiSortTarget,
+};
 use mbv_queue::QueueItemContentId;
 
 /// One request from the Library panel's window content (design D2). The
 /// variants and their field names are the wire vocabulary the window
-/// sends; the translation into [`mbv::GuiLibraryCommand`] is the only place
+/// sends; the translation into [`crate::gui_core::GuiLibraryCommand`] is the only place
 /// the two shapes meet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiLibraryCommand {
@@ -54,11 +56,13 @@ pub enum GuiLibraryCommand {
     ShuffleArtist { album_ids: Vec<String> },
     /// Run the row menu's entry at `index`.
     MenuEntry {
-        row: mbv::GuiLibraryMenuRow,
+        row: crate::gui_core::GuiLibraryMenuRow,
         index: usize,
     },
     /// Carry the row's full menu in the section (the right-click item menu).
-    RowMenu { row: mbv::GuiLibraryMenuRow },
+    RowMenu {
+        row: crate::gui_core::GuiLibraryMenuRow,
+    },
     /// Select a Home row (add-gui-library-panel design D12): the row the
     /// Hero shows. The core keeps the selection, so the window paints it.
     HomeSelect { row: GuiHomeRowId },
@@ -154,7 +158,7 @@ pub enum GuiLibraryCommand {
 }
 
 /// The Library list a `RowsInView` set names (gui-delineated-rows design D7),
-/// mirroring `mbv::GuiRowArtScope`.
+/// mirroring `crate::gui_core::GuiRowArtScope`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiRowArtScopeFrame {
     Home,
@@ -196,7 +200,7 @@ pub enum GuiHomeRowId {
     Recent(QueueItemContentId),
 }
 
-impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
+impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
     fn from(command: GuiLibraryCommand) -> Self {
         match command {
             GuiLibraryCommand::OpenDestination { position } => Self::OpenDestination { position },
@@ -283,7 +287,7 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
 /// The window mirrors the same shape on the way out, so a command built from
 /// a carried row addresses exactly that row. The owned form is the ref
 /// form's delegate, so the variant names are hand-written once.
-impl From<&GuiHomeRowId> for mbv::GuiHomeRowId {
+impl From<&GuiHomeRowId> for crate::gui_core::GuiHomeRowId {
     fn from(row: &GuiHomeRowId) -> Self {
         match row {
             GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
@@ -292,7 +296,7 @@ impl From<&GuiHomeRowId> for mbv::GuiHomeRowId {
     }
 }
 
-impl From<GuiHomeRowId> for mbv::GuiHomeRowId {
+impl From<GuiHomeRowId> for crate::gui_core::GuiHomeRowId {
     fn from(row: GuiHomeRowId) -> Self {
         Self::from(&row)
     }

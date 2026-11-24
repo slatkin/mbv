@@ -10,7 +10,7 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::GuiListSortFrame;
+use crate::gui_core::GuiListSortFrame;
 
 use crate::window::library::state::LibraryState;
 

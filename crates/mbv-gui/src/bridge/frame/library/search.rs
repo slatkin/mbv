@@ -8,7 +8,7 @@
 //! inside it: a result that lands between two content changes still reaches
 //! the window, and a closed field rides as the section's `null`.
 
-use mbv::{GuiSearchProjection, GuiSearchRow};
+use crate::gui_core::{GuiSearchProjection, GuiSearchRow};
 
 /// The Search facts one frame carries (design D12, row 12.1). `None` on the
 /// frame while the store holds no query and no row: no field text is up, or

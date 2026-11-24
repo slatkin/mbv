@@ -14,8 +14,8 @@ use std::time::Duration;
 
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, criterion_group, criterion_main};
-use mbv::{
-    App, ClientTickHost, GuiCore, GuiStateSeams, stub_app_with_completed_emby_startup_and_contents,
+use mbv_client_core::{
+    App, ClientTickHost, stub_app_with_completed_emby_startup_and_contents,
     stub_app_with_playing_queue, stub_app_with_queue,
 };
 use mbv_config::TestStateDirGuard;
@@ -26,6 +26,8 @@ use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::sections::GuiSectionBatch;
 use mbv_gui::core_thread::{CoreInput, CoreThread, QuitSink, SectionSink};
+use mbv_gui::gui_core::GuiCore;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
@@ -122,9 +124,9 @@ impl Harness {
 /// An Emby client over the in-memory mock transport, so no request leaves the
 /// process (design D13 of `gui-change-driven-sections`' test seams).
 fn mock_emby_client(http: &MockHttp) -> EmbyClient {
-    EmbyClient::new(mbv::Config {
+    EmbyClient::new(mbv_client_core::Config {
         server_url: "http://127.0.0.1:1".into(),
-        ..mbv::Config::default()
+        ..mbv_client_core::Config::default()
     })
     .with_test_agent(http.agent())
 }

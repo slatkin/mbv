@@ -15,7 +15,7 @@
 
 use std::time::{Duration, Instant};
 
-use mbv::QueuePlaybackProjection;
+use mbv_client_core::QueuePlaybackProjection;
 use mbv_emby_model::{TICKS_PER_SECOND, seconds_to_ticks};
 use mbv_surfaces::queue::QueueSurface;
 

@@ -16,7 +16,7 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
-use mbv::NowPlayingMediaKind;
+use mbv_client_core::NowPlayingMediaKind;
 
 use super::super::QueuePanel;
 use crate::art::GuiArtRef;

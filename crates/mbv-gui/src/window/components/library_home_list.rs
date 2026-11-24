@@ -40,12 +40,16 @@ use crate::window::theme::canvas_var;
 /// row names its own Service's item, so both carry a menu. An `Upcoming` row
 /// is display-only (gui-collection-dropdown design D9), and it paints through
 /// the Shows list, not this one.
-fn home_menu_row(id: &GuiHomeRowIdFrame) -> mbv::GuiLibraryMenuRow {
+fn home_menu_row(id: &GuiHomeRowIdFrame) -> crate::gui_core::GuiLibraryMenuRow {
     let row = match id {
-        GuiHomeRowIdFrame::Continue(item_id) => mbv::GuiHomeRowId::Continue(item_id.clone()),
-        GuiHomeRowIdFrame::Recent(content_id) => mbv::GuiHomeRowId::Recent(content_id.clone()),
+        GuiHomeRowIdFrame::Continue(item_id) => {
+            crate::gui_core::GuiHomeRowId::Continue(item_id.clone())
+        }
+        GuiHomeRowIdFrame::Recent(content_id) => {
+            crate::gui_core::GuiHomeRowId::Recent(content_id.clone())
+        }
     };
-    mbv::GuiLibraryMenuRow::Home(row)
+    crate::gui_core::GuiLibraryMenuRow::Home(row)
 }
 
 /// The row's state as the shared part reads it: the resume percent of an

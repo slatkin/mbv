@@ -15,7 +15,7 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::GuiCollectionNoun;
+use crate::gui_core::GuiCollectionNoun;
 
 use crate::bridge::frame::library::{
     ALL_KEY, GuiCollectionEntry, GuiCollections, GuiCollectionsFrame as _,

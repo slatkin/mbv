@@ -50,7 +50,7 @@ fn space_on_a_toggle_sends_activate_with_the_row_key() {
     assert_eq!(facts, vec!["space=Handled"]);
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::Activate {
+        vec![crate::gui_core::GuiSettingsCommand::Activate {
             setting: mbv_ui_model::settings::SettingKey::from_name("consumeAudio")
                 .expect("the fixture names a declared setting"),
         }],
@@ -99,7 +99,7 @@ fn applying_a_choice_list_sends_apply_choices_with_the_row_carried_kind() {
     );
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::ApplyChoices {
+        vec![crate::gui_core::GuiSettingsCommand::ApplyChoices {
             kind: mbv_ui_model::context_menu::MultiSelectKind::HiddenLibraries,
             selected: vec!["eng".to_owned(), "deu".to_owned()],
         }],
@@ -162,7 +162,7 @@ fn selecting_a_library_in_the_routes_list_sends_route_devices() {
     assert_eq!(facts, vec!["enter=Handled"]);
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::RouteDevices {
+        vec![crate::gui_core::GuiSettingsCommand::RouteDevices {
             library: "movies".to_owned(),
         }],
     );
@@ -188,7 +188,7 @@ fn assigning_a_device_sends_assign_route_with_the_library_and_the_endpoint() {
     assert_eq!(facts, vec!["enter=Handled"]);
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::AssignRoute {
+        vec![crate::gui_core::GuiSettingsCommand::AssignRoute {
             library: "movies".to_owned(),
             endpoint: Some("tcp://tv:8096".to_owned()),
         }],
@@ -210,7 +210,7 @@ fn the_automatic_entry_clears_the_route() {
     assert_eq!(facts, vec!["enter=Handled"]);
     assert_eq!(
         settings_commands(&rx),
-        vec![mbv::GuiSettingsCommand::AssignRoute {
+        vec![crate::gui_core::GuiSettingsCommand::AssignRoute {
             library: "movies".to_owned(),
             endpoint: None,
         }],
@@ -230,7 +230,10 @@ fn a_device_with_no_endpoint_assigns_nothing() {
         press(state, facts, "enter", "Enter", &frame);
     });
     assert_eq!(facts, vec!["enter=Handled"]);
-    assert_eq!(settings_commands(&rx), [] as [mbv::GuiSettingsCommand; 0]);
+    assert_eq!(
+        settings_commands(&rx),
+        [] as [crate::gui_core::GuiSettingsCommand; 0]
+    );
 }
 
 /// The entries builder's Library arm keeps the routes list's paint order, so

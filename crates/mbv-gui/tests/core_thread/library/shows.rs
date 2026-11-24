@@ -7,7 +7,9 @@
 //! request leaves the process, and no live Owner, Service, or window runs
 //! (design D13).
 
-use mbv::{ClientTickHost, GuiCore, GuiStateSeams};
+use mbv_client_core::ClientTickHost;
+use mbv_gui::gui_core::GuiCore;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 
 use mbv_gui::bridge::frame::library::{
@@ -41,7 +43,7 @@ const NO_PREMIERES: &str = r#"{"Items":[],"TotalRecordCount":0}"#;
 /// lands after the core exists, so the construction's launch Home load saw
 /// no Service and scripts no mock answer (design D13).
 fn shows_core(http: &MockHttp) -> TestCore {
-    let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, _cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
     test.core
         .app_mut()
@@ -110,7 +112,7 @@ fn pump_until_shows(
 /// test's own open-destination command is the only TV activation the mock
 /// answers.
 fn shows_command_core(http: &MockHttp) -> TestCore {
-    let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let (app, _cmd_rx) = mbv_client_core::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(http));
@@ -164,7 +166,9 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         "Shows".to_string(),
         "tvshows".to_string(),
     );
-    let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
+    let mut test = test_core_with(mbv_client_core::stub_app_with_completed_emby_startup(vec![
+        view,
+    ]));
 
     // The mocked bootstrap drains on the first tick; the catalog's one
     // presented destination is the Shows library, and the start stays on

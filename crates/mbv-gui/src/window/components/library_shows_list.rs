@@ -497,9 +497,9 @@ pub fn LibraryShowsList() -> Element {
     // The destination list the painted rows' art belongs to (gui-delineated-rows
     // design D7): the visible view names its own scope.
     let art_scope = match frame.map(|frame| frame.view) {
-        Some(mbv::GuiShowsView::New) => GuiRowArtScopeFrame::ShowsNew,
-        Some(mbv::GuiShowsView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
-        Some(mbv::GuiShowsView::All) | None => GuiRowArtScopeFrame::ShowsSeries,
+        Some(crate::gui_core::GuiShowsView::New) => GuiRowArtScopeFrame::ShowsNew,
+        Some(crate::gui_core::GuiShowsView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
+        Some(crate::gui_core::GuiShowsView::All) | None => GuiRowArtScopeFrame::ShowsSeries,
     };
     let paint_library = library.clone();
     // The rows that close an open series' subtree paint its divider.

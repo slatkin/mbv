@@ -2,8 +2,9 @@
 //! Owner is asked for by a play, an add, a shuffle, a play-next, and an item
 //! menu entry — the replacement or the append, its source, and its items.
 
-use mbv::{ClientTickHost, GuiStateSeams, stub_app_with_queue_and_cmd_rx};
+use mbv_client_core::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_gui::bridge::library::GuiLibraryCommand;
+use mbv_gui::gui_core::test_support::GuiStateSeams;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;
 
@@ -324,7 +325,7 @@ fn a_menu_entry_executes_for_its_named_item_not_the_cursor_item() {
     send_library(
         &mut test,
         GuiLibraryCommand::MenuEntry {
-            row: mbv::GuiLibraryMenuRow::Item("ptrk-3".into()),
+            row: mbv_gui::gui_core::GuiLibraryMenuRow::Item("ptrk-3".into()),
             index: 0,
         },
     );

@@ -8,7 +8,7 @@
 //! The Settings screen's UI reset lives here too (design D10): its steps span
 //! the App and this thread's own state, so the command runs them in one place.
 
-use mbv::TickOutcome;
+use mbv_client_core::TickOutcome;
 use mbv_ui_model::overlay::{OverlayRequest, SidebarId};
 use mbv_ui_msg::{ComponentId, OverlayId};
 

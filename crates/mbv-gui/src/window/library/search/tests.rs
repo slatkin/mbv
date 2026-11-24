@@ -98,7 +98,7 @@ fn poll_until_idle(doc: &mut DioxusDocument) {
 }
 
 /// The Library commands the scenario sent, as the core thread receives them.
-fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<mbv::GuiLibraryCommand> {
+fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCommand> {
     let mut commands = Vec::new();
     while let Ok(input) = rx.try_recv() {
         if let CoreInput::Library(command) = input {
@@ -167,7 +167,7 @@ fn the_settled_typing_sends_one_debounced_query() {
     assert_eq!(facts, ["armed=1", "fired=1"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::SearchQuery {
+        [crate::gui_core::GuiLibraryCommand::SearchQuery {
             query: "bat".to_owned()
         }]
     );
@@ -185,7 +185,7 @@ fn an_emptied_field_clears_the_results_at_once_with_no_debounce() {
     assert_eq!(facts, ["armed=0"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::SearchQuery {
+        [crate::gui_core::GuiLibraryCommand::SearchQuery {
             query: String::new()
         }]
     );
@@ -206,10 +206,10 @@ fn esc_closes_the_field_clears_it_and_sends_the_close_command() {
     assert_eq!(
         commands(&rx),
         [
-            mbv::GuiLibraryCommand::SearchQuery {
+            crate::gui_core::GuiLibraryCommand::SearchQuery {
                 query: "bat".to_owned()
             },
-            mbv::GuiLibraryCommand::SearchClose,
+            crate::gui_core::GuiLibraryCommand::SearchClose,
         ]
     );
     assert_eq!(facts[1], format!("search={:?}", initial_library_search()));
@@ -226,7 +226,10 @@ fn a_close_cancels_the_pending_send_with_it() {
         fire(state, clock, facts);
     });
     assert_eq!(facts, ["fired=0"]);
-    assert_eq!(commands(&rx), [mbv::GuiLibraryCommand::SearchClose]);
+    assert_eq!(
+        commands(&rx),
+        [crate::gui_core::GuiLibraryCommand::SearchClose]
+    );
 }
 
 /// The arrows move the highlight along held row ids.
@@ -285,7 +288,7 @@ fn activating_a_row_sends_its_id_and_item_type_never_the_close_command() {
     });
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::SearchActivate {
+        [crate::gui_core::GuiLibraryCommand::SearchActivate {
             id: "r7".to_owned(),
             item_type: "Artist".to_owned(),
         }]
