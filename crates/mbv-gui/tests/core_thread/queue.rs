@@ -226,14 +226,14 @@ fn a_row_menu_entry_press_removes_its_row() {
     assert!(test.core.step());
     assert!(test.held().overlay().is_some());
 
-    // The menu's paint reports its rows; the remove entry is the fifth.
+    // The menu's paint reports its rows; the remove entry is the fourth.
     test.tx
         .send(measured_layout(
             4,
             vec![region_at(
                 0.0,
                 200.0,
-                RegionTarget::Queue(QueueTargetId::RowMenuEntry(4)),
+                RegionTarget::Queue(QueueTargetId::RowMenuEntry(3)),
             )],
         ))
         .unwrap();

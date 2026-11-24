@@ -127,11 +127,6 @@ pub enum ContextAction {
     /// Reorder the Bound queue once at random with the playing slot first
     /// (queue-content-shuffle design D6).
     ShuffleQueue,
-    /// Move the queue item at this explicit index to play directly after the
-    /// playhead (add-tauri-gui-client row 6.2, the canvas row menu's "Play
-    /// next"). The menu retains the resolved index like `PlayQueue` (D2), so
-    /// a follow update to `queue_cursor` cannot redirect the move.
-    PlayNext(usize),
     /// Select the queue visual slot's system-audio visualizer (the visual
     /// slot's chrome menu). The menu resolves the current selection when it
     /// builds, so this action carries the target content, never a toggle.

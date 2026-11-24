@@ -9,7 +9,6 @@ use crate::app::state::playback::ShownEntry;
 use mbv_ctrl::{NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
 use mbv_surfaces::queue::QueueCursorUpdate;
-use rstest::rstest;
 
 pub(super) mod peer_link;
 
@@ -348,49 +347,9 @@ fn a_resting_queue_never_focuses_the_playing_queue_s_index() {
     );
 }
 
-/// A Play-next move inside a shown resting queue reaches that queue: the row
-/// lands directly after the queue's start slot, which stands where a playhead
-/// stands without one, and first when the queue has no start slot (spec
-/// `gui-queue-chooser` "Edits and enqueue reach the shown entry", design D7,
-/// D9).
-#[rstest]
-#[case::after_its_start_slot(Some(0), 2, 1)]
-#[case::at_the_front_without_a_start_slot(None, 2, 0)]
-fn play_next_on_a_resting_queue_reaches_it(
-    #[case] start_index: Option<usize>,
-    #[case] moved: usize,
-    #[case] expected_to: usize,
-) {
-    let (mut app, cmd_rx) = app_with_adopted_named_queues();
-    app.show_named_queue(resting());
-    app.adopt_named_queue_snapshot(resting(), &resting_state(&make_items(3), start_index));
-    drain_commands(&cmd_rx);
-
-    app.play_queue_item_next(moved);
-
-    let sent = cmd_rx
-        .try_recv()
-        .expect("the shown queue receives the move");
-    assert_eq!(
-        sent_move_target(&sent),
-        Some((expected_to, Some(resting()))),
-        "the move lands after the resting queue's own anchor, naming it"
-    );
-}
-
 /// Drain every command the Client sent so far.
 fn drain_commands(cmd_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     while cmd_rx.try_recv().is_ok() {}
-}
-
-/// The target index and Named queue one sent queue move carries.
-fn sent_move_target(cmd: &mbv_ctrl::CtrlCmd) -> Option<(usize, Option<NamedQueueId>)> {
-    match cmd {
-        mbv_ctrl::CtrlCmd::UnifiedQueueMoveSlot {
-            to_index, queue, ..
-        } => Some((*to_index, *queue)),
-        _ => None,
-    }
 }
 
 /// One replacement payload: `items` played from the front, as a Library Play

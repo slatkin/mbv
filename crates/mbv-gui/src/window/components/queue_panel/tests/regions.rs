@@ -30,7 +30,6 @@ fn the_regions_carry_the_header_slot_and_menu_entry_ids_menu_last() {
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(1)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(2)),
             RegionTarget::Queue(QueueTargetId::RowMenuEntry(3)),
-            RegionTarget::Queue(QueueTargetId::RowMenuEntry(4)),
         ]
     );
 }

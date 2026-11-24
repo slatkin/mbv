@@ -257,10 +257,6 @@ impl App {
                 ));
                 None
             }
-            Some(ContextAction::PlayNext(index)) => {
-                self.play_queue_item_next(index);
-                None
-            }
             Some(ContextAction::RemoveFromQueue(pos)) => {
                 self.remove_from_queue(pos);
                 None
@@ -414,7 +410,6 @@ impl App {
                 | ContextAction::MarkPlayedSelection(_)
                 | ContextAction::MarkUnplayedSelection(_)
                 | ContextAction::PlayQueue(_)
-                | ContextAction::PlayNext(_)
                 | ContextAction::PlayFolder(_)
                 | ContextAction::ShuffleFolder(_)
                 | ContextAction::Enqueue
