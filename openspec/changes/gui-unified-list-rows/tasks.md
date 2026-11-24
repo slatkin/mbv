@@ -12,10 +12,10 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 2. Flat rows onto `FlatRow`
 
-- [ ] 2.1 `library_home_list.rs`: both sections paint `FlatRow` with `play: Some(item.state)`. Delete `row_progress`, `recent_played_mark`, and the Recently added mark test. Verify: `cargo nextest run -p mbv-gui library_home_list`.
-- [ ] 2.2 `library/lettered/adapters.rs`: Podcasts and Feeds paint `FlatRow` with `play: Some(entry.state)` and replace `paint_item_row`. Emby and Audiobooks paint `play: None`. Verify: `cargo nextest run -p mbv-gui lettered podcasts feeds emby audiobooks`.
-- [ ] 2.3 `library_shows_list.rs`: series, New, and Upcoming rows paint `FlatRow` with `play: None`. Verify: `cargo check -p mbv-gui`.
-- [ ] 2.4 `library_list.rs`: artist rows paint `FlatRow` with `play: None`. Verify: `cargo check -p mbv-gui`.
+- [x] 2.1 `library_home_list.rs`: both sections paint `FlatRow` with `play: Some(item.state)`. Delete `row_progress`, `recent_played_mark`, and the Recently added mark test. Verify: `cargo nextest run -p mbv-gui library_home_list`.
+- [x] 2.2 `library/lettered/adapters.rs`: Podcasts and Feeds paint `FlatRow` with `play: Some(entry.state)` and replace `paint_item_row`. Emby and Audiobooks paint `play: None`. Verify: `cargo nextest run -p mbv-gui lettered podcasts feeds emby audiobooks`.
+- [x] 2.3 `library_shows_list.rs`: series, New, and Upcoming rows paint `FlatRow` with `play: None`. Verify: `cargo check -p mbv-gui`.
+- [x] 2.4 `library_list.rs`: artist rows paint `FlatRow` with `play: None`. Verify: `cargo check -p mbv-gui`.
 
 ## 3. Tree rows onto `TreeRow`
 
