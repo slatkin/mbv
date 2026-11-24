@@ -19,9 +19,9 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 3. Tree rows onto `TreeRow`
 
-- [ ] 3.1 `library_list.rs`: albums paint `TreeRow` (Parent, One) and tracks paint `TreeRow` (Leaf, Two). Delete their style code. Verify: `cargo nextest run -p mbv-gui library_list`.
-- [ ] 3.2 `library_shows_list.rs`: seasons paint `TreeRow` (Parent, One) and episodes paint `TreeRow` (Leaf, Two, `play` from `episode_state`). Delete `row_name_color`, `row_background`, `row_inset`, and `episode_played`. Update the Shows tests for the `data-library-shows-*` part hooks and the Music look. Verify: `cargo nextest run -p mbv-gui library_shows_list`.
-- [ ] 3.3 `playlists_panel.rs`: playlist rows paint `FlatRow` (`attr: "playlists"`, `thumb: None`, the count as trailing text) and item rows paint `TreeRow` (Leaf, One). Delete `row_style`, `item_row_style`, `row_fill`, `PLAYLIST_ROW_HEIGHT_PX`, and the Playlists guide constants; the rename field's guide follows `TOP_GUIDE_X`. `open_menu` becomes the row's `on_context`. Update the Playlists tests for the `data-library-playlists-*` hooks and the Music look. Verify: `cargo nextest run -p mbv-gui playlists_panel`.
+- [x] 3.1 `library_list.rs`: albums paint `TreeRow` (Parent, One) and tracks paint `TreeRow` (Leaf, Two). Delete their style code. Verify: `cargo nextest run -p mbv-gui library_list`.
+- [x] 3.2 `library_shows_list.rs`: seasons paint `TreeRow` (Parent, One) and episodes paint `TreeRow` (Leaf, Two, `play` from `episode_state`). Delete `row_name_color`, `row_background`, `row_inset`, and `episode_played`. Update the Shows tests for the `data-library-shows-*` part hooks and the Music look. Verify: `cargo nextest run -p mbv-gui library_shows_list`.
+- [x] 3.3 `playlists_panel.rs`: playlist rows paint `FlatRow` (`attr: "playlists"`, `thumb: None`, the count as trailing text) and item rows paint `TreeRow` (Leaf, One). Delete `row_style`, `item_row_style`, `row_fill`, `PLAYLIST_ROW_HEIGHT_PX`, and the Playlists guide constants; the rename field's guide follows `TOP_GUIDE_X`. `open_menu` becomes the row's `on_context`. Update the Playlists tests for the `data-library-playlists-*` hooks and the Music look. Verify: `cargo nextest run -p mbv-gui playlists_panel`.
 
 ## 4. Remove the bespoke paths
 
