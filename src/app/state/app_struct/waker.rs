@@ -27,7 +27,7 @@ impl App {
     /// the shared library event channel, and the GUI Client's core drains it
     /// in `ClientTickHost::drain_client_events`. A TUI Client never starts one
     /// of these fetches.
-    pub(in crate::app) fn gui_client_event_sender(
+    pub fn gui_client_event_sender(
         &self,
     ) -> crate::app::state::gui_client_events::GuiClientEventSender {
         self.gui_client_events.sender()
@@ -38,7 +38,7 @@ impl App {
     /// and for a test that drains over the `App` it holds.
     pub fn take_one_gui_client_event(
         &self,
-    ) -> Option<crate::app::gui_library::client_events::GuiClientEvent> {
+    ) -> Option<crate::app::state::gui_client_events::GuiClientEvent> {
         self.gui_client_events.try_take()
     }
 
@@ -50,7 +50,7 @@ impl App {
     #[doc(hidden)]
     pub fn send_gui_client_event_for_test(
         &self,
-        event: crate::app::gui_library::client_events::GuiClientEvent,
+        event: crate::app::state::gui_client_events::GuiClientEvent,
     ) {
         self.gui_client_event_sender().send(event);
     }
@@ -62,7 +62,7 @@ impl App {
     pub fn wait_for_one_gui_client_event_for_test(
         &self,
         timeout: std::time::Duration,
-    ) -> Option<crate::app::gui_library::client_events::GuiClientEvent> {
+    ) -> Option<crate::app::state::gui_client_events::GuiClientEvent> {
         self.gui_client_events.wait_take_for_test(timeout)
     }
 

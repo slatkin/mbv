@@ -37,6 +37,13 @@ impl App {
         self.shown_resting_queue_id()
     }
 
+    /// Whether the shown queue's name draft waits for the Client to present.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn pending_queue_rename_is_some_for_test(&self) -> bool {
+        self.pending_queue_rename.is_some()
+    }
+
     /// Whether the new-queue control holds no unanswered request.
     #[cfg(any(test, feature = "test"))]
     #[must_use]

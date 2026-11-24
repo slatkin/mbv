@@ -4,7 +4,7 @@
 //! carries only when it changes, the Hero's artwork from the image cache, and
 //! the playing row's track id.
 
-use mbv::{ClientTickHost, stub_app_with_playing_items};
+use mbv::{ClientTickHost, GuiStateSeams, stub_app_with_playing_items};
 use mbv_gui::bridge::frame::library::GuiLibraryTabFrame;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;

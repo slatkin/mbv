@@ -171,7 +171,7 @@ impl App {
     ///   can browse locally while a daemon elsewhere plays something else.
     ///   The shown queue follows the connection (ADR 0034): the peer link
     ///   while it is attached, the Local link otherwise.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn new_remote_with_config(
         client: EmbyClient,

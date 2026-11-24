@@ -6,8 +6,15 @@
 
 #[cfg(any(test, feature = "test"))]
 use super::App;
-#[cfg(any(test, feature = "test"))]
-use crate::app::gui_client_state::GuiClientState;
+
+#[cfg(feature = "test")]
+use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "test")]
+use super::{
+    GUI_MUSIC_LIBRARY_ID, GUI_TV_LIBRARY_ID, album_item, group_item, music_album_level,
+    music_group_level,
+};
 
 /// The action seams a Client's test drives where no Client-facing entry
 /// point reaches (`split-tui-gui-clients` design D4b rule 5).
@@ -78,100 +85,6 @@ mod settings;
 /// The visual slot's test facts and seeds (`split-tui-gui-clients` design
 /// D4b rule 5) sit in their own child module for the same reason.
 mod visualizer;
-
-/// The GUI Client's own state a test seam reads or seeds (`decouple-client-core`
-/// design D4). The state lives in `GuiCore` now, and these `App` seams drive an
-/// `App` alone, so the state is held beside it: the root package's own tests
-/// read the sidecar in `crate::app::tests`, and a dependent Client's `test`
-/// build reads the sidecar this module keeps for it (`gui_state_for_test`,
-/// row 8.1). A test's seeds write the same sidecar, so a seeded store reaches
-/// the store its `App`-seam call reads and the frame it asserts on.
-#[cfg(any(test, feature = "test"))]
-pub(super) fn gui<R>(_app: &App, read: impl FnOnce(&mut GuiClientState) -> R) -> R {
-    #[cfg(test)]
-    return crate::app::tests::stub_gui_state(read);
-    #[cfg(not(test))]
-    {
-        gui_state_for_test(read)
-    }
-}
-
-// The sidecar state thread: every `App`-seam read and seed of a dependent
-// Client's `test` build answers from it, and so does the client-event drain
-// that `CoreThread::step` runs. `None` until the first read or seed takes
-// the default state, so the empty `GuiClientState::new(false)` is built once
-// and only when a test needs it.
-#[cfg(feature = "test")]
-thread_local! {
-    static CLIENT_GUI_STATE: std::cell::RefCell<Option<GuiClientState>> =
-        const { std::cell::RefCell::new(None) };
-}
-
-/// Read or seed the GUI Client's own state beside the `App` a dependent
-/// Client's test drives (`decouple-client-core` row 8.1). The state belongs to
-/// `GuiCore`, and these `App` seams answer from this one copy, so a seed, the
-/// frame it asserts on, and the `CoreThread::step` that adopts it all read and
-/// write the same state: the step takes the slot's state at its start and
-/// publishes its own back at its end, so the slot always holds the live state
-/// between steps and the first call's default is what an unseeded test reads.
-pub fn gui_state_for_test<R>(read: impl FnOnce(&mut GuiClientState) -> R) -> R {
-    #[cfg(feature = "test")]
-    return seeded_gui_state_for_test(|slot| {
-        read(slot.get_or_insert_with(|| GuiClientState::new(false)))
-    });
-    #[cfg(not(feature = "test"))]
-    {
-        let mut gui = GuiClientState::new(false);
-        read(&mut gui)
-    }
-}
-
-/// Reach the sidecar slot itself (`decouple-client-core` row 8.1): the core
-/// takes the seeded state out at a step's start and puts its own back at the
-/// step's end, so it needs the slot and not the state a read gets. Empty
-/// until a test seeds one or a core call publishes one.
-#[cfg(feature = "test")]
-pub fn seeded_gui_state_for_test<R>(read: impl FnOnce(&mut Option<GuiClientState>) -> R) -> R {
-    CLIENT_GUI_STATE.with(|slot| read(&mut slot.borrow_mut()))
-}
-
-/// Take one pending library event through the GUI Client's own stores
-/// (`decouple-client-core` design D4a (c), row 8.1): the event's App-owned
-/// half applies to `app`, and its store half installs in the sidecar
-/// [`gui_state_for_test`] reads, so a dependent Client's test drives the
-/// production drain over the one state it seeds.
-#[cfg(feature = "test")]
-pub fn drain_lib_event_with_stores_for_test(app: &mut App) -> bool {
-    gui_state_for_test(|gui| app.drain_lib_event_with_stores(Some(gui)))
-}
-
-#[cfg(feature = "test")]
-use std::sync::{Arc, Mutex};
-
-#[cfg(feature = "test")]
-use super::{
-    GUI_MUSIC_LIBRARY_ID, GUI_TV_LIBRARY_ID, album_item, group_item, music_album_level,
-    music_group_level,
-};
-
-#[cfg(any(test, feature = "test"))]
-/// One seeded episode row of the GUI's Podcasts helpers: `(episode id, title,
-/// description, publish instant in unix seconds, duration seconds)`.
-#[cfg(any(test, feature = "test"))]
-pub(in crate::app) type SeededAbsEpisode<'a> =
-    (&'a str, &'a str, Option<&'a str>, Option<u64>, Option<f64>);
-
-/// One seeded book row of the GUI's Audiobooks catalog helper: `(id, title,
-/// author display, author sort key, duration seconds, cover path)`.
-#[cfg(any(test, feature = "test"))]
-pub(in crate::app) type SeededAbsBook<'a> = (
-    &'a str,
-    &'a str,
-    Option<&'a str>,
-    &'a str,
-    f64,
-    Option<&'a str>,
-);
 
 impl App {
     /// The Library tabs the catalog holds, for a Client's test that asserts a
@@ -321,35 +234,6 @@ impl App {
             .push(mbv_ui_model::library_tab::LibraryTab::new(library));
     }
 
-    /// Seed the GUI Music store with `albums` for the `group_id` of `lib_idx`,
-    /// as a landed fetch would (add-gui-library-panel design D5): a projection
-    /// or frame test reads the store alone, with no request behind it. Each
-    /// album is a folder, as the live parse makes every `MusicAlbum`
-    /// (`mbv_emby::parse_item`), so its item menu is the album menu.
-    #[cfg(feature = "test")]
-    pub fn seed_gui_music_albums_for_test(
-        &mut self,
-        lib_idx: usize,
-        group_id: &str,
-        albums: &[(&str, &str)],
-    ) {
-        let albums = albums
-            .iter()
-            .map(|(id, name)| {
-                let mut album = mbv_emby_model::test_support::make_item(name, "MusicAlbum");
-                album.id = (*id).to_string();
-                album.is_folder = true;
-                album
-            })
-            .collect();
-        gui(self, |gui| {
-            gui.music_albums.entry(lib_idx).or_default().insert(
-                group_id.to_string(),
-                crate::app::gui_library::GuiGroupAlbums::Loaded(albums),
-            );
-        });
-    }
-
     /// Deliver `key`'s image as a completed GUI fetch would (add-gui-library-panel
     /// design D13, design D14 of `gui-change-driven-sections`): the outcome
     /// keeps the source bytes and no decoded image, so the next tick's
@@ -362,121 +246,6 @@ impl App {
             key.to_string(),
             mbv_images::ImageFetchOutcome::Image { img: None, source },
         ));
-    }
-
-    /// The Grouped Music library's first checked group id
-    /// (add-gui-library-panel design D5; gui-collection-dropdown design D1):
-    /// `None` while All is selected or no entry is stored.
-    #[must_use]
-    pub fn gui_library_groups_for_test(&self, lib_idx: usize) -> Option<String> {
-        gui(self, |gui| {
-            match gui.library_groups.get(&lib_idx).map(|stored| &stored.set) {
-                Some(crate::app::gui_library::GuiCollectionSet::Checked(keys)) => {
-                    keys.first().cloned()
-                }
-                Some(crate::app::gui_library::GuiCollectionSet::All) | None => None,
-            }
-        })
-    }
-
-    /// Seed the GUI Music selection with the single checked group
-    /// `group_id` for `lib_idx`, as a landed set-collections command would
-    /// (add-gui-library-panel): a command test pins the selection before its
-    /// first step, so the launch restore's own application skips it and the
-    /// test's mock answers serve the test's commands alone.
-    #[cfg(feature = "test")]
-    pub fn seed_gui_library_groups_for_test(&mut self, lib_idx: usize, group_id: &str) {
-        gui(self, |gui| {
-            gui.library_groups.insert(
-                lib_idx,
-                crate::app::gui_library::GuiCollectionSelection {
-                    set: crate::app::gui_library::GuiCollectionSet::Checked(vec![
-                        group_id.to_string(),
-                    ]),
-                },
-            );
-        });
-    }
-
-    /// The album ids the GUI Music store loaded for `group_id`; `None` while
-    /// the group is loading or after its fetch failed (design D5).
-    #[must_use]
-    pub fn gui_group_album_ids_for_test(
-        &self,
-        lib_idx: usize,
-        group_id: &str,
-    ) -> Option<Vec<String>> {
-        gui(self, |gui| {
-            match gui
-                .music_albums
-                .get(&lib_idx)
-                .and_then(|groups| groups.get(group_id))
-            {
-                Some(crate::app::gui_library::GuiGroupAlbums::Loaded(albums)) => {
-                    Some(albums.iter().map(|album| album.id.clone()).collect())
-                }
-                Some(
-                    crate::app::gui_library::GuiGroupAlbums::Loading
-                    | crate::app::gui_library::GuiGroupAlbums::Failed,
-                )
-                | None => None,
-            }
-        })
-    }
-
-    /// The album a collection group's pill last showed (design D13).
-    #[must_use]
-    pub fn gui_library_pick_for_test(&self, lib_idx: usize, group_id: &str) -> Option<String> {
-        gui(self, |gui| {
-            gui.library_picks
-                .get(&(lib_idx, group_id.to_string()))
-                .cloned()
-        })
-    }
-
-    /// The row the GUI Library's Hero shows for the plain Emby library
-    /// `lib_idx` (add-gui-library-panel row 8.1).
-    #[must_use]
-    pub fn gui_emby_picked_row_for_test(&self, lib_idx: usize) -> Option<String> {
-        gui(self, |gui| {
-            gui.emby_libs
-                .get(&lib_idx)
-                .and_then(|selection| selection.picked_row.clone())
-        })
-    }
-
-    /// The root item ids the GUI's Emby root-list store loaded for `lib_idx`;
-    /// `None` while the list is loading or after its fetch failed (row 8.1).
-    #[must_use]
-    pub fn gui_emby_root_ids_for_test(&self, lib_idx: usize) -> Option<Vec<String>> {
-        gui(self, |gui| match gui.emby_roots.get(&lib_idx) {
-            Some(crate::app::gui_library::GuiEmbyRootItems::Loaded(items)) => {
-                Some(items.iter().map(|item| item.id.clone()).collect())
-            }
-            Some(
-                crate::app::gui_library::GuiEmbyRootItems::Loading
-                | crate::app::gui_library::GuiEmbyRootItems::Failed,
-            )
-            | None => None,
-        })
-    }
-
-    /// Seed the GUI's plain Emby root-list store with `items` for `lib_idx`,
-    /// as a landed fetch would (add-gui-library-panel row 8.1): a Client's
-    /// command test injects the rows and observes the frame with no fetch
-    /// behind it.
-    #[cfg(feature = "test")]
-    pub fn seed_gui_emby_roots_for_test(
-        &mut self,
-        lib_idx: usize,
-        items: Vec<mbv_emby_model::EmbyItem>,
-    ) {
-        gui(self, |gui| {
-            gui.emby_roots.insert(
-                lib_idx,
-                crate::app::gui_library::GuiEmbyRootItems::Loaded(items),
-            );
-        });
     }
 
     /// Make a feed-view home-videos library the GUI Library test's
@@ -683,6 +452,18 @@ impl App {
         };
         let _ = self.channels.lib_tx.send(event);
         true
+    }
+
+    /// Take one library event off the lib channel within `bound`, leaving the
+    /// fetch marks in place: a test that consumes a worker's own completion
+    /// raw, to assert what the next tick would drain is still armed.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn take_lib_event_for_test(
+        &mut self,
+        bound: std::time::Duration,
+    ) -> Option<crate::app::LibEvent> {
+        self.channels.lib_rx.recv_timeout(bound).ok()
     }
 
     /// The ids of the Home `Recently added` rows the App stores, over the

@@ -37,7 +37,7 @@ impl App {
         self.pinned_request_pending.is_some()
     }
 
-    /// Take the launched `GuiCore`'s capability gate into this `App`, as the
+    /// Take the launched GUI Client core's capability gate into this `App`, as the
     /// GUI Client builds it from its launch location.
     #[cfg(any(test, feature = "test"))]
     pub fn set_gui_client_capabilities_for_test(&mut self) {

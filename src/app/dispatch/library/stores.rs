@@ -6,20 +6,19 @@
 //! event that raised them. A Client that keeps no such stores (the TUI) passes
 //! `None` and nothing happens, as today.
 
-use crate::app::gui_client_state::GuiClientState;
 use crate::app::{App, FeedHomeVideoSelection};
 
-/// Take one pending library event and apply it through `gui`, the GUI
-/// Client's own stores (`decouple-client-core` design D4a (c)). The seam
-/// types stay as private as the GUI state they carry, so the GUI Client calls
-/// this instead of `App::drain_lib_event_with_stores`.
-pub fn drain_lib_event_through(app: &mut App, gui: &mut GuiClientState) -> bool {
-    app.drain_lib_event_with_stores(Some(gui))
+/// Take one pending library event and apply it through `stores`, the Client's
+/// own stores (`decouple-client-core` design D4a (c)). The seam types stay
+/// neutral, so the GUI Client calls this instead of
+/// `App::drain_lib_event_with_stores` and the core names no Client's state.
+pub fn drain_lib_event_through(app: &mut App, stores: &mut dyn ClientLibraryStores) -> bool {
+    app.drain_lib_event_with_stores(Some(stores))
 }
 
 /// What one Client does with the effects a library event raises. The
-/// implementor (`GuiClientState`) reads and writes its own fields; `app` is
-/// the shared core state, which the effect may also touch (the in-view row
+/// implementor (a Client's own state) reads and writes its own fields; `app`
+/// is the shared core state, which the effect may also touch (the in-view row
 /// artwork fetch reads the core's catalog).
 pub trait ClientLibraryStores {
     /// Whether this Client's own selection still wants the landed feed

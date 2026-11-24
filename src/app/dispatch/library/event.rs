@@ -2,8 +2,8 @@ use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::state::app_struct::{LevelFillState, MAX_ALBUM_TRACKS_CACHE, insert_capped};
 use crate::app::state::events::{
-    LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
-    SeriesEvent,
+    FeedHomeVideoSelectionFailed, LibEvent, ModelContentEvent, MusicEvent, NavigateLanding,
+    PendingSeriesHandoff, PlaylistEvent, SeriesEvent,
 };
 use crate::app::{
     AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, dispatch::notify::ToastSeverity,
@@ -72,9 +72,7 @@ impl App {
             // as the `LibEvent::Error` arm this fetch used to send did.
             LibEvent::FeedHomeVideoSelectionFailed(event) => {
                 self.handle_error(&event.error);
-                crate::app::gui_library::handle_feed_home_video_selection_failed(
-                    self, event, stores,
-                );
+                handle_feed_home_video_selection_failed(self, event, stores);
             }
             // A `ModelContent` event's App-side half is
             // `handle_model_content_event`: both Clients' drains run it, and
@@ -364,9 +362,9 @@ impl App {
     /// Apply the store effects one library event raised, in order. A Client
     /// that keeps no library stores passes `None`, so nothing runs.
     ///
-    /// The Client's stores are its own state (`GuiClientState`, design D4a
-    /// (c)), not the core's, so a caller that holds them applies the effects
-    /// as its own events (`GuiCore::drain_lib_event`, which the GUI's
+    /// The Client's stores are its own state (design D4a (c)), not the core's,
+    /// so a caller that holds them applies the effects as its own events
+    /// (the GUI Client's own event drain, which its
     /// `ClientTickHost::drain_lib_events` loops). This entry serves the core
     /// instructions that run outside a Client drain.
     pub fn apply_library_effects(
@@ -567,4 +565,42 @@ impl App {
             }
         }
     }
+}
+
+/// Land one feed-group target's failed fetch (gui-collection-dropdown design
+/// D3): the fetch has returned, so retire the shared outstanding-fetch mark
+/// when it names this target. Retiring the mark and the log stay here, in the
+/// core. Recording the terminal failure beside the Client's claim is
+/// `FeedTargetFailed`, applied through `stores` at the position the direct
+/// claim write held — before the log: the shown pass then skips the target, so
+/// an automatic repaint never retries it; a user press clears the mark. A
+/// library the Client has not claimed keeps no mark, so the TUI's own rules
+/// alone govern its fetches.
+fn handle_feed_home_video_selection_failed(
+    app: &mut App,
+    event: FeedHomeVideoSelectionFailed,
+    stores: Option<&mut dyn ClientLibraryStores>,
+) {
+    let FeedHomeVideoSelectionFailed {
+        lib_idx,
+        selection,
+        error,
+    } = event;
+    app.retire_feed_home_video_fetch(lib_idx, &selection);
+    // The Client's terminal failure mark is recorded where the direct claim
+    // write used to sit — after the outstanding-fetch mark retires and before
+    // the log — so it is applied through `stores` here and not collected to
+    // the end of the arm.
+    app.apply_library_effects(
+        stores,
+        &[ClientLibraryEffect::FeedTargetFailed { lib_idx, selection }],
+    );
+    tracing::info!(
+        name: "feed_home_video.selection_fetch_failed",
+        target: "feed_home_video",
+        library_index = lib_idx,
+        error = %error,
+        "the feed-group target's items failed to load"
+    );
+    app.log_feed_home_video_state(lib_idx, "selection_fetch_failed");
 }

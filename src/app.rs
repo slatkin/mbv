@@ -9,16 +9,25 @@ mod client_core;
 mod client_drains;
 pub mod config;
 pub mod dispatch;
-pub mod gui_client_state;
-mod gui_library;
-mod gui_playlists;
-mod gui_settings;
-#[cfg(any(test, feature = "test"))]
-pub use self::app_stub::gui_state_for_test;
-#[cfg(feature = "test")]
-pub use self::app_stub::seeded_gui_state_for_test;
 #[cfg(any(test, feature = "test"))]
 pub use self::app_stub::stub_app_with_prefix_and_toast;
+#[cfg(test)]
+pub(crate) use self::app_stub::{HOME_POSITION, PEER_POSITION};
+/// The whole-`App` fixtures two Clients' tests share (`2-split-tui-gui-clients`
+/// design D4b rule 5): the stub Owner constructions, the queue shapes a menu or
+/// transport test reads, and the Named-queue fixtures whose queue list and op
+/// answers both Clients' tests drive.
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
+pub use self::app_stub::{
+    SeededAbsBook, close_initial_services, current, emby_unified_state, gui_app_with_named_queues,
+    gui_app_with_peer, inject_local_events, install_test_emby, live_owner_channel, make_app_stub,
+    make_audio_only_remote_app_stub_with_cmd_rx, make_local_daemon_app_stub,
+    make_local_daemon_app_stub_with_cmd_rx, make_local_daemon_app_stub_with_cmd_rx_and_compat,
+    make_remote_app_stub, make_remote_app_stub_at_index, make_remote_app_stub_with_cmd_rx,
+    named_queue_list, op_answer, remote_stub_config, resting, resting_snapshot,
+    seed_queue_row_menu_rows_for_test, seed_queue_shuffle_owner_for_test,
+};
 /// The stub fixtures the crate root re-exports for a Client's own test: the
 /// Emby movie library a Service-seam leak would mutate, the card cache keys
 /// the shell seeds a cached image under, and the entries the GUI queue row
@@ -26,19 +35,18 @@ pub use self::app_stub::stub_app_with_prefix_and_toast;
 #[cfg(any(test, feature = "test"))]
 #[doc(hidden)]
 pub use self::app_stub::{
-    card_cache_key_for_id_for_test, gui_row_menu_entries_for_test, key_chord_for_test,
-    push_movies_library_for_test, queue_card_cache_key_for_test, queue_target_for_test,
+    card_cache_key_for_id_for_test, gui_client_capabilities, key_chord_for_test, make_audio_items,
+    make_items, push_movies_library_for_test, queue_card_cache_key_for_test, queue_target_for_test,
 };
 #[cfg(feature = "test")]
 pub use self::app_stub::{
-    drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,
-    set_subtitle_tracks_for_test, stub_app_for_gui_client, stub_app_with_cached_emby_client,
-    stub_app_with_cast_target, stub_app_with_completed_emby_startup,
-    stub_app_with_completed_emby_startup_and_contents, stub_app_with_failed_emby_setup,
-    stub_app_with_local_daemon_events, stub_app_with_open_row_menu,
+    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_for_gui_client,
+    stub_app_with_cached_emby_client, stub_app_with_cast_target,
+    stub_app_with_completed_emby_startup, stub_app_with_completed_emby_startup_and_contents,
+    stub_app_with_failed_emby_setup_form, stub_app_with_local_daemon_events,
     stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
     stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
-    stub_app_with_track_choices, stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    stub_app_with_track_choices, stub_app_with_unsaved_queue,
 };
 mod image_cache;
 mod infra;
@@ -66,68 +74,11 @@ pub use self::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
 };
 pub use self::dispatch::library::stores::drain_lib_event_through;
-pub use self::gui_client_state::GuiClientState;
-pub use self::gui_client_state::{
-    GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
-    QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
-    RowMenuEntryProjection, TrackPopoverChoice,
-};
-/// The Client-only fetch result a dependent Client's test scripts onto the
-/// `App`'s channel (`decouple-client-core` design D5): the next tick's
-/// `drain_client_events` takes it exactly as it takes a worker's own send.
-#[cfg(feature = "test")]
-#[doc(hidden)]
-pub use self::gui_library::client_events::GuiClientEvent;
-pub use self::gui_library::client_events::install_client_event;
-pub use self::gui_library::{
-    GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
-    GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,
-    GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind,
-    compare_gui_date_order,
-};
-pub use self::gui_library::{
-    GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
-    GuiAudiobooksWorkspace,
-};
-pub use self::gui_library::{
-    GuiDestinationKind, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow,
-    GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
-};
-pub use self::gui_library::{
-    GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, GuiFeedsSelection,
-    GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu,
-    GuiLibraryTab, GuiLibraryTabs, GuiListSort, GuiListSortFrame, GuiMusicAlbum, GuiMusicArtist,
-    GuiMusicHero, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPlayheadMarks,
-    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
-    GuiSearchProjection, GuiSearchRow, GuiSortTarget, gui_feeds_platform,
-};
-pub use self::gui_library::{
-    GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
-    artist_rows_in_view_id, playing_track_id_for_shell,
-};
-#[cfg(test)]
-pub(in crate::app) use self::gui_library::{gui_active_destination, gui_library_tabs};
-pub use self::gui_playlists::{
-    GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,
-    GuiPlaylistsCommand, GuiPlaylistsProjection,
-};
-pub use self::gui_settings::{
-    GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
-    GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
-    GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsLibraryProjection,
-    GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection, GuiSettingsRowKind,
-    GuiSettingsRowProjection, GuiSettingsSection, GuiSettingsServiceProjection,
-    GuiSettingsServicesProjection, GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
-    SetupSecret,
-};
 pub use self::infra::image_fetch::CardImageDrain;
 pub use self::infra::open_url::open_url;
 pub use self::infra::paging::PAGE_SIZE;
 pub(in crate::app) use self::infra::paging::PREFETCH_AHEAD;
 pub use self::infra::signals::{QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog};
-pub use self::input::gui::GuiInput;
-pub use self::input::gui::GuiSurfaceLeaf;
 pub use self::input::key_policy::{
     OverlayFocus, RemoteControlTarget, RouterNow, RouterOverlayState, RouterPlaybackState,
     RouterSnapshot,
@@ -142,6 +93,7 @@ pub use self::queue_playback_projection::{
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
 pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
+pub use self::state::gui_client_events::GuiClientEvent;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;
 pub(in crate::app) use self::waking_relay::spawn_waking_relay;
@@ -184,8 +136,6 @@ use mbv_ui_model::feed::{
 use mbv_ui_model::library_tab::LibraryTab;
 pub use mbv_ui_model::overlay::SidebarId;
 use mbv_ui_model::playback::QueueLink;
-#[cfg(test)]
-use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_model::tab_selection::TabSelection;
 #[cfg(test)]

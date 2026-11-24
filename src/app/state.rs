@@ -5,7 +5,7 @@ pub(in crate::app) mod bootstrap;
 pub mod client_capabilities;
 pub mod construct;
 pub mod context_menu_capabilities;
-pub(in crate::app) mod gui_client_events;
+pub mod gui_client_events;
 pub(in crate::app) mod gui_reads;
 pub(in crate::app) mod gui_writes;
 pub(in crate::app) mod library_position;

@@ -14,10 +14,9 @@ use std::time::Duration;
 
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, criterion_group, criterion_main};
-use mbv::ClientTickHost;
 use mbv::{
-    App, GuiCore, stub_app_with_completed_emby_startup_and_contents, stub_app_with_playing_queue,
-    stub_app_with_queue,
+    App, ClientTickHost, GuiCore, GuiStateSeams, stub_app_with_completed_emby_startup_and_contents,
+    stub_app_with_playing_queue, stub_app_with_queue,
 };
 use mbv_config::TestStateDirGuard;
 use mbv_emby::EmbyClient;

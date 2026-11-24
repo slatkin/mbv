@@ -7,7 +7,7 @@
 //! request leaves the process, and no live Owner, Service, or window runs
 //! (design D13).
 
-use mbv::{ClientTickHost, GuiCore};
+use mbv::{ClientTickHost, GuiCore, GuiStateSeams};
 use mbv_net::mock_http::MockHttp;
 
 use mbv_gui::bridge::frame::library::{

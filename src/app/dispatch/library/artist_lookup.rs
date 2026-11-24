@@ -43,7 +43,7 @@ pub struct ArtistNameLookup;
 
 impl ArtistNameLookup {
     /// The Service artist item id known for an artist name, if any.
-    pub(in crate::app) fn item_id<'a>(app: &'a App, name: &str) -> Option<&'a str> {
+    pub fn item_id<'a>(app: &'a App, name: &str) -> Option<&'a str> {
         app.artist_name_item_ids
             .get(&normalized(name))
             .map(String::as_str)
@@ -97,7 +97,7 @@ impl ArtistNameLookup {
     /// Start the artist search for `name` once: a name with an id, or already
     /// searched or in flight, starts nothing. Only a Client that presents the
     /// search asks, so a Client without `ShownQueueEntries` starts none.
-    pub(in crate::app) fn request(app: &mut App, name: &str) {
+    pub fn request(app: &mut App, name: &str) {
         if !app
             .client_capabilities
             .has(ClientCapability::ShownQueueEntries)

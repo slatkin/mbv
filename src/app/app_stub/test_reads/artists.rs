@@ -30,6 +30,18 @@ impl App {
         self.artist_detail_cache.insert(key, entry);
     }
 
+    /// Record `id` as the Service artist item id for `name`, as a level fill
+    /// that named the artist on its tracks leaves it: the fallback artist row
+    /// then reads the artist's own image.
+    #[cfg(any(test, feature = "test"))]
+    pub fn record_artist_name_for_test(&mut self, name: &str, id: &str) {
+        crate::app::dispatch::library::artist_lookup::ArtistNameLookup::record(
+            self,
+            name,
+            id.to_string(),
+        );
+    }
+
     /// A music-grouping app whose artist root resolves one settled album held
     /// under [`SETTLED_ALBUM_ID`] and attributed to `artist-alpha`, with images
     /// enabled and a ready (unroutable) Emby runtime.

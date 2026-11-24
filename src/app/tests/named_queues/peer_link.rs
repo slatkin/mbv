@@ -41,39 +41,6 @@ fn the_tui_link_keeps_the_connection_rule() {
     assert_eq!(app.displayed_queue().slots().len(), 2);
 }
 
-/// The local Owner's own position, distinct from the peer's.
-const HOME_POSITION: i64 = 7;
-
-/// The connected peer's own position, distinct from the local Owner's.
-const PEER_POSITION: i64 = 42;
-
-/// A GUI Client attached to the local Owner whose link plays at
-/// [`HOME_POSITION`], then connected to a peer that plays at
-/// [`PEER_POSITION`]: each link's commands land on its own channel. The
-/// connect shows the peer entry (design D7), as the playback-target chooser
-/// does.
-pub(crate) fn gui_app_with_peer() -> (
-    App,
-    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
-    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
-) {
-    let (mut app, home_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
-    while home_cmd_rx.try_recv().is_ok() {}
-    app.player
-        .update_status(|status| status.position_ticks = HOME_POSITION);
-    app.set_client_capabilities(gui_client_capabilities());
-    app.adopt_named_queue_list(named_queue_list(), current());
-
-    let (peer, peer_rx, peer_cmd_rx) =
-        mbv_remote_player::RemotePlayer::stub_with_command_rx(make_items(2), 1);
-    let sess = make_session("peer-host", "mbv");
-    app.switch_to_direct_remote(&sess, peer, peer_rx, &stub_endpoint());
-    app.player
-        .update_status(|status| status.position_ticks = PEER_POSITION);
-    while peer_cmd_rx.try_recv().is_ok() {}
-    (app, home_cmd_rx, peer_cmd_rx)
-}
-
 /// The pause intent one transport command sent to `link`'s owner.
 fn pause_intent(paused: bool) -> impl Fn(&mbv_ctrl::CtrlCmd) -> bool {
     move |cmd| {

@@ -58,7 +58,7 @@ fn make_built_app_ungated() -> App {
 }
 
 /// An `App` that stands in for the one a wrapper moves out before it wraps it
-/// (`GuiCore::new(std::mem::replace(..))`): the stub construction, which the
+/// (the GUI Client's wrapper parks one): the stub construction, which the
 /// wrapper drops as soon as the real `App` comes back.
 #[must_use]
 pub fn handoff_app() -> App {

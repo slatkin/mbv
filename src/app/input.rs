@@ -1,7 +1,6 @@
 mod browse_dispatch;
 mod confirm_keys;
-pub(in crate::app) mod gui;
-pub(in crate::app) mod key_policy;
+pub mod key_policy;
 pub use key_policy::{
     OverlayFocus, RemoteControlTarget, RouterNow, RouterOverlayState, RouterPlaybackState,
 };
@@ -25,7 +24,8 @@ impl crate::app::input::RouterNow for App {
 }
 
 impl App {
-    pub(in crate::app) fn context_menu_play_state(item: &EmbyItem) -> bool {
+    #[must_use]
+    pub fn context_menu_play_state(item: &EmbyItem) -> bool {
         if item.is_folder {
             item.unplayed_item_count == 0
         } else {
@@ -33,7 +33,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn context_menu_lib_idx(&self) -> Option<usize> {
+    pub fn context_menu_lib_idx(&self) -> Option<usize> {
         if matches!(self.effective_panel_focus(), PanelFocus::Library) {
             match self.tab {
                 TabSelection::EmbyLibrary(lib_idx) => Some(lib_idx),

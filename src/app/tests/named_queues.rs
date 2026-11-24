@@ -13,50 +13,6 @@ use rstest::rstest;
 
 pub(super) mod peer_link;
 
-/// The stub Owner's current queue.
-pub(crate) fn current() -> NamedQueueId {
-    NamedQueueId::from_raw(1)
-}
-
-/// The stub Owner's resting queue.
-pub(crate) fn resting() -> NamedQueueId {
-    NamedQueueId::from_raw(2)
-}
-
-/// The queue list the stub Owner publishes: `current()` holds three slots, the
-/// resting queue holds one.
-pub(crate) fn named_queue_list() -> Vec<NamedQueueEntry> {
-    vec![
-        NamedQueueEntry {
-            id: current(),
-            name: "Default".to_string(),
-            len: 3,
-        },
-        NamedQueueEntry {
-            id: resting(),
-            name: "Kids".to_string(),
-            len: 1,
-        },
-    ]
-}
-
-/// One resting queue's snapshot: `items` as its slots, naming `resting()`.
-pub(crate) fn resting_snapshot(items: &[EmbyItem]) -> UnifiedQueueStateData {
-    UnifiedQueueStateData {
-        queue: Some(resting()),
-        start_slot: None,
-        slots: items
-            .iter()
-            .enumerate()
-            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
-                slot_id: index as u64 + 1,
-                item: mbv_queue::QueueItem::Emby(Box::new(item.clone())),
-            })
-            .collect(),
-        ..emby_unified_state(items, 0)
-    }
-}
-
 /// A local-daemon App holding `local_items` on its current queue, with the
 /// Named-queue list adopted.
 fn app_with_named_queues(local_items: Vec<EmbyItem>) -> App {
@@ -113,31 +69,6 @@ fn queue_with_start(items: &[EmbyItem], start_index: usize) -> UnifiedQueueState
     state
 }
 
-/// A GUI Client attached to a local Owner that advertises answered queue ops,
-/// with the Named-queue list adopted and its constructor traffic drained.
-/// Every named-queue edit is an answered op, so a test answers the Client's
-/// own op through [`inject_local_events`].
-pub(crate) fn gui_app_with_named_queues() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    let (remote, player_rx, cmd_rx) =
-        mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(3), 0);
-    let config = crate::app::config::Config {
-        stay_alive: true,
-        ..remote_stub_config()
-    };
-    let mut app = App::new_remote_with_config(
-        mbv_emby::EmbyClient::new(config.clone()),
-        remote,
-        player_rx,
-        &mbv_remote_player::DaemonEndpoint::Local,
-        config,
-    );
-    close_initial_services(&mut app);
-    while cmd_rx.try_recv().is_ok() {}
-    app.set_client_capabilities(gui_client_capabilities());
-    app.adopt_named_queue_list(named_queue_list(), current());
-    (app, cmd_rx)
-}
-
 /// A TUI Client attached to a local Owner that advertises answered queue ops.
 fn answered_local_daemon_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (remote, player_rx, cmd_rx) =
@@ -158,14 +89,6 @@ fn answered_local_daemon_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::Ctrl
     (app, cmd_rx)
 }
 
-/// Replace the Local link's event receiver with an injected one, so a test can
-/// answer the Client's own queue op; keep the sender alive to deliver it.
-pub(crate) fn inject_local_events(app: &mut App) -> std::sync::mpsc::Sender<PlayerEvent> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    app.player_rx = rx;
-    tx
-}
-
 /// Replace the suspended home link's event receiver with an injected one, so a
 /// test can deliver the local Owner's events while a peer holds the active
 /// link. Keep the sender alive to deliver them.
@@ -176,14 +99,6 @@ pub(crate) fn inject_home_events(app: &mut App) -> std::sync::mpsc::Sender<Playe
         .expect("a suspended home link")
         .player_rx = rx;
     tx
-}
-
-/// The answer to the Client's own queue op `op`, carrying `data`.
-pub(crate) fn op_answer(op: u64, data: UnifiedQueueStateData) -> PlayerEvent {
-    PlayerEvent::QueueOpResult {
-        op: mbv_ctrl::QueueOpId(op),
-        outcome: mbv_ctrl::QueueOpOutcome::Applied(Box::new(data)),
-    }
 }
 
 /// The `queue` field one sent command carries, for the commands that address a

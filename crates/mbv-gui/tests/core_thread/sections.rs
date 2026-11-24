@@ -3,7 +3,7 @@
 //! else.
 
 use mbv::{
-    App, ClientTickHost, GuiClientEvent, stub_app_with_completed_emby_startup,
+    App, ClientTickHost, GuiClientEvent, GuiStateSeams, stub_app_with_completed_emby_startup,
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_queue,
 };
 use mbv_emby_model::EmbyItem;

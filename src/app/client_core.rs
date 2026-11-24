@@ -88,7 +88,7 @@ pub trait ClientTickHost {
     fn drain_lib_events(&mut self) -> bool;
 
     /// Drain the events this Client's own fetch workers report (design D5):
-    /// the GUI Client drains its own channel here, through `GuiCore`, after
+    /// the GUI Client drains its own channel here, through its own core, after
     /// `drain_lib_events`. `true` when any event arrived. The TUI Client starts
     /// no such fetch and drains nothing.
     fn drain_client_events(&mut self) -> bool;

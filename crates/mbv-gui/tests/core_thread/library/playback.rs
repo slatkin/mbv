@@ -2,8 +2,7 @@
 //! Owner is asked for by a play, an add, a shuffle, a play-next, and an item
 //! menu entry — the replacement or the append, its source, and its items.
 
-use mbv::ClientTickHost;
-use mbv::stub_app_with_queue_and_cmd_rx;
+use mbv::{ClientTickHost, GuiStateSeams, stub_app_with_queue_and_cmd_rx};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;

@@ -15,7 +15,7 @@
 use std::sync::mpsc::Receiver;
 
 use crate::Held;
-use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
+use mbv::{ClientTickHost, GuiStateSeams, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::art::{GuiArtRef, PLACEHOLDER_PATH, art_url};
 use mbv_gui::bridge::frame::library::{

@@ -7,7 +7,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use super::test_reads::gui;
 use super::{GUI_MUSIC_LIBRARY_ID, music_group_level};
 use crate::app::App;
 use crate::app::state::service_runtime::EmbyRuntime;
@@ -53,16 +52,5 @@ impl App {
         {
             level.items = series;
         }
-    }
-
-    /// Record `album_id` as the pick of `group_id` in `lib_idx`, as the
-    /// album pick command does: the selected group's Hero shows the pick
-    /// while the group's union holds it.
-    #[cfg(feature = "test")]
-    pub fn pick_gui_album_for_test(&mut self, lib_idx: usize, group_id: &str, album_id: &str) {
-        gui(self, |gui| {
-            gui.library_picks
-                .insert((lib_idx, group_id.to_string()), album_id.to_string());
-        });
     }
 }

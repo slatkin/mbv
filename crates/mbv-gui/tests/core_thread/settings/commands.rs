@@ -7,6 +7,7 @@
 //! live Owner.
 
 use super::*;
+use mbv::GuiStateSeams;
 
 // ── Rows 5.1 to 5.6: the command arms ────────────────────────────────────
 

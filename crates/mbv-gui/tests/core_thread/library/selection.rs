@@ -2,7 +2,7 @@
 //! design D5, D6, D2): the collection set the core keeps, the picked item the
 //! Hero shows, and the album track load an open starts.
 
-use mbv::ClientTickHost;
+use mbv::{ClientTickHost, GuiStateSeams};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 

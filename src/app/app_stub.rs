@@ -18,8 +18,53 @@ use super::QueueView;
 /// The stub constructions over `App::build`, in their own child module so this
 /// one stays within its line ceiling. Their first half is the construction a
 /// caller outside the `test` builds uses too (the parked `App` a Client wrapper
-/// moves out, `app::gui_library`, `app::gui_settings`, `app::input::gui`).
+/// moves out, and the GUI modules' own paths).
 pub(in crate::app) mod built;
+
+/// The whole-`App` fixtures and the item builders two Clients' tests share
+/// (`2-split-tui-gui-clients` design D4b rule 5), in their own child module so
+/// this file stays within its line ceiling.
+#[cfg(any(test, feature = "test"))]
+mod fixtures;
+
+/// The Named-queue fixtures a Client's own test builds (`2-split-tui-gui-clients`
+/// design D4b rule 5), in their own child module for the same reason.
+#[cfg(any(test, feature = "test"))]
+mod named_queues;
+
+#[cfg(any(test, feature = "test"))]
+pub use self::fixtures::{
+    close_initial_services, emby_unified_state, install_test_emby, live_owner_channel,
+    make_audio_items, make_audio_only_remote_app_stub_with_cmd_rx, make_items,
+    make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx,
+    make_local_daemon_app_stub_with_cmd_rx_and_compat, make_remote_app_stub,
+    make_remote_app_stub_at_index, make_remote_app_stub_with_cmd_rx, remote_stub_config,
+    seed_queue_row_menu_rows_for_test, seed_queue_shuffle_owner_for_test,
+};
+/// One seeded episode row of the GUI's Podcasts helpers: `(episode id, title,
+/// description, publish instant in unix seconds, duration seconds)`.
+#[cfg(any(test, feature = "test"))]
+pub type SeededAbsEpisode<'a> = (&'a str, &'a str, Option<&'a str>, Option<u64>, Option<f64>);
+
+/// One seeded book row of the GUI's Audiobooks catalog helper: `(id, title,
+/// author display, author sort key, duration seconds, cover path)`.
+#[cfg(any(test, feature = "test"))]
+pub type SeededAbsBook<'a> = (
+    &'a str,
+    &'a str,
+    Option<&'a str>,
+    &'a str,
+    f64,
+    Option<&'a str>,
+);
+
+#[cfg(test)]
+pub(crate) use self::named_queues::{HOME_POSITION, PEER_POSITION};
+#[cfg(any(test, feature = "test"))]
+pub use self::named_queues::{
+    current, gui_app_with_named_queues, gui_app_with_peer, inject_local_events, named_queue_list,
+    op_answer, resting, resting_snapshot,
+};
 
 pub use self::built::handoff_app;
 #[cfg(any(test, feature = "test"))]
@@ -351,77 +396,6 @@ pub fn push_movies_library_for_test(app: &mut App) {
     });
 }
 
-/// The entries of the GUI queue row menu a right-click on `slot` opens, as the
-/// Client's frame paints them: the labels and their order.
-#[cfg(any(test, feature = "test"))]
-#[must_use]
-pub fn gui_row_menu_entries_for_test(
-    app: &mut App,
-    slot: mbv_queue::QueueSlotId,
-) -> Vec<mbv_ui_model::context_menu::ContextMenuEntry> {
-    let mut core = crate::gui::GuiCore::new(std::mem::replace(app, handoff_app()));
-    core.open_gui_row_menu(&[slot]);
-    let entries = match core.gui.take_overlay_for_test() {
-        Some(crate::app::gui_client_state::GuiOverlay::RowMenu(menu)) => menu.entries,
-        _ => Vec::new(),
-    };
-    *app = core.into_app();
-    entries
-}
-
-/// The `App` a Client's test drives with the queue built from `items` and
-/// the row menu open over its first slot, so a frame test reads the open
-/// menu's entries and their key hints (add-tauri-gui-client row 6.2). The
-/// menu is the same one `RowContextMenu`'s open path builds.
-///
-/// # Panics
-///
-/// Panics while resolving the menu's row when `items` is empty: the stub
-/// queue then has no first slot to open the menu over.
-#[cfg(feature = "test")]
-#[must_use]
-pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
-    let app = stub_app_with_playing_items(items);
-    let row = app
-        .displayed_queue()
-        .slot_id_at(0)
-        .expect("the stub queue has a first slot");
-    let mut core = crate::gui::GuiCore::new(app);
-    core.open_gui_row_menu(&[row]);
-    // The overlay is the wrapper's own Client state, and the test reads the
-    // state beside the `App` (row 8.1 of `decouple-client-core`), so what the
-    // chord opened goes back out.
-    core.publish_seeded_gui_state_for_test();
-    core.into_app()
-}
-
-/// The `App` a Client's test drives with an active player carrying one audio
-/// and one subtitle track, and the track chip's popover open on `chip`, so a
-/// frame test reads the popover's choices with their chosen marks
-/// (add-tauri-gui-client row 6.2).
-#[cfg(feature = "test")]
-#[must_use]
-pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
-    let mut app = stub_app_with_playing_queue(1);
-    app.player.update_status(|status| {
-        status.active = true;
-        status.audio_tracks = vec![(1, "Stereo".to_string())];
-        status.audio_id = 1;
-        status.sub_tracks = vec![(2, "Forced".to_string(), true)];
-        status.sub_id = 0;
-    });
-    // The popover opens through the GUI Client's own half of the chip press:
-    // the shared playback dispatch's arm for it is a documented core no-op
-    // (design D4a (a)), and the GUI entry (`input/gui.rs`) applies it after
-    // the core. An inactive player lists no choice, so it opens nothing.
-    let mut core = crate::gui::GuiCore::new(std::mem::replace(&mut app, make_app_stub()));
-    core.toggle_gui_track_popover(chip);
-    // The overlay is the wrapper's own Client state, and the test reads the
-    // state beside the `App` (row 8.1 of `decouple-client-core`), so what the
-    // press opened goes back out.
-    core.publish_seeded_gui_state_for_test();
-    core.into_app()
-}
 /// The `App` a GUI Client's test drives with the cast receivers replaced by
 /// `receivers` (add-tauri-gui-client row 6.5's paint/press regression): the
 /// target list the last emitted frame painted can then differ from the list
@@ -532,25 +506,17 @@ pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::
     (app, cmd_rx)
 }
 
-/// The `App` a GUI Client's test drives with the Settings screen open at
-/// Services and a failed Emby setup form whose password field still holds the
-/// typed secret (`add-gui-settings-screen` row 4.3): the frame's Services
+/// The `App` a GUI Client's test drives with a failed Emby setup form whose
+/// password field still holds the typed secret (`add-gui-settings-screen` row
+/// 4.3): the Client opens the Settings screen itself, and the frame's Services
 /// content must carry the error and the server URL and never the password.
 #[cfg(feature = "test")]
 #[must_use]
-pub fn stub_app_with_failed_emby_setup() -> App {
+pub fn stub_app_with_failed_emby_setup_form() -> App {
     use crate::app::dispatch::session::services_settings::EmbySetupForm;
     use mbv_core::service_runtime::ServiceState;
 
-    let mut core = crate::gui::GuiCore::new(make_app_stub());
-    core.apply_gui_settings_overlay(&mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
-        mbv_ui_model::overlay::SidebarId::Settings,
-    ));
-    // The open screen is the wrapper's own Client state, and the test reads
-    // the state beside the `App` (row 8.1 of `decouple-client-core`), so it
-    // goes back out.
-    core.publish_seeded_gui_state_for_test();
-    let mut app = core.into_app();
+    let mut app = make_app_stub();
     app.setup.emby_setup_form = Some(EmbySetupForm {
         fields: [
             "https://emby.example.test".to_string(),
@@ -707,12 +673,6 @@ pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>
 /// (`app_stub::test_reads`).
 #[cfg(any(test, feature = "test"))]
 pub(in crate::app) mod test_reads;
-#[cfg(feature = "test")]
-pub use self::test_reads::drain_lib_event_with_stores_for_test;
-#[cfg(any(test, feature = "test"))]
-pub use self::test_reads::gui_state_for_test;
-#[cfg(feature = "test")]
-pub use self::test_reads::seeded_gui_state_for_test;
 
 /// The `App` a GUI Client's Owner-exit test drives (`daemon-disconnect-`
 /// `handling` "Clients exit cleanly on an announced shutdown"): the stub

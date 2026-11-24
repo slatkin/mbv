@@ -30,10 +30,10 @@ impl App {
     /// hero-scoped so a plain consumer of the same cover — the queue card
     /// painting a playing episode of this show — keeps its uncropped
     /// encoding instead of the hero's cover-fit crop, and neither flashes.
-    pub(in crate::app) fn audiobookshelf_cover_key(
-        &mut self,
-        library_item_id: &str,
-    ) -> Option<String> {
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    pub fn audiobookshelf_cover_key(&mut self, library_item_id: &str) -> Option<String> {
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone()?;
         let cache_key = audiobookshelf_hero_cover_cache_key(
             &setup.server_url,
@@ -78,7 +78,10 @@ impl App {
 
     /// The configured Audiobookshelf server's URL, or `None` with no Service
     /// setup: the row cache key's server identity (design D6).
-    pub(in crate::app) fn audiobookshelf_server_url(&self) -> Option<String> {
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    pub fn audiobookshelf_server_url(&self) -> Option<String> {
         self.config
             .lock()
             .unwrap()
@@ -91,7 +94,10 @@ impl App {
     /// cache key holding the library item's update time, the book's width or
     /// the podcast cover's, and the Service credentials. `None` with no server
     /// configured or no stored credential.
-    pub(in crate::app) fn audiobookshelf_row_request(
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    pub fn audiobookshelf_row_request(
         &self,
         library_item_id: &str,
         book: bool,

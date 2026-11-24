@@ -4,7 +4,7 @@
 use super::*;
 use crate::app::state::context_menu_capabilities::{ItemCapabilities, emby_item_capabilities};
 use crate::push_movies_library_for_test;
-use mbv_ui_model::context_menu::{ContextAction, ContextMenuEntry};
+use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::overlay::OverlayRequest;
 use rstest::rstest;
 
@@ -75,46 +75,6 @@ fn emby_menu_follows_the_standard_action_set_for(
     assert_eq!(menu_labels_for(&mut app, item), expected);
 }
 
-/// queue-content-shuffle spec, "The Queue list menu offers Shuffle": the GUI
-/// Client's per-row right-click menu offers the same Queue list Shuffle entry
-/// the TUI offers, after the play entries and before the removals (a music
-/// row, which takes no mark or go-to entries, shows the full order).
-#[test]
-fn the_gui_row_menu_offers_shuffle_before_the_removals() {
-    let mut app = queue_menu_app(true, leaf_item("queued track", "Audio", "Audio", false));
-
-    let labels: Vec<_> = gui_row_menu(&mut app, mbv_queue::QueueSlotId::from_raw(1))
-        .iter()
-        .map(|entry| entry.label)
-        .collect();
-
-    assert_eq!(
-        labels,
-        vec![
-            "Play now",
-            "Play next",
-            "Shuffle",
-            "Remove from queue",
-            "Clear queue"
-        ]
-    );
-}
-
-/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner
-/// without the capability): the GUI row menu hides the entry when the owner
-/// does not advertise the `queue-shuffle` ctrl capability.
-#[test]
-fn the_gui_row_menu_hides_shuffle_without_the_capability() {
-    let mut app = queue_menu_app(false, leaf_item("queued movie", "Movie", "Video", false));
-
-    let labels: Vec<_> = gui_row_menu(&mut app, mbv_queue::QueueSlotId::from_raw(1))
-        .iter()
-        .map(|entry| entry.label)
-        .collect();
-
-    assert!(!labels.contains(&"Shuffle"));
-}
-
 #[test]
 fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
     let mut app = emby_library_app();
@@ -144,13 +104,8 @@ fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
 /// capability, so the Queue list Shuffle entry is offered or hidden
 /// (queue-content-shuffle design D6).
 fn queue_shuffle_capable_app(shuffle_capable: bool) -> App {
-    let (mut remote, _events, _cmd) =
-        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
-    let mut compat = mbv_ctrl::CtrlCompatibility::current();
-    compat.supports_queue_shuffle = shuffle_capable;
-    remote.set_ctrl_compatibility_for_test(compat);
     let mut app = make_app_stub();
-    app.seed_active_player_for_test(mbv_player::PlayerProxy::from_remote(remote, false));
+    crate::app::seed_queue_shuffle_owner_for_test(&mut app, shuffle_capable);
     app
 }
 
@@ -158,10 +113,10 @@ fn queue_shuffle_capable_app(shuffle_capable: bool) -> App {
 /// `item` as the one displayed slot.
 fn queue_menu_app(shuffle_capable: bool, item: EmbyItem) -> App {
     let mut app = queue_shuffle_capable_app(shuffle_capable);
-    app.set_panel_focus_for_test(PanelFocus::Queue);
-    app.seed_local_queue_snapshot_for_test(&queue_state(vec![mbv_queue::QueueItem::Emby(
-        Box::new(item),
-    )]));
+    crate::app::seed_queue_row_menu_rows_for_test(
+        &mut app,
+        vec![mbv_queue::QueueItem::Emby(Box::new(item))],
+    );
     app
 }
 
@@ -190,12 +145,6 @@ fn queue_state(items: Vec<mbv_queue::QueueItem>) -> mbv_ctrl::UnifiedQueueStateD
 fn opened_menu_labels(app: &mut App) -> Vec<&'static str> {
     app.open_focused_context_menu_for_test();
     pending_menu_labels(app)
-}
-
-/// The ordered entries of the GUI row menu the GUI Client opens on `slot`:
-/// what the frame carries to the window content.
-fn gui_row_menu(app: &mut App, slot: mbv_queue::QueueSlotId) -> Vec<ContextMenuEntry> {
-    crate::gui_row_menu_entries_for_test(app, slot)
 }
 
 /// queue-content-shuffle spec, "The Queue list menu offers Shuffle": an Emby

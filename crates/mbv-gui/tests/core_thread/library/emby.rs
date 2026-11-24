@@ -7,7 +7,7 @@
 //! or window runs (design D13).
 
 use crate::Held;
-use mbv::ClientTickHost;
+use mbv::{ClientTickHost, GuiStateSeams};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiLibraryDetail, GuiMetaKindFrame,

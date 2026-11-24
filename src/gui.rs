@@ -1,26 +1,86 @@
 //! The GUI Client's core state (design D4 of `decouple-client-core`): the
 //! shared `App` the GUI owns, wrapped by composition.
 //!
-//! `GuiCore` is defined in the root package but outside `crate::app`, so
-//! `2-split-tui-gui-clients` does not need to move it once the GUI modules sit
-//! beside it (its D4c). The GUI's `CoreThread` holds one and keeps its
-//! `ClientTickHost` implementation; no `App` field becomes `pub` for it (this
-//! change's D4), so the owned `App` stays behind this field, visible only
-//! inside the root package. The GUI state (`GuiClientState`) sits beside it,
-//! so a GUI `impl GuiCore` block reads the core as `self.app.<...>` and its
-//! Client state as `self.gui.<...>`.
+//! `GuiCore`, the GUI modules, and the GUI routing entry live here, outside
+//! `crate::app`, so the boundary rehearsal takes their module shape now
+//! (`2-split-tui-gui-clients` design D4c). The GUI's `CoreThread` holds one
+//! `GuiCore` and keeps its `ClientTickHost` implementation; no `App` field
+//! becomes `pub` for it (this change's D4), so the owned `App` stays behind
+//! this field, visible only inside this module. The GUI state
+//! (`GuiClientState`) sits beside it, so a GUI `impl GuiCore` block reads the
+//! core as `self.app.<...>` and its Client state as `self.gui.<...>`.
+
+mod gui_client_state;
+mod gui_library;
+mod gui_playlists;
+mod gui_settings;
+mod input;
+
+#[cfg(any(test, feature = "test"))]
+pub mod test_support;
+#[cfg(test)]
+mod tests;
+
+pub use self::gui_client_state::GuiClientState;
+pub use self::gui_client_state::{
+    GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
+    QueueChooserEntryProjection, QueueChooserRenameProjection, QueueHeaderProjection,
+    RowMenuEntryProjection, TrackPopoverChoice,
+};
+pub use self::gui_library::client_events::install_client_event;
+pub use self::gui_library::{
+    GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
+    GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,
+    GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind,
+    compare_gui_date_order,
+};
+pub use self::gui_library::{
+    GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
+    GuiAudiobooksWorkspace,
+};
+pub use self::gui_library::{
+    GuiDestinationKind, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow,
+    GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
+    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
+};
+pub use self::gui_library::{
+    GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, GuiFeedsSelection,
+    GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu,
+    GuiLibraryTab, GuiLibraryTabs, GuiListSort, GuiListSortFrame, GuiMusicAlbum, GuiMusicArtist,
+    GuiMusicHero, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPlayheadMarks,
+    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
+    GuiSearchProjection, GuiSearchRow, GuiSortTarget, gui_feeds_platform,
+};
+pub use self::gui_library::{
+    GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
+    artist_rows_in_view_id, playing_track_id_for_shell,
+};
+#[cfg(test)]
+pub(crate) use self::gui_library::{gui_active_destination, gui_library_tabs};
+pub use self::gui_playlists::{
+    GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,
+    GuiPlaylistsCommand, GuiPlaylistsProjection,
+};
+pub use self::gui_settings::{
+    GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
+    GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
+    GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsLibraryProjection,
+    GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection, GuiSettingsRowKind,
+    GuiSettingsRowProjection, GuiSettingsSection, GuiSettingsServiceProjection,
+    GuiSettingsServicesProjection, GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
+    SetupSecret,
+};
+pub use self::input::{GuiInput, GuiSurfaceLeaf};
 
 use crate::app::App;
-use crate::app::gui_client_state::GuiClientState;
-use crate::app::install_client_event;
 
 /// The GUI Client's core state: the `App` it owns and its own Client state.
 /// Every GUI `impl` block becomes `impl GuiCore` and reads its core state as
 /// `self.app.<...>` (design D4).
 pub struct GuiCore {
-    /// The owned core. Its `impl GuiCore` blocks live under `crate::app`, so
-    /// the field is visible there; every `App` field stays as private as it
-    /// was.
+    /// The owned core. Its `impl GuiCore` blocks live in this module and its
+    /// children, so the field is visible there; every `App` field stays as
+    /// private as it was.
     pub(crate) app: App,
     /// The GUI Client's own state (design D4): every field only GUI code
     /// reads or writes. It is its own `ClientLibraryStores` implementor, so
@@ -100,13 +160,14 @@ impl GuiCore {
     /// [`Self::publish_seeded_gui_state_for_test`] at the end, so the test's
     /// own `*_for_test` reads see what the step left. Only a dependent
     /// Client's `test` build keeps the sidecar: this crate's own tests hold
-    /// their state in `crate::app::tests`, and a build without the `test`
+    /// their state in `test_support`, and a build without the `test`
     /// feature holds none, so there the pair is empty and the calls compile
     /// out. The tick host's step makes them in every build.
     pub fn take_seeded_gui_state_for_test(&mut self) {
         #[cfg(all(not(test), feature = "test"))]
         {
-            let seeded = crate::app::seeded_gui_state_for_test(std::option::Option::take);
+            let seeded =
+                crate::gui::test_support::seeded_gui_state_for_test(std::option::Option::take);
             if let Some(seeded) = seeded {
                 self.gui = seeded;
             }
@@ -120,7 +181,7 @@ impl GuiCore {
     /// with it everywhere else.
     pub fn publish_seeded_gui_state_for_test(&self) {
         #[cfg(all(not(test), feature = "test"))]
-        crate::app::seeded_gui_state_for_test(|slot| *slot = Some(self.gui.clone()));
+        crate::gui::test_support::seeded_gui_state_for_test(|slot| *slot = Some(self.gui.clone()));
     }
 
     /// The shared `App` back out of the wrapper, for a caller that wraps the
@@ -137,7 +198,7 @@ impl GuiCore {
     pub(crate) fn into_app_keeping_gui(self, app: &mut App) {
         let Self { app: owned, gui } = self;
         *app = owned;
-        crate::app::tests::stub_gui_state(|slot| *slot = gui);
+        crate::gui::test_support::stub_gui_state(|slot| *slot = gui);
     }
 }
 

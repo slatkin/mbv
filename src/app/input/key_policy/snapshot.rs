@@ -124,7 +124,7 @@ pub struct RouterSnapshot {
 ///
 /// Two implementors carry the fact in production, so neither Client's routing
 /// site reads the other's state: the core `App` (its own `prefix_armed`
-/// field) and the GUI Client's `GuiCore` (the same method, one accessor down),
+/// field) and the GUI Client's own core (the same method, one accessor down),
 /// and both Clients resolve through one router entry
 /// ([`super::resolve_router_outcome`]). The TUI Client's shell forwards it as
 /// well, because arming and disarming also hold `TuiRealm` focus off.

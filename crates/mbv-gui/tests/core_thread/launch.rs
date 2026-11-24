@@ -5,7 +5,7 @@
 //! so no request leaves the process and no live Owner, Service, or window runs
 //! (design D13).
 
-use mbv::{ClientTickHost, stub_app_with_queue};
+use mbv::{ClientTickHost, GuiStateSeams, stub_app_with_queue};
 use mbv_config::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget, GuiLaunchState,
     TabIdentity, TestStateDirGuard, gui_launch_state_path, load_gui_launch_state,

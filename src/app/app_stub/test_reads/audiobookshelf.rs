@@ -9,8 +9,7 @@
 //! child module of `test_reads` and keeps that file within its line ceiling.
 
 use super::super::App;
-use super::gui;
-use super::{SeededAbsBook, SeededAbsEpisode};
+use super::super::{SeededAbsBook, SeededAbsEpisode};
 
 impl App {
     /// Make the Audiobookshelf catalog still pending (add-gui-library-panel
@@ -60,15 +59,17 @@ impl App {
             .collect();
     }
 
-    /// The book the GUI Library's Hero shows for the Audiobookshelf book
-    /// library `lib_idx` (add-gui-library-panel row 9.1).
-    #[must_use]
-    pub fn gui_abs_picked_book_for_test(&self, lib_idx: usize) -> Option<String> {
-        gui(self, |gui| {
-            gui.abs_libs
-                .get(&lib_idx)
-                .and_then(|selection| selection.picked_book.clone())
-        })
+    /// Name `server_url` as the configured Audiobookshelf server, as a saved
+    /// setup leaves it: the row-art keys and the row sources read it.
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_audiobookshelf_server_url_for_test(&mut self, server_url: &str) {
+        self.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup {
+            server_url: server_url.to_owned(),
+            revision: 1,
+        });
     }
 
     /// Seed the GUI's Audiobooks book catalog for `lib_idx` with `books`, as

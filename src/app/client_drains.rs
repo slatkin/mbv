@@ -256,7 +256,7 @@ impl App {
     /// each event applies its collected effects through `stores` after the
     /// event and before the next one. A Client that keeps no such stores
     /// passes `None`, which is what [`Self::drain_lib_event`] does.
-    pub(in crate::app) fn drain_lib_event_with_stores(
+    pub fn drain_lib_event_with_stores(
         &mut self,
         stores: Option<&mut dyn ClientLibraryStores>,
     ) -> bool {

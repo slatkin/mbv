@@ -167,7 +167,7 @@ impl App {
     /// type filter, unplayed-only flag, sort field and order. One source for
     /// both the first root-level load and the global UI-state reset (#745),
     /// so a reset cannot drift from a fresh library's defaults.
-    pub(in crate::app) fn default_library_level_fields(
+    pub fn default_library_level_fields(
         &self,
         idx: usize,
     ) -> (Option<String>, bool, String, String) {

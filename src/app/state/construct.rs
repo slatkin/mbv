@@ -22,8 +22,8 @@ fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
 }
 
 /// Whether the GUI player's controls auto-hide: the `gui_player_auto_hide`
-/// preference `GuiClientState` starts from (design D4 leaves the key a Client
-/// key, so its reader sits beside the state it fills).
+/// preference the GUI Client's own state starts from (design D4 leaves the key
+/// a Client key, so its reader sits beside the state it fills).
 pub fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["gui_player_auto_hide"].as_bool().unwrap_or(false)
 }
