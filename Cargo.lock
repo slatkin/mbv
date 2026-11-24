@@ -3591,6 +3591,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-client-core"
+version = "0.28.3"
+dependencies = [
+ "image",
+ "indexmap",
+ "libc",
+ "mbv-audiobookshelf",
+ "mbv-cast",
+ "mbv-config",
+ "mbv-core",
+ "mbv-ctrl",
+ "mbv-daemon",
+ "mbv-desktop",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-feed",
+ "mbv-ids",
+ "mbv-images",
+ "mbv-keybinds",
+ "mbv-net",
+ "mbv-player",
+ "mbv-queue",
+ "mbv-remote-player",
+ "mbv-surfaces",
+ "mbv-text",
+ "mbv-theme",
+ "mbv-ui-model",
+ "mbv-ui-msg",
+ "mbv-visualizer",
+ "mbv-ws",
+ "rand 0.10.4",
+ "serde_json",
+ "time",
+ "toml",
+ "tracing",
+ "unicode-width",
+ "ureq",
+]
+
+[[package]]
 name = "mbv-components"
 version = "0.28.3"
 dependencies = [

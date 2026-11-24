@@ -1,0 +1,63 @@
+[package]
+name = "mbv-client-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Shared Client core for the mbv terminal and GUI Clients."
+readme = "../../README.md"
+
+# Exposes the core's test fixtures and test-only actions to the Clients' tests;
+# the shipped builds never enable it.
+[features]
+test = [
+    "mbv-config/test",
+    "mbv-emby/test",
+    "mbv-emby-model/test",
+    "mbv-images/test",
+    "mbv-remote-player/test",
+]
+
+[lints]
+workspace = true
+
+# The core is a library below the shell, so it inherits the workspace's
+# terminal-write restriction rather than the `mbv` binary's copy of the block.
+[dependencies]
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-cast = { path = "../mbv-cast" }
+mbv-config = { path = "../mbv-config" }
+mbv-core = { path = "../mbv-core" }
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-daemon = { path = "../mbv-daemon" }
+mbv-desktop = { path = "../mbv-desktop" }
+mbv-emby = { path = "../mbv-emby" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-feed = { path = "../mbv-feed" }
+mbv-ids = { path = "../mbv-ids" }
+mbv-images = { path = "../mbv-images" }
+mbv-keybinds = { path = "../mbv-keybinds" }
+mbv-net = { path = "../mbv-net" }
+mbv-player = { path = "../mbv-player" }
+mbv-queue = { path = "../mbv-queue" }
+mbv-remote-player = { path = "../mbv-remote-player" }
+mbv-surfaces = { path = "../mbv-surfaces" }
+mbv-text = { path = "../mbv-text" }
+mbv-theme = { path = "../mbv-theme" }
+mbv-ui-model = { path = "../mbv-ui-model" }
+mbv-ui-msg = { path = "../mbv-ui-msg" }
+mbv-visualizer = { path = "../mbv-visualizer" }
+mbv-ws = { path = "../mbv-ws" }
+image = { workspace = true, features = ["jpeg", "png", "gif", "webp", "bmp"] }
+indexmap.workspace = true
+libc.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+time = { workspace = true, features = ["local-offset"] }
+toml.workspace = true
+tracing.workspace = true
+unicode-width.workspace = true
+ureq = { workspace = true, features = ["json"] }
