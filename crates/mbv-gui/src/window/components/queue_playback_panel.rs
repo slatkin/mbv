@@ -55,7 +55,7 @@ mod scrubber;
 use art_stage::{ArtStage, ChipsAndBadge, ControlRow, ControlRowHandles, player_scale};
 
 /// The title block's media-kind icon size, in CSS pixels (user request
-/// 2026-11-20): a large glyph against the block's 22 px title.
+/// 2026-11-20): a large glyph against the block's 18 px title.
 const KIND_ICON_SIZE: u16 = 28;
 /// The media-kind icon's colour: the panel accent's sand, the user's named
 /// hex for both kind icons (2026-11-20). No theme role names it.
@@ -282,7 +282,7 @@ pub fn QueuePlaybackPanel() -> Element {
                 {art_section}
                 // The title block of the canvas's layering (design D2): the
                 // panel fill, its 16/20/18 insets, the rule that separates it
-                // from the queue header, the title in the mono face's 22 px/700
+                // from the queue header, the title in the mono face's 18 px/700
                 // caps, and the parent line under it in the mono face's 14 px/400
                 // (user request 2026-11-24). The title is uppercased here, not by
                 // `text-transform`, so the `Truncate` measure reads the glyphs it
@@ -306,10 +306,10 @@ pub fn QueuePlaybackPanel() -> Element {
                         Truncate {
                             text: title.to_uppercase(),
                             css: format!(
-                                "font-family: var(--font-mono); font-size: 22px; font-weight: 700; letter-spacing: 0.06em; color: {};",
+                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; letter-spacing: 0.06em; color: {};",
                                 ef_var(EfToken::Fg)
                             ),
-                            style: TextStyle::mono(22.0, 700.0).tracking(0.06),
+                            style: TextStyle::mono(18.0, 700.0).tracking(0.06),
                         }
                         if let Some(parent_line) = playback.parent_line.as_ref() {
                             Truncate {
