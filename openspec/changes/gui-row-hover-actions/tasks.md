@@ -46,7 +46,7 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 8. Integration
 
-- [ ] 8.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and fix every failure. Verify: all three pass.
+- [x] 8.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and fix every failure. Verify: all three pass.
 
 ## Workflow follow-up
 
