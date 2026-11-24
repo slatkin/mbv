@@ -13,7 +13,7 @@ mbv SHALL accept `--pin`, which runs the TUI in a pinwin panel named `mbv`: pinw
 terminal as the panel, and that terminal runs mbv with the hidden `--in-panel` flag. The process
 that ran `--pin` SHALL wait until the panel's terminal ends. Without `--pin`, mbv SHALL start in the current terminal exactly as
 before; no config setting starts the panel. `--pin` SHALL combine with `--log-level`, and the mbv
-in the panel SHALL run with that log level. `-h`, `-V`, `-q`, `--toggle` and `--__local-daemon`
+in the panel SHALL run with that log level. `-h`, `-V`, `-q` and `--toggle`
 SHALL never start a panel. The panel SHALL close when mbv in it exits. At most one panel named
 `mbv` SHALL run per Wayland display. When it already runs, `--pin` SHALL show it, leave a shown
 panel unchanged, open no second panel, start no TUI, and exit with status 0.

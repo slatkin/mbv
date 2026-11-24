@@ -31,12 +31,12 @@ mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal prog
 
 ### Requirement: The GUI program ships beside the terminal program
 
-Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the Vulkan loader and fontconfig runtime dependencies. No artifact SHALL declare a WebKitGTK dependency. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
+Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program and the `mbv-owner` program, and SHALL declare the Vulkan loader and fontconfig runtime dependencies. No artifact SHALL declare a WebKitGTK dependency. The GUI Client finds and starts its Owner from the sibling `mbv-owner` program, and the version and wire handshake refuses a mismatched pair, so all three programs SHALL come from one build.
 
 #### Scenario: A package installs both programs
 
 - **WHEN** the tarball, the `.deb`, or an Arch package is installed
-- **THEN** `mbv` and `mbv-gui` are installed in the same directory
+- **THEN** `mbv`, `mbv-gui`, and `mbv-owner` are installed in the same directory
 
 #### Scenario: A package declares the render stack
 
@@ -51,7 +51,7 @@ The GUI Client SHALL be a Client of the Owner process under the same rules as a 
 #### Scenario: No Owner process is running
 
 - **WHEN** the GUI Client starts and no Owner process is running
-- **THEN** the GUI Client starts the Owner process from the `mbv` program and attaches to it
+- **THEN** the GUI Client starts the Owner process from the `mbv-owner` program and attaches to it
 
 #### Scenario: A TUI Client and a GUI Client are attached at once
 
@@ -71,7 +71,7 @@ The GUI Client SHALL be a Client of the Owner process under the same rules as a 
 - **GIVEN** a running Owner process from a different build
 - **WHEN** the GUI Client starts
 - **THEN** the window shows the mismatch and offers Restart and Quit, each on a key
-- **AND** Restart stops that Owner process, starts a new one from the `mbv` program, and attaches to it
+- **AND** Restart stops that Owner process, starts a new one from the `mbv-owner` program, and attaches to it
 
 #### Scenario: Unannounced Owner loss presents the recovery dialog
 

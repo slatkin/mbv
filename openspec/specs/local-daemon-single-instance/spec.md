@@ -173,7 +173,7 @@ The mismatch prompt SHALL show the application version, build identity, and wire
 #### Scenario: User chooses restart
 - **WHEN** the user chooses restart at the mismatch prompt
 - **THEN** mbv SHALL ask the Owner to stop the same way `mbv -q` does, so the Owner persists its state and exits
-- **THEN** mbv SHALL start a fresh Owner from this binary once the old one has released the lock, and attach to it
+- **THEN** mbv SHALL start a fresh Owner from the `mbv-owner` program beside this Client once the old one has released the lock, and attach to it
 - **THEN** mbv SHALL NOT show the prompt again for the Owner that is stopping
 
 #### Scenario: The old Owner does not exit in time
