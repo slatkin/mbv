@@ -740,3 +740,37 @@ fn a_press_sends_the_select_command_with_the_row_id() {
         "the select command names the row id"
     );
 }
+
+/// Contract (gui-list-header-buttons design D1, spec "Shows New shows no tree
+/// buttons"; the requirement is which controls show): the All view's header
+/// paints Expand all and Collapse all, and the New view's header paints
+/// neither, because its list is flat.
+#[test]
+fn the_all_view_paints_the_tree_buttons_and_the_new_view_paints_neither() {
+    let mut all = built(shows_frame(tree()), shows_detail(None));
+    all.measure(300.0);
+    assert!(
+        all.presents("[data-library-expand-all]"),
+        "the All view's header paints Expand all"
+    );
+    assert!(
+        all.presents("[data-library-collapse-all]"),
+        "the All view's header paints Collapse all"
+    );
+
+    let new = GuiShowsList {
+        view: crate::gui_core::GuiShowsView::New,
+        rows: new_view_rows(),
+        ..shows_frame(Vec::new())
+    };
+    let mut new = built(new, shows_detail(None));
+    new.measure(300.0);
+    assert!(
+        !new.presents("[data-library-expand-all]"),
+        "the New view's header paints no Expand all"
+    );
+    assert!(
+        !new.presents("[data-library-collapse-all]"),
+        "the New view's header paints no Collapse all"
+    );
+}

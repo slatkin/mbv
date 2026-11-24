@@ -22,6 +22,11 @@
 //! episode rows paint through the nested row part at the first and second depth
 //! (gui-unified-list-rows design D3). The rows the list paints are also the row
 //! art set the core fetches (design D7).
+//!
+//! The All view paints the series tree, so its header paints the Expand all and
+//! Collapse all buttons (gui-list-header-buttons design D1, D4): they change the
+//! window's open nodes and send no command. The New and Upcoming views are flat
+//! lists, so they paint neither button.
 
 use std::collections::HashSet;
 
@@ -34,7 +39,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
-use crate::window::components::library_list_header::LibraryListHeaderProps;
+use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryTreeActions};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::list_row::{
     FlatRow, LibraryRowThumb, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow, TreeTrail,
@@ -422,6 +427,18 @@ pub fn LibraryShowsList() -> Element {
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The tree's two header presses (gui-list-header-buttons design D1, D4):
+    // only the All view paints the series tree, so the flat New and Upcoming
+    // views paint neither button.
+    let tree =
+        (frame.map(|frame| frame.view) == Some(crate::gui_core::GuiShowsView::All)).then(|| {
+            let expand_library = library.clone();
+            let collapse_library = library.clone();
+            LibraryTreeActions {
+                on_expand_all: Callback::new(move |()| expand_library.expand_all_shows()),
+                on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_shows()),
+            }
+        });
     // The header's facts (design D14, user override): the Shows destination is
     // an Emby destination, so its Emby mark names it under every view
     // (gui-library-header-service-marks design D5), and the view dropdown names
@@ -434,7 +451,7 @@ pub fn LibraryShowsList() -> Element {
         view: frame.map(|frame| frame.view),
         sort,
         on_refresh: Callback::new(|()| {}),
-        tree: None,
+        tree,
         filter: shows_ui.filter.clone(),
         placeholder: filter_placeholder,
         aria_label: "Filter series".to_owned(),

@@ -276,6 +276,59 @@ impl LibraryState {
         }
     }
 
+    /// Open every painted artist row (gui-list-header-buttons design D4, spec
+    /// "Expand all opens every top-level parent row the list shows"): the
+    /// album rows' open state stays as it was, so the press opens no album. The
+    /// ids also leave the filter's closed set, so the artists stay open after
+    /// the filter clears. The press sends no command and picks nothing.
+    pub fn expand_all_music(&self) {
+        let ui = self.ui.peek().clone();
+        let rows = self.rows_of(&ui);
+        let artists: Vec<String> = rows
+            .iter()
+            .filter_map(|row| match row {
+                LibraryRow::Artist { base, .. } => Some(base.id.clone()),
+                LibraryRow::Letter(_) | LibraryRow::Album { .. } | LibraryRow::Track { .. } => None,
+            })
+            .collect();
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            for id in &artists {
+                with_id(&mut ui.open_nodes, id, true);
+                with_id(&mut ui.filter_closed, id, false);
+            }
+        });
+    }
+
+    /// Close every open parent row (gui-list-header-buttons design D4, spec
+    /// "Collapse all closes every open parent row"): every artist and album
+    /// row. While the filter narrows the rows, the painted parent rows also
+    /// enter the filter's closed set, so the rows the filter opened stay shut
+    /// after it clears. The press sends no command and picks nothing.
+    pub fn collapse_all_music(&self) {
+        let ui = self.ui.peek().clone();
+        let rows = self.rows_of(&ui);
+        let narrowing = !ui.filter.trim().is_empty();
+        let parents: Vec<String> = rows
+            .iter()
+            .filter_map(|row| match row {
+                LibraryRow::Artist { base, .. } | LibraryRow::Album { base, .. } => {
+                    Some(base.id.clone())
+                }
+                LibraryRow::Letter(_) | LibraryRow::Track { .. } => None,
+            })
+            .collect();
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            ui.open_nodes.clear();
+            if narrowing {
+                for id in &parents {
+                    with_id(&mut ui.filter_closed, id, true);
+                }
+            }
+        });
+    }
+
     /// Scroll the list by one movement key (design D6): Up and Down move by the
     /// height of the row at the top edge, Page Up and Page Down by the viewport
     /// height, and Home and End go to the list's ends, inside the list's range.

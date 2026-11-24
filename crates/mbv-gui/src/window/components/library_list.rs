@@ -21,6 +21,10 @@
 //! (gui-tree-double-click design D1), and an album without a cached tracklist
 //! asks the core to load it. The list keeps no cursor: the keys
 //! act on the row the pointer marks (`gui-pointer-target-interaction` D2).
+//!
+//! The list is a tree, so its header paints the Expand all and Collapse all
+//! buttons (gui-list-header-buttons design D1, D4): they change the window's
+//! open nodes and send no command.
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -33,7 +37,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
-use crate::window::components::library_list_header::LibraryListHeaderProps;
+use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryTreeActions};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::list_row::{
     FlatRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, TreeDepth, TreeLevel, TreeRow,
@@ -386,6 +390,14 @@ pub fn LibraryList() -> Element {
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The tree's two header presses (gui-list-header-buttons design D1, D4):
+    // Music is a tree list, so its header paints both.
+    let expand_library = library.clone();
+    let collapse_library = library.clone();
+    let tree = Some(LibraryTreeActions {
+        on_expand_all: Callback::new(move |()| expand_library.expand_all_music()),
+        on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_music()),
+    });
     // The header's facts (design D14): Music is an Emby destination, so its Emby
     // mark names it (gui-library-header-service-marks design D5), and the
     // carried selector names the selection itself, so it paints no selection
@@ -398,7 +410,7 @@ pub fn LibraryList() -> Element {
         view: None,
         sort: None,
         on_refresh: Callback::new(|()| {}),
-        tree: None,
+        tree,
         filter: ui.filter.clone(),
         placeholder: filter_placeholder,
         aria_label: "Filter artists".to_owned(),
