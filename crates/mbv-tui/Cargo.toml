@@ -120,7 +120,6 @@ crossterm.workspace = true
 image = { workspace = true, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 libc.workspace = true
 mimalloc.workspace = true
-nix = { workspace = true, features = ["fs", "process", "signal"] }
 ratatui.workspace = true
 ratatui-image = { workspace = true, features = ["crossterm"] }
 serde_json.workspace = true

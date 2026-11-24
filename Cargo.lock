@@ -3837,6 +3837,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-owner"
+version = "0.28.3"
+dependencies = [
+ "libc",
+ "mbv-config",
+ "mbv-core",
+ "mbv-ctrl",
+ "mbv-daemon",
+ "mbv-desktop",
+ "mimalloc",
+ "nix 0.32.0",
+ "rstest",
+ "tracing",
+]
+
+[[package]]
 name = "mbv-player"
 version = "0.28.3"
 dependencies = [
@@ -3966,7 +3982,6 @@ dependencies = [
  "mbv-ui-msg",
  "mbv-visualizer",
  "mimalloc",
- "nix 0.32.0",
  "ratatui",
  "ratatui-image",
  "rstest",

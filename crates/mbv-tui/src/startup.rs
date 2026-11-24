@@ -8,7 +8,6 @@
 
 use std::io::IsTerminal;
 
-use crate::local_daemon;
 use crate::owner_restart;
 use crate::pin;
 use crate::tui::{Model, init_image_protocols};
@@ -195,11 +194,6 @@ fn pre_config_startup(args: &[String]) -> Option<StartupArgs> {
             std::process::exit(1);
         }
     };
-
-    // Hidden local-daemon self-spawn is checked before other CLI parsing.
-    if has_flag(args, "--__local-daemon") {
-        local_daemon::run_local_daemon_main();
-    }
 
     if has_connect_daemon_arg(args) {
         eprintln!("mbv: the `--connect-daemon` flag has been removed.");
