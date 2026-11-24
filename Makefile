@@ -29,10 +29,11 @@ build:
 
 # The file set the AUR packages ship (PKGBUILD-git's package()).
 install: build
-	$(CARGO) build --release -p mbv-gui
+	$(CARGO) build --release -p mbv-owner -p mbv-gui
 	$(INSTALL) -Dm755 target/release/$(BINARY) $(DESTDIR)$(PREFIX)/bin/$(BINARY)
 	$(INSTALL) -Dm755 target/release/mbvd $(DESTDIR)$(PREFIX)/bin/mbvd
 	$(INSTALL) -Dm755 target/release/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-gui
+	$(INSTALL) -Dm755 target/release/mbv-owner $(DESTDIR)$(PREFIX)/bin/mbv-owner
 	$(INSTALL) -Dm644 contrib/mbv.desktop $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
 	$(INSTALL) -Dm644 assets/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
 	$(INSTALL) -d $(DESTDIR)$(PREFIX)/share/mbv/scripts
@@ -50,7 +51,7 @@ install: build
 	fi
 
 uninstall:
-	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/bin/$(BINARY) $(DESTDIR)$(PREFIX)/bin/mbvd $(DESTDIR)$(PREFIX)/bin/mbv-gui
+	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/bin/$(BINARY) $(DESTDIR)$(PREFIX)/bin/mbvd $(DESTDIR)$(PREFIX)/bin/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-owner
 	$(RM_ROOT) -rf $(DESTDIR)$(PREFIX)/share/mbv $(DESTDIR)$(PREFIX)/share/licenses/mbv
 	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
 	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
@@ -70,17 +71,18 @@ clean:
 clean-dev:
 	cargo clean --profile dev
 
-# The GUI starts its Owner from the sibling `mbv` binary, and the handshake
-# refuses an Owner whose build id differs. `cargo run -p mbv-gui` alone leaves
-# `mbv` stale after a commit, so build both before the window starts.
+# The GUI starts its Owner from the sibling `mbv-owner` program, and the
+# handshake refuses an Owner whose build id differs. `cargo run -p mbv-gui`
+# alone leaves `mbv-owner` stale after a commit, so build all three before the
+# window starts.
 dev:
-	cargo build -p mbv-tui -p mbv-gui
+	cargo build -p mbv-tui -p mbv-owner -p mbv-gui
 	cargo run -p mbv-gui
 
 # The same as `dev`, with the release profile: an optimized build that maps
 # far less code than the debug binary, for memory and speed checks.
 dev-release:
-	cargo build --release -p mbv-tui -p mbv-gui
+	cargo build --release -p mbv-tui -p mbv-owner -p mbv-gui
 	cargo run --release -p mbv-gui
 
 # The GUI's stylesheet builds from `assets/app.css` through the Tailwind

@@ -151,7 +151,7 @@ rstest.workspace = true
 
 [package.metadata.deb]
 # The .deb keeps the `mbv` package name (not the crate name): it ships the
-# `mbv` and `mbv-gui` binaries, and the release workflow uploads
+# `mbv`, `mbv-gui`, and `mbv-owner` binaries, and the release workflow uploads
 # `target/debian/mbv_*.deb`.
 name = "mbv"
 maintainer = "slatkin <slatkin@gmail.com>"
@@ -164,6 +164,7 @@ priority = "optional"
 assets = [
     ["../../target/release/mbv", "usr/bin/mbv", "755"],
     ["../../target/release/mbv-gui", "usr/bin/mbv-gui", "755"],
+    ["../../target/release/mbv-owner", "usr/bin/mbv-owner", "755"],
     ["../../contrib/mbv.desktop", "usr/share/applications/mbv.desktop", "644"],
     ["../../assets/icon.svg", "usr/share/icons/hicolor/scalable/apps/mbv.svg", "644"],
     ["../../scripts/mbv.lua", "usr/share/mbv/scripts/mbv.lua", "644"],
