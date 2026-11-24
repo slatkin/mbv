@@ -22,8 +22,8 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 4. Workspace tables and the Hero tracklist (design D5)
 
-- [ ] 4.1 In `library_workspace_table.rs`, remove the `hovered` signal, `hover_styles`, the number cell's play control, `WorkspaceAction`, and `WorkspaceActionIcon`. Make the `li` the `row-hover-host`, merge the actions and duration cells into one trailing cell that holds the duration (`row-hover-trail`) and `RowHoverActions` with Play from `on_play` and Add from a new `on_queue: Option<Callback<String>>` prop. Delete the hover-swap regression test and the `WorkspaceAction` tests. Update the remaining tests to the merged trailing cell. Verify: `cargo nextest run -p mbv-gui library_workspace_table` passes.
-- [ ] 4.2 Update the four tables' callers: `library_tracklist.rs`, `library_shows_hero.rs`, and `library_feeds_hero.rs` pass their existing Add path as `on_queue` and drop their `actions` vectors. `library_audiobooks_hero.rs` passes no `on_queue`. Update the module docs that name Play next or the number-cell play. Verify: `cargo check -p mbv-gui` passes.
+- [x] 4.1 In `library_workspace_table.rs`, remove the `hovered` signal, `hover_styles`, the number cell's play control, `WorkspaceAction`, and `WorkspaceActionIcon`. Make the `li` the `row-hover-host`, merge the actions and duration cells into one trailing cell that holds the duration (`row-hover-trail`) and `RowHoverActions` with Play from `on_play` and Add from a new `on_queue: Option<Callback<String>>` prop. Delete the hover-swap regression test and the `WorkspaceAction` tests. Update the remaining tests to the merged trailing cell. Verify: `cargo nextest run -p mbv-gui library_workspace_table` passes.
+- [x] 4.2 Update the four tables' callers: `library_tracklist.rs`, `library_shows_hero.rs`, and `library_feeds_hero.rs` pass their existing Add path as `on_queue` and drop their `actions` vectors. `library_audiobooks_hero.rs` passes no `on_queue`. Update the module docs that name Play next or the number-cell play. Verify: `cargo check -p mbv-gui` passes.
 
 ## 5. Library list rows (design D2, D3, D4)
 
