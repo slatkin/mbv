@@ -25,9 +25,9 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 4. Remove the bespoke paths
 
-- [ ] 4.1 Delete `library_item_row.rs` and its directory, `RowPlayedMark`, `name_color`, `paint_item_row`, `ItemRowPaint`, and `mark` once no caller remains. Verify: `cargo clippy -p mbv-gui --all-targets -- -D warnings` passes (a surviving caller fails to compile, and a leftover helper fails as dead code).
+- [x] 4.1 Delete `library_item_row.rs` and its directory, `RowPlayedMark`, `name_color`, `paint_item_row`, `ItemRowPaint`, and `mark` once no caller remains. Verify: `cargo clippy -p mbv-gui --all-targets -- -D warnings` passes (a surviving caller fails to compile, and a leftover helper fails as dead code).
 
 ## 5. Integration
 
-- [ ] 5.1 In the foreground: `cargo build -p mbv-tui -p mbv-gui`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-client-core -p mbv-gui`, and `cargo fmt --all -- --check`. Fix every failure. Verify: all pass.
+- [x] 5.1 In the foreground: `cargo build -p mbv-tui -p mbv-gui`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-client-core -p mbv-gui`, and `cargo fmt --all -- --check`. Fix every failure. Verify: all pass.
 - [ ] 5.2 Give the change to the user for a live look check of every list.
