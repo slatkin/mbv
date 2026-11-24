@@ -56,6 +56,23 @@ fn quiet_detail_landing_starts_no_first_season_episode_fetch() {
 }
 
 #[test]
+fn quiet_fetch_joining_a_plain_fetch_starts_the_first_season_on_landing() {
+    let http = MockHttp::new();
+    http.respond_repeated(200, EMPTY_ITEMS, 2);
+    let mut app = fetchable_app(&http);
+
+    app.fetch_series_detail("show-1");
+    app.fetch_series_detail_quiet("show-1");
+    app.handle_series_detail_fetched_for_test("show-1", series_detail("season-1"));
+
+    assert_eq!(
+        app.series_season_loading_for_test(),
+        &std::collections::HashSet::from([("show-1".to_string(), "season-1".to_string())]),
+        "a quiet call that joins a running plain fetch leaves its landing plain"
+    );
+}
+
+#[test]
 fn plain_detail_fetch_while_a_quiet_fetch_runs_starts_the_first_season() {
     let http = MockHttp::new();
     http.respond_repeated(200, EMPTY_ITEMS, 2);

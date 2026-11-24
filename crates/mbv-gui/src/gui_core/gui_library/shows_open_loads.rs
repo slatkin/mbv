@@ -80,8 +80,9 @@ impl GuiCore {
 ///
 /// Nothing starts while the active destination is not the report's Shows
 /// library, because the report then describes a list the Client no longer
-/// paints. A started load whose fetch the core no longer runs drops out first,
-/// so a landing or a failed fetch frees its slot. The series rows start before
+/// paints. A started load whose fetch the core no longer runs, or whose detail
+/// has already landed, drops out first, so a landing or a failed fetch frees its
+/// slot. The series rows start before
 /// the season rows, in report order, and a season starts only once its series'
 /// detail is cached.
 pub(crate) fn pump_shows_open_loads(app: &mut App, gui: &mut GuiClientState) {
@@ -91,8 +92,9 @@ pub(crate) fn pump_shows_open_loads(app: &mut App, gui: &mut GuiClientState) {
     if !is_active_shows_library(app, report.lib_idx) {
         return;
     }
-    gui.shows_open_series_loads
-        .retain(|series_id| app.series_detail_loading(series_id));
+    gui.shows_open_series_loads.retain(|series_id| {
+        app.series_detail(series_id).is_none() && app.series_detail_loading(series_id)
+    });
     gui.shows_open_season_loads
         .retain(|(series_id, season_id)| app.series_season_loading(series_id, season_id));
     for series_id in &report.series {
