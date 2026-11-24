@@ -305,13 +305,16 @@ pub fn QueuePlaybackPanel() -> Element {
                     div {
                         class: "flex min-w-0 flex-1 flex-col",
                         style: "gap: 0;",
-                        Truncate {
-                            text: title.to_uppercase(),
-                            css: format!(
-                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; line-height: 1.15; letter-spacing: 0.06em; color: {};",
+                        // The title wraps rather than truncating (user request
+                        // 2026-11-24): the block is one row of the column, so a
+                        // long name takes the lines it needs, and a long token
+                        // breaks rather than overflowing the column.
+                        span {
+                            style: format!(
+                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; line-height: 1.15; letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: break-word; color: {};",
                                 ef_var(EfToken::Fg)
                             ),
-                            style: TextStyle::mono(18.0, 700.0).tracking(0.06),
+                            "{title}"
                         }
                         if let Some(parent_line) = playback.parent_line.as_ref() {
                             Truncate {
