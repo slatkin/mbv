@@ -23,7 +23,8 @@ use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
-use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
+use crate::window::components::library_list_header::LibraryListHeaderProps;
+use crate::window::components::library_list_header::LibraryListHeading;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::list_row::{FlatRow, LibraryRowThumb, LibraryTrailPart};
 use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
@@ -203,7 +204,7 @@ pub fn LibraryHomeList() -> Element {
     // the default scope so it paints no label, and the `/` filter field
     // narrows it.
     let header = LibraryListHeaderProps {
-        heading: LibraryListHeading::Title("Home".to_owned()),
+        heading: LibraryListHeading::Title("Home".into()),
         label: String::new(),
         label_attr: None,
         collections: None,

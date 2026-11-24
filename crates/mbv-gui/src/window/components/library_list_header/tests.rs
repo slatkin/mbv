@@ -159,11 +159,7 @@ fn built_with(
 /// Build the document over the carried collections and the selection label,
 /// under a Service mark heading.
 fn built_with_label(collections: Option<GuiCollections>, label: String) -> Fixture {
-    built_with(
-        LibraryListHeading::Mark(ServiceMark::Rss),
-        collections,
-        label,
-    )
+    built_with(ServiceMark::Rss.into(), collections, label)
 }
 
 /// Build the document over the carried collections and the default `All`
@@ -208,7 +204,7 @@ fn the_heading_line_paints_the_mark_and_the_trigger() {
 #[test]
 fn a_title_heading_paints_the_title_and_no_mark() {
     let fixture = built_with(
-        LibraryListHeading::Title("Home".to_owned()),
+        LibraryListHeading::Title("Home".into()),
         None,
         "All".to_owned(),
     );

@@ -22,7 +22,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
-use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
+use crate::window::components::library_list_header::LibraryListHeaderProps;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::library::lettered::{LetteredDestination, LetteredItemRow};
 use crate::window::library::list::{LetteredRow, carries_letters, lettered_rail};
@@ -118,7 +118,7 @@ pub fn LibraryLetteredList<D: LetteredDestination>() -> Element {
     // (gui-library-header-service-marks design D5), and its selection label,
     // collection selector, and sort control are its own where it carries them.
     let header = LibraryListHeaderProps {
-        heading: LibraryListHeading::Mark(header.mark),
+        heading: header.mark.into(),
         label: header.label.clone(),
         label_attr: header.label_attr,
         collections: header.collections.clone(),
