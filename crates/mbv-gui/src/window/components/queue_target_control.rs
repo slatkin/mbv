@@ -31,7 +31,9 @@ use crate::bridge::frame::playback::{GuiTargetChoice, GuiTargetKey};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
-use crate::window::components::queue_panel::geometry::{MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX};
+use crate::window::components::queue_panel::geometry::{
+    CONTROL_PX, MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX,
+};
 use crate::window::icons::{Check, ChevronDown, Monitor, RefreshCcwDot};
 use crate::window::layout::region_set::{MarkHandler, use_region_set};
 use crate::window::sections::Sections;
@@ -125,13 +127,16 @@ pub fn QueueTargetControl() -> Element {
 
     rsx! {
         div {
-            style: "position: relative; min-width: 0;",
+            // The trailing gap separates the target control from the Queue
+            // switcher (user request 2026-11-24): the bar's own 2 px flex gap
+            // is too tight between two dropdown controls.
+            style: "position: relative; min-width: 0; margin-inline-end: 8px;",
             class: "flex items-center",
             "data-queue-target-anchor": "",
             button {
                 "type": "button",
                 class: "flex min-w-0 items-center",
-                style: "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; font-size: 13px; color: {target_color};{open_look}",
+                style: "height: {CONTROL_PX}px; padding: 0 8px 0 10px; gap: 6px; border-radius: 6px; border-width: 1px; border-style: solid; font-size: 13px; color: {target_color};{open_look}",
                 "data-target": "playbackTarget",
                 "aria-label": "Playback target",
                 title: "Playback target",

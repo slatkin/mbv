@@ -18,8 +18,9 @@ pub(in crate::window::components) const HEADER_HEIGHT_PX: u16 = 48;
 
 /// The Queue header's control size in logical pixels (user request 2026-11-24,
 /// tightened from the canvas's 32 px): the icon buttons are square at this size
-/// and the switcher is this tall, so the bar's controls take less of the row's
-/// width.
+/// and the Queue switcher and the playback-target control are this tall (user
+/// request 2026-11-24: the two dropdowns paint one height), so the bar's
+/// controls take less of the row's width.
 pub(in crate::window::components) const CONTROL_PX: u16 = 26;
 
 /// The canvas's fixed queue row height in logical pixels (design D3).
