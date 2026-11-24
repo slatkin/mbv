@@ -33,7 +33,7 @@ pub struct TabWindow {
 /// change of the current tab never moves the window.
 #[must_use]
 pub fn tab_width(tab: &GuiLibraryTabFrame) -> f32 {
-    let style = TextStyle::mono(16.0, 600.0).tracking(0.08);
+    let style = TextStyle::mono(14.0, 600.0).tracking(0.08);
     text_width(&tab.label.to_uppercase(), &style) + TAB_CHROME
 }
 

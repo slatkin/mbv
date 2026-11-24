@@ -280,7 +280,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                                 key: "{position}",
                                 "type": "button",
                                 class: "flex items-center uppercase",
-                                style: "height: 56px; padding: 0 12px; font-family: var(--font-mono); font-size: 16px; font-weight: 600; letter-spacing: 0.08em; color: {color};",
+                                style: "height: 56px; padding: 0 12px; font-family: var(--font-mono); font-size: 14px; font-weight: 600; letter-spacing: 0.08em; color: {color};",
                                 "aria-current": current.then_some("page"),
                                 "data-library-tab": "{position}",
                                 onclick: move |_| open_destination(&tab_library, position, tab_opened),

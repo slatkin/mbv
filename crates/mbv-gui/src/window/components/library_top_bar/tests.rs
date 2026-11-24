@@ -272,6 +272,27 @@ fn paints_one_tab_per_presented_destination_and_marks_the_current_one() {
     );
 }
 
+/// Contract (user request 2026-11-24): a tab label paints at 14px, two px
+/// under the previous 16px, and `tab_width` measures the same mono face at
+/// the same size.
+#[test]
+fn a_tab_label_paints_at_14px() {
+    let fixture = built(props(two_tabs(), Some(1), false));
+
+    assert!(
+        fixture
+            .style_of("[data-library-tab]")
+            .contains("font-size: 14px"),
+        "the tab label paints at 14px"
+    );
+    assert!(
+        !fixture
+            .style_of("[data-library-tab]")
+            .contains("font-size: 16px"),
+        "no tab label still paints at 16px"
+    );
+}
+
 /// Contract (`LibraryTopBar.test.ts`): the bar paints the dim canvas fill,
 /// the TUI `BgDim` slot.
 #[test]
