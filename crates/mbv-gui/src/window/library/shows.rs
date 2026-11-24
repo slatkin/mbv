@@ -380,6 +380,24 @@ impl LibraryState {
         set_scroll_top(self.scrolls.shows, &rows, scroll_top);
     }
 
+    /// Report the open Shows nodes the All view paints, in paint order
+    /// (gui-list-header-buttons design D5): the source id of each open series
+    /// row and the `(series_id, source_id)` pair of each open season row. The
+    /// core starts the bounded in-view loads the report misses, and each report
+    /// replaces the last, so a row that leaves the view leaves the report. A
+    /// state that paints no Shows library sends nothing, because only a Shows
+    /// destination carries the library index the command names.
+    pub fn report_shows_open_in_view(&self, series: Vec<String>, seasons: Vec<(String, String)>) {
+        let Some(lib_idx) = self.shows_lib_idx() else {
+            return;
+        };
+        self.link.library(GuiLibraryCommand::ShowsOpenInView {
+            lib_idx,
+            series,
+            seasons,
+        });
+    }
+
     /// Hold the Shows list's scroll offset inside the rows the filter leaves.
     fn clamp_shows_scroll(&self) {
         let rows = self.shows_rows();

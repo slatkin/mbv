@@ -26,7 +26,10 @@
 //! The All view paints the series tree, so its header paints the Expand all and
 //! Collapse all buttons (gui-list-header-buttons design D1, D4): they change the
 //! window's open nodes and send no command. The New and Upcoming views are flat
-//! lists, so they paint neither button.
+//! lists, so they paint neither button. The All view also reports the open
+//! series and season rows of its painted window to the core (design D5), so the
+//! bounded in-view loader loads their children; the flat views report none, and
+//! a report fires whenever an open node, the scroll, or the rows change.
 
 use std::collections::HashSet;
 
@@ -45,7 +48,9 @@ use crate::window::components::list_row::{
     FlatRow, LibraryRowThumb, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow, TreeTrail,
 };
 use crate::window::components::tree_guide::subtree_tails;
+use crate::window::library::list::list_window;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
+use crate::window::library::scroll::ListScroll;
 use crate::window::library::shows_list::{ShowsFlatRow, ShowsListRow, shows_letter_rail};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
@@ -83,6 +88,34 @@ fn episode_state(shows: &GuiShowsList, row: &ShowsListRow) -> Option<GuiHomeRowS
         .flat_map(|season| season.episodes.iter().flatten())
         .find(|carried| carried.episode_id == episode.source_id)
         .map(|carried| carried.state.clone())
+}
+
+/// The open Shows nodes the All view paints (gui-list-header-buttons design
+/// D5), in the painted window's paint order: the source id of each open series
+/// row, and the `(series_id, source_id)` pair of each open season row. The
+/// painted window is the rows a measured viewport holds, so an unmeasured
+/// viewport reports none and a row scrolled past leaves the report.
+fn open_nodes_in_view(
+    rows: &[ShowsListRow],
+    view: ListScroll,
+) -> (Vec<String>, Vec<(String, String)>) {
+    let window = list_window(rows, view.scroll_top, view.viewport_height);
+    let mut series = Vec::new();
+    let mut seasons = Vec::new();
+    for row in &rows[window.start..window.end] {
+        match row {
+            ShowsListRow::Series(row) if row.open => series.push(row.source_id.clone()),
+            ShowsListRow::Season(row) if row.open => {
+                seasons.push((row.series_id.clone(), row.source_id.clone()));
+            }
+            ShowsListRow::Series(_)
+            | ShowsListRow::Season(_)
+            | ShowsListRow::Heading(_)
+            | ShowsListRow::Episode(_)
+            | ShowsListRow::Flat(_) => {}
+        }
+    }
+    (series, seasons)
 }
 
 /// A top-level series row (gui-delineated-rows design D1): the shared top-level
@@ -357,6 +390,26 @@ pub fn LibraryShowsList() -> Element {
 
     // The rail's A–Z letters over the painted rows.
     let rail = shows_letter_rail(&rows);
+
+    // The open nodes of the painted window (gui-list-header-buttons design D5):
+    // the report that drives the core's bounded in-view loads. Only the All
+    // view paints a tree, so the flat New and Upcoming views report none and a
+    // view change stops the loader. The report fires when a node opens or
+    // closes, when the scroll moves, and when rows land, because each of them
+    // changes the value the effect keys on.
+    let open_in_view = match frame.map(|frame| frame.view) {
+        Some(crate::gui_core::GuiShowsView::All) => open_nodes_in_view(&rows, scroll),
+        Some(crate::gui_core::GuiShowsView::New)
+        | Some(crate::gui_core::GuiShowsView::Upcoming)
+        | None => (Vec::new(), Vec::new()),
+    };
+    let report_library = library.clone();
+    use_effect(use_reactive(
+        (&open_in_view.0, &open_in_view.1),
+        move |(series, seasons)| {
+            report_library.report_shows_open_in_view(series, seasons);
+        },
+    ));
 
     // The sort control the header paints last on the heading's line
     // (gui-flat-list-sort design D7): the New view's list is the one it orders,

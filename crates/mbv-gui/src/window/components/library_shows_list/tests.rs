@@ -238,12 +238,30 @@ impl Fixture {
             .collect()
     }
 
-    /// The Library commands the core link received, in send order.
+    /// The `ShowsOpenInView` reports the core link received, in send order.
+    fn reported_shows_open_in_view(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Library(
+                    command @ crate::gui_core::GuiLibraryCommand::ShowsOpenInView { .. },
+                ) => Some(command),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The Library commands the core link received, in send order, without the
+    /// two reports the window sends on its own: the row art set and the open
+    /// Shows nodes.
     fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => None,
+                CoreInput::Library(
+                    crate::gui_core::GuiLibraryCommand::RowsInView { .. }
+                    | crate::gui_core::GuiLibraryCommand::ShowsOpenInView { .. },
+                ) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -539,6 +557,28 @@ fn the_list_reports_the_rows_in_view_under_the_views_scope(
             ids: ids.iter().map(|id| (*id).to_owned()).collect(),
         }),
         "the report names the scope and the ids the core resolves"
+    );
+}
+
+/// Contract (gui-list-header-buttons design D5, spec "A Shows series that is
+/// open and in view loads its seasons when they are not loaded"): the list
+/// reports the open series of its painted window, and a closed series row
+/// beside it stays out of the report.
+#[test]
+fn the_open_series_in_view_is_reported_and_a_closed_one_is_not() {
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
+    fixture.measure(300.0);
+
+    toggle_row(&mut fixture, "shows-series:s1");
+
+    assert_eq!(
+        fixture.reported_shows_open_in_view().last(),
+        Some(&crate::gui_core::GuiLibraryCommand::ShowsOpenInView {
+            lib_idx: 0,
+            series: vec!["s1".to_owned()],
+            seasons: Vec::new(),
+        }),
+        "the report names the open series and not the closed one"
     );
 }
 
