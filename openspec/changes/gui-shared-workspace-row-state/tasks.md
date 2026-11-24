@@ -2,7 +2,7 @@
 
 ## 1. Shared title-tone derivation
 
-- [ ] 1.1 In `crates/mbv-gui/src/window/components/list_row.rs`, add
+- [x] 1.1 In `crates/mbv-gui/src/window/components/list_row.rs`, add
       `pub fn played_title_tone(play: Option<&GuiHomeRowStateFrame>) -> String`
       (design D1) and make `RowLevel::title_tone` delegate its `Some` case to
       it, keeping the leaf-muted default only for the `None` case. Verify
