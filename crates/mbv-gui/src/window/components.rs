@@ -26,7 +26,6 @@ pub mod library_hero_frame;
 pub mod library_hero_summary;
 pub mod library_home_hero;
 pub mod library_home_list;
-pub mod library_item_row;
 pub mod library_letter_heading;
 pub mod library_letter_rail;
 pub mod library_lettered_list;

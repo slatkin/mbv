@@ -29,7 +29,6 @@ use std::rc::Rc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::window::components::library_item_row::ROW_PADDING_PX;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
@@ -37,7 +36,8 @@ use crate::window::components::library_list_column::{
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::list_row::{
-    FlatRow, LibraryRowThumb, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow, TreeTrail,
+    FlatRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, TreeDepth, TreeLevel, TreeRow,
+    TreeTrail,
 };
 use crate::window::components::tree_guide::subtree_tails;
 use crate::window::library::list::{LETTER_ROW_HEIGHT, LibraryRow, letter_rail};
