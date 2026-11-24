@@ -1,5 +1,5 @@
 //! The row art thumb (`gui-unified-list-rows` design D1, D2; gui-delineated-rows
-//! design D1, D2): the 64 × 36 box on the recessed fill, the image or the media
+//! design D1, D2): the 72 × 40 box on the recessed fill, the image or the media
 //! kind's icon inside it, and the row's resume run along the box's bottom edge.
 //! Both row parts paint one thumb, so a change to the box lands in every list.
 //!
@@ -30,14 +30,20 @@ pub struct LibraryRowThumb {
     pub media: GuiRowMediaKindFrame,
 }
 
-/// One row's art thumb (gui-delineated-rows design D1, D2): the 64 × 36 box on
+/// One row's art thumb (gui-delineated-rows design D1, D2): the 72 × 40 box on
 /// the recessed fill, the image or the media kind's icon inside it, and the
 /// row's resume run along the box's bottom edge.
 pub fn paint_thumb(attr: &'static str, thumb: &LibraryRowThumb, progress: Option<f32>) -> Element {
-    // The box: one fixed landscape shape every row shares.
-    let box_style = format!(
-        "width: {THUMB_WIDTH_PX}px; height: {THUMB_HEIGHT_PX}px; border-radius: {THUMB_RADIUS_PX}px; background: {};",
+    // The box: one fixed landscape shape every row shares. A whole (square or
+    // portrait) image sits on no fill: the box only centres it.
+    let whole = matches!(thumb.art, GuiRowArtFrame::Image { square: true, .. });
+    let box_fill = if whole {
+        "transparent".to_owned()
+    } else {
         canvas_var("well")
+    };
+    let box_style = format!(
+        "width: {THUMB_WIDTH_PX}px; height: {THUMB_HEIGHT_PX}px; border-radius: {THUMB_RADIUS_PX}px; background: {box_fill};"
     );
     let box_attrs = vec![Attribute::new(
         library_attr(attr, "thumb"),
@@ -46,10 +52,12 @@ pub fn paint_thumb(attr: &'static str, thumb: &LibraryRowThumb, progress: Option
         false,
     )];
     let cover_class = "h-full w-full object-cover";
-    let square_style = format!("width: {THUMB_SQUARE_PX}px; height: {THUMB_SQUARE_PX}px;");
+    let square_style = format!(
+        "height: {THUMB_SQUARE_PX}px; width: auto; max-width: {THUMB_WIDTH_PX}px; border-radius: {THUMB_RADIUS_PX}px;"
+    );
     let body: Element = match &thumb.art {
         GuiRowArtFrame::Image { art, square: true } => {
-            thumb_image(art.clone(), "object-cover", &square_style)
+            thumb_image(art.clone(), "object-contain", &square_style)
         }
         GuiRowArtFrame::Image { art, square: false } => thumb_image(art.clone(), cover_class, ""),
         // A fetch in flight paints the well alone, as the loading fill does.
@@ -112,8 +120,8 @@ fn thumb_icon(media: GuiRowMediaKindFrame) -> Element {
 }
 
 /// The image an image-state thumb paints (gui-delineated-rows design D2): a
-/// landscape or portrait image cover-fills the box, and a square image shows
-/// whole at the box's height, centred.
+/// landscape image cover-fills the box, and a square or portrait image shows
+/// whole at the box's height, centred, on no fill, with rounded corners.
 fn thumb_image(art: GuiArtRef, class: &str, style: &str) -> Element {
     rsx! {
         ArtImage { art: Some(art), alt: "", class: class.to_owned(), style: style.to_owned() }

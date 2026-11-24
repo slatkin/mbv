@@ -18,15 +18,15 @@ const IMAGE_FETCH_MAX_SIDE: u32 = 1280;
 /// generation any Client paints, so it stays high.
 const IMAGE_FETCH_QUALITY: u8 = 90;
 
-/// A landscape or portrait row image's requested width: 2x the 64 x 36 row
+/// A landscape or portrait row image's requested width: 2x the 72 x 40 row
 /// box. No height joins it, because Emby then forces that exact size.
 const ROW_LANDSCAPE_MAX_WIDTH: u32 = 128;
 
-/// A Square row image's requested sides: 2x the 36 x 36 painted box.
+/// A Square row image's requested sides: about 2x the 40 x 40 painted box.
 const ROW_SQUARE_MAX_SIDE: u32 = 72;
 
 /// A row image's JPEG quality (design D6).
-const ROW_IMAGE_QUALITY: u8 = 80;
+const ROW_IMAGE_QUALITY: u8 = 60;
 
 pub(in crate::app) fn fetch_emby_image(
     cache_key: &str,

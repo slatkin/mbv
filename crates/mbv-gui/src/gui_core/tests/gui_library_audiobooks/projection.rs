@@ -697,7 +697,7 @@ fn a_book_row_shows_its_cover() {
         projection.rows[0].art,
         GuiRowArt::Image {
             key: key.clone(),
-            square: false
+            square: true
         },
         "the row shows the cached book cover under its row key"
     );

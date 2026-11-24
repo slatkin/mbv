@@ -38,10 +38,10 @@ pub const ROW_PADDING_PX: f32 = 8.0;
 pub const ROW_DIVIDER_PX: f32 = 1.0;
 
 /// The thumb box's width in logical pixels (gui-delineated-rows design D2).
-pub const THUMB_WIDTH_PX: f32 = 64.0;
+pub const THUMB_WIDTH_PX: f32 = 72.0;
 
 /// The thumb box's height in logical pixels (gui-delineated-rows design D2).
-pub const THUMB_HEIGHT_PX: f32 = 36.0;
+pub const THUMB_HEIGHT_PX: f32 = 40.0;
 
 /// The side of a square image inside the thumb box (gui-delineated-rows design
 /// D2): the box's height, centred, so the image shows whole.

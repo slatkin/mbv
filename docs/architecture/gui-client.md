@@ -2090,8 +2090,9 @@ inline padding, a 12 px gap, and a 1 px `--canvas-border` divider under it;
 `LibraryVirtualList` paints the matching rule over the list's first row, so the
 list frame has one top rule in every destination.
 
-The thumb is a 64 × 36 box on `--canvas-well`: a landscape or portrait image
-cover-fills it, a square image shows whole at the box's height, and a row with
+The thumb is a 72 × 40 box on `--canvas-well`: a landscape image cover-fills
+it, a square or portrait image shows whole at the box's height, centred, on no
+fill, with rounded corners, and a row with
 no image paints the media kind's `EighthNotes` or `MonitorPlay` icon on
 `--canvas-muted`. The row's resume percent paints in 3 px along the box's
 bottom edge, on `--canvas-thumb-track` under `--canvas-partial`, and no row

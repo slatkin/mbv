@@ -113,7 +113,7 @@ fn row_rendition(square: bool, image: Option<RowEmbyImage>) -> ImageRendition {
 }
 
 /// Design D6: a row's declared kind is requested with its tag and the 2x row
-/// width, at quality 80, with no height and no format parameter.
+/// width, at quality 60, with no height and no format parameter.
 #[test]
 fn a_tagged_row_request_url_carries_the_tag_and_row_width() {
     let rendition = row_rendition(
@@ -136,7 +136,7 @@ fn a_tagged_row_request_url_carries_the_tag_and_row_width() {
 
     assert_eq!(
         url,
-        "https://emby.example/Items/item-1/Images/Thumb?maxWidth=128&quality=80&tag=thumb-1&api_key=secret"
+        "https://emby.example/Items/item-1/Images/Thumb?maxWidth=128&quality=60&tag=thumb-1&api_key=secret"
     );
 }
 
@@ -155,7 +155,7 @@ fn an_untagged_row_request_url_omits_the_tag_parameter() {
 
     assert_eq!(
         url,
-        "https://emby.example/Items/item-1/Images/Backdrop/0?maxWidth=128&quality=80&api_key=secret"
+        "https://emby.example/Items/item-1/Images/Backdrop/0?maxWidth=128&quality=60&api_key=secret"
     );
 }
 
@@ -175,6 +175,6 @@ fn a_square_row_request_url_asks_for_both_sides() {
 
     assert_eq!(
         url,
-        "https://emby.example/Items/item-1/Images/Primary?maxWidth=72&maxHeight=72&quality=80&api_key=secret"
+        "https://emby.example/Items/item-1/Images/Primary?maxWidth=72&maxHeight=72&quality=60&api_key=secret"
     );
 }

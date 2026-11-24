@@ -16,7 +16,8 @@ use rstest::rstest;
 
 use super::{
     FlatRow, LIBRARY_ROW_HEIGHT, LibraryRowThumb, LibraryTrailPart, NODE_ROW_HEIGHT,
-    THUMB_SQUARE_PX, TRACK_ROW_HEIGHT, TreeDepth, TreeLevel, TreeRow, TreeTrail,
+    THUMB_RADIUS_PX, THUMB_SQUARE_PX, THUMB_WIDTH_PX, TRACK_ROW_HEIGHT, TreeDepth, TreeLevel,
+    TreeRow, TreeTrail,
 };
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
@@ -364,7 +365,7 @@ fn a_landscape_image_fills_the_thumb() {
 }
 
 /// Contract (design D2, `library-row-artwork` spec "The thumb fits the image
-/// by its shape"): a square image shows whole, centred at the box's height.
+/// by its shape"): a square or portrait image shows whole, centred at the box's height, rounded, on no fill.
 #[test]
 fn a_square_image_shows_whole_in_the_thumb() {
     let fixture = flat_built(FlatSpec {
@@ -379,7 +380,9 @@ fn a_square_image_shows_whole_in_the_thumb() {
 
     assert_eq!(
         fixture.style_of(&format!("{THUMB} img")),
-        format!("width: {THUMB_SQUARE_PX}px; height: {THUMB_SQUARE_PX}px;"),
+        format!(
+            "height: {THUMB_SQUARE_PX}px; width: auto; max-width: {THUMB_WIDTH_PX}px; border-radius: {THUMB_RADIUS_PX}px;"
+        ),
         "the square image paints at the box's height"
     );
     assert!(

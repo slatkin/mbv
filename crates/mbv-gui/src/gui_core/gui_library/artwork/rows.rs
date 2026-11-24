@@ -42,8 +42,8 @@ pub enum GuiRowMediaKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiRowArt {
     /// The row's cached image under its row cache key. `square` comes from the
-    /// image's own pixels: a square image shows whole, and landscape and
-    /// portrait images cover-fill the painted box.
+    /// image's own pixels: a square or portrait image shows whole, and a
+    /// landscape image cover-fills the painted box.
     Image { key: String, square: bool },
     /// The row's image is not cached yet: its fetch is in flight, awaits its
     /// retry, or has not started because the row is out of view.
@@ -298,7 +298,7 @@ pub(crate) fn row_art(app: &App, source: Option<&GuiRowSource>) -> GuiRowArt {
     }
     GuiRowArt::Image {
         square: entry.dimensions().is_some_and(|(width, height)| {
-            painted_shape_for_pixels(width, height) == ArtworkShape::Square
+            painted_shape_for_pixels(width, height) != ArtworkShape::Landscape
         }),
         key,
     }
