@@ -83,6 +83,7 @@ The primitives derive the look from `RowState` with the Everforest tokens in `wi
 - The progress run: `FlatRow` keeps today's 3 px run along the thumb's bottom edge. `TreeRow` has no thumb, so it paints the same 3 px track and fill along its bottom edge, under the title-to-trailing span.
 - Selection: both types paint the `library-raise` fill. An unselected `TreeRow` paints the `tree-subtree` fill. The Playlists screen's `canvas-selected` fill and 6 px radius go.
 - Numbers (track and episode) paint in the `canvas-ordinal` tone in both states.
+- `NowPlaying` takes the partly played look: the unplayed tones and mark, with the progress run. No source in D4 produces it, but `RowState` admits it, so the derivation names it instead of defaulting.
 
 These values replace commit `ad064a00e`'s Recently added constants, which move into `list_row.rs`.
 
@@ -102,7 +103,7 @@ Each matching bridge frame gains `state: Option<GuiHomeRowStateFrame>` with the 
 
 ### D5. Recently added follows the live state
 
-`App` gains one helper in `state/app_struct/home_recently_added.rs`:
+`App` gains one helper in `crates/mbv-client-core/src/app/state/app_struct/home_recently_added.rs`:
 
 ```rust
 pub(in crate::app) fn apply_home_recent_played(
@@ -110,7 +111,7 @@ pub(in crate::app) fn apply_home_recent_played(
 )
 ```
 
-It updates every stored `home_recently_added` item with that content id. The existing update paths call it: `apply_stopped_slot_progress` (a play that stops or ends), `context_set_played` and `set_feed_entries_played` (mark played or unplayed), `apply_audiobookshelf_socket_progress`, and `apply_audiobookshelf_catalog_progress`. The Home projection reads the stored item, so the next frame shows the change.
+It updates every stored `home_recently_added` item with that content id. Every path that applies a played or progress change calls it: `apply_stopped_slot_progress` and `handle_track_completed_event` (a play that stops, or one that ends with a next item, which reports `TrackCompleted`), `context_set_played` and `set_feed_entries_played` (mark played or unplayed), `apply_audiobookshelf_socket_progress`, `handle_audiobookshelf_progress` and `handle_audiobookshelf_book_progress` (Audiobookshelf progress on the ctrl route), and `apply_audiobookshelf_catalog_progress`. The Home projection reads the stored item, so the next frame shows the change.
 
 Alternative considered: refetch Latest on every change. Rejected: one network fetch per progress event, and the order of the list could move under the pointer.
 
