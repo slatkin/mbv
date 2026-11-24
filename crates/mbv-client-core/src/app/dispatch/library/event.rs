@@ -61,7 +61,7 @@ impl App {
                 None => self.handle_browse_event(event, None),
             },
             LibEvent::Music(event) => self.handle_music_event(event, stores),
-            LibEvent::Series(event) => self.handle_series_event(event),
+            LibEvent::Series(event) => self.handle_series_event(event, stores),
             LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
             // A feed-group target's failed fetch (gui-collection-dropdown
@@ -158,21 +158,44 @@ impl App {
         }
     }
 
-    fn handle_series_event(&mut self, ev: SeriesEvent) {
+    /// The series cache's own arms. Each landing changes the cache, so each
+    /// arm raises [`ClientLibraryEffect::SeriesContentChanged`] for a Client
+    /// whose in-view loader waits on a landing: the core holds no GUI state,
+    /// so the effect is how the next load starts there. The handler names no
+    /// Client type.
+    fn handle_series_event(
+        &mut self,
+        ev: SeriesEvent,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) {
         match ev {
             SeriesEvent::DetailFetched {
                 series_id,
                 seasons,
                 episodes,
-            } => self.handle_series_detail_fetched(
-                &series_id,
-                mbv_ui_model::browse::SeriesDetail { seasons, episodes },
-            ),
+            } => {
+                self.handle_series_detail_fetched(
+                    &series_id,
+                    mbv_ui_model::browse::SeriesDetail { seasons, episodes },
+                );
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
             SeriesEvent::SeasonEpisodesFetched {
                 series_id,
                 season_id,
                 episodes,
-            } => self.handle_series_season_episodes_fetched(&series_id, season_id, episodes),
+            } => {
+                self.handle_series_season_episodes_fetched(&series_id, season_id, episodes);
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
         }
     }
 

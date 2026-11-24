@@ -17,7 +17,8 @@ use crate::gui_core::gui_library::emby_feed_wants_target_in_set;
 use crate::gui_core::gui_library::{
     GuiAudiobooksSelection, GuiCollectionSelection, GuiCollections, GuiEmbyLibrarySelection,
     GuiEmbyRootItems, GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiListSort,
-    GuiPodcastsSelection, GuiSearchStore, GuiSectionRequest, GuiShowsView, GuiTvShowsSelection,
+    GuiPodcastsSelection, GuiSearchStore, GuiSectionRequest, GuiShowsOpenInView, GuiShowsView,
+    GuiTvShowsSelection,
 };
 use crate::gui_core::gui_settings::GuiSettingsState;
 use mbv_client_core::App;
@@ -72,6 +73,15 @@ pub struct GuiClientState {
     pub(crate) shows_flat_selection: Option<String>,
     /// The Shows surface's view, by library index.
     pub(crate) shows_views: std::collections::HashMap<usize, GuiShowsView>,
+    /// The open Shows rows the list last reported in view (gui-list-header-
+    /// buttons design D5): the loader's report. Each report replaces the last,
+    /// so a row that left the view leaves the report with it.
+    pub(crate) shows_open_in_view: Option<GuiShowsOpenInView>,
+    /// The series detail loads the Shows in-view loader started.
+    pub(crate) shows_open_series_loads: std::collections::HashSet<String>,
+    /// The season episode loads the Shows in-view loader started, by series and
+    /// season id.
+    pub(crate) shows_open_season_loads: std::collections::HashSet<(String, String)>,
     /// Shows section fetches, by library index and section id.
     pub(crate) shows_new:
         std::collections::HashMap<String, GuiSectionRequest<mbv_emby_model::EmbyItem>>,
@@ -153,6 +163,9 @@ impl GuiClientState {
             home_selection: None,
             shows_flat_selection: None,
             shows_views: std::collections::HashMap::new(),
+            shows_open_in_view: None,
+            shows_open_series_loads: std::collections::HashSet::new(),
+            shows_open_season_loads: std::collections::HashSet::new(),
             shows_new: std::collections::HashMap::new(),
             tv_shows: std::collections::HashMap::new(),
             emby_libs: std::collections::HashMap::new(),
@@ -209,6 +222,12 @@ impl GuiClientState {
             // this effect replaced, design D4a's table).
             ClientLibraryEffect::RowArtSourcesChanged => {
                 crate::gui_core::gui_library::queue_in_view_row_fetches(app, self);
+            }
+            // A series content load landed or failed, so the series cache
+            // changed: the Shows in-view loader starts the next open row it
+            // still misses (design D5).
+            ClientLibraryEffect::SeriesContentChanged => {
+                crate::gui_core::gui_library::shows_open_loads::pump_shows_open_loads(app, self);
             }
             // A landed target retires its terminal failure mark, so a later
             // cache miss can fetch it again.

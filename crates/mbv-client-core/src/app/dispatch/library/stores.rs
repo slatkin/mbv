@@ -48,4 +48,8 @@ pub enum ClientLibraryEffect {
         lib_idx: usize,
         selection: FeedHomeVideoSelection,
     },
+    /// A series content load landed or failed, so the series cache changed:
+    /// a Client whose list loads the open rows in view starts the next one it
+    /// still misses.
+    SeriesContentChanged,
 }

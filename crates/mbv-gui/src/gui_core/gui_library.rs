@@ -31,6 +31,7 @@ mod request;
 mod rows_in_view;
 mod search;
 mod shows;
+pub(crate) mod shows_open_loads;
 pub(crate) mod shows_projection;
 mod shows_view;
 mod store;
@@ -96,6 +97,7 @@ pub(crate) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
 #[cfg(test)]
 pub(crate) use self::shows::shows_view;
+pub(crate) use self::shows_open_loads::GuiShowsOpenInView;
 pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
@@ -234,6 +236,16 @@ pub enum GuiLibraryCommand {
     ShowsPlay { lib_idx: usize, item_id: String },
     /// Add a Shows episode to the queue (design D12): the shared add path.
     ShowsQueue { lib_idx: usize, item_id: String },
+    /// Report the open Shows rows the All view paints, in paint order (design
+    /// D5): the source id of each open series row and the `(series_id,
+    /// source_id)` pair of each open season row. Each report replaces the last,
+    /// and the core starts the bounded in-view loads the report misses. A
+    /// report for a library that is not a Shows library is an ignored command.
+    ShowsOpenInView {
+        lib_idx: usize,
+        series: Vec<String>,
+        seasons: Vec<(String, String)>,
+    },
     /// Select a plain Emby-library row (design D12, row 8.1): the row the
     /// Hero shows. A row the active list no longer holds changes nothing.
     EmbySelect { lib_idx: usize, row: String },
@@ -392,6 +404,7 @@ impl GuiCore {
             | GuiLibraryCommand::ShowsSelectSeason { .. }
             | GuiLibraryCommand::ShowsPlay { .. }
             | GuiLibraryCommand::ShowsQueue { .. }
+            | GuiLibraryCommand::ShowsOpenInView { .. }
             | GuiLibraryCommand::EmbySelect { .. }
             | GuiLibraryCommand::EmbyPlay { .. }
             | GuiLibraryCommand::EmbyQueue { .. }
@@ -434,6 +447,11 @@ impl GuiCore {
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
                 self::shows::enqueue_shows_item(&mut self.app, &self.gui, lib_idx, &item_id);
             }
+            GuiLibraryCommand::ShowsOpenInView {
+                lib_idx,
+                series,
+                seasons,
+            } => self.apply_gui_shows_open_in_view(lib_idx, series, seasons),
             GuiLibraryCommand::EmbySelect { lib_idx, row } => {
                 self.gui_emby_select(lib_idx, &row);
             }

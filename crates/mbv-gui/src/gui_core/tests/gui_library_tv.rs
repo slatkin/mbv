@@ -361,3 +361,162 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
         "a settled All root starts no second request"
     );
 }
+
+/// The six open series a Shows in-view loader test reports, in paint order:
+/// more rows than `SHOWS_OPEN_LOAD_LIMIT`, so the loader's bound shows.
+const SIX_OPEN_SERIES: [&str; 6] = [
+    "series-1", "series-2", "series-3", "series-4", "series-5", "series-6",
+];
+
+/// Answer every fetch of `series_ids` with one empty detail: each request
+/// carries its series as its `ParentId`, so the answers follow their own path
+/// whatever order the workers arrive in.
+fn respond_with_empty_detail(http: &MockHttp, series_ids: &[&str]) {
+    for series_id in series_ids {
+        http.respond_when(
+            &format!("ParentId={series_id}"),
+            200,
+            r#"{"Items":[],"TotalRecordCount":0}"#,
+        );
+    }
+}
+
+/// Report `series` as the open rows the Shows list paints in view (design D5),
+/// with every season row closed.
+fn report_open_series(app: &mut App, series: &[&str]) {
+    apply_gui_library_command(
+        app,
+        GuiLibraryCommand::ShowsOpenInView {
+            lib_idx: 0,
+            series: series.iter().map(|id| (*id).to_string()).collect(),
+            seasons: Vec::new(),
+        },
+    );
+}
+
+/// Land one queued series event through the GUI core's own drain
+/// (`GuiCore::drain_lib_event`): the App-side half and the store effect the
+/// landing raises both apply, as the GUI tick's drain does. The event rides
+/// the lib channel exactly as the fetch worker sends it.
+fn land_through_gui(app: &mut App) {
+    let event = app
+        .recv_lib_event_within_for_test(Duration::from_secs(2))
+        .expect("the detail fetch completed");
+    stub_gui_state(|gui| app.handle_lib_event(event, Some(gui)));
+}
+
+/// A six-series report starts the loader's limit of detail fetches and no more
+/// (design D5): the fifth and sixth open rows wait for a landing, so their
+/// seasons arrive only once a slot frees.
+#[test]
+fn a_six_series_report_starts_exactly_four_detail_fetches() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    respond_with_empty_detail(&http, &SIX_OPEN_SERIES);
+    let mut app = tv_app(&http);
+
+    report_open_series(&mut app, &SIX_OPEN_SERIES);
+
+    assert!(app.series_detail_loading("series-1"));
+    assert!(app.series_detail_loading("series-2"));
+    assert!(app.series_detail_loading("series-3"));
+    assert!(app.series_detail_loading("series-4"));
+    assert!(
+        !app.series_detail_loading("series-5"),
+        "the fifth open row waits for a landing"
+    );
+    assert!(
+        !app.series_detail_loading("series-6"),
+        "the sixth open row waits for a landing"
+    );
+}
+
+/// One detail landing frees its slot and the loader starts the next open row
+/// (design D5): the report's order decides which row waits, and the landing
+/// reaches the loader through the GUI's own store seam.
+#[test]
+fn one_detail_landing_through_the_gui_drain_starts_the_fifth() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    respond_with_empty_detail(&http, &SIX_OPEN_SERIES);
+    let mut app = tv_app(&http);
+    report_open_series(&mut app, &SIX_OPEN_SERIES);
+
+    land_through_gui(&mut app);
+
+    assert!(
+        app.series_detail_loading("series-5"),
+        "the landing frees its slot for the next open row in report order"
+    );
+}
+
+/// A row the next report drops never starts, even after a landing frees a slot
+/// (spec "A row scrolled past"): the report, not the earlier one, decides what
+/// the loader starts, so the row that scrolled out of view loads nothing.
+#[test]
+fn a_series_dropped_from_the_report_before_its_fetch_starts_never_starts() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    respond_with_empty_detail(&http, &SIX_OPEN_SERIES);
+    let mut app = tv_app(&http);
+    report_open_series(&mut app, &SIX_OPEN_SERIES);
+
+    report_open_series(
+        &mut app,
+        &["series-1", "series-2", "series-3", "series-4", "series-6"],
+    );
+
+    assert!(
+        !app.series_detail_loading("series-5"),
+        "the row the newer report dropped starts nothing while the loader is full"
+    );
+
+    land_through_gui(&mut app);
+
+    assert!(
+        app.series_detail_loading("series-6"),
+        "the newer report's next row takes the freed slot"
+    );
+    assert!(
+        !app.series_detail_loading("series-5"),
+        "the dropped row never starts"
+    );
+}
+
+/// An open season whose series detail is cached and whose episodes are missing
+/// starts its episode fetch through the loader (design D5): the season needs no
+/// detail fetch first, and no pick precedes it.
+#[test]
+fn an_open_season_of_a_cached_series_starts_its_episode_fetch() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_when(
+        "ParentId=season-1",
+        200,
+        r#"{"Items":[],"TotalRecordCount":0}"#,
+    );
+    let mut app = tv_app(&http);
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    app.seed_series_detail_for_test(
+        "series-1",
+        SeriesDetail {
+            seasons: vec![season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsOpenInView {
+            lib_idx: 0,
+            series: Vec::new(),
+            seasons: vec![("series-1".to_string(), "season-1".to_string())],
+        },
+    );
+
+    assert!(
+        app.series_season_loading("series-1", "season-1"),
+        "the open season's episodes load without a pick"
+    );
+}
