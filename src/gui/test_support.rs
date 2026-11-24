@@ -75,16 +75,6 @@ pub fn seeded_gui_state_for_test<R>(read: impl FnOnce(&mut Option<GuiClientState
     CLIENT_GUI_STATE.with(|slot| read(&mut slot.borrow_mut()))
 }
 
-/// Take one pending library event through the GUI Client's own stores
-/// (`decouple-client-core` design D4a (c), row 8.1): the event's App-owned
-/// half applies to `app`, and its store half installs in the sidecar
-/// [`gui_state_for_test`] reads, so a dependent Client's test drives the
-/// production drain over the one state it seeds.
-#[cfg(feature = "test")]
-pub fn drain_lib_event_with_stores_for_test(app: &mut App) -> bool {
-    gui_state_for_test(|gui| app.drain_lib_event_with_stores(Some(gui)))
-}
-
 /// Read or seed the GUI Client's own state beside `app`, over whichever
 /// sidecar this build keeps: the crate's own tests use [`stub_gui_state`], and
 /// a dependent Client's `test` build uses [`gui_state_for_test`].

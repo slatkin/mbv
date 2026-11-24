@@ -596,7 +596,7 @@ fn handle_feed_home_video_selection_failed(
         &[ClientLibraryEffect::FeedTargetFailed { lib_idx, selection }],
     );
     tracing::info!(
-        name: "feed_home_video.selection_fetch_failed",
+        name: "feed.home_video.selection_fetch_failed",
         target: "feed_home_video",
         library_index = lib_idx,
         error = %error,

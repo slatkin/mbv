@@ -139,6 +139,6 @@ pub use self::gui::test_support::{GuiStateSeams, gui_row_menu_entries_for_test};
 #[cfg(feature = "test")]
 #[doc(hidden)]
 pub use self::gui::test_support::{
-    drain_lib_event_with_stores_for_test, gui_state_for_test, seeded_gui_state_for_test,
-    stub_app_with_failed_emby_setup, stub_app_with_open_row_menu, stub_app_with_track_popover,
+    gui_state_for_test, seeded_gui_state_for_test, stub_app_with_failed_emby_setup,
+    stub_app_with_open_row_menu, stub_app_with_track_popover,
 };
