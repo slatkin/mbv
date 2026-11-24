@@ -44,16 +44,6 @@ pub const NESTED_GUIDE_X: f32 = NESTED_INSET_X + 4.0;
 /// row.
 pub const LEAF_INSET_X: f32 = NESTED_GUIDE_X + 8.0;
 
-/// A playlist row's left padding, in pixels from the row box's left edge
-/// (design D2): [`crate::window::components::playlists_panel`]'s row style
-/// paints it, and the tree's items indent from it.
-pub const PLAYLIST_LABEL_X: f32 = 8.0;
-
-/// A playlist's guide's left edge in the row box, in pixels (design D2): a
-/// playlist row has no thumb, so it hangs the guide under the label's first
-/// letter, as a nested row does.
-pub const PLAYLIST_GUIDE_X: f32 = PLAYLIST_LABEL_X + 4.0;
-
 /// How far an open parent's guide clears its own row's bottom edge, in pixels
 /// (design D3): the guide starts this far above the row's bottom, so the gap
 /// under the parent's leading element reads as a start.

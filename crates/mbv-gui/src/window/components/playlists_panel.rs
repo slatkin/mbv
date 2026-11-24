@@ -11,6 +11,10 @@
 //! item row stays a leaf whose double-click plays it, and the playlist's own
 //! Play control and menu Play entry still play the playlist.
 //!
+//! Both row kinds paint through the shared row parts (`gui-unified-list-rows`
+//! design D2, D3): a playlist as a top-level row with no thumb and its count as
+//! the trailing text, and an item as a leaf at the first depth.
+//!
 //! The tree paints the shared indent guide (`gui-tree-indent-guides`): an open
 //! playlist that shows item rows hangs one under its label, and its item rows
 //! and its rename field carry it on to the subtree's last row.
@@ -30,23 +34,18 @@ use crate::window::channel::CoreLink;
 use crate::window::components::library_hero_actions::{
     ACCENT_STYLE, DESTRUCTIVE_STYLE, RAISED_STYLE,
 };
+use crate::window::components::list_row::{
+    FlatRow, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow,
+};
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
-use crate::window::components::tree_guide::{
-    GuideTone, PLAYLIST_GUIDE_X, PLAYLIST_LABEL_X, TreeGuide, parent_guide_start,
-};
-use crate::window::components::tree_hint::TreeHint;
-use crate::window::components::tree_row::{
-    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text, tree_row_text,
-};
-use crate::window::input::f32_from_f64;
+use crate::window::components::tree_guide::{GuideTone, TOP_GUIDE_X, TreeGuide};
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 use crate::window::settings::focus::focus_on_mount;
 use crate::window::settings::state::{SettingsForm, SettingsState};
-use crate::window::truncate::Truncate;
 
 /// The row the hero shows and a menu addresses: a playlist, or one item of the
 /// open playlist. Stable ids, never positions.
@@ -365,21 +364,17 @@ pub fn PlaylistsPanel(props: PlaylistsPanelProps) -> Element {
     }
 }
 
-/// Pick a row and open its right-click menu at the pointer.
+/// Pick a row and open its right-click menu at the pointer: the row parts'
+/// `on_context`, which their shared right-press handler calls after it presses
+/// the row.
 fn open_menu(
-    event: &MouseEvent,
+    (x, y): (f32, f32),
     this: Pick,
     mut pick: Signal<Option<Pick>>,
     mut menu: Signal<Option<RowMenu>>,
 ) {
-    event.prevent_default();
-    let at = event.client_coordinates();
     pick.set(Some(this.clone()));
-    menu.set(Some(RowMenu {
-        pick: this,
-        x: f32_from_f64(at.x),
-        y: f32_from_f64(at.y),
-    }));
+    menu.set(Some(RowMenu { pick: this, x, y }));
 }
 
 /// The tree: the header with the list's refresh, then one row per playlist,
@@ -431,8 +426,8 @@ fn tree_column(
     }
 }
 
-/// One playlist's node: its row, the rename field while renaming it, and its
-/// items while it is the open one.
+/// One playlist's node: its top-level row, the rename field while renaming it,
+/// and its items while it is the open one.
 fn playlist_node(
     playlist: &GuiPlaylistRow,
     frame: &GuiPlaylistsFrame,
@@ -457,40 +452,33 @@ fn playlist_node(
     let rename_here = rename.as_ref().is_some_and(|draft| draft.id == id);
     let rename_name = rename.as_ref().map(|draft| draft.name.clone());
     let mut press_pick = pick;
+    let row_id = id.clone();
     rsx! {
         div {
             key: "{id}",
             class: "flex flex-col",
-            button {
-                "type": "button",
-                class: "tree-parent relative flex w-full items-center text-left",
-                style: row_style(selected, 0.0),
-                "aria-expanded": "{is_open}",
-                "data-playlists-row": "playlist",
-                onclick: move |_| {
+            FlatRow {
+                attr: "playlists",
+                kind: "playlist".to_owned(),
+                id: row_id,
+                title: playlist.name.clone(),
+                subtitle: None,
+                trail: Some(playlist.item_count.to_string()),
+                trail_part: LibraryTrailPart::Duration,
+                thumb: None,
+                selected,
+                tree_open: Some(is_open),
+                tree_guide: shows_items,
+                on_press: Callback::new(move |()| {
                     press_pick.set(Some(Pick::Playlist(press_id.clone())));
-                },
-                ondoubleclick: move |_| {
+                }),
+                on_play: Callback::new(|()| {}),
+                on_toggle: Some(Callback::new(move |()| {
                     toggle_link.playlists(toggle_command(is_open, &toggle_id));
-                },
-                oncontextmenu: move |event: MouseEvent| {
-                    open_menu(&event, Pick::Playlist(context_id.clone()), pick, menu);
-                },
-                Truncate {
-                    text: playlist.name.clone(),
-                    class: "min-w-0 flex-1".to_owned(),
-                    style: tree_row_text(),
-                    css: "color: var(--canvas-text);".to_owned(),
-                }
-                span {
-                    class: "tree-trailing flex-none font-mono tabular-nums",
-                    style: "font-size: 12px; color: var(--canvas-muted);",
-                    "{playlist.item_count}"
-                }
-                if shows_items {
-                    {parent_guide_start(PLAYLIST_GUIDE_X, PLAYLIST_ROW_HEIGHT_PX, 0.0)}
-                }
-                TreeHint { open: is_open }
+                })),
+                on_context: Some(Callback::new(move |at: (f32, f32)| {
+                    open_menu(at, Pick::Playlist(context_id.clone()), pick, menu);
+                })),
             }
             if rename_here {
                 { rename_field(settings, rename_name, shows_items) }
@@ -503,8 +491,9 @@ fn playlist_node(
 }
 
 /// The open playlist's item rows, indented under it. Each item row is a leaf of
-/// the tree, so it carries its playlist's guide from its top to its bottom
-/// (`gui-tree-indent-guides` design D3).
+/// the tree at the first depth, so it carries its playlist's guide from its top
+/// to its bottom (`gui-tree-indent-guides` design D3), and the last one paints
+/// the divider the open parent row gave up.
 fn items_block(
     open: Option<&GuiOpenPlaylist>,
     link: &CoreLink,
@@ -531,82 +520,35 @@ fn items_block(
                     let play_link = link.clone();
                     let play_playlist = open.id.clone();
                     let play_item = item.id.clone();
+                    let tail = open.items.last().is_some_and(|last| last.id == item.id);
                     let mut press_pick = pick;
                     rsx! {
-                        button {
+                        TreeRow {
                             key: "{item.id}",
-                            "type": "button",
-                            class: "relative flex w-full items-center text-left",
-                            style: item_row_style(selected),
-                            "data-playlists-row": "item",
-                            onclick: move |_| press_pick.set(Some(press.clone())),
-                            ondoubleclick: move |_| {
+                            attr: "playlists",
+                            kind: "item".to_owned(),
+                            id: item.id.clone(),
+                            level: TreeLevel::Leaf,
+                            depth: TreeDepth::One,
+                            title: item.name.clone(),
+                            selected,
+                            tail,
+                            on_press: Callback::new(move |()| press_pick.set(Some(press.clone()))),
+                            on_play: Callback::new(move |()| {
                                 play_link.playlists(GuiPlaylistsCommand::ItemAction {
                                     id: play_playlist.clone(),
                                     item_id: play_item.clone(),
                                     action: GuiPlaylistAction::Play,
                                 });
-                            },
-                            oncontextmenu: move |event: MouseEvent| {
-                                open_menu(&event, context.clone(), pick, menu);
-                            },
-                            div {
-                                class: "min-w-0 flex-1",
-                                style: leaf_label_css(),
-                                Truncate {
-                                    text: item.name.clone(),
-                                    style: leaf_row_text(),
-                                    css: "color: var(--canvas-text);".to_owned(),
-                                }
-                            }
-                            TreeGuide {
-                                x: PLAYLIST_GUIDE_X,
-                                tone: GuideTone::Top,
-                                top: 0.0,
-                                bottom: 0.0,
-                            }
+                            }),
+                            on_context: Some(Callback::new(move |at: (f32, f32)| {
+                                open_menu(at, context.clone(), pick, menu);
+                            })),
                         }
                     }
                 }
             }
         }
-    }
-}
-
-/// A Playlists tree row's height, in pixels (`gui-tree-indent-guides` design
-/// D3): [`row_style`] paints it and the open playlist's guide start is measured
-/// from its bottom.
-const PLAYLIST_ROW_HEIGHT_PX: f32 = 36.0;
-
-/// One tree row's box: a [`PLAYLIST_ROW_HEIGHT_PX`] row, indented for an item,
-/// filled while picked.
-fn row_style(selected: bool, indent: f32) -> String {
-    format!(
-        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 {PLAYLIST_LABEL_X}px 0 {}px; border: 0; border-radius: 6px; font-size: {TREE_ROW_FONT_PX}px; background: {}; cursor: pointer;",
-        PLAYLIST_LABEL_X + indent,
-        row_fill(selected),
-    )
-}
-
-/// The indent an item row takes under its playlist, in pixels.
-const ITEM_INDENT_PX: f32 = 24.0;
-
-/// One item row's box: a leaf of the tree, so it paints the leaf look at
-/// [`ITEM_INDENT_PX`] under its open playlist, filled while picked.
-fn item_row_style(selected: bool) -> String {
-    format!(
-        "height: {PLAYLIST_ROW_HEIGHT_PX}px; padding: 0 {PLAYLIST_LABEL_X}px 0 {}px; border: 0; border-radius: 6px; font-size: {LEAF_ROW_FONT_PX}px; background: {}; cursor: pointer;",
-        PLAYLIST_LABEL_X + ITEM_INDENT_PX,
-        row_fill(selected),
-    )
-}
-
-/// A row's fill: the selection bar's fill while the row is picked.
-fn row_fill(selected: bool) -> &'static str {
-    if selected {
-        "var(--canvas-selected)"
-    } else {
-        "none"
     }
 }
 
@@ -712,7 +654,7 @@ fn rename_field(settings: &SettingsState, name: Option<String>, guide: bool) -> 
             }
             if guide {
                 TreeGuide {
-                    x: PLAYLIST_GUIDE_X,
+                    x: TOP_GUIDE_X,
                     tone: GuideTone::Top,
                     top: 0.0,
                     bottom: 0.0,
