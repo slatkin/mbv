@@ -12,9 +12,10 @@
 //!
 //! The Workspace keeps no cursor (`gui-pointer-target-interaction` D6): the keys
 //! act on the row the pointer marks, a press on a row does nothing, a
-//! double-click plays the row, and the hovered row paints its play-next and
-//! add-to-queue controls. Every action sends the episode's stable Service id
-//! with the library index the frame carries; no control names a row position.
+//! double-click plays the row, and the row's hover controls (gui-row-hover-actions
+//! D5) play it and add it to the queue. Every action sends the episode's stable
+//! Service id with the library index the frame carries; no control names a row
+//! position.
 
 use dioxus_native::prelude::*;
 
@@ -29,8 +30,7 @@ use crate::window::components::library_dropdown::{
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{
-    LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceLoading, WorkspaceRow,
-    WorkspaceRowState,
+    LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow, WorkspaceRowState,
 };
 use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::library::hero::{
@@ -60,8 +60,6 @@ pub struct LibraryShowsHeroProps {
 enum ShowsAction {
     /// Play the target item.
     Play,
-    /// Play the target item next in the queue.
-    PlayNext,
     /// Add the target item to the queue.
     Queue,
 }
@@ -70,10 +68,6 @@ enum ShowsAction {
 fn send(library: &LibraryState, command: ShowsAction, lib_idx: usize, item_id: &str) {
     let command = match command {
         ShowsAction::Play => GuiLibraryCommand::ShowsPlay {
-            lib_idx,
-            item_id: item_id.to_owned(),
-        },
-        ShowsAction::PlayNext => GuiLibraryCommand::ShowsPlayNext {
             lib_idx,
             item_id: item_id.to_owned(),
         },
@@ -98,11 +92,6 @@ fn select_season(library: &LibraryState, lib_idx: usize, season_id: &str) {
 /// The Owner owns the queue, so the shared play path replaces it.
 fn play_episode(library: &LibraryState, lib_idx: usize, episode_id: &str) {
     send(library, ShowsAction::Play, lib_idx, episode_id);
-}
-
-/// Admit an episode directly after the active slot (design D12).
-fn play_next_episode(library: &LibraryState, lib_idx: usize, episode_id: &str) {
-    send(library, ShowsAction::PlayNext, lib_idx, episode_id);
 }
 
 /// Append an episode to the queue's tail (design D12).
@@ -333,16 +322,6 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
             play_target.as_deref(),
         );
     });
-    let next_library = library.clone();
-    let next_target = action_target.clone();
-    let on_play_next = Callback::new(move |()| {
-        act_on(
-            &next_library,
-            ShowsAction::PlayNext,
-            lib_idx,
-            next_target.as_deref(),
-        );
-    });
     let queue_library = library.clone();
     let queue_target = action_target.clone();
     let on_queue = Callback::new(move |()| {
@@ -357,7 +336,6 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
         LibraryHeroActions {
             attr: "shows",
             on_play: Some(on_play),
-            on_play_next: Some(on_play_next),
             on_queue: Some(on_queue),
         }
     };
@@ -371,27 +349,11 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
         play_episode(&play_library, lib_idx, &episode_id);
     });
 
-    // The row's hover actions (design D12).
-    let next_library = library.clone();
+    // The row's hover Add (gui-row-hover-actions D5).
     let queue_library = library.clone();
-    let row_actions = vec![
-        WorkspaceAction {
-            key: "playNext".to_owned(),
-            label: "Play next".to_owned(),
-            icon: WorkspaceActionIcon::ListEnd,
-            run: Callback::new(move |episode_id: String| {
-                play_next_episode(&next_library, lib_idx, &episode_id);
-            }),
-        },
-        WorkspaceAction {
-            key: "queue".to_owned(),
-            label: "Add to queue".to_owned(),
-            icon: WorkspaceActionIcon::Plus,
-            run: Callback::new(move |episode_id: String| {
-                queue_episode(&queue_library, lib_idx, &episode_id);
-            }),
-        },
-    ];
+    let on_queue = Callback::new(move |episode_id: String| {
+        queue_episode(&queue_library, lib_idx, &episode_id);
+    });
 
     // The series Hero's Workspace (design D12): the season pills, then the
     // selected season's episodes.
@@ -414,9 +376,9 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                     noun: "Episode",
                     pointer_list: PointerList::Workspace,
                     rows,
-                    actions: row_actions,
                     on_press,
                     on_play,
+                    on_queue: Some(on_queue),
                     loading,
                 }
             }

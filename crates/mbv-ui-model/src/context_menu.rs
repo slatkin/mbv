@@ -127,11 +127,6 @@ pub enum ContextAction {
     /// Reorder the Bound queue once at random with the playing slot first
     /// (queue-content-shuffle design D6).
     ShuffleQueue,
-    /// Move the queue item at this explicit index to play directly after the
-    /// playhead (add-tauri-gui-client row 6.2, the canvas row menu's "Play
-    /// next"). The menu retains the resolved index like `PlayQueue` (D2), so
-    /// a follow update to `queue_cursor` cannot redirect the move.
-    PlayNext(usize),
     /// Select the queue visual slot's system-audio visualizer (the visual
     /// slot's chrome menu). The menu resolves the current selection when it
     /// builds, so this action carries the target content, never a toggle.
@@ -142,6 +137,53 @@ pub enum ContextAction {
     /// Hide the queue visual slot (the visual slot's chrome menu). The `h`
     /// action toggles the same persisted state.
     HideVisualSlot,
+}
+
+impl ContextAction {
+    /// Whether the action shuffles the row's items (gui-row-hover-actions
+    /// design D4): a row's hover Shuffle control runs the row menu's own
+    /// shuffle entry, so it finds that entry by this question rather than by
+    /// its label or its index. Every variant is named, so a new action has to
+    /// say whether it shuffles.
+    #[must_use]
+    pub fn is_shuffle(&self) -> bool {
+        match self {
+            Self::ShuffleSelection(_)
+            | Self::ShuffleFolder(_)
+            | Self::FeedsShuffle(_)
+            | Self::AudiobookshelfShuffle(_) => true,
+            Self::Play
+            | Self::PlaySelection(_)
+            | Self::EnqueueSelection(_)
+            | Self::RemoveSelection(_)
+            | Self::MarkPlayedSelection(_)
+            | Self::MarkUnplayedSelection(_)
+            | Self::PlayQueue(_)
+            | Self::PlayFolder(_)
+            | Self::Enqueue
+            | Self::EnqueueFolder(_)
+            | Self::MarkPlayed(_)
+            | Self::MarkUnplayed(_)
+            | Self::RemoveFromContinueWatching
+            | Self::RemoveFromQueue(_)
+            | Self::ClearQueue
+            | Self::GoToLibrary(..)
+            | Self::FeedsPlay(_)
+            | Self::FeedsEnqueue(_)
+            | Self::FeedsMarkPlayed(_)
+            | Self::FeedsMarkUnplayed(_)
+            | Self::AudiobookshelfPlay(_)
+            | Self::AudiobookshelfEnqueue(_)
+            | Self::AudiobookshelfMarkPlayed(_)
+            | Self::AudiobookshelfMarkUnplayed(_)
+            | Self::HomePlaySelection(_)
+            | Self::HomeEnqueueSelection(_)
+            | Self::ShuffleQueue
+            | Self::ShowVisualizer
+            | Self::ShowMediaArt
+            | Self::HideVisualSlot => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

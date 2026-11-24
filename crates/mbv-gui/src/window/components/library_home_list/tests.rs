@@ -217,6 +217,32 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
+    /// The hover controls the host of the row `row_id` offers, in paint order
+    /// (gui-row-hover-actions design D3): the actions are the row button's
+    /// later sibling in the row's hover host, so the row's own node names them.
+    fn hover_controls_of(&self, row_id: &str) -> Vec<String> {
+        let dom = self.doc.inner();
+        let row = dom
+            .query_selector(&format!("[data-library-home-row-id=\"{row_id}\"]"))
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{row_id} paints"));
+        let host = dom
+            .get_node(row)
+            .expect("the row is in the document")
+            .parent
+            .expect("the row sits in its hover host");
+        dom.query_selector_all_in(host, "[data-row-action]")
+            .expect("the selector is valid")
+            .into_iter()
+            .filter_map(|action| {
+                dom.get_node(action)
+                    .expect("the control is in the document")
+                    .attr(LocalName::from("data-row-action"))
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
     /// The Library commands the core link received, in send order. The row
     /// art report the list sends (gui-delineated-rows design D7) rides its own
     /// test, so a caller that asserts the command its press sends reads it
@@ -633,5 +659,68 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
             )),
         }],
         "the row-menu command names the row's item id"
+    );
+}
+
+/// A `Recently added` row that targets a container (design D12): the only Home
+/// row kind whose menu carries a shuffle entry.
+fn added_collection() -> GuiHomeItemRowFrame {
+    GuiHomeItemRowFrame {
+        id: GuiHomeRowIdFrame::Recent(QueueItemContentId::Feed("f2".to_owned())),
+        title: "A Collection".to_owned(),
+        subtitle: None,
+        trailing: None,
+        kind: GuiHomeRowKindFrame::Collection,
+        state: GuiHomeRowStateFrame::Ordinary,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+    }
+}
+
+/// A media row beside a collection row, with nothing selected.
+fn hover_frame() -> GuiHomeList {
+    GuiHomeList {
+        loading: false,
+        rows: vec![
+            GuiHomeRowFrame::Item(continued_with_art()),
+            GuiHomeRowFrame::Item(added_collection()),
+        ],
+    }
+}
+
+/// The hover controls the Home row `id` offers, in paint order.
+fn home_hover_controls(id: &GuiHomeRowIdFrame) -> Vec<String> {
+    let mut fixture = built(
+        hover_frame(),
+        GuiHomeDetail {
+            selected: None,
+            hero: None,
+        },
+    );
+    fixture.measure(300.0);
+    fixture.hover_controls_of(&home_row_key(id))
+}
+
+/// Contract (gui-row-hover-actions design D3, D4): a Home media row offers Play
+/// and Add through the Home play and queue paths, and no Shuffle.
+#[test]
+fn a_media_row_offers_play_and_add() {
+    assert_eq!(
+        home_hover_controls(&GuiHomeRowIdFrame::Continue("e1".to_owned())),
+        ["play", "queue"],
+        "the media row offers Play and Add and no Shuffle"
+    );
+}
+
+/// Contract (gui-row-hover-actions design D3, D4): a Home collection row's menu
+/// carries Shuffle, so its hover offers Play, Add, and Shuffle.
+#[test]
+fn a_collection_row_offers_shuffle() {
+    assert_eq!(
+        home_hover_controls(&GuiHomeRowIdFrame::Recent(QueueItemContentId::Feed(
+            "f2".to_owned()
+        ))),
+        ["play", "queue", "shuffle"],
+        "the collection row offers Shuffle"
     );
 }

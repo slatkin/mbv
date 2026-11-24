@@ -16,7 +16,9 @@
 //! 1 px `--canvas-border` divider runs under every row, so the flush rows read
 //! apart without a gap. Every row leads with its padded queue ordinal, carries
 //! one title line, and paints the item's duration in its right column in every
-//! state — no second line, no date gutter, no time left, and no state glyph.
+//! state but the hovered one, whose Play control takes the duration's place
+//! (design D6 of `gui-row-hover-actions`) — no second line, no date gutter, no
+//! time left, and no state glyph.
 //! The rows are square-cornered, the now-playing row included (user request
 //! 2026-11-20). The rows paint three fills: the now-playing row's green fill, a
 //! marked row's raised fill, and the hovered row's own fill; every other row
@@ -26,9 +28,10 @@
 //!
 //! The row hover and the drag paint from the frame too — the window holds
 //! neither (the `gui-client` spec): `queue.hover` names the row that paints
-//! the hover fill (the row's context menu opens on a right-click, and a drag
+//! the hover fill and the hover Play control (the row's context menu opens on a
+//! right-click, and a drag
 //! starts on motion after a press anywhere in the row — user request
-//! 2026-11-23; the window paints no hover chrome), and `queue.drag`
+//! 2026-11-23; no other hover chrome), and `queue.drag`
 //! carries the drag ghost's content and the insertion
 //! line's stable-slot anchor. The ghost floats at the line the drop would
 //! insert at, with no ordinal, no right column, and the dragged row's ring and
@@ -40,7 +43,9 @@
 //!
 //! The regions report in paint order: the header's controls resolve to their
 //! `queueChooser`, `newQueue`, `closeQueue`, and `filter` targets, then the
-//! rows resolve to their stable slots. The switcher always paints and
+//! rows resolve to their stable slots, and the hovered row's Play control
+//! resolves to its `rowPlay` target right after its row's slot. The switcher
+//! always paints and
 //! so always claims a pointer; the close control claims one only while it acts,
 //! so the panel marks it only then. The open row menu's entries
 //! (`QueueRowMenu`, presentation-only) report their `rowMenuEntry` indices
@@ -73,12 +78,13 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiOverlayFrame;
+use crate::bridge::frame::queue::GuiQueue;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{ListId, QueueTargetId, RegionTarget};
 use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
 use crate::window::components::queue_header::QueueHeader;
 use crate::window::components::queue_row_menu::QueueRowMenu;
-use crate::window::layout::region_set::{MarkHandler, use_region_set};
+use crate::window::layout::region_set::{MarkHandler, RegionSet, use_region_set};
 use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::theme::role_var;
@@ -93,6 +99,30 @@ use geometry::{
 };
 use row::queue_rows;
 use row_cells::{ItemRow, RowCells, RowChrome, row_look};
+
+/// The painted rows' marks, in paint order, and the hovered row's Play control
+/// mark: every item row marks its slot, and the hovered row marks its Play
+/// control right after its own slot, so the control wins the hit map where it
+/// paints over the row (design D6 of `gui-row-hover-actions`). `None` for every
+/// row that is not hovered, and while no row is.
+fn row_marks(
+    region_set: &RegionSet,
+    queue: &GuiQueue,
+) -> (Vec<(u64, MarkHandler)>, Option<MarkHandler>) {
+    let mut slot_marks: Vec<(u64, MarkHandler)> = Vec::new();
+    let mut play_mark: Option<MarkHandler> = None;
+    for item in queue.rows.iter().filter_map(ItemRow::of) {
+        let slot = item.slot;
+        slot_marks.push((
+            slot,
+            region_set.mark(RegionTarget::Queue(QueueTargetId::Slot(slot))),
+        ));
+        if queue.hover == Some(slot) {
+            play_mark = Some(region_set.mark(RegionTarget::Queue(QueueTargetId::RowPlay(slot))));
+        }
+    }
+    (slot_marks, play_mark)
+}
 
 #[cfg(test)]
 mod tests;
@@ -175,17 +205,9 @@ pub fn QueuePanel() -> Element {
     let rename_mark = (!summary.header.rename_disabled)
         .then(|| region_set.mark(RegionTarget::Queue(QueueTargetId::RenameQueue)));
     let filter_mark = region_set.mark(RegionTarget::Queue(QueueTargetId::Filter));
-    // The painted rows' slot marks, in paint order.
-    let slot_marks: Vec<(u64, MarkHandler)> = queue
-        .rows
-        .iter()
-        .filter_map(ItemRow::of)
-        .map(|item| {
-            let slot = item.slot;
-            let mark = region_set.mark(RegionTarget::Queue(QueueTargetId::Slot(slot)));
-            (slot, mark)
-        })
-        .collect();
+    // The painted rows' slot marks, in paint order, with the hovered row's
+    // Play control mark (design D6 of `gui-row-hover-actions`).
+    let (slot_marks, play_mark) = row_marks(&region_set, &queue);
     // The open row menu's entries mark overlay 0, one per painted row in row
     // order, and the open Queue chooser's entries mark overlay 1 the same way,
     // each naming the identity the window paints — a local queue's own, or the
@@ -253,7 +275,7 @@ pub fn QueuePanel() -> Element {
                     style: "margin-top: {LIST_TOP_GAP_PX}px; padding-inline: 8px; display: flex; flex-direction: column; gap: {ROW_GAP_PX}px;",
                     "data-queue-list": "",
                     onmounted: region_set.mark_list(ListId::Queue, whole_rows),
-                    {queue_rows(&queue, insertion.as_ref(), &slot_marks)}
+                    {queue_rows(&queue, insertion.as_ref(), &slot_marks, play_mark)}
                 }
                 if let Some(scroll) = queue.scroll {
                     // The scroll bar: a readout of the core's scroll, set

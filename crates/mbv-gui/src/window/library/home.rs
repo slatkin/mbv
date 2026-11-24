@@ -119,13 +119,6 @@ impl LibraryState {
             .library(GuiLibraryCommand::HomePlay { row: row_id.into() });
     }
 
-    /// Enqueue a Home row directly after the active slot, or at the tail with
-    /// no active slot (design D12): `n` and the Hero's Play next.
-    pub fn play_home_row_next(&self, row_id: GuiHomeRowIdFrame) {
-        self.link
-            .library(GuiLibraryCommand::HomePlayNext { row: row_id.into() });
-    }
-
     /// Add a Home row to the queue's tail (design D12): `a` and the Hero's Add
     /// to queue.
     pub fn queue_home_row(&self, row_id: GuiHomeRowIdFrame) {

@@ -749,7 +749,10 @@ impl LibraryState {
     }
 }
 
+mod hover;
 mod rows;
+
+pub use hover::RowHoverPresses;
 
 #[cfg(test)]
 mod tests;

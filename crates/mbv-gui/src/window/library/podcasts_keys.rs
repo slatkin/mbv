@@ -9,9 +9,9 @@
 //! The routing itself is the shared panel key handler's
 //! ([`super::keys_shared`], row 7C.2): the movements and Enter never reach
 //! the core, Esc's overlay and menu handling runs before this, `/` opens the
-//! list's filter, and Space stays the core's play and pause. This module keeps only the Podcasts facts it routes over. There is
-//! no play-next on the destination: `n` is consumed and does nothing, and
-//! `a` sends the queue command.
+//! list's filter, and Space stays the core's play and pause. This module keeps only the Podcasts facts it routes over. `n` is not a
+//! Library key, so it goes to the core's router, and `a` sends the queue
+//! command.
 
 use dioxus_native::prelude::*;
 
@@ -43,8 +43,7 @@ impl PodcastsFrame {
 }
 
 /// The Podcasts facts the shared panel key handler routes over (row 7C.2):
-/// the item the play and queue commands name is the episode the pointer marks,
-/// and there is no play-next.
+/// the item the play and queue commands name is the episode the pointer marks.
 struct PodcastsKeys<'a> {
     state: &'a LibraryState,
 }
@@ -99,9 +98,6 @@ impl PanelKeys for PodcastsKeys<'_> {
     fn queue_item(&self, item_id: &str) {
         PodcastsList::queue(self.state, item_id);
     }
-
-    // A podcast episode has no play-next: the shared default consumes `n` and
-    // sends nothing.
 }
 
 /// Route a key to the Podcasts keys (row 10.1): the shared handler over the

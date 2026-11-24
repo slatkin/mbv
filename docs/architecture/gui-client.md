@@ -847,11 +847,14 @@ reserves one only while the list is focused and overflows.
 
 The row hover and the drag paint from the frame, and the window holds
 neither. `GuiQueue.hover` names the row the pointer rests on: that row paints
-the hover fill and nothing else (user request 2026-11-23 retired the hover
-chrome — the six-dot grip and the actions button). The `rowMenu` overlay
+the hover fill and a hover Play control at its trailing end, in place of the
+item's duration (user request 2026-11-23 retired the hover chrome — the
+six-dot grip and the actions button). The control is a sibling of the row
+button, a click on it plays that slot as the row's double-click does, and a
+right-click on it opens the row menu. The `rowMenu` overlay
 opens on a right-click over the row and
 on the context-menu chord, and its
-entries — Play now, Play next, Mark watched, Go to episode, Remove
+entries — Play now, Mark watched, Go to episode, Shuffle, Remove
 from queue, and Clear queue — carry their key hints; the menu paints the
 canvas's return glyph `⏎` where the core's hint chord is `Enter`, at paint
 time only, so `direct_select` and the key routes keep matching the raw
@@ -2059,7 +2062,7 @@ kicker, title, and plain facts — a movie is its own largest unit), the detail
 block (art, selected unit, actions, overview), and the list band (the movie's
 credits table and the IMDb button).
 `LibraryWorkspaceTable` paints the list band's rows,
-`LibraryHeroActions` the Play, Play next, and Add to queue buttons,
+`LibraryHeroActions` the Play and Add to queue buttons,
 `LibraryDropdown` the Shows Workspace's season dropdown (a radio row per
 season and a filter field, one open state in `LibraryUiState.shows_seasons`),
 `FlatRow` and `TreeRow` the rows of
@@ -2105,21 +2108,37 @@ through its subtree, painted per row by the shared `TreeGuide` part
 (`crates/mbv-gui/src/window/components/tree_guide.rs`), so the guide stays
 whole while only the rows in view paint. A top-level parent's guide paints in
 `--canvas-tree-guide` and a nested parent's guide in
-`--canvas-tree-guide-nested`. The part carries the row's `aria-expanded`, and
-while the pointer rests on the row it
-shows the shared `TreeHint`
-(`crates/mbv-gui/src/window/components/tree_hint.rs`) — `Double-click to
-expand` when the row is closed, `Double-click to collapse` when it is open —
-as a tooltip card under the row's bottom edge, through the row's `tree-parent`
-class and the `.tree-parent:hover` rule in `assets/app.css`. The row is the
-card's positioning box and does not clip it, and the row's trailing text stays
-visible. The rule is one for
-every GUI tree parent: a Music album, a Shows season, and a Playlists
-playlist paint through `TreeRow` and take the same press, the same double-click,
-the same `aria-expanded`, and the same hint, while a leaf row — a track, an
+`--canvas-tree-guide-nested`. The part carries the row's `aria-expanded`. The
+rule is one for every GUI tree parent: a Music album, a Shows season, and a
+Playlists playlist paint through `TreeRow` and take the same press, the same
+double-click, and the same `aria-expanded`, while a leaf row — a track, an
 episode, or a playlist item — takes none of them. A double-click on a leaf
 row still plays the row's item, as its Enter play does. Nested rows paint
 through `TreeRow`: a Music album or track, and a Shows season or episode.
+
+Under the pointer, a Library row reveals the shared `RowHoverActions` part
+(`crates/mbv-gui/src/window/components/row_hover_actions.rs`,
+`gui-row-hover-actions` design D1, D2): the fixed control order is Play,
+Add to queue, Shuffle, and Expand/collapse, and a row paints only the
+controls its kind asks for — D3's matrix governs the hover controls, so a
+Playlists item row shows Play and Add only, while the screen's hero and menu
+control set for an item still carries Shuffle. The reveal is CSS, with no
+window hover state: the row painter wraps the row in a `div.row-hover-host`
+that carries the row's fill as a `--row-fill` custom property, the part is a
+sibling of the row button at the row's trailing end, and
+`.row-hover-host:hover .row-hover-actions` shows it while
+`.row-hover-host:hover .row-hover-trail` covers the trailing text. The part
+paints the row's own fill behind it, so it covers the trailing end of a long
+title cleanly, and `Truncate` measures in Rust, so the title does not reflow.
+The hovered row keeps one look across its two boxes: a host that paints a fill
+(`row-hover-row`) carries the pointer veil on its button (`row-hover-face`) and
+on the part's cover while the host is hovered, so the veil does not drop when
+the pointer moves onto a control, and the cover stops above the row's divider
+(the host's `--row-divider`) so its fill does not blank the line.
+Each control calls `stop_propagation` in its `onclick` and `ondoubleclick`,
+so a press never picks or double-clicks the row. Every control runs a path a
+gesture already runs; Shuffle sends `GuiLibraryCommand::Shuffle { row }`,
+which runs the row's right-click Shuffle entry.
 
 Every row frame carries `GuiRowArtFrame` — the cached image and the fit its own
 pixels ask for, a fetch in flight, a source that answered with no image, or a

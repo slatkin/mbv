@@ -10,7 +10,9 @@
 //! entry lists pass their carried play state so the part derives the title's
 //! tone and the thumb's run. The press and the double-click ride the adapter's
 //! command methods, so the generic component calls one press path for all
-//! four.
+//! four. The rows' hover controls ride those same methods
+//! (`gui-row-hover-actions` design D3, D4), and only an Emby `Collection`
+//! row's Shuffle reaches the row menu's own shuffle entry.
 
 use std::sync::Arc;
 
@@ -135,10 +137,6 @@ impl LetteredDestination for EmbyList {
     fn queue(state: &LibraryState, item_id: &str) {
         state.queue_emby_row(item_id);
     }
-
-    fn play_next(state: &LibraryState, item_id: &str) {
-        state.play_emby_row_next(item_id);
-    }
 }
 
 /// The row kind word the item row's hook paints (`data-library-emby-row`).
@@ -150,7 +148,8 @@ fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
 }
 
 /// One painted row of the plain Emby-library list: the letter heading or the
-/// item row.
+/// item row. Its hover offers Play and Add on every row, and Shuffle on a
+/// `Collection` row alone (`gui-row-hover-actions` design D3).
 fn paint_emby_row(
     row: &LetteredRow<LetteredItemRow<GuiEmbyRowFrame>>,
     library: &LibraryState,
@@ -164,6 +163,12 @@ fn paint_emby_row(
             let press_library = library.clone();
             let play_id = item.row.id.clone();
             let play_library = library.clone();
+            let hover = library.item_hover_presses(
+                item.row.id.clone(),
+                EmbyList::play,
+                EmbyList::queue,
+                item.row.kind == GuiEmbyRowKindFrame::Collection,
+            );
             let menu_id = item.row.id.clone();
             let menu_library = library.clone();
             rsx! {
@@ -184,6 +189,9 @@ fn paint_emby_row(
                         EmbyList::select(&press_library, &press_row);
                     }),
                     on_play: Callback::new(move |()| EmbyList::play(&play_library, &play_id)),
+                    on_hover_play: hover.play,
+                    on_hover_queue: hover.queue,
+                    on_hover_shuffle: hover.shuffle,
                     on_context: Some(Callback::new(
                         move |(x, y): (f32, f32)| menu_library.open_row_menu_at(
                             Some(LibraryState::row_menu_item(menu_id.clone())),
@@ -287,7 +295,9 @@ impl LetteredDestination for AudiobooksList {
     }
 }
 
-/// One painted row of the book list: the letter heading or the book row.
+/// One painted row of the book list: the letter heading or the book row. A
+/// book is no collection, so its hover offers Play and Add and no Shuffle
+/// (`gui-row-hover-actions` design D3).
 fn paint_audiobooks_row(
     row: &LetteredRow<LetteredItemRow<GuiAudiobooksRowFrame>>,
     library: &LibraryState,
@@ -301,6 +311,12 @@ fn paint_audiobooks_row(
             let press_library = library.clone();
             let play_id = item.row.id.clone();
             let play_library = library.clone();
+            let hover = library.item_hover_presses(
+                item.row.id.clone(),
+                AudiobooksList::play,
+                AudiobooksList::queue,
+                false,
+            );
             let menu_id = item.row.id.clone();
             let menu_library = library.clone();
             rsx! {
@@ -323,6 +339,8 @@ fn paint_audiobooks_row(
                     on_play: Callback::new(move |()| {
                         AudiobooksList::play(&play_library, &play_id);
                     }),
+                    on_hover_play: hover.play,
+                    on_hover_queue: hover.queue,
                     on_context: Some(Callback::new(
                         move |(x, y): (f32, f32)| menu_library.open_row_menu_at(
                             Some(LibraryState::row_menu_item(menu_id.clone())),
@@ -442,7 +460,8 @@ fn paint_podcasts_row(
 }
 
 /// One painted episode row: the row's press selects the episode the Hero
-/// shows, a double-click plays it, and a right-press opens the row menu.
+/// shows, a double-click plays it, and a right-press opens the row menu. Its
+/// hover controls run the destination's play and queue paths (design D4).
 fn paint_podcasts_item(
     row: &LetteredItemRow<GuiEntryRowFrame>,
     library: &LibraryState,
@@ -452,6 +471,12 @@ fn paint_podcasts_item(
     let press_library = library.clone();
     let play_id = row.row.id.clone();
     let play_library = library.clone();
+    let hover = library.item_hover_presses(
+        row.row.id.clone(),
+        PodcastsList::play,
+        PodcastsList::queue,
+        false,
+    );
     let menu_id = row.row.id.clone();
     let menu_library = library.clone();
     let pressed_row = LetteredRow::Item(press_item);
@@ -472,6 +497,8 @@ fn paint_podcasts_item(
             }),
             on_press: Callback::new(move |()| PodcastsList::select(&press_library, &pressed_row)),
             on_play: Callback::new(move |()| PodcastsList::play(&play_library, &play_id)),
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library
                     .open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);
@@ -584,7 +611,8 @@ fn paint_feeds_row(
 }
 
 /// One painted entry row: a press selects the entry the Hero shows, a
-/// double-click plays it, and a right-press opens the row menu.
+/// double-click plays it, and a right-press opens the row menu. Its hover
+/// controls run the destination's play and queue paths (design D4).
 fn paint_feeds_item(
     row: &LetteredItemRow<GuiEntryRowFrame>,
     library: &LibraryState,
@@ -594,6 +622,8 @@ fn paint_feeds_item(
     let press_library = library.clone();
     let play_id = row.row.id.clone();
     let play_library = library.clone();
+    let hover =
+        library.item_hover_presses(row.row.id.clone(), FeedsList::play, FeedsList::queue, false);
     let menu_id = row.row.id.clone();
     let menu_library = library.clone();
     let pressed_row = LetteredRow::Item(press_item);
@@ -614,6 +644,8 @@ fn paint_feeds_item(
             }),
             on_press: Callback::new(move |()| FeedsList::select(&press_library, &pressed_row)),
             on_play: Callback::new(move |()| FeedsList::play(&play_library, &play_id)),
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library
                     .open_row_menu_at(Some(LibraryState::row_menu_item(menu_id.clone())), x, y);

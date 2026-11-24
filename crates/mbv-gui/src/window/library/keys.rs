@@ -9,7 +9,6 @@
 
 use crate::bridge::frame::library::{GuiDestinationList, GuiHomeRowIdFrame, GuiSearchFrame};
 use crate::bridge::keys::{DomKey, KeyTarget};
-use crate::bridge::library::GuiLibraryCommand;
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
@@ -161,10 +160,10 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
 
 /// Route a key to the Home keys (design D12, D2 of
 /// `gui-pointer-target-interaction`): `/` opens the list filter, the movement
-/// keys scroll the list under the pointer, and Enter, `n`, and `a` act on the
-/// hovered row. With no hovered row they are consumed and do nothing. There is
-/// no destination filter and no collection dropdown on Home, so Space passes
-/// to the core's router.
+/// keys scroll the list under the pointer, and Enter and `a` act on the hovered
+/// row. With no hovered row they are consumed and do nothing. There is no
+/// destination filter and no collection dropdown on Home, so Space passes to
+/// the core's router.
 fn route_home_panel_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) -> KeyOutcome {
     let target = core_target(pointer);
     if key.key == "/" && bare(key) {
@@ -192,12 +191,6 @@ fn route_home_panel_key(state: &LibraryState, key: &DomKey, pointer: &PointerTar
         "Enter" => {
             if let Some(row) = hovered_home_row(state, pointer) {
                 state.play_home_row(row);
-            }
-            KeyOutcome::Handled
-        }
-        "n" => {
-            if let Some(row) = hovered_home_row(state, pointer) {
-                state.play_home_row_next(row);
             }
             KeyOutcome::Handled
         }
@@ -266,24 +259,19 @@ fn hovered_item_id(state: &LibraryState, pointer: &PointerTarget) -> Option<Stri
 /// item for the Hero, and Enter plays.
 fn play_hovered_item(state: &LibraryState, pointer: &PointerTarget) {
     if let Some(item_id) = hovered_item_id(state, pointer) {
-        state.link.library(GuiLibraryCommand::Play { item_id });
+        state.play_library_item(&item_id);
     }
 }
 
-/// Route `n` and `a` to the item the pointer's control names (design D2, D8):
-/// play next and add to queue. The Library takes both keys while the pointer
-/// rests over the Library column, so the core's `a` chord never runs from here;
-/// with no item the key sends no command.
-fn route_item_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) {
+/// Route `a` to the item the pointer's control names (design D2, D8): add to
+/// queue. The Library takes the key while the pointer rests over the Library
+/// column, so the core's `a` chord never runs from here; with no item the key
+/// sends no command.
+fn route_item_key(state: &LibraryState, pointer: &PointerTarget) {
     let Some(item_id) = hovered_item_id(state, pointer) else {
         return;
     };
-    match key.key.as_str() {
-        "n" => state.link.library(GuiLibraryCommand::PlayNext { item_id }),
-        _ => state
-            .link
-            .library(GuiLibraryCommand::AddToQueue { item_id }),
-    }
+    state.queue_library_item(&item_id);
 }
 
 /// Close the window's open menu or overlay with Esc (design D2, step 1): the
@@ -432,8 +420,8 @@ fn route_music_panel_key(
             play_hovered_item(state, pointer);
             KeyOutcome::Handled
         }
-        "n" | "a" => {
-            route_item_key(state, key, pointer);
+        "a" => {
+            route_item_key(state, pointer);
             KeyOutcome::Handled
         }
         // Nothing else of the Library's answers this key: the core's router

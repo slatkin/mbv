@@ -15,17 +15,18 @@ use mbv_ui_msg::{PointerEvent, PointerKind, Position};
 
 use crate::bridge::layout::{ConfirmTargetId, DaemonLostTargetId, RegionTarget};
 use crate::leaves::{
-    PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
-    seekbar_region,
+    PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_hover_at,
+    row_slot_at, seekbar_region,
 };
 
 use super::CoreThread;
 
 impl CoreThread {
-    /// The Queue row the pointer rests on, the shared region rule the leaf's
-    /// click path resolves with too: the row's own region.
+    /// The Queue row the pointer rests on: the row's own region, or the row
+    /// whose hover Play control the pointer rests on, so the control never
+    /// clears the hover that paints it (design D6 of `gui-row-hover-actions`).
     pub(super) fn queue_row_at(&self, at: Position) -> Option<QueueSlotId> {
-        row_slot_at(&self.regions, at)
+        row_hover_at(&self.regions, at)
     }
 
     /// Route one translated pointer event (design D4, task row 2.4): disarm

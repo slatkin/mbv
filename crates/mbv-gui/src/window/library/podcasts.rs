@@ -6,8 +6,8 @@
 //! and the selected episode (the frame's `collections` and `selected`), so
 //! nothing here mirrors them: a press sends the select command, and the frame
 //! carries the choice back. The row model is [`super::lettered`]'s; the
-//! Hero overlay stays in [`super::state`]'s shared store. There is no
-//! play-next: `n` is consumed and does nothing.
+//! Hero overlay stays in [`super::state`]'s shared store. `n` is not a Library
+//! key, so it goes to the core's router.
 //!
 //! The list keeps no cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
@@ -119,8 +119,7 @@ impl LibraryState {
     }
 
     /// Add an episode to the queue's tail (design D12): `a` on the hovered
-    /// row. There is no play-next on the destination, so `n` is consumed and
-    /// does nothing here.
+    /// row.
     pub fn queue_podcasts_row(&self, item_id: &str) {
         let Some(lib_idx) = self.podcasts_lib_idx() else {
             return;

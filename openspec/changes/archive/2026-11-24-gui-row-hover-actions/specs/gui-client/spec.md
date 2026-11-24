@@ -22,6 +22,17 @@ While the pointer rests on a GUI Library row, the row SHALL show its hover contr
 - **WHEN** the pointer rests on a Hero tracklist row
 - **THEN** the row shows its track number and its hover controls, and the controls take the place of its duration
 
+#### Scenario: The pointer moves onto a control
+
+- **GIVEN** the pointer rests on a selected Music album row
+- **WHEN** the pointer moves from the row onto one of its hover controls
+- **THEN** the row keeps its hover look and its selection fill, and the controls carry the same look as the rest of the row
+
+#### Scenario: The controls leave the row's divider
+
+- **WHEN** a row that paints a divider under itself shows its hover controls
+- **THEN** the divider still shows under the controls, as under the rest of the row
+
 ### Requirement: A row's hover controls follow its kind
 
 A collection row SHALL show Play, Add to queue, and Shuffle. A collection row is an Emby folder or boxset, a Music artist or album, a Shows series or season, a Home row that names a collection, or a saved playlist. A media row SHALL show Play and Add to queue. An Audiobooks chapter row SHALL show Play only. A row that cannot play, such as a Shows Upcoming row, SHALL show no hover controls. No row SHALL show a Play next control.
@@ -30,6 +41,17 @@ A collection row SHALL show Play, Add to queue, and Shuffle. A collection row is
 
 - **WHEN** the pointer rests on a Shows series row
 - **THEN** the row shows Play, Add to queue, and Shuffle
+
+#### Scenario: A top-level tree parent's controls
+
+- **WHEN** the pointer rests on a top-level Music artist row that names an item
+- **THEN** the row shows Play, Add to queue, Shuffle, and Expand/collapse
+- **AND** a top-level Shows series row and a Playlists screen playlist row show the same four controls
+
+#### Scenario: A top-level tree parent with no item
+
+- **WHEN** the pointer rests on a Music artist row that names no item
+- **THEN** the row shows Expand/collapse alone
 
 #### Scenario: An episode row's controls
 
@@ -106,7 +128,7 @@ A GUI tree parent row SHALL show an Expand/collapse control with its other hover
 
 ### Requirement: A queue row shows a Play control on hover
 
-While the pointer rests on a queue row, the row SHALL show a Play control in its right column, in place of the item's duration, beside the row-actions button. A press on the control SHALL play that slot, as a double-click on the row does. A double-click on the control SHALL NOT play the row a second time.
+While the pointer rests on a queue row, the row SHALL show a Play control in its right column, in place of the item's duration, at the row's trailing end. A press on the control SHALL play that slot, as a double-click on the row does. A double-click on the control SHALL NOT play the row a second time.
 
 #### Scenario: A hovered queue row plays from its control
 
@@ -185,12 +207,12 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 #### Scenario: A row is hovered
 
 - **WHEN** the pointer is over a queue row
-- **THEN** the row paints the canvas's hovered row: the grip replaces the row's ordinal, the Play control takes the place of the duration, and the row-actions button shows at the row's end
+- **THEN** the row paints the canvas's hovered row: it keeps its ordinal, and the hover Play control takes the place of the duration at the row's trailing end
 
 #### Scenario: The row menu opens
 
-- **WHEN** the row-actions button is pressed
-- **THEN** the menu opens with Play now (`⏎`), Mark watched (`w`), Go to episode (`g`), and Remove from queue (`dd`)
+- **WHEN** the user right-clicks the row or its hover Play control
+- **THEN** the menu opens with Play now (`⏎`), Mark watched (`w`), Go to episode (`g`), Shuffle, Remove from queue (`dd`), and Clear queue (`c`)
 - **AND** the menu shows no Play next entry
 
 #### Scenario: The destructive entry is distinct

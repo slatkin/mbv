@@ -101,8 +101,9 @@ fn enter_plays_the_hovered_track_row() {
     assert_eq!(facts, ["enter=Handled"]);
 }
 
-// Enter, `n`, and `a` with no hovered row do nothing (design D2, step 3): the
-// key is the window's, and it sends no command.
+// Enter and `a` with no hovered row do nothing (design D2, step 3): the key is
+// the window's, and it sends no command. `n` is not a Library key, so it goes
+// to the core.
 #[test]
 fn enter_n_and_a_with_no_hovered_row_send_nothing() {
     let (facts, rx) = run(|state, facts| {
@@ -111,25 +112,20 @@ fn enter_n_and_a_with_no_hovered_row_send_nothing() {
         route(state, facts, "n", "n", false);
         route(state, facts, "a", "a", false);
     });
-    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(facts, ["enter=Handled", "n=Core(None)", "a=Handled"]);
     assert_eq!(commands(&rx), []);
 }
 
-// `n` on a hovered album row sends play next for that album.
+// `n` over a Library row is not a Library key (design D7): it goes to the
+// core's router and sends no Library command.
 #[test]
-fn n_on_the_hovered_album_row_sends_play_next_for_that_album() {
+fn n_over_a_library_row_is_the_cores() {
     let (facts, rx) = run(|state, facts| {
         carry_list(state, &["artist:service:a1"]);
         route_on_row(state, facts, "n", "n", PointerList::Music, "album:al1");
     });
-    assert_eq!(
-        commands(&rx),
-        [GuiLibraryCommand::PlayNext {
-            item_id: "al1".to_owned(),
-        }
-        .into()]
-    );
-    assert_eq!(facts, ["n=Handled"]);
+    assert_eq!(facts, ["n=Core(None)"]);
+    assert_eq!(commands(&rx), []);
 }
 
 // `a` with the pointer on a tracklist row adds that track to the queue.

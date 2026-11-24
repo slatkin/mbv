@@ -19,6 +19,7 @@ use mbv_ui_model::browse::{BrowseResting, ServerRows};
 mod destinations;
 mod launch;
 mod projection;
+mod row_shuffle;
 
 const LIB_ID: &str = "lib-music";
 const HIPHOP: &str = "grp-hiphop";

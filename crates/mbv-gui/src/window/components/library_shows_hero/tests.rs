@@ -22,8 +22,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
 use super::{
-    LibraryShowsHero, ShowsAction, act_on, action_target, play_episode, play_next_episode,
-    queue_episode, select_season,
+    LibraryShowsHero, ShowsAction, act_on, action_target, play_episode, queue_episode,
+    select_season,
 };
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiMetaKindFrame,
@@ -537,26 +537,6 @@ fn a_double_click_on_an_episode_sends_its_play_command() {
             item_id: "ep2".to_owned(),
         }],
         "the play command names the played episode"
-    );
-}
-
-/// Contract (`LibraryShowsHero.test.ts`): a hovered row plays its episode
-/// next. The press contract rides the handler function the row's action
-/// closure calls (a headless document cannot fire a hover).
-#[test]
-fn a_hovered_row_plays_its_episode_next() {
-    let mut fixture = built_series();
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || play_next_episode(&state, LIB_IDX, "ep2"));
-
-    assert_eq!(
-        fixture.library_commands(),
-        vec![crate::gui_core::GuiLibraryCommand::ShowsPlayNext {
-            lib_idx: LIB_IDX,
-            item_id: "ep2".to_owned(),
-        }],
-        "the play-next command names the hovered episode"
     );
 }
 

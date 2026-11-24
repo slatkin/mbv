@@ -65,6 +65,23 @@ fn four_rows() -> CoreInput {
     )
 }
 
+/// The four rows, the second one hovered: the report carries the second row's
+/// Play control over the row's trailing end (design D6 of
+/// `gui-row-hover-actions`), as the crossed report after a hover change paints
+/// it, after the rows' own regions.
+fn four_rows_with_a_play_control() -> CoreInput {
+    measured_layout(
+        4,
+        vec![
+            region_at(0.0, 0.0, RegionTarget::Queue(QueueTargetId::Slot(1))),
+            region_at(0.0, 24.0, RegionTarget::Queue(QueueTargetId::Slot(2))),
+            region_at(100.0, 24.0, RegionTarget::Queue(QueueTargetId::RowPlay(2))),
+            region_at(0.0, 48.0, RegionTarget::Queue(QueueTargetId::Slot(3))),
+            region_at(0.0, 72.0, RegionTarget::Queue(QueueTargetId::Slot(4))),
+        ],
+    )
+}
+
 /// The slot moves the Owner received, as `(slot_id, to_index)`.
 fn slot_moves(cmd_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) -> Vec<(u64, usize)> {
     cmd_rx
@@ -108,6 +125,31 @@ fn the_frame_carries_the_hovered_row() {
     test.tx.send(move_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
     assert_eq!(test.held().queue().hover, None);
+}
+
+/// Contract (spec `gui-client` "A queue row shows a Play control on hover",
+/// design D6 of `gui-row-hover-actions`): a pointer resting on the hovered
+/// row's Play control keeps that row hovered. The control's region resolves to
+/// its row for the hover alone, so the hover never clears, the control
+/// repaints, and the next report's pointer still rests on the same row.
+#[test]
+fn a_pointer_on_the_row_play_control_keeps_its_row_hovered() {
+    let mut test = test_core(3);
+    test.tx.send(four_rows_with_a_play_control()).unwrap();
+    assert!(test.core.step());
+    test.held();
+
+    // The move lands on the second row's Play control.
+    test.tx.send(move_at(150.0, 30.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.held().queue().hover, Some(2));
+
+    // The report the hover repaint causes repaints the control, and the
+    // pointer still rests on it: the hover holds, so the control does not
+    // vanish under the pointer.
+    test.tx.send(four_rows_with_a_play_control()).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.held().queue().hover, Some(2));
 }
 
 /// A drag's motion previews the drop index and the frame's ghost and
@@ -226,14 +268,14 @@ fn a_row_menu_entry_press_removes_its_row() {
     assert!(test.core.step());
     assert!(test.held().overlay().is_some());
 
-    // The menu's paint reports its rows; the remove entry is the fifth.
+    // The menu's paint reports its rows; the remove entry is the fourth.
     test.tx
         .send(measured_layout(
             4,
             vec![region_at(
                 0.0,
                 200.0,
-                RegionTarget::Queue(QueueTargetId::RowMenuEntry(4)),
+                RegionTarget::Queue(QueueTargetId::RowMenuEntry(3)),
             )],
         ))
         .unwrap();

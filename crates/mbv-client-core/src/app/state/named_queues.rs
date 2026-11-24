@@ -563,17 +563,4 @@ impl App {
     pub(in crate::app) fn queue_edit_target(&self) -> QueueTarget {
         self.queue_target(self.playing_queue_link())
     }
-
-    /// The row a "Play next" move lands directly after in the queue the panel
-    /// shows (design D7, D9 of `gui-named-queues`): the run's active row, or —
-    /// for a resting queue the GUI shows, which holds no playhead — its start
-    /// slot. `None` while the run is idle, or a resting queue has no start
-    /// slot.
-    #[must_use]
-    pub(in crate::app) fn shown_queue_anchor(&self) -> Option<usize> {
-        if self.shows_resting_local_queue() {
-            return self.displayed_queue().start_index();
-        }
-        self.displayed_playback_state().active_idx
-    }
 }

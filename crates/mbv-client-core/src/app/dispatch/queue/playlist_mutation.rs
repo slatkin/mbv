@@ -236,42 +236,6 @@ impl App {
         self.append_on_owner(items, None);
     }
 
-    /// Play an explicitly resolved library-view item next (add-gui-library-
-    /// panel design D8): the same route and admission checks as
-    /// [`App::enqueue_lib_item`], and the same shared folder expansion for a
-    /// folder item, but the items enter directly after the active slot
-    /// instead of at the tail. The edit is an Append, so no slot already in the
-    /// queue moves: the new items sit between the active slot and the one that
-    /// followed it. The TUI has no producer for it.
-    pub fn play_lib_item_next(&mut self, lib_idx: usize, item: EmbyItem) {
-        if item.is_folder {
-            let before = self.play_next_anchor();
-            self.do_enqueue_folder_before(&item, before);
-            return;
-        }
-        if !is_playable(&item) {
-            return;
-        }
-        tracing::info!(name: "library_route.play_next.requested", target: "library_route", item = %item.id, item_name = %item.name, source = "library_view", "play next requested");
-        let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
-        if self.enqueue_route_conflict(resolved.as_ref()) {
-            return;
-        }
-        let before = self.play_next_anchor();
-        self.append_on_owner(vec![QueueItem::Emby(Box::new(item))], before);
-    }
-
-    /// The owner slot a play-next append enters ahead of (add-gui-library-panel
-    /// design D8): the slot after the active slot, and `None` when the owner
-    /// reports no active slot or the active slot is the last one, so the items
-    /// land at the tail. Read from the queue as it is before the append: the
-    /// append's own answer is what adds the new slots.
-    fn play_next_anchor(&self) -> Option<u64> {
-        let queue = self.displayed_queue();
-        let active = queue.slot_index(queue.active_slot_id()?)?;
-        queue.slot_id_at(active + 1).map(mbv_ctrl::slot_id_to_u64)
-    }
-
     /// Appends one item to the viewed queue by sending the answered Append op
     /// to that link's Player owner (row 5.3, design D6): the Client holds no
     /// editable queue, so the entry appears only when the owner's answer (or

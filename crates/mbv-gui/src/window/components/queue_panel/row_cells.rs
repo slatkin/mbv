@@ -3,7 +3,9 @@
 //! with the progress ring beside it. The row carries no second line, and the
 //! ring adds no height: it sits in the right column (design D3 of
 //! `gui-delineated-rows`; the ring and the duration are one cluster, user
-//! request 2026-11-23). The drag ghost paints the title, the ring after the
+//! request 2026-11-23). The hovered row paints no duration, because its Play
+//! control takes the duration's place (design D6 of `gui-row-hover-actions`).
+//! The drag ghost paints the title, the ring after the
 //! title, and the percent only. The row's colours come through the queue
 //! column's `--ef-*`
 //! tokens (design D1 of `gui-queue-panel-redesign`).
@@ -32,11 +34,13 @@ const RING_CIRCUMFERENCE_PX: f32 = 37.7;
 /// The ghost's percent in logical pixels of type.
 const GHOST_PERCENT_PX: f32 = 12.0;
 
-/// Which cells a row paints: the list row, or the drag ghost (the title, the
-/// ring, and the percent only).
+/// Which cells a row paints: the list row, the hovered row (its Play control
+/// takes the right column's duration), or the drag ghost (the title, the ring,
+/// and the percent only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RowChrome {
     Row,
+    Hover,
     Ghost,
 }
 
@@ -73,6 +77,12 @@ impl ItemRow {
             }),
             _ => None,
         }
+    }
+
+    /// The row's title: its one painted line, and the name its hover Play
+    /// control carries.
+    pub(super) fn title(&self) -> &str {
+        &self.primary
     }
 }
 
@@ -231,8 +241,10 @@ pub(super) struct RowCellsProps {
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
 /// ordinal, the one title line, and the right column's duration with the
 /// progress ring beside it (user request 2026-11-23: the ring and the
-/// duration are one information set, so they paint as one cluster). The drag
-/// ghost paints the title, the ring, and the percent only.
+/// duration are one information set, so they paint as one cluster). The hovered
+/// row paints no duration: its Play control takes the duration's place, and its
+/// right column fits what remains (design D6 of `gui-row-hover-actions`). The
+/// drag ghost paints the title, the ring, and the percent only.
 #[component]
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
@@ -240,12 +252,23 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let look = &props.look;
     let chrome = props.chrome;
     let progress = row_progress(row, &playhead);
-    let duration = row.duration.clone();
+    // The hovered row's Play control takes the duration's place (design D6 of
+    // `gui-row-hover-actions`).
+    let duration = match chrome {
+        RowChrome::Hover => None,
+        RowChrome::Row | RowChrome::Ghost => row.duration.clone(),
+    };
+    // The right column's fixed width, released on the hovered row so its ring
+    // sits just before the Play control.
+    let column_width = match chrome {
+        RowChrome::Row | RowChrome::Ghost => format!("width: {RIGHT_COL_PX}px;"),
+        RowChrome::Hover => String::new(),
+    };
     let ordinal = row.ordinal;
     let ordinal_text = format!("{ordinal:02}");
 
     rsx! {
-        if chrome == RowChrome::Row {
+        if chrome != RowChrome::Ghost {
             span {
                 class: "shrink-0 text-right font-mono tabular-nums",
                 style: format!(
@@ -296,14 +319,15 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         if chrome != RowChrome::Ghost
             && (duration.is_some() || progress.is_some())
         {
-            // The right column: the item's duration in every row state
-            // (design D3), with the progress ring beside it — the ring and
-            // the duration are one information set, so they paint as one
-            // cluster right-aligned in the column (user request 2026-11-23).
+            // The right column: the item's duration in every row state but the
+            // hovered one (design D3), with the progress ring beside it — the
+            // ring and the duration are one information set, so they paint as
+            // one cluster right-aligned in the column (user request
+            // 2026-11-23).
             span {
                 class: "shrink-0 flex items-center justify-end",
                 style: format!(
-                    "width: {RIGHT_COL_PX}px; gap: 6px; font-size: 12px; color: {};",
+                    "{column_width} gap: 6px; font-size: 12px; color: {};",
                     ef_var(EfToken::Grey1)
                 ),
                 if let Some(percent) = progress {

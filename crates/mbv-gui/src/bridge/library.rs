@@ -48,8 +48,6 @@ pub enum GuiLibraryCommand {
     OpenAlbum { album_id: String },
     /// Play the item.
     Play { item_id: String },
-    /// Play the item next.
-    PlayNext { item_id: String },
     /// Add the item to the queue.
     AddToQueue { item_id: String },
     /// Shuffle the artist whose albums are `albumIds`.
@@ -63,15 +61,16 @@ pub enum GuiLibraryCommand {
     RowMenu {
         row: crate::gui_core::GuiLibraryMenuRow,
     },
+    /// Shuffle the row: the row's hover Shuffle control runs the row menu's
+    /// own shuffle entry, so the two cannot disagree.
+    Shuffle {
+        row: crate::gui_core::GuiLibraryMenuRow,
+    },
     /// Select a Home row (add-gui-library-panel design D12): the row the
     /// Hero shows. The core keeps the selection, so the window paints it.
     HomeSelect { row: GuiHomeRowId },
     /// Play a Home row (design D12).
     HomePlay { row: GuiHomeRowId },
-    /// Enqueue a Home row after the active slot (design D12): the Owner
-    /// owns the queue, and the row resolves through the same Home enqueue
-    /// path the add carries.
-    HomePlayNext { row: GuiHomeRowId },
     /// Enqueue a Home row (design D12).
     HomeQueue { row: GuiHomeRowId },
     /// Select a Shows row (design D12, D8): the series the Hero shows. The GUI
@@ -83,8 +82,6 @@ pub enum GuiLibraryCommand {
     /// Play a Shows episode (design D12): Enter on the row, or the
     /// double-click a window sends with this same command.
     ShowsPlay { lib_idx: usize, item_id: String },
-    /// Play a Shows episode next (design D12).
-    ShowsPlayNext { lib_idx: usize, item_id: String },
     /// Add a Shows episode to the queue (design D12).
     ShowsQueue { lib_idx: usize, item_id: String },
     /// Select a plain Emby-library row (add-gui-library-panel design D12,
@@ -96,8 +93,6 @@ pub enum GuiLibraryCommand {
     /// boxset plays through the TUI's folder-play rule, so no nested list
     /// opens.
     EmbyPlay { lib_idx: usize, item_id: String },
-    /// Play a plain Emby-library row next (row 8.1).
-    EmbyPlayNext { lib_idx: usize, item_id: String },
     /// Add a plain Emby-library row to the queue (row 8.1).
     EmbyQueue { lib_idx: usize, item_id: String },
     /// Select an Audiobooks book (add-gui-library-panel design D12, row
@@ -215,14 +210,13 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
             GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
             GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },
             GuiLibraryCommand::Play { item_id } => Self::Play { item_id },
-            GuiLibraryCommand::PlayNext { item_id } => Self::PlayNext { item_id },
             GuiLibraryCommand::AddToQueue { item_id } => Self::AddToQueue { item_id },
             GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
             GuiLibraryCommand::MenuEntry { row, index } => Self::MenuEntry { row, index },
             GuiLibraryCommand::RowMenu { row } => Self::RowMenu { row },
+            GuiLibraryCommand::Shuffle { row } => Self::Shuffle { row },
             GuiLibraryCommand::HomeSelect { row } => Self::HomeSelect { row: row.into() },
             GuiLibraryCommand::HomePlay { row } => Self::HomePlay { row: row.into() },
-            GuiLibraryCommand::HomePlayNext { row } => Self::HomePlayNext { row: row.into() },
             GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue { row: row.into() },
             GuiLibraryCommand::ShowsSelect { lib_idx, row } => Self::ShowsSelect { lib_idx, row },
             GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
@@ -231,17 +225,11 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
             GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
                 Self::ShowsPlay { lib_idx, item_id }
             }
-            GuiLibraryCommand::ShowsPlayNext { lib_idx, item_id } => {
-                Self::ShowsPlayNext { lib_idx, item_id }
-            }
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
                 Self::ShowsQueue { lib_idx, item_id }
             }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => Self::EmbySelect { lib_idx, row },
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },
-            GuiLibraryCommand::EmbyPlayNext { lib_idx, item_id } => {
-                Self::EmbyPlayNext { lib_idx, item_id }
-            }
             GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
                 Self::EmbyQueue { lib_idx, item_id }
             }

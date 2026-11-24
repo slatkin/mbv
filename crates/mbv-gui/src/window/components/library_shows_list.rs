@@ -83,8 +83,10 @@ fn episode_state(shows: &GuiShowsList, row: &ShowsListRow) -> Option<GuiHomeRowS
 /// A top-level series row (gui-delineated-rows design D1): the shared top-level
 /// row part over the series' name and its art thumb. An expandable series is a
 /// tree parent (gui-tree-double-click design D1, D2, D4), so it paints no caret:
-/// its press selects it, its double-click toggles the node, and its hover shows
-/// the hint. A series that does not expand takes no double-click.
+/// its press selects it, its double-click toggles the node, and its hover offers
+/// Play, Add, and Shuffle over the series' Service id plus Expand
+/// (gui-row-hover-actions design D3). A series that does not expand takes no
+/// double-click and paints no Expand control.
 fn paint_shows_series(
     row: &ShowsListRow,
     library: &LibraryState,
@@ -105,6 +107,7 @@ fn paint_shows_series(
         .map(str::to_owned)
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
+    let hover = library.shows_row_hover_presses(series.source_id.clone(), true);
     rsx! {
         FlatRow {
             attr: "shows",
@@ -124,6 +127,9 @@ fn paint_shows_series(
             on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
             on_play: Callback::new(|()| {}),
             on_toggle,
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
+            on_hover_shuffle: hover.shuffle,
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
                 menu_library.open_row_menu_at(menu_id.clone(), x, y);
             })),
@@ -135,9 +141,10 @@ fn paint_shows_series(
 /// D3): the nested row part at the first depth, so it paints the Music album
 /// look. An expandable season is a tree parent (gui-tree-double-click design
 /// D1, D2), so it paints no caret: its press selects it, its double-click
-/// toggles the node, and its hover shows the hint. It passes the series' guide
-/// through and, while it shows episode rows, starts its own under its label
-/// (gui-tree-indent-guides design D2, D3).
+/// toggles the node, and its hover offers Play, Add, and Shuffle over the
+/// season's Service id plus Expand (gui-row-hover-actions design D3). It passes
+/// the series' guide through and, while it shows episode rows, starts its own
+/// under its label (gui-tree-indent-guides design D2, D3).
 fn paint_shows_season(
     row: &ShowsListRow,
     library: &LibraryState,
@@ -156,6 +163,7 @@ fn paint_shows_season(
         .map(str::to_owned)
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
+    let hover = library.shows_row_hover_presses(season.source_id.clone(), true);
     rsx! {
         TreeRow {
             attr: "shows",
@@ -173,6 +181,9 @@ fn paint_shows_season(
             on_toggle: toggle_node.map(|node_id| {
                 Callback::new(move |()| toggle_library.toggle_shows_node(&node_id))
             }),
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
+            on_hover_shuffle: hover.shuffle,
             // The part presses the row first, so the menu's View Detail opens
             // the Hero for this row.
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
@@ -185,9 +196,11 @@ fn paint_shows_season(
 /// A flat New or Upcoming row (gui-collection-dropdown design D9;
 /// gui-delineated-rows design D1, D2): the shared top-level row part over the
 /// two title lines and the date gutter the old Home sections carried, with the
-/// row's art thumb. An Upcoming row paints no play affordance, takes no
-/// select, and opens no row menu, because it is display-only; a New row is a
-/// playable episode and opens the row menu its episode rows do.
+/// row's art thumb. An Upcoming row paints no play affordance and no hover
+/// control, takes no select, and opens no row menu, because it is display-only;
+/// a New row is a playable episode: its hover offers Play and Add and no
+/// Shuffle (gui-row-hover-actions design D3), and it opens the row menu its
+/// episode rows do.
 fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option<&str>) -> Element {
     let id = row.id.clone();
     let selected_row = Some(id.as_str()) == selected;
@@ -198,6 +211,14 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
     let play_library = library.clone();
     let menu_id = (!display_only).then(|| LibraryState::row_menu_item(id.clone()));
     let menu_library = library.clone();
+    // An Upcoming row is display-only, so it paints no hover control (design
+    // D3); a New row offers Play and Add over its own id.
+    let (hover_play, hover_queue) = if display_only {
+        (None, None)
+    } else {
+        let hover = library.shows_row_hover_presses(id.clone(), false);
+        (hover.play, hover.queue)
+    };
     rsx! {
         FlatRow {
             attr: "shows",
@@ -220,6 +241,8 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
                     play_library.play_shows_row(&play_id);
                 }
             }),
+            on_hover_play: hover_play,
+            on_hover_queue: hover_queue,
             // The shared row part presses on a right-click before it calls
             // `on_context`, so the menu's View Detail shows this row.
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
@@ -233,7 +256,9 @@ fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option
 /// the second depth, so it paints the Music track look — the number cell, the
 /// muted name, and the runtime — with the double-click's play. It is a leaf of
 /// the tree, so it paints both guides that pass through it — the series' and its
-/// season's (gui-tree-indent-guides design D3).
+/// season's (gui-tree-indent-guides design D3). Its hover offers Play and Add and
+/// no Shuffle, because an episode is no collection (gui-row-hover-actions design
+/// D3).
 fn paint_shows_episode(
     row: &ShowsListRow,
     library: &LibraryState,
@@ -254,6 +279,7 @@ fn paint_shows_episode(
     let play_library = library.clone();
     let menu_id = LibraryState::row_menu_item(episode.source_id.clone());
     let menu_library = library.clone();
+    let hover = library.shows_row_hover_presses(episode.source_id.clone(), false);
     rsx! {
         TreeRow {
             attr: "shows",
@@ -269,6 +295,8 @@ fn paint_shows_episode(
             tail,
             on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
             on_play: Callback::new(move |()| play_library.play_shows_row(&play_id)),
+            on_hover_play: hover.play,
+            on_hover_queue: hover.queue,
             // The part presses the row first, so the menu's View Detail opens
             // the Hero for this row.
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {

@@ -56,7 +56,7 @@ fn the_open_row_menu_paints_the_canvas_chrome_hints_and_destructive_entry() {
     );
 
     let entries = fixture.all("[data-menu-entry]");
-    assert_eq!(entries.len(), 5);
+    assert_eq!(entries.len(), 4);
     let first = fixture.text_of("[data-menu-entry=\"0\"]");
     assert!(first.contains("Play now"), "{first}");
     assert!(first.contains("⏎"), "{first}");
@@ -75,7 +75,7 @@ fn the_open_row_menu_paints_the_canvas_chrome_hints_and_destructive_entry() {
         cursor_style.contains("background: var(--canvas-selected)"),
         "{cursor_style}"
     );
-    let remove_style = fixture.style_of("[data-menu-entry=\"4\"]");
+    let remove_style = fixture.style_of("[data-menu-entry=\"3\"]");
     assert!(
         remove_style.contains("color: var(--canvas-destructive)"),
         "{remove_style}"

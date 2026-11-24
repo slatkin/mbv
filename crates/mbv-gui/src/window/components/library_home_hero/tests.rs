@@ -328,26 +328,6 @@ fn play_sends_the_play_command_for_the_selected_row() {
     );
 }
 
-/// Contract (`LibraryHomeHero.test.ts`): Play next sends the play-next
-/// command for the selected row. The press contract rides the handler
-/// function (a headless document cannot fire a DOM click).
-#[test]
-fn play_next_sends_the_play_next_command_for_the_selected_row() {
-    let mut fixture = built(hero(GuiArtShapeFrame::Landscape));
-
-    let detail = fixture.detail.clone();
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || press(&state, &detail, LibraryState::play_home_row_next));
-
-    assert_eq!(
-        fixture.library_commands(),
-        vec![crate::gui_core::GuiLibraryCommand::HomePlayNext {
-            row: crate::gui_core::GuiHomeRowId::Continue("e1".to_owned()),
-        }],
-        "the play-next command names the frame's selected row"
-    );
-}
-
 /// Contract (`LibraryHomeHero.test.ts`): Add to queue sends the enqueue
 /// command for the selected row. The press contract rides the handler
 /// function (a headless document cannot fire a DOM click).

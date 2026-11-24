@@ -11,9 +11,9 @@
 //! The destinations keep no keyboard cursor: their keys act on the row the
 //! pointer marks (`gui-pointer-target-interaction` D2, D6), so this state holds
 //! no cursor either. Each destination's module keeps its own doc, its own
-//! command shapes, its own names, and its own extras — Emby's letter rail and
-//! play-next — over this one state, so a filter change lands the same way on
-//! every one of them.
+//! command shapes, its own names, and its own extras — Emby's letter rail —
+//! over this one state, so a filter change lands the same way on every one of
+//! them.
 
 use dioxus_native::prelude::*;
 

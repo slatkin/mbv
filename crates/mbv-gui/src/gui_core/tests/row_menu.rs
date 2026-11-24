@@ -15,7 +15,7 @@ fn gui_row_menu(app: &mut App, slot: mbv_queue::QueueSlotId) -> Vec<ContextMenuE
 
 /// queue-content-shuffle spec, "The Queue list menu offers Shuffle": the GUI
 /// Client's per-row right-click menu offers the same Queue list Shuffle entry
-/// the TUI offers, after the play entries and before the removals (a music
+/// the TUI offers, after the Play now entry and before the removals (a music
 /// row, which takes no mark or go-to entries, shows the full order).
 #[test]
 fn the_gui_row_menu_offers_shuffle_before_the_removals() {
@@ -28,13 +28,7 @@ fn the_gui_row_menu_offers_shuffle_before_the_removals() {
 
     assert_eq!(
         labels,
-        vec![
-            "Play now",
-            "Play next",
-            "Shuffle",
-            "Remove from queue",
-            "Clear queue"
-        ]
+        vec!["Play now", "Shuffle", "Remove from queue", "Clear queue"]
     );
 }
 

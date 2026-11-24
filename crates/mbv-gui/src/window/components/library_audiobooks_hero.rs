@@ -10,8 +10,8 @@
 //! the tracklist's play glyph. The Workspace keeps no cursor
 //! (`gui-pointer-target-interaction` D6): the keys act on the chapter the
 //! pointer marks, a press on a row does nothing, a double-click plays or seeks
-//! from the chapter, and the hovered row paints its play control. Books have no
-//! play next, and a chapter enqueues nothing: only the play control paints.
+//! from the chapter, and the row's hover controls (gui-row-hover-actions D5)
+//! paint Play only. A chapter enqueues nothing, so the table takes no `on_queue`.
 //!
 //! Play, and Add to queue (`a`), send the Audiobooks destination's commands
 //! with the frame's selected book (design D12) — the core owns the selection,
@@ -53,7 +53,7 @@ pub struct LibraryAudiobooksHeroProps {
 }
 
 /// Play or seek from one chapter (design D12): the double-click and the row's
-/// hover play control send the chapter the row names — the Service
+/// hover Play control send the chapter the row names — the Service
 /// discriminator the TUI's chapter activation addresses.
 fn play_chapter(
     library: &LibraryState,
@@ -157,7 +157,7 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     });
 
     // The actions' sends (design D12, row 9.1): the picked book's own stable
-    // id. Books have no play next.
+    // id.
     let lib_idx = props.lib_idx;
     let play_library = library.clone();
     let play_detail = props.detail.clone();
@@ -189,7 +189,8 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
 
     // The book Hero's Workspace (design D12): the book's chapter rows, or
     // the loading line while the detail fetch has not landed. A chapter has
-    // no row action beyond play, so the actions list stays empty.
+    // no Add path, so the table takes no `on_queue` (gui-row-hover-actions
+    // D5) and its rows paint Play only.
     let loading = (workspace.is_none() && workspace_loading).then(|| WorkspaceLoading {
         text: "Loading chapters…".to_owned(),
         attr: "data-library-abs-chapters-loading",
@@ -203,7 +204,6 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
                 noun: "Chapter",
                 pointer_list: PointerList::Workspace,
                 rows,
-                actions: Vec::new(),
                 on_press,
                 on_play,
                 loading,
