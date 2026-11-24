@@ -18,7 +18,7 @@
 
 ## 4. Gates
 
-- [ ] 4.1 Run `cargo fmt`, then `cargo clippy -p mbv-gui --all-targets -- -D warnings`, each unpiped in the foreground, and verify both exit 0. Run `make check-code-file-lines` and verify it exits 0.
+- [x] 4.1 Run `cargo fmt`, then `cargo clippy -p mbv-gui --all-targets -- -D warnings`, each unpiped in the foreground, and verify both exit 0. Run `make check-code-file-lines` and verify it exits 0.
 
 ## Workflow follow-up
 
