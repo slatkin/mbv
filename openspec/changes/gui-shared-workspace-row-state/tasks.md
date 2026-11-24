@@ -11,7 +11,7 @@
 
 ## 2. Workspace table and destinations
 
-- [ ] 2.1 In `crates/mbv-gui/src/window/components/library_workspace_table.rs`,
+- [x] 2.1 In `crates/mbv-gui/src/window/components/library_workspace_table.rs`,
       change `WorkspaceRow.state` to `Option<GuiHomeRowStateFrame>`, delete the
       `progress` field, `WorkspaceRowState`, and `name_color`, add the
       module-private state-hook wire function and the playing-row heading
@@ -21,7 +21,7 @@
       contract test (design D5). Record for the next unit: the crate does not
       compile until 2.2 lands, because the heroes still name the deleted type.
       Verify `cargo check -p mbv-gui` reaches only the two hero files' errors.
-- [ ] 2.2 In `library_shows_hero.rs` and `library_feeds_hero.rs`, delete the
+- [x] 2.2 In `library_shows_hero.rs` and `library_feeds_hero.rs`, delete the
       private `row_state` conversions and the unused
       `episode_progress`/`is_played_episode` imports and pass the carried frame
       (`episode.state.clone()` / `row.state.clone()`) with no percent. In
