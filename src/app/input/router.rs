@@ -15,7 +15,7 @@ use crate::app::dispatch::action::{AppCommand, Command, PlaybackIntent};
 use mbv_ui_msg::ComponentId;
 
 pub use super::key_policy::RouterNow;
-pub(in crate::app) use super::key_policy::RouterSnapshot;
+pub use super::key_policy::RouterSnapshot;
 
 /// ADR 0002's three routing outcomes, exactly. `Application::tick` returns the
 /// focused component's message before subscribers'; the router's outcome
@@ -49,7 +49,7 @@ pub enum RouterOutcome {
 /// Client supplies the coordinator state through a [`RouterNow`] and reads a plain
 /// [`RouterOutcome`], so no routing site reads another Client's fields and
 /// every Client resolves through these rules. The TUI shell (through
-/// [`super::super::shell::neutral_edge::resolve_tui_key`]) and the GUI Client
+/// the TUI's neutral-edge `resolve_tui_key`) and the GUI Client
 /// (`super::gui`) both call it.
 ///
 /// A matched command is dispatched by the Client's shell; blocking and
@@ -77,10 +77,10 @@ pub enum RouterOutcome {
 /// The `blocking_overlay_open` catch-all rules stay: they still discard the
 /// focused leaf's message when no overlay is mounted.
 /// The shell translates a terminal key into this neutral chord at the TUI edge
-/// (`crate::app::shell::neutral_edge`) and normalizes it with
+/// (the TUI's neutral edge) and normalizes it with
 /// [`KeyChord::from_key`]; the router never names a toolkit type and never
 /// translates a key itself (`extract-client-core` design D4).
-pub(in crate::app) fn resolve_router_outcome(
+pub fn resolve_router_outcome(
     chord: KeyChord,
     snapshot: &RouterSnapshot,
     now: &dyn RouterNow,

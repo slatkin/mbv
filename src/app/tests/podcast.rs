@@ -1,5 +1,4 @@
 use super::*;
-use mbv_ui_model::browse::ServerRows;
 
 pub(crate) fn audiobookshelf_app() -> App {
     let mut app = make_app_stub();
@@ -41,39 +40,11 @@ pub(crate) fn audiobookshelf_app() -> App {
     app
 }
 
-/// A populated Emby movie library, so a key or action that leaks across the
-/// Service seam would have Emby state to mutate.
-pub(super) fn add_emby_movie_library(app: &mut App) {
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.collection_type = "movies".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: vec![make_item("Item 0", "Movie")],
-
-            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
-}
 /// The Audiobookshelf destination never opens an Emby context menu, even when
 #[test]
 fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     let mut app = audiobookshelf_app();
-    add_emby_movie_library(&mut app);
+    crate::push_movies_library_for_test(&mut app);
 
     app.open_context_menu(false, None);
     assert!(
@@ -126,7 +97,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
 #[test]
 fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     let mut app = audiobookshelf_app();
-    add_emby_movie_library(&mut app);
+    crate::push_movies_library_for_test(&mut app);
     let before_queue = app.local_view.total_queue_len();
     let before_nav = app.libs[0].nav_stack.len();
     let before_active = app.player.status_snapshot().active;
@@ -207,7 +178,7 @@ fn podcast_saved_positions_do_not_record_or_restore_a_show_id() {
 #[test]
 fn audiobookshelf_f5_stages_a_replacement_without_clearing_the_catalog() {
     let mut app = audiobookshelf_app();
-    add_emby_movie_library(&mut app);
+    crate::push_movies_library_for_test(&mut app);
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::AudiobookshelfLibrary(0);
 

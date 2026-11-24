@@ -37,7 +37,7 @@ impl KeyChord {
     ///   SHIFT kept, so the pressed and configured chords compare equal.
     ///   Other non-Char codes keep SHIFT: literal bindings such as the
     ///   queue-column-width entry match on it.
-    pub(in crate::app) fn new(code: Key, mods: KeyModifiers) -> Self {
+    pub fn new(code: Key, mods: KeyModifiers) -> Self {
         let mods = if code == Key::BackTab {
             mods.without(KeyModifiers::SHIFT)
         } else {

@@ -11,19 +11,19 @@ use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 /// Log-dedup memo for the title overlay's decision and paint lines; shell
 /// state, not presentation.
 #[derive(Clone, Debug, Default)]
-pub(in crate::app) struct TitleLogGate {
+pub struct TitleLogGate {
     decision: Option<(String, &'static str)>,
     paint: Option<(String, &'static str)>,
 }
 
 impl App {
     /// The artwork log gate, read and written by every title-overlay path.
-    pub(in crate::app) fn title_log_gate(&mut self) -> &mut TitleLogGate {
+    pub fn title_log_gate(&mut self) -> &mut TitleLogGate {
         &mut self.title_log_gate
     }
 
     /// The decision reason the last logged decision recorded.
-    pub(in crate::app) fn title_log_decision_reason(&self) -> Option<&'static str> {
+    pub fn title_log_decision_reason(&self) -> Option<&'static str> {
         self.title_log_gate.last_decision_reason()
     }
 }
@@ -33,12 +33,7 @@ impl TitleLogGate {
         self.decision.as_ref().map(|(_, reason)| *reason)
     }
 
-    pub(in crate::app) fn log_paint(
-        &mut self,
-        identity: &str,
-        outcome: &'static str,
-        reason: &'static str,
-    ) {
+    pub fn log_paint(&mut self, identity: &str, outcome: &'static str, reason: &'static str) {
         let paint = (identity.to_owned(), outcome);
         if self.paint.as_ref() == Some(&paint) {
             return;
@@ -187,3 +182,6 @@ pub(in crate::app) fn slotless_card_image_types(
         _ => &["Primary"],
     }
 }
+
+#[cfg(test)]
+mod tests;

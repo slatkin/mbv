@@ -83,7 +83,7 @@ impl QueueTarget {
     /// The target that names `link`'s current queue: the default for every
     /// path that does not edit the GUI Client's shown queue (design D7).
     #[must_use]
-    pub(in crate::app) fn current(link: QueueLink) -> Self {
+    pub fn current(link: QueueLink) -> Self {
         Self { link, queue: None }
     }
 }
@@ -142,7 +142,7 @@ pub enum DestinationLatestSource {
 /// `destination-latest-modes`, "Latest markers follow their destination
 /// pills"), never from this snapshot.
 #[derive(Clone, Debug)]
-pub(in crate::app) struct DestinationLatestSnapshot {
+pub struct DestinationLatestSnapshot {
     pub items: Vec<QueueItem>,
 }
 

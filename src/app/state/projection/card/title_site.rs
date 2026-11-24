@@ -79,8 +79,3 @@ pub(in crate::app) fn item_kind(item: &QueueItem) -> &str {
         QueueItem::Twitch(_) => "Twitch",
     }
 }
-
-#[cfg(test)]
-mod overlay_tests;
-#[cfg(test)]
-mod tests;

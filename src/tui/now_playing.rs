@@ -1,0 +1,82 @@
+//! The shell-owned now-playing projection (hero-workspace-now-playing D1):
+//! one derivation per sync pass that every workspace owner reads, so the
+//! Queue and every Workspace agree on which item is playing. Owners never
+//! read playback state; they match the projection's identity against their
+//! rows and apply its progress.
+
+use crate::app::App;
+use mbv_emby_model::seconds_to_ticks;
+use mbv_ids::ItemId;
+use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};
+use mbv_ui_model::media_list::ActiveProgress;
+use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+use mbv_ui_model::playback::PlaybackState;
+
+/// Derives the workspace now-playing projection for this sync pass (D1):
+/// `displayed_playback_state()` — the playing queue's state, with a pending
+/// slot already applied as the active index — plus the playing queue's item
+/// at that index. Deliberately not `displayed_queue_playback_state()`: that
+/// value the Queue column gates by its viewed link, and the Workspace must
+/// not go blank when the user views the other queue link.
+///
+/// Feed entries and Audiobookshelf podcast episodes derive nothing: no
+/// workspace projects their rows (change non-goals).
+pub(in crate::tui) fn derive_workspace_now_playing(app: &App) -> Option<WorkspaceNowPlaying> {
+    let state = app.displayed_playback_state();
+    if !state.active {
+        return None;
+    }
+    match app.playback_queue().item_at(state.active_idx?)? {
+        QueueItem::Emby(item) => Some(WorkspaceNowPlaying::Item {
+            item_id: ItemId::new(item.id.clone()),
+            progress: ActiveProgress::of_ticks(state.position_ticks, state.runtime_ticks)
+                .map(ActiveProgress::percent)
+                .map(u16::from),
+        }),
+        // Feed entries, Audiobookshelf podcast episodes, and Twitch items
+        // derive nothing: no workspace projects their rows (change non-goals;
+        // a Twitch item keeps no playback state).
+        QueueItem::Feed(_)
+        | QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_))
+        | QueueItem::Twitch(_) => None,
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
+            playing_book_chapter(app, &state, book)
+        }
+    }
+}
+
+/// Resolves a playing book's chapter projection (D3): the chapter containing
+/// the playback position against the chapter list the shell already holds in
+/// `AudiobookshelfBookBrowseState` (`detail_cache`, absolute seconds on the
+/// merged timeline), as the chapter's stable Service id plus the position's
+/// fraction of the chapter range.
+fn playing_book_chapter(
+    app: &App,
+    state: &PlaybackState,
+    book: &AudiobookshelfBookQueueItem,
+) -> Option<WorkspaceNowPlaying> {
+    // D6: a pending book lights no chapter. `displayed_playback_state`
+    // synthesizes the unconfirmed slot with position 0, so a chapter
+    // resolved from it would light a chapter the owner has not reached.
+    if app.pending_playback_slot().is_some() && *state != app.effective_playback_state() {
+        return None;
+    }
+    let chapters = app.audiobookshelf_book_chapters(&book.library_item_id)?;
+    let position_ticks = state.position_ticks;
+    let chapter = chapters.iter().find(|chapter| {
+        position_ticks >= seconds_to_ticks(chapter.start)
+            && position_ticks < seconds_to_ticks(chapter.end)
+    })?;
+    // The match above guarantees `start <= position < end`, so the span is
+    // positive and the fraction is below 100.
+    let start = seconds_to_ticks(chapter.start);
+    let progress = (position_ticks - start) * 100 / (seconds_to_ticks(chapter.end) - start);
+    Some(WorkspaceNowPlaying::Chapter {
+        library_item_id: book.library_item_id.clone(),
+        chapter_id: chapter.id,
+        progress: u16::try_from(progress).unwrap_or(u16::MAX),
+    })
+}
+
+#[cfg(test)]
+mod tests;

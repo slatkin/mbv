@@ -142,7 +142,7 @@ impl LocalPlaybackTarget {
         app.save_prefs();
     }
 
-    pub(in crate::app) fn displayed_volume(app: &App) -> i64 {
+    pub fn displayed_volume(app: &App) -> i64 {
         let s = app.shown_playback_status();
         if s.active {
             if s.muted { 0 } else { s.volume }
@@ -156,11 +156,11 @@ impl LocalPlaybackTarget {
         }
     }
 
-    pub(in crate::app) fn displayed_mute(app: &App) -> bool {
+    pub fn displayed_mute(app: &App) -> bool {
         app.mute_on
     }
 
-    pub(in crate::app) fn indicator_data(app: &App) -> Option<IndicatorData> {
+    pub fn indicator_data(app: &App) -> Option<IndicatorData> {
         let pst = app.shown_playback_status();
         if !pst.active {
             return None;

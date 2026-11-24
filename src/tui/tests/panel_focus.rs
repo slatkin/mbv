@@ -1,0 +1,359 @@
+use super::*;
+use crate::tui::test_support::{Terminal, TestBackend};
+use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_tui_support::ToRatatui;
+use tuirealm::event::Event;
+
+/// The queue items these tests seed from `items`: the Emby slots the
+/// adoption takes.
+fn queue_items(items: Vec<EmbyItem>) -> Vec<mbv_queue::QueueItem> {
+    items
+        .into_iter()
+        .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+        .collect()
+}
+
+/// The library column's named body-fill authority follows the appearance
+/// bit: in mini view the column rests at the unfocused `LibraryColumn` fill
+/// even while the library holds focus; wide keeps the focused fill.
+#[test]
+fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
+    let mut app = make_app_stub();
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
+    let mut mini = TickHarness::new(app);
+    crate::tui::test_support::set_terminal_width(mini.model_mut(), 60);
+    assert_eq!(
+        mini.model().library_body_fill(),
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, false)
+            .fill
+            .to_ratatui(),
+    );
+
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    let mut wide_harness = TickHarness::new(app);
+    crate::tui::test_support::set_terminal_width(wide_harness.model_mut(), 100);
+    assert_eq!(
+        wide_harness.model().library_body_fill(),
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, true)
+            .fill
+            .to_ratatui(),
+    );
+}
+
+/// The painted proof: in mini view with Queue focused, the queue panel's
+/// frame fill and the queue rows' zebra rest at the unfocused tones even
+/// though the component holds interaction focus -- one palette, the default
+/// (unfocused) one, because there is no sibling panel to contrast against.
+/// The selected row is the exception: the focused panel keeps its cursor bar
+/// on the resting stripe.
+#[test]
+fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
+    let mut app = make_app_stub();
+    app.set_mini_view_focus_for_test(PanelFocus::Queue);
+    app.seed_local_queue_items_for_test(queue_items(make_items(3)), 0);
+    let mut harness = TickHarness::new(app);
+    crate::tui::test_support::set_terminal_width(harness.model_mut(), 60);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    let resting_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, false)
+        .fill
+        .to_ratatui();
+    let focused_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, true)
+        .fill
+        .to_ratatui();
+    assert_ne!(
+        resting_zebra, focused_zebra,
+        "the QueueColumn focus pair must differ for this proof to bind"
+    );
+    let panel = crate::tui::draw::queue_panel_placement(
+        &harness.model().app,
+        harness.model().layout.card.height,
+        harness.model().terminal_size(),
+    )
+    .panel_area;
+    assert!(panel.width > 2 && panel.height > 0, "queue panel placed");
+    let buf = terminal.backend().buffer();
+    // The placement's outer frame columns stay outside the inset list box,
+    // so their fill is the frame's own QueueColumn tone.
+    assert_eq!(
+        buf[(panel.x, panel.y)].style().bg,
+        Some(resting_zebra),
+        "mini view frame fill rests despite Queue holding focus"
+    );
+    // The zebra stripes across the rows follow the same suppression: no row
+    // paints the focused tone, and the resting stripe did paint. The
+    // selected row is the exception: it keeps the canonical cursor bar.
+    let box_area = mbv_render::arrangements::queue::queue_list_box(panel);
+    let rows = mbv_render::arrangements::queue::queue_list_rows(box_area);
+    // The box's top pad row keeps the recessed box's own fill; the list
+    // begins one row below it.
+    assert_eq!(
+        buf[(box_area.x, box_area.y)].style().bg,
+        Some(
+            mbv_theme::surface_colors(mbv_theme::Surface::QueuePanel, false)
+                .fill
+                .to_ratatui()
+        ),
+        "mini view keeps the box's top pad on the recessed panel's fill"
+    );
+    assert_eq!(
+        buf[(rows.x, rows.y)].style().bg,
+        Some(
+            mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
+        ),
+        "mini view keeps the cursor bar on the first row"
+    );
+    let mut striped = 0;
+    for y in rows.y..rows.bottom() {
+        for x in box_area.x..box_area.right() {
+            let bg = buf[(x, y)].style().bg;
+            if bg
+                == Some(
+                    mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false)
+                        .fill
+                        .to_ratatui(),
+                )
+            {
+                continue;
+            }
+            assert_ne!(
+                bg,
+                Some(focused_zebra),
+                "focused zebra tone at ({x}, {y}) in mini view"
+            );
+            striped += u32::from(bg == Some(resting_zebra));
+        }
+    }
+    assert!(striped > 0, "the resting zebra painted");
+}
+
+#[test]
+fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.set_mini_view_focus_for_test(PanelFocus::Library);
+    let mut harness = TickHarness::new(app);
+    crate::tui::test_support::set_terminal_width(harness.model_mut(), 100);
+
+    let mut wide_terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    wide_terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    harness.inject(Event::WindowResize(60, 24));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::Resize {
+            width: 60,
+            height: 24
+        })
+    )));
+
+    // Production order: the resize observer message is dispatched
+    // and the sync pass runs before the next draw. The resize side effects --
+    // including the mini-view focus hand-off -- belong to the sync pass now;
+    // the draw path only reads geometry.
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    narrow_terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Queue,
+        "crossing into mini view selects Queue"
+    );
+    assert_eq!(
+        harness.model().app.stored_panel_focus(),
+        PanelFocus::Library,
+        "mini-view focus must not replace the stored wide focus"
+    );
+
+    let mut widened_terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    widened_terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Library,
+        "widening restores the prior wide focus"
+    );
+    assert_eq!(
+        harness.model().app.stored_panel_focus(),
+        PanelFocus::Library
+    );
+}
+
+/// The mini-view threshold crossing is a sync-pass side effect now.
+/// After one `tick()` + sync pass and without drawing, the ephemeral mini-view
+/// focus has moved to Queue while the stored wide focus is untouched.
+#[test]
+fn build_restores_panel_focus_from_prefs_for_both_values() {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    for (pref, expected) in [
+        ("queue_side", PanelFocus::Queue),
+        ("library_side", PanelFocus::Library),
+    ] {
+        std::fs::write(
+            crate::app::config::prefs_path(),
+            serde_json::json!({ "panel_focus": pref }).to_string(),
+        )
+        .expect("write prefs");
+
+        let app = make_built_app();
+
+        assert_eq!(app.stored_panel_focus(), expected);
+    }
+}
+
+#[test]
+fn build_always_starts_on_home_without_affecting_saved_queue_state() {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    std::fs::write(
+        crate::app::config::prefs_path(),
+        serde_json::json!({ "library_tab": 3 }).to_string(),
+    )
+    .expect("write prefs");
+
+    let app = make_built_app();
+
+    assert!(app.tab_for_test().is_home());
+    assert_eq!(
+        app.local_queue_view_for_test().emby_items(),
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
+}
+
+#[test]
+fn panel_focus_changes_do_not_write_legacy_launch_prefs() {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    std::fs::write(
+        crate::app::config::prefs_path(),
+        serde_json::json!({ "panel_focus": "queue_side", "library_tab": 3 }).to_string(),
+    )
+    .expect("write legacy prefs");
+    let mut app = make_app_stub();
+
+    app.set_panel_focus(PanelFocus::Library);
+
+    let prefs: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(crate::app::config::prefs_path()).expect("prefs retained"),
+    )
+    .expect("prefs json");
+    assert_eq!(prefs["panel_focus"].as_str(), Some("queue_side"));
+    assert_eq!(prefs["library_tab"].as_u64(), Some(3));
+}
+
+#[test]
+fn entering_queue_focus_selects_now_playing_item() {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_local_queue_items_for_test(queue_items(make_items(3)), 0);
+    app.move_local_queue_cursor_for_test(2);
+    app.seed_playing_status_for_test(1, 3);
+
+    app.set_panel_focus(PanelFocus::Queue);
+
+    assert_eq!(app.local_queue_cursor_for_test(), 1);
+}
+
+#[test]
+fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
+    let _guard = crate::app::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.set_panel_focus_for_test(PanelFocus::Library);
+    app.seed_local_queue_items_for_test(queue_items(make_items(3)), 0);
+    app.move_local_queue_cursor_for_test(99);
+
+    app.set_panel_focus(PanelFocus::Queue);
+
+    assert_eq!(app.local_queue_cursor_for_test(), 0);
+}
+
+/// Contract: "Two-panel layout hides an empty queue column". At 80+ columns
+/// with `both` and an empty
+/// displayed queue, the effective mode is library-only while the stored mode
+/// stays `both` -- the `x` cycle reads the stored mode, so it still advances
+/// from `both`.
+#[test]
+fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
+    let mut app = make_app_stub();
+    app.set_panel_mode_for_test(PanelMode::Both);
+    let mut model = Model::new(app);
+    crate::tui::test_support::set_terminal_width(&mut model, 100);
+    let app = &model.app;
+
+    assert_eq!(app.effective_panel_mode(), PanelMode::LibraryOnly);
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::Both
+    );
+}
+
+/// Contract: "Cycle continues from both". With the queue column hidden because
+/// the displayed queue is empty,
+/// the `x` cycle still reads the stored `both` and advances to queue-only.
+#[test]
+fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
+    let mut app = make_app_stub();
+    app.set_panel_mode_for_test(PanelMode::Both);
+    let mut model = Model::new(app);
+    crate::tui::test_support::set_terminal_width(&mut model, 100);
+    let app = &mut model.app;
+
+    app.dispatch(&AppCommand::Panel(PanelIntent::CyclePanelMode));
+
+    assert_eq!(
+        app.presentation_facts_for_test().panel_mode,
+        PanelMode::QueueOnly
+    );
+}
+
+/// Contract: "Hidden empty queue moves focus to the library" and "Focus
+/// stays on the library on refill".
+/// The queue held focus; emptying it and syncing moves the stored focus to
+/// the library, and a later slot adoption leaves it there.
+#[test]
+fn emptied_queue_moves_stored_focus_to_library_and_refill_leaves_it_there() {
+    let mut app = make_app_stub();
+    app.set_panel_mode_for_test(PanelMode::Both);
+    app.set_panel_focus_for_test(PanelFocus::Queue);
+    app.seed_local_queue_items_for_test(queue_items(make_items(2)), 0);
+    let mut model = Model::new(app);
+    crate::tui::test_support::set_terminal_width(&mut model, 100);
+    model.sync_queue();
+    assert_eq!(model.app.stored_panel_focus(), PanelFocus::Queue);
+
+    let empty = emby_unified_state(&[], 0);
+    model.app.readopt_local_queue_for_test(
+        &empty,
+        crate::app::state::queue_view::AdoptCause::Replacement,
+    );
+    model.sync_queue();
+    assert_eq!(model.app.stored_panel_focus(), PanelFocus::Library);
+
+    let refilled = emby_unified_state(&make_items(1), 0);
+    model.app.readopt_local_queue_for_test(
+        &refilled,
+        crate::app::state::queue_view::AdoptCause::Replacement,
+    );
+    model.sync_queue();
+    assert_eq!(model.app.stored_panel_focus(), PanelFocus::Library);
+}

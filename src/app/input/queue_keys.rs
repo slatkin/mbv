@@ -8,7 +8,7 @@ const QUEUE_NAV_CURSOR_HOLD: Duration = Duration::from_millis(500);
 
 impl App {
     /// Apply a QueueComponent-owned column resize intent.
-    pub(in crate::app) fn resize_queue_column(&mut self, wider: bool) {
+    pub fn resize_queue_column(&mut self, wider: bool) {
         if wider {
             self.queue_column_width += LEFT_WIDTH_STEP;
         } else {

@@ -11,7 +11,7 @@
 //!
 //! A drain that mixes `App` state with Client-owned state is split here at
 //! that seam, named on each method. The shell's Client-owned half is in
-//! `crate::app::shell::run::drains`.
+//! the TUI shell's `run::drains`.
 
 use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};

@@ -173,9 +173,10 @@ impl GuiClientState {
     }
 
     /// Take the overlay this Client's state holds, clearing it: a test of the
-    /// entries a right-click opened reads them once. `cfg(test)` only, because
-    /// the root package's own tests are their only caller.
-    #[cfg(test)]
+    /// entries a right-click opened reads them once. It compiles under the
+    /// `test` feature as well, because the row-menu fixture a Client's test
+    /// builds reads it (`split-tui-gui-clients` design D4e).
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub(in crate::app) fn take_overlay_for_test(&mut self) -> Option<GuiOverlay> {
         self.overlay.take()

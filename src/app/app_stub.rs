@@ -284,6 +284,70 @@ pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
     app
 }
 
+/// The queue card's cache key for the playing queue's item at `index`: the
+/// key the card projection fetches and paints that row's artwork under.
+#[cfg(any(test, feature = "test"))]
+#[must_use]
+pub fn queue_card_cache_key_for_test(app: &App, index: usize) -> Option<String> {
+    let item = app.playback_queue().emby_item_at(index)?;
+    Some(crate::app::state::projection::card::artwork::card_cache_key(item))
+}
+
+/// The queue card's cache key for an item id and type, as the slotless
+/// session path builds it.
+#[cfg(any(test, feature = "test"))]
+#[must_use]
+pub fn card_cache_key_for_id_for_test(item_id: &str, item_type: Option<&str>) -> String {
+    crate::app::state::projection::card::artwork::card_cache_key_for_id(item_id, item_type)
+}
+
+/// Hold a populated Emby movie library on the `App`: the Emby state a key or
+/// action that leaked across the Service seam would mutate.
+#[cfg(any(test, feature = "test"))]
+pub fn push_movies_library_for_test(app: &mut App) {
+    let mut library = mbv_emby_model::test_support::make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.collection_type = "movies".into();
+    library.is_folder = true;
+    app.push_library_for_test(mbv_ui_model::library_tab::LibraryTab {
+        nav_stack: vec![mbv_ui_model::browse::BrowseLevel {
+            rows: mbv_ui_model::browse::ServerRows::new(1),
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: vec![mbv_emby_model::test_support::make_item("Item 0", "Movie")],
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        ..mbv_ui_model::library_tab::LibraryTab::new(library)
+    });
+}
+
+/// The entries of the GUI queue row menu a right-click on `slot` opens, as the
+/// Client's frame paints them: the labels and their order.
+#[cfg(any(test, feature = "test"))]
+#[must_use]
+pub fn gui_row_menu_entries_for_test(
+    app: &mut App,
+    slot: mbv_queue::QueueSlotId,
+) -> Vec<mbv_ui_model::context_menu::ContextMenuEntry> {
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(app, handoff_app()));
+    core.open_gui_row_menu(&[slot]);
+    let entries = match core.gui.take_overlay_for_test() {
+        Some(crate::app::gui_client_state::GuiOverlay::RowMenu(menu)) => menu.entries,
+        _ => Vec::new(),
+    };
+    *app = core.into_app();
+    entries
+}
+
 /// The `App` a Client's test drives with the queue built from `items` and
 /// the row menu open over its first slot, so a frame test reads the open
 /// menu's entries and their key hints (add-tauri-gui-client row 6.2). The

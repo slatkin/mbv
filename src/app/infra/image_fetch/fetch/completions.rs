@@ -2,7 +2,7 @@
 //! D10): the one loop both Clients run — spawning queued requests inside the
 //! in-flight limit, then folding each completion into the image cache. The
 //! protocol encoding of a completed entry is the TUI Client shell's alone
-//! (`crate::app::shell::image_protocol`); this module queues the entry's
+//! (the TUI shell's `image_protocol`); this module queues the entry's
 //! decoded source as a neutral record (`App::queue_protocol_encode`) and reaches
 //! no shell type, so a Client with no terminal protocol keeps the same cache.
 

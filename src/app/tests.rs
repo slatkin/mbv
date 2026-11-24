@@ -310,8 +310,8 @@ pub(in crate::app) fn gui_art_retry_due(
 }
 
 // The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
-// to `crate::app::shell::test_support` (task 4.7): they write the shell
-// `Model`'s size and push the single-panel fact the core reads.
+// to the TUI shell's `test_support` (task 4.7): they write the shell `Model`'s
+// size and push the single-panel fact the core reads.
 
 mod audiobookshelf_book_activation_tests;
 mod audiobookshelf_browse_actions_sibling_tests;
@@ -321,11 +321,8 @@ mod audiobookshelf_runtime;
 mod auto_reconnect;
 mod browse_cache_caps_tests;
 mod context_actions;
-mod context_menu_entries;
-mod context_menu_placement;
 mod daemon_bootstrap;
 mod feeds;
-mod gui_client_settings;
 mod gui_library;
 mod gui_library_audiobooks;
 mod gui_library_emby;
@@ -339,35 +336,24 @@ mod gui_library_shows;
 mod gui_library_tv;
 mod gui_playlists;
 mod gui_settings;
-mod home_latest;
 mod library_navigate_reveal;
 mod library_position;
 mod library_route;
-mod library_viewport_reach_tests;
-mod lifecycle;
 mod music_grouping;
 mod named_queue_controls;
 mod named_queues;
-mod narrow_browse_migration;
 mod output_handoff;
-mod panel_focus;
 mod pin_swap;
-mod pinned_view_toggle;
 mod podcast;
-mod queue;
 pub(crate) mod render_fixtures;
 pub(crate) mod route_state;
-mod routing_matrix;
 mod services_settings_lifecycle;
 mod session_connect;
 mod settings_activation;
 mod split_browse_state_browse_level_tests;
-pub(crate) mod tick_integration;
-mod twitch_url;
-
-use mbv_emby::test_support::make_session;
-// `TestBackend`, `Terminal`, and `confirm_replace_queue` moved to
-// `crate::app::shell::test_support` (task 4.6c): they name the toolkit.
+pub(crate) use mbv_emby::test_support::make_session;
+// `TestBackend`, `Terminal`, and `confirm_replace_queue` moved to the TUI
+// shell's `test_support` (task 4.6c): they name the toolkit.
 use mbv_emby_model::test_support::make_item;
 
 // The App stub construction moved to `app_stub` so the Clients' own tests

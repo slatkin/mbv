@@ -8,7 +8,6 @@ mod group_nav;
 mod mark_played_keeps_row;
 mod mark_played_state;
 mod menu;
-mod tab_guard;
 
 /// The unfiltered root level of the `YouTube` home-video library.
 fn youtube_root_level(rows: ServerRows, items: Vec<EmbyItem>, loading: bool) -> BrowseLevel {

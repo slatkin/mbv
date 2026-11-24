@@ -28,6 +28,37 @@ impl App {
         self.apply_emby_setup_completion_without_network(completion)
     }
 
+    /// Land one Emby startup failure on the current setup generation, as the
+    /// startup worker's own `Err` completion does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn apply_emby_startup_failure_for_test(&mut self, failure: mbv_emby::EmbyFailure) {
+        let generation = self.emby_setup_generation_for_test();
+        let _ = self.apply_emby_completion_for_test(
+            crate::app::dispatch::session::service_startup::Completion {
+                generation,
+                result: Err(failure),
+            },
+        );
+    }
+
+    /// Land one Emby setup failure on the current setup generation, as the
+    /// setup worker's own `Err` completion does.
+    #[cfg(any(test, feature = "test"))]
+    pub fn apply_emby_setup_failure_for_test(
+        &mut self,
+        previous_state: mbv_core::service_runtime::ServiceState,
+        error: mbv_emby::EmbyError,
+    ) {
+        let generation = self.emby_setup_generation_for_test();
+        let _ = self.apply_emby_setup_completion_without_network_for_test(
+            crate::app::dispatch::session::service_startup::SetupCompletion {
+                generation,
+                previous_state,
+                result: Err(error),
+            },
+        );
+    }
+
     /// Run the Emby startup-worker disconnect through the production
     /// transition, as a dropped worker does.
     #[cfg(any(test, feature = "test"))]

@@ -2,6 +2,7 @@
 //! Emby, Audiobookshelf, and Feeds state behind each tab.
 
 use crate::app::App;
+use mbv_audiobookshelf::AudiobookshelfChapter;
 use mbv_ui_model::audiobookshelf_browse::{
     AudiobookshelfBookBrowseState, AudiobookshelfBrowseState,
 };
@@ -276,6 +277,20 @@ impl App {
         index: usize,
     ) -> Option<&AudiobookshelfBookBrowseState> {
         self.audiobookshelf_book_browse.get(index)
+    }
+
+    /// The chapters cached for one Audiobookshelf book, as the last detail
+    /// fetch left them: absolute seconds on the merged timeline. `None` when
+    /// no detail fetch landed for that book.
+    #[must_use]
+    pub fn audiobookshelf_book_chapters(
+        &self,
+        library_item_id: &str,
+    ) -> Option<&[AudiobookshelfChapter]> {
+        self.audiobookshelf_book_browse
+            .iter()
+            .find_map(|browse| browse.detail_cache.get(library_item_id))
+            .map(|(chapters, _)| chapters.as_slice())
     }
 
     /// The Feeds tab state: subscriptions and their entries.

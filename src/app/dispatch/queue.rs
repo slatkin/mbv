@@ -548,11 +548,7 @@ impl App {
     /// the operand for the effect the caller is about to run. The
     /// component's own cursor is authoritative for selection; the App's queue
     /// cursor is not written here (task 3.1: the mirror is gone).
-    pub(in crate::app) fn select_queue_slot(
-        &mut self,
-        link: QueueLink,
-        slot_id: QueueSlotId,
-    ) -> Option<usize> {
+    pub fn select_queue_slot(&mut self, link: QueueLink, slot_id: QueueSlotId) -> Option<usize> {
         if link == QueueLink::Peer && !self.has_direct_remote_queue() {
             return None;
         }

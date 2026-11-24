@@ -9,6 +9,10 @@ use super::App;
 #[cfg(any(test, feature = "test"))]
 use crate::app::gui_client_state::GuiClientState;
 
+/// The action seams a Client's test drives where no Client-facing entry
+/// point reaches (`split-tui-gui-clients` design D4b rule 5).
+mod actions;
+
 /// The Audiobookshelf destinations' test seeds and their Owner admission
 /// (rows 9.1 and 10.1) live in their own child module so this file stays
 /// within its line ceiling.

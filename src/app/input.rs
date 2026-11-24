@@ -12,11 +12,6 @@ pub mod resolver;
 pub mod router;
 mod search_sidebar_keys;
 
-#[cfg(test)]
-mod music_track_scope_tests;
-#[cfg(test)]
-mod music_track_test_support;
-
 use super::{App, PanelFocus, TabSelection};
 use mbv_emby_model::EmbyItem;
 
@@ -51,7 +46,7 @@ impl App {
 
     /// Home + one tab per library (no Queue tab -- the queue is the
     /// always-visible left column, not a tab).
-    pub(in crate::app) fn tab_count(&self) -> usize {
+    pub fn tab_count(&self) -> usize {
         1 + self.libs.len()
             + self.audiobookshelf_libraries.len()
             + usize::from(self.has_feeds_subscriptions())

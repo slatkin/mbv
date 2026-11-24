@@ -2,8 +2,8 @@
 //! resolver's normalized pressed chord and the keybind registry's configured
 //! chord (`add-gui-settings-screen` task 1.4, design D6).
 
-use super::{KeyChord, modifiers_to_registry_mods};
 use crate::app::input::resolver::registry_mods_to_modifiers;
+use crate::app::input::resolver::{KeyChord, modifiers_to_registry_mods};
 use mbv_ui_msg::{Key, KeyModifiers};
 
 /// The capture invariant: a pressed chord converts to a configured chord

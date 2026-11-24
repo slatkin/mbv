@@ -8,14 +8,15 @@
 
 use std::io::IsTerminal;
 
+use crate::app::App;
 use crate::app::config::{self, Config, load_config};
 use crate::app::dispatch::session::owner_restart as owner_restart_follow_up;
 use crate::app::owner_link::{self, OwnerStartOptions, OwnerState};
 use crate::app::state::home_latest::capture_launch_window;
-use crate::app::{App, Model};
 use crate::local_daemon;
 use crate::owner_restart;
 use crate::pin;
+use crate::tui::{Model, init_image_protocols};
 use crate::{ClientCapabilities, ClientCapability};
 use mbv_core::applog;
 use mbv_ctrl::OwnerAction;
@@ -118,7 +119,7 @@ fn run_tui(mut app: App) {
     if pin::is_pinned() {
         app.pin_launch_focus_to_queue();
     }
-    let image_protocols = crate::app::init_image_protocols(&mut app);
+    let image_protocols = init_image_protocols(&mut app);
     let mut model = Model::new_with_launch_window(app, launch_window, image_protocols);
     if let Err(e) = model.run() {
         pin::fatal(format!("mbv: {e}"));

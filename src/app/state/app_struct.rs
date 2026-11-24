@@ -35,7 +35,7 @@ pub(in crate::app) use self::fill_state::{
     LevelFillAction, LevelFillState, MAX_ALBUM_TRACKS_CACHE, MAX_SERIES_DETAIL_CACHE,
     TvUpcomingFetchState, insert_capped,
 };
-pub(in crate::app) use self::launch_restore::LaunchRestore;
+pub use self::launch_restore::LaunchRestore;
 
 #[expect(
     clippy::struct_excessive_bools,

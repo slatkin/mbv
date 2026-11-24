@@ -73,7 +73,7 @@ impl App {
     /// already in flight is not started again: the flag is set here and
     /// cleared when the completion is handled, so repeated refresh presses
     /// stack no work.
-    pub(in crate::app) fn spawn_cast_discovery(&mut self) {
+    pub fn spawn_cast_discovery(&mut self) {
         if self.cast_discovery_loading {
             return;
         }

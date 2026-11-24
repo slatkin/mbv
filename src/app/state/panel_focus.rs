@@ -161,3 +161,6 @@ impl App {
         self.panel_focus = focus;
     }
 }
+
+#[cfg(test)]
+mod tests;

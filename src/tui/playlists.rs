@@ -1,0 +1,220 @@
+use super::Model;
+use mbv_components::{PlaylistsComponent, PlaylistsContent};
+use mbv_ui_msg::{ComponentId, ModalId, OverlayId, PlaylistsTarget, ShellRequest};
+
+impl Model {
+    pub(in crate::tui) fn update_playlists_content(&mut self) {
+        let id = ComponentId::Overlay(OverlayId::Playlists);
+        if !self.application.mounted(&id) {
+            return;
+        }
+        let panel = crate::tui::chrome_panels::sync_panel_area(&self.app, self.terminal_size());
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>()
+        {
+            playlists.set_content(PlaylistsContent {
+                playlists: self.app.playlists().to_vec(),
+                loading: self.app.playlists_loading(),
+                open: self.app.playlists_open().cloned(),
+                open_items: self.app.playlists_open_items().to_vec(),
+                open_loading: self.app.playlists_open_loading(),
+                loaded_id: match self.app.playback_queue().source() {
+                    mbv_queue::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
+                    _ => None,
+                },
+            });
+            playlists.set_panel_area(panel);
+        }
+    }
+
+    pub(in crate::tui) fn render_playlists_overlay(&mut self, frame: &mut ratatui::Frame) {
+        let id = ComponentId::Overlay(OverlayId::Playlists);
+        if !self.application.mounted(&id) {
+            return;
+        }
+        self.application.view(&id, frame, frame.area());
+    }
+
+    pub(in crate::tui) fn render_save_playlist_overlay(&mut self, frame: &mut ratatui::Frame) {
+        let id = ComponentId::Modal(ModalId::SavePlaylist);
+        if self.application.mounted(&id) {
+            self.application.view(&id, frame, frame.area());
+        }
+    }
+
+    pub(in crate::tui) fn handle_playlists_request(&mut self, request: &ShellRequest) {
+        match request {
+            ShellRequest::PlaylistsBack => {
+                self.app.close_open_playlist();
+            }
+            ShellRequest::PlaylistsOpen(index) => {
+                if let Some(playlist) = self.app.playlist_at(*index).cloned() {
+                    self.app.spawn_open_playlist(&playlist);
+                }
+            }
+            ShellRequest::PlaylistsAction { target, action } => match *target {
+                PlaylistsTarget::Playlist(index) => {
+                    if let Some(id) = self.app.playlist_at(index).map(|p| p.id.clone()) {
+                        self.app.playlist_action(&id, *action);
+                    }
+                }
+                PlaylistsTarget::Row(index) => {
+                    if let Some(item_id) =
+                        self.app.playlists_open_item_at(index).map(|i| i.id.clone())
+                    {
+                        self.app.playlist_row_action(&item_id, *action);
+                    }
+                }
+            },
+            ShellRequest::PlaylistsRename(index) => {
+                if let Some(playlist) = self.app.playlist_at(*index).cloned() {
+                    self.app
+                        .open_save_playlist_dialog(mbv_ui_model::feed::SavePlaylistDialog {
+                            input: playlist.name,
+                            stage: mbv_ui_model::feed::SavePlaylistStage::RenamePlaylist {
+                                id: playlist.id,
+                            },
+                        });
+                }
+            }
+            ShellRequest::PlaylistsDelete(index) => {
+                if let Some(playlist) = self.app.playlist_at(*index).cloned() {
+                    self.app
+                        .ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
+                            format!(
+                                "Delete playlist '{}'?",
+                                mbv_ui_model::ui_util::trunc_str(&playlist.name, 40)
+                            ),
+                            "Confirm",
+                            "Cancel",
+                            mbv_ui_model::confirm::ConfirmAction::DeletePlaylist {
+                                id: playlist.id,
+                                name: playlist.name,
+                            },
+                        ));
+                }
+            }
+            ShellRequest::PlaylistsRefresh => {
+                if let Some(playlist) = self.app.playlists_open().cloned() {
+                    self.app.close_open_playlist();
+                    self.app.spawn_open_playlist(&playlist);
+                } else {
+                    self.app.spawn_load_playlists();
+                }
+            }
+            ShellRequest::DismissPlaylists => {
+                self.dismiss_sidebar(super::SidebarId::Playlists);
+            }
+            // unreachable: shell/messages.rs routes only the Playlists* group
+            // (Back/Open/Action/Rename/Delete/Refresh/DismissPlaylists) here;
+            // every one has an arm above.
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_local_daemon_app_stub_with_cmd_rx};
+    use mbv_emby_model::test_support::make_item;
+    use mbv_queue::QueueSource;
+    use mbv_ui_msg::MusicTreeAction;
+    use mbv_ui_msg::{Msg, TerminalObserverEvent};
+    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn playlists_shell_mounts_and_routes_component() {
+        let mut app = make_app_stub();
+        app.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Playlists);
+        let mut model = Model::new(app);
+        model.sync_modal_requests();
+        let id = ComponentId::Overlay(OverlayId::Playlists);
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .expect("Playlists component mounted")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert!(matches!(
+            message,
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+    }
+
+    /// A model with playlist "pl" open over audio items a, b, c and an empty
+    /// queue, plus the owner command channel.
+    fn open_playlist_model() -> (Model, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+        let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(Vec::new());
+        let mut playlist = make_item("Playlist", "Playlist");
+        playlist.id = "pl".into();
+        let rows = ["a", "b", "c"]
+            .into_iter()
+            .map(|id| {
+                let mut item = make_item(id, "Audio");
+                item.id = id.into();
+                item.media_type = "Audio".into();
+                item
+            })
+            .collect();
+        app.seed_open_playlist_for_test(playlist, rows);
+        (Model::new(app), cmd_rx)
+    }
+
+    fn open_action(index: usize, action: MusicTreeAction) -> ShellRequest {
+        ShellRequest::PlaylistsAction {
+            target: PlaylistsTarget::Row(index),
+            action,
+        }
+    }
+
+    /// Saved playlist order is untouched: Shuffle replaces the queue with
+    /// every playlist item under `QueueSource::Shuffle`, never the playlist.
+    #[test]
+    fn shuffle_replaces_the_queue_with_a_shuffle_source() {
+        let _guard = crate::app::config::TestStateDirGuard::new();
+        let (mut model, cmd_rx) = open_playlist_model();
+
+        model.handle_playlists_request(&open_action(1, MusicTreeAction::Shuffle));
+
+        let replaces: Vec<_> = cmd_rx
+            .try_iter()
+            .filter_map(|command| match command {
+                mbv_ctrl::CtrlCmd::UnifiedQueueReplace { items, source, .. } => {
+                    Some((items.len(), source))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(matches!(replaces.as_slice(), [(3, QueueSource::Shuffle)]));
+    }
+
+    /// Enqueue one item from an open playlist: one append holding only the
+    /// cursor item, and no replace.
+    #[test]
+    fn open_view_enqueue_appends_only_the_cursor_item() {
+        let _guard = crate::app::config::TestStateDirGuard::new();
+        let (mut model, cmd_rx) = open_playlist_model();
+
+        model.handle_playlists_request(&open_action(1, MusicTreeAction::Enqueue));
+
+        let commands: Vec<_> = cmd_rx.try_iter().collect();
+        let appended: Vec<Vec<String>> = commands
+            .iter()
+            .filter_map(|command| match command {
+                mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, .. } => {
+                    Some(items.iter().map(|item| item.id().to_string()).collect())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(appended, vec![vec!["b".to_string()]]);
+        assert!(
+            !commands
+                .iter()
+                .any(|command| matches!(command, mbv_ctrl::CtrlCmd::UnifiedQueueReplace { .. }))
+        );
+    }
+}

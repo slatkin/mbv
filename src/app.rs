@@ -19,6 +19,16 @@ pub use self::app_stub::gui_state_for_test;
 pub use self::app_stub::seeded_gui_state_for_test;
 #[cfg(any(test, feature = "test"))]
 pub use self::app_stub::stub_app_with_prefix_and_toast;
+/// The stub fixtures the crate root re-exports for a Client's own test: the
+/// Emby movie library a Service-seam leak would mutate, the card cache keys
+/// the shell seeds a cached image under, and the entries the GUI queue row
+/// menu opens with.
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
+pub use self::app_stub::{
+    card_cache_key_for_id_for_test, gui_row_menu_entries_for_test, push_movies_library_for_test,
+    queue_card_cache_key_for_test,
+};
 #[cfg(feature = "test")]
 pub use self::app_stub::{
     drain_lib_event_with_stores_for_test, gui_client_capabilities, set_cast_receivers_for_test,
@@ -131,22 +141,17 @@ pub use self::queue_playback_projection::{
 };
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
 pub use self::queue_surface::QueueSurfaceProjection;
-pub(crate) use self::shell::set_mouse_capture;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;
 pub(in crate::app) use self::waking_relay::spawn_waking_relay;
-mod shell;
 #[cfg(any(test, feature = "test"))]
 pub mod test_seams;
+#[cfg(test)]
 use self::dispatch::notify::ToastSeverity;
-pub use self::shell::Model;
-/// The TUI's image pickers, built before the `TuiRealm` listener starts
-/// (#654); the `Model` constructor takes the store it returns.
-pub use self::shell::init_image_protocols;
 use self::state::app_init::AppInit;
 use self::state::bootstrap::bootstrap_unified_queue;
-use self::state::playback_target::LocalPlaybackTarget;
+pub use self::state::playback_target::LocalPlaybackTarget;
 use crate::app::state::events::SessionEvent;
 pub(in crate::app) use crate::app::state::events::{AudiobookshelfEvent, PlaylistEvent};
 pub use crate::app::state::events::{

@@ -25,7 +25,7 @@ impl PanelTarget {
     }
 
     #[must_use]
-    pub(in crate::app) fn row(&self, has_direct_endpoint: bool) -> SessionTargetRow {
+    pub fn row(&self, has_direct_endpoint: bool) -> SessionTargetRow {
         match self {
             Self::Emby(session) => SessionTargetRow::Emby {
                 id: session.id.clone(),

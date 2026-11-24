@@ -2,7 +2,7 @@
 //! D3): the browser's idle poster prefetch. It reads and writes the cache and
 //! its fetch reservations, never a terminal protocol, so the core owns it; the
 //! ratatui and `ratatui-image` halves — the placeholder entry's encoding,
-//! pickers, painting — stay in `crate::app::shell::image_protocol`.
+//! pickers, painting — stay in the TUI shell's `image_protocol`.
 
 use crate::app::App;
 

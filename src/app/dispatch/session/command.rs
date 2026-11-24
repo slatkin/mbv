@@ -6,7 +6,7 @@ impl App {
         self.queue_epoch.advance();
     }
 
-    pub(in crate::app) fn spawn_sessions_load(&mut self) {
+    pub fn spawn_sessions_load(&mut self) {
         if self.sessions_loading {
             return;
         }

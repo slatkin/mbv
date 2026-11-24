@@ -15,6 +15,7 @@ mod local_daemon;
 mod owner_restart;
 mod pin;
 mod startup;
+mod tui;
 
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, CardImageDrain, ClientCore, ClientLifecycle,
@@ -104,6 +105,16 @@ pub use self::app::seeded_gui_state_for_test;
 pub use self::app::test_seams::{
     DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
     DIRECT_CONNECT_TEST_LOCK, OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
+};
+/// The stub fixtures a Client's own test shares with the root package's:
+/// the Emby movie library a Service-seam leak would mutate, the card cache
+/// keys the shell seeds a cached image under, and the entries the GUI queue
+/// row menu opens with.
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
+pub use self::app::{
+    card_cache_key_for_id_for_test, gui_row_menu_entries_for_test, push_movies_library_for_test,
+    queue_card_cache_key_for_test,
 };
 #[cfg(feature = "test")]
 pub use self::app::{

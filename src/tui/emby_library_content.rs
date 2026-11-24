@@ -1,0 +1,302 @@
+//! Shell wiring for the Movies/HomeVideos/Generic embedded content owner
+//! (`EmbyLibraryContent`, task 6.1, design D2). Mirrors `shell/home_content.rs`'s
+//! shape: the owner lives inside the mounted `LibraryPanel`, addressed by
+//! `LibraryKey::Service { .. }`, and the shell projects Model-owned
+//! browse snapshots into it at the same writer seams `shell/emby_library.rs`
+//! already calls for TV's embedded `TvContent`
+//! (the former standalone browser lifecycle) — this file supplies the
+//! three functions take for the three migrated kinds, so every existing
+//! writer call site keeps working unchanged for both paths.
+//!
+//! Typed effects need no new dispatch: this owner emits the same
+//! `ShellRequest::Browser*`/`EmbyLibrary*` messages the mounted
+//! `EmbyLibraryContent` did, and `shell/emby_library.rs::handle_emby_library_request` /
+//! `shell/messages.rs`'s dispatch are keyed only by the active tab, not by
+//! which component or owner sent the message.
+
+use super::Model;
+use super::TabSelection;
+use mbv_components::emby_library_content::EmbyLibraryIdentity;
+use mbv_components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
+use mbv_components::library_panel::LibraryPanel;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::ServiceKind;
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_msg::{ComponentId, Msg, UserEvent};
+use tuirealm::application::Application;
+
+impl Model {
+    /// The active tab's migrated-owner identity, when the active Emby
+    /// library's kind is one of the three this owner serves (design D2's
+    /// `LibraryKey::Service`). `None` for every other tab, including a TV or
+    /// Music library (still served by their own mounted components) or a
+    /// non-`EmbyLibrary` tab.
+    pub(in crate::tui) fn active_emby_library_owner(
+        &self,
+    ) -> Option<(usize, LibraryKey, LibraryKind)> {
+        let TabSelection::EmbyLibrary(index) = self.app.active_tab() else {
+            return None;
+        };
+        let library = self.app.emby_library(index)?;
+        let kind = LibraryKind::from_collection_type(&library.library.collection_type);
+        if !matches!(
+            kind,
+            LibraryKind::Generic | LibraryKind::Movies | LibraryKind::HomeVideos
+        ) {
+            return None;
+        }
+        let key = LibraryKey::Service {
+            service: ServiceKind::Emby,
+            library_id: library.library.id.clone(),
+            kind,
+        };
+        Some((index, key, kind))
+    }
+
+    /// Mutably borrow the owner installed for `key` inside the mounted
+    /// `LibraryPanel`, creating it with `kind` on first reach (mirrors
+    /// `update_home_owner`).
+    fn update_emby_library_owner<R>(
+        &mut self,
+        key: &LibraryKey,
+        kind: LibraryKind,
+        f: impl FnOnce(&mut EmbyLibraryContent) -> R,
+    ) -> Option<R> {
+        self.update_library_owner(key, || Box::new(EmbyLibraryContent::new(kind)), f)
+    }
+
+    /// The browse identity of library `index`'s current level (mirrors
+    /// `shell/emby_library.rs::browse_identity`, reused verbatim as the shared
+    /// `EmbyLibraryIdentity` shape).
+    fn emby_library_owner_identity(&self, index: usize) -> EmbyLibraryIdentity {
+        let facts = self.app.emby_library_level_facts(index).unwrap_or(
+            crate::app::state::shell_reads::BrowseLevelFacts {
+                depth: 0,
+                level: None,
+                has_feed_home_video: false,
+            },
+        );
+        let level = facts
+            .level
+            .unwrap_or(crate::app::state::shell_reads::BrowseLevelIdentity {
+                parent_id: String::new(),
+                letter_filter: None,
+                sort_by: String::new(),
+                sort_order: String::new(),
+                unplayed_only: false,
+                loading: false,
+                tv_content_mode: None,
+            });
+        EmbyLibraryIdentity {
+            depth: facts.depth,
+            parent_id: level.parent_id,
+            letter_filter: level.letter_filter,
+            sort_by: level.sort_by,
+            sort_order: level.sort_order,
+            unplayed_only: level.unplayed_only,
+            feed_group: facts
+                .has_feed_home_video
+                .then(|| self.app.feed_home_video_selected_group_index(index)),
+        }
+    }
+
+    /// The feed/home-video group-level snapshot for the owner push: the
+    /// selected group's items, its cursor/scroll, and the group's
+    /// outstanding-load flag (falling back to the root level's while the
+    /// group state is still unseeded).
+    fn feed_home_video_owner_snapshot(&self, index: usize) -> (Vec<EmbyItem>, usize, usize, bool) {
+        let items = self.app.feed_home_video_selected_items(index);
+        let (cursor, scroll) = self
+            .app
+            .emby_library_feed_home_video(index)
+            .map_or((0, 0), |state| (state.video_cursor, state.video_scroll));
+        let loading = self.app.emby_library_feed_home_video(index).map_or_else(
+            || self.app.emby_library_root_loading(index),
+            |state| state.loading,
+        );
+        (items, cursor, scroll, loading)
+    }
+
+    /// Event-scoped content projection for the migrated owner (mirrors
+    /// former standalone projection's body): mirrors the shell-owned browse
+    /// snapshot — the feed/home-video group's selected items when active,
+    /// the ordinary nav-stack level otherwise — into the owner, re-seeding
+    /// position only on a real identity change, then prefetches nearby
+    /// Movie posters at the owner's now-authoritative cursor (#287,
+    /// `App::fetch_nearby_movie_posters`, moved here from
+    /// the old draw path since that call no longer
+    /// runs for these three kinds).
+    pub(in crate::tui) fn push_emby_library_owner_content(
+        &mut self,
+        index: usize,
+        key: &LibraryKey,
+        kind: LibraryKind,
+    ) {
+        // Group-level loading belongs to the shell projection seam, not the
+        // render path: ensure the owner receives complete content before it
+        // is painted.
+        self.app.ensure_feed_home_video_group_level(index);
+        let feed_group_view = self.app.is_feed_home_video_group_view(index);
+        // Lazy per-selection fetch (design D2 of change
+        // `feed-view-lazy-folder-groups`): a shown selection whose items are
+        // not cached fetches here. The Latest (New) pill is exempt — the group
+        // lists must not load merely because New is active (spec
+        // feed-home-video-group-view, "The New pill SHALL NOT depend on any
+        // group list being loaded"). Read fresh: the owner push below can
+        // flip Latest mode, and the later Latest-marker/request decisions
+        // must see the post-push answer.
+        if feed_group_view && !self.active_emby_library_owner_is_latest() {
+            self.app
+                .ensure_feed_home_video_selection_loaded(index, false);
+        }
+        let show_letter_pills = self.app.should_show_letter_pills(index);
+        let selector_mode = if feed_group_view {
+            mbv_components::emby_library_content::EmbySelectorMode::FeedGroups
+        } else if show_letter_pills {
+            mbv_components::emby_library_content::EmbySelectorMode::Letters
+        } else {
+            mbv_components::emby_library_content::EmbySelectorMode::None
+        };
+        let (items, total_count, library_total, letter_filter, loading, cursor, scroll) =
+            if feed_group_view {
+                let (items, cursor, scroll, loading) = self.feed_home_video_owner_snapshot(index);
+                let total_count = items.len();
+                (items, total_count, None, None, loading, cursor, scroll)
+            } else {
+                let cursor = self
+                    .app
+                    .emby_library_level(index)
+                    .map_or(0, |l| l.resting().cursor());
+                let scroll = self
+                    .app
+                    .emby_library_level(index)
+                    .map_or(0, |l| l.resting().scroll());
+                let ctx = self.app.library_list_render_ctx(index, cursor);
+                (
+                    ctx.items,
+                    ctx.total_count,
+                    ctx.library_total,
+                    ctx.letter_filter,
+                    ctx.loading,
+                    cursor,
+                    scroll,
+                )
+            };
+        // Keep the painted names and launch identities aligned from one
+        // structural source; the snapshot resolves a selected group to its
+        // folder content ID, never to the display name.
+        // Pill membership follows the root listing and the per-folder video
+        // counts (design D3): a folder with no counted videos offers no pill,
+        // so the fan-out's empty count map leaves only New and All until it
+        // fills (task 3.3 owns the count fan-out).
+        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = self
+            .app
+            .counted_folder_iter(index)
+            .map(|folder| (folder.name.clone(), folder.id.clone()))
+            .unzip();
+        let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
+        let library_id = self.app.emby_libraries()[index].library.id.clone();
+        let latest_items = self
+            .tv_latest_snapshots
+            .get(&library_id)
+            .map(|snapshot| {
+                snapshot
+                    .items
+                    .iter()
+                    .filter_map(|item| item.as_emby().cloned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let latest_source = super::DestinationLatestSource::Emby(library_id.clone());
+        if self.active_emby_library_owner_is_latest()
+            && !self
+                .acknowledged_home_latest_sources
+                .contains(&latest_source)
+        {
+            self.record_home_latest_acknowledgement(latest_source.clone());
+        }
+        let latest_marker = self.destination_latest_marker(&latest_source);
+        let push = BrowserOwnerPush {
+            items,
+            latest_items,
+            total_count,
+            library_total,
+            letter_filter,
+            loading,
+            selector_mode,
+            feed_groups,
+            feed_group_ids,
+            feed_group_cursor,
+            now_secs: mbv_ui_model::feed_age::current_time_secs(),
+        };
+        let identity = self.emby_library_owner_identity(index);
+        let landed_cursor = self.update_emby_library_owner(key, kind, |owner| {
+            owner.set_latest_marker(latest_marker);
+            owner.set_content(push);
+            if owner.note_browse_identity(identity) {
+                owner.apply_position(cursor, scroll);
+            }
+            owner.cursor()
+        });
+        if let Some(cursor) = landed_cursor {
+            self.fetch_owner_nearby_posters(key, cursor);
+        }
+        // Latest is the default pill, so a default landing — first open or
+        // launch restore — fetches the lazy Latest list here (spec
+        // `destination-latest-modes`, "Destination Latest lists load lazily",
+        // "opening a destination on its default Latest pill"): the podcast
+        // push seam spawns its shelf the same way. The per-run requested set
+        // keeps this every-sync-pass projection from re-requesting; an
+        // explicit pill pick or refresh re-fetches through its own path.
+        if self.active_emby_library_owner_is_latest()
+            && self.emby_destination_latest_requested.insert(library_id)
+        {
+            self.app.spawn_destination_latest_snapshot(index);
+        }
+    }
+
+    pub(in crate::tui) fn push_active_emby_library_owner_content(&mut self) {
+        if let Some((index, key, kind)) = self.active_emby_library_owner() {
+            self.push_emby_library_owner_content(index, &key, kind);
+        }
+    }
+
+    /// Read-only borrow of the owner installed for `key` inside the mounted
+    /// `LibraryPanel` (the immutable twin of `update_emby_library_owner`):
+    /// the one lookup/downcast chain every `EmbyLibraryContent` reader
+    /// reuses instead of repeating it. An associated function over the
+    /// application rather than a `&self` method so a caller holding the
+    /// returned borrow can still reach `&mut self.app` — `application` and
+    /// `app` are disjoint `Model` fields, which a `&self` receiver would
+    /// fuse into one borrow.
+    fn emby_library_owner<'a>(
+        application: &'a Application<ComponentId, Msg, UserEvent>,
+        key: &LibraryKey,
+    ) -> Option<&'a EmbyLibraryContent> {
+        application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.owner(key))
+            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+    }
+
+    /// The nearby-poster prefetch at the owner's now-authoritative cursor:
+    /// the owner holds the pushed list verbatim (`set_content` stores
+    /// `push.items`), so the window reads it instead of a second clone of
+    /// the shell-side snapshot (#287).
+    fn fetch_owner_nearby_posters(&mut self, key: &LibraryKey, cursor: usize) {
+        let owner_items =
+            Self::emby_library_owner(&self.application, key).map(EmbyLibraryContent::browse_items);
+        if let Some(items) = owner_items {
+            self.app.fetch_nearby_movie_posters(items, cursor);
+        }
+    }
+
+    pub(in crate::tui) fn active_emby_library_owner_is_latest(&self) -> bool {
+        let Some((_, key, _)) = self.active_emby_library_owner() else {
+            return false;
+        };
+        Self::emby_library_owner(&self.application, &key)
+            .is_some_and(EmbyLibraryContent::latest_mode)
+    }
+}

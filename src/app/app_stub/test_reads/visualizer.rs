@@ -25,6 +25,14 @@ impl App {
         self.visualizer_enabled = enabled;
     }
 
+    /// Select the artwork or the visualizer as the slot's content, as the
+    /// visual-slot menu's own mode change does: the gate a Client without
+    /// the slot controls answers as a no-op.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_visualizer_choice_for_test(&mut self, enabled: bool) {
+        self.set_visualizer(enabled);
+    }
+
     /// Whether the persisted visual-slot hide is on, as a TUI run's prefs
     /// leave it.
     #[cfg(any(test, feature = "test"))]
