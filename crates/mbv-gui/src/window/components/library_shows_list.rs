@@ -34,7 +34,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
 };
-use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryListHeading};
+use crate::window::components::library_list_header::LibraryListHeaderProps;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::list_row::{
     FlatRow, LibraryRowThumb, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow, TreeTrail,
@@ -427,7 +427,7 @@ pub fn LibraryShowsList() -> Element {
     // (gui-library-header-service-marks design D5), and the view dropdown names
     // the view; no title repeats it.
     let header = LibraryListHeaderProps {
-        heading: LibraryListHeading::Mark(ServiceMark::Emby),
+        heading: ServiceMark::Emby.into(),
         label: String::new(),
         label_attr: None,
         collections: None,

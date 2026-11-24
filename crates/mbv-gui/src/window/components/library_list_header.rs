@@ -29,6 +29,8 @@
 //! `label_attr` names a destination's own attribute, so a destination's tests
 //! keep a per-tab hook beside the shared ones.
 
+use std::borrow::Cow;
+
 use dioxus_native::prelude::*;
 
 use crate::gui_core::{GuiCollections, GuiListSortFrame, GuiShowsView};
@@ -45,8 +47,15 @@ use crate::window::service_mark::{ServiceMark, ServiceMarkIcon};
 pub enum LibraryListHeading {
     /// A Service destination: its Service mark, and no text.
     Mark(ServiceMark),
-    /// Home: its text title.
-    Title(String),
+    /// Home: its text title. The `Cow` keeps the common static literal
+    /// allocation-free on every render.
+    Title(Cow<'static, str>),
+}
+
+impl From<ServiceMark> for LibraryListHeading {
+    fn from(mark: ServiceMark) -> Self {
+        Self::Mark(mark)
+    }
 }
 
 /// The props of the list header (the `LibraryListHeader` props, in
