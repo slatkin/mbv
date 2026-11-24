@@ -70,6 +70,13 @@ pub use self::app::test_seams::{
     DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
     DIRECT_CONNECT_TEST_LOCK, OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
 };
+/// The core's own fixtures and test-trait prelude (`2-split-tui-gui-clients`
+/// design D4e): a Client's tests name `mbv_client_core::tests` exactly as the
+/// one-crate tests named `crate::app::tests`. The `test` feature alone makes it
+/// reachable, so a shipped build has no such path.
+#[cfg(any(test, feature = "test"))]
+#[doc(hidden)]
+pub use self::app::tests;
 /// The whole-`App` fixtures two Clients' tests share (`2-split-tui-gui-clients`
 /// design D4b rule 5): the stub Owner constructions, the queue shapes a menu or
 /// transport test reads, and the Named-queue fixtures whose queue list and op

@@ -1,6 +1,8 @@
+#[cfg(test)]
 use super::*;
 use mbv_remote_player::DaemonEndpoint;
 
+#[cfg(test)]
 fn reconnect_local_daemon(
     _endpoint: &DaemonEndpoint,
 ) -> (
@@ -10,8 +12,9 @@ fn reconnect_local_daemon(
     mbv_remote_player::RemotePlayer::stub(make_items(2), 0)
 }
 
-pub(crate) fn stub_endpoint() -> DaemonEndpoint {
-    DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap())
+#[must_use]
+pub fn stub_endpoint() -> DaemonEndpoint {
+    DaemonEndpoint::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], 0)))
 }
 
 // Row 4.1/design D1 deleted Bare: every launch attaches, so RemoteSlotState

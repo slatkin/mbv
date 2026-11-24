@@ -141,5 +141,5 @@ use mbv_ui_model::tab_selection::TabSelection;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-#[cfg(test)]
-pub(crate) mod tests;
+#[cfg(any(test, feature = "test"))]
+pub mod tests;

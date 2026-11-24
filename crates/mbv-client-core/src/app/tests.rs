@@ -1,45 +1,79 @@
+#[cfg(test)]
 use super::*;
+// The whole-module prelude above names core items that the core's own test
+// build alone has; only the queue view crosses the feature gate (design D4e).
+#[cfg(all(not(test), feature = "test"))]
+use super::QueueView;
 
 // The terminal-size helpers (`set_terminal_size`, `set_terminal_width`) moved
 // to the TUI shell's `test_support` (task 4.7): they write the shell `Model`'s
 // size and push the single-panel fact the core reads.
 
+// The suites themselves run only in the core's own test build: they name
+// dev-dependencies (`rstest`, `uuid`) that a Client's `test`-feature build does
+// not carry. The fixtures and the prelude below stay reachable in both builds
+// (design D4e).
+#[cfg(test)]
 mod audiobookshelf_book_activation_tests;
+#[cfg(test)]
 mod audiobookshelf_browse_actions_sibling_tests;
+#[cfg(test)]
 mod audiobookshelf_context_menu;
+#[cfg(test)]
 mod audiobookshelf_mark;
+#[cfg(test)]
 mod audiobookshelf_runtime;
+#[cfg(test)]
 mod auto_reconnect;
+#[cfg(test)]
 mod browse_cache_caps_tests;
+#[cfg(test)]
 mod context_actions;
+#[cfg(test)]
 mod daemon_bootstrap;
+#[cfg(test)]
 mod feeds;
+#[cfg(test)]
 mod library_navigate_reveal;
+#[cfg(test)]
 mod library_position;
+#[cfg(test)]
 mod library_route;
+#[cfg(test)]
 mod music_grouping;
+#[cfg(test)]
 mod named_queues;
+#[cfg(test)]
 mod output_handoff;
+#[cfg(test)]
 mod pin_swap;
+#[cfg(test)]
 mod podcast;
-pub(crate) mod render_fixtures;
-pub(crate) mod route_state;
+/// The whole-`App` fixtures a Client's tests build (`design D4b rule 5`).
+pub mod render_fixtures;
+/// The daemon endpoint and reconnect stubs the queue-link tests share.
+pub mod route_state;
+#[cfg(test)]
 mod services_settings_lifecycle;
+#[cfg(test)]
 mod session_connect;
+#[cfg(test)]
 mod settings_activation;
+#[cfg(test)]
 mod split_browse_state_browse_level_tests;
-pub(crate) use mbv_emby::test_support::make_session;
+pub use mbv_emby::test_support::make_session;
 // `TestBackend`, `Terminal`, and `confirm_replace_queue` moved to the TUI
 // shell's `test_support` (task 4.6c): they name the toolkit.
+#[cfg(test)]
 use mbv_emby_model::test_support::make_item;
 
 // The App stub construction moved to `app_stub` so the Clients' own tests
 // can build it too; the `crate::app::tests::*` paths stay working.
-pub(crate) use super::app_stub::built::make_built_app;
-pub(crate) use super::app_stub::{gui_client_capabilities, make_app_stub};
+pub use super::app_stub::built::make_built_app;
+pub use super::app_stub::{gui_client_capabilities, make_app_stub};
 // The whole-`App` fixtures moved into `app_stub` so a Client's own tests reach
 // them; the `crate::app::tests::*` prelude the TUI tests share stays working.
-pub(crate) use super::{
+pub use super::{
     close_initial_services, emby_unified_state, install_test_emby, live_owner_channel,
     make_audio_items, make_audio_only_remote_app_stub_with_cmd_rx, make_items,
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx,
@@ -49,9 +83,9 @@ pub(crate) use super::{
 
 // ── test helpers ─────────────────────────────────────────────────────────
 
-pub(crate) trait QueueViewTestExt {
-    fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize);
-    fn emby_items(&self) -> Vec<EmbyItem>;
+pub trait QueueViewTestExt {
+    fn adopt_items(&mut self, items: Vec<mbv_emby_model::EmbyItem>, cursor: usize);
+    fn emby_items(&self) -> Vec<mbv_emby_model::EmbyItem>;
     fn adopt_queue_items(&mut self, items: Vec<mbv_queue::QueueItem>, cursor: usize);
     fn adopt_queue_items_with_active(
         &mut self,
@@ -63,7 +97,7 @@ pub(crate) trait QueueViewTestExt {
 }
 
 impl QueueViewTestExt for QueueView {
-    fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize) {
+    fn adopt_items(&mut self, items: Vec<mbv_emby_model::EmbyItem>, cursor: usize) {
         adopt_queue_view(
             self,
             items
@@ -76,7 +110,7 @@ impl QueueViewTestExt for QueueView {
         );
     }
 
-    fn emby_items(&self) -> Vec<EmbyItem> {
+    fn emby_items(&self) -> Vec<mbv_emby_model::EmbyItem> {
         self.slots()
             .iter()
             .filter_map(|slot| slot.item.as_emby().cloned())

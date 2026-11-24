@@ -12,6 +12,7 @@ use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::browse::ServerRows;
 
+#[must_use]
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
@@ -59,6 +60,7 @@ pub fn make_movie_app() -> App {
     app
 }
 
+#[must_use]
 pub fn make_queue_app(item_count: usize) -> App {
     let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
@@ -71,6 +73,7 @@ pub fn make_queue_app(item_count: usize) -> App {
     app
 }
 
+#[must_use]
 pub fn make_music_group_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
