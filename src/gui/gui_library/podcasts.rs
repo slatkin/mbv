@@ -22,9 +22,9 @@ use super::ensure::catalog_unloaded;
 use super::podcasts_projection::GuiPodcastEpisodeId;
 use super::tabs::GuiDestinationKind;
 
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// The GUI Library's Podcasts selection (row 10.1): per podcast library, the
 /// stored collection selection — the checked shows (gui-collection-dropdown
@@ -220,7 +220,7 @@ pub(in crate::gui::gui_library) fn install_podcast_set(
 /// destination-ensure design D1): the GUI core owns the pass, so a step that
 /// holds an `App` hands it to the core.
 fn run_podcast_loads(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
-    let mut core = GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
+    let mut core = GuiCore::new(std::mem::replace(app, mbv_client_core::handoff_app()));
     *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
     *gui = std::mem::take(core.gui_state_mut());

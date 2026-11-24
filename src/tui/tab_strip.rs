@@ -9,7 +9,7 @@
 //! point it always did.
 
 use super::Model;
-use crate::app::App;
+use mbv_client_core::App;
 use mbv_render::arrangements::chrome::tab_strip_text_width;
 use ratatui::layout::Rect;
 

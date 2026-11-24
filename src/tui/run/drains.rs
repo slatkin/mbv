@@ -7,8 +7,8 @@ use super::super::{
 };
 use super::pin_swap::PinSwapLink;
 use super::{Duration, Instant, PollStrategy};
-use crate::app::state::projection::PendingProtocolEncode;
-use crate::app::{
+use mbv_client_core::state::projection::PendingProtocolEncode;
+use mbv_client_core::{
     BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, MusicEvent, PlayerEventDrain,
     SeriesEvent,
 };
@@ -487,7 +487,7 @@ impl Model {
         let poll_timeout = if self.app.visualizer_worker().is_some() {
             Duration::from_millis(8)
         } else {
-            crate::app::CLIENT_IDLE_CADENCE
+            mbv_client_core::CLIENT_IDLE_CADENCE
         };
         let tick_started = Instant::now();
         let ticked = self.application.tick(PollStrategy::Once(poll_timeout));

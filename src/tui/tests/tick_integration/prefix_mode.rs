@@ -9,10 +9,10 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::dispatch::action::{NavigationIntent, PanelIntent};
-use crate::app::input::router::RouterOutcome;
-use crate::app::tests::make_app_stub;
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::dispatch::action::{NavigationIntent, PanelIntent};
+use mbv_client_core::input::router::RouterOutcome;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::home_content::HomeContent;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_emby_model::test_support::make_item;
@@ -31,7 +31,7 @@ fn key(code: Key) -> Event<UserEvent> {
 /// A `[keys]` configuration with prefix `Ctrl+b` and the given
 /// prefix-namespace assignments, grouped by each action's declared section
 /// and validated through the registry loader.
-fn prefix_config(assignments: &[(&str, &str)]) -> crate::app::config::Config {
+fn prefix_config(assignments: &[(&str, &str)]) -> mbv_client_core::config::Config {
     let mut sections: Vec<(String, RawSection)> = Vec::new();
     for (id, chord) in assignments {
         let section = mbv_keybinds::action_by_id(id)
@@ -51,7 +51,7 @@ fn prefix_config(assignments: &[(&str, &str)]) -> crate::app::config::Config {
             .prefix
             .push(((*id).into(), (*chord).into()));
     }
-    crate::app::config::Config {
+    mbv_client_core::config::Config {
         keybinds: mbv_keybinds::load(&RawKeybinds {
             prefix: Some("Ctrl+b".into()),
             sections,
@@ -61,7 +61,7 @@ fn prefix_config(assignments: &[(&str, &str)]) -> crate::app::config::Config {
     }
 }
 
-fn harness_with(config: crate::app::config::Config) -> TickHarness {
+fn harness_with(config: mbv_client_core::config::Config) -> TickHarness {
     let mut app = make_app_stub();
     app.config_for_test(|held| *held = config);
     TickHarness::new(app)
@@ -83,7 +83,7 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
         .expect("Home owner installed")
 }
 
-fn home_harness(count: usize, config: crate::app::config::Config) -> TickHarness {
+fn home_harness(count: usize, config: mbv_client_core::config::Config) -> TickHarness {
     let mut app = make_app_stub();
     app.config_for_test(|held| *held = config);
     app.seed_active_tab_for_test(TabSelection::Home);

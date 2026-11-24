@@ -34,10 +34,10 @@ use super::collection::{GuiCollectionSet, GuiCollectionTarget};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use crate::app::App;
-use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
+use mbv_client_core::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One episode's stable identity across every list view (row 10.1): the

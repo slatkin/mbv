@@ -2,10 +2,10 @@ use crate::tui::test_support::{Terminal, TestBackend};
 use ratatui::layout::Rect;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::tests::make_app_stub;
-use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::tui::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::tui::tests::tick_integration::search_component_mut;
+use mbv_client_core::tests::make_app_stub;
+use mbv_client_core::tests::render_fixtures::make_music_group_app;
 use mbv_components::QueueComponent;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_emby_model::test_support::make_item;
@@ -194,7 +194,7 @@ fn drawn_harness_terminal(
 }
 
 fn drawn_tab_harness() -> TickHarness {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.seed_active_tab_for_test(TabSelection::Home);
     // The tab-bar geometry under test is the two-panel layout: with the
     // empty-queue column hidden (change `hide-empty-queue-column`, D1) an
@@ -236,7 +236,7 @@ fn library_panel_component(harness: &TickHarness) -> &LibraryPanel {
 #[test]
 fn tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide_modes() {
     for (terminal_width, terminal_height) in [(80, 24), (120, 30)] {
-        let mut app = crate::app::tests::render_fixtures::make_music_group_app();
+        let mut app = mbv_client_core::tests::render_fixtures::make_music_group_app();
         app.set_panel_mode_for_test(PanelMode::LibraryOnly);
         app.set_panel_focus_for_test(PanelFocus::Library);
         let mut harness = TickHarness::new(app);
@@ -402,7 +402,7 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
 // use.
 #[test]
 fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.seed_idle_volume_and_mute_for_test(60, false);
     // The stub player starts active (a remote-owner stand-in), which would
     // route the volume intent through the player status instead of the
@@ -620,7 +620,7 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
 
 #[test]
 fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
-    let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
+    let mut app = mbv_client_core::tests::render_fixtures::make_queue_app(2);
     app.set_panel_mode_for_test(PanelMode::Both);
     app.set_panel_focus_for_test(PanelFocus::Library);
     let mut harness = TickHarness::new(app);

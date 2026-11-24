@@ -70,23 +70,24 @@ impl Model {
     /// `EmbyLibraryIdentity` shape).
     fn emby_library_owner_identity(&self, index: usize) -> EmbyLibraryIdentity {
         let facts = self.app.emby_library_level_facts(index).unwrap_or(
-            crate::app::state::shell_reads::BrowseLevelFacts {
+            mbv_client_core::state::shell_reads::BrowseLevelFacts {
                 depth: 0,
                 level: None,
                 has_feed_home_video: false,
             },
         );
-        let level = facts
-            .level
-            .unwrap_or(crate::app::state::shell_reads::BrowseLevelIdentity {
-                parent_id: String::new(),
-                letter_filter: None,
-                sort_by: String::new(),
-                sort_order: String::new(),
-                unplayed_only: false,
-                loading: false,
-                tv_content_mode: None,
-            });
+        let level =
+            facts
+                .level
+                .unwrap_or(mbv_client_core::state::shell_reads::BrowseLevelIdentity {
+                    parent_id: String::new(),
+                    letter_filter: None,
+                    sort_by: String::new(),
+                    sort_order: String::new(),
+                    unplayed_only: false,
+                    loading: false,
+                    tv_content_mode: None,
+                });
         EmbyLibraryIdentity {
             depth: facts.depth,
             parent_id: level.parent_id,

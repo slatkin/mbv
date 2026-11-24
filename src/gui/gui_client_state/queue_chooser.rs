@@ -6,8 +6,8 @@ use mbv_queue::NamedQueueId;
 
 use super::overlay::{GuiOverlay, QueueChooserState};
 use super::projection::QueueChooserEntryProjection;
-use crate::app::state::playback::ShownEntry;
 use crate::gui::GuiCore;
+use mbv_client_core::state::playback::ShownEntry;
 
 impl GuiCore {
     /// The Queue chooser's entries (spec `gui-queue-chooser` "The chooser lists

@@ -5,8 +5,8 @@
 //! 6.2); these shell halves project what the App stores.
 
 use super::Model;
-use crate::app::state::events::ModelContentEvent;
-use crate::app::state::playback::{
+use mbv_client_core::state::events::ModelContentEvent;
+use mbv_client_core::state::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };
 #[cfg(test)]

@@ -37,7 +37,7 @@ fn app_with_suspended_home() -> (
         "music",
         route,
         route_rx,
-        &crate::app::tests::route_state::stub_endpoint(),
+        &mbv_client_core::tests::route_state::stub_endpoint(),
     );
     while route_cmd_rx.try_recv().is_ok() {}
 

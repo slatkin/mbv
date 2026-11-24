@@ -2,19 +2,23 @@ use super::*;
 
 #[test]
 fn teardown_flushes_pending_settings_save() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.config_for_test(|config| config.consume_audio = true);
     app.seed_deferred_settings_save_for_test();
 
     app.teardown(Duration::from_secs(1), false);
 
-    assert!(crate::app::config::load_config().unwrap().consume_audio);
+    assert!(
+        mbv_client_core::config::load_config()
+            .unwrap()
+            .consume_audio
+    );
 }
 
 #[test]
 fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.config_for_test(|config| config.auto_reconnect = true);
     app.seed_active_route_for_test(Some("music".to_string()));
@@ -22,18 +26,20 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
     app.teardown(Duration::from_secs(1), false);
 
     assert_eq!(
-        crate::app::config::load_last_remote_connection().unwrap(),
-        Some(crate::app::config::LastRemoteConnection::LibraryRoute {
-            library: "music".to_string()
-        })
+        mbv_client_core::config::load_last_remote_connection().unwrap(),
+        Some(
+            mbv_client_core::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string()
+            }
+        )
     );
 }
 
 #[test]
 fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
-    let _ = crate::app::config::save_last_remote_connection(Some(
-        &crate::app::config::LastRemoteConnection::LibraryRoute {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let _ = mbv_client_core::config::save_last_remote_connection(Some(
+        &mbv_client_core::config::LastRemoteConnection::LibraryRoute {
             library: "music".to_string(),
         },
     ));
@@ -47,10 +53,12 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     // existed must be left exactly as it was, not cleared just because
     // `active_route` is currently `None`.
     assert_eq!(
-        crate::app::config::load_last_remote_connection().unwrap(),
-        Some(crate::app::config::LastRemoteConnection::LibraryRoute {
-            library: "music".to_string()
-        })
+        mbv_client_core::config::load_last_remote_connection().unwrap(),
+        Some(
+            mbv_client_core::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string()
+            }
+        )
     );
 }
 
@@ -61,9 +69,9 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
 // changed the connection this run must not clear it.
 #[test]
 fn teardown_without_a_remote_keeps_the_saved_target() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
-    let _ = crate::app::config::save_last_remote_connection(Some(
-        &crate::app::config::LastRemoteConnection::DirectSession {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let _ = mbv_client_core::config::save_last_remote_connection(Some(
+        &mbv_client_core::config::LastRemoteConnection::DirectSession {
             device_name: "music".to_string(),
         },
     ));
@@ -73,10 +81,12 @@ fn teardown_without_a_remote_keeps_the_saved_target() {
     app.teardown(Duration::from_secs(1), false);
 
     assert_eq!(
-        crate::app::config::load_last_remote_connection().unwrap(),
-        Some(crate::app::config::LastRemoteConnection::DirectSession {
-            device_name: "music".to_string(),
-        })
+        mbv_client_core::config::load_last_remote_connection().unwrap(),
+        Some(
+            mbv_client_core::config::LastRemoteConnection::DirectSession {
+                device_name: "music".to_string(),
+            }
+        )
     );
 }
 
@@ -85,9 +95,9 @@ fn teardown_without_a_remote_keeps_the_saved_target() {
 // the record the previous run saved and the next launch stays local.
 #[test]
 fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
-    let _ = crate::app::config::save_last_remote_connection(Some(
-        &crate::app::config::LastRemoteConnection::DirectSession {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let _ = mbv_client_core::config::save_last_remote_connection(Some(
+        &mbv_client_core::config::LastRemoteConnection::DirectSession {
             device_name: "music".to_string(),
         },
     ));
@@ -103,7 +113,7 @@ fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
     app.teardown(Duration::from_secs(1), false);
 
     assert_eq!(
-        crate::app::config::load_last_remote_connection().unwrap(),
+        mbv_client_core::config::load_last_remote_connection().unwrap(),
         None
     );
 }
@@ -117,8 +127,8 @@ fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
 // (dispatch/run_loop/teardown.rs), which observes the attempted request.
 #[test]
 fn swapped_out_teardown_sends_no_shutdown_request() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
-    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    mbv_client_core::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_app_stub();
     app.config_for_test(|config| config.stay_alive = false);
 
@@ -137,7 +147,7 @@ fn swapped_out_teardown_sends_no_shutdown_request() {
         .unwrap();
     model.drain_suspended_home_events();
     assert!(model.swapped_out_exit);
-    assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(mbv_client_core::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
 
     model.teardown(Duration::ZERO);
 

@@ -12,9 +12,9 @@ use mbv_config::TabIdentity;
 use super::collection::{GuiDateOrder, compare_gui_date_order};
 use super::projection::sort_letter;
 use super::tabs::GuiDestinationKind;
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// The sorts of every target but Audiobooks (design D2), in paint order.
 const THREE_SORTS: [GuiListSort; 3] =

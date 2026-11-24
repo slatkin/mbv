@@ -2,7 +2,7 @@
 //! D3): the ratatui and `ratatui-image` halves of the image cache that the
 //! shell alone runs — encoding a fetched entry under the active terminal
 //! protocol and painting it. The cache, the fetch, and the completion drain
-//! stay in `crate::app::infra::image_fetch`, so a Client with no terminal
+//! stay in `mbv_client_core::infra::image_fetch`, so a Client with no terminal
 //! protocol holds the same cache.
 
 use super::Model;
@@ -226,7 +226,7 @@ impl Model {
                     .contains(self.app.image_cache(), bare_key, suffix)
         });
         if reencode {
-            let crate::app::state::shell_reads::ImageBuildFacts {
+            let mbv_client_core::state::shell_reads::ImageBuildFacts {
                 img,
                 cover_box,
                 logo_key: stored_logo_key,

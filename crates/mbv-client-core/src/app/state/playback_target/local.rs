@@ -160,6 +160,13 @@ impl LocalPlaybackTarget {
         app.mute_on
     }
 
+    /// The status-bar indicator's data for the shown player, or `None` while
+    /// nothing plays.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the shown video height cannot widen into a `u64`, which the
+    /// nonnegative clamp rules out.
     pub fn indicator_data(app: &App) -> Option<IndicatorData> {
         let pst = app.shown_playback_status();
         if !pst.active {

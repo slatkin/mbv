@@ -13,8 +13,8 @@ use mbv_ui_model::settings::{
 };
 use mbv_ui_model::ui_util::{SUBTITLE_MODES, lang_cycle};
 
-use crate::app::state::shell_reads::SetupFormDraft;
 use crate::gui::GuiCore;
+use mbv_client_core::state::shell_reads::SetupFormDraft;
 
 use super::{GuiSettingsState, GuiSetupService};
 
@@ -275,7 +275,7 @@ impl GuiCore {
             .iter()
             .map(|&entry| GuiSettingsServiceProjection {
                 entry,
-                name: crate::app::App::service_entry_name(entry),
+                name: mbv_client_core::App::service_entry_name(entry),
                 state: self.app.service_state_label(entry),
                 context: self.app.service_context(entry),
                 actions: self

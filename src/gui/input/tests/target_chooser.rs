@@ -8,10 +8,10 @@ use std::sync::mpsc::Receiver;
 use mbv_ctrl::CtrlCmd;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, ShellRequest};
 
-use crate::app::{gui_client_capabilities, make_local_daemon_app_stub_with_cmd_rx_and_compat};
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiOverlay;
 use crate::gui::input::GuiInput;
+use mbv_client_core::{gui_client_capabilities, make_local_daemon_app_stub_with_cmd_rx_and_compat};
 
 /// One routed key, delivered through the GUI entry.
 fn gui_key(core: &mut GuiCore, input: GuiInput) -> bool {

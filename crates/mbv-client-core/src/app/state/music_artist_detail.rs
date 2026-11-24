@@ -36,6 +36,7 @@ use mbv_ui_model::ui_util::sort_audio_tracks;
 /// arms the bound and each arrival frees a slot for the next album.
 const MAX_ARTIST_FALLBACK_TRACK_FETCHES: usize = 6;
 
+#[must_use]
 pub fn artist_artwork_cache_key(
     destination: &LibraryKey,
     generation: u64,

@@ -9,7 +9,7 @@ use mbv_images::CachedImage;
 use mbv_queue::{AudiobookshelfEpisodeCatalog, EpisodeResume};
 
 use super::*;
-use crate::app::make_app_stub;
+use mbv_client_core::make_app_stub;
 
 /// A feed entry of `kind`: the Feeds destination's row input.
 fn feed_entry(kind: FeedKind) -> FeedEntry {
@@ -49,7 +49,7 @@ fn episode(show_id: &str) -> AudiobookshelfQueueItem {
 /// An `App` whose Audiobookshelf setup names `server`, with the image cache
 /// holding no entry for the row keys the tests read.
 fn app_with_audiobookshelf(server: &str) -> App {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_audiobookshelf_server_url_for_test(server);
     app

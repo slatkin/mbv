@@ -4,7 +4,7 @@
 //! A local Client refuses an Owner built from a different version before
 //! sending its control credential. What that refusal means — prompt, wait for
 //! the old Owner, refuse, or report — is the core's pure decision
-//! ([`crate::app::dispatch::session::owner_restart::follow_up`]). This module
+//! ([`mbv_client_core::dispatch::session::owner_restart::follow_up`]). This module
 //! turns it into the terminal prompt and reads the answer.
 
 use std::io::{BufRead, Write};

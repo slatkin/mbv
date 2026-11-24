@@ -2,7 +2,7 @@
 //! shared `App` the GUI owns, wrapped by composition.
 //!
 //! `GuiCore`, the GUI modules, and the GUI routing entry live here, outside
-//! `crate::app`, so the boundary rehearsal takes their module shape now
+//! `mbv-client-core`, so the boundary rehearsal takes their module shape now
 //! (`2-split-tui-gui-clients` design D4c). The GUI's `CoreThread` holds one
 //! `GuiCore` and keeps its `ClientTickHost` implementation; no `App` field
 //! becomes `pub` for it (this change's D4), so the owned `App` stays behind
@@ -72,7 +72,7 @@ pub use self::gui_settings::{
 };
 pub use self::input::{GuiInput, GuiSurfaceLeaf};
 
-use crate::app::App;
+use mbv_client_core::App;
 
 /// The GUI Client's core state: the `App` it owns and its own Client state.
 /// Every GUI `impl` block becomes `impl GuiCore` and reads its core state as
@@ -93,7 +93,7 @@ impl GuiCore {
     #[must_use]
     pub fn new(app: App) -> Self {
         let player_auto_hide =
-            crate::app::state::construct::gui_player_auto_hide_from_prefs(&App::load_prefs());
+            mbv_client_core::state::construct::gui_player_auto_hide_from_prefs(&App::load_prefs());
         Self {
             app,
             gui: GuiClientState::new(player_auto_hide),
@@ -135,7 +135,7 @@ impl GuiCore {
     /// collects applies to this Client's `GuiClientState` before the next
     /// event. The GUI's tick host calls this once per event.
     pub fn drain_lib_event(&mut self) -> bool {
-        crate::app::drain_lib_event_through(&mut self.app, &mut self.gui)
+        mbv_client_core::drain_lib_event_through(&mut self.app, &mut self.gui)
     }
 
     /// Take one Client-only fetch result and install it in this Client's own
@@ -202,7 +202,7 @@ impl GuiCore {
     }
 }
 
-impl crate::app::RouterNow for GuiCore {
+impl mbv_client_core::RouterNow for GuiCore {
     /// The armed bit the router reads for this Client. It lives beside the
     /// core the GUI owns, so the routing entry reads it through the router's
     /// neutral access instead of the router reading the routing site's

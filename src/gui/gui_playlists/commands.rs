@@ -83,7 +83,7 @@ impl GuiCore {
         if name.is_empty() {
             self.app.flash(
                 "Playlist name can't be empty".into(),
-                crate::app::dispatch::notify::ToastSeverity::Error,
+                mbv_client_core::dispatch::notify::ToastSeverity::Error,
             );
             return;
         }

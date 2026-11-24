@@ -97,6 +97,10 @@ impl ArtistNameLookup {
     /// Start the artist search for `name` once: a name with an id, or already
     /// searched or in flight, starts nothing. Only a Client that presents the
     /// search asks, so a Client without `ShownQueueEntries` starts none.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the Emby client lock is poisoned.
     pub fn request(app: &mut App, name: &str) {
         if !app
             .client_capabilities

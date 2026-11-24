@@ -45,16 +45,16 @@ impl GuiCore {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::App;
-    use crate::app::make_app_stub;
     use crate::gui::GuiCore;
+    use mbv_client_core::App;
+    use mbv_client_core::make_app_stub;
 
     /// The key is the GUI Client's (design D4): the toggle writes
     /// `gui_player_auto_hide` through the Client-key writer, and a fresh
     /// state reads it back at start.
     #[test]
     fn player_auto_hide_prefs_round_trip() {
-        let _guard = crate::app::config::TestStateDirGuard::new();
+        let _guard = mbv_client_core::config::TestStateDirGuard::new();
         let mut core = GuiCore::new(make_app_stub());
         core.gui.player_auto_hide = true;
 

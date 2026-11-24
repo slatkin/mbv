@@ -19,7 +19,7 @@ pub(super) fn launch_state(
 }
 
 fn pending_emby_launch_at(library_id: &str, panel_focus: mbv_config::LaunchPanelFocus) -> App {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.seed_emby_service_state_for_test(mbv_core::service_runtime::ServiceState::Connecting);
     app.seed_launch_restore_pending_for_test(launch_state(
         ServiceKind::Emby,
@@ -68,7 +68,7 @@ pub(super) fn assert_expired_launch_restores_saved_focus(app: App) {
 #[test]
 fn emby_service_outcome_expiry_restores_saved_focus() {
     fn expire(trigger: impl FnOnce(&mut App)) {
-        let _guard = crate::app::config::TestStateDirGuard::new();
+        let _guard = mbv_client_core::config::TestStateDirGuard::new();
         let mut app = pending_emby_launch();
         trigger(&mut app);
         assert_expired_launch_restores_saved_focus(app);
@@ -166,7 +166,7 @@ fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
 fn reanchor_does_not_apply_to_a_tab_changed_by_stale_destination_normalization() {
     // #810: asynchronous catalog removal must not redirect a resolved launch
     // destination's remaining focus state onto the normalized Home tab.
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.set_panel_focus_for_test(PanelFocus::Library);
     app.seed_launch_restore_tab_settled_for_test(
         launch_state(
@@ -314,7 +314,7 @@ fn pinned_launch_overrides_saved_focus_with_queue() {
 /// alone is overridden, and the forcing path tolerates `LaunchRestore::Done`.
 #[test]
 fn pinned_launch_without_snapshot_still_starts_on_queue() {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.set_panel_focus_for_test(PanelFocus::Library);
     app.seed_launch_restore_done_for_test();
 
@@ -332,7 +332,7 @@ fn pinned_launch_without_snapshot_still_starts_on_queue() {
 #[test]
 fn restart_after_a_letter_pill_session_selects_latest() {
     // Exit with a letter pill active on a large movie library.
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.set_library_total_for_test(0, 400);
     app.set_library_level_letter_filter_for_test(
         0,
@@ -356,7 +356,7 @@ fn restart_after_a_letter_pill_session_selects_latest() {
 
     // Restart on the same library: the selector opens on Latest and the
     // letter pill does not reappear.
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.set_library_total_for_test(0, 400);
     app.seed_launch_restore_tab_settled_for_test(saved, TabSelection::EmbyLibrary(0));
     let mut model = Model::new(app);
@@ -376,7 +376,7 @@ fn restart_after_a_letter_pill_session_selects_latest() {
 /// letter range).
 #[test]
 fn restart_with_an_absent_recorded_scope_selects_latest() {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.set_library_total_for_test(0, 400);
     app.seed_launch_restore_tab_settled_for_test(
         launch_state(

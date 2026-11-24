@@ -18,9 +18,9 @@ use mbv_emby::EmbyError;
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::search_sidebar::is_navigable_type;
 
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// The GUI Library's Search store (row 12.1).
 ///

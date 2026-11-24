@@ -18,10 +18,10 @@ use super::artwork::{GuiRowArt, GuiRowMediaKind, artist_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::collection_command::GuiCollectionSite;
 use super::{GuiGroupAlbums, GuiMusicCollectionSite};
-use crate::app::App;
-use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
+use mbv_client_core::dispatch::library::artist_lookup::ArtistNameLookup;
 
 /// One artist row of the Music list (design D5, D7): the union's artist with
 /// its albums, in artist sort-name order.

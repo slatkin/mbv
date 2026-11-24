@@ -11,8 +11,8 @@ use super::*;
 /// hit geometry, not a recomputed expectation.
 #[test]
 fn tick_visual_slot_right_click_opens_the_menu_and_hide_hides_the_slot() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.seed_active_tab_for_test(TabSelection::Home);
     // The two-panel layout needs a non-empty queue (hide-empty-queue-column D1).
     app.seed_local_queue_emby_items_for_test(vec![make_item("Queue Item", "Movie")], 0);

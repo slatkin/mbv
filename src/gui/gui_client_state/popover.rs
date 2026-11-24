@@ -7,8 +7,8 @@ use mbv_ui_msg::TrackChipKind;
 
 use super::overlay::{GuiOverlay, TrackPopoverState};
 use super::projection::TrackPopoverChoice;
-use crate::app::queue_playback_projection::{TrackChip, TrackChips};
 use crate::gui::GuiCore;
+use mbv_client_core::queue_playback_projection::{TrackChip, TrackChips};
 
 impl GuiCore {
     /// Toggle a track chip's popover (the `OpenTrackPopover` request's

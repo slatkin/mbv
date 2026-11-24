@@ -24,8 +24,8 @@ use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source, row_art};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
 /// The active destination's Audiobooks library index (row 9.1): the

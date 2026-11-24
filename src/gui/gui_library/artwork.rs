@@ -10,8 +10,8 @@
 use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource, painted_shape_for_pixels};
 use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 use mbv_images::SourceImage;
 
 mod rows;

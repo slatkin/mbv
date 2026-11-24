@@ -28,9 +28,9 @@ use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_sourc
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 use mbv_ui_model::meta::MetaSegment;
 use mbv_ui_model::sort_filter::effective_sort_str;
 

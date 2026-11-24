@@ -15,9 +15,9 @@ use super::GuiGroupAlbums;
 use super::collection::GuiCollectionSet;
 use super::podcasts_projection::GuiPodcastEpisodeId;
 use super::request::GuiSectionRequest;
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// One GUI Library row's resolved menu target (add-gui-library-panel design
 /// D2): the destination's own identity, so the shared builders pick the

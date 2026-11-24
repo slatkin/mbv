@@ -8,7 +8,7 @@ use std::time::Instant;
 use mbv_ui_msg::{Msg, ServiceRequest};
 
 use super::super::Model;
-use crate::app::{App, ClientTickHost, TickOutcome};
+use mbv_client_core::{App, ClientTickHost, TickOutcome};
 
 impl ClientTickHost for Model {
     fn app_mut(&mut self) -> &mut App {

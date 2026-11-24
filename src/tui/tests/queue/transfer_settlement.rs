@@ -1,6 +1,6 @@
-use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::tests::{make_audio_items, make_local_daemon_app_stub_with_cmd_rx};
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::dispatch::notify::ToastSeverity;
+use mbv_client_core::tests::{make_audio_items, make_local_daemon_app_stub_with_cmd_rx};
 use mbv_ctrl::player::PlayerStatus;
 use mbv_ctrl::{CtrlCmd, UnifiedQueueSlot, UnifiedQueueStateData};
 use mbv_queue::{QueueItem, QueueLineage, QueueSource};

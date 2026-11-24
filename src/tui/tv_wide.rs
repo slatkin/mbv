@@ -1,4 +1,4 @@
-use crate::app::App;
+use mbv_client_core::App;
 use mbv_queue::TvContentMode;
 use mbv_render::arrangements::wide_hero;
 use mbv_render::components::widgets;

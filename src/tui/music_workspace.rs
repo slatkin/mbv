@@ -6,7 +6,7 @@ use super::BrowseLevel;
 use super::PendingMusicReanchor;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
-use crate::app::MusicEvent;
+use mbv_client_core::MusicEvent;
 use mbv_components::music_content::MusicContent;
 use mbv_components::music_tree_target::MusicTreeTarget;
 use mbv_queue::ServiceKind;
@@ -369,9 +369,9 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::MusicEvent;
-    use crate::app::tests::render_fixtures::make_music_group_app;
     use crate::tui::Model;
+    use mbv_client_core::MusicEvent;
+    use mbv_client_core::tests::render_fixtures::make_music_group_app;
     use mbv_components::library_panel::owner::LibraryContentOwner;
     use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
@@ -382,8 +382,8 @@ mod tests {
     /// track fetch for whatever item was selected on ANY Emby library tab.
     /// Positive control for the guard above: a genuine Music album-folder
     /// selection still fetches the selected album's tracks.
-    fn settled_service_artist_app() -> crate::app::App {
-        crate::app::App::settled_service_artist_app_for_test()
+    fn settled_service_artist_app() -> mbv_client_core::App {
+        mbv_client_core::App::settled_service_artist_app_for_test()
     }
 
     fn music_destination() -> mbv_ui_model::library::LibraryKey {
@@ -430,7 +430,7 @@ mod tests {
         );
         assert!(
             model.app.image_loading(
-                &crate::app::state::music_artist_detail::artist_artwork_cache_key(
+                &mbv_client_core::state::music_artist_detail::artist_artwork_cache_key(
                     &destination,
                     generation.value(),
                     "artist-alpha",
@@ -490,7 +490,7 @@ mod tests {
         let (mut model, generation) = artist_focused_model();
 
         model.app.handle_lib_event(
-            crate::app::LibEvent::Music(MusicEvent::ArtistTracksFetched {
+            mbv_client_core::LibEvent::Music(MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
@@ -511,7 +511,7 @@ mod tests {
         track.id = "track-1".into();
         track.album_id = "album-1".into();
         model.app.handle_lib_event(
-            crate::app::LibEvent::Music(MusicEvent::ArtistTracksFetched {
+            mbv_client_core::LibEvent::Music(MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),

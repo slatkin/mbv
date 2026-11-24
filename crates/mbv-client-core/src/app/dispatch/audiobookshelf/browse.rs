@@ -543,11 +543,13 @@ impl App {
     }
 }
 
+#[must_use]
 pub fn seconds_to_ticks(seconds: f64) -> i64 {
     seconds_to_ticks_u64(seconds)
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)
 }
+#[must_use]
 pub fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
     (seconds.is_finite() && seconds >= 0.0).then(|| {
         let ticks = saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).round());

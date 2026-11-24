@@ -17,8 +17,8 @@
 //! cannot recreate what it cleared.
 
 use super::Model;
-use crate::app::App;
-use crate::app::dispatch::notify::ToastSeverity;
+use mbv_client_core::App;
+use mbv_client_core::dispatch::notify::ToastSeverity;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::queue::QueueComponent;
 use mbv_render::arrangements::queue::normalize_queue_column_width;

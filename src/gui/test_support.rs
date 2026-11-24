@@ -2,22 +2,22 @@
 //! fixtures and helper calls the GUI's own tests and a dependent Client's
 //! `test` build drive. They stand beside `GuiCore` rather than in the core, so
 //! the core names no GUI module and the GUI names the core only through the
-//! `test`-feature seams `crate::app` re-exports (design D4b rule 5).
+//! `test`-feature seams `mbv-client-core` re-exports (design D4b rule 5).
 //!
 //! The core state a call seeds is written through those seams; the Client's own
 //! state is held in the sidecar this module keeps (`stub_gui_state`,
 //! `gui_state_for_test`), because the `App` never holds it.
 
-use crate::app::App;
-use crate::app::handoff_app;
-#[cfg(test)]
-use crate::app::state::gui_client_events::GuiClientEvent;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
 #[cfg(test)]
 use crate::gui::gui_library::client_events::install_client_event;
 use crate::gui::gui_library::{GuiCollectionSelection, GuiCollectionSet};
 use crate::gui::gui_library::{GuiEmbyRootItems, GuiGroupAlbums};
+use mbv_client_core::App;
+use mbv_client_core::handoff_app;
+#[cfg(test)]
+use mbv_client_core::state::gui_client_events::GuiClientEvent;
 
 /// The GUI Client's own state beside the stub `App` a test holds. The state
 /// lives in `GuiCore` (design D4), and these helpers drive the `App` alone, so
@@ -591,7 +591,7 @@ pub fn gui_row_menu_entries_for_test(
 #[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
-    let app = crate::app::stub_app_with_playing_items(items);
+    let app = mbv_client_core::stub_app_with_playing_items(items);
     let row = app
         .displayed_queue()
         .slot_id_at(0)
@@ -612,7 +612,7 @@ pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
 #[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
-    let mut app = crate::app::stub_app_with_playing_queue(1);
+    let mut app = mbv_client_core::stub_app_with_playing_queue(1);
     app.edit_player_status_for_test(|status| {
         status.active = true;
         status.audio_tracks = vec![(1, "Stereo".to_string())];
@@ -624,7 +624,10 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     // the shared playback dispatch's arm for it is a documented core no-op
     // (design D4a (a)), and the GUI entry applies it after the core. An
     // inactive player lists no choice, so it opens nothing.
-    let mut core = GuiCore::new(std::mem::replace(&mut app, crate::app::make_app_stub()));
+    let mut core = GuiCore::new(std::mem::replace(
+        &mut app,
+        mbv_client_core::make_app_stub(),
+    ));
     core.toggle_gui_track_popover(chip);
     // The overlay is the wrapper's own Client state, and the test reads the
     // state beside the `App` (row 8.1 of `decouple-client-core`), so what the
@@ -640,7 +643,7 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
 #[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn stub_app_with_failed_emby_setup() -> App {
-    let mut core = GuiCore::new(crate::app::stub_app_with_failed_emby_setup_form());
+    let mut core = GuiCore::new(mbv_client_core::stub_app_with_failed_emby_setup_form());
     core.apply_gui_settings_overlay(&mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
         mbv_ui_model::overlay::SidebarId::Settings,
     ));

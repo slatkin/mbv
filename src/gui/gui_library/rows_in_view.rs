@@ -26,10 +26,10 @@ use super::artwork::{
 use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
 use super::home::GuiHomeRowId;
 use super::podcasts_projection::GuiPodcastEpisodeId;
-use crate::app::App;
-use crate::app::dispatch::library::artist_lookup::ArtistNameLookup;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
+use mbv_client_core::dispatch::library::artist_lookup::ArtistNameLookup;
 
 impl GuiCore {
     /// Store one `RowsInView` set and queue its fetches once navigation is idle

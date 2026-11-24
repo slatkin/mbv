@@ -1,5 +1,5 @@
 use super::Model;
-use crate::app::tests::make_app_stub;
+use mbv_client_core::tests::make_app_stub;
 use mbv_images::{CachedImage, SourceImage};
 use ratatui_image::picker::{Picker, ProtocolType};
 

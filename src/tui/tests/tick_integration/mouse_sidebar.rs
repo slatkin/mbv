@@ -1,9 +1,9 @@
 use crate::tui::test_support::{Terminal, TestBackend};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::dispatch::action::NavigationIntent;
-use crate::app::tests::make_app_stub;
 use crate::tui::tests::tick_integration::harness::{StepOutcome, TickHarness};
+use mbv_client_core::dispatch::action::NavigationIntent;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::{HelpComponent, PlaylistsComponent, QueueComponent};
 use mbv_emby_model::test_support::make_item;
@@ -49,7 +49,9 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        crate::app::input::router::RouterOutcome::Command(NavigationIntent::OpenPlaylists.into())
+        mbv_client_core::input::router::RouterOutcome::Command(
+            NavigationIntent::OpenPlaylists.into()
+        )
     );
     assert!(
         outcome.messages.is_empty(),
@@ -177,7 +179,7 @@ fn mounted_library_cursor(harness: &mut TickHarness) -> usize {
 
 #[test]
 fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
-    let mut app = crate::app::tests::render_fixtures::make_queue_app(8);
+    let mut app = mbv_client_core::tests::render_fixtures::make_queue_app(8);
     app.set_mini_view_focus_for_test(PanelFocus::Queue);
     let mut harness = TickHarness::new(app);
     crate::tui::test_support::set_terminal_width(harness.model_mut(), 70);

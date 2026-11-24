@@ -7,8 +7,8 @@
 
 use mbv_ui_model::tab_selection::TabSelection;
 
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 
 /// The destination kind one tab position names (design D2, D12): the one
 /// abstraction the top bar, the content gate, and the launch restore read,

@@ -61,3 +61,16 @@ toml.workspace = true
 tracing.workspace = true
 unicode-width.workspace = true
 ureq = { workspace = true, features = ["json"] }
+
+# The core's own tests name the providers' and leaves' test support, and the
+# fixture tables. No shipped build enables these features (design D4e).
+[dev-dependencies]
+mbv-config = { path = "../mbv-config", features = ["test"] }
+mbv-emby = { path = "../mbv-emby", features = ["test"] }
+mbv-emby-model = { path = "../mbv-emby-model", features = ["test"] }
+mbv-images = { path = "../mbv-images", features = ["test"] }
+mbv-net = { path = "../mbv-net", features = ["test"] }
+mbv-remote-player = { path = "../mbv-remote-player", features = ["test"] }
+mbv-ui-model = { path = "../mbv-ui-model", features = ["test"] }
+rstest.workspace = true
+uuid = { workspace = true, features = ["v4", "fast-rng"] }

@@ -4,7 +4,7 @@
 //! read playback state; they match the projection's identity against their
 //! rows and apply its progress.
 
-use crate::app::App;
+use mbv_client_core::App;
 use mbv_emby_model::seconds_to_ticks;
 use mbv_ids::ItemId;
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};

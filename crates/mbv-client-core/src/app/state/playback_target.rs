@@ -4,7 +4,7 @@ use crate::app::App;
 use crate::app::state::client_capabilities::ClientCapability;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct LocalPlaybackTarget;
 
 impl App {

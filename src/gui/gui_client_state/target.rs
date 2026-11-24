@@ -6,8 +6,8 @@
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 
 use super::overlay::{GuiOverlay, TargetChooserState};
-use crate::app::state::panel_targets::resolve_session_target;
 use crate::gui::GuiCore;
+use mbv_client_core::state::panel_targets::resolve_session_target;
 
 impl GuiCore {
     /// Select a row's playback target by its stable key, as the playback-target

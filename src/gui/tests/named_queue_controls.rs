@@ -6,8 +6,8 @@
 //! shown entry", "The chooser lists local queues and connected peers").
 
 use super::*;
-use crate::app::state::playback::ShownEntry;
 use crate::gui::gui_client_state::GuiOverlay;
+use mbv_client_core::state::playback::ShownEntry;
 use mbv_ctrl::{CtrlCmd, NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
 use mbv_ui_model::overlay::OverlayRequest;
@@ -127,7 +127,7 @@ fn a_rejected_close_tells_the_user_why() {
     );
     assert_eq!(
         app.newest_toast_severity(),
-        crate::app::dispatch::notify::ToastSeverity::Error,
+        mbv_client_core::dispatch::notify::ToastSeverity::Error,
         "a refusal is an error, not a neutral status"
     );
     assert!(

@@ -8,11 +8,11 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::dispatch::action::{NavigationIntent, PanelIntent, PlaybackIntent};
-use crate::app::input::router::RouterOutcome;
-use crate::app::tests::make_app_stub;
 use crate::tui::fold_keyboard_messages;
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::dispatch::action::{NavigationIntent, PanelIntent, PlaybackIntent};
+use mbv_client_core::input::router::RouterOutcome;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::SearchSidebarComponent;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmButton, ConfirmModal};
 use mbv_ui_model::overlay::OverlayRequest;
@@ -41,7 +41,7 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 
 #[test]
 fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.set_panel_focus_for_test(PanelFocus::Library);
     // The restored launch focus is Queue, so the displayed queue must not be
     // empty: with the empty-queue column hidden (change
@@ -301,7 +301,7 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
         Some(&ComponentId::Queue)
     );
 
-    let mut library_app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut library_app = mbv_client_core::tests::render_fixtures::make_movie_app();
     library_app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     library_app.set_panel_focus_for_test(PanelFocus::Library);
     library_app.set_panel_mode_for_test(PanelMode::Both);

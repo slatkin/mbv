@@ -3514,6 +3514,7 @@ dependencies = [
  "libc",
  "mbv-audiobookshelf",
  "mbv-cast",
+ "mbv-client-core",
  "mbv-components",
  "mbv-config",
  "mbv-core",
@@ -3622,12 +3623,14 @@ dependencies = [
  "mbv-visualizer",
  "mbv-ws",
  "rand 0.10.4",
+ "rstest",
  "serde_json",
  "time",
  "toml",
  "tracing",
  "unicode-width",
  "ureq",
+ "uuid",
 ]
 
 [[package]]

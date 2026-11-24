@@ -19,9 +19,9 @@ use mbv_ui_model::settings::PanelFocus;
 use super::GuiDestinationKind;
 use super::GuiHomeRowId;
 use super::item_actions::GuiLibraryMenuTarget;
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// The row one Library menu names: the window sends it with `rowMenu` and
 /// echoes it back with `menuEntry`, so the App rebuilds the same entries the

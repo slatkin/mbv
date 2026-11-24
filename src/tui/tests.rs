@@ -1,7 +1,7 @@
 use super::*;
-use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
-use crate::app::tests::{make_app_stub, make_remote_app_stub_with_cmd_rx};
 use crossterm::event::{KeyCode, KeyEvent};
+use mbv_client_core::dispatch::action::{PlaybackIntent, ShellCommand};
+use mbv_client_core::tests::{make_app_stub, make_remote_app_stub_with_cmd_rx};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
@@ -229,12 +229,12 @@ fn music_artist_play_replaces_once_with_ordered_album_tracks() {
 // ── what the D4c set's tests read through `use super::*` ─────────────────
 //
 // A moved test file names the core's stub fixtures and a few leaf types
-// through `use super::*`, as it did while it sat inside `crate::app::tests`.
+// through `use super::*`, as it did while it sat inside `mbv_client_core::tests`.
 // These re-exports keep that spelling path-only after the move.
 
-pub(crate) use crate::app::tests::*;
-pub(crate) use crate::app::{App, AppCommand, Command, PanelIntent, QueueCardArtwork};
 pub(crate) use crate::tui::Model;
+pub(crate) use mbv_client_core::tests::*;
+pub(crate) use mbv_client_core::{App, AppCommand, Command, PanelIntent, QueueCardArtwork};
 pub(crate) use mbv_ctrl::player::PlayerEvent;
 pub(crate) use mbv_ui_model::browse::BrowseLevel;
 pub(crate) use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};

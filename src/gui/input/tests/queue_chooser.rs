@@ -8,12 +8,12 @@ use mbv_ctrl::CtrlCmd;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 
-use crate::app::{
-    emby_unified_state, gui_client_capabilities, make_items, make_local_daemon_app_stub_with_cmd_rx,
-};
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::{GuiOverlay, GuiOverlayProjection, QueueChooserEntryProjection};
 use crate::gui::input::GuiInput;
+use mbv_client_core::{
+    emby_unified_state, gui_client_capabilities, make_items, make_local_daemon_app_stub_with_cmd_rx,
+};
 use mbv_ctrl::player::PlayerEvent;
 
 /// One routed key, delivered through the GUI entry.

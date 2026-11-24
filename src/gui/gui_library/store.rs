@@ -11,9 +11,9 @@ use mbv_emby_model::EmbyItem;
 use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
-use crate::app::state::gui_client_events::GuiClientEvent;
-use crate::app::{App, PAGE_SIZE};
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::state::gui_client_events::GuiClientEvent;
+use mbv_client_core::{App, PAGE_SIZE};
 
 /// One group's album list in the store (design D5): a group's first selection
 /// starts its fetch, a loaded list lives for the session, and a failed list
@@ -62,7 +62,7 @@ pub(crate) fn install_library_collection(
 /// D1): the pass is the GUI core's, so the collection install reaches it by
 /// handing the core the App it holds.
 fn run_destination_open(app: &mut App, gui: &mut GuiClientState, kind: GuiDestinationKind) {
-    let mut core = crate::gui::GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
+    let mut core = crate::gui::GuiCore::new(std::mem::replace(app, mbv_client_core::handoff_app()));
     // The caller's own state moves into the core and back, so the pass sees
     // the selection it just installed and the caller keeps the state.
     *core.gui_state_mut() = std::mem::take(gui);

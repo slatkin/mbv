@@ -83,7 +83,7 @@ impl Model {
                     self.app.select_audiobookshelf_book_bucket(position);
                 }
                 AudiobookshelfBookMove::ChapterFocus(selection) => {
-                    crate::app::App::set_audiobookshelf_book_chapter_focus(selection);
+                    mbv_client_core::App::set_audiobookshelf_book_chapter_focus(selection);
                 }
             },
             ShellRequest::AudiobookshelfBookIntent(intent) => match intent {

@@ -112,6 +112,11 @@ impl App {
 }
 
 /// The server-bytes stand-in for a test's decoded image: its PNG encode.
+///
+/// # Panics
+///
+/// Panics when the in-memory PNG encode or the resulting sniff fails, which
+/// neither can for an encoded image on a memory cursor.
 #[cfg(any(test, feature = "test"))]
 #[must_use]
 pub fn test_source(img: &image::DynamicImage) -> SourceImage {

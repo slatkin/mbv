@@ -18,10 +18,10 @@ use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item_f
 use super::ensure::catalog_unloaded;
 use super::entry_list::picked_or_first;
 use super::tabs::GuiDestinationKind;
-use crate::app::App;
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
+use mbv_client_core::dispatch::notify::ToastSeverity;
 
 /// The GUI Library's Audiobooks selection (row 9.1): per book library, the
 /// book the Hero shows, by stable `library_item_id`. The TUI's own resting
@@ -103,7 +103,7 @@ pub(in crate::gui::gui_library) fn open_abs(
     clear_abs_catalog_failed(app, lib_idx);
     // The ordered load pass is the GUI core's, so the open step hands the
     // core the App it holds.
-    let mut core = GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
+    let mut core = GuiCore::new(std::mem::replace(app, mbv_client_core::handoff_app()));
     *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
     *gui = std::mem::take(core.gui_state_mut());

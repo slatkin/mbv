@@ -2,7 +2,7 @@ use mbv_ui_msg::ShellRequest;
 
 #[test]
 fn quit_request_sets_shell_quit_and_unknown_navigation_is_forwarded() {
-    let mut model = crate::tui::Model::new(crate::app::tests::make_app_stub());
+    let mut model = crate::tui::Model::new(mbv_client_core::tests::make_app_stub());
     let mut quit = false;
 
     assert!(

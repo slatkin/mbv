@@ -31,9 +31,9 @@ use super::collection::{GuiCollectionTarget, GuiCollections};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One entry's stable identity across every list view and every

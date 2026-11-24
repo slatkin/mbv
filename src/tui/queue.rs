@@ -1,7 +1,7 @@
 use super::Model;
 use super::{PanelFocus, QueueLink};
-use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{FooterPill, QueueSurfaceProjection};
+use mbv_client_core::dispatch::notify::ToastSeverity;
+use mbv_client_core::{FooterPill, QueueSurfaceProjection};
 use mbv_components::QueueComponent;
 use mbv_tui_support::ToRatatui;
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -34,7 +34,7 @@ impl Model {
         if self.app.visual_slot_shown() {
             let resizing = self.refresh_resize_drag_hold();
 
-            let record = crate::app::state::projection::card::refresh_queue_card_image(
+            let record = mbv_client_core::state::projection::card::refresh_queue_card_image(
                 &mut self.app,
                 resizing,
             );
@@ -61,7 +61,7 @@ impl Model {
     /// it once the hold lifts.
     pub(in crate::tui) fn ensure_queue_card_title_overlay(
         &mut self,
-        record: &crate::app::state::projection::card::QueueTitleRecord,
+        record: &mbv_client_core::state::projection::card::QueueTitleRecord,
         resizing: bool,
     ) {
         self.app.set_queue_card_plain_key(record.base_key.clone());

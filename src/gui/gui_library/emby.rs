@@ -27,10 +27,10 @@ use mbv_ui_model::feed::FeedHomeVideoTarget;
 use super::collection::{GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet};
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
-use crate::app::App;
-use crate::app::state::gui_client_events::GuiClientEvent;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
+use mbv_client_core::state::gui_client_events::GuiClientEvent;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 
 /// One plain Emby library's root list in the store (row 8.1): a library's
@@ -239,7 +239,7 @@ pub(in crate::gui::gui_library) fn open_emby(
     }
     // The ordered load pass is the GUI core's, so the open step hands the core
     // the App and the state it holds, and takes both back.
-    let mut core = GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
+    let mut core = GuiCore::new(std::mem::replace(app, mbv_client_core::handoff_app()));
     *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Library { lib_idx });
     *gui = std::mem::take(core.gui_state_mut());

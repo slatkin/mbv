@@ -279,7 +279,7 @@ impl Model {
             && library.tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
         {
             self.acknowledge_home_latest(
-                crate::app::state::playback::DestinationLatestSource::Emby(
+                mbv_client_core::state::playback::DestinationLatestSource::Emby(
                     library.library.id.clone(),
                 ),
             );
@@ -512,7 +512,7 @@ impl Model {
             context.upcoming_failed = self.app.tv_upcoming_fetch_failed(&library_id);
         }
         let latest_source =
-            crate::app::state::playback::DestinationLatestSource::Emby(library_id.clone());
+            mbv_client_core::state::playback::DestinationLatestSource::Emby(library_id.clone());
         if tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
             && !self
                 .acknowledged_home_latest_sources

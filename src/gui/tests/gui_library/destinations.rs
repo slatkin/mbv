@@ -88,7 +88,7 @@ fn the_current_tab_names_the_movies_destination() {
 /// nothing else.
 #[test]
 fn a_music_items_row_menu_leaves_out_the_played_toggle() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let app = app_with_stored_groups(
         vec![stored_album(
             "alb-ill",
@@ -130,8 +130,12 @@ fn record_open(url: &str) {
 /// the window — reaches no opener.
 #[test]
 fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
-    let _guard = crate::app::test_seams::OPEN_URL_TEST_LOCK.lock().unwrap();
-    *crate::app::test_seams::OPEN_URL_OVERRIDE.lock().unwrap() = Some(record_open);
+    let _guard = mbv_client_core::test_seams::OPEN_URL_TEST_LOCK
+        .lock()
+        .unwrap();
+    *mbv_client_core::test_seams::OPEN_URL_OVERRIDE
+        .lock()
+        .unwrap() = Some(record_open);
     let mut app = make_app_stub();
     apply_gui_library_command(
         &mut app,
@@ -145,7 +149,9 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
             url: "javascript:alert(1)".to_string(),
         },
     );
-    *crate::app::test_seams::OPEN_URL_OVERRIDE.lock().unwrap() = None;
+    *mbv_client_core::test_seams::OPEN_URL_OVERRIDE
+        .lock()
+        .unwrap() = None;
 
     assert_eq!(
         *OPENED.lock().unwrap(),
@@ -159,7 +165,7 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
 /// start, so the next window does not report it again.
 #[test]
 fn an_interrupted_art_retry_comes_due_in_the_window_that_holds_it() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let start = std::time::Instant::now();
     app.interrupt_card_image_fetch_for_test("alb-1:P");

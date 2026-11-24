@@ -74,6 +74,7 @@ impl Clone for GuiClientEventSender {
 
 /// The Client-only fetch channel: the worker senders, and the receiver the
 /// `App` that owns it drains.
+#[derive(Debug)]
 pub struct GuiClientEvents {
     sender: GuiClientEventSender,
     /// The receiver. The `App` holds the one copy, and every GUI Client core
@@ -84,6 +85,7 @@ pub struct GuiClientEvents {
 impl GuiClientEvents {
     /// A fresh channel with no event in flight. A result wakes the Client
     /// through `waker`, as a library event does.
+    #[must_use]
     pub fn new(waker: ClientWaker) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {

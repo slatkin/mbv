@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::make_app_stub;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::HelpComponent;
 
 #[test]

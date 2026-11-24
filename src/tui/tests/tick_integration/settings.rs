@@ -1,9 +1,9 @@
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::dispatch::action::NavigationIntent;
-use crate::app::input::router::RouterOutcome;
-use crate::app::tests::make_app_stub;
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::dispatch::action::NavigationIntent;
+use mbv_client_core::input::router::RouterOutcome;
+use mbv_client_core::tests::make_app_stub;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
 

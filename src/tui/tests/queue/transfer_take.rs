@@ -13,14 +13,14 @@ use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 use mbv_ui_model::confirm::ConfirmAction;
 use mbv_ui_model::overlay::OverlayRequest;
 
-use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::panel_targets::PanelTarget;
-use crate::app::state::queue_transfer::QueueTransferDirection;
-use crate::app::tests::{make_audio_items, make_local_daemon_app_stub_with_cmd_rx_and_compat};
 use crate::tui::tests::queue::transfer_handoff::{
     PROBE_LINK, applied, confirm_key, hand_off_key as transfer_key, peer_compat, peer_replace,
     peer_session, peer_snapshot, staged_probe_connect, stop_sent_to,
 };
+use mbv_client_core::dispatch::notify::ToastSeverity;
+use mbv_client_core::state::panel_targets::PanelTarget;
+use mbv_client_core::state::queue_transfer::QueueTransferDirection;
+use mbv_client_core::tests::{make_audio_items, make_local_daemon_app_stub_with_cmd_rx_and_compat};
 
 /// The local Owner's negotiated compatibility for the copy: a real Owner
 /// advertises the start-position capability from its Hello (task 2.3); the
@@ -173,7 +173,7 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
     // scenario "Take from an unconnected peer", plus the probe-stop contract
     // (row 8.1): the source Stop reaches the probe link the transfer opened
     // — never `self.player` — and the settlement closes that link.
-    let _guard = crate::app::test_seams::DIRECT_CONNECT_TEST_LOCK
+    let _guard = mbv_client_core::test_seams::DIRECT_CONNECT_TEST_LOCK
         .lock()
         .unwrap();
     let (mut app, local_cmd_rx) =
@@ -186,7 +186,7 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
     probe.update_status(|status| status.position_ticks = 420_000_000);
     let (_dropped_tx, probe_event_rx) = mpsc::channel();
     *PROBE_LINK.lock().unwrap() = Some((probe, probe_event_rx));
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = Some(staged_probe_connect);
     app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
@@ -279,7 +279,7 @@ fn take_from_an_unconnected_peer_stops_the_probe_after_local_observes_and_stays_
             && !app.has_remote_queue_for_test(),
         "the settled Take leaves no staged link and the Client stays unconnected"
     );
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = None;
 }
@@ -593,7 +593,7 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
     // Review P2 (row 8.1): the dead link is the peer's probe — the report
     // must name the peer, not the local Owner the settlement's own link
     // loss names.
-    let _guard = crate::app::test_seams::DIRECT_CONNECT_TEST_LOCK
+    let _guard = mbv_client_core::test_seams::DIRECT_CONNECT_TEST_LOCK
         .lock()
         .unwrap();
     let (mut app, local_cmd_rx) =
@@ -604,7 +604,7 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
     probe.set_disconnected_for_test(true);
     let (_dropped_tx, probe_event_rx) = mpsc::channel();
     *PROBE_LINK.lock().unwrap() = Some((probe, probe_event_rx));
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = Some(staged_probe_connect);
     app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
@@ -640,7 +640,7 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
         !app.pending_queue_transfer_for_test() && !app.queue_transfer_is_staged_for_test(),
         "the dead probe arms nothing"
     );
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = None;
 }

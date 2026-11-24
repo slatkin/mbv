@@ -9,8 +9,8 @@
 //! encoding is `crate::tui::image_protocol`.
 
 use super::Model;
-use crate::app::App;
 use image::GenericImageView;
+use mbv_client_core::App;
 use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 
 /// What one projection pass decided about a Library panel hero (task 5.10,

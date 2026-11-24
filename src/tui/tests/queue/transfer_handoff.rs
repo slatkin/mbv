@@ -5,12 +5,14 @@
 use std::sync::Mutex;
 use std::sync::mpsc;
 
-use crate::app::App;
-use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::panel_targets::PanelTarget;
-use crate::app::state::queue_transfer::QueueTransferDirection;
-use crate::app::tests::{make_audio_items, make_items, make_local_daemon_app_stub_with_cmd_rx};
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::App;
+use mbv_client_core::dispatch::notify::ToastSeverity;
+use mbv_client_core::state::panel_targets::PanelTarget;
+use mbv_client_core::state::queue_transfer::QueueTransferDirection;
+use mbv_client_core::tests::{
+    make_audio_items, make_items, make_local_daemon_app_stub_with_cmd_rx,
+};
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
 use mbv_ctrl::{
     CTRL_PROTOCOL_VERSION, CtrlCmd, CtrlCompatibility, QueueOpId, QueueOpOutcome, UnifiedQueueSlot,
@@ -197,7 +199,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
     // "Hand off connects the Client to the peer": the unconnected flow opens
     // the peer link to read its queue, asks, attaches on confirm, and stops
     // local only in the tick that observes the start slot playing.
-    let _guard = crate::app::test_seams::DIRECT_CONNECT_TEST_LOCK
+    let _guard = mbv_client_core::test_seams::DIRECT_CONNECT_TEST_LOCK
         .lock()
         .unwrap();
     let items = make_audio_items(3);
@@ -212,7 +214,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
         .send(applied(1, peer_snapshot(&items, 0, true)))
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = Some(staged_probe_connect);
     app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
@@ -299,7 +301,7 @@ fn hand_off_confirms_then_attaches_and_stops_local_only_after_the_peer_observes(
         stop_sent_to(&local_cmd_rx),
         "local stops only after the peer observed the start slot"
     );
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = None;
 }
@@ -310,7 +312,7 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
     // scenario "Peer already holds a queue": cancel leaves both queues and
     // both playbacks unchanged, and the link opened to read the peer queue
     // is dropped — the Client stays unconnected.
-    let _guard = crate::app::test_seams::DIRECT_CONNECT_TEST_LOCK
+    let _guard = mbv_client_core::test_seams::DIRECT_CONNECT_TEST_LOCK
         .lock()
         .unwrap();
     let (mut app, local_cmd_rx) = hand_off_source_app(make_audio_items(2));
@@ -322,7 +324,7 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
         .send(applied(1, peer_snapshot(&make_audio_items(1), 0, true)))
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = Some(staged_probe_connect);
     app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
@@ -356,7 +358,7 @@ fn cancelling_the_confirm_drops_the_opened_link_and_sends_nothing() {
         "cancel sends nothing to the peer"
     );
     assert!(!stop_sent_to(&local_cmd_rx), "local keeps playing");
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = None;
 }
@@ -503,7 +505,7 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
     // the Owner-output hand-back — the local Owner may be the transfer source
     // playing through a Cast or Emby Session output, and its Stop must wait
     // for the settlement's observation, not ride the attach.
-    let _guard = crate::app::test_seams::DIRECT_CONNECT_TEST_LOCK
+    let _guard = mbv_client_core::test_seams::DIRECT_CONNECT_TEST_LOCK
         .lock()
         .unwrap();
     let items = make_audio_items(3);
@@ -520,7 +522,7 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
         .send(applied(1, peer_snapshot(&items, 0, true)))
         .unwrap();
     *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = Some(staged_probe_connect);
     app.seed_panel_targets_for_test(vec![PanelTarget::Emby(Box::new(peer_session(
@@ -554,7 +556,7 @@ fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
         1,
         "the only local stop is the settlement's source stop"
     );
-    *crate::app::test_seams::DIRECT_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DIRECT_CONNECT_OVERRIDE
         .lock()
         .unwrap() = None;
 }

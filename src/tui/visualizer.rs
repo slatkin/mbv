@@ -1,4 +1,4 @@
-use crate::app::App;
+use mbv_client_core::App;
 use mbv_tui_support::ToRatatui;
 use mbv_visualizer::StereoSample;
 use ratatui::Frame;

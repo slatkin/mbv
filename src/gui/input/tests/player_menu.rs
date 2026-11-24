@@ -5,10 +5,10 @@
 
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest};
 
-use crate::app::make_app_stub;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::gui::input::GuiInput;
+use mbv_client_core::make_app_stub;
 
 /// One key, delivered through the GUI entry with no focused leaf.
 fn gui_key(core: &mut GuiCore, key: Key) {

@@ -97,7 +97,7 @@ impl Model {
             .collect();
         let capabilities = items
             .iter()
-            .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
+            .map(mbv_client_core::state::context_menu_capabilities::emby_item_capabilities)
             .collect();
         self.app.open_context_menu_for_selection(
             &items,
@@ -213,8 +213,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_items};
-    use crate::app::{LibEvent, ModelContentEvent};
+    use mbv_client_core::tests::{make_app_stub, make_items};
+    use mbv_client_core::{LibEvent, ModelContentEvent};
     use mbv_emby_model::test_support::make_item;
 
     fn target(id: &str) -> HomeItemTarget {
@@ -263,11 +263,11 @@ mod tests {
 
     #[test]
     fn continue_watching_effects_use_the_resolved_item_target() {
-        let _guard = crate::app::config::TestStateDirGuard::new();
+        let _guard = mbv_client_core::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         // Row 5.3: the enqueue is an Append owner op, so the resolved item is
         // observed on the wire rather than in an optimistic Client write.
-        let cmd_rx = crate::app::tests::live_owner_channel(&mut app);
+        let cmd_rx = mbv_client_core::tests::live_owner_channel(&mut app);
         let mut model = Model::new(app);
         model.app.seed_home_continue_items_for_test(make_items(3));
 
@@ -330,7 +330,7 @@ mod tests {
         };
         let mut movie = make_item("Movie", "Movie");
         movie.date_added = date_added_iso(i64::try_from(now - 20 * day).unwrap());
-        let source = crate::app::state::playback::DestinationLatestSource::Emby("lib".into());
+        let source = mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into());
 
         model
             .app
@@ -359,7 +359,7 @@ mod tests {
         old_movie.date_added = date_added_iso(i64::try_from(current - 20 * day).unwrap());
         let episode = podcast_episode("episode", current - 2 * day);
         model.app.accept_home_recently_added(
-            crate::app::state::playback::DestinationLatestSource::Emby("lib".into()),
+            mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             model.app.emby_setup_generation(),
             vec![
                 QueueItem::Emby(Box::new(movie)),
@@ -367,7 +367,9 @@ mod tests {
             ],
         );
         model.app.accept_home_recently_added(
-            crate::app::state::playback::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
+            mbv_client_core::state::playback::DestinationLatestSource::Audiobookshelf(
+                "pod-lib".into(),
+            ),
             model.app.audiobookshelf_setup_generation(),
             vec![QueueItem::Audiobookshelf(
                 mbv_queue::AudiobookshelfItem::Episode(episode),
@@ -442,11 +444,11 @@ mod tests {
     /// marker) appeared (#930 follow-up).
     #[test]
     fn home_load_at_launch_with_a_cached_emby_client_arms_the_emby_recently_added_fetch() {
-        let _guard = crate::app::config::TestStateDirGuard::new();
+        let _guard = mbv_client_core::config::TestStateDirGuard::new();
         let http = mbv_net::mock_http::MockHttp::new();
-        let mut config = crate::app::config::Config {
+        let mut config = mbv_client_core::config::Config {
             server_url: "http://127.0.0.1:1".into(),
-            ..crate::app::config::Config::default()
+            ..mbv_client_core::config::Config::default()
         };
         let client = mbv_emby::EmbyClient::new(config.clone()).with_test_agent(http.agent());
         config.emby_setup = Some(mbv_config::EmbySetup::new("http://127.0.0.1:1", "user"));
@@ -474,7 +476,9 @@ mod tests {
             }) => {
                 assert_eq!(
                     source,
-                    crate::app::state::playback::DestinationLatestSource::Emby("lib-movies".into())
+                    mbv_client_core::state::playback::DestinationLatestSource::Emby(
+                        "lib-movies".into()
+                    )
                 );
                 assert_eq!(items.len(), 1);
             }
@@ -493,7 +497,9 @@ mod tests {
         let current = model.home_latest_launch_window.current;
         let episode = podcast_episode("episode", current - 24 * 60 * 60);
         model.app.accept_home_recently_added(
-            crate::app::state::playback::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
+            mbv_client_core::state::playback::DestinationLatestSource::Audiobookshelf(
+                "pod-lib".into(),
+            ),
             model.app.audiobookshelf_setup_generation(),
             vec![QueueItem::Audiobookshelf(
                 mbv_queue::AudiobookshelfItem::Episode(episode.clone()),
@@ -523,7 +529,7 @@ mod tests {
         let current = model.home_latest_launch_window.current;
         let day = 24 * 60 * 60;
         model.app.accept_home_recently_added(
-            crate::app::state::playback::DestinationLatestSource::Emby("lib".into()),
+            mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             model.app.emby_setup_generation(),
             vec![QueueItem::Emby(Box::new(recent_movie(
                 "movie",

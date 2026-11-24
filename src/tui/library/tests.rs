@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::render_fixtures::make_movie_app;
+use mbv_client_core::tests::render_fixtures::make_movie_app;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
@@ -9,7 +9,7 @@ use mbv_ui_msg::OverlayId;
 
 /// The two-panel destination a mouse-eligibility test drives: the Emby
 /// library tab active, Library focus, both panels shown.
-fn seed_library_destination(app: &mut crate::app::App) {
+fn seed_library_destination(app: &mut mbv_client_core::App) {
     app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app.set_panel_focus_for_test(PanelFocus::Library);
     app.set_panel_mode_for_test(PanelMode::Both);

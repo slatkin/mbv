@@ -3,8 +3,8 @@
 //! last one or the owner reports none. The Owner is the answered-op stub and
 //! every answer is injected ahead of the call, so nothing waits on a clock.
 
-use crate::app::tests::{emby_unified_state, make_items};
 use crate::tui::tests::queue::queue_op::{answered_local_daemon_app, inject_player_rx};
+use mbv_client_core::tests::{emby_unified_state, make_items};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::QueueItem;

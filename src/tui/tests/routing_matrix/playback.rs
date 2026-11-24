@@ -1,10 +1,10 @@
 //! Routing matrix: playback precedence and policy rows.
 
 use super::support::*;
-use crate::app::dispatch::action::{PlaybackIntent, VisualIntent};
-use crate::app::input::resolver::KeyChord;
-use crate::app::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
-use crate::app::tests::gui_client_capabilities;
+use mbv_client_core::dispatch::action::{PlaybackIntent, VisualIntent};
+use mbv_client_core::input::resolver::KeyChord;
+use mbv_client_core::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
+use mbv_client_core::tests::gui_client_capabilities;
 use mbv_ui_msg::{ComponentId, Key, KeyModifiers, Msg, ShellRequest, TrackChipKind};
 
 #[test]
@@ -165,12 +165,12 @@ fn visualizer_resolves_to_router_command() {
 #[test]
 fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
     let snapshot = RouterSnapshot {
-        playback: crate::app::input::RouterPlaybackState {
+        playback: mbv_client_core::input::RouterPlaybackState {
             player_active: true,
             ..Default::default()
         },
-        overlays: crate::app::input::RouterOverlayState {
-            focus: crate::app::input::OverlayFocus::Blocking,
+        overlays: mbv_client_core::input::RouterOverlayState {
+            focus: mbv_client_core::input::OverlayFocus::Blocking,
             ..Default::default()
         },
         ..RouterSnapshot::default()
@@ -206,8 +206,8 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
 #[test]
 fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     let snapshot = RouterSnapshot {
-        playback: crate::app::input::RouterPlaybackState {
-            remote_target: crate::app::input::RemoteControlTarget::DirectRemote,
+        playback: mbv_client_core::input::RouterPlaybackState {
+            remote_target: mbv_client_core::input::RemoteControlTarget::DirectRemote,
             idle_feed_link_available: true,
             ..Default::default()
         },
@@ -226,7 +226,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
 
     let queue_only_idle = RouterSnapshot {
         panel_mode: mbv_ui_model::settings::PanelMode::QueueOnly,
-        playback: crate::app::input::RouterPlaybackState {
+        playback: mbv_client_core::input::RouterPlaybackState {
             queue_only_idle: true,
             ..snapshot.playback
         },
@@ -247,7 +247,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     // present + idle fact in the two-panel layout is suppressed too.
     let both_idle = RouterSnapshot {
         panel_mode: mbv_ui_model::settings::PanelMode::Both,
-        playback: crate::app::input::RouterPlaybackState {
+        playback: mbv_client_core::input::RouterPlaybackState {
             queue_only_idle: true,
             ..snapshot.playback
         },
@@ -268,7 +268,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     // displays the feed), so the link opens.
     let library_only_idle = RouterSnapshot {
         panel_mode: mbv_ui_model::settings::PanelMode::LibraryOnly,
-        playback: crate::app::input::RouterPlaybackState {
+        playback: mbv_client_core::input::RouterPlaybackState {
             queue_only_idle: false,
             ..snapshot.playback
         },

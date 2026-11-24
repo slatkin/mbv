@@ -6,7 +6,7 @@
 //! tick-integration or render tests.
 
 use super::*;
-use crate::app::tests::render_fixtures::make_music_group_app;
+use mbv_client_core::tests::render_fixtures::make_music_group_app;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::library_panel::owner::LibraryContentOwner;
 use mbv_emby_model::test_support::make_item;
@@ -242,8 +242,8 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
 // inactive Music owner's cursor/scroll, since the panel retains an owner
 // while its library stays in the catalog. ─────────────────────────────────
 
-fn music_library_app_with_three_albums() -> crate::app::App {
-    let mut app = crate::app::tests::make_app_stub();
+fn music_library_app_with_three_albums() -> mbv_client_core::App {
+    let mut app = mbv_client_core::tests::make_app_stub();
     app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app.set_panel_focus_for_test(mbv_ui_model::settings::PanelFocus::Library);
     app.seed_grouped_music_levels_for_test();
@@ -504,8 +504,8 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
 // landing path (Inline Search activation and `NavigateLanding::Album` both
 // funnel through it). ─────────────────────────────────────────────────────
 
-fn music_two_artist_app() -> crate::app::App {
-    let mut app = crate::app::tests::make_app_stub();
+fn music_two_artist_app() -> mbv_client_core::App {
+    let mut app = mbv_client_core::tests::make_app_stub();
     app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app.set_panel_focus_for_test(mbv_ui_model::settings::PanelFocus::Library);
     app.seed_grouped_music_levels_for_test();

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::{
+use mbv_client_core::tests::{
     live_owner_channel, make_app_stub, make_items, make_remote_app_stub_with_cmd_rx,
 };
 use mbv_emby_model::test_support::make_item;
@@ -8,7 +8,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 #[test]
 fn queue_rows_follow_readopted_owner_snapshot_with_same_wire_revision_issue_836() {
-    let mut first = crate::app::tests::emby_unified_state(&make_items(2), 0);
+    let mut first = mbv_client_core::tests::emby_unified_state(&make_items(2), 0);
     first.active_slot = None;
     first.revision = 7;
     let mut app = make_app_stub();
@@ -19,12 +19,12 @@ fn queue_rows_follow_readopted_owner_snapshot_with_same_wire_revision_issue_836(
     let component = queue_component(&model);
     assert_eq!(component.projected_row_states().len(), 2);
 
-    let mut replacement = crate::app::tests::emby_unified_state(&make_items(1), 0);
+    let mut replacement = mbv_client_core::tests::emby_unified_state(&make_items(1), 0);
     replacement.active_slot = None;
     replacement.revision = 7;
     model.app.readopt_local_queue_for_test(
         &replacement,
-        crate::app::state::queue_view::AdoptCause::Replacement,
+        mbv_client_core::state::queue_view::AdoptCause::Replacement,
     );
     model.sync_queue();
 
@@ -35,7 +35,7 @@ fn queue_rows_follow_readopted_owner_snapshot_with_same_wire_revision_issue_836(
 #[test]
 fn queue_projection_uses_adopted_pending_transition_without_progress() {
     // Owns queue-canonical-list, "Queue projection is bounded presentation data".
-    let mut snapshot = crate::app::tests::emby_unified_state(&make_items(2), 0);
+    let mut snapshot = mbv_client_core::tests::emby_unified_state(&make_items(2), 0);
     snapshot.in_flight_transition = Some(mbv_ctrl::TransitionSummary {
         request_id: 1,
         generation: 1,
@@ -104,18 +104,18 @@ fn deleting_before_playing_row_keeps_highlight_on_playing_slot() {
     // item as playing.
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.seed_local_queue_snapshot_for_test(&crate::app::tests::emby_unified_state(&items, 1));
+    app.seed_local_queue_snapshot_for_test(&mbv_client_core::tests::emby_unified_state(&items, 1));
     app.seed_playing_status_for_test(1, items.len());
 
     // The owner applied the delete of the first row: the playing slot
     // (101) is now first. The status has not refreshed yet —
     // `current_idx` still names the stale ordinal 1.
-    let mut after_delete = crate::app::tests::emby_unified_state(&items[1..], 0);
+    let mut after_delete = mbv_client_core::tests::emby_unified_state(&items[1..], 0);
     after_delete.slots[0].slot_id = 101;
     after_delete.active_slot = Some(101);
     app.readopt_local_queue_for_test(
         &after_delete,
-        crate::app::state::queue_view::AdoptCause::OwnAnswer,
+        mbv_client_core::state::queue_view::AdoptCause::OwnAnswer,
     );
 
     let displayed = app.displayed_queue_playback_state();
@@ -144,17 +144,17 @@ fn deleting_playing_row_after_ordinal_shift_still_asks_now_playing_confirm() {
     // observed active slot by identity.
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.seed_local_queue_snapshot_for_test(&crate::app::tests::emby_unified_state(&items, 1));
+    app.seed_local_queue_snapshot_for_test(&mbv_client_core::tests::emby_unified_state(&items, 1));
     app.seed_playing_status_for_test(1, items.len());
 
     // Same post-delete adoption as the highlight regression: the playing
     // slot (101) is now first while `current_idx` still names ordinal 1.
-    let mut after_delete = crate::app::tests::emby_unified_state(&items[1..], 0);
+    let mut after_delete = mbv_client_core::tests::emby_unified_state(&items[1..], 0);
     after_delete.slots[0].slot_id = 101;
     after_delete.active_slot = Some(101);
     app.readopt_local_queue_for_test(
         &after_delete,
-        crate::app::state::queue_view::AdoptCause::OwnAnswer,
+        mbv_client_core::state::queue_view::AdoptCause::OwnAnswer,
     );
 
     app.remove_from_queue_for_test(0);
@@ -201,7 +201,7 @@ fn progress_only_change_patches_one_row_without_rebuilding_slots_review_u17_1() 
 fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
     // A replacement QueueView restarts its private revision mint; lineage
     // still distinguishes its rows from the prior owner's queue.
-    let mut state = crate::app::tests::emby_unified_state(&make_items(2), 0);
+    let mut state = mbv_client_core::tests::emby_unified_state(&make_items(2), 0);
     state.active_slot = None;
     state.revision = 7;
     let mut app = make_app_stub();
@@ -212,7 +212,7 @@ fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
 
     let mut replacement_items = make_items(2);
     replacement_items[0].id = "replacement".into();
-    let mut replacement = crate::app::tests::emby_unified_state(&replacement_items, 0);
+    let mut replacement = mbv_client_core::tests::emby_unified_state(&replacement_items, 0);
     replacement.active_slot = None;
     replacement.revision = 7;
     replacement.lineage = mbv_queue::QueueLineage(1);
@@ -233,7 +233,7 @@ fn queue_projection_fetches_now_playing_image_once_and_none_on_repaint() {
     // synchronously — the counters cannot see a duplicate spawn; the
     // reservation set and counters together pin the request count.
     let mut app = make_app_stub();
-    let items = crate::app::tests::make_items(2);
+    let items = mbv_client_core::tests::make_items(2);
     app.seed_playback_queue_for_test(
         items
             .into_iter()
@@ -364,7 +364,7 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
     // the visible queue is Local, so the Local undo entry is consumed and
     // its inverse edit is sent to the Local owner instead of flashing a
     // spurious remote-undo-unsupported error.
-    use crate::app::state::playback::UndoEntry;
+    use mbv_client_core::state::playback::UndoEntry;
     let mut app = make_app_stub();
     let _cmd_rx = live_owner_channel(&mut app);
     app.seed_playback_queue_for_test(emby_items(2), 0);
@@ -403,7 +403,7 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
 // it silently); the one `App` dispatch is the behaviour both now share.
 #[test]
 fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
-    use crate::app::state::playback::UndoEntry;
+    use mbv_client_core::state::playback::UndoEntry;
     let (app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(2));
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     let mut app = app;

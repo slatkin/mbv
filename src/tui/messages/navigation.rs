@@ -1,5 +1,5 @@
 use super::{DestinationLatestSource, ShellRequest, ToastSeverity};
-use crate::app::state::queue_transfer::QueueTransferDirection;
+use mbv_client_core::state::queue_transfer::QueueTransferDirection;
 
 impl super::super::Model {
     pub(super) fn handle_navigation_request(

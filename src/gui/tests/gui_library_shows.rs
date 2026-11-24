@@ -8,8 +8,8 @@
 
 use super::*;
 
-use crate::app::config::TestStateDirGuard;
 use crate::gui::gui_library::GuiSectionRequest;
+use mbv_client_core::config::TestStateDirGuard;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use rstest::rstest;
@@ -300,7 +300,7 @@ fn the_series_heroes_art_box_follows_the_fetched_images_own_aspect() {
     app.insert_cached_image_for_test(
         &mbv_images::series_image_cache_key("series-a", &["Primary"]),
         mbv_images::CachedImage {
-            source: Some(crate::app::queue_card_artwork::test_source(&still)),
+            source: Some(mbv_client_core::queue_card_artwork::test_source(&still)),
             img: Some(still),
             cover_box: None,
             applied_logo_key: None,

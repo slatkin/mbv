@@ -89,6 +89,12 @@ pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {
     save_ui_config(ui);
 }
 
+/// Writes the `display` section of the config file, keeping every other key.
+///
+/// # Panics
+///
+/// Panics when the config file's `display` key holds something other than a
+/// table.
 pub fn save_ui_config(ui: &UiConfig) {
     let path = mbv_config::config_path();
     let mut doc: toml::Value = std::fs::read_to_string(&path)

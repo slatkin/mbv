@@ -6,9 +6,9 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::App;
-use crate::app::tests::make_app_stub;
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::App;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};

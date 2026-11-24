@@ -58,7 +58,7 @@ impl Model {
     /// selected, on refresh while it is selected, and on launch restoration
     /// on Latest — never in the startup catalog loop.
     pub(in crate::tui) fn spawn_audiobookshelf_latest_shelves(&self, library_id: &str) {
-        crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
+        mbv_client_core::dispatch::session::service_startup::start_audiobookshelf_shelves(
             self.app.config_snapshot(),
             self.app.audiobookshelf_setup_generation(),
             library_id.to_string(),
@@ -91,7 +91,7 @@ impl Model {
         if selected_latest {
             self.app.ensure_audiobookshelf_latest_shelf(&library_id);
         }
-        let source = crate::app::state::playback::DestinationLatestSource::Audiobookshelf(
+        let source = mbv_client_core::state::playback::DestinationLatestSource::Audiobookshelf(
             library_id.clone(),
         );
         if selected_latest && !self.acknowledged_home_latest_sources.contains(&source) {

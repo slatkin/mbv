@@ -1,5 +1,5 @@
 use super::Model;
-use crate::app::dispatch::session::daemon_lost::DaemonLostAnswer;
+use mbv_client_core::dispatch::session::daemon_lost::DaemonLostAnswer;
 use mbv_components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
 use mbv_ui_model::confirm::ConfirmAction;
 use mbv_ui_msg::{ComponentId, Key, KeyEvent, ModalId};

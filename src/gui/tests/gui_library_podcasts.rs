@@ -115,7 +115,7 @@ fn projection_app() -> App {
 /// description, and the parent show's Square cover.
 #[test]
 fn all_merges_two_shows_in_date_order_with_the_default_hero() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
     let projection = gui_podcasts_projection(&mut app, 1);
@@ -194,7 +194,7 @@ fn all_merges_two_shows_in_date_order_with_the_default_hero() {
 /// rows.
 #[test]
 fn a_checked_show_scopes_the_rows_to_that_show() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
     toggle_show(&mut app, 1, "show-a");
@@ -222,7 +222,7 @@ fn a_checked_show_scopes_the_rows_to_that_show() {
 /// with the undated episode last.
 #[test]
 fn two_checked_shows_merge_their_episodes_in_date_order() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
     toggle_show(&mut app, 1, "show-a");
@@ -269,7 +269,7 @@ fn add_second_podcast_library(app: &mut App) {
 /// destination's load pass inert.
 #[test]
 fn a_collection_command_on_another_podcast_library_starts_no_load() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = podcast_app();
     add_second_podcast_library(&mut app);
 
@@ -299,7 +299,7 @@ fn a_collection_command_on_another_podcast_library_starts_no_load() {
 /// the merged list without a refetch.
 #[test]
 fn the_oldest_sort_puts_the_earliest_episode_first_with_undated_last() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
     set_gui_list_sort(&mut app, GuiSortTarget::Podcasts(1), GuiListSort::Oldest);
 
@@ -322,7 +322,7 @@ fn the_oldest_sort_puts_the_earliest_episode_first_with_undated_last() {
 /// projection paints All's merged rows and marks All checked.
 #[test]
 fn a_vanished_checked_show_falls_back_to_all() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
     toggle_show(&mut app, 1, "show-a");
     app.edit_audiobookshelf_browse_state_for_test(1, |state| {
@@ -354,7 +354,7 @@ fn a_vanished_checked_show_falls_back_to_all() {
 /// `Active` with its percent, and every other episode is `Ordinary`.
 #[test]
 fn the_rows_carry_the_played_and_resume_state() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
     app.seed_gui_podcast_progress_for_test(1, "show-a", "a-old", 300.0, false);
     app.seed_gui_podcast_progress_for_test(1, "show-a", "a-undated", 600.0, true);
@@ -401,7 +401,7 @@ fn the_episode_row_id_round_trips_through_its_encoding() {
 /// appends it.
 #[test]
 fn the_play_and_queue_commands_replace_and_append_under_the_admission() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
     let cmd_rx = super::live_owner_channel(&mut app);
     let row = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
@@ -458,7 +458,7 @@ fn the_play_and_queue_commands_replace_and_append_under_the_admission() {
 /// Audiobookshelf admission.
 #[test]
 fn a_denied_podcast_owner_flashes_the_owner_unavailable_toast() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
     let cmd_rx = super::live_owner_channel(&mut app);
     app.set_abs_admission_for_test(false);
@@ -495,7 +495,7 @@ fn a_denied_podcast_owner_flashes_the_owner_unavailable_toast() {
 /// pick as it was.
 #[test]
 fn stale_podcast_ids_change_nothing() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
     let cmd_rx = super::live_owner_channel(&mut app);
     let picked = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
@@ -552,7 +552,7 @@ fn stale_podcast_ids_change_nothing() {
 /// paints the audio media kind.
 #[test]
 fn a_podcast_row_shows_its_show_cover() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app();
     let server = app
         .audiobookshelf_server_url()

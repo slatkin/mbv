@@ -6,8 +6,8 @@ use crate::tui::test_support::{Terminal, TestBackend};
 use ratatui::layout::Rect;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::tests::make_app_stub;
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use mbv_render::arrangements::chrome::QUEUE_PLAYBACK_HEADER_ROWS;
 use mbv_tui_support::ToRatatui;
@@ -46,8 +46,8 @@ fn is_seek_fill(symbol: &str) -> bool {
 
 /// An app with active playback and a non-empty queue, in the given panel
 /// mode (mini view uses the ephemeral queue focus).
-fn active_app(panel_mode: PanelMode) -> crate::app::App {
-    let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
+fn active_app(panel_mode: PanelMode) -> mbv_client_core::App {
+    let mut app = mbv_client_core::tests::render_fixtures::make_queue_app(3);
     app.set_panel_mode_for_test(panel_mode);
     if panel_mode != PanelMode::Both {
         app.set_mini_view_focus_for_test(PanelFocus::Queue);
@@ -77,7 +77,7 @@ fn playback_intents(
 
 /// Draw one real shell frame (sync pass + `draw_frame`) and return the
 /// harness plus the panel's retained transport hit geometry.
-fn drawn_harness(app: crate::app::App, width: u16, height: u16) -> (TickHarness, Rect, Rect) {
+fn drawn_harness(app: mbv_client_core::App, width: u16, height: u16) -> (TickHarness, Rect, Rect) {
     let mut harness = TickHarness::new(app);
     crate::tui::test_support::set_terminal_size(harness.model_mut(), width, height);
     harness.model_mut().sync_mounted_surfaces();

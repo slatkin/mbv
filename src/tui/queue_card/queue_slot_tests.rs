@@ -12,8 +12,8 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui_image::picker::{Picker, ProtocolType};
 
-use crate::app::tests::make_app_stub;
 use crate::tui::Model;
+use mbv_client_core::tests::make_app_stub;
 
 const CARD_KEY: &str = "card:P";
 

@@ -5,10 +5,10 @@
 //! module.
 
 use super::*;
-use crate::app::state::events::AudiobookshelfEvent;
-use crate::app::state::playback::DestinationLatestSource;
-use crate::app::*;
 use crate::gui::test_support::*;
+use mbv_client_core::state::events::AudiobookshelfEvent;
+use mbv_client_core::state::playback::DestinationLatestSource;
+use mbv_client_core::*;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;

@@ -16,9 +16,9 @@
 use mbv_queue::TvContentMode;
 
 use super::tabs::GuiDestinationKind;
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// The GUI Library's Shows selection (design D12, D8): per Shows library, the
 /// selected series and the selected season. The season is never kept across a
@@ -81,7 +81,7 @@ pub(in crate::gui::gui_library) fn open_tv(
     }
     // The ordered load pass is the GUI core's, so the open step hands the
     // core the App it holds.
-    let mut core = GuiCore::new(std::mem::replace(app, crate::app::handoff_app()));
+    let mut core = GuiCore::new(std::mem::replace(app, mbv_client_core::handoff_app()));
     *core.gui_state_mut() = std::mem::take(gui);
     core.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
     *gui = std::mem::take(core.gui_state_mut());

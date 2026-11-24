@@ -18,7 +18,7 @@ fn drain_player_event(event: PlayerEvent, app: &mut App) {
 fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
     // Confirm records the slot to remove after playback stops; neither the
     // confirmation nor its Stopped event optimistically edits the Client view.
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(make_items(3), 0);
     // TrackChanged(0) activates slot 0, mirroring real playback where the
@@ -82,7 +82,7 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
 
 #[test]
 fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(make_items(1), 0);
     app.ask_confirm(ConfirmModal {
@@ -103,7 +103,7 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
 
 #[test]
 fn stopped_consume_keeps_the_client_view_until_the_owner_snapshot() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     // When the last item in the queue finishes, the player thread sends a
     // Stopped event (not TrackCompleted/TrackChanged) since there's no next
     // track to advance to. consume_audio must still remove it, mirroring how
@@ -239,7 +239,7 @@ fn a_video_consume_flag_is_ignored_when_video_consumption_is_disabled() {
 
 #[test]
 fn consuming_a_video_without_autosave_marks_queue_dirty() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(items, 0);
@@ -273,7 +273,7 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
 
 #[test]
 fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(items, 0);
@@ -306,7 +306,7 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
 
 #[test]
 fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_flag() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let local_items = make_items(2);
     let remote_items = make_items(2);
     let mut app = make_remote_app_stub(local_items.clone(), remote_items);
@@ -350,7 +350,7 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
 
 #[test]
 fn clients_hold_no_editable_queue_track_completed_audio_consume_keeps_view_until_snapshot() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(items, 0);
@@ -399,7 +399,7 @@ fn clients_hold_no_editable_queue_track_completed_audio_consume_keeps_view_until
 
 #[test]
 fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(items, 0);
@@ -434,7 +434,7 @@ fn multi_delete_including_active_confirms_whole_selection_before_any_removal() {
     // A multi-select delete is one operation: when it includes the
     // now-playing row, nothing is removed before the user answers the one
     // confirmation (issue: non-confirmable rows deleted before the modal).
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(make_items(3), 0);
     drain_player_event(
@@ -484,7 +484,7 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
     // Confirming the gated multi-delete stops playback and removes every
     // named slot in one owner edit from the resulting `Stopped` event; the
     // Client view still waits for the owner's snapshot.
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let cmd_rx = live_owner_channel(&mut app);
     app.seed_local_queue_emby_items_for_test(make_items(3), 0);
@@ -559,7 +559,7 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
 fn cancelled_multi_delete_with_active_removes_nothing() {
     // Esc on the gated multi-delete answers Cancel: no stop is recorded and
     // no row is removed.
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_local_queue_emby_items_for_test(make_items(3), 0);
     drain_player_event(

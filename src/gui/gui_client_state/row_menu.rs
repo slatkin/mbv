@@ -6,8 +6,8 @@ use mbv_queue::QueueSlotId;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuEntry};
 
 use super::overlay::{GuiOverlay, GuiRowMenu};
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 
 impl GuiCore {
     /// Open the GUI Client's row menu over a queue row. `targets` are the

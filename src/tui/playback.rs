@@ -84,7 +84,7 @@ mod tests {
         #[case] series_name: Option<&str>,
         #[case] expected_context: Option<&str>,
     ) {
-        let mut app = crate::app::tests::make_app_stub();
+        let mut app = mbv_client_core::tests::make_app_stub();
         app.seed_playback_output_for_test(Some(mbv_ctrl::OutputState::EmbySession {
             device_id: "device-1".to_string(),
             name: "Living Room TV".to_string(),
@@ -118,7 +118,7 @@ mod tests {
     fn foreign_emby_session_content_presents_its_own_transport_title() {
         use mbv_emby_model::test_support::make_item;
 
-        let mut app = crate::app::tests::make_app_stub();
+        let mut app = mbv_client_core::tests::make_app_stub();
         let mut loaded = make_item("Loaded Slot", "Movie");
         loaded.id = "loaded-slot".into();
         app.seed_local_queue_emby_items_for_test(vec![loaded], 0);
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn playback_chrome_request_routes_through_shell_authority() {
-        let app = crate::app::tests::make_app_stub();
+        let app = mbv_client_core::tests::make_app_stub();
         let mut model = Model::new(app);
         model.handle_playback_request(&PlaybackRequest::VolumeDelta(5));
         assert!(matches!(

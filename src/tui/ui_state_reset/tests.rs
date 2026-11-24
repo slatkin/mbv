@@ -5,10 +5,10 @@
 //! cancellation is owned by `tests/lifecycle/lifecycle_launch_restore.rs`.
 
 use super::*;
-use crate::app::state::playback::DestinationLatestSource;
-use crate::app::tests::render_fixtures::{make_movie_app, make_queue_app};
-use crate::app::{BrowseEvent, LibEvent};
 use mbv_audiobookshelf::AudiobookshelfLibrary;
+use mbv_client_core::state::playback::DestinationLatestSource;
+use mbv_client_core::tests::render_fixtures::{make_movie_app, make_queue_app};
+use mbv_client_core::{BrowseEvent, LibEvent};
 use mbv_components::QueueCursorUpdate;
 use mbv_components::emby_library_content::EmbyLibraryContent;
 use mbv_emby_model::test_support::make_item;
@@ -263,7 +263,7 @@ fn assert_saved_presentation_cleared(model: &Model) {
     assert_eq!(prefs["unrelated_future_key"], serde_json::json!("keep"));
     assert_eq!(
         model.app.newest_toast_severity(),
-        crate::app::dispatch::notify::ToastSeverity::Success
+        mbv_client_core::dispatch::notify::ToastSeverity::Success
     );
 }
 

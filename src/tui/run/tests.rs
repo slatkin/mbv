@@ -1,15 +1,15 @@
 use super::*;
-use crate::app::ModelContentEvent;
-use crate::app::dispatch::session::service_startup::AudiobookshelfCatalogOutcome;
-use crate::app::state::events::AudiobookshelfEvent;
-use crate::app::state::events::LibEvent;
-use crate::app::state::events::SessionEvent;
-use crate::app::tests::make_app_stub;
-use crate::app::tests::render_fixtures::make_movie_app;
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,
 };
+use mbv_client_core::ModelContentEvent;
+use mbv_client_core::dispatch::session::service_startup::AudiobookshelfCatalogOutcome;
+use mbv_client_core::state::events::AudiobookshelfEvent;
+use mbv_client_core::state::events::LibEvent;
+use mbv_client_core::state::events::SessionEvent;
+use mbv_client_core::tests::make_app_stub;
+use mbv_client_core::tests::render_fixtures::make_movie_app;
 use mbv_core::service_runtime::ServiceState;
 use mbv_images::series_image_cache_key;
 use mbv_ui_model::browse::ServerRows;
@@ -626,7 +626,7 @@ fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
     model.app.begin_emby_setup_for_test();
     model.app.send_lib_event_for_test(LibEvent::ModelContent(
         ModelContentEvent::HomeRecentlyAddedFetched {
-            source: crate::app::state::playback::DestinationLatestSource::Emby("lib".into()),
+            source: mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             generation: stale,
             items: vec![home_recently_added_feed_row(Some(0))],
         },
@@ -638,7 +638,7 @@ fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
         model
             .app
             .home_recently_added_rows_for_test(
-                &crate::app::state::playback::DestinationLatestSource::Emby("lib".into())
+                &mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into())
             )
             .is_empty()
     );
@@ -655,7 +655,7 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
     let generation = model.app.emby_setup_generation_for_test();
     model.app.send_lib_event_for_test(LibEvent::ModelContent(
         ModelContentEvent::HomeRecentlyAddedFetched {
-            source: crate::app::state::playback::DestinationLatestSource::Emby("lib".into()),
+            source: mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             generation,
             items: vec![
                 home_recently_added_feed_row(Some(current - day)),
@@ -668,7 +668,7 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
     model.drain_lib_events();
 
     let rows = model.app.home_recently_added_rows_for_test(
-        &crate::app::state::playback::DestinationLatestSource::Emby("lib".into()),
+        &mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
     );
     assert_eq!(rows.len(), 1);
 }
@@ -683,7 +683,7 @@ fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain()
     let generation = model.app.emby_setup_generation_for_test();
     model.app.send_lib_event_for_test(LibEvent::ModelContent(
         ModelContentEvent::HomeRecentlyAddedFetched {
-            source: crate::app::state::playback::DestinationLatestSource::Emby("lib".into()),
+            source: mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             generation,
             items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
         },
@@ -710,7 +710,7 @@ fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
     let generation = model.app.emby_setup_generation_for_test();
     model.app.send_lib_event_for_test(LibEvent::ModelContent(
         ModelContentEvent::HomeRecentlyAddedFetched {
-            source: crate::app::state::playback::DestinationLatestSource::Emby("lib".into()),
+            source: mbv_client_core::state::playback::DestinationLatestSource::Emby("lib".into()),
             generation,
             items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
         },
@@ -727,7 +727,7 @@ fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
     );
 
     model.app.clear_libraries_for_test();
-    model.assign_home_content(crate::app::state::playback::HomeContent {
+    model.assign_home_content(mbv_client_core::state::playback::HomeContent {
         continue_items: Vec::new(),
         loading: false,
     });

@@ -24,9 +24,9 @@ use super::GuiLibraryArtwork;
 use super::artwork::{
     GuiRowArt, GuiRowMediaKind, queue_item_media_kind, queue_item_row_source, row_art,
 };
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One Home row's stable identity (design D12): the identity

@@ -6,7 +6,7 @@
 //! neutral left panel area that the TUI pushes (D13 Rule B).
 
 use super::Model;
-use crate::app::App;
+use mbv_client_core::App;
 use mbv_render::arrangements::chrome::{ChromeGeometryInput, chrome_geometry};
 use mbv_render::arrangements::queue::{QueuePanelGeometry, queue_footer_row, queue_list_content};
 use mbv_render::layout::{AppLayout, FrameChromeGeometry};

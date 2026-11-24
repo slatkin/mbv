@@ -6,7 +6,7 @@
 
 use super::*;
 
-use crate::app::state::events::PendingSeriesLanding;
+use mbv_client_core::state::events::PendingSeriesLanding;
 
 /// A painted frame does not defeat the saved folder set (gui-collection-
 /// dropdown design D2, D3): the shown pass claims the library's fetched
@@ -14,7 +14,7 @@ use crate::app::state::events::PendingSeriesLanding;
 /// the saved folders over the painted frame instead of opening on All.
 #[test]
 fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
     app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
@@ -47,7 +47,8 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
         "the shown pass claims the library's fetched results"
     );
 
-    let core = crate::gui::GuiCore::new(std::mem::replace(&mut app, crate::app::handoff_app()));
+    let core =
+        crate::gui::GuiCore::new(std::mem::replace(&mut app, mbv_client_core::handoff_app()));
     let mut state = core.gui_launch_state();
     app = core.into_app();
     let destination = state.destination.clone();
@@ -85,7 +86,7 @@ fn a_shown_pass_before_the_restore_still_restores_the_saved_folder_set() {
 /// it while a press clears the mark and requests it again.
 #[test]
 fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     // The first checked folder's fetch fails, so the press's retry is the one
     // request the count can see; the second folder answers.
@@ -144,7 +145,7 @@ fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
 /// switches tabs after the library error.
 #[test]
 fn a_failed_feed_folder_fetch_disarms_deferred_navigation() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond_when("ParentId=folder-1", 500, "");
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");

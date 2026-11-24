@@ -59,7 +59,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
+    use mbv_client_core::tests::make_app_stub;
     use mbv_components::library_panel::LibraryContentOwner;
     use mbv_config::FeedSubscription;
     use mbv_queue::FeedKind;

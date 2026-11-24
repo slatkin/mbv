@@ -1,5 +1,5 @@
 use super::Model;
-use crate::app::config::{Config, UiConfig};
+use mbv_client_core::config::{Config, UiConfig};
 use mbv_components::{SettingsComponent, SettingsSnapshot};
 use mbv_keybinds::{KEY_SECTIONS, KEYBIND_ACTIONS, KeybindAction};
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
@@ -74,7 +74,7 @@ impl Model {
             .emby_setup_draft()
             .or_else(|| self.app.audiobookshelf_setup_draft())
         {
-            Some(crate::app::state::shell_reads::SetupFormDraft::Emby {
+            Some(mbv_client_core::state::shell_reads::SetupFormDraft::Emby {
                 fields,
                 focus,
                 busy,
@@ -85,7 +85,7 @@ impl Model {
                 busy,
                 error,
             }),
-            Some(crate::app::state::shell_reads::SetupFormDraft::Audiobookshelf {
+            Some(mbv_client_core::state::shell_reads::SetupFormDraft::Audiobookshelf {
                 fields,
                 focus,
                 busy,
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn settings_service_request_stays_at_shell_boundary() {
-        let mut app = crate::app::tests::make_app_stub();
+        let mut app = mbv_client_core::tests::make_app_stub();
         app.open_services_settings();
         let mut model = Model::new(app);
         model.handle_service_request(ServiceRequest::ActivateService(0));
@@ -399,7 +399,7 @@ mod tests {
     fn keys_row_summary_follows_the_loaded_configuration() {
         use mbv_ui_model::settings;
         use mbv_ui_model::settings::SettingKey;
-        let app = crate::app::tests::make_app_stub();
+        let app = mbv_client_core::tests::make_app_stub();
         let cfg = app.config_snapshot();
         let ui = app.ui_config_snapshot();
         assert_eq!(
@@ -433,7 +433,7 @@ mod tests {
         // The Session section's two version rows carry the values `App`
         // formats for them, not configuration values (owner-gate-on-wire-identity
         // design D4).
-        let model = Model::new(crate::app::tests::make_app_stub());
+        let model = Model::new(mbv_client_core::tests::make_app_stub());
         let snapshot = model.settings_snapshot();
         let row_value = |label: &str| {
             snapshot
@@ -458,7 +458,7 @@ mod tests {
     /// the registry set, and an override renders the configured chord.
     #[test]
     fn keys_destination_lists_registry_groups_rows_and_overrides() {
-        let mut app = crate::app::tests::make_app_stub();
+        let mut app = mbv_client_core::tests::make_app_stub();
         app.seed_settings_destination_for_test(SettingsDestination::Keys);
         let mut model = Model::new(app);
         model.keybinds = mbv_keybinds::Keybinds {

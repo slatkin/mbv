@@ -116,8 +116,8 @@ pub use self::tv::GuiTvShowsSelection;
 
 use mbv_ui_model::settings::PanelFocus;
 
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 
 /// The Library list whose rows a `RowsInView` set names (gui-delineated-rows
 /// design D7): the destination list the ids belong to, so the core resolves
@@ -734,9 +734,12 @@ pub fn playing_track_id_for_shell(app: &App) -> Option<String> {
 /// behind the test seam that observes the open without a real browser.
 fn open_url(url: &str) -> std::io::Result<()> {
     #[cfg(any(test, feature = "test"))]
-    if let Some(open) = *crate::app::test_seams::OPEN_URL_OVERRIDE.lock().unwrap() {
+    if let Some(open) = *mbv_client_core::test_seams::OPEN_URL_OVERRIDE
+        .lock()
+        .unwrap()
+    {
         open(url);
         return Ok(());
     }
-    crate::app::open_url(url)
+    mbv_client_core::open_url(url)
 }

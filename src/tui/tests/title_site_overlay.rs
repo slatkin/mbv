@@ -2,8 +2,8 @@
 //! stays measured on the configured protocol's grid, so opening a dimming
 //! overlay neither re-encodes nor re-keys the variant.
 
-use crate::app::tests::make_app_stub;
 use crate::tui::Model;
+use mbv_client_core::tests::make_app_stub;
 use mbv_images::CachedImage;
 use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
 use ratatui_image::picker::{Picker, ProtocolType};

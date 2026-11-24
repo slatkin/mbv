@@ -9,7 +9,7 @@
 //! The Local/Peer queue-link pills are queue concern and paint in the
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
-use crate::app::App;
+use mbv_client_core::App;
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators as indicator_paint;
 use mbv_tui_support::ToRatatui;
@@ -23,7 +23,7 @@ use super::Model;
 /// Returns None if the local player is not active.
 /// Callers wrap these in [ ... ] with whatever surrounding style they need.
 pub(in crate::tui) fn build_status_indicator_spans(app: &App) -> Option<Vec<Span<'static>>> {
-    let data = crate::app::LocalPlaybackTarget::indicator_data(app)?;
+    let data = mbv_client_core::LocalPlaybackTarget::indicator_data(app)?;
     Some(indicator_paint::indicator_spans(
         app.indicator_style(),
         &data,
@@ -32,7 +32,7 @@ pub(in crate::tui) fn build_status_indicator_spans(app: &App) -> Option<Vec<Span
 }
 
 pub(in crate::tui) fn mute_status_spans(app: &App) -> Option<Vec<Span<'static>>> {
-    crate::app::LocalPlaybackTarget::displayed_mute(app).then(|| {
+    mbv_client_core::LocalPlaybackTarget::displayed_mute(app).then(|| {
         vec![
             Span::styled(
                 " ",
@@ -68,7 +68,7 @@ pub(in crate::tui) fn mute_status_spans(app: &App) -> Option<Vec<Span<'static>>>
 }
 
 pub(in crate::tui) fn volume_status_spans(app: &App) -> Vec<Span<'static>> {
-    let volume = crate::app::LocalPlaybackTarget::displayed_volume(app);
+    let volume = mbv_client_core::LocalPlaybackTarget::displayed_volume(app);
     // Speaker glyph reflects the volume state (0 / low / mid / high).
     let icon = if volume == 0 {
         "\u{1F507}"
@@ -260,7 +260,7 @@ fn queue_source_status_label(
 
 #[cfg(test)]
 mod tests {
-    use crate::app::tests::make_app_stub;
+    use mbv_client_core::tests::make_app_stub;
     use mbv_render::components::widgets::service_state_color;
     use mbv_tui_support::ToRatatui;
 

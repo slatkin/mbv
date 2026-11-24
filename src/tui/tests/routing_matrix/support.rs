@@ -23,8 +23,8 @@
 //! candidate policy: a consumed chord falls through to the leaf, and the
 //! candidate resolves as `Deferred`.
 
-use crate::app::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 use crate::tui::fold_keyboard_messages;
+use mbv_client_core::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
 use mbv_ui_msg::{
     ComponentId, Key, KeyEvent as NeutralKeyEvent, KeyModifiers, Msg, TerminalObserverEvent,
@@ -120,8 +120,8 @@ pub(crate) fn fold_tick_focused(
 /// The router's neutral prefix access for the matrix rows, which resolve
 /// unarmed chords: the core `App` stub, whose armed bit is false (design D6,
 /// row 8.4).
-pub(crate) fn disarmed() -> impl crate::app::RouterNow {
-    crate::app::tests::make_app_stub()
+pub(crate) fn disarmed() -> impl mbv_client_core::RouterNow {
+    mbv_client_core::tests::make_app_stub()
 }
 
 pub(crate) fn idle_snapshot() -> RouterSnapshot {
@@ -132,7 +132,7 @@ pub(crate) fn idle_snapshot() -> RouterSnapshot {
 
 pub(crate) fn active_snapshot() -> RouterSnapshot {
     RouterSnapshot {
-        playback: crate::app::input::RouterPlaybackState {
+        playback: mbv_client_core::input::RouterPlaybackState {
             player_active: true,
             ..Default::default()
         },
@@ -175,7 +175,7 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
         leaf.clone(),
         key(Key::Char('q')),
         focused.as_ref(),
-        &RouterOutcome::Command(crate::app::dispatch::action::AppCommand::Quit.into()),
+        &RouterOutcome::Command(mbv_client_core::dispatch::action::AppCommand::Quit.into()),
     );
     assert!(
         command.is_empty(),

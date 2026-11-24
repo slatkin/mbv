@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::make_app_stub;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::MultiselectComponent;
 use mbv_ui_model::context_menu::{MultiSelectKind, MultiSelectPopup};
 use mbv_ui_msg::{Msg, ShellRequest, UserEvent};
@@ -255,7 +255,7 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
 /// `settings_popup_multiselect_shell_syncs_and_commits_component_choices`.
 #[test]
 fn my_languages_commit_writes_prefs_through_to_player() {
-    let _state_dir = crate::app::config::TestStateDirGuard::new();
+    let _state_dir = mbv_client_core::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     model.app.config_for_test(|config| {
         config.subtitle_lang = "English".into(); // selected: stays

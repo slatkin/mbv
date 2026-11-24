@@ -27,14 +27,14 @@ use mbv_ui_msg::{
     QueueIntent, QueueMove, ShellRequest,
 };
 
-use crate::app::RemoteControlTarget;
-use crate::app::dispatch::action::{
+use crate::gui::GuiCore;
+use mbv_client_core::RemoteControlTarget;
+use mbv_client_core::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent,
 };
-use crate::app::input::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
-use crate::app::input::resolver::KeyChord;
-use crate::app::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
-use crate::gui::GuiCore;
+use mbv_client_core::input::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
+use mbv_client_core::input::resolver::KeyChord;
+use mbv_client_core::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 
 /// One translated GUI Client input event: the neutral shape the shared
 /// router resolves, whatever toolkit produced it (design D4).

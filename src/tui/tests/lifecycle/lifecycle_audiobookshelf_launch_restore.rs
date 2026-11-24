@@ -3,7 +3,7 @@ use super::*;
 use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 fn pending_audiobookshelf_launch() -> App {
-    let mut app = crate::app::tests::make_app_stub();
+    let mut app = mbv_client_core::tests::make_app_stub();
     app.set_panel_focus_for_test(PanelFocus::Library);
     // The saved focus is Queue, so the displayed queue must not be empty:
     // with the empty-queue column hidden (change `hide-empty-queue-column`,

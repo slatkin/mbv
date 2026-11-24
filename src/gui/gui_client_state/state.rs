@@ -11,8 +11,6 @@
 //! implementor, so the core's library-event seam reaches the state through
 //! that trait and nothing else.
 
-use crate::app::App;
-use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::gui::gui_client_state::GuiOverlay;
 use crate::gui::gui_library::GuiLibraryMenuRow;
 use crate::gui::gui_library::emby_feed_wants_target_in_set;
@@ -22,6 +20,8 @@ use crate::gui::gui_library::{
     GuiSearchStore, GuiSectionRequest, GuiShowsView, GuiTvShowsSelection,
 };
 use crate::gui::gui_settings::GuiSettingsState;
+use mbv_client_core::App;
+use mbv_client_core::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use mbv_config::TabIdentity;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 

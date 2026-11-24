@@ -5,9 +5,9 @@ use tuirealm::application::PollStrategy;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::listener::{EventListenerCfg, Poll, PortResult};
 
-use crate::app::App;
-use crate::app::input::router::RouterOutcome;
 use crate::tui::{Model, fold_mouse_messages};
+use mbv_client_core::App;
+use mbv_client_core::input::router::RouterOutcome;
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
 const INJECT_PORT_INTERVAL: Duration = Duration::from_millis(1);
@@ -131,7 +131,7 @@ impl TickHarness {
 
 #[test]
 fn injected_key_reaches_application_tick() {
-    let mut harness = TickHarness::new(crate::app::tests::make_app_stub());
+    let mut harness = TickHarness::new(mbv_client_core::tests::make_app_stub());
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('a'),
         modifiers: KeyModifiers::NONE,

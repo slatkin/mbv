@@ -6,7 +6,7 @@
 //! The launch snapshot save is shared with the GUI Client's pin-swap
 //! handshake, so this module is its shell-side home.
 
-use crate::app::dispatch::run_loop::teardown::save_launch_state;
+use mbv_client_core::dispatch::run_loop::teardown::save_launch_state;
 use std::time::Duration;
 
 use super::Model;

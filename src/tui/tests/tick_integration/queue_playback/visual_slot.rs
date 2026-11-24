@@ -50,7 +50,7 @@ fn set_image_protocols(mut model: crate::tui::Model) -> crate::tui::Model {
 /// `queue_card_reserved_rect`.
 #[test]
 fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
-    fn card_app() -> crate::app::App {
+    fn card_app() -> mbv_client_core::App {
         let mut app = active_app(PanelMode::Both);
         app.configure_image_protocol_for_test(None, true);
         // A cached square artwork for the active item (the fixture's shared

@@ -17,7 +17,7 @@ impl GuiCore {
                 }
             }
             ChooserTargetKey::Target(key) => {
-                if let Some(target) = crate::app::state::panel_targets::resolve_session_target(
+                if let Some(target) = mbv_client_core::state::panel_targets::resolve_session_target(
                     self.app.panel_targets(),
                     key,
                 ) {

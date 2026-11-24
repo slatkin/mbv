@@ -10,9 +10,9 @@ use mbv_ui_model::library_tab::LibraryTab;
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
-use crate::app::{gui_client_capabilities, make_app_stub};
 use crate::gui::GuiCore;
 use crate::gui::input::GuiInput;
+use mbv_client_core::{gui_client_capabilities, make_app_stub};
 
 /// A catalog with a Grouped Music library at position 1 and a Shows library
 /// at position 2, Music active: the shortest catalog in which a tab step has

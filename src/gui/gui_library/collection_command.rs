@@ -14,9 +14,9 @@ use super::{
     GuiEmbyFeedCollectionSite, GuiFeedsCollectionSite, GuiMusicCollectionSite,
     GuiPodcastsCollectionSite,
 };
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// The op one collection command carries (gui-collection-dropdown design D5):
 /// the three dropdown commands, destination-neutral.

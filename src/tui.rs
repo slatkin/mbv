@@ -3,10 +3,10 @@ use std::time::Duration;
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(in crate::tui) use crate::app::input::router::RouterOutcome;
-use crate::app::state::playback::{DestinationLatestSnapshot, DestinationLatestSource};
-use crate::app::{App, LibEvent, SidebarId};
-use crate::app::{QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog};
+pub(in crate::tui) use mbv_client_core::input::router::RouterOutcome;
+use mbv_client_core::state::playback::{DestinationLatestSnapshot, DestinationLatestSource};
+use mbv_client_core::{App, LibEvent, SidebarId};
+use mbv_client_core::{QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog};
 use mbv_components::{QueueBoundaryComponent, UiRootComponent};
 use mbv_ui_model::browse::{AlbumIndexState, BrowseLevel};
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
@@ -363,7 +363,7 @@ pub(in crate::tui) fn install_image_pickers_for_test(
     model
         .image_protocols
         .set_image_pickers_for_test(image, halfblock);
-    let mut app = std::mem::replace(&mut model.app, crate::app::handoff_app());
+    let mut app = std::mem::replace(&mut model.app, mbv_client_core::handoff_app());
     push_image_protocol_facts(&mut app, &model.image_protocols);
     model.app = app;
 }

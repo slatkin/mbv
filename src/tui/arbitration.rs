@@ -1,7 +1,7 @@
 use super::Model;
-use crate::app::dispatch::action::Command;
-use crate::app::dispatch::action::ShellCommand;
-use crate::app::input::router::{RouterNow, RouterOutcome, RouterSnapshot};
+use mbv_client_core::dispatch::action::Command;
+use mbv_client_core::dispatch::action::ShellCommand;
+use mbv_client_core::input::router::{RouterNow, RouterOutcome, RouterSnapshot};
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
 
 impl RouterNow for Model {
@@ -281,25 +281,25 @@ impl Model {
         // any QueueOnly/mini-view frame. Read it in its own statement.
         let player_active = self.app.shown_playback_status().active;
         let snapshot = RouterSnapshot {
-            playback: crate::app::input::RouterPlaybackState {
+            playback: mbv_client_core::input::RouterPlaybackState {
                 player_active,
-                remote_target: crate::app::input::RemoteControlTarget::DirectRemote,
+                remote_target: mbv_client_core::input::RemoteControlTarget::DirectRemote,
                 queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
                     && !self.app.effective_playback_state().active,
                 idle_feed_link_available: self.app.idle_feed_link_available(),
             },
-            overlays: crate::app::input::RouterOverlayState {
+            overlays: mbv_client_core::input::RouterOverlayState {
                 focus: if self
                     .application
                     .mounted(&ComponentId::Overlay(OverlayId::ContextMenu))
                 {
-                    crate::app::input::OverlayFocus::ContextMenu
+                    mbv_client_core::input::OverlayFocus::ContextMenu
                 } else if self.blocking_overlay_active() {
-                    crate::app::input::OverlayFocus::Blocking
+                    mbv_client_core::input::OverlayFocus::Blocking
                 } else if self.overlay_holds_focus() {
-                    crate::app::input::OverlayFocus::NonBlocking
+                    mbv_client_core::input::OverlayFocus::NonBlocking
                 } else {
-                    crate::app::input::OverlayFocus::Free
+                    mbv_client_core::input::OverlayFocus::Free
                 },
                 help: self
                     .application

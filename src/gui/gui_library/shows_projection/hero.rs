@@ -11,9 +11,9 @@ use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource};
 
 use super::super::home::artwork_shape;
 use super::{GuiShowsHero, GuiShowsProjection, GuiShowsSeasonPill, GuiShowsWorkspace, episode_row};
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 /// The season whose episodes the Workspace shows (design D12): the stored
 /// choice while the detail holds it, else the first season — the season pills

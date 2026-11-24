@@ -16,10 +16,10 @@ use mbv_ui_model::library_hero::producers::hero_content_queue;
 
 use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
-use crate::app::App;
-use crate::app::state::gui_client_events::GuiClientEvent;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
+use mbv_client_core::state::gui_client_events::GuiClientEvent;
 
 impl GuiCore {
     /// Install one Shows view (design D8).

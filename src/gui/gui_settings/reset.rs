@@ -9,8 +9,8 @@
 //! presentation state (the spec's *Reset UI State resets the GUI's
 //! presentation*).
 
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::gui::GuiCore;
+use mbv_client_core::dispatch::notify::ToastSeverity;
 
 impl GuiCore {
     /// Design D10's App-owned steps: abandon the launch intent and select Home

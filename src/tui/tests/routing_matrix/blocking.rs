@@ -1,9 +1,9 @@
 //! Routing matrix: blocking precedence and policy rows.
 
 use super::support::*;
-use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
-use crate::app::input::resolver::KeyChord;
-use crate::app::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
+use mbv_client_core::dispatch::action::{PlaybackIntent, ShellCommand};
+use mbv_client_core::input::resolver::KeyChord;
+use mbv_client_core::input::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome};
 use mbv_ui_msg::ConfirmIntent;
 use mbv_ui_msg::{ComponentId, ModalId, Msg, ShellRequest};
 use mbv_ui_msg::{Key, KeyModifiers};
@@ -11,8 +11,8 @@ use mbv_ui_msg::{Key, KeyModifiers};
 #[test]
 fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
     let snapshot = RouterSnapshot {
-        overlays: crate::app::input::RouterOverlayState {
-            focus: crate::app::input::OverlayFocus::Blocking,
+        overlays: mbv_client_core::input::RouterOverlayState {
+            focus: mbv_client_core::input::OverlayFocus::Blocking,
             ..Default::default()
         },
         ..RouterSnapshot::default()
@@ -35,8 +35,8 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
 #[test]
 fn focused_blocking_overlay_keeps_its_own_global_chord() {
     let snapshot = RouterSnapshot {
-        overlays: crate::app::input::RouterOverlayState {
-            focus: crate::app::input::OverlayFocus::Blocking,
+        overlays: mbv_client_core::input::RouterOverlayState {
+            focus: mbv_client_core::input::OverlayFocus::Blocking,
             ..Default::default()
         },
         ..RouterSnapshot::default()
@@ -63,8 +63,8 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
 #[test]
 fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
     let snapshot = RouterSnapshot {
-        overlays: crate::app::input::RouterOverlayState {
-            focus: crate::app::input::OverlayFocus::Blocking,
+        overlays: mbv_client_core::input::RouterOverlayState {
+            focus: mbv_client_core::input::OverlayFocus::Blocking,
             ..Default::default()
         },
         ..RouterSnapshot::default()
@@ -166,8 +166,8 @@ fn twitch_url_open_resolves_to_its_shell_command_on_the_default_chord() {
 fn twitch_url_open_is_swallowed_under_a_blocking_overlay() {
     let key = key_mod(Key::Char('T'), KeyModifiers::SHIFT);
     let snapshot = RouterSnapshot {
-        overlays: crate::app::input::RouterOverlayState {
-            focus: crate::app::input::OverlayFocus::Blocking,
+        overlays: mbv_client_core::input::RouterOverlayState {
+            focus: mbv_client_core::input::OverlayFocus::Blocking,
             ..Default::default()
         },
         ..RouterSnapshot::default()
@@ -192,8 +192,8 @@ fn rebound_global_respects_blocking_overlays() {
     let keybinds = keybinds_with_override("help_open", "Ctrl+h");
     let rebound_key = key_mod(Key::Char('h'), KeyModifiers::CONTROL);
     let snapshot = RouterSnapshot {
-        overlays: crate::app::input::RouterOverlayState {
-            focus: crate::app::input::OverlayFocus::Blocking,
+        overlays: mbv_client_core::input::RouterOverlayState {
+            focus: mbv_client_core::input::OverlayFocus::Blocking,
             ..Default::default()
         },
         ..RouterSnapshot::default()

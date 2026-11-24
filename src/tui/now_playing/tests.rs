@@ -4,8 +4,8 @@
 //! chapter, and no active item or a different book resolving to nothing.
 
 use super::*;
-use crate::app::tests::{emby_unified_state, make_app_stub, make_items};
 use mbv_audiobookshelf::{AudiobookshelfChapter, AudiobookshelfLibrary};
+use mbv_client_core::tests::{emby_unified_state, make_app_stub, make_items};
 use mbv_ctrl::{TransitionSummary, UnifiedQueueSlot, UnifiedQueueStateData};
 use mbv_queue::QueueSource;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;

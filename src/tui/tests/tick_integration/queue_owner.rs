@@ -6,7 +6,7 @@
 use crate::tui::test_support::{Terminal, TestBackend};
 
 use super::harness::TickHarness;
-use crate::app::tests::{make_items, make_local_daemon_app_stub};
+use mbv_client_core::tests::{make_items, make_local_daemon_app_stub};
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 use mbv_render::arrangements::queue::queue_footer_row;
 use mbv_ui_model::playback::QueueLink;

@@ -15,8 +15,8 @@ use mbv_keybinds::{Keybinds, action_by_id};
 use mbv_ui_msg::KeyEvent;
 
 use super::projection::GuiSettingsKeyRefusalProjection;
-use crate::app::input::resolver::KeyChord;
 use crate::gui::GuiCore;
+use mbv_client_core::input::resolver::KeyChord;
 
 /// The frame's binding target (`design D5`): what a `keysCapture` or
 /// `keysClear` command edits.
@@ -135,7 +135,7 @@ impl GuiCore {
         self.app.set_configured_keybinds(loaded);
         let config = self.app.config_snapshot();
         if let Err(error) =
-            crate::app::config::save_config_section(&config, mbv_config::ConfigSection::Keys)
+            mbv_client_core::config::save_config_section(&config, mbv_config::ConfigSection::Keys)
         {
             tracing::warn!(name: "config.save.failed", target: "config", error = %error, "config save failed");
             self.app.flash_error(format!(

@@ -86,7 +86,7 @@ fn book_state(app: &App) -> &AudiobookshelfBookBrowseState {
 /// catalog starts no second chain.
 #[test]
 fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
     gui_abs_open(&mut app, 0);
@@ -150,7 +150,7 @@ fn opening_an_unloaded_book_catalog_lands_its_page_on_the_app() {
 /// and a stale id changes nothing.
 #[test]
 fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.edit_audiobookshelf_book_state_for_test(0, |state| {
         state.books = vec![book("book-a", "A Book")];
@@ -209,7 +209,7 @@ fn selecting_a_book_stores_the_pick_and_lands_its_chapters() {
 /// second pass of a cached pick starts nothing.
 #[test]
 fn the_frame_paths_ensure_loads_the_default_picks_detail() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.edit_audiobookshelf_book_state_for_test(0, |state| {
         state.books = vec![book("book-a", "A Book")];
@@ -262,7 +262,7 @@ fn add_second_book_library(app: &mut App) {
 /// naming another book library starts no load.
 #[test]
 fn the_open_entry_on_another_book_library_starts_no_load() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
     add_second_book_library(&mut app);
 
@@ -291,7 +291,7 @@ fn the_open_entry_on_another_book_library_starts_no_load() {
 /// pass ends there, so the pick's detail waits for the catalog to land.
 #[test]
 fn a_restored_audiobooks_destination_starts_its_catalog_load() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
     crate::gui::test_support::ensure_gui_destination(
@@ -332,7 +332,7 @@ fn pass_catalog_request(app: &mut App) -> u64 {
 /// refresh collects — arms nothing beside them.
 #[test]
 fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.edit_audiobookshelf_book_state_for_test(0, |state| {
         state.loading_pages.insert(0);
@@ -363,7 +363,7 @@ fn a_repaint_beside_an_in_flight_catalog_starts_no_second_chain() {
 /// honours that mark, and the open clears it.
 #[test]
 fn a_failed_catalog_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.edit_audiobookshelf_book_state_for_test(0, |state| {
         state.error = Some("the catalog failed to load".into());
@@ -392,7 +392,7 @@ fn a_failed_catalog_load_is_not_retried_by_a_repaint_but_an_open_retries_it() {
 /// after the assertion would run.
 #[test]
 fn opening_a_catalog_with_a_page_in_flight_starts_no_second_chain() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
     app.edit_audiobookshelf_book_state_for_test(0, |state| {
         state.loading_pages.insert(0);
@@ -418,7 +418,7 @@ fn opening_a_catalog_with_a_page_in_flight_starts_no_second_chain() {
 /// the next position, and each active destination's kind is its own.
 #[test]
 fn the_presented_tabs_include_a_book_library_and_a_podcast_library() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
     let tabs = gui_library_tabs(&app);

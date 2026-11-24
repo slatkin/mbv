@@ -1,9 +1,9 @@
 //! Queue artwork ownership: movies fetch landscape art, episodes never show
 //! series art; overlay composition stays off the tick thread during a drag.
 
-use crate::app::state::projection::card::refresh_queue_card_image;
-use crate::app::tests::render_fixtures::make_queue_app;
 use crate::tui::Model;
+use mbv_client_core::state::projection::card::refresh_queue_card_image;
+use mbv_client_core::tests::render_fixtures::make_queue_app;
 use mbv_images::CachedImage;
 use ratatui_image::picker::{Picker, ProtocolType};
 

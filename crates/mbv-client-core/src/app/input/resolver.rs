@@ -52,6 +52,7 @@ impl KeyChord {
         Self { code, mods }
     }
 
+    #[must_use]
     pub fn from_key(key: KeyEvent) -> Self {
         Self::new(key.code, key.modifiers)
     }
@@ -97,6 +98,7 @@ impl KeyChord {
     /// slip past the collision check against a declared `Shift+N` default
     /// while routing the same press. `from_keybinds_chord` of the result is
     /// the pressed chord again, its `KeyChord::new` folding undoing this.
+    #[must_use]
     pub fn to_keybinds_chord(self) -> Option<mbv_keybinds::Chord> {
         use mbv_keybinds::Key as RegistryKey;
         let key = match self.code {
@@ -133,6 +135,7 @@ impl KeyChord {
 /// Map the registry's Ctrl/Shift/Alt modifier set onto the neutral modifiers.
 /// Extracted from `KeyChord::from_keybinds_chord` (issue #803); the mapping
 /// is lossless in both directions.
+#[must_use]
 pub fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
     use mbv_keybinds::KeyMods;
     let mut out = KeyModifiers::NONE;

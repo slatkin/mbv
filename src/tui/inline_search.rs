@@ -1,6 +1,6 @@
 use super::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
-use crate::app::{BrowseEvent, MusicEvent};
+use mbv_client_core::{BrowseEvent, MusicEvent};
 use mbv_components::SearchPool;
 use mbv_components::inline_search::InlineSearchHost;
 use mbv_components::library_panel::LibraryPanel;
@@ -264,7 +264,7 @@ impl Model {
         // the shell hand-off (task 3.1/3.2) subsumes it.
         if let super::LibEvent::Browse(BrowseEvent::NavigateTo {
             lib_idx,
-            landing: crate::app::state::events::NavigateLanding::Chain { ref nav_stack },
+            landing: mbv_client_core::state::events::NavigateLanding::Chain { ref nav_stack },
             switch_tab: true,
         }) = ev
         {

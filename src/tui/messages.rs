@@ -5,7 +5,7 @@ mod selection;
 mod tests;
 
 use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
-use crate::app::state::playback::DestinationLatestSource;
+use mbv_client_core::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 
@@ -273,7 +273,7 @@ impl Model {
 
     fn handle_open_url_request(&mut self, url: &str) {
         if mbv_ui_model::ui_util::sanitize_url(url).is_some()
-            && let Err(error) = crate::app::open_url(url)
+            && let Err(error) = mbv_client_core::open_url(url)
         {
             tracing::warn!(name: "library_link.open.failed", target: "library_link", { url = %url, error = %error }, "failed to open provider link");
             self.app.flash(
@@ -539,7 +539,7 @@ impl Model {
                 if items.len() > 1 {
                     let capabilities = items
                         .iter()
-                        .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
+                        .map(mbv_client_core::state::context_menu_capabilities::emby_item_capabilities)
                         .collect();
                     self.app.open_context_menu_for_selection(
                         &items,

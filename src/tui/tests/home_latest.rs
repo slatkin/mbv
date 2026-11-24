@@ -1,14 +1,14 @@
-use crate::app::tests::make_app_stub;
 use crate::tui::Model;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::library_panel::LibraryContentOwner;
 use mbv_config::{HomeSelectorKey, SelectorIdentity};
 use mbv_queue::QueueItem;
 
 #[test]
 fn legacy_home_section_preference_falls_back_to_continue_watching() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     std::fs::write(
-        crate::app::config::prefs_path(),
+        mbv_client_core::config::prefs_path(),
         serde_json::json!({ "home_section": "abs:book-lib" }).to_string(),
     )
     .expect("write legacy prefs");
@@ -73,11 +73,12 @@ fn feed_entry(pub_date_secs: u64) -> mbv_queue::FeedEntry {
 /// shows the marker from its Home fetch alone.
 #[test]
 fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
-    let source = crate::app::state::playback::DestinationLatestSource::Emby("movies-lib".into());
+    let source =
+        mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
 
     model.app.accept_home_recently_added(
         source.clone(),
@@ -97,11 +98,12 @@ fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
 /// and the marker stays cleared for the rest of the run.
 #[test]
 fn acknowledging_the_source_clears_its_marker() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
-    let source = crate::app::state::playback::DestinationLatestSource::Emby("movies-lib".into());
+    let source =
+        mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
     model.app.accept_home_recently_added(
         source.clone(),
         model.app.emby_setup_generation_for_test(),
@@ -119,11 +121,12 @@ fn acknowledging_the_source_clears_its_marker() {
 /// cutoff, so it is never stored as a Home row and never marks.
 #[test]
 fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 30 * 24 * 60 * 60);
     let current = model.home_latest_launch_window.current;
-    let source = crate::app::state::playback::DestinationLatestSource::Emby("movies-lib".into());
+    let source =
+        mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
 
     model.app.accept_home_recently_added(
         source.clone(),
@@ -142,11 +145,12 @@ fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
 /// NOT mark during that run").
 #[test]
 fn an_item_dated_after_the_launch_instant_does_not_mark() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
-    let source = crate::app::state::playback::DestinationLatestSource::Emby("movies-lib".into());
+    let source =
+        mbv_client_core::state::playback::DestinationLatestSource::Emby("movies-lib".into());
 
     model.app.accept_home_recently_added(
         source.clone(),
@@ -166,12 +170,12 @@ fn an_item_dated_after_the_launch_instant_does_not_mark() {
 /// the rows is Home's, and the Latest list itself may not have loaded.
 #[test]
 fn a_podcast_library_marks_from_its_home_recently_added_rows() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
     let source =
-        crate::app::state::playback::DestinationLatestSource::Audiobookshelf("pod-lib".into());
+        mbv_client_core::state::playback::DestinationLatestSource::Audiobookshelf("pod-lib".into());
     let queue_episode = mbv_queue::AudiobookshelfQueueItem {
         library_item_id: "pod-lib".into(),
         episode_id: "episode".into(),
@@ -203,7 +207,7 @@ fn a_podcast_library_marks_from_its_home_recently_added_rows() {
 /// 14-day cutoff.
 #[test]
 fn a_feed_entry_inside_the_launch_window_marks_the_feeds_destination() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut model = Model::new(make_app_stub());
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.home_latest_launch_window.current;
@@ -211,9 +215,7 @@ fn a_feed_entry_inside_the_launch_window_marks_the_feeds_destination() {
         .app
         .seed_feed_entries_for_test(vec![feed_entry(current - 60)]);
 
-    assert!(
-        model.destination_latest_marker(
-            &crate::app::state::playback::DestinationLatestSource::Feeds
-        )
-    );
+    assert!(model.destination_latest_marker(
+        &mbv_client_core::state::playback::DestinationLatestSource::Feeds
+    ));
 }

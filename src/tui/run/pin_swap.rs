@@ -4,9 +4,9 @@
 //! `SwapPrepare`/`SwapQuit` never reach `App` dispatch: the run loop's
 //! player-event drains hand them here first.
 
-use crate::app::QUIT_REQUESTED;
-use crate::app::dispatch::run_loop::teardown::save_launch_state;
 use crate::tui::Model;
+use mbv_client_core::QUIT_REQUESTED;
+use mbv_client_core::dispatch::run_loop::teardown::save_launch_state;
 use mbv_ui_model::playback::QueueLink;
 use std::sync::atomic::Ordering;
 

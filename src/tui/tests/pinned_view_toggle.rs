@@ -6,9 +6,9 @@
 //! no `pinwin` process runs and nothing sleeps.
 
 use super::*;
-use crate::app::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use crate::tui::test_support::{Terminal, TestBackend};
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_components::QueuePlaybackPanel;
 use mbv_ui_model::settings::PinnedWidth;
 
@@ -152,7 +152,7 @@ fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request()
     assert_eq!(requests.len(), 1, "one collapse request for the play");
     assert_eq!(
         requests[0],
-        crate::app::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
+        mbv_client_core::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
     );
     assert!(app.drain_pinned_requests_for_test());
     assert_eq!(app.pinned_width_for_test(), PinnedWidth::Collapsed);
@@ -261,7 +261,7 @@ fn recording_the_toggled_width_leaves_the_panel_mode_alone() {
 /// view, sync at the stale width, draw into the snapped buffer.
 #[test]
 fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_buffer() {
-    let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
+    let mut app = mbv_client_core::tests::render_fixtures::make_queue_app(3);
     app.set_panel_mode_for_test(PanelMode::LibraryOnly);
     app.set_panel_focus_for_test(PanelFocus::Library);
     app.seed_playing_position_for_test(

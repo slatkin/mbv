@@ -25,9 +25,9 @@ use super::projection::sort_letter;
 use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 use mbv_ui_model::meta::MetaSegment;
 use mbv_ui_model::sort_filter::effective_sort_str;
 

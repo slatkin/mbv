@@ -20,7 +20,7 @@ fn hero_album_id(app: &mut App) -> Option<String> {
 /// never blank while the group's albums are loaded (design D13).
 #[test]
 fn a_group_with_no_pick_heroes_its_first_album() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![
             stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
@@ -40,7 +40,7 @@ fn a_group_with_no_pick_heroes_its_first_album() {
 /// other group with no pick heroes its first album (design D13).
 #[test]
 fn each_pill_reopens_on_its_own_last_pick() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![
             stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
@@ -98,7 +98,7 @@ fn six_warm_albums() -> Vec<mbv_emby_model::EmbyItem> {
 /// projection. The pick itself is the Hero's own fetch.
 #[test]
 fn the_picked_albums_neighbours_are_warmed() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_warm_albums(six_warm_albums());
     apply_gui_library_command(
         &mut app,
@@ -135,7 +135,7 @@ fn the_picked_albums_neighbours_are_warmed() {
 /// gate).
 #[test]
 fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_warm_albums(six_warm_albums());
     app.backdate_navigation_for_test(std::time::Duration::from_secs(1));
 
@@ -162,7 +162,7 @@ fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
 /// and the tracklist from the cached tracks (add-gui-library-panel design D5).
 #[test]
 fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![
             stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
@@ -232,7 +232,7 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
 /// artist's album tracklists (add-gui-library-panel design D5).
 #[test]
 fn the_artist_total_waits_for_every_albums_tracklist() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![
             stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
@@ -271,7 +271,7 @@ fn the_artist_total_waits_for_every_albums_tracklist() {
 /// still shows Paul's Boutique while the union holds it.
 #[test]
 fn a_second_group_keeps_the_hero() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
             "alb-paul",
@@ -317,7 +317,7 @@ fn a_second_group_keeps_the_hero() {
 /// session-only union pick.
 #[test]
 fn a_pick_under_the_effectively_single_group_is_kept() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
             "alb-paul",
@@ -367,7 +367,7 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
 /// in artist order — never to a list-order first album of one group.
 #[test]
 fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album("alb-zeb", "Zebra Album", "Zebra", 1990)],
         vec![stored_album("alb-aar", "Aardvark Album", "Aardvark", 1989)],
@@ -399,7 +399,7 @@ fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
 /// image instead of painting the media kind with no source.
 #[test]
 fn a_fallback_artist_row_requests_the_artist_item_its_tracks_named() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
     app.record_artist_name_for_test("Beastie Boys", "artist-7");
 
@@ -416,7 +416,7 @@ fn a_fallback_artist_row_requests_the_artist_item_its_tracks_named() {
 /// image; the projection's own rows carry that art beside their media kind.
 #[test]
 fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
             "alb-ill",

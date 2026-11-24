@@ -8,8 +8,8 @@
 use super::GuiEmbyRootItems;
 use super::request::GuiSectionRequest;
 use super::store::GuiGroupAlbums;
-use crate::app::state::gui_client_events::GuiClientEvent;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::state::gui_client_events::GuiClientEvent;
 use mbv_emby_model::EmbyItem;
 
 /// Install one drained result in the Client's own stores: the same rule the

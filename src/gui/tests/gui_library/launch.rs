@@ -146,7 +146,7 @@ fn a_saved_checked_set_restores_as_saved(
     #[case] keys: &[&str],
     #[case] sort: Option<(GuiSortTarget, GuiListSort)>,
 ) {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut source = launch_roundtrip_app(&target);
     seed_launch_selection(&mut source, &target, keys);
     if let Some(sort) = sort {
@@ -187,7 +187,7 @@ fn a_saved_checked_set_restores_as_saved(
 /// site.
 #[test]
 fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
     app.disconnect_emby_client_for_test();
@@ -229,7 +229,7 @@ fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
 /// drops a group the landed catalog no longer holds.
 #[test]
 fn a_saved_resting_music_set_installs_without_a_group_list() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.seed_music_levels_for_test(&["group", "album"]);
     let mut library = make_item("Music", "CollectionFolder");
@@ -279,7 +279,7 @@ fn a_saved_resting_music_set_installs_without_a_group_list() {
 /// under the destination the user moved to.
 #[test]
 fn a_mid_restore_destination_switch_applies_no_saved_set() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
     app.seed_gui_abs_libraries_for_test();
@@ -327,7 +327,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_set() {
 /// destination", scenario "A saved collection no longer exists").
 #[test]
 fn a_saved_group_no_longer_held_restores_as_all() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
     let destination = saved_music_identity();
@@ -362,7 +362,7 @@ fn a_saved_group_no_longer_held_restores_as_all() {
 /// old file without the field loads as All.
 #[test]
 fn the_shows_view_survives_a_restart() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-tv".into();

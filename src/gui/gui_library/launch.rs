@@ -26,8 +26,8 @@ use super::{
     GuiEmbyFeedCollectionSite, GuiFeedsCollectionSite, GuiMusicCollectionSite,
     GuiPodcastsCollectionSite,
 };
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 
 impl GuiCore {
     /// The GUI's launch location (design D9, D10): the active destination, the

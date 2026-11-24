@@ -8,7 +8,7 @@
 //!
 //! Roles:
 //! - The **launcher** (a Client with `stay_alive` set) starts a local daemon
-//!   through `crate::app::owner_link::start_owner`, then attaches to it as an
+//!   through `mbv_client_core::owner_link::start_owner`, then attaches to it as an
 //!   ordinary client (`App::new_remote`).
 //! - The **local daemon** is `mbv --__local-daemon`, entered via
 //!   [`run_local_daemon_main`], which never returns.
@@ -17,7 +17,7 @@
 //! `split-tui-gui-clients`): the swap launch, the tray hooks, and the run
 //! loop. The Client half — the argv, the display environment, and the
 //! detached spawn that waits for the control socket — lives beside the Owner
-//! link in `crate::app::owner_link`, because a Client starts the Owner.
+//! link in `mbv_client_core::owner_link`, because a Client starts the Owner.
 
 use std::ffi::OsStr;
 use std::process::{Command, Stdio};
@@ -51,7 +51,7 @@ fn swap_argv(
 
 /// Detached launch of the replacement Client: stdin,
 /// stdout and stderr null, and `setsid` in `pre_exec`, the same as the
-/// Client's Owner spawn (`crate::app::owner_link::start_owner`). The Owner's
+/// Client's Owner spawn (`mbv_client_core::owner_link::start_owner`). The Owner's
 /// environment already carries the session display variables.
 fn detached_swap_command(argv: &[String]) -> Command {
     let mut cmd = Command::new(&argv[0]);
@@ -108,7 +108,7 @@ pub fn run_local_daemon_main() -> ! {
     mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), &log_spec);
     tracing::info!(name: "local_daemon.process.starting", target: "local_daemon", "local daemon starting");
 
-    let config = match crate::app::config::load_config() {
+    let config = match mbv_client_core::config::load_config() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("mbv: local daemon: {e}");

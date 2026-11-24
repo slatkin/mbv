@@ -155,6 +155,7 @@ fn prefetch_card_images(app: &mut App, cursor: usize) {
 /// The neutral record this sync's title-site decision leaves for the shell's
 /// overlay encoder: the base key, its item, and the parts the shell measures
 /// the overlay from. `None` when the site is not `Artwork`.
+#[derive(Debug)]
 pub struct QueueTitleRecord {
     pub base_key: String,
     pub parts: mbv_queue::PlaybackTitleParts,

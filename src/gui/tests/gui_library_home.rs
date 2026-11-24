@@ -7,7 +7,7 @@
 //! mock transport runs.
 
 use super::*;
-use crate::app::config::TestStateDirGuard;
+use mbv_client_core::config::TestStateDirGuard;
 use mbv_config::FeedSubscription;
 use mbv_emby_model::UpcomingPremiere;
 use mbv_queue::{QueueItem, QueueItemContentId};
@@ -142,7 +142,7 @@ fn seed_relocated_tv_lists(app: &mut App) {
 
 #[test]
 fn the_seeded_sections_project_as_heading_rows_in_order() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = home_app(vec![
         continue_item(
             "cw-first",

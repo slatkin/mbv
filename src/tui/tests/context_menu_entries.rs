@@ -2,8 +2,8 @@
 //! "Library lists share one standard action set", the Played label, and the
 //! music rule). Standard-media-context-menus tasks 2.1-2.3.
 use super::*;
-use crate::app::state::context_menu_capabilities::{ItemCapabilities, emby_item_capabilities};
 use crate::push_movies_library_for_test;
+use mbv_client_core::state::context_menu_capabilities::{ItemCapabilities, emby_item_capabilities};
 use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::overlay::OverlayRequest;
 use rstest::rstest;
@@ -105,7 +105,7 @@ fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
 /// (queue-content-shuffle design D6).
 fn queue_shuffle_capable_app(shuffle_capable: bool) -> App {
     let mut app = make_app_stub();
-    crate::app::seed_queue_shuffle_owner_for_test(&mut app, shuffle_capable);
+    mbv_client_core::seed_queue_shuffle_owner_for_test(&mut app, shuffle_capable);
     app
 }
 
@@ -113,7 +113,7 @@ fn queue_shuffle_capable_app(shuffle_capable: bool) -> App {
 /// `item` as the one displayed slot.
 fn queue_menu_app(shuffle_capable: bool, item: EmbyItem) -> App {
     let mut app = queue_shuffle_capable_app(shuffle_capable);
-    crate::app::seed_queue_row_menu_rows_for_test(
+    mbv_client_core::seed_queue_row_menu_rows_for_test(
         &mut app,
         vec![mbv_queue::QueueItem::Emby(Box::new(item))],
     );
@@ -239,7 +239,7 @@ fn feed_episode() -> mbv_queue::FeedEntry {
 /// on the nav-level lookup.
 #[test]
 fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     push_movies_library_for_test(&mut app);
     app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));

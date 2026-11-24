@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::render_fixtures::make_movie_app;
+use mbv_client_core::tests::render_fixtures::make_movie_app;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_msg::{Msg, ShellRequest};
@@ -13,7 +13,7 @@ fn mounted_tv_model_with_mock_emby(http: &MockHttp) -> Model {
     let mut model = mounted_tv_model();
     let mut config = model.app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
-    crate::app::tests::install_test_emby(&mut model.app, config);
+    mbv_client_core::tests::install_test_emby(&mut model.app, config);
     let client = model
         .app
         .cached_emby_client_for_test()

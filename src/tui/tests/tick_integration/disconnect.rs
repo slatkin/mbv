@@ -1,7 +1,7 @@
-use crate::app::tests::{
+use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::tests::{
     QueueViewTestExt, emby_unified_state, make_items, make_local_daemon_app_stub,
 };
-use crate::tui::tests::tick_integration::harness::TickHarness;
 use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 use mbv_ui_model::playback::QueueLink;
@@ -98,7 +98,7 @@ fn suspended_home_disconnect_raises_owner_lost_modal() {
 
 #[test]
 fn suspended_home_shutdown_announced_exits_cleanly() {
-    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    mbv_client_core::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_local_daemon_app_stub(make_items(1));
     app.switch_to_direct_remote_for_test(
         "remote-owner",
@@ -131,14 +131,14 @@ fn suspended_home_shutdown_announced_exits_cleanly() {
             .as_deref(),
         Some("mbv: the Owner process was stopped — exiting.")
     );
-    assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
-    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    assert!(mbv_client_core::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+    mbv_client_core::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
 }
 
 // Owns queue-owner-process D4: shutting down a routed remote restores the live home link.
 #[test]
 fn routed_remote_shutdown_announced_restores_suspended_home_without_quitting() {
-    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    mbv_client_core::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_local_daemon_app_stub(make_items(1));
     app.switch_to_direct_remote_for_test(
         "remote-owner",
@@ -165,12 +165,12 @@ fn routed_remote_shutdown_announced_restores_suspended_home_without_quitting() {
             .take_pending_exit_message()
             .is_none()
     );
-    assert!(!crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(!mbv_client_core::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
 }
 
 #[test]
 fn local_home_shutdown_announced_exits_cleanly() {
-    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    mbv_client_core::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (event_tx, event_rx) = mpsc::channel();
     app.set_active_player_events_for_test(event_rx);
@@ -197,13 +197,15 @@ fn local_home_shutdown_announced_exits_cleanly() {
             .as_deref(),
         Some("mbv: the Owner process was stopped — exiting.")
     );
-    assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
-    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    assert!(mbv_client_core::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+    mbv_client_core::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
 }
 
 #[test]
 fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
-    use crate::app::test_seams::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
+    use mbv_client_core::test_seams::{
+        DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK,
+    };
 
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
@@ -237,10 +239,10 @@ fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
 
 #[test]
 fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
-    let _connect_guard = crate::app::test_seams::DAEMON_ROUTE_CONNECT_TEST_LOCK
+    let _connect_guard = mbv_client_core::test_seams::DAEMON_ROUTE_CONNECT_TEST_LOCK
         .lock()
         .unwrap();
-    *crate::app::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
         .lock()
         .unwrap() = Some(reconnect_local_daemon);
 
@@ -285,7 +287,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
         assert!(!matches!(cmd, mbv_ctrl::CtrlCmd::Stop));
     }
 
-    *crate::app::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
+    *mbv_client_core::test_seams::DAEMON_ROUTE_CONNECT_OVERRIDE
         .lock()
         .unwrap() = None;
 }

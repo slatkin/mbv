@@ -6,12 +6,12 @@ use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest, ShellRequest, TrackChipKind};
 
-use crate::app::{
-    gui_client_capabilities, make_app_stub, make_items, make_remote_app_stub_with_cmd_rx,
-};
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::gui::input::GuiInput;
+use mbv_client_core::{
+    gui_client_capabilities, make_app_stub, make_items, make_remote_app_stub_with_cmd_rx,
+};
 
 /// Stands in for the GUI core thread's drain of the two modal requests
 /// (`crates/mbv-gui` `apply_pending_overlay_request`): the App only raises
@@ -423,7 +423,7 @@ fn open_overlay_owns_the_keyboard() {
 // past the Off entry, Enter on the track, and the popover closes.
 #[test]
 fn track_popover_choose_sends_the_track_switch() {
-    let _state_dir = crate::app::config::TestStateDirGuard::new();
+    let _state_dir = mbv_client_core::config::TestStateDirGuard::new();
     let (mut core, cmd_rx) = core_with_cmd_rx();
     core.app
         .set_client_capabilities_for_test(gui_client_capabilities());

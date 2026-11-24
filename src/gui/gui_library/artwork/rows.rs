@@ -22,8 +22,8 @@ use mbv_ui_model::library_hero::{
 };
 use mbv_ui_model::music_grouping::ArtistKey;
 
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 
 #[cfg(test)]
 mod tests;

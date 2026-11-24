@@ -1,5 +1,5 @@
-use crate::app::BrowseEvent;
-use crate::app::{ClientCore, TickOutcome};
+use mbv_client_core::BrowseEvent;
+use mbv_client_core::{ClientCore, TickOutcome};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -226,11 +226,12 @@ impl Model {
 
     pub(in crate::tui) fn handle_restored_library_position_event(
         &mut self,
-        ev: crate::app::LibEvent,
+        ev: mbv_client_core::LibEvent,
     ) {
         let lib_idx = match &ev {
-            crate::app::LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
-                lib_idx, ..
+            mbv_client_core::LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
+                lib_idx,
+                ..
             }) => *lib_idx,
             _ => unreachable!("restore handler called with a different library event"),
         };

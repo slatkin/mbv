@@ -4,7 +4,7 @@ use mbv_components::library_panel::owner::LibraryContentOwner as _;
 #[test]
 fn queue_boundary_unmounts_outside_the_two_panel_layout() {
     for mode in [PanelMode::QueueOnly, PanelMode::LibraryOnly] {
-        let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
+        let mut app = mbv_client_core::tests::render_fixtures::make_queue_app(2);
         app.set_panel_mode_for_test(mode);
         let mut harness = TickHarness::new(app);
         assert!(
@@ -38,7 +38,7 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 
     // Mini view derives its mode from `mini_view_focus`, never the stored
     // Both: a narrow terminal in the Library mini view has no boundary either.
-    let mini = crate::app::tests::render_fixtures::make_queue_app(2);
+    let mini = mbv_client_core::tests::render_fixtures::make_queue_app(2);
     let mut harness = TickHarness::new(mini);
     crate::tui::test_support::set_terminal_width(harness.model_mut(), 70);
     harness.model_mut().sync_mounted_surfaces();
@@ -52,7 +52,7 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 
 #[test]
 fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
-    let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
+    let mut app = mbv_client_core::tests::render_fixtures::make_queue_app(2);
     app.set_panel_mode_for_test(PanelMode::Both);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
@@ -114,7 +114,7 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
 
 #[test]
 fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_stale_one() {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    let mut app = mbv_client_core::tests::render_fixtures::make_movie_app();
     app.set_panel_focus_for_test(PanelFocus::Library);
     app.set_panel_mode_for_test(PanelMode::LibraryOnly);
     let mut harness = TickHarness::new(app);
@@ -277,7 +277,7 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
 
 #[test]
 fn image_hold_outlives_the_drag_by_the_settle_window() {
-    let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
+    let mut app = mbv_client_core::tests::render_fixtures::make_queue_app(2);
     app.set_panel_mode_for_test(PanelMode::Both);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();

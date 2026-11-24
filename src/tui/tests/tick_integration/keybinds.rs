@@ -7,10 +7,10 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::dispatch::action::{NavigationIntent, PlaybackIntent, ShellCommand};
-use crate::app::input::router::RouterOutcome;
-use crate::app::tests::{make_app_stub, make_items, make_local_daemon_app_stub_with_cmd_rx};
 use crate::tui::tests::tick_integration::harness::TickHarness;
+use mbv_client_core::dispatch::action::{NavigationIntent, PlaybackIntent, ShellCommand};
+use mbv_client_core::input::router::RouterOutcome;
+use mbv_client_core::tests::{make_app_stub, make_items, make_local_daemon_app_stub_with_cmd_rx};
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseLevel;
 use mbv_ui_model::browse::ServerRows;
@@ -32,7 +32,7 @@ fn key(code: Key) -> Event<UserEvent> {
 #[test]
 fn configured_rebind_fires_through_tick() {
     let mut app = make_app_stub();
-    let config = crate::app::config::Config {
+    let config = mbv_client_core::config::Config {
         keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
             sections: vec![(
@@ -115,7 +115,7 @@ fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
 #[test]
 fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
     let mut app = make_app_stub();
-    let config = crate::app::config::Config {
+    let config = mbv_client_core::config::Config {
         keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
             sections: vec![(

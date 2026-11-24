@@ -9,9 +9,9 @@ use mbv_ui_msg::TrackChipKind;
 use super::daemon_lost::daemon_lost_buttons;
 use super::overlay::GuiOverlay;
 use super::popover::track_popover_choices;
-use crate::app::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackProjection};
-use crate::app::state::playback::ShownEntry;
 use crate::gui::GuiCore;
+use mbv_client_core::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackProjection};
+use mbv_client_core::state::playback::ShownEntry;
 
 /// The Queue header's chooser facts for one read (spec `gui-queue-chooser`
 /// "The queue header holds the chooser and its controls"): the name the

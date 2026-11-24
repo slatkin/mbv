@@ -149,7 +149,7 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
 
 #[test]
 fn direct_remote_feed_play_submits_the_selected_entry() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(1));
     let entry = playable_feed_entry("feed-play");
     app.seed_feeds_tab_for_test(vec![test_feed_subscription()], vec![entry.clone()]);

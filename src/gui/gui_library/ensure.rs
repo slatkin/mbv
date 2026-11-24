@@ -18,9 +18,9 @@
 
 use std::collections::HashSet;
 
-use crate::app::App;
 use crate::gui::GuiCore;
 use crate::gui::gui_client_state::GuiClientState;
+use mbv_client_core::App;
 
 use super::GuiDestinationKind;
 use super::store::GuiGroupAlbums;

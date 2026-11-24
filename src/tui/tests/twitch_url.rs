@@ -76,7 +76,7 @@ fn replaces(
 /// *The prompt accepts only Twitch hosts*, other-host scenario).
 #[test]
 fn refused_url_keeps_the_prompt_mounted_and_the_queue_unchanged() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let (mut model, cmd_rx) = model_with_owner(true);
     mount_prompt(&mut model);
 
@@ -104,7 +104,7 @@ fn refused_url_keeps_the_prompt_mounted_and_the_queue_unchanged() {
 /// at once as a Twitch item*).
 #[test]
 fn accepted_url_submits_a_play_now_twitch_item_and_closes_the_prompt() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let (mut model, cmd_rx) = model_with_owner(true);
     mount_prompt(&mut model);
 
@@ -137,7 +137,7 @@ fn accepted_url_submits_a_play_now_twitch_item_and_closes_the_prompt() {
 /// *Client attached to an Owner without the capability*).
 #[test]
 fn owner_without_the_capability_sends_nothing() {
-    let _guard = crate::app::config::TestStateDirGuard::new();
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let (mut model, cmd_rx) = model_with_owner(false);
     mount_prompt(&mut model);
 

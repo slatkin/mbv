@@ -11,8 +11,8 @@ use std::time::Instant;
 
 use mbv_queue::{AudiobookshelfItem, QueueItem};
 
-use crate::app::App;
 use crate::gui::GuiCore;
+use mbv_client_core::App;
 
 /// The playhead facts whose change marks the Library section (design D3 rule
 /// 4). The current chapter is not here: the window derives it from the

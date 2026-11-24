@@ -13,8 +13,8 @@ use mbv_ui_msg::{DaemonLostIntent, Key};
 
 use super::overlay::GuiOverlay;
 use super::projection::{GuiConfirmButtonProjection, GuiConfirmButtonTone};
-use crate::app::dispatch::session::daemon_lost::DaemonLostAnswer;
 use crate::gui::GuiCore;
+use mbv_client_core::dispatch::session::daemon_lost::DaemonLostAnswer;
 use mbv_ui_model::daemon_lost::DaemonLostModal;
 
 /// The dialog's choices in paint order: the intent the choice answers with,

@@ -3,7 +3,7 @@
 //! toggle.
 //!
 //! The panel identity and every running-panel request live in
-//! [`crate::app::pin`]; this module builds the launch argv from the `pub`
+//! [`mbv_client_core::pin`]; this module builds the launch argv from the `pub`
 //! parts there and claims that identity at start-up. The pinned panel is a
 //! process-wide singleton: a second `--pin` shows the running panel.
 
@@ -18,10 +18,10 @@ use mbv_desktop::launch::{
     PANEL_NAME, PinSpawnError, launch_exe, notify, run_request, terminal_prefix, toggle_argv,
 };
 
-pub(crate) use crate::app::pin::IN_PANEL_FLAG;
-pub use crate::app::pin::{claim_panel_identity, claim_swap_token, is_pinned, swap_token};
+pub(crate) use mbv_client_core::pin::IN_PANEL_FLAG;
+pub use mbv_client_core::pin::{claim_panel_identity, claim_swap_token, is_pinned, swap_token};
 
-use crate::app::pin::{
+use mbv_client_core::pin::{
     PanelReserveMode, claimed_socket, collapsed_reserve, focus_ring_arg, size_arg,
 };
 

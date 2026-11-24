@@ -296,6 +296,7 @@ path = "src/main.rs"
 # support surfaces of the crates it builds from.
 [features]
 test = [
+    "mbv-client-core/test",
     "mbv-config/test",
     "mbv-emby/test",
     "mbv-emby-model/test",
@@ -304,6 +305,7 @@ test = [
 ]
 
 [dependencies]
+mbv-client-core = { path = "crates/mbv-client-core" }
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }
 mbv-audiobookshelf = { path = "crates/mbv-audiobookshelf" }
@@ -352,6 +354,9 @@ time = { workspace = true, features = ["local-offset"] }
 mbv-feed = { path = "crates/mbv-feed" }
 
 [dev-dependencies]
+# The `test` feature exposes the core's stub fixtures and test seams. It is a
+# dev dependency only: no shipped build enables it (design D4e).
+mbv-client-core = { path = "crates/mbv-client-core", features = ["test"] }
 mbv-ui-msg = { path = "crates/mbv-ui-msg", features = ["test"] }
 mbv-cast = { path = "crates/mbv-cast", features = ["test"] }
 mbv-images = { path = "crates/mbv-images", features = ["test"] }

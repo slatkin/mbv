@@ -4,11 +4,11 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::dispatch::action::NavigationIntent;
-use crate::app::state::panel_targets::PanelTarget;
-use crate::app::tests::make_app_stub;
 use crate::tui::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use mbv_cast::discovery::CastReceiver;
+use mbv_client_core::dispatch::action::NavigationIntent;
+use mbv_client_core::state::panel_targets::PanelTarget;
+use mbv_client_core::tests::make_app_stub;
 use mbv_components::SessionsComponent;
 use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
@@ -21,13 +21,13 @@ fn key(code: Key) -> Event<UserEvent> {
     })
 }
 
-fn sessions(ids: &[&str]) -> Vec<crate::app::state::panel_targets::PanelTarget> {
+fn sessions(ids: &[&str]) -> Vec<mbv_client_core::state::panel_targets::PanelTarget> {
     ids.iter()
         .map(|id| {
             let mut session = mbv_emby::test_support::make_session(id, "mbv");
             session.id = (*id).into();
             session.device_id = format!("device-{id}");
-            crate::app::state::panel_targets::PanelTarget::Emby(Box::new(session))
+            mbv_client_core::state::panel_targets::PanelTarget::Emby(Box::new(session))
         })
         .collect()
 }
@@ -45,7 +45,7 @@ fn cast_target(id: &str) -> PanelTarget {
 /// owner-bound commands arrive on the returned receiver (design D13 rows
 /// 8.1/8.2; same pattern as `live_owner_channel` plus the capability).
 fn playback_output_owner_app() -> (
-    crate::app::App,
+    mbv_client_core::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
     capability_owner_app(true, false)
@@ -57,7 +57,7 @@ fn capability_owner_app(
     supports_playback_output: bool,
     emby_session: bool,
 ) -> (
-    crate::app::App,
+    mbv_client_core::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
     let mut app = make_app_stub();
@@ -73,7 +73,7 @@ fn capability_owner_app(
 /// peer endpoint it is the packaged `mbvd` hello, whose capabilities a Session
 /// activation never consults (it severs to the local Owner first).
 fn capabilityless_owner_app() -> (
-    crate::app::App,
+    mbv_client_core::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
     capability_owner_app(false, false)
@@ -82,7 +82,7 @@ fn capabilityless_owner_app() -> (
 /// An app whose owner advertises both output capabilities — the Local
 /// owner's compatibility (emby-session-owner-output design D3/D12).
 fn both_output_capabilities_owner_app() -> (
-    crate::app::App,
+    mbv_client_core::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
     capability_owner_app(true, true)
@@ -122,7 +122,9 @@ fn open_sessions(harness: &mut TickHarness) {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        crate::app::input::router::RouterOutcome::Command(NavigationIntent::OpenSessions.into())
+        mbv_client_core::input::router::RouterOutcome::Command(
+            NavigationIntent::OpenSessions.into()
+        )
     );
     harness
         .model_mut()
@@ -536,7 +538,7 @@ fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
 /// `cast-session-control` "Playback targets are mutually exclusive").
 #[test]
 fn tick_sessions_direct_endpoint_activation_switches_away_from_an_mbvd_owner() {
-    use crate::app::test_seams::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+    use mbv_client_core::test_seams::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
     use std::sync::Mutex;
 
     static REQUESTED: Mutex<Option<mbv_remote_player::DaemonEndpoint>> = Mutex::new(None);
