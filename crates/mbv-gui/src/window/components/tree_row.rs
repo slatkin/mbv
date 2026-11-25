@@ -26,7 +26,7 @@ pub const TREE_ROW_FONT_PX: f32 = 14.0;
 pub const LEAF_ROW_FONT_PX: f32 = 13.0;
 
 /// The leaf tree rows' font weight, painted and measured.
-const LEAF_ROW_FONT_WEIGHT: f32 = 500.0;
+pub const LEAF_ROW_FONT_WEIGHT: f32 = 500.0;
 
 /// The leaf label's inset, as its `padding` shorthand (user request
 /// 2026-11-24): it sits on the label's wrapper, so the row box keeps the tree's

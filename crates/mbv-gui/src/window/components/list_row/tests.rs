@@ -69,6 +69,7 @@ struct FlatSpec {
     play: Option<GuiHomeRowStateFrame>,
     subtitle: Option<String>,
     trail: Option<String>,
+    hover_play: bool,
 }
 
 impl Default for FlatSpec {
@@ -79,6 +80,7 @@ impl Default for FlatSpec {
             play: None,
             subtitle: None,
             trail: None,
+            hover_play: false,
         }
     }
 }
@@ -111,6 +113,7 @@ fn flat_app(spec: FlatSpec) -> Element {
         play,
         subtitle,
         trail,
+        hover_play,
     } = spec;
     provide_row_contexts();
     rsx! {
@@ -127,6 +130,7 @@ fn flat_app(spec: FlatSpec) -> Element {
             selected: false,
             on_press: Callback::new(|()| {}),
             on_play: Callback::new(|()| {}),
+            on_hover_play: hover_play.then_some(Callback::new(|()| {})),
         }
     }
 }
@@ -650,13 +654,13 @@ fn a_nested_rows_level_and_depth_pick_its_look(
     );
 }
 
-/// Contract (design D4): a nested row's title tone follows its play state — no
-/// play state paints the level's own tone, an unplayed row the text tone, and a
-/// played row the muted tone.
+/// Contract (design D4; gui-played-row-marks design D1): a nested row's title
+/// tone follows its play state — no play state paints the level's own tone, an
+/// unplayed row the `ef` text tone, and a played row the `ef` grey tone.
 #[rstest]
 #[case(None, "var(--canvas-muted)")]
-#[case(Some(GuiHomeRowStateFrame::Ordinary), "var(--canvas-text)")]
-#[case(Some(GuiHomeRowStateFrame::Played), "var(--canvas-muted)")]
+#[case(Some(GuiHomeRowStateFrame::Ordinary), "var(--ef-fg)")]
+#[case(Some(GuiHomeRowStateFrame::Played), "var(--ef-grey1)")]
 fn a_nested_rows_title_paints_its_play_tone(
     #[case] play: Option<GuiHomeRowStateFrame>,
     #[case] tone: &str,
@@ -671,5 +675,48 @@ fn a_nested_rows_title_paints_its_play_tone(
     assert!(
         fixture.style_of(TITLE).contains(&format!("color: {tone}")),
         "the title paints {tone}"
+    );
+}
+
+/// Contract (gui-played-row-marks design D1–D3, `gui-client` spec "A played
+/// row" and "The hover controls cover the trailing end"): a flat row that
+/// carries a play state paints its mark in the one trailing cluster the trail
+/// text shares — no state paints no mark, an unplayed row the `unplayed` mark,
+/// a played row the `played` mark with its thumb dimmed to the played opacity.
+#[rstest]
+#[case(None, None, false)]
+#[case(Some(GuiHomeRowStateFrame::Ordinary), Some("unplayed"), false)]
+#[case(Some(GuiHomeRowStateFrame::Played), Some("played"), true)]
+fn a_flat_rows_mark_shares_the_trailing_cluster_with_the_trail_text(
+    #[case] play: Option<GuiHomeRowStateFrame>,
+    #[case] mark: Option<&str>,
+    #[case] dimmed: bool,
+) {
+    let fixture = flat_built(FlatSpec {
+        play,
+        trail: Some("2026-11-24".to_owned()),
+        hover_play: true,
+        ..FlatSpec::default()
+    });
+
+    assert_eq!(
+        fixture
+            .attr_of("[data-play-mark]", "data-play-mark")
+            .as_deref(),
+        mark,
+        "the slot carries the mark value"
+    );
+    let thumb_style = fixture.style_of(THUMB);
+    assert_eq!(
+        thumb_style.contains("opacity: 0.35"),
+        dimmed,
+        "the thumb box dims only on the played row: {thumb_style}"
+    );
+    let shared = fixture.presents(".row-hover-trail [data-play-mark]")
+        && fixture.presents(".row-hover-trail [data-library-test-date]");
+    assert_eq!(
+        shared,
+        mark.is_some(),
+        "the mark and the trail text share the one row-hover-trail cluster"
     );
 }
