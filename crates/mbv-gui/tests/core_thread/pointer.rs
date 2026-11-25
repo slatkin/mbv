@@ -6,8 +6,8 @@
 //! semantic hit map).
 
 use mbv_client_core::{
-    stub_app_with_cast_target, stub_app_with_prefix_and_toast, stub_app_with_track_choices,
-    transport_client_capabilities,
+    ClientTickHost, stub_app_with_cast_target, stub_app_with_prefix_and_toast,
+    stub_app_with_track_choices, transport_client_capabilities,
 };
 use mbv_config::TestStateDirGuard;
 use mbv_gui::bridge::frame::chrome::GuiStatusBar;
@@ -265,6 +265,11 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
     assert!(test.core.step());
     test.held();
 
+    // Nothing is active on the Owner by the press (#1031: the stub's unset
+    // endpoint is the local Owner), so the selection skips the hand-off question.
+    test.core
+        .app_mut()
+        .edit_player_status_for_test(|status| status.active = false);
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());
     let frame = test.held();

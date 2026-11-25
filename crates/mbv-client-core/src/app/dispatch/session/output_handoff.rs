@@ -31,7 +31,13 @@ impl App {
     /// counting — the hand-off moves it the same way). A disconnected
     /// suspended link carries a stale status and hands nothing off.
     fn local_owner_slot_active(&self) -> bool {
-        if self.is_local_daemon() {
+        // An unset endpoint (before the first connect) is the local Owner, as
+        // in `local_owner_link`.
+        if self
+            .player_endpoint
+            .as_ref()
+            .is_none_or(mbv_remote_player::DaemonEndpoint::is_local)
+        {
             self.player.status_snapshot().active
         } else {
             self.suspended_local.as_ref().is_some_and(|suspended| {

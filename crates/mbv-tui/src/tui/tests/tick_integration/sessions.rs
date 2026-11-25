@@ -379,6 +379,9 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
 #[test]
 fn tick_sessions_reordered_snapshot_activates_selected_identity() {
     let (mut app, cmd_rx) = both_output_capabilities_owner_app();
+    // Nothing is active on the Owner (#1031: the unset endpoint is the local
+    // Owner), so the selection skips the hand-off question.
+    app.edit_player_status_for_test(|status| status.active = false);
     app.seed_panel_targets_for_test(sessions(&["first", "selected"]));
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);

@@ -195,6 +195,11 @@ fn a_chooser_press_selects_the_painted_choice_after_the_list_grows() {
     // A receiver arrives ahead of the painted one; the window has painted
     // neither it nor a new region yet.
     set_cast_receivers_for_test(test.core.app_mut(), vec![BEDROOM, LIVING_ROOM]);
+    // Nothing is active on the Owner by the press (#1031: the stub's unset
+    // endpoint is the local Owner), so the selection skips the hand-off question.
+    test.core
+        .app_mut()
+        .edit_player_status_for_test(|status| status.active = false);
 
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());

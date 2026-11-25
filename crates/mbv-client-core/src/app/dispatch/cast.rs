@@ -174,6 +174,12 @@ mod tests {
     {
         let mut app = make_app_stub();
         let cmd_rx = live_owner_channel(&mut app);
+        // Nothing active on the Owner: the selection takes the immediate path.
+        // The stub's unset endpoint is the local Owner (#1031), so its status
+        // decides the continue-playback gate.
+        app.player
+            .remote()
+            .update_status(|status| status.active = false);
         app.local_view
             .adopt_queue_items(vec![feed_item("a", Some("https://feed/a.mp3"))], 0);
         let before: Vec<String> = app
