@@ -8,6 +8,8 @@ Full Emby client session remote control via WebSocket is also supported. `mbv` c
 
 You can download it. It's a vibe-coded funtime hobby though, as should be obvious. And I probably have ADHD. I don't even care enough about licencing to type "MIT" on this! Danger.
 
+Services supported: Emby, Audiobookshelf, media RSS feeds.
+
 It requires mpv, obviously.
 
 ![mbv GUI client](assets/screenshot-gui.png)
