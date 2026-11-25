@@ -399,8 +399,7 @@ pub fn LibraryShowsList() -> Element {
     // changes the value the effect keys on.
     let open_in_view = match frame.map(|frame| frame.view) {
         Some(crate::gui_core::GuiShowsView::All) => open_nodes_in_view(&rows, scroll),
-        Some(crate::gui_core::GuiShowsView::New)
-        | Some(crate::gui_core::GuiShowsView::Upcoming)
+        Some(crate::gui_core::GuiShowsView::New | crate::gui_core::GuiShowsView::Upcoming)
         | None => (Vec::new(), Vec::new()),
     };
     let report_library = library.clone();

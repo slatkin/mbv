@@ -147,11 +147,13 @@ fn tree() -> Vec<GuiShowsSeriesFrame> {
 
 /// Carry the given Shows content into the store's sections.
 fn carry(state: &LibraryState, list: GuiLibraryList) {
-    let mut batch = GuiSectionBatch::default();
-    batch.library_list = Some(GuiSection {
-        revision: 1,
-        value: Some(list),
-    });
+    let batch = GuiSectionBatch {
+        library_list: Some(GuiSection {
+            revision: 1,
+            value: Some(list),
+        }),
+        ..GuiSectionBatch::default()
+    };
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
 }

@@ -462,7 +462,7 @@ impl GuiCore {
                 seasons,
             } => self.apply_gui_shows_open_in_view(lib_idx, series, seasons),
             GuiLibraryCommand::Refresh { album_ids } => {
-                self.refresh_gui_destination(album_ids);
+                self.refresh_gui_destination(&album_ids);
             }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => {
                 self.gui_emby_select(lib_idx, &row);

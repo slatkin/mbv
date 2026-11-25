@@ -26,7 +26,7 @@ impl GuiCore {
     /// `album_ids` are the open Music album rows the window paints in view, so
     /// their tracks reload in place. A session that presents no destination is
     /// an ignored command.
-    pub(crate) fn refresh_gui_destination(&mut self, album_ids: Vec<String>) {
+    pub(crate) fn refresh_gui_destination(&mut self, album_ids: &[String]) {
         let Some(kind) = self.gui_active_destination() else {
             super::log_ignored_library_command("refresh", format_args!("no destination is active"));
             return;
@@ -34,7 +34,7 @@ impl GuiCore {
         match kind {
             GuiDestinationKind::Home => self.app.refresh_home_content(),
             GuiDestinationKind::Music { lib_idx } => {
-                refresh_music(&mut self.app, &mut self.gui, lib_idx, &album_ids);
+                refresh_music(&mut self.app, &mut self.gui, lib_idx, album_ids);
             }
             GuiDestinationKind::Shows { lib_idx } => {
                 refresh_shows(&mut self.app, &mut self.gui, lib_idx);

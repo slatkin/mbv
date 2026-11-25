@@ -125,7 +125,7 @@ impl App {
                 self.handle_album_tracks_fetched(album_id, tracks);
             }
             MusicEvent::AlbumTracksRefreshFailed { album_id } => {
-                self.handle_album_tracks_refresh_failed(album_id);
+                self.handle_album_tracks_refresh_failed(&album_id);
             }
             MusicEvent::ArtistTracksFetched {
                 destination,
@@ -356,8 +356,8 @@ impl App {
     /// A failed track-list refresh (design D9): the cached tracks stay, the
     /// album's loading mark frees so a later refresh may start, and the
     /// failure shows one toast.
-    fn handle_album_tracks_refresh_failed(&mut self, album_id: String) {
-        self.album_tracks_loading.remove(&album_id);
+    fn handle_album_tracks_refresh_failed(&mut self, album_id: &str) {
+        self.album_tracks_loading.remove(album_id);
         self.flash("Refresh failed".to_string(), ToastSeverity::Error);
     }
 

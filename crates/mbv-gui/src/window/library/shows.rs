@@ -259,11 +259,12 @@ impl LibraryState {
         shows_ui.with_mut(|ui| {
             ui.open.clear();
             if narrowing {
-                for id in &nodes {
-                    if !ui.closed.iter().any(|closed| closed == id) {
-                        ui.closed.push(id.clone());
-                    }
-                }
+                let absent: Vec<String> = nodes
+                    .iter()
+                    .filter(|id| !ui.closed.contains(*id))
+                    .cloned()
+                    .collect();
+                ui.closed.extend(absent);
             }
         });
     }
