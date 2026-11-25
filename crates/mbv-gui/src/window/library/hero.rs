@@ -199,6 +199,28 @@ pub fn artist_page_facts(hero: &GuiMusicHeroFrame) -> Segments {
     facts
 }
 
+/// The artist page block's facts line (gui-music-artist-page design D6): the
+/// span of the artist's release years alone — the header's facts line carries
+/// the rest. Empty while the subject is an album, or while no album names a
+/// year.
+#[must_use]
+pub fn artist_year_span_facts(hero: &GuiMusicHeroFrame) -> Segments {
+    let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject else {
+        return Vec::new();
+    };
+    let Some((first, last)) = &page.years else {
+        return Vec::new();
+    };
+    vec![GuiMetaSegmentFrame {
+        text: if first == last {
+            first.clone()
+        } else {
+            format!("{first}\u{2013}{last}")
+        },
+        kind: GuiMetaKindFrame::Date,
+    }]
+}
+
 /// The artist's albums in the union, which Shuffle artist plays (design D8).
 /// The union artist is the one that owns the picked album, so a name the
 /// Service repeats cannot pick the wrong artist; the picked album alone is the

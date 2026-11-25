@@ -15,7 +15,7 @@ use crate::window::library::list::{
     build_library_rows, jump_to_letter, letter_rail, list_window, scroll_step,
     scroll_top_to_show_cursor,
 };
-use crate::window::library::parts::library_music_list;
+use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::scroll::set_scroll_top;
 
 use super::{LibraryState, LibraryUiState, RowHoverPresses};
@@ -214,13 +214,34 @@ impl LibraryState {
         }
     }
 
-    /// Play a track (`add-gui-library-panel`, the user's double-click contract):
-    /// the track's own stable id, through the same play command Enter sends. The
-    /// Owner's queue is replaced, and with the library playback policy's autoload on,
-    /// the album's tracks replace it from the played track onward. The list's track
-    /// rows and the Hero's tracklist rows both send it, so one gesture cannot drift
-    /// from the other.
+    /// Play a track (`add-gui-library-panel`, the user's double-click contract;
+    /// gui-music-artist-page design D6): the one entry the double-click, the hover
+    /// Play, and Enter share, so one gesture cannot drift from the other. While the
+    /// carried Music detail's subject is the artist page, the command is
+    /// `PlayArtistTrack` with the page's album ids in order — the sequence runs
+    /// through the page's albums and does not stop at the end of the track's album.
+    /// Otherwise it is the track's own stable id through the same play command Enter
+    /// sends: the Owner's queue is replaced, and with the library playback policy's
+    /// autoload on, the album's tracks replace it from the played track onward.
     pub fn play_library_track(&self, track_id: &str) {
+        let detail = self.sections.library_detail.peek();
+        let page = library_music_detail(detail.as_deref())
+            .and_then(|detail| detail.hero.as_ref())
+            .and_then(|hero| match &hero.subject {
+                GuiMusicHeroSubjectFrame::Artist(page) => Some(page),
+                GuiMusicHeroSubjectFrame::Album(_) => None,
+            });
+        if let Some(page) = page {
+            self.link.library(GuiLibraryCommand::PlayArtistTrack {
+                album_ids: page
+                    .albums
+                    .iter()
+                    .map(|album| album.album_id.clone())
+                    .collect(),
+                track_id: track_id.to_owned(),
+            });
+            return;
+        }
         self.play_library_item(track_id);
     }
 

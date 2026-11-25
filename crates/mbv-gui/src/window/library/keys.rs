@@ -270,8 +270,17 @@ fn hovered_item_id(state: &LibraryState, pointer: &PointerTarget) -> Option<Stri
 /// Play the item the pointer's control names (design D2's Enter): the list row,
 /// or the Hero's tracklist track while the pointer rests on the tracklist. With
 /// no item the key sends no command. Enter never picks: a mouse press picks the
-/// item for the Hero, and Enter plays.
+/// item for the Hero, and Enter plays. The tracklist marker routes through
+/// `play_library_track` (gui-music-artist-page design D6, spec "Enter plays the
+/// hovered artist page track"), so Enter, the hover Play, and the double-click
+/// share one path.
 fn play_hovered_item(state: &LibraryState, pointer: &PointerTarget) {
+    if pointer.list == Some(PointerList::Tracklist) {
+        if let Some(track_id) = pointer.row.as_deref() {
+            state.play_library_track(track_id);
+        }
+        return;
+    }
     if let Some(item_id) = hovered_item_id(state, pointer) {
         state.play_library_item(&item_id);
     }

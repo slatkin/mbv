@@ -435,7 +435,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                         }
                     });
                     let mut entries = row_menu_entries(&menu.entries);
-                    if row_menu.detail && arrangement == GuiArrangement::Narrow && !overlay_open {
+                    if arrangement == GuiArrangement::Narrow && !overlay_open {
                         entries.insert(0, view_detail_entry());
                     }
                     let top = format!("{}px", row_menu.y);

@@ -46,9 +46,6 @@ pub struct RowMenu {
     pub x: f32,
     /// The pointer's client y when the menu opened.
     pub y: f32,
-    /// Whether the menu offers View Detail: `false` for a row whose press
-    /// picks no item (a Music artist row), which has no Hero to open.
-    pub detail: bool,
 }
 
 /// The Library panel's interaction state (`state.ts`'s `LibraryUiState`).
@@ -687,16 +684,12 @@ impl LibraryState {
     /// pointer position, and a chosen entry sends its index for that row. The
     /// Hero's own menu closes with it — one menu is up at a time.
     pub fn open_library_row_menu(&self, row: crate::gui_core::GuiLibraryMenuRow, x: f32, y: f32) {
-        self.open_row_menu(row, x, y, true);
-    }
-
-    fn open_row_menu(&self, row: crate::gui_core::GuiLibraryMenuRow, x: f32, y: f32, detail: bool) {
         self.link
             .library(GuiLibraryCommand::RowMenu { row: row.clone() });
         let mut ui = self.ui;
         ui.with_mut(|ui| {
             ui.item_menu_open = false;
-            ui.row_menu = Some(RowMenu { row, x, y, detail });
+            ui.row_menu = Some(RowMenu { row, x, y });
         });
     }
 
@@ -714,20 +707,6 @@ impl LibraryState {
     ) {
         if let Some(row) = row {
             self.open_library_row_menu(row, x, y);
-        }
-    }
-
-    /// Open the item menu of a row whose press picks no item (a Music artist
-    /// row): the same menu without View Detail, because the Hero has no item
-    /// to show for the row.
-    pub fn open_row_menu_without_detail_at(
-        &self,
-        row: Option<crate::gui_core::GuiLibraryMenuRow>,
-        x: f32,
-        y: f32,
-    ) {
-        if let Some(row) = row {
-            self.open_row_menu(row, x, y, false);
         }
     }
 

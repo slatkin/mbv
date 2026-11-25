@@ -208,10 +208,12 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
             on_hover_play: hover.play,
             on_hover_queue: hover.queue,
             on_hover_shuffle: hover.shuffle,
+            // The part presses the row first, so the menu's View Detail opens
+            // the Hero for this row — the artist page it picks
+            // (gui-music-artist-page design D6, spec "The overlay shows the
+            // artist page").
             on_context: Some(Callback::new(move |(x, y): (f32, f32)| {
-                // An artist press picks no item, so its menu offers no View
-                // Detail.
-                menu_library.open_row_menu_without_detail_at(
+                menu_library.open_row_menu_at(
                     item_id.clone().map(LibraryState::row_menu_item),
                     x,
                     y,
