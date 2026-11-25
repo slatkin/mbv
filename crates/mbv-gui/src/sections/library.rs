@@ -80,16 +80,22 @@ fn destination_parts(
 /// playing track's id.
 fn music_parts(core: &mut GuiCore, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
     let projection = core.gui_music_projection(lib_idx);
-    let picked = projection
-        .hero
-        .as_ref()
-        .map(|hero| hero.album.album_id.clone());
-    let art = picked
-        .as_deref()
-        .map(|album_id| GuiArtRef::from(&core.gui_library_artwork(album_id)));
-    let menu = picked
-        .map(|album_id| core.gui_library_menu(&album_id))
-        .unwrap_or_default();
+    // The Hero's art and menu follow the subject (gui-music-artist-page design
+    // D5): the album subject keeps the album's art and the picked item's menu;
+    // the artist page paints the artist's art and has no More actions, so its
+    // menu is empty.
+    let (art, menu) = match projection.hero.as_ref().map(|hero| &hero.subject) {
+        Some(crate::gui_core::GuiMusicHeroSubject::Album(album)) => {
+            let art = GuiArtRef::from(&core.gui_library_artwork(&album.album_id));
+            let menu = core.gui_library_menu(&album.album_id);
+            (Some(art), menu)
+        }
+        Some(crate::gui_core::GuiMusicHeroSubject::Artist(page)) => {
+            let art = GuiArtRef::from(&core.gui_artist_artwork(&page.artist_key));
+            (Some(art), Vec::new())
+        }
+        None => (None, Vec::new()),
+    };
     let playing_track_id = crate::gui_core::playing_track_id_for_shell(core.app());
     (
         GuiDestinationList::Music(GuiMusicList::from_projection(lib_idx, &projection)),

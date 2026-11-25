@@ -8,10 +8,12 @@
 //! art state each row paints, its Hero artwork source, and the row cache read.
 
 use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource, painted_shape_for_pixels};
+use mbv_ui_model::music_grouping::ArtistKey;
 use mbv_ui_model::playback::MUSIC_ALBUM_IMAGE_TYPES;
 
 use crate::gui_core::GuiCore;
 use mbv_client_core::App;
+use mbv_client_core::dispatch::library::artist_lookup::ArtistNameLookup;
 use mbv_images::SourceImage;
 
 mod rows;
@@ -96,6 +98,13 @@ impl GuiCore {
     pub fn gui_library_artwork(&mut self, album_id: &str) -> GuiLibraryArtwork {
         library_artwork(&mut self.app, album_id)
     }
+
+    /// Project the artist page's artwork for `artist_key`
+    /// (gui-music-artist-page design D5).
+    #[must_use]
+    pub fn gui_artist_artwork(&mut self, artist_key: &ArtistKey) -> GuiLibraryArtwork {
+        artist_artwork(&mut self.app, artist_key)
+    }
 }
 
 /// The image cache's source under `cache_key`, as the server sent it
@@ -108,6 +117,46 @@ pub(in crate::gui_core::gui_library) fn art_source(
     app.image_cache()
         .image(cache_key)
         .and_then(|entry| entry.source.clone())
+}
+
+/// The artist page's artwork source for a Service artist id
+/// (gui-music-artist-page design D5): the artist's own `Primary` image under
+/// the artist's `{id}:P` card key, through the shared Hero art path.
+fn music_artist_source(artist_id: &str) -> ArtworkSource {
+    ArtworkSource::Emby {
+        item_id: artist_id.to_owned(),
+        series_id: String::new(),
+        image_types: vec!["Primary".to_owned()],
+        cache_key: mbv_images::emby_card_cache_key(artist_id, ""),
+    }
+}
+
+/// Project the artist page's artwork for `artist_key` (gui-music-artist-page
+/// design D5): the artist's `Primary` image, fetched and resolved through the
+/// shared Hero art path. A fallback name resolves its Service artist id
+/// through `ArtistNameLookup`, as the row art does; a name with no resolved id
+/// paints the placeholder.
+#[must_use]
+pub(in crate::gui_core::gui_library) fn artist_artwork(
+    app: &mut App,
+    artist_key: &ArtistKey,
+) -> GuiLibraryArtwork {
+    let id = match artist_key {
+        ArtistKey::Service(id) => Some(id.clone()),
+        ArtistKey::Fallback(name) => ArtistNameLookup::item_id(app, name).map(str::to_owned),
+    };
+    let Some(id) = id.filter(|id| !id.is_empty()) else {
+        return GuiLibraryArtwork::Placeholder;
+    };
+    if !app.image_cache().protocol_enabled() {
+        return GuiLibraryArtwork::Placeholder;
+    }
+    let Some((cache_key, item_id, series_id, image_types)) =
+        emby_fetch_parts(music_artist_source(&id))
+    else {
+        return GuiLibraryArtwork::Placeholder;
+    };
+    home_hero_artwork(app, &cache_key, &item_id, &series_id, &image_types)
 }
 
 /// Pre-warm the Hero artwork of the entries neighbouring the picked one in

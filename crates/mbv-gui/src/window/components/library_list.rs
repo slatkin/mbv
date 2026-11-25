@@ -310,9 +310,11 @@ pub fn LibraryList() -> Element {
 
     // The album the Hero shows: the list paints its row in the canvas's
     // picked fill (design D7).
+    // The subject's album while the subject is one (gui-music-artist-page
+    // row 5.2 reworks this reader for the artist page).
     let picked = detail
         .and_then(|detail| detail.hero.as_ref())
-        .map(|hero| hero.album.album_id.clone());
+        .and_then(|hero| hero.album().map(|album| album.album_id.clone()));
 
     // The album the list last revealed. A pick reveals once, so a later
     // frame carrying the same pick does not move the cursor again. The
@@ -330,7 +332,12 @@ pub fn LibraryList() -> Element {
         ) else {
             return;
         };
-        let album_id = detail.hero.as_ref().map(|hero| hero.album.album_id.clone());
+        // The subject's album while the subject is one (row 5.2 reworks this
+        // reader for the artist page).
+        let album_id = detail
+            .hero
+            .as_ref()
+            .and_then(|hero| hero.album().map(|album| album.album_id.clone()));
         let mut revealed = revealed_album.borrow_mut();
         if album_id.is_none() || album_id == *revealed {
             return;

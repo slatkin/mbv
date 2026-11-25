@@ -25,7 +25,10 @@ fn destination_label(tabs: &[GuiLibraryTabFrame], current_tab: Option<usize>) ->
 fn picked_name(hero: Option<&GuiMusicHeroFrame>) -> Option<String> {
     let hero = hero?;
     Some(if hero.artist.trim().is_empty() {
-        hero.album.name.clone()
+        // The subject's album while the subject is one (gui-music-artist-page
+        // row 5.3 reworks this reader for the artist page).
+        hero.album()
+            .map_or_else(|| hero.artist.clone(), |album| album.name.clone())
     } else {
         hero.artist.clone()
     })

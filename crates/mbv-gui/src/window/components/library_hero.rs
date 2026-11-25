@@ -131,13 +131,19 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     let Some(hero) = detail.hero.as_ref() else {
         return rsx! {};
     };
+    // The subject's album while the subject is one (gui-music-artist-page row
+    // 6.3 branches this component for the artist page, which paints nothing
+    // here until then).
+    let Some(album) = hero.album() else {
+        return rsx! {};
+    };
 
     // The actions' sends (design D8): the picked album's own stable id.
-    let album_id = hero.album.album_id.clone();
+    let album_id = album.album_id.clone();
     let play_library = library.clone();
     let on_play = Callback::new(move |()| play_album(&play_library, &album_id));
     let queue_library = library.clone();
-    let album_id = hero.album.album_id.clone();
+    let album_id = album.album_id.clone();
     let on_queue = Callback::new(move |()| add_album_to_queue(&queue_library, &album_id));
 
     let menu: Vec<GuiMusicMenuEntryFrame> = hero
@@ -174,7 +180,7 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     let menu_library = library.clone();
     // The menu's press names the picked album, cloned once for the callback —
     // the three play closures each moved their own copy.
-    let album_id = hero.album.album_id.clone();
+    let album_id = album.album_id.clone();
     let on_select =
         Callback::new(move |index: usize| press_menu_entry(&menu_library, &album_id, index));
     let actions = rsx! {
@@ -217,12 +223,12 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
             },
             header_action: Some(header_action),
             block: HeroBlock {
-                label: hero.album.name.clone(),
+                label: album.name.clone(),
                 eyebrow: Some(vec![GuiMetaSegmentFrame {
-                    text: hero.album.year.clone(),
+                    text: album.year.clone(),
                     kind: GuiMetaKindFrame::Date,
                 }]),
-                name: Some(hero.album.name.clone()),
+                name: Some(album.name.clone()),
                 name_episode: false,
                 facts: Some(album_facts(hero)),
                 meta: Vec::new(),
@@ -230,12 +236,12 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
             },
             art_shape: GuiArtShapeFrame::Square,
             art: detail.art.clone(),
-            art_title: hero.album.name.clone(),
+            art_title: album.name.clone(),
             art_placeholder: Some("[Album art · Emby Primary]".to_owned()),
             actions: Some(actions),
             children: Some(rsx! {
                 LibraryTracklist {
-                    tracks: hero.album.tracks.clone().unwrap_or_default(),
+                    tracks: album.tracks.clone().unwrap_or_default(),
                     playing_track_id: detail.playing_track_id.clone(),
                 }
             }),

@@ -134,9 +134,8 @@ pub fn artist_facts(hero: &GuiMusicHeroFrame) -> Segments {
 /// landed (design D5).
 #[must_use]
 pub fn album_facts(hero: &GuiMusicHeroFrame) -> Segments {
-    hero.album
-        .total
-        .as_ref()
+    hero.album()
+        .and_then(|album| album.total.as_ref())
         .map_or_else(Vec::new, track_total_facts)
 }
 
@@ -151,14 +150,16 @@ pub fn artist_union_albums(
     artists: &[crate::bridge::frame::library::GuiMusicArtistFrame],
     hero: &GuiMusicHeroFrame,
 ) -> Vec<String> {
-    let owner = artists.iter().find(|artist| {
-        artist
-            .albums
-            .iter()
-            .any(|album| album.album_id == hero.album.album_id)
-    });
+    // The subject's album while the subject is one (gui-music-artist-page
+    // row 5.3 reworks this reader for the artist page).
+    let Some(picked) = hero.album().map(|album| album.album_id.clone()) else {
+        return Vec::new();
+    };
+    let owner = artists
+        .iter()
+        .find(|artist| artist.albums.iter().any(|album| album.album_id == picked));
     owner.map_or_else(
-        || vec![hero.album.album_id.clone()],
+        || vec![picked],
         |owner| {
             owner
                 .albums

@@ -5,8 +5,8 @@
 //! Both ride the `libraryList` and `libraryDetail` sections.
 
 use crate::gui_core::{
-    GuiCollections, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
-    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
+    GuiCollections, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicArtistPage,
+    GuiMusicHero, GuiMusicHeroSubject, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
 use mbv_ui_model::music_grouping::ArtistKey;
 
@@ -159,11 +159,38 @@ pub struct GuiMusicTrackTotalFrame {
     pub duration: String,
 }
 
-/// The Hero's facts for the picked album (design D5): the artist header, the
-/// picked album block, and its tracklist.
+/// The Hero's subject (gui-music-artist-page design D1), mirroring
+/// `crate::gui_core::GuiMusicHeroSubject`: the picked album, or the picked
+/// artist's page while the union still holds the artist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GuiMusicHeroSubjectFrame {
+    /// The picked album, with its tracklist when the cache holds it.
+    Album(GuiMusicAlbumFrame),
+    /// The picked artist's page.
+    Artist(GuiMusicArtistPageFrame),
+}
+
+/// The artist page the Hero shows while an artist is picked
+/// (gui-music-artist-page design D1), mirroring
+/// `crate::gui_core::GuiMusicArtistPage`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuiMusicArtistPageFrame {
+    /// The artist's stable identity, the row the page pick names.
+    pub artist_key: GuiArtistKey,
+    /// The union's albums of the artist, in the union's order, with their
+    /// tracklists when the cache holds them.
+    pub albums: Vec<GuiMusicAlbumFrame>,
+    /// The first and last release year of the albums that name one, in the
+    /// union's album order; `None` when no album names a year.
+    pub years: Option<(String, String)>,
+}
+
+/// The Hero's facts for the picked subject (design D5; gui-music-artist-page
+/// design D1): the artist header, and the subject — the picked album's block
+/// and tracklist, or the artist page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicHeroFrame {
-    /// The picked album's artist.
+    /// The subject's artist.
     pub artist: String,
     /// The selected collection names in selector order.
     pub collections: Vec<String>,
@@ -172,12 +199,53 @@ pub struct GuiMusicHeroFrame {
     /// The artist's track count and total time, present once every one of the
     /// artist's union albums holds a cached tracklist.
     pub artist_tracks: Option<GuiMusicTrackTotalFrame>,
-    /// The picked album, with its tracklist when the cache holds it.
-    pub album: GuiMusicAlbumFrame,
+    /// The picked subject: the artist page while the union holds the page's
+    /// artist, else the picked album (gui-music-artist-page design D1).
+    pub subject: GuiMusicHeroSubjectFrame,
     /// The picked item's menu entries (design D8): the shared builder's entries
     /// for the album, which More actions paints. Empty when the item offers no
-    /// menu.
+    /// menu — the artist page has no More actions.
     pub menu: Vec<GuiMusicMenuEntryFrame>,
+}
+
+impl GuiMusicHeroFrame {
+    /// The subject's album; `None` while the subject is an artist page.
+    #[must_use]
+    pub fn album(&self) -> Option<&GuiMusicAlbumFrame> {
+        match &self.subject {
+            GuiMusicHeroSubjectFrame::Album(album) => Some(album),
+            GuiMusicHeroSubjectFrame::Artist(_) => None,
+        }
+    }
+
+    /// The picked row's name (gui-music-artist-page design D6): the album's
+    /// name for an album subject, the artist's name for an artist page, so a
+    /// reader never matches on the subject.
+    #[must_use]
+    pub fn picked_name(&self) -> String {
+        match &self.subject {
+            GuiMusicHeroSubjectFrame::Album(album) => album.name.clone(),
+            GuiMusicHeroSubjectFrame::Artist(_) => self.artist.clone(),
+        }
+    }
+
+    /// The picked row's id in the encodings `window/library/list.rs` paints
+    /// (gui-music-artist-page design D6): the album row's id for an album
+    /// subject, the artist row's id for an artist page, so a reader never
+    /// matches on the subject.
+    #[must_use]
+    pub fn picked_row_id(&self) -> String {
+        match &self.subject {
+            GuiMusicHeroSubjectFrame::Album(album) => format!("album:{}", album.album_id),
+            GuiMusicHeroSubjectFrame::Artist(page) => {
+                let (kind, id) = match &page.artist_key {
+                    GuiArtistKey::Service(id) => ("service", id),
+                    GuiArtistKey::Fallback(id) => ("fallback", id),
+                };
+                format!("artist:{kind}:{id}")
+            }
+        }
+    }
 }
 
 impl From<&GuiMusicArtist> for GuiMusicArtistFrame {
@@ -236,8 +304,27 @@ impl From<&GuiMusicHero> for GuiMusicHeroFrame {
                 .artist_tracks
                 .as_ref()
                 .map(GuiMusicTrackTotalFrame::from),
-            album: GuiMusicAlbumFrame::from(&hero.album),
+            subject: GuiMusicHeroSubjectFrame::from(&hero.subject),
             menu: Vec::new(),
+        }
+    }
+}
+
+impl From<&GuiMusicHeroSubject> for GuiMusicHeroSubjectFrame {
+    fn from(subject: &GuiMusicHeroSubject) -> Self {
+        match subject {
+            GuiMusicHeroSubject::Album(album) => Self::Album(GuiMusicAlbumFrame::from(album)),
+            GuiMusicHeroSubject::Artist(page) => Self::Artist(GuiMusicArtistPageFrame::from(page)),
+        }
+    }
+}
+
+impl From<&GuiMusicArtistPage> for GuiMusicArtistPageFrame {
+    fn from(page: &GuiMusicArtistPage) -> Self {
+        Self {
+            artist_key: GuiArtistKey::from(&page.artist_key),
+            albums: page.albums.iter().map(GuiMusicAlbumFrame::from).collect(),
+            years: page.years.clone(),
         }
     }
 }
@@ -247,6 +334,15 @@ impl From<&ArtistKey> for GuiArtistKey {
         match key {
             ArtistKey::Service(id) => Self::Service(id.clone()),
             ArtistKey::Fallback(id) => Self::Fallback(id.clone()),
+        }
+    }
+}
+
+impl From<GuiArtistKey> for ArtistKey {
+    fn from(key: GuiArtistKey) -> Self {
+        match key {
+            GuiArtistKey::Service(id) => Self::Service(id),
+            GuiArtistKey::Fallback(id) => Self::Fallback(id),
         }
     }
 }

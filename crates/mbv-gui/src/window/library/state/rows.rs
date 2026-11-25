@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicList};
+use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::library::list::{
@@ -151,7 +151,9 @@ impl LibraryState {
     /// Hero on a row in view. An album whose tracks are not loaded is opened
     /// through the same command a press sends, which is what loads them.
     pub fn reveal_picked_album(&self, list: &GuiMusicList, detail: &GuiMusicDetail) {
-        let Some(album) = detail.hero.as_ref().map(|hero| &hero.album) else {
+        // The subject's album while the subject is one (gui-music-artist-page
+        // row 5.2 reworks this reader for the artist page).
+        let Some(album) = detail.hero.as_ref().and_then(GuiMusicHeroFrame::album) else {
             return;
         };
         let Some(artist) = list.artists.iter().find(|candidate| {
