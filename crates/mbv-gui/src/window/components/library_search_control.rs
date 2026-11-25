@@ -16,6 +16,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiSearchFrame;
+use crate::window::components::clear_field_button::ClearFieldButton;
 use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::icons::Search;
 use crate::window::library::state::LibraryState;
@@ -176,6 +177,7 @@ fn paint_search_box(
     let focus_library = library.clone();
     let blur_library = library.clone();
     let input_library = library.clone();
+    let clear_library = library.clone();
     rsx! {
         input {
             "type": "text",
@@ -190,15 +192,30 @@ fn paint_search_box(
             onblur: move |_| blur_library.blur_search_field(),
             oninput: move |event: FormEvent| input_library.set_search_query(event.value()),
         }
-        // The chord's hint inside the field (the spec's "a Search field with
-        // the hint `Ctrl K`", the canvas's bordered chip): a pointer passes
-        // through it to the field.
-        span {
-            class: "font-mono",
-            "aria-hidden": "true",
-            style: "position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--canvas-muted); border: 1px solid var(--canvas-border); border-radius: 4px; padding: 1px 4px; pointer-events: none;",
-            "data-library-search-hint": "",
-            "Ctrl K"
+        // Inside the field's right end: the clear button while the field holds
+        // text, the chord's hint while it is empty. The hint is a cue to open
+        // an empty field, so it gives its place to the button once there is
+        // text to clear.
+        if query.is_empty() {
+            // The chord's hint inside the field (the spec's "a Search field
+            // with the hint `Ctrl K`", the canvas's bordered chip): a pointer
+            // passes through it to the field.
+            span {
+                class: "font-mono",
+                "aria-hidden": "true",
+                style: "position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--canvas-muted); border: 1px solid var(--canvas-border); border-radius: 4px; padding: 1px 4px; pointer-events: none;",
+                "data-library-search-hint": "",
+                "Ctrl K"
+            }
+        } else {
+            ClearFieldButton {
+                label: "Clear search",
+                placement: "position: absolute; right: 4px; top: 50%; transform: translateY(-50%);",
+                on_clear: move |()| {
+                    clear_library.set_search_query(String::new());
+                    clear_library.focus_search_field();
+                },
+            }
         }
         if let Some(search) = search {
             { paint_search_results(search, library, highlight) }

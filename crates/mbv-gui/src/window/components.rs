@@ -5,6 +5,7 @@ pub mod art_image;
 pub mod attach_screen;
 pub mod checkbox_box;
 pub mod chooser_menu;
+pub mod clear_field_button;
 pub mod collapsed_rail;
 pub mod compact_strip;
 pub mod confirm_overlay;

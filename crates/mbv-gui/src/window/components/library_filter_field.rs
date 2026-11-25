@@ -10,6 +10,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::window::components::clear_field_button::ClearFieldButton;
 use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::library::state::LibraryState;
 
@@ -68,6 +69,15 @@ pub fn LibraryFilterField(props: LibraryFilterFieldProps) -> Element {
                 onblur: move |_| on_accept.call(()),
                 oninput: move |event: FormEvent| on_input.call(event.value()),
             }
+            if !props.value.is_empty() {
+                ClearFieldButton {
+                    label: "Clear filter",
+                    on_clear: move |()| on_input.call(String::new()),
+                }
+            }
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

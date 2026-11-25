@@ -262,6 +262,34 @@ fn a_closed_search_section_paints_the_field_and_no_dropdown() {
     );
 }
 
+/// Contract (user request 2026-11-25, the clear button): an empty field paints
+/// the `Ctrl K` hint and no clear button; once the field holds text, the clear
+/// button takes the hint's place.
+#[test]
+fn the_clear_button_takes_the_hints_place_once_the_field_holds_text() {
+    let mut fixture = built(false);
+    assert!(
+        fixture.presents("[data-library-search-hint]"),
+        "the hint paints"
+    );
+    assert!(
+        !fixture.presents("[data-field-clear]"),
+        "an empty field paints no clear button"
+    );
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.set_search_query("ba".to_owned()));
+
+    assert!(
+        fixture.presents("[data-field-clear]"),
+        "the clear button paints"
+    );
+    assert!(
+        !fixture.presents("[data-library-search-hint]"),
+        "the hint gives its place up"
+    );
+}
+
 /// Contract (the moved contract): the dropdown paints the rows in the
 /// list-row look, and a first landing highlights the first row.
 #[test]

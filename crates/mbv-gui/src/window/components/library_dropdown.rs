@@ -9,6 +9,7 @@
 use dioxus_native::prelude::*;
 
 use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
+use crate::window::components::clear_field_button::ClearFieldButton;
 use crate::window::components::menu_card::MENU_CARD_STYLE;
 use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::icons::{ChevronDown, ChevronUp};
@@ -316,6 +317,12 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
                                     onmounted: move |event: Event<MountedData>| filter_mounted.set(Some(event)),
                                     oninput: move |event: FormEvent| on_filter.call(event.value()),
                                     ..filter_attrs,
+                                }
+                                if !filter.is_empty() {
+                                    ClearFieldButton {
+                                        label: "Clear filter",
+                                        on_clear: move |()| on_filter.call(String::new()),
+                                    }
                                 }
                             }
                         }
