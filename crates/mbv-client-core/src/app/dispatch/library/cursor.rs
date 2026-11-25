@@ -1,3 +1,4 @@
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::app_struct::{MAX_SERIES_DETAIL_CACHE, insert_capped};
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
@@ -283,7 +284,13 @@ impl App {
     ) {
         // A late completion must not replace a newer cached projection (for
         // example, a refresh that completed while this request was in flight).
-        self.cache_series_detail(series_id, detail);
+        // A stale id is that rule's one exception: the refresh is the newer
+        // projection, so its landing replaces the cached detail (design D9).
+        if self.series_detail_stale.remove(series_id) {
+            self.replace_stale_series_detail(series_id, detail);
+        } else {
+            self.cache_series_detail(series_id, detail);
+        }
         self.series_detail_loading.remove(series_id);
         // A quiet in-view load (design D6) caches the detail without the first
         // season's episodes: the seasons stay closed until a pick or an
@@ -320,18 +327,77 @@ impl App {
     ) {
         let key = (series_id.to_string(), season_id.clone());
         self.series_season_loading.remove(&key);
+        // A stale season's landing replaces the list the cache holds; any other
+        // landing keeps the first-wins rule (design D9).
+        let stale = self.series_season_stale.remove(&key);
         let Some(detail) = self.series_detail_cache.get_mut(series_id) else {
             self.refresh_series_detail_loading(series_id);
             return;
         };
         if !detail.seasons.iter().any(|season| season.id == season_id)
-            || detail.episodes.contains_key(&season_id)
+            || (detail.episodes.contains_key(&season_id) && !stale)
         {
             self.refresh_series_detail_loading(series_id);
             return;
         }
         detail.episodes.insert(season_id, episodes);
         self.refresh_series_detail_loading(series_id);
+    }
+
+    /// Replaces a stale detail with the landed one (design D9): the seasons the
+    /// new detail still holds keep the episodes the cache already held for them,
+    /// so an open season never empties while its own refresh runs. An entry the
+    /// cache no longer holds takes the bounded insert of a first landing.
+    fn replace_stale_series_detail(&mut self, series_id: &str, mut detail: SeriesDetail) {
+        let Some(old) = self.series_detail_cache.get(series_id) else {
+            insert_capped(
+                &mut self.series_detail_cache,
+                MAX_SERIES_DETAIL_CACHE,
+                series_id.to_string(),
+                detail,
+            );
+            return;
+        };
+        for (season_id, episodes) in &old.episodes {
+            if detail
+                .seasons
+                .iter()
+                .any(|season| season.id.as_str() == season_id)
+            {
+                detail
+                    .episodes
+                    .entry(season_id.clone())
+                    .or_insert_with(|| episodes.clone());
+            }
+        }
+        self.series_detail_cache
+            .insert(series_id.to_string(), detail);
+    }
+
+    /// A failed stale-detail refresh (design D9): the cached detail stays,
+    /// and the loading, quiet, and stale marks retire so the failure never
+    /// retries on each landing. One toast reports it.
+    pub(in crate::app) fn handle_series_detail_refresh_failed(&mut self, series_id: &str) {
+        self.series_detail_loading.remove(series_id);
+        self.series_detail_quiet.remove(series_id);
+        self.series_detail_stale.remove(series_id);
+        self.flash("Refresh failed".to_string(), ToastSeverity::Error);
+    }
+
+    /// A failed stale-season refetch (design D9): the cached episodes stay, and
+    /// the loading and stale marks retire so the failure never retries. The
+    /// series detail's loading mark follows the season fetches still running.
+    /// One toast reports it.
+    pub(in crate::app) fn handle_series_season_refresh_failed(
+        &mut self,
+        series_id: &str,
+        season_id: &str,
+    ) {
+        let key = (series_id.to_string(), season_id.to_string());
+        self.series_season_loading.remove(&key);
+        self.series_season_stale.remove(&key);
+        self.refresh_series_detail_loading(series_id);
+        self.flash("Refresh failed".to_string(), ToastSeverity::Error);
     }
 
     fn refresh_series_detail_loading(&mut self, series_id: &str) {

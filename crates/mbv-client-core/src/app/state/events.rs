@@ -241,6 +241,17 @@ pub enum SeriesEvent {
         season_id: String,
         episodes: Vec<EmbyItem>,
     },
+    /// A stale detail's refetch failed (gui-list-header-buttons design D9):
+    /// the cache keeps the detail it holds, and the loading, quiet, and stale
+    /// marks retire so a later landing may retry.
+    DetailRefreshFailed { series_id: String },
+    /// A stale season's episode refetch failed (gui-list-header-buttons design
+    /// D9): the cache keeps the episodes it holds, and the loading and stale
+    /// marks retire.
+    SeasonEpisodesRefreshFailed {
+        series_id: String,
+        season_id: String,
+    },
 }
 
 #[derive(Debug)]

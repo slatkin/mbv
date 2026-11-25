@@ -199,6 +199,27 @@ impl App {
                     &[ClientLibraryEffect::SeriesContentChanged],
                 );
             }
+            // A failed refresh frees its loader slot and keeps the cached
+            // detail, so the pump runs as it does for a landing (design D9).
+            SeriesEvent::DetailRefreshFailed { series_id } => {
+                self.handle_series_detail_refresh_failed(&series_id);
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
+            SeriesEvent::SeasonEpisodesRefreshFailed {
+                series_id,
+                season_id,
+            } => {
+                self.handle_series_season_refresh_failed(&series_id, &season_id);
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
         }
     }
 

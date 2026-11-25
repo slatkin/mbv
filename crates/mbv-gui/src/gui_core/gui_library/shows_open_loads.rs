@@ -82,9 +82,12 @@ impl GuiCore {
 /// library, because the report then describes a list the Client no longer
 /// paints. A started load whose fetch the core no longer runs, or whose detail
 /// has already landed, drops out first, so a landing or a failed fetch frees its
-/// slot. The series rows start before
-/// the season rows, in report order, and a season starts only once its series'
-/// detail is cached.
+/// slot. A series whose detail is stale keeps its slot while its refresh runs,
+/// because the detail the cache still paints is not the landing the loader
+/// waits for. The series rows start before the season rows, in report order, and
+/// a season starts only once its series' detail is cached. A stale entry starts
+/// through its refetch, so a refresh keeps the content the view paints (design
+/// D9).
 pub(crate) fn pump_shows_open_loads(app: &mut App, gui: &mut GuiClientState) {
     let Some(report) = gui.shows_open_in_view.clone() else {
         return;
@@ -93,7 +96,8 @@ pub(crate) fn pump_shows_open_loads(app: &mut App, gui: &mut GuiClientState) {
         return;
     }
     gui.shows_open_series_loads.retain(|series_id| {
-        app.series_detail(series_id).is_none() && app.series_detail_loading(series_id)
+        app.series_detail_loading(series_id)
+            && (app.series_detail(series_id).is_none() || app.series_detail_stale(series_id))
     });
     gui.shows_open_season_loads
         .retain(|(series_id, season_id)| app.series_season_loading(series_id, season_id));
@@ -104,7 +108,11 @@ pub(crate) fn pump_shows_open_loads(app: &mut App, gui: &mut GuiClientState) {
         if !series_missing(app, series_id) {
             continue;
         }
-        app.fetch_series_detail_quiet(series_id);
+        if app.series_detail_stale(series_id) {
+            app.refetch_series_detail(series_id);
+        } else {
+            app.fetch_series_detail_quiet(series_id);
+        }
         if app.series_detail_loading(series_id) {
             gui.shows_open_series_loads.insert(series_id.clone());
         }
@@ -116,7 +124,11 @@ pub(crate) fn pump_shows_open_loads(app: &mut App, gui: &mut GuiClientState) {
         if !season_missing(app, series_id, season_id) {
             continue;
         }
-        app.fetch_series_season_episodes(series_id.clone(), season_id.clone());
+        if app.series_season_stale(series_id, season_id) {
+            app.refetch_series_season_episodes(series_id.clone(), season_id.clone());
+        } else {
+            app.fetch_series_season_episodes(series_id.clone(), season_id.clone());
+        }
         if app.series_season_loading(series_id, season_id) {
             gui.shows_open_season_loads
                 .insert((series_id.clone(), season_id.clone()));
@@ -139,18 +151,22 @@ fn in_flight_loads(gui: &GuiClientState) -> usize {
     gui.shows_open_series_loads.len() + gui.shows_open_season_loads.len()
 }
 
-/// Whether `series_id` misses its detail: no cached detail and no running
-/// fetch. Group 5 widens this to stale entries.
+/// Whether `series_id` misses its detail: no cached detail, or a stale cached
+/// detail, and no running fetch (design D5, widened by group 5 to stale entries
+/// per design D9).
 fn series_missing(app: &App, series_id: &str) -> bool {
-    app.series_detail(series_id).is_none() && !app.series_detail_loading(series_id)
+    (app.series_detail(series_id).is_none() || app.series_detail_stale(series_id))
+        && !app.series_detail_loading(series_id)
 }
 
 /// Whether `(series_id, season_id)` misses its episodes: the series' detail is
-/// cached, the detail holds no episode list for the season, and no fetch runs
-/// for it.
+/// cached, the detail holds no episode list for the season or its list is stale,
+/// and no fetch runs for it.
 fn season_missing(app: &App, series_id: &str, season_id: &str) -> bool {
     let Some(detail) = app.series_detail(series_id) else {
         return false;
     };
-    !detail.episodes.contains_key(season_id) && !app.series_season_loading(series_id, season_id)
+    let stale = app.series_season_stale(series_id, season_id);
+    (stale || !detail.episodes.contains_key(season_id))
+        && !app.series_season_loading(series_id, season_id)
 }

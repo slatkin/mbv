@@ -149,6 +149,86 @@ impl App {
         }
     }
 
+    /// Marks a cached series detail stale (design D9): an in-view refresh asks
+    /// the next landing to reload it, and the pump starts the reload through
+    /// [`App::refetch_series_detail`]. An id the cache does not hold takes no
+    /// mark, so a miss keeps its first-load path.
+    pub fn mark_series_detail_stale(&mut self, series_id: &str) {
+        if self.series_detail_cache.contains_key(series_id) {
+            self.series_detail_stale.insert(series_id.to_string());
+        }
+    }
+
+    /// Marks a cached season's episode list stale (design D9): the pump starts
+    /// the reload through [`App::refetch_series_season_episodes`]. A season the
+    /// cached detail does not hold takes no mark, because no reload can replace
+    /// a list the cache lacks.
+    pub fn mark_series_season_stale(&mut self, series_id: &str, season_id: &str) {
+        let holds_season = self
+            .series_detail_cache
+            .get(series_id)
+            .is_some_and(|detail| {
+                detail
+                    .seasons
+                    .iter()
+                    .any(|season| season.id.as_str() == season_id)
+            });
+        if holds_season {
+            self.series_season_stale
+                .insert((series_id.to_string(), season_id.to_string()));
+        }
+    }
+
+    /// Refetches `series_id`'s detail while keeping the cached detail in place
+    /// (design D9): the view paints the seasons and episodes it already holds
+    /// until the landing replaces them, so a refresh never empties an open
+    /// season. A series the cache lacks takes the quiet first load, and a series
+    /// whose fetch already runs is skipped. The fetch is a quiet one (design
+    /// D6), so its landing starts no first-season episode fetch; the pending
+    /// expansions still run. A failed refresh sends
+    /// [`SeriesEvent::DetailRefreshFailed`] instead of the empty detail a first
+    /// load falls back to, so the cache never stores a failure.
+    pub fn refetch_series_detail(&mut self, series_id: &str) {
+        if series_id.is_empty() {
+            return;
+        }
+        if !self.series_detail_cache.contains_key(series_id) {
+            self.fetch_series_detail_quiet(series_id);
+            return;
+        }
+        if self.series_detail_loading.contains(series_id) {
+            return;
+        }
+        self.series_detail_loading.insert(series_id.to_string());
+        self.series_detail_quiet.insert(series_id.to_string());
+        let Some(client) = self.emby_snapshot() else {
+            self.series_detail_loading.remove(series_id);
+            self.series_detail_quiet.remove(series_id);
+            return;
+        };
+        let tx = self.channels.lib_tx.clone();
+        let sid = series_id.to_string();
+        std::thread::spawn(move || {
+            let event = match client.get_items_sorted(
+                &sid,
+                None,
+                false,
+                0,
+                PAGE_SIZE,
+                "SortName",
+                "Ascending",
+            ) {
+                Ok((seasons, _total)) => SeriesEvent::DetailFetched {
+                    series_id: sid,
+                    seasons,
+                    episodes: std::collections::HashMap::new(),
+                },
+                Err(_) => SeriesEvent::DetailRefreshFailed { series_id: sid },
+            };
+            let _ = tx.send(LibEvent::Series(event));
+        });
+    }
+
     /// Fetches one season only after the complete ordered Series detail is
     /// in the cache. The detail event handler arms the first season and any
     /// pending expansions; a season-pill click or a keyboard season move
@@ -194,6 +274,56 @@ impl App {
                 season_id,
                 episodes,
             }));
+        });
+    }
+
+    /// Refetches the episode list of `series_id`'s `season_id` while keeping the
+    /// cached episodes in place (design D9): the view paints the episodes it
+    /// already holds until the landing replaces them. A season whose episodes
+    /// the cache lacks takes the first-load path, and a season whose fetch
+    /// already runs is skipped. A failed refresh sends
+    /// [`SeriesEvent::SeasonEpisodesRefreshFailed`] instead of the empty list a
+    /// first load falls back to, so the cache never stores a failure.
+    pub fn refetch_series_season_episodes(&mut self, series_id: String, season_id: String) {
+        let cached = self
+            .series_detail_cache
+            .get(&series_id)
+            .is_some_and(|detail| detail.episodes.contains_key(&season_id));
+        if !cached {
+            self.fetch_series_season_episodes(series_id, season_id);
+            return;
+        }
+        let key = (series_id.clone(), season_id.clone());
+        if self.series_season_loading.contains(&key) {
+            return;
+        }
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        self.series_detail_loading.insert(series_id.clone());
+        self.series_season_loading.insert(key);
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || {
+            let event = match client.get_items_sorted(
+                &season_id,
+                None,
+                false,
+                0,
+                PAGE_SIZE,
+                "IndexNumber",
+                "Ascending",
+            ) {
+                Ok((episodes, _total)) => SeriesEvent::SeasonEpisodesFetched {
+                    series_id,
+                    season_id,
+                    episodes,
+                },
+                Err(_) => SeriesEvent::SeasonEpisodesRefreshFailed {
+                    series_id,
+                    season_id,
+                },
+            };
+            let _ = tx.send(LibEvent::Series(event));
         });
     }
 }

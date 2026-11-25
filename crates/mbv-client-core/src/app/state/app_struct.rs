@@ -573,7 +573,16 @@ pub struct App {
     /// D6): its landing caches the detail but starts no first-season episode
     /// fetch. A plain `fetch_series_detail` for the same id drops the mark.
     pub(in crate::app) series_detail_quiet: std::collections::HashSet<String>,
+    /// Cached series whose detail an in-view refresh asked to reload (design
+    /// D9): the landing replaces the cached detail instead of the first-wins
+    /// rule, and a failed refetch clears the mark so the failure never retries
+    /// on each landing.
+    pub(in crate::app) series_detail_stale: std::collections::HashSet<String>,
     pub(in crate::app) series_season_loading: std::collections::HashSet<(String, String)>,
+    /// Cached seasons whose episodes an in-view refresh asked to reload (design
+    /// D9): the landing replaces the cached episodes, and a failed refetch
+    /// clears the mark.
+    pub(in crate::app) series_season_stale: std::collections::HashSet<(String, String)>,
     /// Season expansions received before their show's detail has arrived.
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,

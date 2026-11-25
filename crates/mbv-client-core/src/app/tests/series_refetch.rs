@@ -2,11 +2,13 @@
 //! caches the detail but starts no first-season episode fetch, so an open row
 //! in view whose seasons stay closed costs no episode request. A plain fetch
 //! of the same id while the quiet one runs drops the mark, so a pick still
-//! loads the first season. The album-track refresh (design D9) belongs here
-//! too: a failed refresh keeps the cached tracks.
+//! loads the first season. The core refetches (design D9) belong here too: a
+//! stale series detail's landing replaces the seasons and keeps the episodes of
+//! the seasons it still holds, a failed detail refetch keeps the cached detail,
+//! and a failed album-track refresh keeps the cached tracks.
 
 use crate::app::tests::make_app_stub;
-use crate::app::{LibEvent, MusicEvent};
+use crate::app::{LibEvent, MusicEvent, SeriesEvent};
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::SeriesDetail;
@@ -42,6 +44,13 @@ fn cached_track(track_id: &str) -> Vec<mbv_emby_model::EmbyItem> {
     let mut track = make_item(track_id, "Audio");
     track.id = track_id.into();
     vec![track]
+}
+
+/// One episode, as a landed season fetch leaves it in the cache.
+fn cached_episode(episode_id: &str) -> Vec<mbv_emby_model::EmbyItem> {
+    let mut episode = make_item(episode_id, "Episode");
+    episode.id = episode_id.into();
+    vec![episode]
 }
 
 #[test]
@@ -136,5 +145,71 @@ fn plain_detail_fetch_while_a_quiet_fetch_runs_starts_the_first_season() {
         app.series_season_loading_for_test(),
         &std::collections::HashSet::from([("show-1".to_string(), "season-1".to_string())]),
         "a plain fetch of the id while the quiet load runs restores the first-season fetch"
+    );
+}
+
+#[test]
+fn a_stale_detail_landing_replaces_the_seasons_and_keeps_the_old_episodes() {
+    let http = MockHttp::new();
+    http.respond_repeated(200, EMPTY_ITEMS, 2);
+    let mut app = fetchable_app(&http);
+    let mut cached = series_detail("season-1");
+    cached
+        .episodes
+        .insert("season-1".into(), cached_episode("episode-1"));
+    app.cache_series_detail("show-1", cached);
+    app.mark_series_detail_stale("show-1");
+    let mut landed = series_detail("season-1");
+    let mut second = make_item("season-2", "Season");
+    second.id = "season-2".into();
+    landed.seasons.push(second);
+
+    app.handle_series_detail_fetched_for_test("show-1", landed);
+
+    let detail = app
+        .series_detail_snapshot("show-1")
+        .expect("a stale landing is cached");
+    assert_eq!(
+        detail
+            .seasons
+            .iter()
+            .map(|season| season.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["season-1", "season-2"],
+        "a stale landing replaces the seasons the view paints"
+    );
+    assert_eq!(
+        detail.episodes["season-1"][0].id, "episode-1",
+        "a season the new detail still holds keeps the episodes the cache holds"
+    );
+}
+
+#[test]
+fn a_failed_detail_refetch_keeps_the_cached_detail_and_clears_the_stale_mark() {
+    let http = MockHttp::new();
+    http.respond_repeated(200, EMPTY_ITEMS, 1);
+    let mut app = fetchable_app(&http);
+    app.cache_series_detail("show-1", series_detail("season-1"));
+    app.mark_series_detail_stale("show-1");
+
+    app.refetch_series_detail("show-1");
+    app.handle_lib_event(
+        LibEvent::Series(SeriesEvent::DetailRefreshFailed {
+            series_id: "show-1".into(),
+        }),
+        None,
+    );
+
+    assert!(
+        app.series_detail_snapshot("show-1")
+            .is_some_and(|detail| detail
+                .seasons
+                .first()
+                .is_some_and(|season| season.id == "season-1")),
+        "a failed refetch keeps the detail the cache holds"
+    );
+    assert!(
+        !app.series_detail_stale("show-1"),
+        "a failed refetch clears the stale mark, so it never retries on each landing"
     );
 }
