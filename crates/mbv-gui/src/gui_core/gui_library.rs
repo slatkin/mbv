@@ -96,7 +96,7 @@ pub(crate) use self::rows_in_view::queue_in_view_row_fetches;
 pub(crate) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
 #[cfg(test)]
-pub(crate) use self::shows::shows_view;
+pub(crate) use self::shows::{refetch_shows_new, shows_view};
 pub(crate) use self::shows_open_loads::GuiShowsOpenInView;
 pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,

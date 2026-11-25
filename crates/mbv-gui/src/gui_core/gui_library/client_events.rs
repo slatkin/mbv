@@ -63,7 +63,13 @@ pub fn install_client_event(
             ClientEventLanding::Installed
         }
         LibraryFetchEvent::ShowsNew { library_id, result } => {
-            gui.shows_new.insert(library_id, shows_new_request(result));
+            let refreshing = gui.shows_new_refreshing.remove(&library_id);
+            let failed = result.is_err();
+            let landed = shows_new_request(result);
+            if refreshing && failed {
+                return ClientEventLanding::RefreshFailed;
+            }
+            gui.shows_new.insert(library_id, landed);
             ClientEventLanding::Installed
         }
     }

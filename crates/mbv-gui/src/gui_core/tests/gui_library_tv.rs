@@ -8,6 +8,7 @@
 
 use super::*;
 
+use crate::gui_core::gui_library::GuiSectionRequest;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
@@ -518,5 +519,45 @@ fn an_open_season_of_a_cached_series_starts_its_episode_fetch() {
     assert!(
         app.series_season_loading("series-1", "season-1"),
         "the open season's episodes load without a pick"
+    );
+}
+
+/// A failed New refetch keeps the landed rows (gui-list-header-buttons design
+/// D8): the store keeps the list it already held, so a refresh that fails
+/// never empties the painted rows. The Emby boundary is the mock transport and
+/// the result lands through the GUI's own client-event drain.
+#[test]
+fn a_failed_new_refetch_keeps_the_landed_rows() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = tv_app(&http);
+    let mut episode = make_item("Episode one", "Episode");
+    episode.id = "ep-old".into();
+    stub_gui_state(|gui| {
+        gui.shows_new
+            .insert(TV_ID.to_string(), GuiSectionRequest::Landed(vec![episode]));
+    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::New,
+        },
+    );
+    http.fail(std::io::ErrorKind::ConnectionRefused);
+
+    stub_gui_state(|gui| {
+        crate::gui_core::gui_library::refetch_shows_new(&mut app, gui, TV_ID.to_string());
+    });
+    crate::gui_core::test_support::wait_for_client_event(&mut app);
+
+    assert_eq!(
+        crate::gui_core::test_support::gui_shows_projection(&mut app, 0)
+            .rows
+            .iter()
+            .map(|row| row.id.as_str())
+            .collect::<Vec<_>>(),
+        ["ep-old"],
+        "the failed refetch keeps the rows the store landed"
     );
 }

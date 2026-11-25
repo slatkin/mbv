@@ -361,6 +361,41 @@ impl App {
         }) {
             return;
         }
+        self.spawn_tv_upcoming_snapshot_fetch(library_id);
+    }
+
+    /// Refetch one TV library's Upcoming snapshot (gui-list-header-buttons
+    /// design D9): with no snapshot the call is the first load's, which skips
+    /// while a fetch runs or one is already under way; with a snapshot the
+    /// refetch keeps it in place and starts the fetch, so a second press while
+    /// that fetch runs starts nothing. The failure arm
+    /// [`Self::tv_upcoming_snapshot_failed`] already keeps the stored snapshot,
+    /// so the Shows list keeps its rows and names the failure. A library index
+    /// that names no TV library, and a missing Emby client, start nothing at
+    /// all.
+    pub fn refetch_tv_upcoming_snapshot(&mut self, lib_idx: usize) {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        if lib.library.collection_type != "tvshows" {
+            return;
+        }
+        let library_id = lib.library.id.clone();
+        if !self.tv_upcoming_snapshots.contains_key(&library_id) {
+            self.maybe_spawn_tv_upcoming_snapshot(lib_idx);
+            return;
+        }
+        if TvUpcomingFetchState::blocks_request(self.tv_upcoming_fetches.get(&library_id)) {
+            return;
+        }
+        self.spawn_tv_upcoming_snapshot_fetch(library_id);
+    }
+
+    /// Start one TV library's Upcoming snapshot fetch (design D9): the spawn
+    /// body the first load and the refetch share, so both mark the fetch
+    /// `InFlight` and send the same completion events. A missing Emby client
+    /// starts nothing and marks nothing, so a later request retries.
+    fn spawn_tv_upcoming_snapshot_fetch(&mut self, library_id: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };

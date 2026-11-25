@@ -90,6 +90,11 @@ pub struct GuiClientState {
     /// Shows section fetches, by library index and section id.
     pub(crate) shows_new:
         std::collections::HashMap<String, GuiSectionRequest<mbv_emby_model::EmbyItem>>,
+    /// The Shows libraries whose New refetch is in flight (gui-list-header-
+    /// buttons design D8), by library id: a refetch of a landed New list keeps
+    /// its rows in place because of this mark, and a second refetch of the same
+    /// library starts nothing.
+    pub(crate) shows_new_refreshing: std::collections::HashSet<String>,
     /// The TV surface's selection, by library index.
     pub(crate) tv_shows: std::collections::HashMap<usize, GuiTvShowsSelection>,
     /// The Emby library selection, by library index. Distinct from
@@ -178,6 +183,7 @@ impl GuiClientState {
             shows_open_series_loads: std::collections::HashSet::new(),
             shows_open_season_loads: std::collections::HashSet::new(),
             shows_new: std::collections::HashMap::new(),
+            shows_new_refreshing: std::collections::HashSet::new(),
             tv_shows: std::collections::HashMap::new(),
             emby_libs: std::collections::HashMap::new(),
             emby_feed_sets: std::collections::HashMap::new(),
