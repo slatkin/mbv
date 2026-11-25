@@ -142,11 +142,11 @@ pub(super) fn own(attr: &'static str, part: &str) -> &'static str {
     library_attr(&prefix, part)
 }
 
-/// The Hero's heading look (user request 2026-11-24): the queue now-playing
-/// block's mono caps, so a Hero's title and the name line under it read as one
-/// heading. Both carry the case in CSS, because neither box is a `Truncate`
-/// measure.
-const HERO_HEADING_STYLE: &str = "margin: 0; font-family: var(--font-mono); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--canvas-heading);";
+/// The Hero's heading look (user request 2026-11-24, revised 2026-11-25): the
+/// queue now-playing block's bold mono face, so a Hero's title and the name
+/// line under it read as one heading. Both keep their own case: the capitals
+/// read too loud, so no `text-transform` applies.
+const HERO_HEADING_STYLE: &str = "margin: 0; font-family: var(--font-mono); font-weight: 700; letter-spacing: 0.06em; color: var(--canvas-heading);";
 
 /// The Hero title's size, in CSS pixels (user request 2026-11-24).
 const HERO_TITLE_PX: f32 = 18.0;
