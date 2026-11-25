@@ -223,16 +223,10 @@ fn empty_album_id_artist_tracks_never_cross_into_same_titled_groups() {
 /// appearing progressively instead of flooding the Service.
 #[test]
 fn fallback_artist_scope_arms_only_the_bounded_fetch_window() {
-    let (mut app, _context, _target, destination) = settled_artist_app();
+    let (mut app, _context, _target, _destination) = settled_artist_app();
     app.emby_runtime = unroutable_emby_runtime();
-    let target = MusicArtistTarget {
-        artist_id: None,
-        artist_name: "Alpha".into(),
-        album_targets: (1..=8).map(|index| format!("album-{index}")).collect(),
-        revision: 7,
-    };
 
-    app.request_artist_tracks(destination, &target);
+    app.request_albums_tracks((1..=8).map(|index| format!("album-{index}")).collect());
 
     assert_eq!(
         app.album_tracks_loading.len(),
