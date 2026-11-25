@@ -52,7 +52,10 @@ fn esc_closes_the_open_dropdown_over_the_queue() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.collections.set_filter("tifo".to_owned()));
+        ui.with_mut(|ui| {
+            ui.collections.open();
+            ui.collections.set_filter("tifo".to_owned());
+        });
         route_under(state, facts, "escape", "Escape", PointerZone::Queue);
         facts.lock().expect("facts").push(ui_facts(state));
     });

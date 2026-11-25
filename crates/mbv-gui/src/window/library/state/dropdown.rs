@@ -30,8 +30,11 @@ impl DropdownState {
         self.0 = None;
     }
 
-    /// Replace the filter text and open (typing only happens while open).
+    /// Replace the filter text while open. A write while closed changes
+    /// nothing, so a late filter event cannot reopen a closed popover.
     pub fn set_filter(&mut self, filter: String) {
-        self.0 = Some(filter);
+        if self.is_open() {
+            self.0 = Some(filter);
+        }
     }
 }

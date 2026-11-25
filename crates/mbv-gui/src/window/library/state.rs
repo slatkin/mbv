@@ -61,21 +61,18 @@ pub struct LibraryUiState {
     /// without case (design D7).
     pub filter: String,
     /// The collection dropdown's interaction state (gui-collection-dropdown
-    /// design D7): `None` while the dropdown is closed, and `Some(filter)`
-    /// while it is open, holding the filter text the open popover narrows its
-    /// entries by. One value, so a close clears the filter by construction.
+    /// design D7): closed, or open with the filter text the popover narrows
+    /// its entries by. A close clears the filter by construction.
     pub collections: DropdownState,
     /// The Shows Hero's season dropdown's interaction state (user request
-    /// 2026-11-19, the season pills' replacement): `None` while closed, and
-    /// `Some(filter)` while open, holding the filter text the open popover
-    /// narrows its season rows by — the collection dropdown's one-value
-    /// pattern, so a close clears the filter by construction.
+    /// 2026-11-19, the season pills' replacement): closed, or open with the
+    /// filter text the popover narrows its season rows by — the same
+    /// `DropdownState` as the collection dropdown.
     pub shows_seasons: DropdownState,
     /// The Shows view dropdown's open fact (gui-collection-dropdown design D8,
-    /// gtds design D15): `Open` while the All, New, and Upcoming rows paint
-    /// under the trigger. The popover mounts no filter field, so the fact
-    /// carries no text, and the collection dropdown's `collections` names the
-    /// collection dropdowns alone.
+    /// gtds design D15): open while the All, New, and Upcoming rows paint
+    /// under the trigger. The popover mounts no filter field, so its filter
+    /// text is never read.
     pub shows_view: DropdownState,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
@@ -417,7 +414,7 @@ impl LibraryState {
     }
 
     /// Open or close the Shows view dropdown (design D8, D15): a press on the trigger opens it when it is
-    /// closed and closes it when it is open. A close drops the filter text.
+    /// closed and closes it when it is open.
     pub fn toggle_shows_view_dropdown(&self) {
         self.write_dropdown(
             |ui| &mut ui.shows_view,
@@ -425,7 +422,7 @@ impl LibraryState {
         );
     }
 
-    /// Close the Shows view dropdown (design D8, D15) and clear its filter text. A close while closed writes
+    /// Close the Shows view dropdown (design D8, D15). A close while closed writes
     /// nothing: the every-press path calls this on each press, and a write
     /// would repaint the panel for no change.
     pub fn close_shows_view_dropdown(&self) {
@@ -474,10 +471,17 @@ impl LibraryState {
     /// dropdowns and the collapsed Search panel. A new popover joins here, and
     /// the root press and a destination change pick it up.
     pub fn close_popovers(&self) {
+        self.close_dropdowns();
+        self.close_search_panel();
+    }
+
+    /// Close the three dropdowns. A press inside the Library panel closes
+    /// these and leaves the Search panel to the window's root press, which the
+    /// panel press bubbles to.
+    pub fn close_dropdowns(&self) {
         self.close_collections_dropdown();
         self.close_shows_view_dropdown();
         self.close_shows_seasons_dropdown();
-        self.close_search_panel();
     }
 
     fn write_dropdown(
@@ -586,8 +590,9 @@ impl LibraryState {
     /// `gui-pointer-target-interaction`): the core's default row is not a
     /// pick, so the Narrow arrangement shows the new destination's list and
     /// paints no overlay Hero, and an open row menu, item menu, collection
-    /// dropdown, or Shows view dropdown closes (gui-collection-dropdown design
-    /// D7, D8: a destination change closes the dropdown and clears its filter).
+    /// dropdown, Shows view dropdown, season dropdown, or collapsed Search
+    /// panel closes (gui-collection-dropdown design D7, D8: a destination
+    /// change closes the dropdown and clears its filter).
     pub fn reset_for_destination(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {

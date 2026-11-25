@@ -461,22 +461,40 @@ fn collapse_all_under_a_filter_closes_the_filter_opened_artist_and_clears_the_op
 fn close_popovers_closes_every_dropdown_and_the_search_panel_and_clears_filters() {
     let (facts, _rx) = run(|state, facts| {
         state.set_search_collapsed(true);
+        state.toggle_collections_dropdown();
         state.set_collections_filter("rock".to_owned());
         state.toggle_shows_view_dropdown();
+        state.toggle_shows_seasons_dropdown();
         state.set_shows_seasons_filter("s1".to_owned());
         state.open_search_panel();
         state.close_popovers();
         let ui = state.ui.peek();
-        facts.lock().expect("facts").push(format!(
-            "collections={:?} view={} seasons={:?} search={}",
-            ui.collections.filter(),
-            ui.shows_view.is_open() || ui.collections.is_open() || ui.shows_seasons.is_open(),
-            ui.shows_seasons.filter(),
-            ui.search_control.panel_open,
-        ));
+        let mut facts = facts.lock().expect("facts");
+        facts.push(format!("collections={:?}", ui.collections));
+        facts.push(format!("view={:?}", ui.shows_view));
+        facts.push(format!("seasons={:?}", ui.shows_seasons));
+        facts.push(format!("search_panel={}", ui.search_control.panel_open));
     });
     assert_eq!(
         facts,
-        [r#"collections="" view=false seasons="" search=false"#]
+        [
+            "collections=DropdownState(None)",
+            "view=DropdownState(None)",
+            "seasons=DropdownState(None)",
+            "search_panel=false",
+        ]
     );
+}
+
+/// A late filter write must not reopen a closed popover (review of #1028).
+#[test]
+fn a_filter_write_leaves_a_closed_dropdown_closed() {
+    let (facts, _rx) = run(|state, facts| {
+        state.set_collections_filter("late".to_owned());
+        facts
+            .lock()
+            .expect("facts")
+            .push(format!("open={}", state.collections_open()));
+    });
+    assert_eq!(facts, ["open=false"]);
 }
