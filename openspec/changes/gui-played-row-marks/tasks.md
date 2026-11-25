@@ -16,8 +16,8 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 3. Tree row (design D3, D4)
 
-- [ ] 3.1 In `crates/mbv-gui/src/window/components/list_row/tree.rs`, apply design D4 "Tree row" to the leaf and the parent body: the title tone and weight (a `font-weight` on the `Truncate` box, and the `TextStyle` at that weight), the trail's `trail_tone()`, and the D3 trailing cluster when `play` is `Some`. A `play: None` row keeps its present markup. Update the module doc. Verify: `cargo check -p mbv-gui` reports no error in `tree.rs`.
-- [ ] 3.2 Extend `a_nested_rows_title_paints_its_play_tone` in `crates/mbv-gui/src/window/components/list_row/tests.rs` so that each case also asserts the title weight and the `data-play-mark` value. `None` keeps the leaf tone and has no mark, `Ordinary` paints `var(--ef-fg)` at 600 with `unplayed`, and `Played` paints `var(--ef-grey1)` at 400 with `played`. Verify: `cargo nextest run -p mbv-gui list_row` passes.
+- [x] 3.1 In `crates/mbv-gui/src/window/components/list_row/tree.rs`, apply design D4 "Tree row" to the leaf and the parent body: the title tone and weight (a `font-weight` on the `Truncate` box, and the `TextStyle` at that weight), the trail's `trail_tone()`, and the D3 trailing cluster when `play` is `Some`. A `play: None` row keeps its present markup. Update the module doc. Verify: `cargo check -p mbv-gui` reports no error in `tree.rs`.
+- [x] 3.2 Extend `a_nested_rows_title_paints_its_play_tone` in `crates/mbv-gui/src/window/components/list_row/tests.rs` so that each case also asserts the title weight and the `data-play-mark` value. `None` keeps the leaf tone and has no mark, `Ordinary` paints `var(--ef-fg)` at 600 with `unplayed`, and `Played` paints `var(--ef-grey1)` at 400 with `played`. Verify: `cargo nextest run -p mbv-gui list_row` passes.
 
 ## 4. Workspace table (design D4)
 
