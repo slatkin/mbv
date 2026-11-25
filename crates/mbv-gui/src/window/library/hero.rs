@@ -11,6 +11,7 @@
 
 use crate::bridge::frame::library::{
     GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame,
+    GuiMusicHeroSubjectFrame,
 };
 use crate::window::sections::SectionRef;
 
@@ -131,12 +132,71 @@ pub fn artist_facts(hero: &GuiMusicHeroFrame) -> Segments {
 }
 
 /// The album block's facts line, empty while the album's tracklist has not
-/// landed (design D5).
+/// landed (design D5), and empty while the subject is the artist page — the
+/// page's block shows the artist, not an album (gui-music-artist-page design
+/// D6).
 #[must_use]
 pub fn album_facts(hero: &GuiMusicHeroFrame) -> Segments {
     hero.album()
         .and_then(|album| album.total.as_ref())
         .map_or_else(Vec::new, track_total_facts)
+}
+
+/// The artist page header's facts line (gui-music-artist-page design D6): the
+/// selected collections, the artist's album count in the union, the span of
+/// the artist's release years, and the track count and total time once every
+/// album of the artist has loaded its tracks. Empty while the subject is an
+/// album.
+#[must_use]
+pub fn artist_page_facts(hero: &GuiMusicHeroFrame) -> Segments {
+    let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject else {
+        return Vec::new();
+    };
+    let mut facts: Segments = Vec::new();
+    if !hero.collections.is_empty() {
+        facts.push(GuiMetaSegmentFrame {
+            text: hero.collections.join(" + "),
+            kind: GuiMetaKindFrame::Plain,
+        });
+        facts.push(GuiMetaSegmentFrame {
+            text: " · ".to_owned(),
+            kind: GuiMetaKindFrame::Plain,
+        });
+    }
+    facts.push(GuiMetaSegmentFrame {
+        text: hero.album_count.to_string(),
+        kind: GuiMetaKindFrame::Count,
+    });
+    facts.push(GuiMetaSegmentFrame {
+        text: match hero.album_count {
+            1 => " album",
+            _ => " albums",
+        }
+        .to_owned(),
+        kind: GuiMetaKindFrame::Plain,
+    });
+    if let Some((first, last)) = &page.years {
+        facts.push(GuiMetaSegmentFrame {
+            text: " · ".to_owned(),
+            kind: GuiMetaKindFrame::Plain,
+        });
+        facts.push(GuiMetaSegmentFrame {
+            text: if first == last {
+                first.clone()
+            } else {
+                format!("{first}\u{2013}{last}")
+            },
+            kind: GuiMetaKindFrame::Date,
+        });
+    }
+    if let Some(tracks) = &hero.artist_tracks {
+        facts.push(GuiMetaSegmentFrame {
+            text: " · ".to_owned(),
+            kind: GuiMetaKindFrame::Plain,
+        });
+        facts.extend(track_total_facts(tracks));
+    }
+    facts
 }
 
 /// The artist's albums in the union, which Shuffle artist plays (design D8).
@@ -150,8 +210,15 @@ pub fn artist_union_albums(
     artists: &[crate::bridge::frame::library::GuiMusicArtistFrame],
     hero: &GuiMusicHeroFrame,
 ) -> Vec<String> {
-    // The subject's album while the subject is one (gui-music-artist-page
-    // row 5.3 reworks this reader for the artist page).
+    // The artist page's albums are the union's own, in the union's order, so
+    // the page names them directly (gui-music-artist-page design D6).
+    if let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject {
+        return page
+            .albums
+            .iter()
+            .map(|album| album.album_id.clone())
+            .collect();
+    }
     let Some(picked) = hero.album().map(|album| album.album_id.clone()) else {
         return Vec::new();
     };

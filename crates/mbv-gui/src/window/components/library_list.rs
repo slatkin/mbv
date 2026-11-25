@@ -33,6 +33,7 @@ use std::rc::Rc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiMusicHeroFrame;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
@@ -51,11 +52,13 @@ use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
 
-/// Whether the row is the album the Hero shows.
+/// Whether the row is the picked row the Hero shows (gui-music-artist-page
+/// design D6): the album row while the subject is an album, the artist row
+/// while the subject is the artist page. `picked` is the picked row's own id.
 fn is_picked(row: &LibraryRow, picked: Option<&str>) -> bool {
     match row {
-        LibraryRow::Album { album_id, .. } => picked == Some(album_id.as_str()),
-        _ => false,
+        LibraryRow::Album { .. } | LibraryRow::Artist { .. } => picked == Some(row.id()),
+        LibraryRow::Letter(_) | LibraryRow::Track { .. } => false,
     }
 }
 
@@ -156,8 +159,9 @@ fn paint_library_row(
 /// double-click toggles the node and its hover offers Play, Add, and Shuffle
 /// over the artist's item id, plus Expand
 /// (gui-row-hover-actions design D3). An artist frame that carries no item id
-/// paints Expand alone. A press picks nothing (the Hero is album-scoped), and a
-/// double-click only opens it, so the row names no double-click play path.
+/// paints Expand alone. A press picks the artist — the Hero shows its page
+/// (gui-music-artist-page design D6) — and a double-click only opens it, so
+/// the row names no double-click play path.
 /// While it shows album rows it starts its guide under its thumb
 /// (gui-tree-indent-guides design D3).
 fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
@@ -308,20 +312,19 @@ pub fn LibraryList() -> Element {
     // over the open nodes and the filter this component paints.
     let rows = library.rows_of(&ui);
 
-    // The album the Hero shows: the list paints its row in the canvas's
-    // picked fill (design D7).
-    // The subject's album while the subject is one (gui-music-artist-page
-    // row 5.2 reworks this reader for the artist page).
+    // The row the Hero shows: the list paints it in the canvas's picked fill
+    // (design D7) — the album row for an album subject, the artist row for an
+    // artist page (gui-music-artist-page design D6).
     let picked = detail
         .and_then(|detail| detail.hero.as_ref())
-        .and_then(|hero| hero.album().map(|album| album.album_id.clone()));
+        .map(GuiMusicHeroFrame::picked_row_id);
 
-    // The album the list last revealed. A pick reveals once, so a later
+    // The picked row the list last revealed. A pick reveals once, so a later
     // frame carrying the same pick does not move the cursor again. The
     // effect reads the carried frames and writes no signal it reads — the
     // reveal moves the interaction state and the scroll store; the `Rc`
     // shares the one reveal record across the effect's re-runs.
-    let revealed_album = use_hook(|| Rc::new(RefCell::new(None::<String>)));
+    let revealed_row = use_hook(|| Rc::new(RefCell::new(None::<String>)));
     let reveal_library = library.clone();
     use_effect(move || {
         let list_section = reveal_library.sections.library_list.cloned();
@@ -332,17 +335,14 @@ pub fn LibraryList() -> Element {
         ) else {
             return;
         };
-        // The subject's album while the subject is one (row 5.2 reworks this
-        // reader for the artist page).
-        let album_id = detail
-            .hero
-            .as_ref()
-            .and_then(|hero| hero.album().map(|album| album.album_id.clone()));
-        let mut revealed = revealed_album.borrow_mut();
-        if album_id.is_none() || album_id == *revealed {
+        // The picked row's id (gui-music-artist-page design D6): the reveal
+        // keys on it, so a pick of either subject reveals once.
+        let picked_row_id = detail.hero.as_ref().map(GuiMusicHeroFrame::picked_row_id);
+        let mut revealed = revealed_row.borrow_mut();
+        if picked_row_id.is_none() || picked_row_id == *revealed {
             return;
         }
-        *revealed = album_id;
+        *revealed = picked_row_id;
         drop(revealed);
         reveal_library.reveal_picked_album(list, detail);
     });

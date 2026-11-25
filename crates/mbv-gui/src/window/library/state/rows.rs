@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList};
+use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicHeroSubjectFrame, GuiMusicList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::library::list::{
@@ -72,8 +72,8 @@ impl LibraryState {
     }
 
     /// The item a row picks (design D7, D5): an album's own id, and a track's album
-    /// — a picked track picks its album. An artist row picks nothing: the Hero is
-    /// album-scoped (design D5), so an artist's detail would empty it.
+    /// — a picked track picks its album. An artist row names no item: its pick is
+    /// the artist page, which [`Self::press_library_row`] sends apart.
     #[must_use]
     fn picked_item_id(row: &LibraryRow) -> Option<String> {
         match row {
@@ -145,17 +145,32 @@ impl LibraryState {
         }
     }
 
-    /// Reveal the Hero's picked album in the list (`state.ts`'s
-    /// `revealPickedAlbum`). The album's artist opens and the list scrolls so the
-    /// album's row paints, so a restored pick and a pill's last pick reach the
-    /// Hero on a row in view. An album whose tracks are not loaded is opened
-    /// through the same command a press sends, which is what loads them.
+    /// Reveal the Hero's picked row in the list (`state.ts`'s
+    /// `revealPickedAlbum`; gui-music-artist-page design D6). The reveal follows
+    /// the subject: an album pick opens its artist and scrolls so the album's
+    /// row paints, and an artist pick scrolls the artist row into view and opens
+    /// nothing, so a restored pick and a pill's last pick reach the Hero on a
+    /// row in view. An album whose tracks are not loaded is opened through the
+    /// same command a press sends, which is what loads them.
     pub fn reveal_picked_album(&self, list: &GuiMusicList, detail: &GuiMusicDetail) {
-        // The subject's album while the subject is one (gui-music-artist-page
-        // row 5.2 reworks this reader for the artist page).
-        let Some(album) = detail.hero.as_ref().and_then(GuiMusicHeroFrame::album) else {
+        let Some(hero) = detail.hero.as_ref() else {
             return;
         };
+        match &hero.subject {
+            GuiMusicHeroSubjectFrame::Album(album) => self.reveal_album_pick(list, album),
+            GuiMusicHeroSubjectFrame::Artist(_) => {
+                self.scroll_row_into_view(hero.picked_row_id());
+            }
+        }
+    }
+
+    /// The album subject's reveal (design D6): the album's artist opens and the
+    /// list scrolls so the album's row paints.
+    fn reveal_album_pick(
+        &self,
+        list: &GuiMusicList,
+        album: &crate::bridge::frame::library::GuiMusicAlbumFrame,
+    ) {
         let Some(artist) = list.artists.iter().find(|candidate| {
             candidate
                 .albums
@@ -168,27 +183,34 @@ impl LibraryState {
         let artist_row = artist_row_id(artist);
         let mut ui = self.ui;
         ui.with_mut(|ui| with_id(&mut ui.open_nodes, &artist_row, true));
+        self.scroll_row_into_view(album_row);
+        if album.tracks.is_none() {
+            self.link.library(GuiLibraryCommand::OpenAlbum {
+                album_id: album.album_id.clone(),
+            });
+        }
+    }
+
+    /// Scroll the list so the row `row_id` paints (design D6): while the list
+    /// is not measured yet the row cannot scroll into view, so the first
+    /// measurement takes the scroll.
+    fn scroll_row_into_view(&self, row_id: String) {
         if self.music_scroll.peek().viewport_height <= 0.0 {
             // The list is not measured yet, so the row cannot scroll into view.
             // The first measurement takes the scroll.
             let mut pending = self.pending_reveal_row;
-            pending.set(Some(album_row));
+            pending.set(Some(row_id));
         } else {
             let ui = self.ui.peek().clone();
             let rows = self.rows_of(&ui);
             let held = *self.music_scroll.peek();
             let top = scroll_top_to_show_cursor(
                 &rows,
-                Some(&album_row),
+                Some(&row_id),
                 held.scroll_top,
                 held.viewport_height,
             );
             set_scroll_top(self.music_scroll, &rows, top);
-        }
-        if album.tracks.is_none() {
-            self.link.library(GuiLibraryCommand::OpenAlbum {
-                album_id: album.album_id.clone(),
-            });
         }
     }
 
@@ -249,16 +271,40 @@ impl LibraryState {
         })
     }
 
-    /// Press a row (design D7, gui-tree-double-click design D1): a press is the
-    /// pick's half only — a track row picks its album, and the pick's album shows
-    /// in the Hero. An artist row picks nothing (the Hero is album-scoped, design
-    /// D5) and an album row picks itself. A press never opens or closes a tree
+    /// Pick the artist of an artist row (gui-music-artist-page design D6): the
+    /// Hero shows the artist's page. The command names the artist's stable key
+    /// and the Music library the row paints in, and the press closes the item
+    /// menu and the row menu as `show_detail` does. It opens and closes no
+    /// node.
+    fn show_artist(&self, artist_key: &crate::bridge::frame::library::GuiArtistKey) {
+        let list = self.sections.library_list.peek();
+        let Some(music) = library_music_list(list.as_deref()) else {
+            return;
+        };
+        self.link.library(GuiLibraryCommand::ShowArtist {
+            lib_idx: music.lib_idx,
+            artist_key: artist_key.clone(),
+        });
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            ui.item_menu_open = false;
+            ui.row_menu = None;
+        });
+    }
+
+    /// Press a row (design D7, gui-tree-double-click design D1; gui-music-artist-page
+    /// design D6): a press is the pick's half only — a track row picks its album,
+    /// an album row picks itself, and an artist row picks the artist, whose page
+    /// the Hero shows. A press never opens or closes a tree
     /// node: [`Self::toggle_library_node`] owns that half, on the row's
     /// double-click.
     pub fn press_library_row(&self, row: &LibraryRow) {
         match row {
             LibraryRow::Letter(_) => {}
-            LibraryRow::Artist { .. } | LibraryRow::Album { .. } | LibraryRow::Track { .. } => {
+            LibraryRow::Artist { artist_key, .. } => {
+                self.show_artist(artist_key);
+            }
+            LibraryRow::Album { .. } | LibraryRow::Track { .. } => {
                 self.show_detail(Self::picked_item_id(row));
             }
         }

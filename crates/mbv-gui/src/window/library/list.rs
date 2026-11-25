@@ -23,7 +23,7 @@ pub use lettered::{
 };
 
 use crate::bridge::frame::library::{
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicTrackFrame, GuiRowArtFrame,
+    GuiArtistKey, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicTrackFrame, GuiRowArtFrame,
     GuiRowMediaKindFrame,
 };
 
@@ -76,6 +76,9 @@ pub enum LibraryRow {
     Artist {
         /// The shared geometry and id fields.
         base: RowBase,
+        /// The artist's stable identity (gui-music-artist-page design D6): the
+        /// key the artist-page command names, so the press parses no id.
+        artist_key: GuiArtistKey,
         /// The artist's display name.
         name: String,
         /// The Service id the detail command names, or `None` for an artist
@@ -370,6 +373,7 @@ fn push_letter_and_artist(
                 height: 0.0,
                 letter,
             },
+            artist_key: artist.artist_key.clone(),
             name: artist.name.clone(),
             item_id: match &artist.artist_key {
                 crate::bridge::frame::library::GuiArtistKey::Service(id) => Some(id.clone()),

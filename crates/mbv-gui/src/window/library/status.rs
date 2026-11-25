@@ -20,18 +20,11 @@ fn destination_label(tabs: &[GuiLibraryTabFrame], current_tab: Option<usize>) ->
         .map(|tab| tab.label.clone())
 }
 
-/// The picked item's name (design D5, D10): the Hero's artist, or the album's
-/// title while the Service names no artist. Absent while nothing is picked.
+/// The picked item's name (design D5, D10; gui-music-artist-page design D6):
+/// the Hero's picked name — the picked album's title, or the artist's name
+/// while the Hero shows the artist page. Absent while nothing is picked.
 fn picked_name(hero: Option<&GuiMusicHeroFrame>) -> Option<String> {
-    let hero = hero?;
-    Some(if hero.artist.trim().is_empty() {
-        // The subject's album while the subject is one (gui-music-artist-page
-        // row 5.3 reworks this reader for the artist page).
-        hero.album()
-            .map_or_else(|| hero.artist.clone(), |album| album.name.clone())
-    } else {
-        hero.artist.clone()
-    })
+    hero.map(GuiMusicHeroFrame::picked_name)
 }
 
 /// The id and title fields the selected-title segment reads off a carried
