@@ -1,18 +1,22 @@
 //! One queue row's canvas cells (the `rowCells` snippet of `QueuePanel`): the
 //! padded queue ordinal, the one title line, and the right column's duration
-//! with the progress ring beside it. The row carries no second line, and the
-//! ring adds no height: it sits in the right column (design D3 of
-//! `gui-delineated-rows`; the ring and the duration are one cluster, user
-//! request 2026-11-23). The hovered row paints no duration, because its Play
-//! control takes the duration's place (design D6 of `gui-row-hover-actions`).
-//! The drag ghost paints the title, the ring after the
-//! title, and the percent only. The row's colours come through the queue
-//! column's `--ef-*`
-//! tokens (design D1 of `gui-queue-panel-redesign`).
+//! with the progress ring and the play mark beside it. The row carries no
+//! second line, and the ring adds no height: it sits in the right column
+//! (design D3 of `gui-delineated-rows`; the ring and the duration are one
+//! cluster, user request 2026-11-23). The play mark is the shared
+//! [`PlayMark`] of `gui-played-row-marks` (design D4): it paints between the
+//! ring and the duration on the list row only, and the now-playing row keeps
+//! the empty slot, so no row's duration moves when its state changes. The
+//! hovered row paints no duration and no mark, because its Play control takes
+//! the duration's place (design D6 of `gui-row-hover-actions`). The drag ghost
+//! paints the title, the ring after the title, and the percent only. The
+//! row's colours come through the queue column's `--ef-*` tokens (design D1 of
+//! `gui-queue-panel-redesign`).
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiSemanticState};
+use crate::window::components::play_mark::{PlayMark, RowPlay};
 use crate::window::components::queue_panel::geometry::{ORDINAL_COL_PX, RIGHT_COL_PX};
 use crate::window::playhead::Playhead;
 use crate::window::theme::{EfToken, ef_var};
@@ -89,18 +93,18 @@ impl ItemRow {
 /// The colour set one row paints in (the canvas's row states, design D3):
 /// the now-playing row paints the green title at weight 600 on the green
 /// fill, a marked row the raised fill, the hovered row the hover
-/// fill, the watched row the grey title its strike crosses in the darker
-/// token, and every other row no fill and the primary text. The ordinal and
-/// the right column are shared: the number and the duration are grey. The
-/// ring's track and fill are shared too: the track the raised tier and the
-/// fill orange except on the playing row.
+/// fill, and every other row no fill and the play look's title tone and
+/// weight (design D4 of `gui-played-row-marks`: a played row grey at 400, an
+/// unplayed row the primary text at 600). The ordinal and the right column
+/// are shared: the number and the duration are grey. The ring's track and
+/// fill are shared too: the track the raised tier and the fill orange except
+/// on the playing row.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct RowLook {
     /// The row button's own fill, `None` for an ordinary resting row.
     pub(super) background: Option<&'static str>,
     title: &'static str,
     weight: f32,
-    strike: &'static str,
     ordinal: &'static str,
     track: &'static str,
     fill: &'static str,
@@ -118,12 +122,14 @@ pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
             background: Some(ef_var(EfToken::BgGreen)),
             title: ef_var(EfToken::Green),
             weight: 600.0,
-            strike: ef_var(EfToken::Bg5),
             ordinal: ef_var(EfToken::Grey1),
             track: ef_var(EfToken::Bg2),
             fill: ef_var(EfToken::Green),
         };
     }
+    // The now-playing branch returns above, so every row here carries a play
+    // state (design D4 of `gui-played-row-marks`).
+    let play = RowPlay::of_queue(&row.state);
     let background = if queue.marks.contains(&row.slot) {
         Some(ef_var(EfToken::Bg3))
     } else if hovered {
@@ -131,16 +137,15 @@ pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
     } else {
         None
     };
-    let title = if row.state == GuiSemanticState::Played && !hovered {
-        ef_var(EfToken::Grey1)
-    } else {
+    let title = if hovered {
         ef_var(EfToken::Fg)
+    } else {
+        play.map_or(ef_var(EfToken::Fg), RowPlay::title_tone)
     };
     RowLook {
         background,
         title,
-        weight: 400.0,
-        strike: ef_var(EfToken::Bg5),
+        weight: play.map_or(400.0, RowPlay::title_weight),
         ordinal: ef_var(EfToken::Grey1),
         track: ef_var(EfToken::Bg2),
         fill: ef_var(EfToken::Orange),
@@ -266,6 +271,15 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
     };
     let ordinal = row.ordinal;
     let ordinal_text = format!("{ordinal:02}");
+    // The list row's right column always paints: its play-mark slot is the
+    // one width every row reserves (design D1 of `gui-played-row-marks`), so
+    // no row's duration moves when its state changes. The hovered row's
+    // column paints only while a ring remains.
+    let paints_column = match chrome {
+        RowChrome::Row => true,
+        RowChrome::Hover => progress.is_some(),
+        RowChrome::Ghost => false,
+    };
 
     rsx! {
         if chrome != RowChrome::Ghost {
@@ -291,14 +305,10 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 // The title is a row-flex item, so it grows into the row's
                 // free width: its measure must read the room the row has,
                 // not the width of the text it currently paints.
-                let title_class = if row.state == GuiSemanticState::Played {
-                    "min-w-0 flex-1 line-through"
-                } else {
-                    "min-w-0 flex-1"
-                };
+                let title_class = "min-w-0 flex-1";
                 let title_css = format!(
-                    "font-size: 13.5px; font-weight: {}; text-decoration-color: {}; color: {};",
-                    look.weight, look.strike, title_color
+                    "font-size: 13.5px; font-weight: {}; color: {};",
+                    look.weight, title_color
                 );
                 rsx! {
                     Truncate {
@@ -316,14 +326,14 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 {progress_ring(look, percent)}
             }
         }
-        if chrome != RowChrome::Ghost
-            && (duration.is_some() || progress.is_some())
-        {
+        if paints_column {
             // The right column: the item's duration in every row state but the
-            // hovered one (design D3), with the progress ring beside it — the
-            // ring and the duration are one information set, so they paint as
-            // one cluster right-aligned in the column (user request
-            // 2026-11-23).
+            // hovered one (design D3), with the progress ring and the play
+            // mark beside it — the ring, the mark, and the duration are one
+            // cluster right-aligned in the column (user request 2026-11-23,
+            // design D4 of `gui-played-row-marks`). The mark comes from
+            // `RowPlay::of_queue`, whose `None` is the now-playing row's empty
+            // slot. The hovered row and the drag ghost paint no mark.
             span {
                 class: "shrink-0 flex items-center justify-end",
                 style: format!(
@@ -333,6 +343,9 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 if let Some(percent) = progress {
                     // The row's only progress mark (design D3).
                     {progress_ring(look, percent)}
+                }
+                if chrome == RowChrome::Row {
+                    PlayMark { play: RowPlay::of_queue(&row.state) }
                 }
                 if let Some(duration) = duration {
                     span {
