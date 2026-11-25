@@ -4,8 +4,8 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 1. Core intent for the album track loads (design D3)
 
-- [ ] 1.1 In `crates/mbv-client-core/src/app/state/music_artist_detail.rs`, add `pub fn request_albums_tracks(&mut self, album_ids: Vec<String>)` on `App`. It calls `enqueue_artist_album_tracks` and holds no logic of its own. Write its doc to say that the loads are bounded at `MAX_ARTIST_FALLBACK_TRACK_FETCHES` and deduplicated against the cache, the loading set, and the pending queue. Keep `enqueue_artist_album_tracks` `pub(in crate::app)`. Verify: `cargo check -p mbv-client-core` passes.
-- [ ] 1.2 In `crates/mbv-client-core/src/app/state/music_artist_detail/tests.rs`, extend the existing test that asserts the fan-out bound (the one that names `MAX_ARTIST_FALLBACK_TRACK_FETCHES`, near line 239) so that it starts the loads through `request_albums_tracks`. It adds no test. Verify: `cargo nextest run -p mbv-client-core music_artist_detail` passes.
+- [x] 1.1 In `crates/mbv-client-core/src/app/state/music_artist_detail.rs`, add `pub fn request_albums_tracks(&mut self, album_ids: Vec<String>)` on `App`. It calls `enqueue_artist_album_tracks` and holds no logic of its own. Write its doc to say that the loads are bounded at `MAX_ARTIST_FALLBACK_TRACK_FETCHES` and deduplicated against the cache, the loading set, and the pending queue. Keep `enqueue_artist_album_tracks` `pub(in crate::app)`. Verify: `cargo check -p mbv-client-core` passes.
+- [x] 1.2 In `crates/mbv-client-core/src/app/state/music_artist_detail/tests.rs`, extend the existing test that asserts the fan-out bound (the one that names `MAX_ARTIST_FALLBACK_TRACK_FETCHES`, near line 239) so that it starts the loads through `request_albums_tracks`. It adds no test. Verify: `cargo nextest run -p mbv-client-core music_artist_detail` passes.
 
 ## 2. Pick state, subject, and projection (design D1)
 
