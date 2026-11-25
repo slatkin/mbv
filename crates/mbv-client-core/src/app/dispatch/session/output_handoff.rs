@@ -52,7 +52,13 @@ impl App {
     /// which while thin-client describes the peer and before the drain lags
     /// this record one tick.
     pub(in crate::app) fn local_owner_output(&self) -> Option<mbv_ctrl::OutputState> {
-        if self.is_local_daemon() {
+        // An unset endpoint (before the first connect) is the local Owner, as
+        // in `local_owner_link`.
+        if self
+            .player_endpoint
+            .as_ref()
+            .is_none_or(mbv_remote_player::DaemonEndpoint::is_local)
+        {
             self.player.remote().playback_output_state()
         } else {
             self.suspended_local
