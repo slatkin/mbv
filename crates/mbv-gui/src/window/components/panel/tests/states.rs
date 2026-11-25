@@ -127,6 +127,24 @@ fn the_folded_queue_reports_the_expand_control_region() {
     );
 }
 
+/// Contract (user bug report 2026-11-25): a queue-only window does not
+/// collapse. With no Library panel beside the panel, the collapse toggle
+/// paints the expanded artboard, not a rail beside a blank window, and the
+/// footer paints no collapse control.
+#[test]
+fn a_queue_only_panel_ignores_the_collapse_toggle_and_paints_no_collapse_control() {
+    let mut fixture = built_queue_only(TALL);
+    fixture.set_toggles(true, false);
+    assert!(
+        fixture.presents("[data-panel-state=\"expanded\"]"),
+        "the queue-only panel stays expanded"
+    );
+    assert!(
+        !fixture.presents("[data-target=\"collapse\"]"),
+        "the queue-only footer paints no collapse control"
+    );
+}
+
 /// Contract (`Panel.test.ts`): the rail reports the transport's two controls,
 /// the artwork slot, and the expand control, in paint order — its whole
 /// region list, since the queue and the footer belong to the expanded

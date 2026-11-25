@@ -415,7 +415,8 @@ pub(super) fn chooser() -> GuiOverlayFrame {
 
 /// The root of the chooser's region-order contracts: the player panel's top
 /// block and the Queue panel under one reporter, as the expanded artboard
-/// composes them (`QueueFooter` joins with its port, task 5.6).
+/// composes them (`QueueFooter` joins with its port, task 5.6), beside the
+/// Library panel, so the footer paints its collapse control.
 pub(super) fn panel_tree_app(props: FixtureProps) -> Element {
     let FixtureProps { sender, handle } = props;
     provide_fixture_contexts(sender, &handle);
@@ -423,7 +424,7 @@ pub(super) fn panel_tree_app(props: FixtureProps) -> Element {
         QueuePlaybackPanel {}
         QueuePanel {}
         QueueFooter {
-            library_visible: false,
+            library_visible: true,
         }
     }
 }

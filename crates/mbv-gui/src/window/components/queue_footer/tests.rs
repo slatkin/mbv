@@ -148,6 +148,8 @@ const FIXTURE_CSS: &str = concat!(
 #[derive(Clone)]
 struct FixtureProps {
     sender: Sender<CoreInput>,
+    /// Whether the Library panel shows beside the footer's panel.
+    library_visible: bool,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
@@ -158,7 +160,11 @@ type FixtureHandles = (Sections, LayoutEpoch);
 /// The root: paints the footer line over the section stores, as `Panel`
 /// does.
 fn footer_app(props: FixtureProps) -> Element {
-    let FixtureProps { sender, handle } = props;
+    let FixtureProps {
+        sender,
+        library_visible,
+        handle,
+    } = props;
     provide_context(CoreLink::new(sender));
     provide_context(crate::window::layout::use_layout_reporter());
     provide_context(use_hook(LayoutEpoch::new));
@@ -167,7 +173,7 @@ fn footer_app(props: FixtureProps) -> Element {
     let epoch = use_hook(LayoutEpoch::new);
     handle.borrow_mut().replace((sections, epoch));
     rsx! {
-        QueueFooter { library_visible: false }
+        QueueFooter { library_visible }
     }
 }
 
@@ -297,6 +303,16 @@ impl Fixture {
 /// A fixture over the footer line alone, laid out into a 640×900 viewport
 /// with the queue tree's utilities, so a measured cut reads a laid-out width.
 fn built() -> Fixture {
+    built_with(true)
+}
+
+/// A fixture over the footer line of a queue-only window: no Library panel
+/// beside it, so the line owns the armed prefix.
+fn built_queue_only() -> Fixture {
+    built_with(false)
+}
+
+fn built_with(library_visible: bool) -> Fixture {
     let (sender, receiver) = channel();
     let handle = Rc::new(RefCell::new(None));
     let config = DocumentConfig {
@@ -312,6 +328,7 @@ fn built() -> Fixture {
             footer_app,
             FixtureProps {
                 sender,
+                library_visible,
                 handle: Rc::clone(&handle),
             },
         ),
@@ -465,7 +482,7 @@ fn the_active_footer_states_paint_their_lucide_icons(
 /// prefix badge, and the line shows no toast text.
 #[test]
 fn an_armed_frame_renders_the_prefix_badge() {
-    let mut fixture = built();
+    let mut fixture = built_queue_only();
     fixture.show(
         footer_frame(),
         summary(),

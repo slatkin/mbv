@@ -70,6 +70,8 @@ use crate::window::time::format_duration_short;
 pub struct QueueFooterProps {
     /// Whether the Library panel shows beside this one: the Library Status
     /// bar owns the armed prefix then, so the footer line does not paint it.
+    /// The collapse control paints only then: a queue-only window does not
+    /// collapse.
     #[props(default)]
     pub library_visible: bool,
 }
@@ -151,17 +153,19 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                 div {
                     class: "flex min-w-0 items-center",
                     style: "gap: 12px;",
-                    button {
-                        "type": "button",
-                        class: "flex shrink-0 items-center justify-center",
-                        style: "width: 28px; height: 28px;",
-                        "data-target": "collapse",
-                        "aria-label": "Collapse panel",
-                        title: "Collapse panel (z)",
-                        onmounted: region_set.mark(RegionTarget::QueuePlayback(
-                            QueuePlaybackTargetId::Collapse,
-                        )),
-                        ChevronsRight { size: 18, stroke_width: 1.8, color: role_var(GuiRole::TextMuted) }
+                    if props.library_visible {
+                        button {
+                            "type": "button",
+                            class: "flex shrink-0 items-center justify-center",
+                            style: "width: 28px; height: 28px;",
+                            "data-target": "collapse",
+                            "aria-label": "Collapse panel",
+                            title: "Collapse panel (z)",
+                            onmounted: region_set.mark(RegionTarget::QueuePlayback(
+                                QueuePlaybackTargetId::Collapse,
+                            )),
+                            ChevronsRight { size: 18, stroke_width: 1.8, color: role_var(GuiRole::TextMuted) }
+                        }
                     }
                     if let Some(autosave) = footer.autosave.as_ref() {
                         SaveCheck {

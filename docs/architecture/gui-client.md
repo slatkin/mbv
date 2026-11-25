@@ -522,7 +522,11 @@ reports the size through `LayoutReporter::report_container_size` — the same
 measurement `LayoutReport.container_size` carries to the core — so the painted state, the
 list capacity, and the hit map follow one size.
 
-The `z` toggle (`GuiPanelToggles.collapsed`) wins over every size and paints
+The `z` toggle (`GuiPanelToggles.collapsed`) applies only while the Library
+panel shows beside the panel (`Panel` masks it with `library_visible`, and
+`QueueFooter` paints its collapse control only then): a queue-only window has
+nothing to give the freed width to, so the toggle stays in the core and paints
+nothing there. Beside the Library panel it wins over every size and paints
 the 72 px rail at the window's right edge: a progress ring around the
 artwork, play/pause, next, the
 remaining time, and a control that expands the panel again. A measured

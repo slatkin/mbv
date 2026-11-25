@@ -316,14 +316,13 @@ pub(crate) fn header_facts(sections: &Sections) -> HeaderFacts {
 }
 
 /// The Queue column's class for its one root slot. Two columns pin its width;
-/// a queue-only expanded panel fills the window; a queue-only collapsed rail
-/// fills the window's height but end-aligns its 72 px to the right edge.
+/// a queue-only panel fills the window. A queue-only panel never paints the
+/// collapsed rail (the `Panel` gates the collapse toggle on the Library
+/// panel beside it), so no class end-aligns a rail.
 #[must_use]
-fn queue_column_class(two_columns: bool, collapsed: bool) -> &'static str {
+fn queue_column_class(two_columns: bool) -> &'static str {
     if two_columns {
         "flex h-full min-h-0 flex-col flex-none"
-    } else if collapsed {
-        "flex h-full min-h-0 flex-col flex-1 items-end"
     } else {
         "flex h-full min-h-0 flex-col flex-1"
     }
@@ -705,7 +704,7 @@ pub fn App() -> Element {
                             {queue_column(
                                 queue_visible,
                                 two_columns,
-                                queue_column_class(two_columns, panel.collapsed),
+                                queue_column_class(two_columns),
                                 widths.queue,
                                 container,
                                 library_visible,

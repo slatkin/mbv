@@ -98,7 +98,7 @@ fn resize_app(props: Props) -> Element {
                 }
                 if queue_visible {
                     div {
-                        class: super::super::queue_column_class(true, false),
+                        class: super::super::queue_column_class(true),
                         "data-queue-column": "",
                         style: "width: {widths.queue}px;",
                     }

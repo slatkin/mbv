@@ -201,6 +201,8 @@ pub(super) const SHORT: LayoutSize = LayoutSize {
 struct FixtureProps {
     sender: Sender<CoreInput>,
     container: LayoutSize,
+    /// Whether the Library panel shows beside the panel.
+    library_visible: bool,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
@@ -238,7 +240,7 @@ fn panel_app(props: FixtureProps) -> Element {
     rsx! {
         Panel {
             container: container.cloned(),
-            library_visible: false,
+            library_visible: props.library_visible,
         }
     }
 }
@@ -386,7 +388,18 @@ impl Fixture {
     }
 }
 
+/// A fixture with the Library panel beside the panel: the two-column window,
+/// where the collapse toggle paints the rail.
 pub(super) fn built(container: LayoutSize) -> Fixture {
+    built_with(container, true)
+}
+
+/// A fixture with the panel alone in the window: the queue-only (Mini) view.
+pub(super) fn built_queue_only(container: LayoutSize) -> Fixture {
+    built_with(container, false)
+}
+
+fn built_with(container: LayoutSize, library_visible: bool) -> Fixture {
     let (sender, receiver) = channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let config = DocumentConfig {
@@ -403,6 +416,7 @@ pub(super) fn built(container: LayoutSize) -> Fixture {
             FixtureProps {
                 sender,
                 container,
+                library_visible,
                 handle: Rc::clone(&handle),
             },
         ),

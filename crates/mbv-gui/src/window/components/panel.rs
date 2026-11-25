@@ -47,8 +47,12 @@ pub fn Panel(props: PanelProps) -> Element {
     let sections = consume_context::<Sections>();
 
     // The state the panel paints: the toggles and the container size (design
-    // D10).
-    let layout = panel::panel_state(props.container, &sections.panel.cloned());
+    // D10). The collapse toggle applies only while the Library panel shows
+    // beside this one: a queue-only window has nothing to give the freed
+    // width to, so a rail there would leave the rest of the window blank.
+    let mut toggles = sections.panel.cloned();
+    toggles.collapsed &= props.library_visible;
+    let layout = panel::panel_state(props.container, &toggles);
 
     // The compact strip's next-item title: the core's summary names the
     // slot after the playhead independently of the painted viewport (review

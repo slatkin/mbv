@@ -456,7 +456,7 @@ A pointer press, drag, or wheel step on the player panel SHALL resolve to the se
 
 ### Requirement: The panel changes state with its own size
 
-The panel SHALL pick one of four states from its own size, not from the window size: expanded, compact strip, expanded without queue, or rail. The `z` key SHALL toggle the collapse and the `q` key SHALL toggle the queue fold. The Client core SHALL hold the two toggles. The front end SHALL pick the layout from the measured size of the panel container, the same measurement that it reports to the Client core in `LayoutReport`, so the painted layout, the list capacity, and the hit map follow one size.
+The panel SHALL pick one of four states from its own size, not from the window size: expanded, compact strip, expanded without queue, or rail. The `z` key SHALL toggle the collapse and the `q` key SHALL toggle the queue fold. The Client core SHALL hold the two toggles. The collapse SHALL apply only while the Library panel shows beside the panel: while the Queue column is the only column (the Mini view's Queue, or no Library content), the panel SHALL paint as if not collapsed and the footer line SHALL show no collapse control. The front end SHALL pick the layout from the measured size of the panel container, the same measurement that it reports to the Client core in `LayoutReport`, so the painted layout, the list capacity, and the hit map follow one size.
 
 #### Scenario: The container is shorter than 520 px
 
@@ -473,6 +473,12 @@ The panel SHALL pick one of four states from its own size, not from the window s
 - **WHEN** the user presses `z`
 - **THEN** the panel shows the 72 px rail: a progress ring around the artwork, play/pause, next, the remaining time, and a control that expands the panel
 - **AND** pressing `z` again restores the previous state
+
+#### Scenario: A queue-only window does not collapse
+
+- **GIVEN** the Queue column is the only column in the window
+- **WHEN** the user opens the panel, or presses `z`
+- **THEN** the footer line shows no collapse control and the panel never shows the rail beside an empty window
 
 ### Requirement: The scrubber seeks and previews
 
