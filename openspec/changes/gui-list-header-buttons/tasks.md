@@ -40,7 +40,7 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 7. Docs and gates
 
-- [ ] 7.1 Update the list header paragraph of `docs/architecture/gui-client.md` (the paragraph that starts "`LibraryListHeader` paints the heading line") for the trailing group, the refresh button, and the Expand all and Collapse all buttons, and add the Shows in-view loader and its quiet fetch to that document's Shows data notes. Verify: `rg -n "Expand all" docs/architecture/gui-client.md` finds the new header paragraph and `rg -n "in-view loader" docs/architecture/gui-client.md` finds the Shows note. Neither phrase is in the file today.
+- [x] 7.1 Update the list header paragraph of `docs/architecture/gui-client.md` (the paragraph that starts "`LibraryListHeader` paints the heading line") for the trailing group, the refresh button, and the Expand all and Collapse all buttons, and add the Shows in-view loader and its quiet fetch to that document's Shows data notes. Verify: `rg -n "Expand all" docs/architecture/gui-client.md` finds the new header paragraph and `rg -n "in-view loader" docs/architecture/gui-client.md` finds the Shows note. Neither phrase is in the file today.
 - [ ] 7.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-client-core -p mbv-gui`. Fix every failure. Each command runs in the foreground with no pipe, so its exit code is the gate. Verify: all three commands exit 0.
 
 ## Workflow follow-up
