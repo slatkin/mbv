@@ -28,7 +28,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_attr::library_attr;
-use crate::window::components::play_mark::{PLAY_MARK_GAP_PX, PlayMark, RowPlay};
+use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::typed_text::TypedText;
 use crate::window::icons::Play;
@@ -361,10 +361,7 @@ fn paint_trailing_cell(
             },
         };
         rsx! {
-            span {
-                class: "row-hover-trail flex items-center",
-                style: "gap: {PLAY_MARK_GAP_PX}px;",
-                PlayMark { play: mark }
+            PlayCluster { class: "row-hover-trail", play: mark,
                 span {
                     class: "flex-none font-mono tabular-nums",
                     style: "{duration_style}",

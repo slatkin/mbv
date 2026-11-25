@@ -6,7 +6,9 @@
 //! trailing tone, and the thumb opacity, so no painter restates a value.
 //! [`PlayMark`] paints the mark itself: every row of a list that carries a
 //! play state keeps the same width for it, so no row moves when its state
-//! changes.
+//! changes. [`PlayCluster`] paints the one trailing cluster — the mark, then
+//! the trailing content — that carries a row's hover swap (design D3), so the
+//! cluster's mechanics have one owner.
 //!
 //! A sibling module of `list_row` and not a part of it, because the queue and
 //! the Workspace table use the same rule and `list_row` is the Library and
@@ -141,6 +143,47 @@ impl RowPlay {
         match self {
             Self::Unplayed => "Unplayed",
             Self::Played => "Played",
+        }
+    }
+}
+
+/// The props of the trailing cluster.
+#[derive(Props, Clone, PartialEq)]
+pub struct PlayClusterProps {
+    /// The trail class the cluster carries (design D3): the `row-hover-trail`
+    /// marker while the row's hover controls cover the trailing end, so the
+    /// mark and the trailing content hide together.
+    pub class: &'static str,
+    /// The row's derived play state: `None` for the empty slot.
+    pub play: Option<RowPlay>,
+    /// The trailing content that shares the cluster with the mark.
+    pub children: Element,
+}
+
+impl std::fmt::Debug for PlayClusterProps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlayClusterProps")
+            .field("class", &self.class)
+            .field("play", &self.play)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The trailing cluster (design D3): the one span — the play mark, then the
+/// trailing content at the shared gap — that carries the row's hover swap, so
+/// the mark and the content hide together while the hover controls show. The
+/// flat row, the tree row, and the Workspace table all paint their trailing
+/// end through this component, so the cluster's mechanics have one owner
+/// (invariant 38).
+#[component]
+pub fn PlayCluster(props: PlayClusterProps) -> Element {
+    let class = props.class;
+    rsx! {
+        span {
+            class: "{class} flex items-center",
+            style: "gap: {PLAY_MARK_GAP_PX}px;",
+            PlayMark { play: props.play }
+            {props.children}
         }
     }
 }

@@ -27,7 +27,7 @@ use crate::window::components::list_row::{
     LIBRARY_ROW_HEIGHT, LibraryRowThumb, LibraryTrailPart, ROW_DIVIDER_PX, ROW_PADDING_PX,
     RowLevel, context_press, hover_trail_class, paint_thumb, row_host_style,
 };
-use crate::window::components::play_mark::{PLAY_MARK_GAP_PX, PlayMark, RowPlay};
+use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
 use crate::window::components::tree_row::TREE_ROW_FONT_PX;
@@ -234,14 +234,16 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     // its mono face, and its size. A row that carries no play state keeps the
     // bare trailing text it always painted.
     let trailing: Option<Element> = if let Some(play) = row_play {
-        let cluster_class = format!("{trail_class} flex items-center");
+        // The text inside the cluster never carries the trail marker — the
+        // cluster does — so it paints the trail class of a row nothing covers.
+        let inner_class = hover_trail_class(false);
         let text = trail_text.as_ref().map(|trail| {
             let attrs = trail_attrs.clone();
             let css = trail_css.clone();
             let trail = trail.clone();
             rsx! {
                 span {
-                    class: "flex-none font-mono tabular-nums",
+                    class: "{inner_class}",
                     style: "{css}",
                     ..attrs,
                     "{trail}"
@@ -249,12 +251,7 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
             }
         });
         Some(rsx! {
-            span {
-                class: "{cluster_class}",
-                style: "gap: {PLAY_MARK_GAP_PX}px;",
-                PlayMark { play: Some(play) }
-                {text}
-            }
+            PlayCluster { class: trail_class, play: Some(play), {text} }
         })
     } else {
         trail_text.as_ref().map(|trail| {

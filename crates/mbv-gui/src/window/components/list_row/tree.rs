@@ -31,15 +31,13 @@ use crate::window::components::list_row::{
     LibraryTrailPart, NODE_ROW_HEIGHT, ROW_DIVIDER_PX, ROW_PADDING_PX, RowLevel, TRACK_ROW_HEIGHT,
     context_press, hover_trail_class, row_host_style,
 };
-use crate::window::components::play_mark::{PLAY_MARK_GAP_PX, PlayMark, RowPlay};
+use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{
     GuideTone, LEAF_INSET_X, NESTED_INSET_X, TOP_GUIDE_X, TreeGuide, leaf_guides,
     nested_parent_guides, tail_divider_style,
 };
-use crate::window::components::tree_row::{
-    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text,
-};
+use crate::window::components::tree_row::{LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css};
 use crate::window::components::typed_text::TypedText;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
@@ -53,11 +51,6 @@ const NUMBER_CELL_PX: f32 = 18.0;
 /// The trailing text's and the number cell's font size, in CSS pixels (design
 /// D3).
 const TRAIL_FONT_PX: f32 = 12.0;
-
-/// The trailing text's class inside the play cluster (gui-played-row-marks
-/// design D3): the mono face, and never the trail marker — the cluster carries
-/// it, so the mark and the text hide together.
-const INNER_TRAIL_CLASS: &str = "flex-none font-mono tabular-nums";
 
 /// The level of a nested row (design D3): the look the row paints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -309,20 +302,15 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     // state keeps the bare trailing text it always painted.
     let trail_tone = row_play.and_then(RowPlay::trail_tone);
     let trailing: Option<Element> = if let Some(play) = row_play {
-        let cluster_class = format!("{trail_class} flex items-center");
+        // The text inside the cluster never carries the trail marker — the
+        // cluster does — so it paints the trail class of a row nothing covers.
+        let inner_class = hover_trail_class(false);
         let text = trail.as_ref().map(|trail| match level {
-            TreeLevel::Parent => {
-                parent_trail(attr, trail, props.selected, INNER_TRAIL_CLASS, trail_tone)
-            }
-            TreeLevel::Leaf => leaf_trail(attr, trail, INNER_TRAIL_CLASS, trail_tone),
+            TreeLevel::Parent => parent_trail(attr, trail, props.selected, inner_class, trail_tone),
+            TreeLevel::Leaf => leaf_trail(attr, trail, inner_class, trail_tone),
         });
         Some(rsx! {
-            span {
-                class: "{cluster_class}",
-                style: "gap: {PLAY_MARK_GAP_PX}px;",
-                PlayMark { play: Some(play) }
-                {text}
-            }
+            PlayCluster { class: trail_class, play: Some(play), {text} }
         })
     } else {
         trail.as_ref().map(|trail| match level {
@@ -423,11 +411,6 @@ fn leaf_title(
     } else {
         format!("color: {tone};")
     };
-    let style = if carried {
-        TextStyle::mono(LEAF_ROW_FONT_PX, weight)
-    } else {
-        leaf_row_text()
-    };
     rsx! {
         div {
             class: "min-w-0 flex-1",
@@ -435,7 +418,7 @@ fn leaf_title(
             Truncate {
                 text: title,
                 css,
-                style,
+                style: TextStyle::mono(LEAF_ROW_FONT_PX, weight),
                 attrs,
             }
         }
