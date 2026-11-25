@@ -31,8 +31,8 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 6. Docs and integration
 
-- [ ] 6.1 Update `docs/architecture/gui-client.md` (the queue row looks paragraph that names the strike) and `docs/invariants/38-repeated-gui-shapes-have-one-mechanics-owner.md` (the `played_title_tone` bullet). Name `play_mark.rs` (`RowPlay`, `PlayMark`) as the one played-state derivation and mark that the flat row, the tree row, the Workspace table, and the queue use. Verify: `rg -n "played_title_tone|line-through|bg5. strike" docs` returns nothing.
-- [ ] 6.2 Run `make gui-css` and commit any change to `crates/mbv-gui/assets/app.generated.css`. Then run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`, each in the foreground, with no pipe. Verify: all four commands exit 0.
+- [x] 6.1 Update `docs/architecture/gui-client.md` (the queue row looks paragraph that names the strike) and `docs/invariants/38-repeated-gui-shapes-have-one-mechanics-owner.md` (the `played_title_tone` bullet). Name `play_mark.rs` (`RowPlay`, `PlayMark`) as the one played-state derivation and mark that the flat row, the tree row, the Workspace table, and the queue use. Verify: `rg -n "played_title_tone|line-through|bg5. strike" docs` returns nothing.
+- [x] 6.2 Run `make gui-css` and commit any change to `crates/mbv-gui/assets/app.generated.css`. Then run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`, each in the foreground, with no pipe. Verify: all four commands exit 0.
 
 ## Workflow follow-up
 
