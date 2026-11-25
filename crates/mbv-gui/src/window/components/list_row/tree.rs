@@ -307,7 +307,7 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     // text — and the cluster carries the hover swap, so the mark and the text
     // hide together while the hover controls show. A row that carries no play
     // state keeps the bare trailing text it always painted.
-    let trail_tone = row_play.and_then(|play| play.trail_tone());
+    let trail_tone = row_play.and_then(RowPlay::trail_tone);
     let trailing: Option<Element> = if let Some(play) = row_play {
         let cluster_class = format!("{trail_class} flex items-center");
         let text = trail.as_ref().map(|trail| match level {
