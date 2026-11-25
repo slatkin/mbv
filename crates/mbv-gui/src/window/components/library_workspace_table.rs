@@ -15,12 +15,20 @@
 //! table row offers Shuffle or Expand. The table keeps no cursor
 //! (`gui-pointer-target-interaction` D6): a press runs the destination's press
 //! act, and a double-click or the Play control plays the row.
+//!
+//! A row that carries a play state derives its title's tone and weight from
+//! [`RowPlay`] (gui-played-row-marks design D1, D4), and its trailing cell
+//! paints the shared cluster — the play mark, then the duration — that the
+//! hover controls hide together (design D3). The playing row keeps its own
+//! heading tone and weight and paints the mark's empty slot, so its duration
+//! stays aligned with the other rows. A row that carries no play state keeps
+//! the bare duration it always painted.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_attr::library_attr;
-use crate::window::components::list_row::played_title_tone;
+use crate::window::components::play_mark::{PLAY_MARK_GAP_PX, PlayMark, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::typed_text::TypedText;
 use crate::window::icons::Play;
@@ -119,15 +127,32 @@ impl std::fmt::Debug for LibraryWorkspaceTableProps {
     }
 }
 
-/// A row's title tone (`gui-shared-workspace-row-state` design D1, D2): the
-/// playing row's own heading tone — the table's mark beside its glyph, which no
-/// carried state changes — and otherwise the shared played-title derivation
-/// every row part paints.
+/// A row's title tone (`gui-shared-workspace-row-state` design D1, D2;
+/// gui-played-row-marks design D1, D4): the playing row's own heading tone —
+/// the table's mark beside its glyph, which no carried state changes —
+/// otherwise the tone [`RowPlay`] derives from the row's carried state, or the
+/// text tone on a row that carries none.
 fn title_tone(row: &WorkspaceRow) -> String {
     if row.playing {
         return canvas_var("heading");
     }
-    played_title_tone(row.state.as_ref())
+    match row.state.as_ref() {
+        Some(state) => RowPlay::of_row(state).title_tone().to_owned(),
+        None => canvas_var("text"),
+    }
+}
+
+/// A row's title weight (gui-played-row-marks design D1, D4): the weight
+/// [`RowPlay`] derives from the row's carried state; the playing row and a row
+/// that carries no state keep 400.
+fn title_weight(row: &WorkspaceRow) -> f32 {
+    if row.playing {
+        return 400.0;
+    }
+    match row.state.as_ref() {
+        Some(state) => RowPlay::of_row(state).title_weight(),
+        None => 400.0,
+    }
 }
 
 /// The value a row's state hook paints (`gui-shared-workspace-row-state` design
@@ -249,6 +274,7 @@ fn paint_name_button(
     let row_id = row.id.clone();
     let double_click_id = row.id.clone();
     let color = title_tone(row);
+    let weight = title_weight(row);
     rsx! {
         button {
             "type": "button",
@@ -272,18 +298,25 @@ fn paint_name_button(
                 Truncate {
                     text: row.name.clone(),
                     class: "min-w-0 flex-1".to_owned(),
-                    css: format!("font-size: 13.5px; color: {color};"),
-                    style: TextStyle::sans(13.5, 400.0),
+                    css: format!("font-size: 13.5px; color: {color}; font-weight: {weight};"),
+                    style: TextStyle::sans(13.5, weight),
                 }
             }
         }
     }
 }
 
-/// The trailing cell (design D5): the row's duration at the repeat opacity,
-/// which rests as the `row-hover-trail` the stylesheet hides while the hover
-/// controls show, and the controls themselves over it. Play always paints, and
-/// Add paints only where the destination passes `on_queue`.
+/// The trailing cell (design D5; gui-played-row-marks design D3, D4): the
+/// controls themselves, and over the cell the `row-hover-trail` the stylesheet
+/// hides while they show. A row that carries a play state paints the one
+/// trailing cluster — the play mark, then the duration — and the cluster
+/// carries the hover swap, so the mark and the text hide together. The playing
+/// row paints the mark's empty slot, so its duration stays aligned with the
+/// other rows. A played row's duration is a plain span in the played trail
+/// tone, because `TypedText` paints each segment in its kind's colour and
+/// cannot dim; an unplayed row keeps `TypedText`. A row that carries no play
+/// state keeps the bare duration at the repeat opacity. Play always paints,
+/// and Add paints only where the destination passes `on_queue`.
 fn paint_trailing_cell(
     hook: &'static str,
     row: &WorkspaceRow,
@@ -306,9 +339,42 @@ fn paint_trailing_cell(
         let queue_id = row.id.clone();
         Callback::new(move |()| queue.call(queue_id.clone()))
     });
-    rsx! {
-        span {
-            class: "flex items-center justify-end",
+    // The trailing end (gui-played-row-marks design D3): the cluster carries
+    // the hover swap in place of the text span, and the text keeps its hook,
+    // its mono face, and its size.
+    let trailing: Element = if let Some(state) = row.state.as_ref() {
+        let row_play = RowPlay::of_row(state);
+        let mark = if row.playing { None } else { Some(row_play) };
+        let tone = row_play
+            .trail_tone()
+            .map_or_else(String::new, |tone| format!(" color: {tone};"));
+        let duration_style = format!("font-size: 12px; text-align: right;{tone}");
+        let duration_text: Element = match row_play {
+            RowPlay::Played => rsx! {
+                "{row.duration}"
+            },
+            RowPlay::Unplayed => rsx! {
+                TypedText {
+                    segments: segments,
+                    repeat: true,
+                }
+            },
+        };
+        rsx! {
+            span {
+                class: "row-hover-trail flex items-center",
+                style: "gap: {PLAY_MARK_GAP_PX}px;",
+                PlayMark { play: mark }
+                span {
+                    class: "flex-none font-mono tabular-nums",
+                    style: "{duration_style}",
+                    ..duration_attrs,
+                    {duration_text}
+                }
+            }
+        }
+    } else {
+        rsx! {
             span {
                 class: "row-hover-trail font-mono tabular-nums",
                 style: "font-size: 12px; text-align: right;",
@@ -318,6 +384,12 @@ fn paint_trailing_cell(
                     repeat: true,
                 }
             }
+        }
+    };
+    rsx! {
+        span {
+            class: "flex items-center justify-end",
+            {trailing}
             RowHoverActions {
                 on_play: Some(on_hover_play),
                 on_queue: on_hover_queue,
