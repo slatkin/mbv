@@ -448,10 +448,25 @@ pub(in crate::gui_core::gui_library) fn refresh_emby_feed_group(
     }
     let targets = match emby_feed_effective_set(app, gui, lib_idx).as_ref() {
         GuiCollectionSet::All => vec![FeedHomeVideoSelection::All],
-        GuiCollectionSet::Checked(keys) => keys
-            .iter()
-            .map(|key| FeedHomeVideoSelection::Folder(key.clone()))
-            .collect(),
+        // The stored set keeps the folders' press order, while the pills paint
+        // in the root listing's own folder order (`GuiEmbyFeedCollectionSite`'s
+        // scopes, design D1), so the queue is sorted into the pills' order
+        // before it fills (design D7a). The effective set has dropped every
+        // checked key the listing no longer holds, so each key has a position;
+        // a key that somehow had none sorts last instead of panicking.
+        GuiCollectionSet::Checked(keys) => {
+            let folders = super::emby_projection::root_folder_names(app, lib_idx);
+            let mut keys: Vec<&String> = keys.iter().collect();
+            keys.sort_by_key(|key| {
+                folders
+                    .iter()
+                    .position(|(id, _name)| id == key)
+                    .unwrap_or(usize::MAX)
+            });
+            keys.into_iter()
+                .map(|key| FeedHomeVideoSelection::Folder(key.clone()))
+                .collect()
+        }
     };
     gui.emby_feed_refresh_targets.insert(lib_idx, targets);
     if let Some(claim) = gui

@@ -103,6 +103,40 @@ fn a_refresh_of_a_cached_all_target_starts_its_fetch_and_keeps_the_painted_items
     );
 }
 
+/// A refresh queues the checked folders in the order their pills paint, not
+/// the order they were pressed (design D7a): the pills paint in the root
+/// listing's own folder order, so a folder pressed second but painted above
+/// the first is refetched first.
+#[test]
+fn a_refresh_queues_the_checked_folders_in_pill_paint_order() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_when("ParentId=folder-1", 200, VIDEO_BODY);
+    http.respond_when("ParentId=folder-2", 200, VIDEO_BODY);
+    let mut app = feed_group_app(
+        &http,
+        &[("folder-1", "Channel 1"), ("folder-2", "Channel 2")],
+    );
+    // Pressed bottom-up, so the stored set's press order is folder-2 first.
+    toggle_folder(&mut app, "folder-2");
+    toggle_folder(&mut app, "folder-1");
+
+    crate::gui_core::test_support::with_stub_gui(&mut app, |core| core.refresh_gui_feed_group(0));
+
+    assert_eq!(
+        crate::gui_core::test_support::stub_gui_state(|gui| {
+            gui.emby_feed_refresh_targets.get(&0).cloned()
+        }),
+        Some(vec![
+            FeedHomeVideoSelection::Folder("folder-1".to_string()),
+            FeedHomeVideoSelection::Folder("folder-2".to_string()),
+        ]),
+        "the queue is in the order the folder pills paint"
+    );
+
+    land_until_fetched(&mut app);
+}
+
 /// A failed target refetch keeps the painted rows (design D7a): the failure
 /// retires the fetch mark and records the terminal failure beside the claim,
 /// and the old items stay in the cache, so the destination paints them on.
