@@ -654,16 +654,45 @@ fn a_nested_rows_level_and_depth_pick_its_look(
     );
 }
 
-/// Contract (design D4; gui-played-row-marks design D1): a nested row's title
-/// tone follows its play state — no play state paints the level's own tone, an
-/// unplayed row the `ef` text tone, and a played row the `ef` grey tone.
+/// The title weight assertion of the play-tone table: a row that carries a
+/// play state paints the weight its case names on the `Truncate` box, and a
+/// row that carries none keeps the leaf label's weight and writes no
+/// `font-weight` of its own.
+fn assert_title_weight(fixture: &Fixture, weight: Option<&str>) {
+    let style = fixture.style_of(TITLE);
+    match weight {
+        Some(weight) => assert!(style.contains(weight), "the title paints {weight}: {style}"),
+        None => assert!(
+            !style.contains("font-weight"),
+            "the title writes no weight of its own: {style}"
+        ),
+    }
+}
+
+/// Contract (design D4; gui-played-row-marks design D1, D3, D4): a nested
+/// row's title tone and weight follow its play state, and its play mark names
+/// the state — no play state paints the level's own tone and weight and no
+/// mark, an unplayed row the `ef` text tone at 600 with the `unplayed` mark,
+/// and a played row the `ef` grey tone at 400 with the `played` mark.
 #[rstest]
-#[case(None, "var(--canvas-muted)")]
-#[case(Some(GuiHomeRowStateFrame::Ordinary), "var(--ef-fg)")]
-#[case(Some(GuiHomeRowStateFrame::Played), "var(--ef-grey1)")]
+#[case(None, "var(--canvas-muted)", None, None)]
+#[case(
+    Some(GuiHomeRowStateFrame::Ordinary),
+    "var(--ef-fg)",
+    Some("font-weight: 600"),
+    Some("unplayed")
+)]
+#[case(
+    Some(GuiHomeRowStateFrame::Played),
+    "var(--ef-grey1)",
+    Some("font-weight: 400"),
+    Some("played")
+)]
 fn a_nested_rows_title_paints_its_play_tone(
     #[case] play: Option<GuiHomeRowStateFrame>,
     #[case] tone: &str,
+    #[case] weight: Option<&str>,
+    #[case] mark: Option<&str>,
 ) {
     let fixture = tree_built(TreeSpec {
         level: TreeLevel::Leaf,
@@ -675,6 +704,14 @@ fn a_nested_rows_title_paints_its_play_tone(
     assert!(
         fixture.style_of(TITLE).contains(&format!("color: {tone}")),
         "the title paints {tone}"
+    );
+    assert_title_weight(&fixture, weight);
+    assert_eq!(
+        fixture
+            .attr_of("[data-play-mark]", "data-play-mark")
+            .as_deref(),
+        mark,
+        "the slot carries the mark value"
     );
 }
 
