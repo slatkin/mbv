@@ -9,6 +9,14 @@
 //! and the guides that pass through the row, and [`TreeTrail`] picks the
 //! trailing text's kind and hook part.
 //!
+//! A row that carries a play state derives its title's tone and weight and its
+//! trail's tone from [`RowPlay`] (gui-played-row-marks design D1, D4), and
+//! paints the trailing cluster — the play mark, then the trailing text — that
+//! the hover controls hide together (design D3); a played parent's date paints
+//! as plain text in the played tone, because a typed segment paints its own
+//! kind's colour over any tone the span sets. A row that carries none keeps the
+//! bare trailing text.
+//!
 //! The row sits in a `row-hover-host` box with the shared hover controls as its
 //! later sibling (gui-row-hover-actions design D2). The box carries the row's
 //! fill as `--row-fill`, so the row button and the controls that cover its
@@ -23,23 +31,19 @@ use crate::window::components::list_row::{
     LibraryTrailPart, NODE_ROW_HEIGHT, ROW_DIVIDER_PX, ROW_PADDING_PX, RowLevel, TRACK_ROW_HEIGHT,
     context_press, hover_trail_class, row_host_style,
 };
+use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{
     GuideTone, LEAF_INSET_X, NESTED_INSET_X, TOP_GUIDE_X, TreeGuide, leaf_guides,
     nested_parent_guides, tail_divider_style,
 };
-use crate::window::components::tree_row::{
-    LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css, leaf_row_text,
-};
+use crate::window::components::tree_row::{LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX, leaf_label_css};
 use crate::window::components::typed_text::TypedText;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The gap between a nested row's parts, in logical pixels (design D3).
 const NESTED_GAP_PX: f32 = 8.0;
-
-/// A nested parent row's title weight, painted and measured (design D3).
-const PARENT_TITLE_WEIGHT: f32 = 400.0;
 
 /// The number cell's width on a leaf row, in logical pixels (design D3).
 const NUMBER_CELL_PX: f32 = 18.0;
@@ -267,6 +271,11 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     row_style.push_str(&tail_divider_style(props.tail));
     let host_style = row_host_style(&fill, if props.tail { ROW_DIVIDER_PX } else { 0.0 });
 
+    // The row's play look (gui-played-row-marks design D1): one derivation
+    // decides the title's tone and weight and the trail's tone. A row that
+    // carries no play state keeps the level's own look.
+    let row_play = props.play.as_ref().map(RowPlay::of_row);
+    let title_weight = row_level.title_weight(props.play.as_ref());
     let title_css = row_level.title_tone(props.play.as_ref());
     let title_attrs = vec![Attribute::new(library_attr(attr, "title"), "", None, false)];
     let number = props.number.clone().filter(|number| !number.is_empty());
@@ -286,23 +295,43 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
         || on_toggle.is_some();
     let trail_class = hover_trail_class(paints_actions);
 
+    // The trailing end (gui-played-row-marks design D3): a row that carries a
+    // play state paints the one trailing cluster — the mark, then the trailing
+    // text — and the cluster carries the hover swap, so the mark and the text
+    // hide together while the hover controls show. A row that carries no play
+    // state keeps the bare trailing text it always painted.
+    let trail_tone = row_play.and_then(RowPlay::trail_tone);
+    let trailing: Option<Element> = if let Some(play) = row_play {
+        // The text inside the cluster never carries the trail marker — the
+        // cluster does — so it paints the trail class of a row nothing covers.
+        let inner_class = hover_trail_class(false);
+        let text = trail.as_ref().map(|trail| match level {
+            TreeLevel::Parent => parent_trail(attr, trail, props.selected, inner_class, trail_tone),
+            TreeLevel::Leaf => leaf_trail(attr, trail, inner_class, trail_tone),
+        });
+        Some(rsx! {
+            PlayCluster { class: trail_class, play: Some(play), {text} }
+        })
+    } else {
+        trail.as_ref().map(|trail| match level {
+            TreeLevel::Parent => parent_trail(attr, trail, props.selected, trail_class, trail_tone),
+            TreeLevel::Leaf => leaf_trail(attr, trail, trail_class, trail_tone),
+        })
+    };
+
     // The level's own body: a parent's title over its date, or a leaf's number,
     // title, and runtime.
     let body: Element = match level {
         TreeLevel::Parent => rsx! {
-            {parent_title(props.title.clone(), &title_css, title_attrs)}
-            if let Some(trail) = trail {
-                {parent_trail(attr, &trail, props.selected, trail_class)}
-            }
+            {parent_title(props.title.clone(), &title_css, title_weight, title_attrs)}
+            {trailing}
         },
         TreeLevel::Leaf => rsx! {
             if let Some(number) = number {
                 {number_cell(attr, &number)}
             }
-            {leaf_title(props.title.clone(), &title_css, title_attrs)}
-            if let Some(trail) = trail {
-                {leaf_trail(attr, &trail, trail_class)}
-            }
+            {leaf_title(props.title.clone(), &title_css, title_weight, props.play.is_some(), title_attrs)}
+            {trailing}
         },
     };
 
@@ -350,30 +379,46 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     }
 }
 
-/// A parent row's title (design D3): the sans face at the parent weight, in the
-/// level's tone.
-fn parent_title(title: String, tone: &str, attrs: Vec<Attribute>) -> Element {
+/// A parent row's title (design D3; gui-played-row-marks design D4): the sans
+/// face at the row's weight — the play state's weight on a row that carries
+/// one, the parent weight otherwise — in the level's tone, measured at the
+/// painted weight.
+fn parent_title(title: String, tone: &str, weight: f32, attrs: Vec<Attribute>) -> Element {
     rsx! {
         Truncate {
             text: title,
             class: "min-w-0 flex-1",
-            css: format!("color: {tone}; font-weight: {PARENT_TITLE_WEIGHT};"),
-            style: TextStyle::sans(TREE_ROW_FONT_PX, PARENT_TITLE_WEIGHT),
+            css: format!("color: {tone}; font-weight: {weight};"),
+            style: TextStyle::sans(TREE_ROW_FONT_PX, weight),
             attrs,
         }
     }
 }
 
-/// A leaf row's title (design D3): the leaf face at the level's tone.
-fn leaf_title(title: String, tone: &str, attrs: Vec<Attribute>) -> Element {
+/// A leaf row's title (design D3; gui-played-row-marks design D4): the leaf
+/// face at the level's tone. A row that carries a play state paints and
+/// measures its weight, which the `Truncate` box's own `font-weight` sets over
+/// the leaf label's 500; a row that carries none keeps the leaf label's weight.
+fn leaf_title(
+    title: String,
+    tone: &str,
+    weight: f32,
+    carried: bool,
+    attrs: Vec<Attribute>,
+) -> Element {
+    let css = if carried {
+        format!("color: {tone}; font-weight: {weight};")
+    } else {
+        format!("color: {tone};")
+    };
     rsx! {
         div {
             class: "min-w-0 flex-1",
             style: leaf_label_css(),
             Truncate {
                 text: title,
-                css: format!("color: {tone};"),
-                style: leaf_row_text(),
+                css,
+                style: TextStyle::mono(LEAF_ROW_FONT_PX, weight),
                 attrs,
             }
         }
@@ -402,12 +447,15 @@ fn number_cell(attr: &'static str, number: &str) -> Element {
 /// A parent row's trailing text (design D3): a date in the typed text's date
 /// token, at the repeat opacity unless the selection marks the row, and in the
 /// muted tone while it does. The hover controls replace it while the pointer
-/// rests on the row.
+/// rests on the row. A play state's trail tone (gui-played-row-marks design
+/// D4) paints the date as plain text in that tone, because a typed segment
+/// paints its own kind's colour over any tone the span sets.
 fn parent_trail(
     attr: &'static str,
     trail: &TreeTrail,
     selected: bool,
     class: &'static str,
+    tone: Option<&'static str>,
 ) -> Element {
     let attrs = vec![Attribute::new(
         library_attr(attr, trail.part().part()),
@@ -415,6 +463,16 @@ fn parent_trail(
         None,
         false,
     )];
+    if let Some(tone) = tone {
+        return rsx! {
+            span {
+                class: "{class}",
+                style: "font-size: {TRAIL_FONT_PX}px; color: {tone};",
+                ..attrs,
+                "{trail.text()}"
+            }
+        };
+    }
     let style = if selected {
         format!(
             "font-size: {TRAIL_FONT_PX}px; color: {};",
@@ -437,18 +495,26 @@ fn parent_trail(
     }
 }
 
-/// A leaf row's trailing text (design D3): the runtime in the muted mono tone.
-fn leaf_trail(attr: &'static str, trail: &TreeTrail, class: &'static str) -> Element {
+/// A leaf row's trailing text (design D3): the runtime in the muted mono tone,
+/// or in the play state's trail tone on a row that carries one
+/// (gui-played-row-marks design D4).
+fn leaf_trail(
+    attr: &'static str,
+    trail: &TreeTrail,
+    class: &'static str,
+    tone: Option<&'static str>,
+) -> Element {
     let attrs = vec![Attribute::new(
         library_attr(attr, trail.part().part()),
         trail.text().to_owned(),
         None,
         false,
     )];
+    let color = tone.map_or_else(|| canvas_var("muted"), str::to_owned);
     rsx! {
         span {
             class: "{class}",
-            style: "font-size: {TRAIL_FONT_PX}px; color: var(--canvas-muted);",
+            style: "font-size: {TRAIL_FONT_PX}px; color: {color};",
             ..attrs,
             "{trail.text()}"
         }

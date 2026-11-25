@@ -109,6 +109,21 @@ fn style_of(doc: &DioxusDocument, selector: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// The `data-play-mark` value the fixture row's trailing cluster paints, when
+/// the row carries a play state.
+fn play_mark_value(doc: &DioxusDocument) -> Option<String> {
+    let dom = doc.inner();
+    let node = dom
+        .query_selector(&format!(
+            "[data-library-track=\"{ROW_ID}\"] [data-play-mark]"
+        ))
+        .expect("the selector is valid")?;
+    dom.get_node(node)
+        .expect("the node is in the document")
+        .attr(LocalName::from("data-play-mark"))
+        .map(str::to_owned)
+}
+
 /// The width the fixture row's resume run paints, when it paints one.
 fn run_width(doc: &DioxusDocument) -> Option<String> {
     let style = style_of(
@@ -120,25 +135,43 @@ fn run_width(doc: &DioxusDocument) -> Option<String> {
         .find_map(|part| part.trim().strip_prefix("width: ").map(str::to_owned))
 }
 
-/// Contract (`gui-shared-workspace-row-state` design D5, the `gui-client`
-/// spec's Workspace play-state scenarios): a row's title tone and resume run
-/// come from the one shared derivation — a played row mutes its title, a partly
-/// played row with a percent paints its run at that percent, and a row with no
-/// percent or no play state paints the text tone and no run.
+/// Contract (`gui-shared-workspace-row-state` design D5, gui-played-row-marks
+/// design D1, D4, the `gui-client` spec's Workspace play-state scenarios): a
+/// row's title tone, its play mark, and its resume run come from the one shared
+/// derivation — a played row paints the greyed tone and the played mark, a
+/// partly played row with a percent paints its run at that percent, and a row
+/// with no play state paints the text tone, no mark, and no run.
 #[rstest]
-#[case(None, "var(--canvas-text)", None)]
-#[case(Some(GuiHomeRowStateFrame::Ordinary), "var(--canvas-text)", None)]
-#[case(Some(GuiHomeRowStateFrame::Played), "var(--canvas-muted)", None)]
+#[case(None, "var(--canvas-text)", None, None)]
+#[case(
+    Some(GuiHomeRowStateFrame::Ordinary),
+    "var(--ef-fg)",
+    None,
+    Some("unplayed")
+)]
+#[case(
+    Some(GuiHomeRowStateFrame::Played),
+    "var(--ef-grey1)",
+    None,
+    Some("played")
+)]
 #[case(
     Some(GuiHomeRowStateFrame::Active { progress: Some(42) }),
-    "var(--canvas-text)",
-    Some("42%")
+    "var(--ef-fg)",
+    Some("42%"),
+    Some("unplayed")
 )]
-#[case(Some(GuiHomeRowStateFrame::Active { progress: None }), "var(--canvas-text)", None)]
+#[case(
+    Some(GuiHomeRowStateFrame::Active { progress: None }),
+    "var(--ef-fg)",
+    None,
+    Some("unplayed")
+)]
 fn a_rows_play_state_decides_its_title_tone_and_its_resume_run(
     #[case] state: Option<GuiHomeRowStateFrame>,
     #[case] tone: &str,
     #[case] width: Option<&str>,
+    #[case] mark: Option<&str>,
 ) {
     let doc = built(vec![row_with(state)], false);
     let title = style_of(
@@ -155,6 +188,41 @@ fn a_rows_play_state_decides_its_title_tone_and_its_resume_run(
         run_width(&doc).as_deref(),
         width,
         "the resume run paints at the row's carried percent"
+    );
+    assert_eq!(
+        play_mark_value(&doc).as_deref(),
+        mark,
+        "the trailing cluster paints the row's play mark"
+    );
+}
+
+/// Contract (gui-played-row-marks design D4, the `gui-client` spec's "The
+/// playing Workspace row keeps its own mark"): a playing row keeps its own
+/// heading tone whatever state it carries, and paints the mark's empty slot, so
+/// its duration stays aligned with the other rows.
+#[test]
+fn a_playing_row_keeps_its_heading_tone_and_paints_no_play_mark() {
+    let doc = built(
+        vec![WorkspaceRow {
+            playing: true,
+            ..row_with(Some(GuiHomeRowStateFrame::Played))
+        }],
+        false,
+    );
+    let title = style_of(
+        &doc,
+        &format!("[data-library-track=\"{ROW_ID}\"] [data-library-track-name] div.truncate"),
+    )
+    .expect("the row paints its title");
+
+    assert!(
+        title.contains("color: var(--canvas-heading)"),
+        "the playing row keeps its heading tone: {title}"
+    );
+    assert_eq!(
+        play_mark_value(&doc).as_deref(),
+        Some("none"),
+        "the playing row paints the mark's empty slot"
     );
 }
 

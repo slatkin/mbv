@@ -55,9 +55,11 @@ when one surface receives a fix and the other does not.
   serve the Queue chooser and the playback-target chooser, Refresh row
   included. Their entries and marks differ; the card and row mechanics do not,
   and each owner keeps its own interaction authority (rule 5).
-- `played_title_tone` in `list_row.rs` is the one played-title derivation,
-  and Workspace rows carry `GuiHomeRowStateFrame`, the frame the list rows
-  carry; the Workspace table keeps its own playhead mark
+- `play_mark.rs` (`RowPlay`, `PlayMark`) is the one played-state derivation and
+  mark: the flat row, the tree row, the Workspace table, and the queue rows all
+  take their played title tone, weight, and mark from it
+  (`gui-played-row-marks`). Workspace rows carry `GuiHomeRowStateFrame`, the
+  frame the list rows carry; the Workspace table keeps its own playhead mark
   (`gui-shared-workspace-row-state`).
 - The open `gui-unified-list-rows` change makes `FlatRow` and `TreeRow` the
   canonical Library row painters and removes their caller-supplied look props.

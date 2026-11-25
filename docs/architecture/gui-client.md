@@ -829,8 +829,8 @@ fixed 40 logical pixel height with no gap between rows, 10 px padding, and
 a 1 px `--canvas-border` divider under each row. The rows are square, the
 now-playing row included (user request 2026-11-20). A row with
 progress — a partial row, and the now-playing row, whose ring follows the
-playhead — carries the progress ring in its right column, directly before
-the duration, so the ring and the duration read as one cluster (user
+playhead — carries the progress ring in its right column, before the played
+mark and the duration, so the ring and the duration read as one cluster (user
 request 2026-11-23): a 14 px svg in the
 collapsed rail's two-circle form, the track in `--ef-bg2` and the played arc
 in `--ef-orange`, or `--ef-green` on the now-playing row, each circle
@@ -844,9 +844,10 @@ displaces; every marked row fills `--ef-bg3`, kept under the
 pointer too; a hovered row that is neither fills `--ef-bg0`; and an
 ordinary row paints no fill of its own. The frame's `cursor` slot paints
 nothing: only a multi-selection shows as selected, and the hover names the
-row a right-click acts on. A watched row paints `--ef-grey1`
-with the `--ef-bg5` strike, and a hovered watched row keeps the primary
-title. The looks need no focus fact, because the window holds none (ADR
+row a right-click acts on. A watched row takes the shared played look every row painter takes
+(`RowPlay` and `PlayMark` in `play_mark.rs`): the `--ef-grey1` title at
+weight 400 and the played check mark in its right column, and a hovered
+watched row keeps the primary title. The looks need no focus fact, because the window holds none (ADR
 0040). The list paints no scrollbar column yet — the TUI
 reserves one only while the list is focused and overflows.
 

@@ -7,7 +7,12 @@
 //! look value — no height, colour, fill, weight, or style string — so a
 //! restyle lands here and reaches every list. The level rules (the title tone
 //! and the selection fill) come from [`super`], and the art thumb from
-//! [`super::thumb`]; this part composes them. The row sits in a
+//! [`super::thumb`]; this part composes them. A row that carries a play state
+//! derives its title tone and weight, its subtitle and trail tones, and its
+//! thumb's opacity from [`RowPlay`] (gui-played-row-marks design D1, D4), and
+//! paints the trailing cluster — the play mark, then the trailing text — that
+//! the hover controls hide together (design D3). A row that carries none keeps
+//! the bare trailing text. The row sits in a
 //! `row-hover-host` box with the shared hover controls as its later sibling
 //! (gui-row-hover-actions design D2), and the box carries the row's fill as
 //! `--row-fill` for both the row button and the controls.
@@ -22,10 +27,10 @@ use crate::window::components::list_row::{
     LIBRARY_ROW_HEIGHT, LibraryRowThumb, LibraryTrailPart, ROW_DIVIDER_PX, ROW_PADDING_PX,
     RowLevel, context_press, hover_trail_class, paint_thumb, row_host_style,
 };
+use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
-use crate::window::components::tree_row::{TREE_ROW_FONT_PX, tree_row_text};
-use crate::window::library::LIBRARY_ROW_TITLE_WEIGHT;
+use crate::window::components::tree_row::TREE_ROW_FONT_PX;
 use crate::window::library::episode::episode_progress;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
@@ -156,9 +161,15 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     let _ = write!(row_style, " background: var(--row-fill);");
     let host_style = row_host_style(&fill, divider_width);
 
+    // The row's play look (gui-played-row-marks design D1): one derivation
+    // decides the title's tone and weight, the subtitle's and the trail's
+    // tones, and the thumb's opacity. A row that carries no play state keeps
+    // the level's own look.
+    let row_play = props.play.as_ref().map(RowPlay::of_row);
+    let title_weight = RowLevel::Top.title_weight(props.play.as_ref());
     let title_attrs = vec![Attribute::new(library_attr(attr, "title"), "", None, false)];
     let title_css = format!(
-        "color: {}; font-weight: {LIBRARY_ROW_TITLE_WEIGHT};",
+        "color: {}; font-weight: {title_weight};",
         RowLevel::Top.title_tone(props.play.as_ref())
     );
     let subtitle_attrs = vec![Attribute::new(
@@ -167,10 +178,14 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
         None,
         false,
     )];
-    let small_css = format!(
-        "font-size: {SMALL_TEXT_PX}px; color: {};",
-        canvas_var("muted")
-    );
+    let muted = canvas_var("muted");
+    let subtitle_tone =
+        row_play.map_or_else(|| muted.clone(), |play| play.secondary_tone().to_owned());
+    let trail_tone = row_play
+        .and_then(|play| play.trail_tone().map(str::to_owned))
+        .unwrap_or_else(|| muted.clone());
+    let subtitle_css = format!("font-size: {SMALL_TEXT_PX}px; color: {subtitle_tone};");
+    let trail_css = format!("font-size: {SMALL_TEXT_PX}px; color: {trail_tone};");
     let trail_text = props.trail.clone().filter(|trail| !trail.is_empty());
     let trail_attrs = trail_text.as_ref().map_or(Vec::new(), |trail| {
         vec![Attribute::new(
@@ -188,10 +203,11 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
         .as_ref()
         .and_then(episode_progress)
         .map(f32::from);
+    let thumb_opacity = row_play.and_then(RowPlay::thumb_opacity);
     let thumb = props
         .thumb
         .as_ref()
-        .map(|thumb| paint_thumb(attr, thumb, progress));
+        .map(|thumb| paint_thumb(attr, thumb, progress, thumb_opacity));
 
     // The hover controls (gui-row-hover-actions design D1-D3): the trailing
     // text steps aside for them, and Expand reuses the row's own toggle, so a
@@ -211,6 +227,47 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
         "row-hover-face relative flex w-full items-center overflow-hidden"
     };
     let trail_class = hover_trail_class(paints_actions);
+    // The trailing end (gui-played-row-marks design D3): a row that carries a
+    // play state paints the one trailing cluster — the mark, then the trailing
+    // text — and the cluster carries the hover swap, so the mark and the text
+    // hide together while the hover controls show. The text keeps its hook,
+    // its mono face, and its size. A row that carries no play state keeps the
+    // bare trailing text it always painted.
+    let trailing: Option<Element> = if let Some(play) = row_play {
+        // The text inside the cluster never carries the trail marker — the
+        // cluster does — so it paints the trail class of a row nothing covers.
+        let inner_class = hover_trail_class(false);
+        let text = trail_text.as_ref().map(|trail| {
+            let attrs = trail_attrs.clone();
+            let css = trail_css.clone();
+            let trail = trail.clone();
+            rsx! {
+                span {
+                    class: "{inner_class}",
+                    style: "{css}",
+                    ..attrs,
+                    "{trail}"
+                }
+            }
+        });
+        Some(rsx! {
+            PlayCluster { class: trail_class, play: Some(play), {text} }
+        })
+    } else {
+        trail_text.as_ref().map(|trail| {
+            let attrs = trail_attrs.clone();
+            let css = trail_css.clone();
+            let trail = trail.clone();
+            rsx! {
+                span {
+                    class: "{trail_class}",
+                    style: "{css}",
+                    ..attrs,
+                    "{trail}"
+                }
+            }
+        })
+    };
     let on_double_click = props.on_toggle.unwrap_or(props.on_play);
     let on_press = props.on_press;
     let on_context = props.on_context;
@@ -240,25 +297,20 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
                     Truncate {
                         text: props.title.clone(),
                         css: title_css,
-                        style: tree_row_text(),
+                        style: TextStyle::sans(TREE_ROW_FONT_PX, title_weight),
                         attrs: title_attrs,
                     }
                     if let Some(subtitle) = props.subtitle.clone() {
                         Truncate {
                             text: subtitle,
-                            css: small_css.clone(),
+                            css: subtitle_css.clone(),
                             style: TextStyle::sans(SMALL_TEXT_PX, 400.0),
                             attrs: subtitle_attrs,
                         }
                     }
                 }
-                if let Some(trail) = trail_text {
-                    span {
-                        class: "{trail_class}",
-                        style: "{small_css}",
-                        ..trail_attrs,
-                        "{trail}"
-                    }
+                if let Some(trailing) = trailing {
+                    {trailing}
                 }
                 if show_guide {
                     {parent_guide_start(TOP_GUIDE_X, LIBRARY_ROW_HEIGHT, 0.0)}

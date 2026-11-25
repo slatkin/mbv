@@ -1,9 +1,10 @@
 //! The shared row vocabulary (`gui-unified-list-rows` design D1, D4): the rules
 //! every Library and Playlists row part derives its look from, and the row
 //! constants. [`RowLevel`] names the level a part paints and derives the
-//! title's tone and the selection's fill and corner radius from it, so no part
-//! and no list restates a tone; [`played_title_tone`] is the one played-title
-//! rule, which every row part and the Workspace table reach; [`context_press`]
+//! title's tone and weight and the selection's fill and corner radius from
+//! it, so no part and no list restates a tone; a row that carries a play state
+//! derives its title look from [`RowPlay`](crate::window::components::play_mark::RowPlay),
+//! the one played-state rule; [`context_press`]
 //! is the one right-press handler. [`thumb`] holds the art thumb both parts paint, [`flat`] the
 //! top-level row, and [`tree`] the nested parent and leaf rows.
 //!
@@ -14,8 +15,10 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiHomeRowStateFrame;
+use crate::window::components::play_mark::RowPlay;
+use crate::window::components::tree_row::LEAF_ROW_FONT_WEIGHT;
 use crate::window::input::f32_from_f64;
-use crate::window::library::episode::is_played_episode;
+use crate::window::library::LIBRARY_ROW_TITLE_WEIGHT;
 use crate::window::theme::canvas_var;
 
 pub mod flat;
@@ -99,19 +102,37 @@ pub enum RowLevel {
 }
 
 impl RowLevel {
-    /// The title's tone (`gui-unified-list-rows` design D4): a row that carries
-    /// a play state paints the tone [`played_title_tone`] derives from it; a row
-    /// that carries none paints its level's tone, which is the text tone on a
-    /// top-level or parent row and the muted tone on a leaf.
+    /// The title's tone (`gui-unified-list-rows` design D4;
+    /// gui-played-row-marks design D1): a row that carries a play state paints
+    /// the tone [`RowPlay`] derives from it; a row that carries none paints its
+    /// level's tone, which is the text tone on a top-level or parent row and
+    /// the muted tone on a leaf.
     #[must_use]
     pub fn title_tone(self, play: Option<&GuiHomeRowStateFrame>) -> String {
-        if play.is_some() {
-            return played_title_tone(play);
+        if let Some(play) = play {
+            return RowPlay::of_row(play).title_tone().to_owned();
         }
         if self == RowLevel::Leaf {
             canvas_var("muted")
         } else {
             canvas_var("text")
+        }
+    }
+
+    /// The title's weight (gui-played-row-marks design D1, D4): a row that
+    /// carries a play state paints the weight [`RowPlay`] derives from it; a
+    /// row that carries none keeps its level's present weight — the Library
+    /// title weight on a top-level row, 400 on a parent, and the leaf weight
+    /// on a leaf.
+    #[must_use]
+    pub fn title_weight(self, play: Option<&GuiHomeRowStateFrame>) -> f32 {
+        if let Some(play) = play {
+            return RowPlay::of_row(play).title_weight();
+        }
+        match self {
+            RowLevel::Top => LIBRARY_ROW_TITLE_WEIGHT,
+            RowLevel::Parent => 400.0,
+            RowLevel::Leaf => LEAF_ROW_FONT_WEIGHT,
         }
     }
 
@@ -132,19 +153,6 @@ impl RowLevel {
         } else {
             0.0
         }
-    }
-}
-
-/// The title's tone a row's play state decides (`gui-shared-workspace-row-state`
-/// design D1): the muted tone for a played row and the text tone otherwise, and
-/// the text tone when the row carries no play state. The level's own tone is
-/// [`RowLevel::title_tone`]'s rule, not this one's.
-#[must_use]
-pub fn played_title_tone(play: Option<&GuiHomeRowStateFrame>) -> String {
-    if play.is_some_and(is_played_episode) {
-        canvas_var("muted")
-    } else {
-        canvas_var("text")
     }
 }
 

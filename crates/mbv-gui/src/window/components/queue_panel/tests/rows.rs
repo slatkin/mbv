@@ -168,16 +168,19 @@ fn ring_percents(fixture: &Fixture) -> Vec<Option<String>> {
         .collect()
 }
 
-/// Contract (`QueuePanel.test.ts`, `gui-queue-panel-redesign` design D9): the
-/// rows paint the watched and now-playing states — the watched row paints its
-/// title grey and crosses it with the darker strike colour, and the now-playing
-/// row fills green and paints its title green at weight 600.
+/// Contract (spec `gui-client` "Rows show their state", design D4 of
+/// `gui-played-row-marks`): the rows paint the watched and now-playing states
+/// — the watched row paints its title grey at weight 400 with no line-through
+/// and carries the played mark, an ordinary row paints the primary text at
+/// weight 600 with the unplayed mark, and the now-playing row fills green,
+/// paints its title green at weight 600, and carries the empty mark slot.
 #[test]
 fn the_rows_paint_the_watched_and_now_playing_states() {
     let rows = vec![
         in_state(renamed(item(1), "Watched"), GuiSemanticState::Played),
+        renamed(item(2), "New"),
         in_state(
-            renamed(item(2), "Playing"),
+            renamed(item(3), "Playing"),
             GuiSemanticState::NowPlaying {
                 tracks_progress: true,
             },
@@ -186,18 +189,47 @@ fn the_rows_paint_the_watched_and_now_playing_states() {
     let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
 
     let watched = fixture.attr_of("[data-slot=\"1\"] .truncate", local_name!("class"));
-    assert!(watched.is_some_and(|class| class.contains("line-through")));
-    let watched_style = fixture.style_of("[data-slot=\"1\"] .truncate");
     assert!(
-        watched_style.contains(&format!("text-decoration-color: {}", ef_var(EfToken::Bg5))),
-        "{watched_style}"
+        !watched
+            .as_deref()
+            .is_some_and(|class| class.contains("line-through")),
+        "the watched row's title carries no strike: {watched:?}"
     );
+    let watched_style = fixture.style_of("[data-slot=\"1\"] .truncate");
     assert!(
         watched_style.contains(&format!("color: {}", ef_var(EfToken::Grey1))),
         "{watched_style}"
     );
+    assert!(
+        watched_style.contains("font-weight: 400"),
+        "{watched_style}"
+    );
+    assert_eq!(
+        fixture.attr_of(
+            "[data-slot=\"1\"] [data-play-mark]",
+            blitz_dom::LocalName::from("data-play-mark")
+        ),
+        Some("played".to_owned())
+    );
 
-    let playing_row = fixture.style_of("[data-slot=\"2\"]");
+    let ordinary_style = fixture.style_of("[data-slot=\"2\"] .truncate");
+    assert!(
+        ordinary_style.contains(&format!("color: {}", ef_var(EfToken::Fg))),
+        "{ordinary_style}"
+    );
+    assert!(
+        ordinary_style.contains("font-weight: 600"),
+        "{ordinary_style}"
+    );
+    assert_eq!(
+        fixture.attr_of(
+            "[data-slot=\"2\"] [data-play-mark]",
+            blitz_dom::LocalName::from("data-play-mark")
+        ),
+        Some("unplayed".to_owned())
+    );
+
+    let playing_row = fixture.style_of("[data-slot=\"3\"]");
     assert!(
         playing_row.contains(&format!("background: {}", ef_var(EfToken::BgGreen))),
         "{playing_row}"
@@ -206,7 +238,7 @@ fn the_rows_paint_the_watched_and_now_playing_states() {
         playing_row.contains("border-radius: 0px"),
         "the now-playing row is as square as every row: {playing_row}"
     );
-    let playing_title = fixture.style_of("[data-slot=\"2\"] .truncate");
+    let playing_title = fixture.style_of("[data-slot=\"3\"] .truncate");
     assert!(
         playing_title.contains("font-weight: 600"),
         "{playing_title}"
@@ -214,6 +246,13 @@ fn the_rows_paint_the_watched_and_now_playing_states() {
     assert!(
         playing_title.contains(&format!("color: {}", ef_var(EfToken::Green))),
         "{playing_title}"
+    );
+    assert_eq!(
+        fixture.attr_of(
+            "[data-slot=\"3\"] [data-play-mark]",
+            blitz_dom::LocalName::from("data-play-mark")
+        ),
+        Some("none".to_owned())
     );
 }
 

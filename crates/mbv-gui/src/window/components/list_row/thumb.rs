@@ -7,6 +7,8 @@
 //! the box. The box carries `data-library-<attr>-thumb` with its art state, and
 //! its resume run carries `data-library-<attr>-thumb-progress`.
 
+use std::fmt::Write as _;
+
 use dioxus_native::prelude::*;
 
 use crate::art::GuiArtRef;
@@ -33,18 +35,28 @@ pub struct LibraryRowThumb {
 /// One row's art thumb (gui-delineated-rows design D1, D2): the 72 × 40 box on
 /// the recessed fill, the image or the media kind's icon inside it, and the
 /// row's resume run along the box's bottom edge.
-pub fn paint_thumb(attr: &'static str, thumb: &LibraryRowThumb, progress: Option<f32>) -> Element {
+pub fn paint_thumb(
+    attr: &'static str,
+    thumb: &LibraryRowThumb,
+    progress: Option<f32>,
+    opacity: Option<f32>,
+) -> Element {
     // The box: one fixed landscape shape every row shares. A whole (square or
-    // portrait) image sits on no fill: the box only centres it.
+    // portrait) image sits on no fill: the box only centres it. A played row's
+    // thumb dims by its layer alpha (gui-played-row-marks design D2) — never a
+    // `filter`, which the renderer drops.
     let whole = matches!(thumb.art, GuiRowArtFrame::Image { square: true, .. });
     let box_fill = if whole {
         "transparent".to_owned()
     } else {
         canvas_var("well")
     };
-    let box_style = format!(
+    let mut box_style = format!(
         "width: {THUMB_WIDTH_PX}px; height: {THUMB_HEIGHT_PX}px; border-radius: {THUMB_RADIUS_PX}px; background: {box_fill};"
     );
+    if let Some(opacity) = opacity {
+        let _ = write!(box_style, " opacity: {opacity};");
+    }
     let box_attrs = vec![Attribute::new(
         library_attr(attr, "thumb"),
         thumb_state(&thumb.art),

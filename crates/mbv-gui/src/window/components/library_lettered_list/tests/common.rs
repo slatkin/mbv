@@ -273,7 +273,7 @@ fn played_and_active_rows<D: Host>() {
     assert!(
         fixture
             .attr_of(&part_selector::<D>(D::IDS[1], "title"), "style")
-            .is_some_and(|style| style.contains("var(--canvas-muted)")),
+            .is_some_and(|style| style.contains("var(--ef-grey1)")),
         "the played row's title dims"
     );
     assert!(
