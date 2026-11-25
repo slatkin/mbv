@@ -12,6 +12,8 @@ It requires mpv, obviously.
 
 ![mbv GUI client](assets/screenshot-gui.png)
 
+![mbv GUI client with the queue collapsed](assets/screenshot-gui-narrow.png)
+
 ### Instructions
 You turn it on and put in some stuff and there it is.
 
