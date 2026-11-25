@@ -367,6 +367,44 @@ fn no_hero() -> GuiMusicDetail {
     }
 }
 
+/// One album of the refresh scenario, carrying its tracklist so opening its
+/// node sends no command.
+fn loaded_album(album_id: &str, name: &str, year: &str, track_id: &str) -> GuiMusicAlbumFrame {
+    GuiMusicAlbumFrame {
+        album_id: album_id.to_owned(),
+        name: name.to_owned(),
+        year: year.to_owned(),
+        tracks: Some(vec![GuiMusicTrackFrame {
+            track_id: track_id.to_owned(),
+            name: "A track".to_owned(),
+            number: 1,
+            duration: "3:00".to_owned(),
+        }]),
+        total: None,
+    }
+}
+
+/// The carried content of the refresh scenario (gui-list-header-buttons design
+/// D7): one artist holding three albums whose tracklists are all cached, so a
+/// press that opens one sends no command.
+fn three_albums() -> GuiMusicList {
+    GuiMusicList {
+        artists: vec![GuiMusicArtistFrame {
+            art: GuiRowArtFrame::NoSource,
+            media: GuiRowMediaKindFrame::Audio,
+            artist_key: GuiArtistKey::Service("a1".to_owned()),
+            name: "Beastie Boys".to_owned(),
+            sort_letter: 'B',
+            albums: vec![
+                loaded_album("al1", "Licensed To Ill", "1986", "t1"),
+                loaded_album("al2", "Paul’s Boutique", "1989", "t2"),
+                loaded_album("al3", "Check Your Head", "1992", "t3"),
+            ],
+        }],
+        ..music(&["Hip-Hop"])
+    }
+}
+
 /// Open the Beastie Boys node, so its albums paint.
 fn open_beastie(fixture: &mut Fixture) {
     toggle_row(fixture, "artist:service:a1");
@@ -597,6 +635,36 @@ fn a_double_click_closes_and_reopens_a_node_while_the_filter_narrows_the_rows() 
         fixture.attr_of(album, local_name!("aria-expanded")),
         Some("true".to_owned()),
         "the second double-click reopens the node"
+    );
+}
+
+/// Press the header's Refresh button, as its callback does.
+fn refresh_music(fixture: &mut Fixture) {
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.refresh_music_list());
+}
+
+/// Contract (gui-list-header-buttons design D7, spec "A refresh of an open
+/// album in view" and "An open album out of view"): the Music refresh names the
+/// album ids of the open album rows the painted window holds, so neither the
+/// closed album in view nor the open album scrolled out of it names an id.
+#[test]
+fn a_refresh_of_music_names_only_the_open_album_rows_in_view() {
+    let mut fixture = built(&three_albums(), &no_hero());
+    open_beastie(&mut fixture);
+    toggle_row(&mut fixture, "album:al1");
+    toggle_row(&mut fixture, "album:al3");
+    // 150 px holds the letter, the artist, al1 with its track, and the closed
+    // al2; al3's row starts past the window.
+    measure(&mut fixture, 150.0);
+
+    refresh_music(&mut fixture);
+
+    assert_eq!(
+        fixture.library_commands(),
+        [crate::gui_core::GuiLibraryCommand::Refresh {
+            album_ids: vec!["al1".to_owned()],
+        }]
     );
 }
 

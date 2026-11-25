@@ -24,7 +24,8 @@
 //!
 //! The list is a tree, so its header paints the Expand all and Collapse all
 //! buttons (gui-list-header-buttons design D1, D4): they change the window's
-//! open nodes and send no command.
+//! open nodes and send no command. The header's Refresh button reloads the
+//! destination in place, naming the open album rows in view (design D7).
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -398,6 +399,10 @@ pub fn LibraryList() -> Element {
         on_expand_all: Callback::new(move |()| expand_library.expand_all_music()),
         on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_music()),
     });
+    // The header's Refresh button (gui-list-header-buttons design D7): Music
+    // names the open album rows its window holds, so the core reloads exactly
+    // those tracklists.
+    let refresh_library = library.clone();
     // The header's facts (design D14): Music is an Emby destination, so its Emby
     // mark names it (gui-library-header-service-marks design D5), and the
     // carried selector names the selection itself, so it paints no selection
@@ -409,7 +414,7 @@ pub fn LibraryList() -> Element {
         collections,
         view: None,
         sort: None,
-        on_refresh: Callback::new(|()| {}),
+        on_refresh: Callback::new(move |()| refresh_library.refresh_music_list()),
         tree,
         filter: ui.filter.clone(),
         placeholder: filter_placeholder,

@@ -492,6 +492,10 @@ pub fn LibraryShowsList() -> Element {
                 on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_shows()),
             }
         });
+    // The header's Refresh button (gui-list-header-buttons design D7): Shows
+    // names no album id — the core reloads the children of the open rows its
+    // in-view report holds.
+    let refresh_library = library.clone();
     // The header's facts (design D14, user override): the Shows destination is
     // an Emby destination, so its Emby mark names it under every view
     // (gui-library-header-service-marks design D5), and the view dropdown names
@@ -503,7 +507,7 @@ pub fn LibraryShowsList() -> Element {
         collections: None,
         view: frame.map(|frame| frame.view),
         sort,
-        on_refresh: Callback::new(|()| {}),
+        on_refresh: Callback::new(move |()| refresh_library.refresh_library_list()),
         tree,
         filter: shows_ui.filter.clone(),
         placeholder: filter_placeholder,

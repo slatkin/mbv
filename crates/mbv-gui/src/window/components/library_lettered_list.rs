@@ -114,6 +114,10 @@ pub fn LibraryLetteredList<D: LetteredDestination>() -> Element {
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The header's Refresh button (gui-list-header-buttons design D7): every
+    // lettered destination names no album id and the core reloads the active
+    // destination's content in place.
+    let refresh_library = library.clone();
     // The header's facts (design D4, D15): the destination's mark names it
     // (gui-library-header-service-marks design D5), and its selection label,
     // collection selector, and sort control are its own where it carries them.
@@ -124,7 +128,7 @@ pub fn LibraryLetteredList<D: LetteredDestination>() -> Element {
         collections: header.collections.clone(),
         view: None,
         sort: header.sort.clone(),
-        on_refresh: Callback::new(|()| {}),
+        on_refresh: Callback::new(move |()| refresh_library.refresh_library_list()),
         tree: None,
         filter: ui.filter.clone(),
         placeholder: header.placeholder.clone(),

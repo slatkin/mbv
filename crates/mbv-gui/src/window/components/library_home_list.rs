@@ -199,6 +199,9 @@ pub fn LibraryHomeList() -> Element {
 
     let filter_library = library.clone();
     let accept_library = library.clone();
+    // The header's Refresh button (gui-list-header-buttons design D7): Home
+    // names no album id and the core reloads its content in place.
+    let refresh_library = library.clone();
     // The header's facts (design D15): Home keeps its text title
     // (gui-library-header-service-marks design D5), the whole destination is
     // the default scope so it paints no label, and the `/` filter field
@@ -210,7 +213,7 @@ pub fn LibraryHomeList() -> Element {
         collections: None,
         view: None,
         sort: None,
-        on_refresh: Callback::new(|()| {}),
+        on_refresh: Callback::new(move |()| refresh_library.refresh_library_list()),
         tree: None,
         filter: filter.clone(),
         placeholder: "Filter home".to_owned(),

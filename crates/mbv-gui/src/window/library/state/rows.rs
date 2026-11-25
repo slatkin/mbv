@@ -12,7 +12,8 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::library::list::{
     LibraryRow, LibraryTree, ListMove, MusicRowsFacts, album_row_id, artist_row_id,
-    build_library_rows, jump_to_letter, letter_rail, scroll_step, scroll_top_to_show_cursor,
+    build_library_rows, jump_to_letter, letter_rail, list_window, scroll_step,
+    scroll_top_to_show_cursor,
 };
 use crate::window::library::parts::library_music_list;
 use crate::window::library::scroll::set_scroll_top;
@@ -327,6 +328,34 @@ impl LibraryState {
                 }
             }
         });
+    }
+
+    /// Refresh the Music destination (gui-list-header-buttons design D7): the
+    /// tree refresh reloads the children of the open parent rows in view, so
+    /// the command names the album ids of the open album rows the painted
+    /// window holds (spec "A refresh of an open album in view"). An open album
+    /// scrolled out of the window names nothing (spec "An open album out of
+    /// view"). The window keeps its pick, filter, scroll, and open state.
+    pub fn refresh_music_list(&self) {
+        let ui = self.ui.peek().clone();
+        let rows = self.rows_of(&ui);
+        let view = *self.music_scroll.peek();
+        let window = list_window(&rows, view.scroll_top, view.viewport_height);
+        let album_ids: Vec<String> = rows[window.start..window.end]
+            .iter()
+            .filter_map(|row| match row {
+                LibraryRow::Album {
+                    album_id,
+                    open: true,
+                    ..
+                } => Some(album_id.clone()),
+                LibraryRow::Letter(_)
+                | LibraryRow::Artist { .. }
+                | LibraryRow::Album { .. }
+                | LibraryRow::Track { .. } => None,
+            })
+            .collect();
+        self.link.library(GuiLibraryCommand::Refresh { album_ids });
     }
 
     /// Scroll the list by one movement key (design D6): Up and Down move by the
