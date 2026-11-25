@@ -74,6 +74,10 @@ pub struct LibraryUiState {
     /// under the trigger. The popover mounts no filter field, so its filter
     /// text is never read.
     pub shows_view: DropdownState,
+    /// The top bar's destination dropdown's open fact (user request
+    /// 2026-11-25): in the Mini arrangement the destination tabs paint as one
+    /// dropdown. The popover mounts no filter field.
+    pub destinations: DropdownState,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
     pub open_nodes: Vec<String>,
@@ -109,6 +113,7 @@ impl LibraryUiState {
             collections: DropdownState::default(),
             shows_seasons: DropdownState::default(),
             shows_view: DropdownState::default(),
+            destinations: DropdownState::default(),
             search_control: SearchControlState::default(),
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
@@ -437,6 +442,24 @@ impl LibraryState {
         self.ui.peek().shows_view.is_open()
     }
 
+    /// Open or close the top bar's destination dropdown (the Mini
+    /// arrangement's tabs): a press on the trigger opens it when it is closed
+    /// and closes it when it is open.
+    pub fn toggle_destinations_dropdown(&self) {
+        self.write_dropdown(
+            |ui| &mut ui.destinations,
+            |d| if d.is_open() { d.close() } else { d.open() },
+        );
+    }
+
+    /// Close the top bar's destination dropdown. A close while closed writes
+    /// nothing, as the other dropdowns' closes do.
+    pub fn close_destinations_dropdown(&self) {
+        if self.ui.peek().destinations.is_open() {
+            self.write_dropdown(|ui| &mut ui.destinations, DropdownState::close);
+        }
+    }
+
     /// Open or close the Shows Hero's season dropdown: a press on the trigger opens it when it is
     /// closed and closes it when it is open. A close drops the filter text.
     pub fn toggle_shows_seasons_dropdown(&self) {
@@ -467,7 +490,7 @@ impl LibraryState {
         self.write_dropdown(|ui| &mut ui.shows_seasons, |d| d.set_filter(filter));
     }
 
-    /// Close every popover the window's every-press path closes: the three
+    /// Close every popover the window's every-press path closes: the four
     /// dropdowns and the collapsed Search panel. A new popover joins here, and
     /// the root press and a destination change pick it up.
     pub fn close_popovers(&self) {
@@ -475,13 +498,14 @@ impl LibraryState {
         self.close_search_panel();
     }
 
-    /// Close the three dropdowns. A press inside the Library panel closes
+    /// Close the four dropdowns. A press inside the Library panel closes
     /// these and leaves the Search panel to the window's root press, which the
     /// panel press bubbles to.
     pub fn close_dropdowns(&self) {
         self.close_collections_dropdown();
         self.close_shows_view_dropdown();
         self.close_shows_seasons_dropdown();
+        self.close_destinations_dropdown();
     }
 
     fn write_dropdown(

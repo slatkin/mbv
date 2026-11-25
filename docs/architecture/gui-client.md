@@ -1735,6 +1735,11 @@ destination active and shows the Library in place of the Queue; while the
 Library shows, a press on the already active destination's own control — its
 tab, or the Home icon while the Home content is present — puts the Queue
 back, and a press on a different destination keeps the Library showing.
+In Mini the header paints the destination tabs as one dropdown in the tab
+strip's place (`LibraryTopBar`'s `mini` prop, over the shared
+`LibraryDropdown` with the radio marker; its open fact is
+`LibraryUiState.destinations`): a row press is the tab's press, so the view
+switch above applies unchanged, and the Home and Playlists icons stay.
 Outside Mini the view is unaffected: every other arrangement paints both
 columns. Narrow mounts both panels, and
 the row menu's View Detail entry opens the Hero as an overlay over the list;

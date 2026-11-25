@@ -15,6 +15,11 @@
 //! shows the Library in place of the Queue while the Mini arrangement holds
 //! (design D8).
 //!
+//! In the Mini arrangement the destination tabs paint as one dropdown in the
+//! strip's place (user request 2026-11-25): the trigger names the current tab,
+//! and its rows are the same tabs in the same order. The Home and Playlists
+//! icons stay beside it.
+//!
 //! The Search control sits at the bar's right end, before the Settings
 //! control (user request 2026-11-19): the route out of the Library Status
 //! bar, responsive to the bar's measured width — wide enough it paints the
@@ -30,6 +35,9 @@ use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::playlists::GuiPlaylistsCommand;
 use crate::bridge::settings::GuiSettingsCommand;
+use crate::window::components::library_dropdown::{
+    LibraryDropdown, LibraryDropdownMarker, LibraryDropdownRow,
+};
 use crate::window::components::library_search_control::LibrarySearchControl;
 use crate::window::icons::{ChevronLeft, ChevronRight, ListVideo, Settings};
 use crate::window::layout::track_width;
@@ -75,6 +83,79 @@ pub struct LibraryTopBarProps {
     /// control puts the Queue back.
     #[props(default)]
     pub on_destination_opened: Option<Callback<usize>>,
+    /// Whether the Mini arrangement holds: the tabs paint as one dropdown.
+    #[props(default)]
+    pub mini: bool,
+}
+
+/// The destination dropdown's trigger label while no tab is current (Home,
+/// or the Playlists screen).
+const DESTINATIONS_LABEL: &str = "Libraries";
+
+/// The destination dropdown's rows: one per tab, in the tabs' order, keyed by
+/// the destination's position, with the current tab selected.
+fn destination_rows(
+    tabs: &[GuiLibraryTabFrame],
+    current_tab: Option<usize>,
+) -> Vec<LibraryDropdownRow> {
+    tabs.iter()
+        .map(|tab| LibraryDropdownRow {
+            key: tab.position.to_string(),
+            label: tab.label.clone(),
+            selected: Some(tab.position) == current_tab,
+        })
+        .collect()
+}
+
+/// The Mini arrangement's destination dropdown, in the tab strip's place: a
+/// row press opens that destination, as its tab would, and closes the popover.
+fn destinations_dropdown(
+    library: &LibraryState,
+    tabs: &[GuiLibraryTabFrame],
+    current_tab: Option<usize>,
+    on_destination_opened: Option<Callback<usize>>,
+) -> Element {
+    let label = tabs
+        .iter()
+        .find(|tab| Some(tab.position) == current_tab)
+        .map_or_else(|| DESTINATIONS_LABEL.to_owned(), |tab| tab.label.clone());
+    let open = library.ui.cloned().destinations.is_open();
+    let toggle_library = library.clone();
+    let on_toggle = Callback::new(move |()| toggle_library.toggle_destinations_dropdown());
+    let inside_library = library.clone();
+    let on_inside_press = Callback::new(move |()| inside_library.close_library_row_menu());
+    let on_filter = Callback::new(move |_: String| {});
+    let select_library = library.clone();
+    let on_select = Callback::new(move |key: String| {
+        select_library.close_destinations_dropdown();
+        if let Ok(position) = key.parse::<usize>() {
+            open_destination(&select_library, position, on_destination_opened);
+        }
+    });
+    rsx! {
+        div {
+            class: "flex items-center",
+            style: "flex: 1 1 0; min-width: 0; height: 56px; padding-left: 8px;",
+            "data-library-tabs-menu": "",
+            LibraryDropdown {
+                label,
+                open,
+                rows: destination_rows(tabs, current_tab),
+                marker: LibraryDropdownMarker::Radio,
+                aria_label: "Library destination",
+                trigger_attr: "data-library-destinations-trigger",
+                menu_attr: "data-library-destinations-menu",
+                row_attr: "data-library-destinations-row",
+                mark_attr: "data-library-destinations-mark",
+                filter: None,
+                on_toggle,
+                on_select,
+                on_filter,
+                on_inside_press,
+                align_end: false,
+            }
+        }
+    }
 }
 
 /// Home's own position in the destination order (design D2): the Home icon
@@ -244,70 +325,77 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                     }
                 }
             }
+            // The Mini arrangement's destination dropdown, in the strip's
+            // place (user request 2026-11-25).
+            if props.mini {
+                {destinations_dropdown(&library, &props.tabs, props.current_tab, props.on_destination_opened)}
+            }
             // The tab strip: the tabs that fit, with a chevron at each edge
             // that hides some. The chevrons step the first painted tab by
             // one, as the TUI's tab bar scrolls its anchor.
-            div {
-                class: "flex items-center",
-                style: "flex: 1 1 0; min-width: 120px; height: 56px; gap: 2px; overflow: hidden;",
-                "data-library-tabs": "",
-                onmounted: move |event: Event<MountedData>| strip_mounted.set(Some(event)),
-                if tab_window.left {
-                    button {
-                        "type": "button",
-                        class: "flex flex-none items-center justify-center",
-                        style: "width: 24px; height: 44px; border: 0; background: none; color: var(--canvas-muted); cursor: pointer;",
-                        "aria-label": "Previous tabs",
-                        "data-library-tabs-left": "",
-                        onclick: move |_| first_tab.set(tab_window.start.saturating_sub(1)),
-                        ChevronLeft { size: 16 }
+            if !props.mini {
+                div {
+                    class: "flex items-center",
+                    style: "flex: 1 1 0; min-width: 120px; height: 56px; gap: 2px; overflow: hidden;",
+                    "data-library-tabs": "",
+                    onmounted: move |event: Event<MountedData>| strip_mounted.set(Some(event)),
+                    if tab_window.left {
+                        button {
+                            "type": "button",
+                            class: "flex flex-none items-center justify-center",
+                            style: "width: 24px; height: 44px; border: 0; background: none; color: var(--canvas-muted); cursor: pointer;",
+                            "aria-label": "Previous tabs",
+                            "data-library-tabs-left": "",
+                            onclick: move |_| first_tab.set(tab_window.start.saturating_sub(1)),
+                            ChevronLeft { size: 16 }
+                        }
                     }
-                }
-                for tab in &props.tabs[tab_window.start..tab_window.end] {
-                    {
-                        let current = Some(tab.position) == props.current_tab;
-                        let position = tab.position;
-                        let label = tab.label.clone();
-                        let color = if current {
-                            canvas_var("heading")
-                        } else {
-                            canvas_var("muted")
-                        };
-                        let tab_library = library.clone();
-                        let tab_opened = props.on_destination_opened;
-                        rsx! {
-                            button {
-                                key: "{position}",
-                                "type": "button",
-                                class: "flex items-center uppercase",
-                                style: "height: 56px; padding: 0 12px; font-family: var(--font-mono); font-size: 14px; font-weight: 600; letter-spacing: 0.08em; color: {color};",
-                                "aria-current": current.then_some("page"),
-                                "data-library-tab": "{position}",
-                                onclick: move |_| open_destination(&tab_library, position, tab_opened),
-                                if current {
-                                    // The current tab's run: the canvas's two
-                                    // underline strokes around the label.
-                                    span {
-                                        class: "block",
-                                        style: "border-top: 2px solid {underline}; border-bottom: 2px solid {underline}; padding: 3px 1px 2px; line-height: 1;",
+                    for tab in &props.tabs[tab_window.start..tab_window.end] {
+                        {
+                            let current = Some(tab.position) == props.current_tab;
+                            let position = tab.position;
+                            let label = tab.label.clone();
+                            let color = if current {
+                                canvas_var("heading")
+                            } else {
+                                canvas_var("muted")
+                            };
+                            let tab_library = library.clone();
+                            let tab_opened = props.on_destination_opened;
+                            rsx! {
+                                button {
+                                    key: "{position}",
+                                    "type": "button",
+                                    class: "flex items-center uppercase",
+                                    style: "height: 56px; padding: 0 12px; font-family: var(--font-mono); font-size: 14px; font-weight: 600; letter-spacing: 0.08em; color: {color};",
+                                    "aria-current": current.then_some("page"),
+                                    "data-library-tab": "{position}",
+                                    onclick: move |_| open_destination(&tab_library, position, tab_opened),
+                                    if current {
+                                        // The current tab's run: the canvas's two
+                                        // underline strokes around the label.
+                                        span {
+                                            class: "block",
+                                            style: "border-top: 2px solid {underline}; border-bottom: 2px solid {underline}; padding: 3px 1px 2px; line-height: 1;",
+                                            "{label}"
+                                        }
+                                    } else {
                                         "{label}"
                                     }
-                                } else {
-                                    "{label}"
                                 }
                             }
                         }
                     }
-                }
-                if tab_window.right {
-                    button {
-                        "type": "button",
-                        class: "flex flex-none items-center justify-center",
-                        style: "width: 24px; height: 44px; border: 0; background: none; color: var(--canvas-muted); cursor: pointer;",
-                        "aria-label": "Next tabs",
-                        "data-library-tabs-right": "",
-                        onclick: move |_| first_tab.set(tab_window.start + 1),
-                        ChevronRight { size: 16 }
+                    if tab_window.right {
+                        button {
+                            "type": "button",
+                            class: "flex flex-none items-center justify-center",
+                            style: "width: 24px; height: 44px; border: 0; background: none; color: var(--canvas-muted); cursor: pointer;",
+                            "aria-label": "Next tabs",
+                            "data-library-tabs-right": "",
+                            onclick: move |_| first_tab.set(tab_window.start + 1),
+                            ChevronRight { size: 16 }
+                        }
                     }
                 }
             }

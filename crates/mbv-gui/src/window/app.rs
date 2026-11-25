@@ -657,6 +657,7 @@ pub fn App() -> Element {
                             home_active: header.home_active && !playlists_open,
                             playlists_active: playlists_open,
                             on_destination_opened: Some(on_destination_opened),
+                            mini: arrangement == GuiArrangement::Mini,
                         }
                     }
                     div {

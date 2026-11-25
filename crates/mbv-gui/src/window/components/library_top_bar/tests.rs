@@ -247,7 +247,46 @@ fn props(
         home_active,
         playlists_active: false,
         on_destination_opened: None,
+        mini: false,
     }
+}
+
+/// Contract (user request 2026-11-25): in the Mini arrangement the tabs paint
+/// as one dropdown that names the current tab, with no tab strip, and the
+/// Home and Playlists icons stay. The open popover lists the tabs in order.
+#[test]
+fn the_mini_arrangement_paints_the_tabs_as_one_dropdown() {
+    let mut fixture = built(LibraryTopBarProps {
+        mini: true,
+        ..props(two_tabs(), Some(2), false)
+    });
+    assert!(
+        !fixture.presents("[data-library-tabs]"),
+        "no tab strip paints"
+    );
+    assert!(
+        fixture.presents("[data-library-home]"),
+        "the Home icon stays"
+    );
+    assert!(
+        fixture.presents("[data-library-playlists]"),
+        "the Playlists icon stays"
+    );
+    assert_eq!(
+        fixture.text_of("[data-library-destinations-trigger]"),
+        "Shows"
+    );
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.toggle_destinations_dropdown());
+
+    assert_eq!(
+        fixture.attrs_of(
+            "[data-library-destinations-row]",
+            &blitz_dom::LocalName::from("data-library-destinations-row")
+        ),
+        vec![Some("1".to_owned()), Some("2".to_owned())]
+    );
 }
 
 /// Contract (`LibraryTopBar.test.ts`): the bar paints one tab per presented

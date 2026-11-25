@@ -1431,12 +1431,19 @@ The Hero SHALL show the picked album with its artist header, its square artwork,
 
 ### Requirement: The top bar shows the destination tabs and Search
 
-The window SHALL show a top bar with a Home icon and the destination tabs as its global header. Once Search is presented, the Library Status bar SHALL show a Search field with the hint `Ctrl K` at its left side. A press on a tab SHALL make its destination active. The Search field SHALL search all libraries, show the results above the field, and activate a result by Enter or a press.
+The window SHALL show a top bar with a Home icon and the destination tabs as its global header. Once Search is presented, the Library Status bar SHALL show a Search field with the hint `Ctrl K` at its left side. A press on a tab SHALL make its destination active. In Mini the destination tabs SHALL show as one dropdown in the tab strip's place: its trigger SHALL name the current tab (or `Libraries` while no tab is current), its rows SHALL be the tabs in their order, and a row press SHALL act as a press on that tab and close the dropdown. The Home and Playlists icons SHALL stay beside it. Esc and a press outside SHALL close the dropdown. The Search field SHALL search all libraries, show the results above the field, and activate a result by Enter or a press.
 
 #### Scenario: A tab is pressed
 
 - **WHEN** the user presses the Music tab
 - **THEN** Music becomes the active destination and its tab is marked current
+
+#### Scenario: The tabs are a dropdown in Mini
+
+- **GIVEN** the arrangement is Mini and Shows is the active destination
+- **WHEN** the window paints the top bar
+- **THEN** the Home and Playlists icons show, then one dropdown named Shows, and no tab strip
+- **AND** opening the dropdown lists the destination tabs in order with Shows marked
 
 #### Scenario: A tab is pressed in Mini while the Queue shows
 

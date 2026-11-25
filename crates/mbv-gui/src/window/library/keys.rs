@@ -114,6 +114,16 @@ fn route_shows_view_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOu
     None
 }
 
+/// Route a key while the top bar's destination dropdown is open: Esc closes
+/// it. The popover mounts no filter field, so every other key passes on.
+fn route_destinations_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+    if key.key == "Escape" && bare(key) {
+        state.close_destinations_dropdown();
+        return Some(KeyOutcome::Handled);
+    }
+    None
+}
+
 /// Route a key while the Shows Hero's season dropdown is open: Esc closes it
 /// and clears its filter text, and its filter field, which always mounts with
 /// the popover, takes the typed keys and Backspace wherever the pointer is.
@@ -134,13 +144,14 @@ fn route_seasons_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutco
 fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     // The facts are copied out of the store: a route may write it, and a held
     // read would meet that write.
-    let (filter_open, collections_open, shows_view_open, seasons_open) = {
+    let (filter_open, collections_open, shows_view_open, seasons_open, destinations_open) = {
         let ui = state.ui.peek();
         (
             ui.filter_open,
             ui.collections.is_open(),
             ui.shows_view.is_open(),
             ui.shows_seasons.is_open(),
+            ui.destinations.is_open(),
         )
     };
     if filter_open {
@@ -154,6 +165,9 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
     }
     if seasons_open {
         return route_seasons_open_key(state, key);
+    }
+    if destinations_open {
+        return route_destinations_open_key(state, key);
     }
     None
 }
