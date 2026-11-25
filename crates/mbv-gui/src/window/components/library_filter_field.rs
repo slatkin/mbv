@@ -1,8 +1,8 @@
 //! The list's `/` filter field (`replace-tauri-with-blitz` task 7.1, the
 //! port of `LibraryFilterField`; add-gui-library-panel design D3,
 //! step 2, D7): the panel's open text field, in the one look every Library
-//! list paints it — the `/` glyph and the input in the canvas's bordered
-//! field. The key router types into it without checking focus, so the field
+//! list paints it — the input in the canvas's bordered field, with a clear
+//! button while it holds text. The key router types into it without checking focus, so the field
 //! owns its focus: it takes the keyboard while the filter is open, closes
 //! the filter when it loses focus keeping the text as Enter does, and
 //! reports the focus and text through its props, because each destination's
@@ -51,11 +51,6 @@ pub fn LibraryFilterField(props: LibraryFilterFieldProps) -> Element {
             class: "flex flex-none items-center",
             "data-hover-frame": "",
             style: "height: 32px; padding: 0 10px; gap: 8px; background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--canvas-muted);",
-            span {
-                class: "font-mono",
-                style: "font-size: 13px; color: var(--canvas-source);",
-                "/"
-            }
             input {
                 "type": "text",
                 class: "min-w-0 flex-1",

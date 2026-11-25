@@ -1,6 +1,6 @@
 //! The Search control's contracts (user request 2026-11-19, the port of the
 //! Search field's tests, which moved with the field from the Library Status
-//! bar's suite): the field and its results dropdown, the `Ctrl K` hint, the
+//! bar's suite): the field and its results dropdown, the
 //! mount and focus facts, the collapsed form's icon and panel, and the panel
 //! mount retracting when the control stops painting the field. The mount,
 //! focus, and highlight facts are the store's (`window/library/search.rs`);
@@ -262,15 +262,15 @@ fn a_closed_search_section_paints_the_field_and_no_dropdown() {
     );
 }
 
-/// Contract (user request 2026-11-25, the clear button): an empty field paints
-/// the `Ctrl K` hint and no clear button; once the field holds text, the clear
-/// button takes the hint's place.
+/// Contract (user request 2026-11-25, the clear button and no key hints): the
+/// field paints no `Ctrl K` hint, an empty field paints no clear button, and
+/// once the field holds text the clear button paints.
 #[test]
-fn the_clear_button_takes_the_hints_place_once_the_field_holds_text() {
+fn the_clear_button_paints_only_while_the_field_holds_text() {
     let mut fixture = built(false);
     assert!(
-        fixture.presents("[data-library-search-hint]"),
-        "the hint paints"
+        !fixture.presents("[data-library-search-hint]"),
+        "the field paints no key hint"
     );
     assert!(
         !fixture.presents("[data-field-clear]"),
@@ -283,10 +283,6 @@ fn the_clear_button_takes_the_hints_place_once_the_field_holds_text() {
     assert!(
         fixture.presents("[data-field-clear]"),
         "the clear button paints"
-    );
-    assert!(
-        !fixture.presents("[data-library-search-hint]"),
-        "the hint gives its place up"
     );
 }
 
@@ -487,11 +483,6 @@ fn the_icon_press_opens_and_closes_the_panel() {
     assert!(
         fixture.presents("[data-library-search-input]"),
         "the panel carries the field"
-    );
-    assert_eq!(
-        fixture.text_of("[data-library-search-hint]"),
-        "Ctrl K",
-        "the chord's hint paints in the panel"
     );
     assert!(fixture.state.search.peek().mounted, "the field mounts");
 

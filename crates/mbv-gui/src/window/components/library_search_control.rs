@@ -1,9 +1,9 @@
 //! The Library's Search control (user request 2026-11-19): the global search
 //! field at the top bar's right end, moved back out of the Library Status bar.
 //! The bar's measure decides between the two forms: wide enough, the field
-//! paints inline with its `Ctrl K` hint; too narrow, the control paints the
-//! Search icon whose press opens a dropdown panel that carries the same field,
-//! hint, and results. The results open downward — the bar sits at the window's
+//! paints inline; too narrow, the control paints the
+//! Search icon whose press opens a dropdown panel that carries the same field
+//! and results. The results open downward — the bar sits at the window's
 //! top edge — and the collapsed panel's own surface stops the outside-press
 //! rule that closes it.
 //!
@@ -139,7 +139,7 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
                     Search { size: 18 }
                 }
                 if panel_open {
-                    // The collapsed control's panel: the same field, hint, and
+                    // The collapsed control's panel: the same field and
                     // results in the Library panel card's look, anchored under
                     // the icon. The results open downward with the card.
                     div {
@@ -163,7 +163,7 @@ const SEARCH_CARD_STYLE: &str = "background: var(--canvas-library-panel); border
 /// The loading, failed, and empty notices' one-line look.
 const NOTICE_STYLE: &str = "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);";
 
-/// The field, its `Ctrl K` hint, and the results dropdown the frame carries
+/// The field, its clear button, and the results dropdown the frame carries
 /// (design D9): the markup both forms paint. The collapsed panel wraps it in
 /// its own card, so this box paints no card and no anchor of its own. The
 /// handlers clone their own state handles (D4), as every call site does.
@@ -182,7 +182,7 @@ fn paint_search_box(
         input {
             "type": "text",
             class: "w-full",
-            style: "height: 28px; padding: 0 46px 0 8px; box-sizing: border-box; background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--canvas-heading); font-size: 13px; outline: none;",
+            style: "height: 28px; padding: 0 28px 0 8px; box-sizing: border-box; background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--canvas-heading); font-size: 13px; outline: none;",
             placeholder: "Search",
             "aria-label": "Search",
             value: "{query}",
@@ -192,22 +192,9 @@ fn paint_search_box(
             onblur: move |_| blur_library.blur_search_field(),
             oninput: move |event: FormEvent| input_library.set_search_query(event.value()),
         }
-        // Inside the field's right end: the clear button while the field holds
-        // text, the chord's hint while it is empty. The hint is a cue to open
-        // an empty field, so it gives its place to the button once there is
-        // text to clear.
-        if query.is_empty() {
-            // The chord's hint inside the field (the spec's "a Search field
-            // with the hint `Ctrl K`", the canvas's bordered chip): a pointer
-            // passes through it to the field.
-            span {
-                class: "font-mono",
-                "aria-hidden": "true",
-                style: "position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--canvas-muted); border: 1px solid var(--canvas-border); border-radius: 4px; padding: 1px 4px; pointer-events: none;",
-                "data-library-search-hint": "",
-                "Ctrl K"
-            }
-        } else {
+        // The clear button at the field's right end, while the field holds
+        // text.
+        if !query.is_empty() {
             ClearFieldButton {
                 label: "Clear search",
                 placement: "position: absolute; right: 4px; top: 50%; transform: translateY(-50%);",

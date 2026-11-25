@@ -1011,8 +1011,8 @@ pointer zone, so a key pressed over it routes as over the Library column.
 The Search control sits at its right end, before the Settings control
 (`src/window/components/library_search_control.rs`, user request
 2026-11-19): the bar's measure decides the form — wide enough it paints the
-field inline with its `Ctrl K` hint; too narrow it paints the Search icon
-whose press opens a dropdown panel that carries the same field, hint, and
+field inline; too narrow it paints the Search icon
+whose press opens a dropdown panel that carries the same field and
 results, which open downward. `src/window/components/library_panel.rs` paints the destination's list (`LibraryList` with
 `LibraryLetterRail` in Music; `LibraryHomeList` in Home;
 `LibraryShowsList` in Shows; and `LibraryLetteredList` in Emby, Audiobooks,

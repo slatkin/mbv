@@ -491,10 +491,9 @@ fn a_wide_bar_paints_the_search_field_inline() {
         fixture.presents("[data-library-search-input]"),
         "the field paints inline"
     );
-    assert_eq!(
-        fixture.text_of("[data-library-search-hint]"),
-        "Ctrl K",
-        "the chord's hint paints inside the field"
+    assert!(
+        !fixture.presents("[data-library-search-hint]"),
+        "the field paints no key hint"
     );
     assert!(
         !fixture.presents("[data-library-search-control]"),

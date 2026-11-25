@@ -302,11 +302,6 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
                             label {
                                 class: "flex flex-none items-center",
                                 style: "height: 40px; padding: 0 12px; gap: 10px; border-bottom: 1px solid var(--canvas-menu-border); color: var(--canvas-muted);",
-                                span {
-                                    class: "font-mono",
-                                    style: "font-size: 14px; color: var(--canvas-accent);",
-                                    "/"
-                                }
                                 input {
                                     "type": "text",
                                     class: "min-w-0 flex-1",

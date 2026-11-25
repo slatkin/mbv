@@ -1,6 +1,6 @@
 //! The Hero's action buttons (`replace-tauri-with-blitz` task 7.5, the port
 //! of `LibraryHeroActions`; add-gui-library-panel design D15): Play and Add to
-//! queue (`a`), each painted only when the destination supplies its handler.
+//! queue, each painted only when the destination supplies its handler.
 //! The one set every Hero's action row paints, inside the row
 //! `LibraryHeroSummary` or `LibraryHeroFrame` owns, so a fix to one look lands
 //! in every Hero.
@@ -25,17 +25,6 @@ pub struct LibraryHeroActionsProps {
     pub on_queue: Option<Callback<()>>,
 }
 
-/// The hint span a key-hinted button paints after its label (`n`, `a`).
-fn paint_hint(hint: &str) -> Element {
-    rsx! {
-        span {
-            class: "font-mono",
-            style: "font-size: 12px; color: var(--canvas-muted);",
-            "{hint}"
-        }
-    }
-}
-
 /// The accent Play pill's style, shared with the Playlists hero.
 pub(crate) const ACCENT_STYLE: &str = "height: 44px; padding: 0 18px 0 14px; gap: 8px; background: var(--canvas-accent); border: 0; border-radius: 22px; color: var(--canvas-ink); font-size: 15px; font-weight: 600; cursor: pointer;";
 
@@ -47,7 +36,6 @@ pub(crate) const DESTRUCTIVE_STYLE: &str = "height: 44px; padding: 0 14px; gap: 
 pub(crate) const RAISED_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background: var(--canvas-library-raise); border: 1px solid var(--canvas-library-control); border-radius: 22px; color: var(--canvas-text); font-size: 14px; cursor: pointer;";
 
 /// The Hero's action buttons: the accent Play pill, and the raised
-/// Add-to-queue pill with its muted mono key hint.
 #[component]
 pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
     let play_attrs = vec![Attribute::new(own(props.attr, "play"), "", None, false)];
@@ -74,7 +62,6 @@ pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
                     onclick: move |_| on_queue.call(()),
                     ..add_attrs,
                     "Add to queue"
-                    { paint_hint("a") }
                 }
             }
         }
