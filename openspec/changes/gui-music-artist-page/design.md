@@ -118,16 +118,6 @@ Per `docs/invariants/14-test-ownership.md` and `crates/mbv-gui/AGENTS.md`: headl
 - Bridge: one conversion test for the frame's subject.
 - Window: one painted-structure test for the artist branch of `LibraryHero` (the album labels, the tracks per album, no More actions control); one test for the press (an artist row sends `ShowArtist` and does not toggle the row); one test that the key route's tracklist arm sends `PlayArtistTrack` while the page shows.
 
-### D9. The page builds on `gui-hero-design-polish`
-
-This change lands after `gui-hero-design-polish` and uses its Hero parts. It adds no look of its own.
-
-- The header facts of the artist page are pills in the style of that change: the album count, the release-year span, the artist's track count, and the total time (when the tracks have loaded). The album count shows here only. The album Hero has no artist facts line after that change.
-- The page has no progress, as no Hero has after that change.
-- The tracklist band has a section header with a rule. Each album label sits in the band, and the rows are the rounded, striped rows of that change. The row that plays now gets its fill, its bold title, and its bars mark in place of the number.
-- The header gets the blurred glow from the artist's artwork (D5), else from the first album's cover.
-- D6's "the album branch is unchanged" means no change from this change. The album branch has the look of `gui-hero-design-polish`.
-
 ## Risks / Trade-offs
 
 - [An artist with many albums issues many requests] → The existing bound of 6 in flight limits the burst, and each arrival frees a slot.

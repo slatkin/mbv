@@ -43,4 +43,3 @@ None.
 - `crates/mbv-gui/src/bridge`: the Hero frame, the command mirror, and the section frames.
 - `crates/mbv-gui/src/window`: the Library state's row press, the Music Hero component, the tracklist, and the hovered-track key route.
 - `docs/architecture/gui-client.md`, `CONTEXT.md` (the term Artist page).
-- Depends on `gui-hero-design-polish`, which lands first. The artist page uses its Hero parts: the header facts are pills, and the page shows no progress (design D9).
