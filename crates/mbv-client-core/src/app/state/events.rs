@@ -197,6 +197,11 @@ pub enum MusicEvent {
         album_id: String,
         tracks: Vec<EmbyItem>,
     },
+    /// A refresh of an album's track list failed (design D9). The landing
+    /// keeps the cached list, frees the album's loading mark, and flashes, so
+    /// the view keeps painting the tracks it already had. A failure is never
+    /// cached.
+    AlbumTracksRefreshFailed { album_id: String },
     /// Completion of the typed `ArtistItems`-ID Audio query (design D7,
     /// task 6.1). The destination, Service setup generation, and settled
     /// revision all ride the completion so the shell can reject a response

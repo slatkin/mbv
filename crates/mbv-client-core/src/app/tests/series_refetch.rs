@@ -2,9 +2,11 @@
 //! caches the detail but starts no first-season episode fetch, so an open row
 //! in view whose seasons stay closed costs no episode request. A plain fetch
 //! of the same id while the quiet one runs drops the mark, so a pick still
-//! loads the first season.
+//! loads the first season. The album-track refresh (design D9) belongs here
+//! too: a failed refresh keeps the cached tracks.
 
 use crate::app::tests::make_app_stub;
+use crate::app::{LibEvent, MusicEvent};
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::SeriesDetail;
@@ -33,6 +35,38 @@ fn fetchable_app(http: &MockHttp) -> crate::app::App {
     let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
     app.adopt_ready_emby_client_for_test(client);
     app
+}
+
+/// One track, as a landed album-track fetch leaves it in the cache.
+fn cached_track(track_id: &str) -> Vec<mbv_emby_model::EmbyItem> {
+    let mut track = make_item(track_id, "Audio");
+    track.id = track_id.into();
+    vec![track]
+}
+
+#[test]
+fn a_failed_album_tracks_refetch_keeps_the_cached_tracks() {
+    let http = MockHttp::new();
+    http.respond_repeated(200, EMPTY_ITEMS, 1);
+    let mut app = fetchable_app(&http);
+    app.cache_album_tracks("album-1".into(), cached_track("track-1"));
+
+    app.refetch_album_tracks("album-1".into());
+    app.handle_lib_event(
+        LibEvent::Music(MusicEvent::AlbumTracksRefreshFailed {
+            album_id: "album-1".into(),
+        }),
+        None,
+    );
+
+    assert_eq!(
+        app.album_tracks_cache["album-1"][0].id, "track-1",
+        "a failed refetch keeps the tracks the cache already holds"
+    );
+    assert!(
+        !app.album_tracks_loading_for_test("album-1"),
+        "a failed refetch frees the loading mark so a later refresh starts"
+    );
 }
 
 #[test]

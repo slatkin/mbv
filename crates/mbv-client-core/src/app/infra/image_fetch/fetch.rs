@@ -56,6 +56,44 @@ impl App {
         });
     }
 
+    /// Refetches `album_id`'s track list while keeping the cached list in
+    /// place (design D9): the view paints the tracks it already holds until
+    /// the landing replaces them, so a refresh never blanks the pane. An
+    /// album the cache lacks takes the first-load path, and an album whose
+    /// fetch already runs is skipped. A failed refresh sends
+    /// [`MusicEvent::AlbumTracksRefreshFailed`] instead of the empty list a
+    /// first load falls back to, so the cache never stores a failure.
+    pub fn refetch_album_tracks(&mut self, album_id: String) {
+        if !self.album_tracks_cache.contains_key(&album_id) {
+            self.fetch_album_tracks(album_id);
+            return;
+        }
+        if self.album_tracks_loading.contains(&album_id) {
+            return;
+        }
+        self.album_tracks_loading.insert(album_id.clone());
+        let Some(client) = self.emby_snapshot() else {
+            self.album_tracks_loading.remove(&album_id);
+            return;
+        };
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || {
+            let event = match client.get_items_sorted(
+                &album_id,
+                None,
+                false,
+                0,
+                PAGE_SIZE,
+                "ParentIndexNumber,IndexNumber",
+                "Ascending",
+            ) {
+                Ok((tracks, _total)) => MusicEvent::AlbumTracksFetched { album_id, tracks },
+                Err(_) => MusicEvent::AlbumTracksRefreshFailed { album_id },
+            };
+            let _ = tx.send(LibEvent::Music(event));
+        });
+    }
+
     /// Proactively fetches TV series detail (seasons + episodes) so the
     /// Inline series detail pane can render without the user
     /// drilling in first.
