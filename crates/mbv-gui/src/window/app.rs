@@ -319,12 +319,19 @@ pub(crate) fn header_facts(sections: &Sections) -> HeaderFacts {
 /// a queue-only panel fills the window. A queue-only panel never paints the
 /// collapsed rail (the `Panel` gates the collapse toggle on the Library
 /// panel beside it), so no class end-aligns a rail.
+///
+/// `min-w-0` works around a Blitz 0.3.0-beta.4 defect. A flex item's automatic
+/// minimum width makes taffy measure the column at min-content, and that
+/// measure re-breaks each text node's one shared Parley layout at its
+/// min-content width. A later resolve can take the final layout from the taffy
+/// cache without a new line break, so the now-playing title painted one word
+/// per line inside a one-line box. An explicit `min-w-0` skips that measure.
 #[must_use]
 fn queue_column_class(two_columns: bool) -> &'static str {
     if two_columns {
-        "flex h-full min-h-0 flex-col flex-none"
+        "flex h-full min-h-0 min-w-0 flex-col flex-none"
     } else {
-        "flex h-full min-h-0 flex-col flex-1"
+        "flex h-full min-h-0 min-w-0 flex-col flex-1"
     }
 }
 
