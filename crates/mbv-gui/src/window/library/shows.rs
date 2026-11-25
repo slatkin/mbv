@@ -211,6 +211,64 @@ impl LibraryState {
         }
     }
 
+    /// Open every painted series row (gui-list-header-buttons design D4, spec
+    /// "Expand all opens every top-level parent row the list shows"): no
+    /// season opens, and the ids leave the filter's closed set, so the series
+    /// stay open after the filter clears. The press sends no command and picks
+    /// nothing, so the Hero stays as it was.
+    pub fn expand_all_shows(&self) {
+        let series: Vec<String> = self
+            .shows_rows()
+            .iter()
+            .filter_map(|row| match row {
+                ShowsListRow::Series(series) => Some(series.id.clone()),
+                ShowsListRow::Heading(_)
+                | ShowsListRow::Season(_)
+                | ShowsListRow::Episode(_)
+                | ShowsListRow::Flat(_) => None,
+            })
+            .collect();
+        let mut shows_ui = self.shows_ui;
+        shows_ui.with_mut(|ui| {
+            for id in &series {
+                if !ui.open.iter().any(|open| open == id) {
+                    ui.open.push(id.clone());
+                }
+                ui.closed.retain(|closed| closed != id);
+            }
+        });
+    }
+
+    /// Close every open series and season row (gui-list-header-buttons design
+    /// D4, spec "Collapse all closes every open parent row"): every painted
+    /// node also enters the filter's closed set while the filter narrows the
+    /// rows, so the rows the filter opened stay shut after it clears. The press
+    /// sends no command and picks nothing, so the Hero stays as it was.
+    pub fn collapse_all_shows(&self) {
+        let rows = self.shows_rows();
+        let narrowing = !self.shows_ui.peek().filter.trim().is_empty();
+        let nodes: Vec<String> = rows
+            .iter()
+            .filter_map(|row| match row {
+                ShowsListRow::Series(series) => Some(series.id.clone()),
+                ShowsListRow::Season(season) => Some(season.id.clone()),
+                ShowsListRow::Heading(_) | ShowsListRow::Episode(_) | ShowsListRow::Flat(_) => None,
+            })
+            .collect();
+        let mut shows_ui = self.shows_ui;
+        shows_ui.with_mut(|ui| {
+            ui.open.clear();
+            if narrowing {
+                let absent: Vec<String> = nodes
+                    .iter()
+                    .filter(|id| !ui.closed.contains(*id))
+                    .cloned()
+                    .collect();
+                ui.closed.extend(absent);
+            }
+        });
+    }
+
     /// Press a Shows row (design D14): a press picks a node, a flat row, or an
     /// episode leaf, and nothing else. The open state belongs to the
     /// double-click ([`Self::toggle_shows_node`]), so a press on a series or
@@ -323,6 +381,24 @@ impl LibraryState {
         set_scroll_top(self.scrolls.shows, &rows, scroll_top);
     }
 
+    /// Report the open Shows nodes the All view paints, in paint order
+    /// (gui-list-header-buttons design D5): the source id of each open series
+    /// row and the `(series_id, source_id)` pair of each open season row. The
+    /// core starts the bounded in-view loads the report misses, and each report
+    /// replaces the last, so a row that leaves the view leaves the report. A
+    /// state that paints no Shows library sends nothing, because only a Shows
+    /// destination carries the library index the command names.
+    pub fn report_shows_open_in_view(&self, series: Vec<String>, seasons: Vec<(String, String)>) {
+        let Some(lib_idx) = self.shows_lib_idx() else {
+            return;
+        };
+        self.link.library(GuiLibraryCommand::ShowsOpenInView {
+            lib_idx,
+            series,
+            seasons,
+        });
+    }
+
     /// Hold the Shows list's scroll offset inside the rows the filter leaves.
     fn clamp_shows_scroll(&self) {
         let rows = self.shows_rows();
@@ -330,3 +406,6 @@ impl LibraryState {
         set_scroll_top(self.scrolls.shows, &rows, held.scroll_top);
     }
 }
+
+#[cfg(test)]
+mod tests;

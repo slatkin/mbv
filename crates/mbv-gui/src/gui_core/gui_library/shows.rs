@@ -115,6 +115,39 @@ fn spawn_shows_new(app: &mut App, gui: &mut GuiClientState, library_id: String) 
     // with landed rows, empty when the fetch fails.
     gui.shows_new
         .insert(library_id.clone(), GuiSectionRequest::Requesting);
+    start_shows_new_fetch(app, client, library_id);
+}
+
+/// Refetch one TV library's New episodes over the `App` the GUI core owns
+/// (gui-list-header-buttons design D8): with no landed list the refetch takes
+/// the first-load path, and with a landed list it keeps that list in place and
+/// starts the fetch, recording the library in the in-flight set so a second
+/// refetch while that fetch runs starts nothing. No Emby client starts nothing
+/// at all.
+pub(crate) fn refetch_shows_new(app: &mut App, gui: &mut GuiClientState, library_id: String) {
+    let Some(client) = app.emby_snapshot() else {
+        // The no-client condition is not a fetch failure (design D8): the
+        // refetch stores no mark and starts nothing.
+        return;
+    };
+    let loaded = gui
+        .shows_new
+        .get(&library_id)
+        .is_some_and(GuiSectionRequest::is_landed);
+    if !loaded {
+        spawn_shows_new(app, gui, library_id);
+        return;
+    }
+    if !gui.shows_new_refreshing.insert(library_id.clone()) {
+        return;
+    }
+    start_shows_new_fetch(app, client, library_id);
+}
+
+/// Start one TV library's New fetch worker (design D9, D8): the one spawn body
+/// the first load and the refetch share, so both send the same result event,
+/// whose landing replaces the store's value or reports a failed refresh.
+fn start_shows_new_fetch(app: &App, client: mbv_emby::EmbyClient, library_id: String) {
     let tx = app.library_fetch_event_sender();
     std::thread::spawn(move || {
         let result = client.get_latest_episodes(&library_id, 30);

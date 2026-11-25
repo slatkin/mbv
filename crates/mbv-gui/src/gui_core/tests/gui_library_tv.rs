@@ -8,6 +8,7 @@
 
 use super::*;
 
+use crate::gui_core::gui_library::GuiSectionRequest;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
@@ -359,5 +360,240 @@ fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
     assert!(
         app.try_recv_lib_event().is_none(),
         "a settled All root starts no second request"
+    );
+}
+
+/// The six open series a Shows in-view loader test reports, in paint order:
+/// more rows than `SHOWS_OPEN_LOAD_LIMIT`, so the loader's bound shows.
+const SIX_OPEN_SERIES: [&str; 6] = [
+    "series-1", "series-2", "series-3", "series-4", "series-5", "series-6",
+];
+
+/// Answer every fetch of `series_ids` with one empty detail: each request
+/// carries its series as its `ParentId`, so the answers follow their own path
+/// whatever order the workers arrive in.
+fn respond_with_empty_detail(http: &MockHttp, series_ids: &[&str]) {
+    for series_id in series_ids {
+        http.respond_when(
+            &format!("ParentId={series_id}"),
+            200,
+            r#"{"Items":[],"TotalRecordCount":0}"#,
+        );
+    }
+}
+
+/// Report `series` as the open rows the Shows list paints in view (design D5),
+/// with every season row closed.
+fn report_open_series(app: &mut App, series: &[&str]) {
+    apply_gui_library_command(
+        app,
+        GuiLibraryCommand::ShowsOpenInView {
+            lib_idx: 0,
+            series: series.iter().map(|id| (*id).to_string()).collect(),
+            seasons: Vec::new(),
+        },
+    );
+}
+
+/// Land one queued series event through the GUI core's own drain
+/// (`GuiCore::drain_lib_event`): the App-side half and the store effect the
+/// landing raises both apply, as the GUI tick's drain does. The event rides
+/// the lib channel exactly as the fetch worker sends it.
+fn land_through_gui(app: &mut App) {
+    let event = app
+        .recv_lib_event_within_for_test(Duration::from_secs(2))
+        .expect("the detail fetch completed");
+    stub_gui_state(|gui| app.handle_lib_event(event, Some(gui)));
+}
+
+/// A six-series report starts the loader's limit of detail fetches and no more
+/// (design D5): the fifth and sixth open rows wait for a landing, so their
+/// seasons arrive only once a slot frees.
+#[test]
+fn a_six_series_report_starts_exactly_four_detail_fetches() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    respond_with_empty_detail(&http, &SIX_OPEN_SERIES);
+    let mut app = tv_app(&http);
+
+    report_open_series(&mut app, &SIX_OPEN_SERIES);
+
+    assert!(app.series_detail_loading("series-1"));
+    assert!(app.series_detail_loading("series-2"));
+    assert!(app.series_detail_loading("series-3"));
+    assert!(app.series_detail_loading("series-4"));
+    assert!(
+        !app.series_detail_loading("series-5"),
+        "the fifth open row waits for a landing"
+    );
+    assert!(
+        !app.series_detail_loading("series-6"),
+        "the sixth open row waits for a landing"
+    );
+}
+
+/// One detail landing frees its slot and the loader starts the next open row
+/// (design D5): the report's order decides which row waits, and the landing
+/// reaches the loader through the GUI's own store seam.
+#[test]
+fn one_detail_landing_through_the_gui_drain_starts_the_fifth() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    respond_with_empty_detail(&http, &SIX_OPEN_SERIES);
+    let mut app = tv_app(&http);
+    report_open_series(&mut app, &SIX_OPEN_SERIES);
+
+    land_through_gui(&mut app);
+
+    assert!(
+        app.series_detail_loading("series-5"),
+        "the landing frees its slot for the next open row in report order"
+    );
+}
+
+/// A row the next report drops never starts, even after a landing frees a slot
+/// (spec "A row scrolled past"): the report, not the earlier one, decides what
+/// the loader starts, so the row that scrolled out of view loads nothing.
+#[test]
+fn a_series_dropped_from_the_report_before_its_fetch_starts_never_starts() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    respond_with_empty_detail(&http, &SIX_OPEN_SERIES);
+    let mut app = tv_app(&http);
+    report_open_series(&mut app, &SIX_OPEN_SERIES);
+
+    report_open_series(
+        &mut app,
+        &["series-1", "series-2", "series-3", "series-4", "series-6"],
+    );
+
+    assert!(
+        !app.series_detail_loading("series-5"),
+        "the row the newer report dropped starts nothing while the loader is full"
+    );
+
+    land_through_gui(&mut app);
+
+    assert!(
+        app.series_detail_loading("series-6"),
+        "the newer report's next row takes the freed slot"
+    );
+    assert!(
+        !app.series_detail_loading("series-5"),
+        "the dropped row never starts"
+    );
+}
+
+/// An open season whose series detail is cached and whose episodes are missing
+/// starts its episode fetch through the loader (design D5): the season needs no
+/// detail fetch first, and no pick precedes it.
+#[test]
+fn an_open_season_of_a_cached_series_starts_its_episode_fetch() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_when(
+        "ParentId=season-1",
+        200,
+        r#"{"Items":[],"TotalRecordCount":0}"#,
+    );
+    let mut app = tv_app(&http);
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    app.seed_series_detail_for_test(
+        "series-1",
+        SeriesDetail {
+            seasons: vec![season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsOpenInView {
+            lib_idx: 0,
+            series: Vec::new(),
+            seasons: vec![("series-1".to_string(), "season-1".to_string())],
+        },
+    );
+
+    assert!(
+        app.series_season_loading("series-1", "season-1"),
+        "the open season's episodes load without a pick"
+    );
+}
+
+/// A failed in-view detail load caches nothing and starts no retry until the
+/// next report (PR 1065 review, finding 1): the failure raises no
+/// `SeriesContentChanged` effect, so a sustained outage retries no open row
+/// without backoff, and the cache never holds the empty detail the pick path's
+/// first-load fallback would store. The next report's pump restarts the load.
+#[test]
+fn a_failed_in_view_detail_load_caches_nothing_and_waits_for_the_next_report() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_when("ParentId=series-1", 500, "Error");
+    let mut app = tv_app(&http);
+    report_open_series(&mut app, &["series-1"]);
+
+    land_through_gui(&mut app);
+
+    assert!(
+        app.series_detail_snapshot("series-1").is_none(),
+        "a failed in-view load stores no empty detail"
+    );
+    assert!(
+        !app.series_detail_loading("series-1"),
+        "the failed load frees its loader slot"
+    );
+    assert!(
+        app.try_recv_lib_event().is_none(),
+        "the failure starts no retry until the next report or landing"
+    );
+
+    report_open_series(&mut app, &["series-1"]);
+
+    assert!(
+        app.series_detail_loading("series-1"),
+        "the next report's pump restarts the failed load"
+    );
+}
+
+/// A failed New refetch keeps the landed rows (gui-list-header-buttons design
+/// D8): the store keeps the list it already held, so a refresh that fails
+/// never empties the painted rows. The Emby boundary is the mock transport and
+/// the result lands through the GUI's own client-event drain.
+#[test]
+fn a_failed_new_refetch_keeps_the_landed_rows() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = tv_app(&http);
+    let mut episode = make_item("Episode one", "Episode");
+    episode.id = "ep-old".into();
+    stub_gui_state(|gui| {
+        gui.shows_new
+            .insert(TV_ID.to_string(), GuiSectionRequest::Landed(vec![episode]));
+    });
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::ShowsSetView {
+            lib_idx: 0,
+            view: GuiShowsView::New,
+        },
+    );
+    http.fail(std::io::ErrorKind::ConnectionRefused);
+
+    stub_gui_state(|gui| {
+        crate::gui_core::gui_library::refetch_shows_new(&mut app, gui, TV_ID.to_string());
+    });
+    crate::gui_core::test_support::wait_for_client_event(&mut app);
+
+    assert_eq!(
+        crate::gui_core::test_support::gui_shows_projection(&mut app, 0)
+            .rows
+            .iter()
+            .map(|row| row.id.as_str())
+            .collect::<Vec<_>>(),
+        ["ep-old"],
+        "the failed refetch keeps the rows the store landed"
     );
 }

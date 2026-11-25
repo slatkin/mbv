@@ -31,6 +31,8 @@ use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
 
+mod reports;
+
 /// The context handles the root hands the test: the Library store and the
 /// layout epoch the re-measures read.
 type FixtureHandles = (LibraryState, LayoutEpoch);
@@ -225,25 +227,17 @@ impl Fixture {
             .expect("the scenario returned a value")
     }
 
-    /// The `RowsInView` reports the core link received, in send order.
-    fn reported_rows_in_view(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Library(
-                    command @ crate::gui_core::GuiLibraryCommand::RowsInView { .. },
-                ) => Some(command),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// The Library commands the core link received, in send order.
+    /// The Library commands the core link received, in send order, without the
+    /// two reports the window sends on its own: the row art set and the open
+    /// Shows nodes.
     fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
             .try_iter()
             .filter_map(|input| match input {
-                CoreInput::Library(crate::gui_core::GuiLibraryCommand::RowsInView { .. }) => None,
+                CoreInput::Library(
+                    crate::gui_core::GuiLibraryCommand::RowsInView { .. }
+                    | crate::gui_core::GuiLibraryCommand::ShowsOpenInView { .. },
+                ) => None,
                 CoreInput::Library(command) => Some(command),
                 _ => None,
             })
@@ -510,38 +504,6 @@ fn the_date_sorted_view_paints_no_rail() {
     );
 }
 
-/// Contract (gui-delineated-rows design D7): the list reports the rows it
-/// paints under the scope its visible view names, with the ids the core
-/// resolves — a series row's raw Emby id, and no row key the list itself adds —
-/// so the core queues their row art without a coordinate.
-#[rstest::rstest]
-#[case(crate::gui_core::GuiShowsView::All, crate::gui_core::GuiRowArtScope::ShowsSeries, &["s1", "s3"])]
-#[case(crate::gui_core::GuiShowsView::New, crate::gui_core::GuiRowArtScope::ShowsNew, &["new:e1"])]
-#[case(crate::gui_core::GuiShowsView::Upcoming, crate::gui_core::GuiRowArtScope::ShowsUpcoming, &["new:e1"])]
-fn the_list_reports_the_rows_in_view_under_the_views_scope(
-    #[case] view: crate::gui_core::GuiShowsView,
-    #[case] scope: crate::gui_core::GuiRowArtScope,
-    #[case] ids: &[&str],
-) {
-    let frame = GuiShowsList {
-        sort: None,
-        view,
-        rows: new_view_rows(),
-        ..shows_frame(tree())
-    };
-    let mut fixture = built(frame, shows_detail(None));
-    fixture.measure(300.0);
-
-    assert_eq!(
-        fixture.reported_rows_in_view().last(),
-        Some(&crate::gui_core::GuiLibraryCommand::RowsInView {
-            scope,
-            ids: ids.iter().map(|id| (*id).to_owned()).collect(),
-        }),
-        "the report names the scope and the ids the core resolves"
-    );
-}
-
 /// Contract (design D14, user override): the Shows header paints no selection
 /// label — the UI is not verbose.
 #[test]
@@ -738,5 +700,39 @@ fn a_press_sends_the_select_command_with_the_row_id() {
             row: "s3".to_owned(),
         }],
         "the select command names the row id"
+    );
+}
+
+/// Contract (gui-list-header-buttons design D1, spec "Shows New shows no tree
+/// buttons"; the requirement is which controls show): the All view's header
+/// paints Expand all and Collapse all, and the New view's header paints
+/// neither, because its list is flat.
+#[test]
+fn the_all_view_paints_the_tree_buttons_and_the_new_view_paints_neither() {
+    let mut all = built(shows_frame(tree()), shows_detail(None));
+    all.measure(300.0);
+    assert!(
+        all.presents("[data-library-expand-all]"),
+        "the All view's header paints Expand all"
+    );
+    assert!(
+        all.presents("[data-library-collapse-all]"),
+        "the All view's header paints Collapse all"
+    );
+
+    let new = GuiShowsList {
+        view: crate::gui_core::GuiShowsView::New,
+        rows: new_view_rows(),
+        ..shows_frame(Vec::new())
+    };
+    let mut new = built(new, shows_detail(None));
+    new.measure(300.0);
+    assert!(
+        !new.presents("[data-library-expand-all]"),
+        "the New view's header paints no Expand all"
+    );
+    assert!(
+        !new.presents("[data-library-collapse-all]"),
+        "the New view's header paints no Collapse all"
     );
 }

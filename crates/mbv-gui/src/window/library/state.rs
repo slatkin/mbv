@@ -354,6 +354,19 @@ impl LibraryState {
             .library(GuiLibraryCommand::RowsInView { scope, ids });
     }
 
+    /// Refresh the active destination (gui-list-header-buttons design D7): Home,
+    /// Shows, and the flat lettered lists name no album id, so the core's
+    /// per-destination dispatcher resolves the scope itself — Shows reloads the
+    /// children of the open rows its in-view report holds — and reloads the
+    /// destination's content in place. Music names them instead
+    /// ([`Self::refresh_music_list`]). The window keeps its pick, filter,
+    /// scroll, and open state (spec "A refresh of an open album in view").
+    pub fn refresh_library_list(&self) {
+        self.link.library(GuiLibraryCommand::Refresh {
+            album_ids: Vec::new(),
+        });
+    }
+
     /// Ask for a collection row of one destination `target` to be pressed
     /// (gui-collection-dropdown design D5): the dropdown's All row and
     /// checkbox rows capture the target alone, so a repaint clones no whole

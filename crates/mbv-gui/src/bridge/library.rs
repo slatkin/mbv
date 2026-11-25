@@ -84,6 +84,20 @@ pub enum GuiLibraryCommand {
     ShowsPlay { lib_idx: usize, item_id: String },
     /// Add a Shows episode to the queue (design D12).
     ShowsQueue { lib_idx: usize, item_id: String },
+    /// Report the open Shows rows the All view paints, in paint order
+    /// (gui-list-header-buttons design D5): the source id of each open series
+    /// row and the `(series_id, source_id)` pair of each open season row. The
+    /// core stores the report and starts the bounded in-view loads it misses.
+    ShowsOpenInView {
+        lib_idx: usize,
+        series: Vec<String>,
+        seasons: Vec<(String, String)>,
+    },
+    /// Refresh the active destination (gui-list-header-buttons design D7): the
+    /// destination's own content reloads in place, and a tree list also
+    /// reloads the children of its open rows in view. `album_ids` are the open
+    /// Music album rows the window paints in view.
+    Refresh { album_ids: Vec<String> },
     /// Select a plain Emby-library row (add-gui-library-panel design D12,
     /// row 8.1): the row the Hero shows. A row the active list no longer
     /// holds changes nothing.
@@ -228,6 +242,16 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
                 Self::ShowsQueue { lib_idx, item_id }
             }
+            GuiLibraryCommand::ShowsOpenInView {
+                lib_idx,
+                series,
+                seasons,
+            } => Self::ShowsOpenInView {
+                lib_idx,
+                series,
+                seasons,
+            },
+            GuiLibraryCommand::Refresh { album_ids } => Self::Refresh { album_ids },
             GuiLibraryCommand::EmbySelect { lib_idx, row } => Self::EmbySelect { lib_idx, row },
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },
             GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {

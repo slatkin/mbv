@@ -183,6 +183,12 @@ impl GuiCore {
     ) {
         enqueue_emby_item(&mut self.app, &self.gui, lib_idx, item_id);
     }
+
+    /// Refetch the feed-group library `lib_idx`'s items, keeping the rows it
+    /// paints (gui-list-header-buttons design D7a).
+    pub fn refresh_gui_feed_group(&mut self, lib_idx: usize) {
+        refresh_emby_feed_group(&mut self.app, &mut self.gui, lib_idx);
+    }
 }
 
 /// Whether `lib_idx` names a plain Emby library destination (row 8.1): every
@@ -336,8 +342,9 @@ pub(in crate::gui_core::gui_library) fn install_emby_feed_set(
 /// one fetch that runs, so the next target's fetch starts on a later frame once
 /// it clears: one fetch at a time, as the TUI's own selection fetch. The shared
 /// `FeedHomeVideoState::selection` is never written here, so the TUI keeps its
-/// own selection. The targets iterate the checked set's borrowed keys, and All
-/// is one cache probe, so the per-frame ensure clones nothing for the walk.
+/// own selection. A refresh's queued target comes first (design D7a): the
+/// press's targets are refetched even while the cache holds their lists, which
+/// the walk below skips.
 pub(in crate::gui_core::gui_library) fn ensure_emby_feed_fetch(
     app: &mut App,
     gui: &mut GuiClientState,
@@ -360,12 +367,50 @@ pub(in crate::gui_core::gui_library) fn ensure_emby_feed_fetch(
     if state.fetching.is_some() {
         return;
     }
+    // A refresh's queued target starts first, even while the cache holds its
+    // list (design D7a): the fetch starts through the shared spawn body, and
+    // the queue drops the target once it has started.
+    if let Some(target) = queued_feed_refresh_target(gui, lib_idx) {
+        if app.spawn_feed_home_video_fetch(lib_idx, target.clone()) {
+            gui.drop_feed_refresh_target(lib_idx, &target);
+        }
+        return;
+    }
+    let Some(target) = uncached_feed_target(app, gui, lib_idx) else {
+        return;
+    };
+    app.spawn_feed_home_video_fetch(lib_idx, target);
+}
+
+/// The next target `lib_idx`'s refresh queue names, borrowed from the queue's
+/// front (design D7a): the targets are taken in paint order, so the list the
+/// user sees refreshes first.
+fn queued_feed_refresh_target(
+    gui: &GuiClientState,
+    lib_idx: usize,
+) -> Option<FeedHomeVideoSelection> {
+    gui.emby_feed_refresh_targets
+        .get(&lib_idx)
+        .and_then(|queue| queue.first())
+        .cloned()
+}
+
+/// The first target — All, or the first checked folder — with no cache entry
+/// and no terminal failure mark (design D3). The targets iterate the checked
+/// set's borrowed keys, and All is one cache probe, so the per-frame ensure
+/// clones nothing for the walk.
+fn uncached_feed_target(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+) -> Option<FeedHomeVideoSelection> {
+    let state = app.emby_library_feed_home_video(lib_idx)?;
     // A failed target waits for a user press: the press clears its mark, so an
     // automatic repaint never retries it and no retry storm starts.
     let failed = |target: FeedHomeVideoTarget<'_>| {
         emby_feed_claim(gui, lib_idx).is_some_and(|claim| claim.is_failed(target))
     };
-    let next = match emby_feed_effective_set(app, gui, lib_idx).as_ref() {
+    match emby_feed_effective_set(app, gui, lib_idx).as_ref() {
         GuiCollectionSet::All => (state.items_for(FeedHomeVideoTarget::All).is_none()
             && !failed(FeedHomeVideoTarget::All))
         .then_some(FeedHomeVideoSelection::All),
@@ -378,11 +423,60 @@ pub(in crate::gui_core::gui_library) fn ensure_emby_feed_fetch(
                     && !failed(FeedHomeVideoTarget::Folder(key.as_str()))
             })
             .map(|key| FeedHomeVideoSelection::Folder(key.clone())),
-    };
-    let Some(target) = next else {
+    }
+}
+
+/// Refetch a feed-group library's items, keeping the rows it paints
+/// (gui-list-header-buttons design D7a): the queue takes the targets
+/// [`emby_feed_effective_set`] names — All, or each checked folder in paint
+/// order — and the library's failed claims clear, so the press retries a
+/// target that failed before. The selection step then starts the first
+/// queued target. `App::refresh_lib` is not called for this destination: its
+/// completion clears the shared `feed_home_video.items` map, which would
+/// blank the painted rows until the next fetch landed.
+pub(in crate::gui_core::gui_library) fn refresh_emby_feed_group(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+) {
+    if !app.is_feed_home_video_library(lib_idx) {
+        super::log_ignored_library_command(
+            "refresh",
+            format_args!("the destination is no feed-view library"),
+        );
         return;
+    }
+    let targets = match emby_feed_effective_set(app, gui, lib_idx).as_ref() {
+        GuiCollectionSet::All => vec![FeedHomeVideoSelection::All],
+        // The stored set keeps the folders' press order, while the pills paint
+        // in the root listing's own folder order (`GuiEmbyFeedCollectionSite`'s
+        // scopes, design D1), so the queue is sorted into the pills' order
+        // before it fills (design D7a). The effective set has dropped every
+        // checked key the listing no longer holds, so each key has a position;
+        // a key that somehow had none sorts last instead of panicking.
+        GuiCollectionSet::Checked(keys) => {
+            let folders = super::emby_projection::root_folder_names(app, lib_idx);
+            let mut keys: Vec<&String> = keys.iter().collect();
+            keys.sort_by_key(|key| {
+                folders
+                    .iter()
+                    .position(|(id, _name)| id == key)
+                    .unwrap_or(usize::MAX)
+            });
+            keys.into_iter()
+                .map(|key| FeedHomeVideoSelection::Folder(key.clone()))
+                .collect()
+        }
     };
-    app.spawn_feed_home_video_fetch(lib_idx, target);
+    gui.emby_feed_refresh_targets.insert(lib_idx, targets);
+    if let Some(claim) = gui
+        .emby_libs
+        .get_mut(&lib_idx)
+        .and_then(|selection| selection.feed_claim.as_mut())
+    {
+        claim.failed.clear();
+    }
+    ensure_emby_feed_fetch(app, gui, lib_idx);
 }
 
 /// The GUI's claim on `lib_idx`'s fetched results (design D2, D3): `None`
@@ -471,6 +565,56 @@ pub(crate) fn fetch_emby_root_items(app: &mut App, gui: &mut GuiClientState, lib
         gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Failed);
         return;
     };
+    let Some(listing) = emby_root_listing(app, lib_idx) else {
+        return;
+    };
+    gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Loading);
+    spawn_emby_root_items_fetch(app, client, lib_idx, listing);
+}
+
+/// Refetch `lib_idx`'s root list over the `App` the GUI core owns (design D8):
+/// with no loaded list the refetch clears the failed mark and takes the
+/// first-load path, and with a loaded list it keeps that list in place and
+/// starts the fetch, recording the library in the in-flight set so a second
+/// refetch while that fetch runs starts nothing. No Emby client starts nothing
+/// at all.
+pub(crate) fn refetch_emby_root_items(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
+    let Some(client) = app.emby_snapshot() else {
+        // The no-client condition is not a fetch failure (design D8): the
+        // refetch stores no mark and starts nothing.
+        return;
+    };
+    let loaded = matches!(
+        gui.emby_roots.get(&lib_idx),
+        Some(GuiEmbyRootItems::Loaded(_))
+    );
+    if !loaded {
+        clear_failed_emby_roots(gui, lib_idx);
+        fetch_emby_root_items(app, gui, lib_idx);
+        return;
+    }
+    let Some(listing) = emby_root_listing(app, lib_idx) else {
+        return;
+    };
+    if !gui.emby_roots_refreshing.insert(lib_idx) {
+        return;
+    }
+    spawn_emby_root_items_fetch(app, client, lib_idx, listing);
+}
+
+/// Clear `lib_idx`'s failed mark (design D8): a refetch of a store with no
+/// loaded list is the user's retry, so the first-load path starts the fetch
+/// again.
+fn clear_failed_emby_roots(gui: &mut GuiClientState, lib_idx: usize) {
+    if matches!(gui.emby_roots.get(&lib_idx), Some(GuiEmbyRootItems::Failed)) {
+        gui.emby_roots.remove(&lib_idx);
+    }
+}
+
+/// The root-list request `lib_idx` reads (row 8.1): the library level's item
+/// type filter and the library's own parent id, from the level fields the TUI
+/// root listing also reads.
+fn emby_root_listing(app: &App, lib_idx: usize) -> Option<(String, Option<String>)> {
     let (item_types, _unplayed_only, sort_by, sort_order) =
         app.default_library_level_fields(lib_idx);
     debug_assert_eq!(
@@ -479,17 +623,27 @@ pub(crate) fn fetch_emby_root_items(app: &mut App, gui: &mut GuiClientState, lib
         "the root-list store reads the name sort"
     );
     debug_assert_eq!(sort_order.as_str(), "Ascending");
-    let Some(parent_id) = app.emby_library_id(lib_idx).map(str::to_string) else {
-        return;
-    };
-    gui.emby_roots.insert(lib_idx, GuiEmbyRootItems::Loading);
+    app.emby_library_id(lib_idx)
+        .map(|parent_id| (parent_id.to_string(), item_types))
+}
+
+/// Start `lib_idx`'s root-list fetch worker (row 8.1, design D8): the one
+/// spawn body the first load and the refetch share, so both send the same
+/// result event, whose landing replaces the store's value or reports a failed
+/// refresh.
+fn spawn_emby_root_items_fetch(
+    app: &App,
+    client: mbv_emby::EmbyClient,
+    lib_idx: usize,
+    listing: (String, Option<String>),
+) {
+    let (parent_id, item_types) = listing;
     let tx = app.library_fetch_event_sender();
     std::thread::spawn(move || {
         let result = super::store::fetch_all_pages(&client, &parent_id, item_types.as_deref());
         tx.send(LibraryFetchEvent::EmbyRootItems { lib_idx, result });
     });
 }
-
 /// Play the plain Emby-library row a command names (design D12, row 8.1): the
 /// shared library play path, whose folder-play rule expands a folder or a
 /// boxset into its playable content and whose admission and route checks are

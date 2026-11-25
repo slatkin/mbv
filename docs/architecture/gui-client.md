@@ -1040,8 +1040,17 @@ holds the shell beside the letter rail. Each list keeps its own row model, its
 header facts, its notice texts, and its row painter, so the scaffold shares the
 wiring, not the list (`gui-tech-debt-simplification` design D14). Each list
 paints its own header: `LibraryListHeader` paints the heading line — the
-destination's Service mark, or Home's text title alone, the dropdown where
-one applies, and the sort control where one applies — on that line. Music,
+destination's Service mark, or Home's text title alone, and one trailing
+control group — on that line (gui-list-header-buttons design D1). The group
+holds, in order, the refresh icon button, then the Expand all and Collapse
+all buttons while the list passes tree actions (Music always; Shows in its
+All view), then the dropdown or selection label where one applies, then the
+sort control where one applies; the three buttons share one 28 px
+icon-button part with a per-instance label, and the Playlists screen's
+refresh paints the same part (design D2). A press on Expand all opens every
+painted top-level parent row — every artist in Music, every series in
+Shows — and Collapse all closes every open parent row; both change only the
+window's open-node state and send no command (design D4). Music,
 Podcasts, Feeds, and an Emby feed-group library paint
 `LibraryCollectionDropdown` with the collection frame; Shows paints its
 single-choice view dropdown over the same prop-driven presentation (no
@@ -1228,6 +1237,19 @@ longer carries falls back to that first node. The `hero` is present exactly
 while a series is selected; the driver's Shows steps run in order — the root
 load, then the default series' detail, then the selected season's episodes —
 so the Workspace paints without a season press.
+
+The All view drives one bounded in-view loader over the painted window
+(gui-list-header-buttons design D5): the list reports the open nodes in its
+window through the `ShowsOpenInView` command, and the GUI core's loader
+keeps at most four loads in flight — an open series whose detail is not
+cached starts the quiet series-detail fetch, and an open season whose
+series detail is cached and whose episodes are not starts the
+season-episodes fetch. A row that scrolls out of the window drops out of
+the report, so its load never starts; the New and Upcoming views report
+nothing, so a view change stops the loader. The quiet mark is core-owned
+(design D6): a loader-started series-detail fetch skips the first-season
+episode fetch that a detail landing normally starts, and a pick of that
+series removes the mark and still loads the first season.
 
 That hero carries the TUI series producer's facts —
 `hero_content_series_with_episode`'s genre, year range (else the release

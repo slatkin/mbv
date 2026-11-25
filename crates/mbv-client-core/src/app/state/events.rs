@@ -197,6 +197,11 @@ pub enum MusicEvent {
         album_id: String,
         tracks: Vec<EmbyItem>,
     },
+    /// A refresh of an album's track list failed (design D9). The landing
+    /// keeps the cached list, frees the album's loading mark, and flashes, so
+    /// the view keeps painting the tracks it already had. A failure is never
+    /// cached.
+    AlbumTracksRefreshFailed { album_id: String },
     /// Completion of the typed `ArtistItems`-ID Audio query (design D7,
     /// task 6.1). The destination, Service setup generation, and settled
     /// revision all ride the completion so the shell can reject a response
@@ -235,6 +240,30 @@ pub enum SeriesEvent {
         series_id: String,
         season_id: String,
         episodes: Vec<EmbyItem>,
+    },
+    /// A stale detail's refetch failed (gui-list-header-buttons design D9):
+    /// the cache keeps the detail it holds, and the loading, quiet, and stale
+    /// marks retire so a later landing may retry.
+    DetailRefreshFailed { series_id: String },
+    /// A quiet in-view detail load failed (PR 1065 review, finding 1): the
+    /// cache stores nothing, so the view never holds a poisoned empty detail,
+    /// and the marks retire so a later report or landing starts the load
+    /// again. The pick path's first-load failure keeps its empty fallback.
+    DetailLoadFailed { series_id: String },
+    /// A stale season's episode refetch failed (gui-list-header-buttons design
+    /// D9): the cache keeps the episodes it holds, and the loading and stale
+    /// marks retire.
+    SeasonEpisodesRefreshFailed {
+        series_id: String,
+        season_id: String,
+    },
+    /// The in-view loader's first episode fetch failed (PR 1065 review,
+    /// finding 1): the cache stores no empty episode list, and the loading
+    /// marks retire so a later report or landing starts the load again. The
+    /// pick path's first-load failure keeps its empty fallback.
+    SeasonEpisodesLoadFailed {
+        series_id: String,
+        season_id: String,
     },
 }
 

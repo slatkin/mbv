@@ -61,7 +61,7 @@ impl App {
                 None => self.handle_browse_event(event, None),
             },
             LibEvent::Music(event) => self.handle_music_event(event, stores),
-            LibEvent::Series(event) => self.handle_series_event(event),
+            LibEvent::Series(event) => self.handle_series_event(event, stores),
             LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
             // A feed-group target's failed fetch (gui-collection-dropdown
@@ -124,6 +124,9 @@ impl App {
             MusicEvent::AlbumTracksFetched { album_id, tracks } => {
                 self.handle_album_tracks_fetched(album_id, tracks);
             }
+            MusicEvent::AlbumTracksRefreshFailed { album_id } => {
+                self.handle_album_tracks_refresh_failed(&album_id);
+            }
             MusicEvent::ArtistTracksFetched {
                 destination,
                 generation,
@@ -158,21 +161,81 @@ impl App {
         }
     }
 
-    fn handle_series_event(&mut self, ev: SeriesEvent) {
+    /// The series cache's own arms. Each landing changes the cache, so each
+    /// arm raises [`ClientLibraryEffect::SeriesContentChanged`] for a Client
+    /// whose in-view loader waits on a landing: the core holds no GUI state,
+    /// so the effect is how the next load starts there. The handler names no
+    /// Client type.
+    fn handle_series_event(
+        &mut self,
+        ev: SeriesEvent,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) {
         match ev {
             SeriesEvent::DetailFetched {
                 series_id,
                 seasons,
                 episodes,
-            } => self.handle_series_detail_fetched(
-                &series_id,
-                mbv_ui_model::browse::SeriesDetail { seasons, episodes },
-            ),
+            } => {
+                self.handle_series_detail_fetched(
+                    &series_id,
+                    mbv_ui_model::browse::SeriesDetail { seasons, episodes },
+                );
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
             SeriesEvent::SeasonEpisodesFetched {
                 series_id,
                 season_id,
                 episodes,
-            } => self.handle_series_season_episodes_fetched(&series_id, season_id, episodes),
+            } => {
+                self.handle_series_season_episodes_fetched(&series_id, season_id, episodes);
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
+            // A failed refresh frees its loader slot and keeps the cached
+            // detail, so the pump runs as it does for a landing (design D9).
+            SeriesEvent::DetailRefreshFailed { series_id } => {
+                self.handle_series_detail_refresh_failed(&series_id);
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
+            SeriesEvent::SeasonEpisodesRefreshFailed {
+                series_id,
+                season_id,
+            } => {
+                self.handle_series_season_refresh_failed(&series_id, &season_id);
+                Self::apply_library_effects(
+                    self,
+                    stores,
+                    &[ClientLibraryEffect::SeriesContentChanged],
+                );
+            }
+            // A failed first-load fetch caches nothing (PR 1065 review, finding
+            // 1): the marks retire so a later report or landing starts the load
+            // again. No effect here: the pump would restart the failed load at
+            // once, and a sustained outage would retry it without backoff; the
+            // next report or landing runs the pump, which also frees the
+            // loader's slot. No toast: an in-view load is not an action the
+            // user took.
+            SeriesEvent::DetailLoadFailed { series_id } => {
+                self.handle_series_detail_load_failed(&series_id);
+            }
+            SeriesEvent::SeasonEpisodesLoadFailed {
+                series_id,
+                season_id,
+            } => {
+                self.handle_series_season_load_failed(&series_id, &season_id);
+            }
         }
     }
 
@@ -304,6 +367,14 @@ impl App {
         if fallback_completed {
             self.drain_artist_album_track_fetches();
         }
+    }
+
+    /// A failed track-list refresh (design D9): the cached tracks stay, the
+    /// album's loading mark frees so a later refresh may start, and the
+    /// failure shows one toast.
+    fn handle_album_tracks_refresh_failed(&mut self, album_id: &str) {
+        self.album_tracks_loading.remove(album_id);
+        self.flash("Refresh failed".to_string(), ToastSeverity::Error);
     }
 
     fn handle_playlists_loaded(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {

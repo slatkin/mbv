@@ -22,6 +22,7 @@ use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::library::list::{LibraryRow, album_row_id, artist_row_id};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
@@ -143,6 +144,32 @@ fn artist(id: &str, index: usize) -> GuiMusicArtistFrame {
         sort_letter: 'A',
         albums: Vec::new(),
     }
+}
+
+/// The artist helper's row over `albums`, so a tree test's artist paints its
+/// albums.
+fn artist_holding(id: &str, index: usize, albums: Vec<GuiMusicAlbumFrame>) -> GuiMusicArtistFrame {
+    GuiMusicArtistFrame {
+        albums,
+        ..artist(id, index)
+    }
+}
+
+/// The open mark of every painted artist and album row, in paint order, as
+/// `id=true` or `id=false`: the Music tree's state in one fact.
+fn node_marks(state: &LibraryState) -> String {
+    let ui = state.ui.peek().clone();
+    let rows = state.rows_of(&ui);
+    let marks: Vec<String> = rows
+        .iter()
+        .filter_map(|row| match row {
+            LibraryRow::Artist { base, open, .. } | LibraryRow::Album { base, open, .. } => {
+                Some(format!("{}={open}", base.id))
+            }
+            LibraryRow::Letter(_) | LibraryRow::Track { .. } => None,
+        })
+        .collect();
+    marks.join(" ")
 }
 
 /// One album with its cached tracklist.
@@ -288,4 +315,142 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
     assert_eq!(facts, ["top=1214 viewport=40"]);
     // The album's tracks are cached, so the reveal sends no open-album.
     assert_eq!(commands(&rx), []);
+}
+
+/// gui-list-header-buttons design D4, spec "Expand all in Music": Expand all
+/// opens every painted artist row, leaves every album's open state as it was,
+/// and sends no command.
+#[test]
+fn expand_all_opens_every_painted_artist_and_leaves_the_albums_as_they_were() {
+    let artists = vec![
+        artist_holding(
+            "a0",
+            0,
+            vec![
+                album("al0", "One For All", "1990", Some(Vec::new())),
+                album("al1", "Blues", "1991", Some(Vec::new())),
+            ],
+        ),
+        artist_holding(
+            "a1",
+            1,
+            vec![album("al2", "Dah Shinin'", "1995", Some(Vec::new()))],
+        ),
+        artist("a2", 2),
+    ];
+    let expected = [
+        format!("{}=true", artist_row_id(&artists[0])),
+        format!("{}=true", album_row_id("al0")),
+        format!("{}=false", album_row_id("al1")),
+        format!("{}=true", artist_row_id(&artists[1])),
+        format!("{}=false", album_row_id("al2")),
+        format!("{}=true", artist_row_id(&artists[2])),
+    ]
+    .join(" ");
+    let list = music_list(artists);
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, Some(list.clone()), Some(music_detail(None)));
+        // The fixture's one open album, so the press shows it staying open.
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.open_nodes.push(album_row_id("al0")));
+        state.expand_all_music();
+        facts.lock().expect("facts").push(node_marks(state));
+    });
+    assert_eq!(facts, [expected]);
+    assert_eq!(commands(&rx), []);
+}
+
+/// gui-list-header-buttons design D4, spec "Expand all under a filter": the
+/// artist the filter kept opens and leaves the filter's closed set, so it
+/// still paints open once the filter clears.
+#[test]
+fn expand_all_under_a_filter_opens_the_closed_artist_the_filter_kept() {
+    let artists = vec![
+        artist_holding(
+            "a0",
+            0,
+            vec![album("al0", "One For All", "1990", Some(Vec::new()))],
+        ),
+        artist_holding(
+            "a1",
+            1,
+            vec![album("al1", "Blues", "1991", Some(Vec::new()))],
+        ),
+    ];
+    let a0 = artist_row_id(&artists[0]);
+    let cleared = [
+        format!("{a0}=true"),
+        format!("{}=false", album_row_id("al0")),
+        format!("{}=false", artist_row_id(&artists[1])),
+    ]
+    .join(" ");
+    let list = music_list(artists);
+    let closed_artist = a0.clone();
+    let (facts, _rx) = run(move |state, facts| {
+        carry(state, Some(list.clone()), Some(music_detail(None)));
+        state.set_library_filter("One".to_owned());
+        // The user closes the artist the filter opened.
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.filter_closed.push(closed_artist.clone()));
+        state.expand_all_music();
+        let (open, closed) = {
+            let ui = state.ui.peek();
+            (
+                ui.open_nodes.contains(&closed_artist),
+                ui.filter_closed.contains(&closed_artist),
+            )
+        };
+        facts
+            .lock()
+            .expect("facts")
+            .push(format!("open={open} closed={closed}"));
+        state.set_library_filter(String::new());
+        facts.lock().expect("facts").push(node_marks(state));
+    });
+    assert_eq!(facts, [String::from("open=true closed=false"), cleared]);
+}
+
+/// gui-list-header-buttons design D4, spec "Collapse all under a filter": the
+/// press closes the artist the filter opened, clears the open nodes, and leaves
+/// the filter text in place.
+#[test]
+fn collapse_all_under_a_filter_closes_the_filter_opened_artist_and_clears_the_open_nodes() {
+    let artists = vec![
+        artist_holding(
+            "a0",
+            0,
+            vec![album("al0", "One For All", "1990", Some(Vec::new()))],
+        ),
+        artist_holding(
+            "a1",
+            1,
+            vec![album("al1", "Blues", "1991", Some(Vec::new()))],
+        ),
+    ];
+    let a0 = artist_row_id(&artists[0]);
+    let list = music_list(artists);
+    let closed_artist = a0.clone();
+    let (facts, _rx) = run(move |state, facts| {
+        carry(state, Some(list.clone()), Some(music_detail(None)));
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.open_nodes.push(album_row_id("al0")));
+        state.set_library_filter("One".to_owned());
+        state.collapse_all_music();
+        let marks = node_marks(state);
+        let (open_empty, in_closed, filter) = {
+            let ui = state.ui.peek();
+            (
+                ui.open_nodes.is_empty(),
+                ui.filter_closed.contains(&closed_artist),
+                ui.filter.clone(),
+            )
+        };
+        facts.lock().expect("facts").push(format!(
+            "{marks} open_empty={open_empty} closed={in_closed} filter={filter}"
+        ));
+    });
+    assert_eq!(
+        facts,
+        [format!("{a0}=false open_empty=true closed=true filter=One")]
+    );
 }

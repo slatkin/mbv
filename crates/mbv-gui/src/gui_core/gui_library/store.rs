@@ -185,6 +185,67 @@ pub(crate) fn fetch_group_albums(
         .entry(lib_idx)
         .or_default()
         .insert(group_id.clone(), GuiGroupAlbums::Loading);
+    spawn_group_albums_fetch(app, client, lib_idx, group_id);
+}
+
+/// Refetch `group_id`'s album list over the `App` the GUI core owns (design
+/// D8): with no loaded list the refetch clears the group's failed mark and
+/// takes the first-load path, and with a loaded list it keeps that list in
+/// place and starts the fetch, recording the group in the in-flight set so a
+/// second refetch while that fetch runs starts nothing. No Emby client starts
+/// nothing at all.
+pub(crate) fn refetch_group_albums(
+    app: &mut App,
+    gui: &mut GuiClientState,
+    lib_idx: usize,
+    group_id: String,
+) {
+    let Some(client) = app.emby_snapshot() else {
+        // The no-client condition is not a fetch failure (design D5, D8): the
+        // refetch stores no mark and starts nothing.
+        return;
+    };
+    let loaded = matches!(
+        gui.music_albums
+            .get(&lib_idx)
+            .and_then(|groups| groups.get(&group_id)),
+        Some(GuiGroupAlbums::Loaded(_))
+    );
+    if !loaded {
+        clear_failed_group_albums(gui, lib_idx, &group_id);
+        fetch_group_albums(app, gui, lib_idx, group_id);
+        return;
+    }
+    if !gui
+        .music_albums_refreshing
+        .insert((lib_idx, group_id.clone()))
+    {
+        return;
+    }
+    spawn_group_albums_fetch(app, client, lib_idx, group_id);
+}
+
+/// Clear one group's failed mark (design D8): a refetch of a store with no
+/// loaded list is the user's retry, so the first-load path starts the group
+/// again.
+fn clear_failed_group_albums(gui: &mut GuiClientState, lib_idx: usize, group_id: &str) {
+    let Some(groups) = gui.music_albums.get_mut(&lib_idx) else {
+        return;
+    };
+    if matches!(groups.get(group_id), Some(GuiGroupAlbums::Failed)) {
+        groups.remove(group_id);
+    }
+}
+
+/// Start `group_id`'s album fetch worker (design D5, D8): the one spawn body
+/// the first load and the refetch share, so both send the same result event,
+/// whose landing replaces the store's value or reports a failed refresh.
+fn spawn_group_albums_fetch(
+    app: &App,
+    client: mbv_emby::EmbyClient,
+    lib_idx: usize,
+    group_id: String,
+) {
     let tx = app.library_fetch_event_sender();
     std::thread::spawn(move || {
         let result = fetch_all_pages(&client, &group_id, None);

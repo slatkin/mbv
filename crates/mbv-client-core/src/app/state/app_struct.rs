@@ -569,7 +569,26 @@ pub struct App {
     /// oldest entry.
     pub(in crate::app) series_detail_cache: IndexMap<String, SeriesDetail>,
     pub(in crate::app) series_detail_loading: std::collections::HashSet<String>,
+    /// Series whose own detail fetch runs, as distinct from the loading mark its
+    /// season fetches also hold (unit 7 review, finding P1): a season landing
+    /// keeps the derived mark while its series' detail fetch is in flight, and a
+    /// stale detail waits for a running season fetch. Only the detail landing and
+    /// the detail failure arm clear an id here.
+    pub(in crate::app) series_detail_fetches_in_flight: std::collections::HashSet<String>,
+    /// Series ids whose running detail fetch is a quiet in-view load (design
+    /// D6): its landing caches the detail but starts no first-season episode
+    /// fetch. A plain `fetch_series_detail` for the same id drops the mark.
+    pub(in crate::app) series_detail_quiet: std::collections::HashSet<String>,
+    /// Cached series whose detail an in-view refresh asked to reload (design
+    /// D9): the landing replaces the cached detail instead of the first-wins
+    /// rule, and a failed refetch clears the mark so the failure never retries
+    /// on each landing.
+    pub(in crate::app) series_detail_stale: std::collections::HashSet<String>,
     pub(in crate::app) series_season_loading: std::collections::HashSet<(String, String)>,
+    /// Cached seasons whose episodes an in-view refresh asked to reload (design
+    /// D9): the landing replaces the cached episodes, and a failed refetch
+    /// clears the mark.
+    pub(in crate::app) series_season_stale: std::collections::HashSet<(String, String)>,
     /// Season expansions received before their show's detail has arrived.
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,

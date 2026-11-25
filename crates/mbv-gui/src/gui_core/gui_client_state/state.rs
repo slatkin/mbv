@@ -17,7 +17,8 @@ use crate::gui_core::gui_library::emby_feed_wants_target_in_set;
 use crate::gui_core::gui_library::{
     GuiAudiobooksSelection, GuiCollectionSelection, GuiCollections, GuiEmbyLibrarySelection,
     GuiEmbyRootItems, GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiListSort,
-    GuiPodcastsSelection, GuiSearchStore, GuiSectionRequest, GuiShowsView, GuiTvShowsSelection,
+    GuiPodcastsSelection, GuiSearchStore, GuiSectionRequest, GuiShowsOpenInView, GuiShowsView,
+    GuiTvShowsSelection,
 };
 use crate::gui_core::gui_settings::GuiSettingsState;
 use mbv_client_core::App;
@@ -57,6 +58,11 @@ pub struct GuiClientState {
     /// key.
     pub(crate) music_albums:
         std::collections::HashMap<usize, std::collections::HashMap<String, GuiGroupAlbums>>,
+    /// The groups whose refetch is in flight (gui-list-header-buttons design
+    /// D8), by library index and group key: a refetch of a loaded group keeps
+    /// its albums in place because of this mark, and a second refetch of the
+    /// same group starts nothing.
+    pub(crate) music_albums_refreshing: std::collections::HashSet<(usize, String)>,
     /// The chosen collection-group key, by library index and group key.
     pub(crate) library_picks: std::collections::HashMap<(usize, String), String>,
     /// The chosen Music union-group key, by library index.
@@ -72,9 +78,23 @@ pub struct GuiClientState {
     pub(crate) shows_flat_selection: Option<String>,
     /// The Shows surface's view, by library index.
     pub(crate) shows_views: std::collections::HashMap<usize, GuiShowsView>,
+    /// The open Shows rows the list last reported in view (gui-list-header-
+    /// buttons design D5): the loader's report. Each report replaces the last,
+    /// so a row that left the view leaves the report with it.
+    pub(crate) shows_open_in_view: Option<GuiShowsOpenInView>,
+    /// The series detail loads the Shows in-view loader started.
+    pub(crate) shows_open_series_loads: std::collections::HashSet<String>,
+    /// The season episode loads the Shows in-view loader started, by series and
+    /// season id.
+    pub(crate) shows_open_season_loads: std::collections::HashSet<(String, String)>,
     /// Shows section fetches, by library index and section id.
     pub(crate) shows_new:
         std::collections::HashMap<String, GuiSectionRequest<mbv_emby_model::EmbyItem>>,
+    /// The Shows libraries whose New refetch is in flight (gui-list-header-
+    /// buttons design D8), by library id: a refetch of a landed New list keeps
+    /// its rows in place because of this mark, and a second refetch of the same
+    /// library starts nothing.
+    pub(crate) shows_new_refreshing: std::collections::HashSet<String>,
     /// The TV surface's selection, by library index.
     pub(crate) tv_shows: std::collections::HashMap<usize, GuiTvShowsSelection>,
     /// The Emby library selection, by library index. Distinct from
@@ -82,8 +102,21 @@ pub struct GuiClientState {
     pub(crate) emby_libs: std::collections::HashMap<usize, GuiEmbyLibrarySelection>,
     /// The Emby collection selection, by library index.
     pub(crate) emby_feed_sets: std::collections::HashMap<usize, GuiCollectionSelection>,
+    /// The feed-group targets one library's refresh wants, in paint order
+    /// (gui-list-header-buttons design D7a): the queue the selection step
+    /// takes its next fetch from, so a refresh refetches the targets the
+    /// destination paints instead of clearing the shared cache. A target
+    /// leaves the queue when its fetch starts, and on its landing or its
+    /// failure.
+    pub(crate) emby_feed_refresh_targets:
+        std::collections::HashMap<usize, Vec<FeedHomeVideoSelection>>,
     /// The Emby library's root items, by library index.
     pub(crate) emby_roots: std::collections::HashMap<usize, GuiEmbyRootItems>,
+    /// The libraries whose root-list refetch is in flight (gui-list-header-
+    /// buttons design D8), by library index: a refetch of a loaded list keeps
+    /// it in place because of this mark, and a second refetch of the same
+    /// library starts nothing.
+    pub(crate) emby_roots_refreshing: std::collections::HashSet<usize>,
     /// The Audiobookshelf library selection, by library index.
     pub(crate) abs_libs: std::collections::HashMap<usize, GuiAudiobooksSelection>,
     /// The podcast library selection, by library index.
@@ -146,6 +179,7 @@ impl GuiClientState {
             player_auto_hide,
             library_groups: std::collections::HashMap::new(),
             music_albums: std::collections::HashMap::new(),
+            music_albums_refreshing: std::collections::HashSet::new(),
             library_picks: std::collections::HashMap::new(),
             music_union_picks: std::collections::HashMap::new(),
             library_row_menu_target: None,
@@ -153,11 +187,17 @@ impl GuiClientState {
             home_selection: None,
             shows_flat_selection: None,
             shows_views: std::collections::HashMap::new(),
+            shows_open_in_view: None,
+            shows_open_series_loads: std::collections::HashSet::new(),
+            shows_open_season_loads: std::collections::HashSet::new(),
             shows_new: std::collections::HashMap::new(),
+            shows_new_refreshing: std::collections::HashSet::new(),
             tv_shows: std::collections::HashMap::new(),
             emby_libs: std::collections::HashMap::new(),
             emby_feed_sets: std::collections::HashMap::new(),
+            emby_feed_refresh_targets: std::collections::HashMap::new(),
             emby_roots: std::collections::HashMap::new(),
+            emby_roots_refreshing: std::collections::HashSet::new(),
             abs_libs: std::collections::HashMap::new(),
             podcast_libs: std::collections::HashMap::new(),
             feeds_selection: GuiFeedsSelection::default(),
@@ -210,9 +250,16 @@ impl GuiClientState {
             ClientLibraryEffect::RowArtSourcesChanged => {
                 crate::gui_core::gui_library::queue_in_view_row_fetches(app, self);
             }
+            // A series content load landed or failed, so the series cache
+            // changed: the Shows in-view loader starts the next open row it
+            // still misses (design D5).
+            ClientLibraryEffect::SeriesContentChanged => {
+                crate::gui_core::gui_library::shows_open_loads::pump_shows_open_loads(app, self);
+            }
             // A landed target retires its terminal failure mark, so a later
             // cache miss can fetch it again.
             ClientLibraryEffect::FeedTargetLanded { lib_idx, selection } => {
+                self.drop_feed_refresh_target(lib_idx, &selection);
                 if let Some(claim) = self
                     .emby_libs
                     .get_mut(&lib_idx)
@@ -224,6 +271,7 @@ impl GuiClientState {
             // A failed target records the mark, so the shown pass skips it
             // until a user press clears it and no repaint retries it.
             ClientLibraryEffect::FeedTargetFailed { lib_idx, selection } => {
+                self.drop_feed_refresh_target(lib_idx, &selection);
                 if let Some(claim) = self
                     .emby_libs
                     .get_mut(&lib_idx)
@@ -232,6 +280,24 @@ impl GuiClientState {
                     claim.failed.insert(selection);
                 }
             }
+        }
+    }
+
+    /// Drop `selection` from `lib_idx`'s feed-group refresh queue (design
+    /// D7a): a target's landing, its failure, or the start of its fetch ends
+    /// the refresh's interest in it, so the queue never refetches what already
+    /// arrived or is already running. An emptied queue leaves no entry behind.
+    pub(crate) fn drop_feed_refresh_target(
+        &mut self,
+        lib_idx: usize,
+        selection: &FeedHomeVideoSelection,
+    ) {
+        let Some(queue) = self.emby_feed_refresh_targets.get_mut(&lib_idx) else {
+            return;
+        };
+        queue.retain(|queued| queued != selection);
+        if queue.is_empty() {
+            self.emby_feed_refresh_targets.remove(&lib_idx);
         }
     }
 }

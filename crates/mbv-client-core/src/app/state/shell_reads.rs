@@ -86,6 +86,19 @@ impl App {
         &self.series_detail_loading
     }
 
+    /// Whether the library's TV Upcoming snapshot fetch is in flight
+    /// (gui-list-header-buttons design D9): the mark a refetch sets and a
+    /// snapshot's completion or failure clears. A test observes the refetch's
+    /// arm through it; the fetch itself is the production path under test.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn tv_upcoming_fetch_in_flight_for_test(&self, library_id: &str) -> bool {
+        matches!(
+            self.tv_upcoming_fetches.get(library_id),
+            Some(crate::app::state::app_struct::TvUpcomingFetchState::InFlight)
+        )
+    }
+
     /// The seasons whose episode fetch is in flight, as `(series id, season
     /// id)`.
     #[cfg(any(test, feature = "test"))]

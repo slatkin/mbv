@@ -108,6 +108,21 @@ impl App {
             .contains(&(series_id.to_string(), season_id.to_string()))
     }
 
+    /// Whether the cached detail of `series_id` waits for an in-view refresh to
+    /// replace it (design D9).
+    #[must_use]
+    pub fn series_detail_stale(&self, series_id: &str) -> bool {
+        self.series_detail_stale.contains(series_id)
+    }
+
+    /// Whether the cached episode list of `series_id`'s season `season_id` waits
+    /// for an in-view refresh to replace it (design D9).
+    #[must_use]
+    pub fn series_season_stale(&self, series_id: &str, season_id: &str) -> bool {
+        self.series_season_stale
+            .contains(&(series_id.to_string(), season_id.to_string()))
+    }
+
     /// The cached series detail's season or episode with `item_id`: the item a
     /// Shows tree row names, from whichever cached detail holds it.
     #[must_use]

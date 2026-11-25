@@ -12,7 +12,8 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::library::list::{
     LibraryRow, LibraryTree, ListMove, MusicRowsFacts, album_row_id, artist_row_id,
-    build_library_rows, jump_to_letter, letter_rail, scroll_step, scroll_top_to_show_cursor,
+    build_library_rows, jump_to_letter, letter_rail, list_window, scroll_step,
+    scroll_top_to_show_cursor,
 };
 use crate::window::library::parts::library_music_list;
 use crate::window::library::scroll::set_scroll_top;
@@ -274,6 +275,87 @@ impl LibraryState {
             }
             LibraryRow::Letter(_) | LibraryRow::Track { .. } => {}
         }
+    }
+
+    /// Open every painted artist row (gui-list-header-buttons design D4, spec
+    /// "Expand all opens every top-level parent row the list shows"): the
+    /// album rows' open state stays as it was, so the press opens no album. The
+    /// ids also leave the filter's closed set, so the artists stay open after
+    /// the filter clears. The press sends no command and picks nothing.
+    pub fn expand_all_music(&self) {
+        let ui = self.ui.peek().clone();
+        let rows = self.rows_of(&ui);
+        let artists: Vec<String> = rows
+            .iter()
+            .filter_map(|row| match row {
+                LibraryRow::Artist { base, .. } => Some(base.id.clone()),
+                LibraryRow::Letter(_) | LibraryRow::Album { .. } | LibraryRow::Track { .. } => None,
+            })
+            .collect();
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            for id in &artists {
+                with_id(&mut ui.open_nodes, id, true);
+                with_id(&mut ui.filter_closed, id, false);
+            }
+        });
+    }
+
+    /// Close every open parent row (gui-list-header-buttons design D4, spec
+    /// "Collapse all closes every open parent row"): every artist and album
+    /// row. While the filter narrows the rows, the painted parent rows also
+    /// enter the filter's closed set, so the rows the filter opened stay shut
+    /// after it clears. The press sends no command and picks nothing.
+    pub fn collapse_all_music(&self) {
+        let ui = self.ui.peek().clone();
+        let rows = self.rows_of(&ui);
+        let narrowing = !ui.filter.trim().is_empty();
+        let parents: Vec<String> = rows
+            .iter()
+            .filter_map(|row| match row {
+                LibraryRow::Artist { base, .. } | LibraryRow::Album { base, .. } => {
+                    Some(base.id.clone())
+                }
+                LibraryRow::Letter(_) | LibraryRow::Track { .. } => None,
+            })
+            .collect();
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            ui.open_nodes.clear();
+            if narrowing {
+                for id in &parents {
+                    with_id(&mut ui.filter_closed, id, true);
+                }
+            }
+        });
+    }
+
+    /// Refresh the Music destination (gui-list-header-buttons design D7): the
+    /// tree refresh reloads the children of the open parent rows in view, so
+    /// the command names the album ids of the open album rows the painted
+    /// window holds (spec "A refresh of an open album in view"). An open album
+    /// scrolled out of the window names nothing (spec "An open album out of
+    /// view"). The window keeps its pick, filter, scroll, and open state.
+    pub fn refresh_music_list(&self) {
+        let ui = self.ui.peek().clone();
+        let rows = self.rows_of(&ui);
+        let view = *self.music_scroll.peek();
+        let window = list_window(&rows, view.scroll_top, view.viewport_height);
+        let album_ids: Vec<String> = rows[window.start..window.end]
+            .iter()
+            .filter_map(|row| match row {
+                LibraryRow::Album {
+                    album_id,
+                    open: true,
+                    ..
+                } => Some(album_id.clone()),
+                LibraryRow::Letter(_)
+                | LibraryRow::Artist { .. }
+                | LibraryRow::Album { .. }
+                | LibraryRow::Track { .. } => None,
+            })
+            .collect();
+        self.link.library(GuiLibraryCommand::Refresh { album_ids });
     }
 
     /// Scroll the list by one movement key (design D6): Up and Down move by the
