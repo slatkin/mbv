@@ -1,6 +1,6 @@
 ## mbv
 
-`mbv` is a media player: a Rust native window (Dioxus Native/Blitz) that shows your Emby / Audiobookshelf / RSS-feed libraries and plays and syncs them through mpv in a child process. `mbv-tui` is the same thing as a terminal UI. It runs as one background process per user (the "Owner") that holds the player and the queue; every window, GUI or TUI, is a client that talks to it over a local socket. 
+`mbv` is an mpv front-end: a Rust native window (Dioxus Native/Blitz) that shows your Emby / Audiobookshelf / RSS-feed libraries and plays and syncs them through mpv in a child process. `mbv-tui` is the same thing as a terminal UI. It runs as one background process per user (the "Owner") that holds the player and the queue; every window, GUI or TUI, is a client that talks to it over a local socket. 
 
 Full Emby client session remote control via WebSocket is also supported. `mbv` can control (and be remote-controlled by) standard Emby clients.
 
