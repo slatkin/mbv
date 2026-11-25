@@ -53,6 +53,7 @@ pub mod list_row;
 pub mod menu_card;
 pub mod panel;
 pub mod panel_divider;
+pub mod play_mark;
 pub mod playlists_panel;
 pub mod prefix_badge;
 pub mod queue_chooser_menu;
