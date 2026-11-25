@@ -37,6 +37,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiShowsList};
 use crate::bridge::library::GuiRowArtScopeFrame;
+use crate::gui_core::GuiShowsView;
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
@@ -48,7 +49,7 @@ use crate::window::components::list_row::{
     FlatRow, LibraryRowThumb, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow, TreeTrail,
 };
 use crate::window::components::tree_guide::subtree_tails;
-use crate::window::library::list::list_window;
+use crate::window::library::list::{RailLetter, list_window};
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
 use crate::window::library::scroll::ListScroll;
 use crate::window::library::shows_list::{ShowsFlatRow, ShowsListRow, shows_letter_rail};
@@ -363,6 +364,111 @@ fn paint_shows_row(
     }
 }
 
+/// The open nodes the painted window reports for `view` (gui-list-header-buttons
+/// design D5): only the All view paints a tree, so the flat New and Upcoming
+/// views report none and a view change stops the loader.
+fn shows_open_in_view(
+    rows: &[ShowsListRow],
+    scroll: ListScroll,
+    view: Option<GuiShowsView>,
+) -> (Vec<String>, Vec<(String, String)>) {
+    match view {
+        Some(GuiShowsView::All) => open_nodes_in_view(rows, scroll),
+        Some(GuiShowsView::New | GuiShowsView::Upcoming) | None => (Vec::new(), Vec::new()),
+    }
+}
+
+/// The destination list the painted rows' art belongs to (gui-delineated-rows
+/// design D7): the visible view names its own scope.
+fn shows_row_art_scope(view: Option<GuiShowsView>) -> GuiRowArtScopeFrame {
+    match view {
+        Some(GuiShowsView::New) => GuiRowArtScopeFrame::ShowsNew,
+        Some(GuiShowsView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
+        Some(GuiShowsView::All) | None => GuiRowArtScopeFrame::ShowsSeries,
+    }
+}
+
+/// The list column's wiring (design D14): its two DOM facts report to the
+/// scroll store (design D9), and the rows in view report the scope they paint
+/// under to the core for their row art fetches (gui-delineated-rows design D7).
+fn shows_column_wiring<'a>(
+    rows: &'a [ShowsListRow],
+    scroll: ListScroll,
+    library: &LibraryState,
+    art_scope: GuiRowArtScopeFrame,
+) -> ListColumnWiring<'a, ShowsListRow> {
+    let measure_library = library.clone();
+    let scroll_library = library.clone();
+    let art_library = library.clone();
+    ListColumnWiring {
+        rows,
+        view: scroll,
+        attr: "shows",
+        list: PointerList::Shows,
+        padding: "8px 0 8px 8px",
+        on_measure: Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
+        on_scroll: Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),
+        rows_in_view: Some(Callback::new(move |ids: Vec<String>| {
+            art_library.report_rows_in_view(art_scope, ids);
+        })),
+    }
+}
+
+/// The tree's two header presses (gui-list-header-buttons design D1, D4): only
+/// the All view paints the series tree, so the flat New and Upcoming views
+/// paint neither button.
+fn shows_tree_actions(
+    view: Option<GuiShowsView>,
+    library: &LibraryState,
+) -> Option<LibraryTreeActions> {
+    (view == Some(GuiShowsView::All)).then(|| {
+        let expand_library = library.clone();
+        let collapse_library = library.clone();
+        LibraryTreeActions {
+            on_expand_all: Callback::new(move |()| expand_library.expand_all_shows()),
+            on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_shows()),
+        }
+    })
+}
+
+/// The rail paints exactly while the rows carry letters (gui-flat-list-sort
+/// design D8): the All view's series tree, and the New view while its sort
+/// compares a name. The date-sorted views show no heading and no rail (spec
+/// "The letter rail jumps a name-sorted list"). The rail's press scrolls to the
+/// letter's first row (design D7).
+fn shows_list_rail(
+    letters: Vec<RailLetter>,
+    paints: bool,
+    library: &LibraryState,
+) -> Option<Element> {
+    let jump_library = library.clone();
+    paints.then(|| {
+        rsx! {
+            LibraryLetterRail {
+                letters,
+                jump: Some(Callback::new(move |letter: char| {
+                    jump_library.jump_shows_to_letter(letter);
+                })),
+            }
+        }
+    })
+}
+
+/// The series list has not landed yet, or the Upcoming mode's eager fetch
+/// failed (design D14): one line per state, and the failure line only over a
+/// landed list.
+fn shows_notices(frame: Option<&GuiShowsList>) -> Option<ListFrameNoticesProps> {
+    frame.map(|frame| ListFrameNoticesProps {
+        loading: frame
+            .loading
+            .then(|| ListFrameNoticeLine::loading("data-library-shows-loading")),
+        failed: (!frame.loading && frame.upcoming_failed).then(|| {
+            ListFrameNoticeLine::new("data-library-shows-failed", "Upcoming fetch failed")
+        }),
+        empty: None,
+    })
+}
+
 /// The Shows list: the header, the load and failure lines, the rows over
 /// native scroll, and the series list's letter rail.
 #[component]
@@ -397,11 +503,7 @@ pub fn LibraryShowsList() -> Element {
     // view change stops the loader. The report fires when a node opens or
     // closes, when the scroll moves, and when rows land, because each of them
     // changes the value the effect keys on.
-    let open_in_view = match frame.map(|frame| frame.view) {
-        Some(crate::gui_core::GuiShowsView::All) => open_nodes_in_view(&rows, scroll),
-        Some(crate::gui_core::GuiShowsView::New | crate::gui_core::GuiShowsView::Upcoming)
-        | None => (Vec::new(), Vec::new()),
-    };
+    let open_in_view = shows_open_in_view(&rows, scroll, frame.map(|frame| frame.view));
     let report_library = library.clone();
     use_effect(use_reactive(
         (&open_in_view.0, &open_in_view.1),
@@ -422,18 +524,11 @@ pub fn LibraryShowsList() -> Element {
     // the placeholder names the whole library.
     let filter_placeholder = "Filter shows".to_owned();
 
-    // The list's two DOM facts report to the scroll store (design D9), and
-    // the rows paint over the interaction state this render read.
-    let measure_library = library.clone();
-    let scroll_library = library.clone();
-    let art_library = library.clone();
-    // The destination list the painted rows' art belongs to (gui-delineated-rows
-    // design D7): the visible view names its own scope.
-    let art_scope = match frame.map(|frame| frame.view) {
-        Some(crate::gui_core::GuiShowsView::New) => GuiRowArtScopeFrame::ShowsNew,
-        Some(crate::gui_core::GuiShowsView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
-        Some(crate::gui_core::GuiShowsView::All) | None => GuiRowArtScopeFrame::ShowsSeries,
-    };
+    // The column's wiring is the one scaffold every list paints through
+    // (design D14), and the rows paint over the interaction state this render
+    // read.
+    let art_scope = shows_row_art_scope(frame.map(|frame| frame.view));
+    let wiring = shows_column_wiring(rows.as_ref(), scroll, &library, art_scope);
     let paint_library = library.clone();
     // The rows that close an open series' subtree paint its divider.
     let tails = subtree_tails(&rows, |row| {
@@ -441,56 +536,13 @@ pub fn LibraryShowsList() -> Element {
     });
     let paint_selected = selected.clone();
     let paint_shows = frame;
-    // The column's wiring is the one scaffold every list paints through
-    // (design D14): its two DOM facts report to the scroll store (design D9),
-    // the rows in view report the scope they paint under to the core for their
-    // row art fetches (gui-delineated-rows design D7).
-    let wiring = ListColumnWiring {
-        rows: rows.as_ref(),
-        view: scroll,
-        attr: "shows",
-        list: PointerList::Shows,
-        padding: "8px 0 8px 8px",
-        on_measure: Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
-        on_scroll: Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),
-        rows_in_view: Some(Callback::new(move |ids: Vec<String>| {
-            art_library.report_rows_in_view(art_scope, ids);
-        })),
-    };
 
-    // The rail paints exactly while the rows carry letters (gui-flat-list-sort
-    // design D8): the All view's series tree, and the New view while its sort
-    // compares a name. The date-sorted views show no heading and no rail (spec
-    // "The letter rail jumps a name-sorted list").
     let paints_rail = rows.iter().any(|row| row.letter().is_some());
-
-    // The rail's press scrolls to the letter's first row (design D7).
-    let jump_library = library.clone();
-    let rail = paints_rail.then(|| {
-        rsx! {
-            LibraryLetterRail {
-                letters: rail,
-                jump: Some(Callback::new(move |letter: char| {
-                    jump_library.jump_shows_to_letter(letter);
-                })),
-            }
-        }
-    });
+    let rail = shows_list_rail(rail, paints_rail, &library);
 
     let filter_library = library.clone();
     let accept_library = library.clone();
-    // The tree's two header presses (gui-list-header-buttons design D1, D4):
-    // only the All view paints the series tree, so the flat New and Upcoming
-    // views paint neither button.
-    let tree =
-        (frame.map(|frame| frame.view) == Some(crate::gui_core::GuiShowsView::All)).then(|| {
-            let expand_library = library.clone();
-            let collapse_library = library.clone();
-            LibraryTreeActions {
-                on_expand_all: Callback::new(move |()| expand_library.expand_all_shows()),
-                on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_shows()),
-            }
-        });
+    let tree = shows_tree_actions(frame.map(|frame| frame.view), &library);
     // The header's Refresh button (gui-list-header-buttons design D7): Shows
     // names no album id — the core reloads the children of the open rows its
     // in-view report holds.
@@ -515,18 +567,7 @@ pub fn LibraryShowsList() -> Element {
         on_accept: Callback::new(move |()| accept_library.accept_destination_filter()),
     };
 
-    // The series list has not landed yet, or the Upcoming mode's eager fetch
-    // failed (design D14): one line per state, and the failure line only over a
-    // landed list.
-    let notices = frame.map(|frame| ListFrameNoticesProps {
-        loading: frame
-            .loading
-            .then(|| ListFrameNoticeLine::loading("data-library-shows-loading")),
-        failed: (!frame.loading && frame.upcoming_failed).then(|| {
-            ListFrameNoticeLine::new("data-library-shows-failed", "Upcoming fetch failed")
-        }),
-        empty: None,
-    });
+    let notices = shows_notices(frame);
 
     library_list_column(
         &wiring,

@@ -12,6 +12,7 @@ mod audiobooks_projection;
 pub(crate) mod client_events;
 mod collection;
 mod collection_command;
+mod destination;
 pub(crate) mod emby;
 mod emby_projection;
 pub(crate) mod ensure;
@@ -434,108 +435,6 @@ impl GuiCore {
             | GuiLibraryCommand::OpenUrl { .. } => {
                 self.dispatch_gui_library_destination_command(command);
             }
-        }
-    }
-
-    /// The Library command's destination arms (design D2), from the Home rows
-    /// down: the dispatch's second pass, so one function stays readable.
-    fn dispatch_gui_library_destination_command(&mut self, command: GuiLibraryCommand) {
-        match command {
-            GuiLibraryCommand::HomeSelect { row } => self.select_gui_home_row(&row),
-            GuiLibraryCommand::HomePlay { row } => self.play_gui_home_row(&row),
-            GuiLibraryCommand::HomeQueue { row } => self.enqueue_gui_home_row(&row, "homeQueue"),
-            GuiLibraryCommand::ShowsSelect { lib_idx, row } => {
-                self.select_gui_shows_row(lib_idx, &row);
-            }
-            GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
-                self.gui_tv_select_season(lib_idx, &season_id);
-            }
-            GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
-                self::shows::play_shows_item(&mut self.app, &self.gui, lib_idx, &item_id);
-            }
-            GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
-                self::shows::enqueue_shows_item(&mut self.app, &self.gui, lib_idx, &item_id);
-            }
-            GuiLibraryCommand::ShowsOpenInView {
-                lib_idx,
-                series,
-                seasons,
-            } => self.apply_gui_shows_open_in_view(lib_idx, series, seasons),
-            GuiLibraryCommand::Refresh { album_ids } => {
-                self.refresh_gui_destination(&album_ids);
-            }
-            GuiLibraryCommand::EmbySelect { lib_idx, row } => {
-                self.gui_emby_select(lib_idx, &row);
-            }
-            GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => {
-                self.play_gui_emby_item(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
-                self.enqueue_gui_emby_item(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::AbsSelect { lib_idx, row } => {
-                self.gui_abs_select(lib_idx, &row);
-            }
-            // The Audiobookshelf destinations' commands (rows 9.1, 10.1): the
-            // book list's play, chapter, and enqueue, and the podcast list's
-            // select, play, and enqueue.
-            GuiLibraryCommand::AbsPlay { lib_idx, item_id } => {
-                self.play_gui_abs_book(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::AbsPlayChapter {
-                lib_idx,
-                book_id,
-                chapter,
-            } => self.play_gui_abs_chapter(lib_idx, &book_id, chapter),
-            GuiLibraryCommand::AbsQueue { lib_idx, item_id } => {
-                self.enqueue_gui_abs_book(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
-                self.select_gui_podcast_row(lib_idx, &row);
-            }
-            GuiLibraryCommand::PodcastsPlay { lib_idx, item_id } => {
-                self.play_gui_podcast_row(lib_idx, &item_id);
-            }
-            GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
-                self.enqueue_gui_podcast_row(lib_idx, &item_id);
-            }
-            // The Feeds destination's own commands (row 11.1): the one feed
-            // tab the Client holds, so no library index rides them.
-            GuiLibraryCommand::FeedsSelect { row } => self.gui_feeds_select(&row),
-            GuiLibraryCommand::FeedsPlay { item_id } => self.play_gui_feed_row(&item_id),
-            GuiLibraryCommand::FeedsQueue { item_id } => self.enqueue_gui_feed_row(&item_id),
-            // The Search field's commands (design D12, row 12.1): the field
-            // is cross-destination, so no library index rides them.
-            GuiLibraryCommand::SearchQuery { query } => self.gui_search_query(query),
-            GuiLibraryCommand::SearchActivate { id, item_type } => {
-                self.gui_search_activate(id, item_type);
-            }
-            GuiLibraryCommand::SearchClose => self.gui_search_close(),
-            GuiLibraryCommand::RowsInView { scope, ids } => {
-                self.apply_gui_rows_in_view(scope, ids);
-            }
-            GuiLibraryCommand::OpenUrl { url } => Self::open_gui_library_url(&url),
-            // The first pass's arms, which this pass never receives: the
-            // dispatch routes them before it hands the command over. Each is
-            // named, so a new variant is a compile error in both passes, and
-            // the one that reaches here is the routing mistake the log
-            // reports rather than a silent drop.
-            GuiLibraryCommand::OpenDestination { .. }
-            | GuiLibraryCommand::CollectionToggle { .. }
-            | GuiLibraryCommand::CollectionAll { .. }
-            | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
-            | GuiLibraryCommand::ShowDetail { .. }
-            | GuiLibraryCommand::OpenAlbum { .. }
-            | GuiLibraryCommand::Play { .. }
-            | GuiLibraryCommand::AddToQueue { .. }
-            | GuiLibraryCommand::ShuffleArtist { .. }
-            | GuiLibraryCommand::MenuEntry { .. }
-            | GuiLibraryCommand::RowMenu { .. }
-            | GuiLibraryCommand::Shuffle { .. } => log_ignored_library_command(
-                "dispatch",
-                format_args!("{command:?} is no destination command of the second pass"),
-            ),
         }
     }
 
