@@ -1437,9 +1437,18 @@ tree shows no playing marker). An album carries `album_id`,
 `name`, `year`, and its `tracks` and `total` when the cache holds them; a
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
-`album`, and its `menu` entries with `label`, `key_hint`, and `index` (the
-entry's index in the shared builder's order, so a window that paints only
-some entries still executes the one it painted). The `rowMenu` section
+`subject`, and the picked item's `menu` entries with `label`, `key_hint`, and
+`index` (the entry's index in the shared builder's order, so a window that
+paints only some entries still executes the one it painted). The `subject` is
+one `Album` or `Artist` arm. The `Artist` arm carries a
+`GuiMusicArtistPageFrame`: the artist's key, the union's albums of the artist
+with their cached tracklists, and the albums' year span. The page is the GUI's
+Artist page, and it is session state: the core keeps the picked artist's key
+per Music library and saves nothing, so a restart shows an album again. An
+artist row press sends `ShowArtist` (`libIdx`, `artistKey`). The page's Play
+and Add to queue controls send `PlayArtist` and `AddArtistToQueue`, each with
+the page's `albumIds`. A press, a double-click, or Enter on a page track
+sends `PlayArtistTrack` (`albumIds`, `trackId`). The `rowMenu` section
 (`GuiLibraryRowMenuFrame`) carries the row the `rowMenu` command named, with
 the TUI menu builder's full entries for it, which the right-click item menu
 paints. The Hero's art (`art`) is a `GuiArtRef`: the cached artwork as an `image`
@@ -1476,7 +1485,10 @@ variants are `openDestination` (`position`), `collectionToggle` (`target`,
 `showsSetView` (`libIdx`, `view`), `showDetail` (`itemId`), `openAlbum`
 (`albumId`),
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
-`shuffleArtist` (`albumIds`), `menuEntry` (`row`, `index`), `rowMenu`
+`shuffleArtist` (`albumIds`), the artist page commands — `showArtist`
+(`libIdx`, `artistKey`), `playArtist` (`albumIds`), `addArtistToQueue`
+(`albumIds`), and `playArtistTrack` (`albumIds`, `trackId`) — `menuEntry`
+(`row`, `index`), `rowMenu`
 (`row`), `rowsInView` (`scope`, `ids`), and the Home commands — `homeSelect`, `homePlay`,
 `homePlayNext`, and `homeQueue` (each carrying `row`, the
 `GuiHomeRowId` the frame painted). Item
