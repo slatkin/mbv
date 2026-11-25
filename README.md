@@ -10,6 +10,8 @@ You can download it. It's a vibe-coded funtime hobby though, as should be obviou
 
 It requires mpv, obviously.
 
+![mbv GUI client](assets/screenshot-gui.png)
+
 ### Instructions
 You turn it on and put in some stuff and there it is.
 
