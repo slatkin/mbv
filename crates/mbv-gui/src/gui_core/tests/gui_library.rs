@@ -325,14 +325,17 @@ fn a_failed_refetch_keeps_a_groups_albums_and_flashes() {
 }
 
 /// A second refetch of a loaded group while one runs starts nothing (design
-/// D8): the in-flight mark skips it, so the store's fetch count stays one.
+/// D8): the in-flight mark skips every refetch taken while the first one runs.
+/// The landing frees the mark, so the refetch after it starts its fetch again,
+/// and the exact request totals of one and then two prove that only the two
+/// sequential refetches started a request.
 #[test]
 fn a_second_refetch_of_a_loaded_group_starts_nothing() {
     let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
     app.seed_gui_music_albums_for_test(0, HIPHOP, &[("alb-old", "Old Album")]);
-    http.respond(200, ALBUMS);
+    http.respond_repeated(200, ALBUMS, 2);
 
     refetch_group(&mut app, HIPHOP);
     assert!(
@@ -341,8 +344,27 @@ fn a_second_refetch_of_a_loaded_group_starts_nothing() {
     );
 
     refetch_group(&mut app, HIPHOP);
+    refetch_group(&mut app, HIPHOP);
 
-    assert_eq!(http.request_count(), 1, "the second refetch starts nothing");
+    land_one_group_through_core(&mut app);
+    assert_eq!(
+        http.request_count(),
+        1,
+        "the refetches taken while the first one ran start nothing"
+    );
+
+    refetch_group(&mut app, HIPHOP);
+    assert!(
+        http.wait_for_requests(2, std::time::Duration::from_secs(2)),
+        "the refetch after the landing starts its fetch"
+    );
+    land_one_group_through_core(&mut app);
+
+    assert_eq!(
+        http.request_count(),
+        2,
+        "the two refetches that ran one at a time start one request each"
+    );
 }
 
 /// A failed group's album list refetches when the user presses All
