@@ -2,7 +2,7 @@
 
 ## Purpose
 Lets the user move their mbv session between the pinned panel and a normal terminal from the Tray
-or `mbv --swap-panel`, by replacing one Client with a new Client in the other mode while the Owner
+or `mbv-tui --swap-panel`, by replacing one Client with a new Client in the other mode while the Owner
 process keeps playing.
 
 ## Requirements
@@ -23,37 +23,37 @@ opens. Only Clients attached over the local transport SHALL count.
 - **WHEN** the user opens the Tray menu while no pinned Client is attached
 - **THEN** the menu SHALL show **Pin** and no **Unpin** item
 
-### Requirement: `mbv --swap-panel` runs the Pin swap
+### Requirement: `mbv-tui --swap-panel` runs the Pin swap
 
-`mbv --swap-panel` SHALL run the Pin swap that the Tray item would run at that moment: **Unpin**
+`mbv-tui --swap-panel` SHALL run the Pin swap that the Tray item would run at that moment: **Unpin**
 while a pinned Client is attached, otherwise **Pin**, with the same target Client and the same
 behavior. It SHALL work whether or not the Tray is shown. When the Owner process refuses to start
 the swap, the CLI SHALL report the reason and exit 1.
 
 #### Scenario: Pin from a shell
 
-- **WHEN** one unpinned Client is attached and the user runs `mbv --swap-panel` in another terminal
+- **WHEN** one unpinned Client is attached and the user runs `mbv-tui --swap-panel` in another terminal
 - **THEN** a pinned Client SHALL start and the unpinned Client SHALL exit after it attaches
 - **THEN** the CLI SHALL exit 0
 
 #### Scenario: Swap already running
 
-- **WHEN** a Pin swap is in progress and the user runs `mbv --swap-panel`
+- **WHEN** a Pin swap is in progress and the user runs `mbv-tui --swap-panel`
 - **THEN** no second process SHALL start
 - **THEN** the CLI SHALL say a panel swap is already running and exit 1
 
 #### Scenario: Unpin with no terminal command
 
 - **WHEN** a pinned Client is attached, `[panel] terminal` and `TERMINAL` are both unset, and the
-  user runs `mbv --swap-panel`
+  user runs `mbv-tui --swap-panel`
 - **THEN** the pinned Client SHALL stay attached and the desktop notification SHALL be sent
 - **THEN** the CLI SHALL name `[panel] terminal` and `TERMINAL` on stderr and exit 1
 
 ### Requirement: Pin replaces the newest unpinned Client
 
-Choosing **Pin** SHALL start `mbv --pin` as a new Client and then end the most recently attached
+Choosing **Pin** SHALL start `mbv-tui --pin` as a new Client and then end the most recently attached
 unpinned Client that supports Pin swap. With no such Client attached, **Pin** SHALL only start
-`mbv --pin`. A Client that does not support Pin swap SHALL never be ended by choosing **Pin**.
+`mbv-tui --pin`. A Client that does not support Pin swap SHALL never be ended by choosing **Pin**.
 
 #### Scenario: Two terminal Clients attached
 
@@ -69,7 +69,7 @@ unpinned Client that supports Pin swap. With no such Client attached, **Pin** SH
 
 ### Requirement: Unpin replaces the pinned Client with a terminal Client
 
-Choosing **Unpin** SHALL start a terminal running `mbv` as a new Client and then end the pinned
+Choosing **Unpin** SHALL start a terminal running `mbv-tui` as a new Client and then end the pinned
 Client. The terminal command SHALL be the `[panel] terminal` config value when set, otherwise the
 `TERMINAL` environment variable followed by `-e`. mbv SHALL NOT fall back to any other terminal.
 
@@ -160,31 +160,31 @@ attached, the menu SHALL list **Open** directly above **Pin**.
 - **WHEN** a Client is attached over TCP only and the user opens the Tray menu
 - **THEN** the menu SHALL show **Open**
 
-### Requirement: Open starts a terminal Client
+### Requirement: Open starts a GUI Client
 
-Choosing **Open** SHALL start a terminal that runs `mbv` as a new Client, with the same terminal
-command that **Unpin** uses. Open SHALL end no Client. The Owner process SHALL run Open also when
-a Client is attached. With neither `[panel] terminal` nor `TERMINAL` set, Open SHALL start nothing
-and SHALL send the same desktop notification as **Unpin**.
+Choosing **Open** SHALL start the `mbv` program, the GUI Client, as a new Client window. Open SHALL
+use no terminal: `[panel] terminal` and `TERMINAL` SHALL have no effect on it. Open SHALL end no
+Client. The Owner process SHALL run Open also when a Client is attached. The GUI Client SHALL
+present the launch token in its Hello, so its attach completes the Open launch, and it SHALL still
+take no part in Pin swap.
 
-#### Scenario: Open with TERMINAL set
+#### Scenario: Open with no Client attached
 
-- **WHEN** no Client is attached, `[panel] terminal` is unset, `TERMINAL=ghostty`, and the user
-  chooses **Open**
-- **THEN** mbv SHALL run `ghostty -e mbv`
-- **THEN** the new Client SHALL attach and playback SHALL be unaffected
+- **WHEN** no Client is attached and the user chooses **Open**
+- **THEN** mbv SHALL start the `mbv` program with no terminal
+- **THEN** the new GUI Client SHALL attach, playback SHALL be unaffected, and no timeout
+  notification SHALL be sent
 
 #### Scenario: Open while a Client is attached
 
-- **WHEN** one unpinned Client is attached and the user runs `mbv --open`
-- **THEN** a second terminal Client SHALL start
+- **WHEN** one unpinned Client is attached and the user runs `mbv-tui --open`
+- **THEN** a GUI Client window SHALL start
 - **THEN** the first Client SHALL stay attached
 
-#### Scenario: Open with no terminal command
+#### Scenario: The opened GUI Client is never a swap target
 
-- **WHEN** `[panel] terminal` and `TERMINAL` are both unset and the user chooses **Open**
-- **THEN** no process SHALL start
-- **THEN** a desktop notification SHALL name `[panel] terminal` and `TERMINAL`
+- **WHEN** Open started a GUI Client, no other Client is attached, and the user chooses **Pin**
+- **THEN** mbv SHALL start `mbv-tui --pin` and SHALL end no Client
 
 ### Requirement: Open shares the Pin swap launch rules
 
@@ -199,24 +199,24 @@ new Client cannot be started, exits with a failure before it attaches, or does n
 
 #### Scenario: Open never attaches
 
-- **WHEN** the started terminal does not attach a Client within 10 seconds
+- **WHEN** the started GUI Client does not attach within 10 seconds
 - **THEN** a desktop notification SHALL say that opening mbv timed out
 
 ### Requirement: Launches start the Owner's own build after its binary file changes
 
-The Pin swap, Unpin, and Open SHALL start the `mbv` program of the build that the Owner process itself runs, even after the installed `mbv` file or the installed `mbv-owner` file is replaced or removed. The Owner process SHALL keep hold of the `mbv` program file that sat beside `mbv-owner` when the Owner started, and SHALL launch TUI Clients from that held file. A Client attaches only to an Owner of the same build, so a launch SHALL NOT start a different build.
+The Pin swap and Unpin SHALL start the `mbv-tui` program, and Open SHALL start the `mbv` program, of the build that the Owner process itself runs, even after the installed Client program file or the installed `mbv-owner` file is replaced or removed. The Owner process SHALL keep hold of the `mbv-tui` and `mbv` program files that sat beside `mbv-owner` when the Owner started, and SHALL launch Clients from those held files. A Client attaches only to an Owner of the same build, so a launch SHALL NOT start a different build.
 
 #### Scenario: Binary file replaced while the Owner runs
 
-- **WHEN** the Owner was started from `/usr/bin/mbv-owner`, `/usr/bin/mbv` is replaced by a newer build, and the user chooses **Pin**
+- **WHEN** the Owner was started from `/usr/bin/mbv-owner`, `/usr/bin/mbv-tui` is replaced by a newer build, and the user chooses **Pin**
 - **THEN** mbv SHALL start a pinned Client from the build the Owner runs
 - **THEN** no "could not start" notification SHALL be sent
 
 #### Scenario: Binary file removed while the Owner runs
 
 - **WHEN** `/usr/bin/mbv` is deleted after the Owner started, nothing replaces it, and the user chooses **Open**
-- **THEN** mbv SHALL start a terminal Client that runs the same build as the Owner process
+- **THEN** mbv SHALL start a GUI Client that runs the same build as the Owner process
 
-#### Scenario: No TUI program beside the Owner program
-- **WHEN** no `mbv` program sat beside `mbv-owner` when the Owner started, and the user chooses **Pin**, **Unpin**, or **Open**
-- **THEN** the Owner SHALL start no Client, SHALL leave any attached Client in place, and SHALL send a desktop notification that names the missing `mbv` program
+#### Scenario: No Client program beside the Owner program
+- **WHEN** no `mbv-tui` program sat beside `mbv-owner` when the Owner started, and the user chooses **Pin** or **Unpin**, or no `mbv` program sat there and the user chooses **Open**
+- **THEN** the Owner SHALL start no Client, SHALL leave any attached Client in place, and SHALL send a desktop notification that names the missing program

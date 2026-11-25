@@ -16,7 +16,7 @@ pub(super) fn run(daemon: &mut DaemonLoop, action: OwnerAction) -> Result<(), St
             let now = Instant::now();
             daemon.pin_swap.start(now, &daemon.ctrl_clients)
         }
-        OwnerAction::OpenTerminal => {
+        OwnerAction::Open => {
             let now = Instant::now();
             daemon.pin_swap.open(now)
         }

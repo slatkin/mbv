@@ -601,13 +601,18 @@ impl SharedQueueState {
     }
 }
 
-/// Which direction a Pin swap runs in (tray-pin-swap design D5). The
-/// daemon's swap state machine derives it from the registry, not from the
-/// Tray label, so a stale menu cannot act on the wrong client.
+/// Which launch the swap launch machine resolves (tray-pin-swap design D5):
+/// a Pin swap direction, or Open. The daemon's swap state machine derives a
+/// swap direction from the registry, not from the Tray label, so a stale
+/// menu cannot act on the wrong client.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SwapDirection {
+    /// Start a pinned panel TUI Client.
     Pin,
+    /// Start a TUI Client in a terminal.
     Unpin,
+    /// Start a GUI Client window, with no effect on any attached Client.
+    Open,
 }
 
 /// Resolves the command that starts the replacement Client (design D5).

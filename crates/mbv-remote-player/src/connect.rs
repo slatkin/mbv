@@ -747,6 +747,7 @@ pub fn connect_stub_daemon_pair() -> Result<
         &crate::ClientHelloClaims {
             pin_swap: Some(crate::PinSwapHello::default()),
             named_queues: false,
+            swap_token: None,
         },
     )
     .map_err(|error| error.to_string())?;

@@ -7,16 +7,16 @@ Defines the GUI Client: a Client that presents mbv in a native desktop window, w
 
 ### Requirement: The GUI Client is a separate program
 
-mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal program. The `mbv` program SHALL NOT load or link the windowing and rendering stack that the GUI Client uses. The `mbv-gui` program SHALL NOT load or link the terminal library or the terminal UI framework that the TUI Client uses. The GUI Client SHALL run no web engine process and no script engine.
+mbv SHALL ship the GUI Client as the `mbv` program, the default app, separate from the `mbv-tui` terminal program. The `mbv-tui` program SHALL NOT load or link the windowing and rendering stack that the GUI Client uses. The `mbv` program SHALL NOT load or link the terminal library or the terminal UI framework that the TUI Client uses. The GUI Client SHALL run no web engine process and no script engine.
 
 #### Scenario: The terminal program carries no window stack
 
-- **WHEN** the `mbv` program is built
+- **WHEN** the `mbv-tui` program is built
 - **THEN** its dependency graph contains no windowing or rendering library that the GUI Client uses
 
 #### Scenario: The GUI program carries no terminal UI
 
-- **WHEN** the `mbv-gui` program is built
+- **WHEN** the `mbv` program is built
 - **THEN** its dependency graph contains no terminal library or terminal UI framework that the TUI Client uses
 
 #### Scenario: The GUI Client starts on its own
@@ -31,12 +31,12 @@ mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal prog
 
 ### Requirement: The GUI program ships beside the terminal program
 
-Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program and the `mbv-owner` program, and SHALL declare the Vulkan loader and fontconfig runtime dependencies. No artifact SHALL declare a WebKitGTK dependency. The GUI Client finds and starts its Owner from the sibling `mbv-owner` program, and the version and wire handshake refuses a mismatched pair, so all three programs SHALL come from one build.
+Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv` program beside the `mbv-tui` program and the `mbv-owner` program, and SHALL declare the Vulkan loader and fontconfig runtime dependencies. No artifact SHALL declare a WebKitGTK dependency. The GUI Client finds and starts its Owner from the sibling `mbv-owner` program, and the version and wire handshake refuses a mismatched pair, so all three programs SHALL come from one build.
 
 #### Scenario: A package installs both programs
 
 - **WHEN** the tarball, the `.deb`, or an Arch package is installed
-- **THEN** `mbv`, `mbv-gui`, and `mbv-owner` are installed in the same directory
+- **THEN** `mbv-tui`, `mbv`, and `mbv-owner` are installed in the same directory
 
 #### Scenario: A package declares the render stack
 

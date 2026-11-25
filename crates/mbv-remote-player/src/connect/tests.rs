@@ -107,6 +107,7 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
         &crate::ClientHelloClaims {
             pin_swap: Some(crate::PinSwapHello::default()),
             named_queues: false,
+            swap_token: None,
         },
     )
     .unwrap();
@@ -267,7 +268,7 @@ fn owner_action_refused_reply_surfaces_the_owner_reason() {
 }
 
 /// Contract: spec owner-actions "Owner does not support this action" — an
-/// Owner that advertises `owner-action` but predates `OpenTerminal` replies
+/// Owner that advertises `owner-action` but predates `Open` replies
 /// `CommandRejected`; the CLI reports a restart requirement without waiting
 /// for the 6 s read timeout.
 #[test]
@@ -319,11 +320,11 @@ fn owner_action_command_rejected_reply_reports_a_restart_requirement() {
         .unwrap();
     });
     let mut reader = BufReader::new(SocketStream::Unix(client));
-    run_owner_action_handshake(&mut reader, OwnerAction::OpenTerminal, || {
+    run_owner_action_handshake(&mut reader, OwnerAction::Open, || {
         Ok("owner-action-token".to_string())
     })
     .unwrap();
-    let error = send_owner_action(&mut reader, OwnerAction::OpenTerminal).unwrap_err();
+    let error = send_owner_action(&mut reader, OwnerAction::Open).unwrap_err();
     peer.join().unwrap();
     assert_eq!(
         error.to_string(),
@@ -496,6 +497,7 @@ fn connect_with_advertised_hello(
         &crate::ClientHelloClaims {
             pin_swap: Some(crate::PinSwapHello::default()),
             named_queues: false,
+            swap_token: None,
         },
     )
     .unwrap();
@@ -657,6 +659,7 @@ fn a_late_partial_seed_line_is_never_consumed() {
         &crate::ClientHelloClaims {
             pin_swap: Some(crate::PinSwapHello::default()),
             named_queues: false,
+            swap_token: None,
         },
         Duration::from_millis(200),
     )

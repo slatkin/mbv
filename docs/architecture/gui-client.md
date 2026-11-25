@@ -7,15 +7,16 @@ definitions live in `CONTEXT.md` and win any disagreement with this file. The
 (`add-tauri-gui-client`, Tauri) recorded the first decisions, and the ADRs
 record the later ones. This file describes what the code does.
 
-The GUI Client is the Dioxus Native program `mbv-gui` (`crates/mbv-gui/`),
+The GUI Client is the Dioxus Native program `mbv` (package `mbv-gui`,
+`crates/mbv-gui/`),
 rendered by Blitz in the same process as its core thread (ADR 0039). It is a
 workspace member outside `default-members`: the default `cargo build` and
 nextest runs skip it, while `--workspace` clippy and fmt cover it. It needs no
 webview and no Node toolchain. Its GPU surface needs a Vulkan or GL driver.
-`make dev` builds `mbv` and `mbv-gui` together, and starts the window with
-`cargo run -p mbv-gui`. Both binaries
-must come from one build: the GUI starts its Owner from the sibling `mbv`
-binary, and the handshake refuses an Owner with a different build id.
+`make dev` builds `mbv`, `mbv-tui`, and `mbv-owner` together, and starts the
+window with `cargo run -p mbv-gui`. The programs must come from one build: the
+GUI starts its Owner from the sibling `mbv-owner` program, and the handshake
+refuses an Owner with a different build id.
 
 ## Process shape: one core thread
 

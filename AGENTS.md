@@ -15,7 +15,7 @@ machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*).
 - **Language**: Rust (stock edition-2024 `cargo fmt`, max-width-100)
 - **Services**: Emby, Audiobookshelf, Feeds
 - **Playback**: embedded mpv; Google Cast receivers and Emby Sessions are output projections of the Owner
-- **Clients**: the TUI (`mbv`, TuiRealm) and the GUI Client (`mbv-gui`, Dioxus Native over Blitz, ADR 0039)
+- **Clients**: the GUI Client (`mbv`, Dioxus Native over Blitz, ADR 0039), the default app, and the TUI (`mbv-tui`, TuiRealm)
 - **Owner program**: `mbv-owner`, the separate program that hosts the Owner process; no Client crate, terminal UI library, or GUI toolkit (ADR 0044)
 - **Client core**: `mbv-client-core`, the state and rules both Clients link (ADR 0043)
 - **Player owners**: the per-user Owner process (local) and the packaged `mbvd` daemon
@@ -31,9 +31,9 @@ crates/
 ├── mbv-client-core/     # The Client core: App, dispatch, neutral state and events, the one
 │                        #   Keyboard Router, the Client tick, Owner find/start/attach. No
 │                        #   terminal or GUI toolkit in its dependency graph
-├── mbv-tui/             # TUI Client, binary `mbv`: the TuiRealm shell, TUI projections, the
+├── mbv-tui/             # TUI Client, binary `mbv-tui`: the TuiRealm shell, TUI projections, the
 │                        #   terminal key edge, and the pinned panel
-├── mbv-gui/             # GUI Client, binary `mbv-gui`: Dioxus Native over Blitz (ADR 0039);
+├── mbv-gui/             # GUI Client, binary `mbv`: Dioxus Native over Blitz (ADR 0039);
 │                        #   outside default-members
 ├── mbv-surfaces/        # Surface state (cursor, selection, marks, viewport), FocusStack, HitMap,
 │                        #   per-list capacity. No ratatui, TuiRealm, crossterm, or GUI toolkit

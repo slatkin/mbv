@@ -116,6 +116,7 @@ fn a_stop_intent_is_delivered_before_the_connection_closes() {
         &super::ClientHelloClaims {
             pin_swap: Some(super::PinSwapHello::default()),
             named_queues: false,
+            swap_token: None,
         },
     )
     .unwrap();

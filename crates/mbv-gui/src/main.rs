@@ -1,4 +1,4 @@
-//! The `mbv-gui` program: the GUI Client's window process on Dioxus Native
+//! The `mbv` program: the GUI Client's window process on Dioxus Native
 //! and Blitz (D3, D4 of `replace-tauri-with-blitz`). The core thread attaches
 //! to the Owner and runs behind the window; the window channel (D4) carries
 //! its batches and the quit edge to the root, and `CoreLink` carries the
@@ -20,6 +20,10 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
+    // Claim the one-shot swap token an Owner Open launch sets, before any
+    // thread or child process spawns: the token is read once and no child
+    // inherits it, and the first Owner Hello presents it.
+    mbv_client_core::pin::claim_swap_token();
     // The core thread logs its failures through the app subscriber: install
     // it before the thread spawns, into the GUI's own log file so it does not
     // interleave with the TUI's (as the earlier build did). A window

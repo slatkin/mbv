@@ -1,6 +1,6 @@
 # mbv-gui Agent Guide
 
-`crates/mbv-gui/` is the GUI Client: the `mbv-gui` program, a Dioxus Native
+`crates/mbv-gui/` is the GUI Client: the `mbv` program, a Dioxus Native
 window rendered by Blitz in the same process as its core thread (ADR 0039).
 It links `mbv-client-core` for the shared state and rules, and it never links
 `mbv-tui`. Read the root `AGENTS.md` first for the workspace, the shared core,
@@ -32,8 +32,9 @@ GUI edge; `docs/architecture/gui-client.md` is the full behaviour guide.
 
 The GUI Client is a workspace member outside `default-members`: the default
 `cargo build` and nextest runs skip it, while `--workspace` clippy and fmt
-cover it. `make dev` builds `mbv` and `mbv-gui` together before it starts the
-window, because the GUI starts its Owner from the sibling `mbv` binary and the
+cover it. The package is `mbv-gui`; its program is `mbv`. `make dev` builds
+`mbv`, `mbv-tui`, and `mbv-owner` together before it starts the window,
+because the GUI starts its Owner from the sibling `mbv-owner` program and the
 handshake refuses an Owner with a different build id.
 
 ## Process rules

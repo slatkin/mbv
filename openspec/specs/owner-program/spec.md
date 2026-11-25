@@ -8,7 +8,7 @@ Defines the separate program that hosts the per-user Owner process: how every lo
 
 ### Requirement: The Owner process runs from its own program
 
-mbv SHALL ship a program named `mbv-owner` that hosts the per-user Owner process. The Owner process SHALL run only from `mbv-owner`. The `mbv` program and the `mbv-gui` program SHALL NOT host the Owner process. `mbv-owner` SHALL contain no Client: its dependency graph SHALL contain no terminal UI library and no GUI toolkit. The packaged `mbvd` daemon SHALL stay a separate program.
+mbv SHALL ship a program named `mbv-owner` that hosts the per-user Owner process. The Owner process SHALL run only from `mbv-owner`. The `mbv-tui` program and the `mbv` program SHALL NOT host the Owner process. `mbv-owner` SHALL contain no Client: its dependency graph SHALL contain no terminal UI library and no GUI toolkit. The packaged `mbvd` daemon SHALL stay a separate program.
 
 #### Scenario: The Owner program carries no Client
 
@@ -17,7 +17,7 @@ mbv SHALL ship a program named `mbv-owner` that hosts the per-user Owner process
 
 #### Scenario: The TUI program does not host the Owner
 
-- **WHEN** the `mbv` program is started with any argument
+- **WHEN** the `mbv-tui` program is started with any argument
 - **THEN** it never runs as the Owner process
 
 ### Requirement: Clients start the Owner program beside them
@@ -26,25 +26,25 @@ A local Client that finds no Owner process SHALL start `mbv-owner` from the dire
 
 #### Scenario: The TUI Client starts the Owner
 
-- **WHEN** the user starts `mbv` and no Owner process is running
-- **THEN** mbv starts `mbv-owner` from the directory of the `mbv` program and attaches to it
+- **WHEN** the user starts `mbv-tui` and no Owner process is running
+- **THEN** `mbv-tui` starts `mbv-owner` from the directory of the `mbv-tui` program and attaches to it
 
 #### Scenario: The GUI Client starts the Owner
 
-- **WHEN** the user starts `mbv-gui` and no Owner process is running
-- **THEN** the GUI Client starts `mbv-owner` from the directory of the `mbv-gui` program and attaches to it
+- **WHEN** the user starts `mbv` and no Owner process is running
+- **THEN** the GUI Client starts `mbv-owner` from the directory of the `mbv` program and attaches to it
 
 #### Scenario: A TUI Client and a GUI Client share one Owner
 
 - **GIVEN** Stay-alive is enabled and the GUI Client started the Owner process
-- **WHEN** the user starts `mbv`
+- **WHEN** the user starts `mbv-tui`
 - **THEN** the TUI Client attaches to that Owner process and starts no second Owner
 
 ### Requirement: Every release artifact installs the Owner program
 
-Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install `mbv-owner` in the same directory as `mbv` and `mbv-gui`. All three programs SHALL come from one build.
+Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install `mbv-owner` in the same directory as `mbv-tui` and `mbv`. All three programs SHALL come from one build.
 
 #### Scenario: A package installs the three programs
 
 - **WHEN** the tarball, the `.deb`, or an Arch package is installed
-- **THEN** `mbv`, `mbv-gui`, and `mbv-owner` are installed in the same directory
+- **THEN** `mbv-tui`, `mbv`, and `mbv-owner` are installed in the same directory

@@ -2,7 +2,7 @@
 
 use std::sync::OnceLock;
 
-use super::{is_pinned, swap_token};
+use super::is_pinned;
 
 /// Whether this Client process takes part in Pin swap: the TUI Client does —
 /// it answers `SwapPrepare` and is a swap target — and the GUI Client never
@@ -27,12 +27,11 @@ fn pin_swap_participant() -> bool {
 }
 
 /// The Pin-swap Hello advertisement for this process's Client connections
-/// (tray-pin-swap design D2): the claimed panel state and swap token behind
-/// the `pin-swap` capability for the TUI Client, `None` — a plain Client
+/// (tray-pin-swap design D2): the claimed panel state behind the `pin-swap`
+/// capability for the TUI Client, `None` — a plain Client
 /// Hello — for the GUI Client, so the Owner never picks it as a swap target.
 pub(in crate::app) fn pin_swap_hello() -> Option<mbv_remote_player::PinSwapHello> {
     pin_swap_participant().then(|| mbv_remote_player::PinSwapHello {
         pinned: is_pinned(),
-        swap_token: swap_token(),
     })
 }

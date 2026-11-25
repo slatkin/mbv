@@ -1,12 +1,18 @@
-//! The Client Hello's claims: the Pin-swap advertisement and `named-queues`.
+//! The Client Hello's claims: the Pin-swap advertisement, the swap token, and
+//! `named-queues`.
 
 use super::*;
+
+/// A swap token no other Hello field can contain.
+const OPEN_LAUNCH_TOKEN: &str = "open-launch-token-7f3a";
 
 /// The Hello advertisement follows the connect's claims
 /// (`extract-client-core` EDGE-1 fix; gui-named-queues design D7): the TUI
 /// Client advertises `pin-swap` and never `named-queues`, and the GUI Client's
 /// local link advertises `named-queues` and sends a plain Hello the Owner
-/// never picks as a swap target. The Owner's classification of the swap
+/// never picks as a swap target. The swap token goes out with or without the
+/// Pin-swap claim, so the GUI Client the Owner starts for Open completes that
+/// launch (tray Open starts the GUI Client). The Owner's classification of the swap
 /// capabilities into a swap surface is the daemon's `swap_surface_from_hello`
 /// contract, already pinned there; its `named-queues` gate is the daemon's
 /// `broadcast_named_queue_event`.
@@ -15,19 +21,29 @@ use super::*;
     crate::ClientHelloClaims {
         pin_swap: Some(crate::PinSwapHello::default()),
         named_queues: false,
+        swap_token: None,
     },
-    (true, false)
+    (true, false, false)
 )]
 #[case::gui_local_link(
     crate::ClientHelloClaims {
         pin_swap: None,
         named_queues: true,
+        swap_token: None,
     },
-    (false, true)
+    (false, true, false)
+)]
+#[case::gui_open_launch(
+    crate::ClientHelloClaims {
+        pin_swap: None,
+        named_queues: true,
+        swap_token: Some(OPEN_LAUNCH_TOKEN.to_string()),
+    },
+    (false, true, true)
 )]
 fn the_client_hello_advertisement_follows_the_connect_claims(
     #[case] claims: crate::ClientHelloClaims,
-    #[case] advertised: (bool, bool),
+    #[case] advertised: (bool, bool, bool),
 ) {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
@@ -77,7 +93,7 @@ fn the_client_hello_advertisement_follows_the_connect_claims(
     peer.join().unwrap();
 
     let client_hello = hello_rx.recv().unwrap();
-    let (pin_swap, named_queues) = advertised;
+    let (pin_swap, named_queues, swap_token) = advertised;
     assert_eq!(
         client_hello.contains(mbv_ctrl::CTRL_CAP_PIN_SWAP),
         pin_swap,
@@ -87,5 +103,10 @@ fn the_client_hello_advertisement_follows_the_connect_claims(
         client_hello.contains(mbv_ctrl::CTRL_CAP_NAMED_QUEUES),
         named_queues,
         "the Hello's named-queues capability must follow the connect's named-queues claim"
+    );
+    assert_eq!(
+        client_hello.contains(OPEN_LAUNCH_TOKEN),
+        swap_token,
+        "the Hello's swap token must follow the connect's swap-token claim"
     );
 }

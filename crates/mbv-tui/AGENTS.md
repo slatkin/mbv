@@ -1,6 +1,6 @@
 # mbv-tui Agent Guide
 
-`crates/mbv-tui/` is the TUI Client: the `mbv` program. It links
+`crates/mbv-tui/` is the TUI Client: the `mbv-tui` program. It links
 `mbv-client-core` for the shared state and rules, and it never links
 `mbv-gui`. Read the root `AGENTS.md` first for the workspace, the shared
 core, the coding standards, and the test rules; this guide holds what applies

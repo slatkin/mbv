@@ -169,7 +169,9 @@ pub fn attach_owner(
 /// `capabilities` (design D6a of `decouple-client-core`). A Client that shows
 /// one queue entry at a time claims `named-queues` on its local Owner link.
 /// The Pin-swap claim follows this process's claimed Pin-swap participation
-/// (`pin_swap_hello`, claimed at start-up).
+/// (`pin_swap_hello`, claimed at start-up). Every Client presents the swap
+/// token it was started with, so an Owner Open launch of the GUI Client
+/// completes as a Pin swap replacement of the TUI Client does.
 #[must_use]
 pub(in crate::app) fn hello_claims(
     capabilities: ClientCapabilities,
@@ -177,6 +179,7 @@ pub(in crate::app) fn hello_claims(
 ) -> ClientHelloClaims {
     ClientHelloClaims {
         pin_swap: crate::app::pin::pin_swap_hello(),
+        swap_token: crate::app::pin::swap_token(),
         named_queues: endpoint.is_local() && capabilities.has(ClientCapability::ShownQueueEntries),
     }
 }

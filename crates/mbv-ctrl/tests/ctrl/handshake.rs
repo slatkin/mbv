@@ -167,7 +167,8 @@ fn hello_without_swap_token_parses_to_none() {
 #[test]
 fn pin_swap_builder_advertises_swap_capabilities_and_token() {
     let hello = CtrlHello::current_control_client("control-123".into())
-        .with_pin_swap(true, Some("t".into()));
+        .with_pin_swap(true)
+        .with_swap_token(Some("t".into()));
     assert!(hello.capabilities.iter().any(|c| c == CTRL_CAP_PIN_SWAP));
     assert!(
         hello

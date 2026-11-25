@@ -96,16 +96,24 @@ impl CtrlHello {
         hello
     }
 
-    /// Add the Pin-swap capabilities and the swap token to a control Client
-    /// Hello. `pinned` advertises `pinned-surface` (the Client runs in a
-    /// pinned panel); `swap_token` marks the Hello as one the Owner itself
-    /// started for a swap.
+    /// Add the Pin-swap capabilities to a control Client Hello. `pinned`
+    /// advertises `pinned-surface` (the Client runs in a pinned panel).
     #[must_use]
-    pub fn with_pin_swap(mut self, pinned: bool, swap_token: Option<String>) -> Self {
+    pub fn with_pin_swap(mut self, pinned: bool) -> Self {
         self.capabilities.push(CTRL_CAP_PIN_SWAP.to_string());
         if pinned {
             self.capabilities.push(CTRL_CAP_PINNED_SURFACE.to_string());
         }
+        self
+    }
+
+    /// Add the one-shot swap token to a control Client Hello: it marks the
+    /// Hello as one of a Client the Owner itself started (a Pin swap
+    /// replacement or an Open launch). It is independent of the Pin-swap
+    /// capabilities, so a Client that takes no part in Pin swap (the GUI
+    /// Client) still completes an Open launch.
+    #[must_use]
+    pub fn with_swap_token(mut self, swap_token: Option<String>) -> Self {
         self.swap_token = swap_token;
         self
     }

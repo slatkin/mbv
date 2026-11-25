@@ -95,8 +95,7 @@ pub(crate) use mbv_net::stream::SocketStream;
 
 /// What a Client Hello advertises for the Pin swap (tray-pin-swap design
 /// D2): the `pin-swap` capability makes the Client a swap target that answers
-/// `SwapPrepared`, `pinned` adds the `pinned-surface` capability, and
-/// `swap_token` marks the Hello of an Owner-launched swap replacement.
+/// `SwapPrepared`, and `pinned` adds the `pinned-surface` capability.
 /// `None` in [`ClientHelloClaims::pin_swap`] sends a plain Client Hello, so
 /// the Owner never picks that Client as a swap target — the GUI Client, which
 /// is neither a terminal Client nor a pinned panel and cannot produce the
@@ -105,8 +104,6 @@ pub(crate) use mbv_net::stream::SocketStream;
 pub struct PinSwapHello {
     /// Advertise `pinned-surface`: this Client runs in the pinwin panel.
     pub pinned: bool,
-    /// The one-shot token an Owner-launched swap replacement carries.
-    pub swap_token: Option<String>,
 }
 
 /// What one Client connection claims in its Hello beyond the standard Client
@@ -117,6 +114,11 @@ pub struct ClientHelloClaims {
     /// The Pin-swap advertisement (tray-pin-swap design D2): `Some` for a
     /// Client that takes part in Pin swap, `None` for a plain Client Hello.
     pub pin_swap: Option<PinSwapHello>,
+    /// The one-shot token a Client the Owner itself started carries: a Pin
+    /// swap replacement or an Open launch. Independent of `pin_swap`, so the
+    /// GUI Client, which takes no part in Pin swap, still completes an Open
+    /// launch. `None` for every Client the user started.
+    pub swap_token: Option<String>,
     /// Advertise `named-queues`: this Client reads the local Owner's Named
     /// queues and shows one of them at a time (gui-named-queues design D3,
     /// D7). Only the GUI Client's link to the local Owner claims it; the TUI

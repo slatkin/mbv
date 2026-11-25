@@ -93,7 +93,7 @@ fn open_and_pin_swap_items(attached_clients: AttachedClients) -> Vec<ksni::MenuI
                 activate: Box::new(|tray: &mut MbvTray| {
                     let _ = tray
                         .transport_tx
-                        .send(TransportCommand::OwnerAction(OwnerAction::OpenTerminal));
+                        .send(TransportCommand::OwnerAction(OwnerAction::Open));
                 }),
                 ..Default::default()
             }
@@ -510,7 +510,7 @@ mod tests {
     }
 
     /// Tray-open-terminal pin-swap spec "No Client attached": activating the
-    /// **Open** item sends `OwnerAction(OpenTerminal)`, the Owner action the
+    /// **Open** item sends `OwnerAction(Open)`, the Owner action the
     /// `--open` CLI flag runs.
     #[test]
     fn activating_open_sends_open_terminal() {
@@ -519,7 +519,7 @@ mod tests {
         activate_item_labelled(&mut tray, "Open");
         assert!(matches!(
             rx.try_recv(),
-            Ok(TransportCommand::OwnerAction(OwnerAction::OpenTerminal))
+            Ok(TransportCommand::OwnerAction(OwnerAction::Open))
         ));
     }
 

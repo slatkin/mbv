@@ -130,7 +130,7 @@ default to off.
 ### Requirement: The Tray icon toggles the pinned panel
 
 A left click on the Tray icon SHALL ask the Owner process to toggle the pinned panel: hide it
-when it is shown, and show it when it is hidden. The request SHALL be the same one `mbv --toggle`
+when it is shown, and show it when it is hidden. The request SHALL be the same one `mbv-tui --toggle`
 sends. The Owner SHALL run it only while a pinned Client is attached; with no pinned Client the
 click SHALL do nothing. The Tray SHALL start no process to do this, and playback SHALL continue
 across the hide and the show.

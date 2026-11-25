@@ -220,8 +220,9 @@ where
                 Some(control_token) => CtrlHello::current_control_client(control_token),
                 None => CtrlHello::current(),
             };
+            let hello = hello.with_swap_token(claims.swap_token.clone());
             match &claims.pin_swap {
-                Some(pin_swap) => hello.with_pin_swap(pin_swap.pinned, pin_swap.swap_token.clone()),
+                Some(pin_swap) => hello.with_pin_swap(pin_swap.pinned),
                 None => hello,
             }
         }

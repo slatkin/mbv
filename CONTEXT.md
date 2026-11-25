@@ -109,7 +109,7 @@ _Avoid_: script source (bare), active script, script lookup
 ## Processes
 
 Owner program:
-The `mbv-owner` program that hosts the Owner process. It is a separate program installed beside `mbv` and `mbv-gui`. It carries no Client: its dependency graph holds no terminal UI library and no GUI toolkit. A Client that finds no Owner process starts it from beside its own program, else the `mbv-owner` name on `PATH`. For Pin swap, Unpin, and Open, it launches the sibling `mbv` program of its own build; it holds that file open from start, so a package upgrade cannot change the build it launches (ADR 0044). It differs from `mbvd`, which is a separately packaged daemon.
+The `mbv-owner` program that hosts the Owner process. It is a separate program installed beside `mbv` and `mbv-tui`. It carries no Client: its dependency graph holds no terminal UI library and no GUI toolkit. A Client that finds no Owner process starts it from beside its own program, else the `mbv-owner` name on `PATH`. For Pin swap and Unpin, it launches the sibling `mbv-tui` program of its own build, and for Open the sibling `mbv` (GUI Client) program; it holds both files open from start, so a package upgrade cannot change the build it launches (ADR 0044). It differs from `mbvd`, which is a separately packaged daemon.
 _Avoid_: owner binary, the Owner in `mbv`, local daemon program, hidden daemon flag
 
 Owner process:
@@ -132,11 +132,11 @@ A TUI Client or a GUI Client attached to an out-of-process Player owner over ctr
 _Avoid_: thin client, terminal client, viewer, attachment
 
 TUI Client:
-The Client kind that presents the full terminal UI. It is the `mbv` program. It attaches to an out-of-process Player owner over ctrl like every Client. It hosts the TuiRealm Interactive Components, translates its raw key and pointer events into neutral events, and paints with ratatui. It presents the focus that the *Client core* derives.
+The Client kind that presents the full terminal UI. It is the `mbv-tui` program. It attaches to an out-of-process Player owner over ctrl like every Client. It hosts the TuiRealm Interactive Components, translates its raw key and pointer events into neutral events, and paints with ratatui. It presents the focus that the *Client core* derives.
 _Avoid_: terminal client, thin client, viewer
 
 GUI Client:
-The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. The design canvas is its reference, not the TUI Client. For the surfaces that both Clients present (the player panel and the Status bar) it shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, and Keyboard Router. Its *GUI Library panel* is its own (ADR 0036). It paints with its own painters, which are Dioxus Native components rendered by Blitz in the same process as the core (ADR 0039), and translates its raw input into neutral events.
+The Client kind that presents a native window. It is the `mbv` program and the default app. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. The design canvas is its reference, not the TUI Client. For the surfaces that both Clients present (the player panel and the Status bar) it shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, and Keyboard Router. Its *GUI Library panel* is its own (ADR 0036). It paints with its own painters, which are Dioxus Native components rendered by Blitz in the same process as the core (ADR 0039), and translates its raw input into neutral events.
 _Avoid_: windowed client, desktop client, GUI (bare, for the app)
 
 Client core:
@@ -152,7 +152,7 @@ The interaction state of one interactive surface, held one time where both Clien
 _Avoid_: widget state, UI state (bare), duplicate state
 
 Local process:
-Any mbv process on the user machine. It runs one of the three programs `mbv`, `mbv-gui`, or `mbv-owner`. It is a Client or the Owner process. Control of mbvd or another device from F3 happens inside an already running Local process. Its Owner process and Tray keep running. Desktop features belong to Local processes and never to mbvd. The Tray and the pinned panel are examples.
+Any mbv process on the user machine. It runs one of the three programs `mbv`, `mbv-tui`, or `mbv-owner`. It is a Client or the Owner process. Control of mbvd or another device from F3 happens inside an already running Local process. Its Owner process and Tray keep running. Desktop features belong to Local processes and never to mbvd. The Tray and the pinned panel are examples.
 _Avoid_: client side (of mbvd), frontend, desktop daemon
 
 Tray:
@@ -164,7 +164,7 @@ The Owner action that moves the session between the pinned panel and a terminal 
 _Avoid_: pin toggle, repin, re-home
 
 Owner action:
-A user action the Owner process runs on request. The request comes from the Tray or from the one CLI flag of that action. The request is not a Client. It attaches to no queue and holds no playback. Pin swap is the first Owner action. Open is the second (code `OwnerAction::OpenTerminal`, CLI flag `--open`).
+A user action the Owner process runs on request. The request comes from the Tray or from the one CLI flag of that action. The request is not a Client. It attaches to no queue and holds no playback. Pin swap is the first Owner action. Open is the second (code `OwnerAction::Open`, CLI flag `mbv-tui --open`): it starts a GUI Client window.
 _Avoid_: owner command, daemon action, admin action
 
 Player endpoint:
@@ -447,7 +447,7 @@ The app-wide layout state. It is one of Mini, Narrow, or Wide. The three values 
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 Pinned panel:
-The Wayland layer-shell surface that pinwin shows beside tiled windows. pinwin hosts the Pin terminal in it, and that terminal runs the mbv TUI. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel. At most one panel named `mbv` runs per Wayland display. It can be hidden and shown with `mbv --toggle` or with a left click on the Tray while mbv keeps running, and a second `--pin` shows it.
+The Wayland layer-shell surface that pinwin shows beside tiled windows. pinwin hosts the Pin terminal in it, and that terminal runs the mbv TUI. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel. At most one panel named `mbv` runs per Wayland display. It can be hidden and shown with `mbv-tui --toggle` or with a left click on the Tray while mbv keeps running, and a second `--pin` shows it.
 _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
 
 Pinned panel width:
@@ -463,7 +463,7 @@ A stroke around the Pinned panel window while it holds keyboard focus. It draws 
 _Avoid_: focus ring, strip, highlight
 
 Panel covering:
-The covering rule of the Pinned panel. The collapsed panel pushes when `[panel]` `reserve` is on, the default: the compositor reserves a strip beside it and tiled windows move aside. It covers when `reserve` is off: it draws over the tiled windows and no strip is reserved. The expanded panel always covers: it draws over the tiled windows and holds the strip already reserved, so expanding and collapsing move no tiled window. A `reserve` change while the panel is expanded applies on the next collapse. A strip the panel already holds is released only on the next `mbv --pin` launch. The F2 `Reserve space` row or `config.toml` edits `reserve`.
+The covering rule of the Pinned panel. The collapsed panel pushes when `[panel]` `reserve` is on, the default: the compositor reserves a strip beside it and tiled windows move aside. It covers when `reserve` is off: it draws over the tiled windows and no strip is reserved. The expanded panel always covers: it draws over the tiled windows and holds the strip already reserved, so expanding and collapsing move no tiled window. A `reserve` change while the panel is expanded applies on the next collapse. A strip the panel already holds is released only on the next `mbv-tui --pin` launch. The F2 `Reserve space` row or `config.toml` edits `reserve`.
 _Avoid_: cover mode, overlay, always on top
 
 Pinned launch:

@@ -25,12 +25,29 @@ use std::process::{Command, Stdio};
 
 use mbv_desktop::launch::{detach, terminal_prefix, toggle_panel};
 
-/// The reason a launch without a held `mbv` program reports: no Client can
-/// run the Owner's own build then (spec pin-swap "No TUI program beside the
-/// Owner program").
-const MISSING_PROGRAM: &str = "cannot start a Client: no mbv program sits beside mbv-owner";
+/// The TUI Client program: Pin swap and Unpin start it.
+const TUI_PROGRAM: &str = "mbv-tui";
 
-/// The sibling `mbv` program the Owner holds from start (design D9).
+/// The GUI Client program: Open starts it.
+const GUI_PROGRAM: &str = "mbv";
+
+/// The sibling Client program one launch starts: the GUI Client for Open,
+/// the TUI Client for Pin and Unpin (the pinned panel is a TUI Client).
+fn launch_program_name(direction: mbv_daemon::SwapDirection) -> &'static str {
+    match direction {
+        mbv_daemon::SwapDirection::Open => GUI_PROGRAM,
+        mbv_daemon::SwapDirection::Pin | mbv_daemon::SwapDirection::Unpin => TUI_PROGRAM,
+    }
+}
+
+/// The reason a launch without its held program reports: no Client can run
+/// the Owner's own build then (spec pin-swap "No Client program beside the
+/// Owner program").
+fn missing_program(name: &str) -> String {
+    format!("cannot start a Client: no {name} program sits beside mbv-owner")
+}
+
+/// A sibling Client program the Owner holds from start (design D9).
 ///
 /// A Client attaches only to an Owner of the same build, so a launch must
 /// start the build the Owner itself runs, not whatever the installed path
@@ -40,10 +57,18 @@ struct HeldProgram {
     /// The open file, `O_CLOEXEC` as `File::open` gives it. It must outlive
     /// the Owner, because [`HeldProgram::launch`] names its descriptor.
     file: std::fs::File,
-    /// The path the file was opened from: `mbv` beside `mbv-owner`.
+    /// The path the file was opened from: the program beside `mbv-owner`.
     path: PathBuf,
     /// The `(dev, ino)` the Owner opened.
     inode: (u64, u64),
+}
+
+/// The two sibling Client programs the Owner holds from start (design D9).
+struct HeldPrograms {
+    /// `mbv-tui`: Pin swap and Unpin start it.
+    tui: Option<HeldProgram>,
+    /// `mbv`, the GUI Client: Open starts it.
+    gui: Option<HeldProgram>,
 }
 
 /// The held program as one launch sees it (design D9): the inode the Owner
@@ -52,7 +77,7 @@ struct HeldProgram {
 struct LaunchProgram {
     /// The `(dev, ino)` the Owner opened at start.
     inode: (u64, u64),
-    /// The path the Owner opened: `mbv` beside `mbv-owner`.
+    /// The path the Owner opened: the program beside `mbv-owner`.
     path: PathBuf,
     /// `/proc/<owner pid>/fd/<n>` for the held file. It names the held inode
     /// from any process of the same user, also from the terminal emulator an
@@ -61,12 +86,12 @@ struct LaunchProgram {
 }
 
 impl HeldProgram {
-    /// Opens the `mbv` program beside the Owner's own program. `None` means
+    /// Opens the program `name` beside the Owner's own program. `None` means
     /// no such program sat there at start, and no launch can start the
-    /// Owner's own build.
-    fn open_beside_owner() -> Option<Self> {
+    /// Owner's own build of it.
+    fn open_beside_owner(name: &str) -> Option<Self> {
         let owner = std::env::current_exe().ok()?;
-        let path = owner.parent()?.join("mbv");
+        let path = owner.parent()?.join(name);
         let file = std::fs::File::open(&path).ok()?;
         let metadata = file.metadata().ok()?;
         Some(Self {
@@ -110,15 +135,17 @@ fn launch_path(held: &LaunchProgram, current_inode: Option<(u64, u64)>) -> &Path
 
 /// Pure argv resolution for the swap-launch command.
 ///
-/// Pin runs `exe --pin` (a new pinned panel Client, no terminal involved).
-/// Unpin (and Open, which shares the Unpin direction) prefixes `exe` with the
-/// `[panel] terminal` argv prefix when set, otherwise `TERMINAL -e`; with
-/// neither set the launch cannot run, and the error names both sources so the
-/// desktop notification does too (spec pin-swap "Neither set").
+/// Pin runs `mbv-tui --pin` (a new pinned panel Client, no terminal
+/// involved). Unpin prefixes `mbv-tui` with the `[panel] terminal` argv
+/// prefix when set, otherwise `TERMINAL -e`; with neither set the launch
+/// cannot run, and the error names both sources so the desktop notification
+/// does too (spec pin-swap "Neither set"). Open runs the GUI Client `mbv`, a
+/// window that needs no terminal.
 ///
-/// `held` is the program the Owner holds, and `current_inode` is the inode its
-/// path names now. No held program fails before any other reason, because no
-/// direction can then start the Owner's own build.
+/// `held` is the program the Owner holds for `direction`, and
+/// `current_inode` is the inode its path names now. No held program fails
+/// before any other reason, because the launch cannot then start the Owner's
+/// own build.
 fn swap_argv(
     direction: mbv_daemon::SwapDirection,
     held: Option<&LaunchProgram>,
@@ -130,10 +157,11 @@ fn swap_argv(
         Some(held) => launch_path(held, current_inode)
             .to_string_lossy()
             .into_owned(),
-        None => return Err(MISSING_PROGRAM.to_string()),
+        None => return Err(missing_program(launch_program_name(direction))),
     };
     match direction {
         mbv_daemon::SwapDirection::Pin => Ok(vec![exe, "--pin".to_string()]),
+        mbv_daemon::SwapDirection::Open => Ok(vec![exe]),
         mbv_daemon::SwapDirection::Unpin => {
             let mut argv = terminal_prefix(panel_terminal, terminal_env, "terminal")
                 .map_err(|reason| format!("cannot start a terminal Client: {reason}"))?;
@@ -160,8 +188,12 @@ fn detached_swap_command(argv: &[String]) -> Command {
 /// file), so its inode is read per launch.
 fn launch_swap_command(
     direction: mbv_daemon::SwapDirection,
-    held: Option<&HeldProgram>,
+    held: &HeldPrograms,
 ) -> Result<Command, String> {
+    let held = match direction {
+        mbv_daemon::SwapDirection::Open => held.gui.as_ref(),
+        mbv_daemon::SwapDirection::Pin | mbv_daemon::SwapDirection::Unpin => held.tui.as_ref(),
+    };
     let current_inode = held.and_then(HeldProgram::current_inode);
     let program = held.map(HeldProgram::launch);
     // The `[panel] terminal` value is re-read from the config file on every
@@ -281,11 +313,14 @@ pub fn run_local_daemon_main() -> ! {
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let player_handle_for_tray = std::sync::Arc::clone(&player_handle);
 
-    // Hold the sibling `mbv` from start (design D9): a Pin swap, Unpin, or
-    // Open after the installed file changes still starts the build this Owner
-    // runs. The file stays open for the Owner's lifetime; the launches read
-    // only its paths and inodes.
-    let held_program = HeldProgram::open_beside_owner();
+    // Hold the sibling `mbv-tui` and `mbv` from start (design D9): a Pin
+    // swap, Unpin, or Open after the installed file changes still starts the
+    // build this Owner runs. The files stay open for the Owner's lifetime; the
+    // launches read only their paths and inodes.
+    let held_programs = HeldPrograms {
+        tui: HeldProgram::open_beside_owner(TUI_PROGRAM),
+        gui: HeldProgram::open_beside_owner(GUI_PROGRAM),
+    };
 
     // `Ok` is unreachable: the daemon loop never returns — shutdown always
     // ends in `process::exit`. Only a startup failure reaches this point.
@@ -303,9 +338,7 @@ pub fn run_local_daemon_main() -> ! {
                     handle.attached_clients,
                 )
             }),
-            swap_command: Box::new(move |direction| {
-                launch_swap_command(direction, held_program.as_ref())
-            }),
+            swap_command: Box::new(move |direction| launch_swap_command(direction, &held_programs)),
             notify: Box::new(mbv_desktop::launch::notify),
             // The Tray's icon click asks the Owner process to toggle the
             // pinned panel; the request runs on a worker thread, so the
@@ -326,6 +359,7 @@ pub fn run_local_daemon_main() -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mbv_daemon::SwapDirection::{Open, Unpin};
     use rstest::rstest;
 
     /// The `(dev, ino)` the Owner opened at start, and the one the path
@@ -333,19 +367,19 @@ mod tests {
     const HELD: (u64, u64) = (1, 2);
     const REPLACED: (u64, u64) = (3, 4);
 
-    /// The held `mbv` program: a fixed path and its Owner descriptor, so a
-    /// case varies only the inodes.
-    fn held_program() -> LaunchProgram {
+    /// The held program for `direction`: a fixed path and its Owner
+    /// descriptor, so a case varies only the inodes.
+    fn held_program(direction: mbv_daemon::SwapDirection) -> LaunchProgram {
         LaunchProgram {
             inode: HELD,
-            path: PathBuf::from("/usr/bin/mbv"),
+            path: PathBuf::from(format!("/usr/bin/{}", launch_program_name(direction))),
             descriptor: PathBuf::from("/proc/4242/fd/7"),
         }
     }
 
     /// Resolves one launch the way the swap hook in
-    /// [`run_local_daemon_main`] does. `held_inode` is `None` when no `mbv`
-    /// program sat beside `mbv-owner` at start.
+    /// [`run_local_daemon_main`] does. `held_inode` is `None` when the
+    /// direction's program did not sit beside `mbv-owner` at start.
     fn resolve(
         direction: mbv_daemon::SwapDirection,
         held_inode: Option<(u64, u64)>,
@@ -357,7 +391,7 @@ mod tests {
             panel_terminal.map(|argv| argv.iter().map(|arg| (*arg).to_string()).collect());
         let program = held_inode.map(|inode| LaunchProgram {
             inode,
-            ..held_program()
+            ..held_program(direction)
         });
         swap_argv(
             direction,
@@ -380,7 +414,7 @@ mod tests {
         Some(HELD),
         Some(&["wezterm", "start", "--"][..]),
         Some("ghostty"),
-        vec!["/usr/bin/mbv".to_string(), "--pin".to_string()]
+        vec!["/usr/bin/mbv-tui".to_string(), "--pin".to_string()]
     )]
     #[case::unpin_uses_panel_terminal(
         mbv_daemon::SwapDirection::Unpin,
@@ -392,7 +426,7 @@ mod tests {
             "wezterm".to_string(),
             "start".to_string(),
             "--".to_string(),
-            "/usr/bin/mbv".to_string(),
+            "/usr/bin/mbv-tui".to_string(),
         ]
     )]
     #[case::unpin_falls_back_to_terminal_env(
@@ -401,9 +435,9 @@ mod tests {
         Some(HELD),
         None,
         Some("ghostty"),
-        vec!["ghostty".to_string(), "-e".to_string(), "/usr/bin/mbv".to_string()]
+        vec!["ghostty".to_string(), "-e".to_string(), "/usr/bin/mbv-tui".to_string()]
     )]
-    #[case::pin_after_the_mbv_path_changed_starts_the_owner_descriptor(
+    #[case::pin_after_the_tui_path_changed_starts_the_owner_descriptor(
         mbv_daemon::SwapDirection::Pin,
         Some(HELD),
         Some(REPLACED),
@@ -411,7 +445,7 @@ mod tests {
         None,
         vec!["/proc/4242/fd/7".to_string(), "--pin".to_string()]
     )]
-    #[case::open_after_the_mbv_path_was_removed_starts_the_owner_descriptor(
+    #[case::unpin_after_the_tui_path_was_removed_starts_the_owner_descriptor(
         mbv_daemon::SwapDirection::Unpin,
         Some(HELD),
         None,
@@ -423,6 +457,14 @@ mod tests {
             "--".to_string(),
             "/proc/4242/fd/7".to_string(),
         ]
+    )]
+    #[case::open_starts_the_gui_with_no_terminal(
+        mbv_daemon::SwapDirection::Open,
+        Some(HELD),
+        Some(HELD),
+        Some(&["wezterm", "start", "--"][..]),
+        Some("ghostty"),
+        vec!["/usr/bin/mbv".to_string()]
     )]
     fn swap_argv_resolves_the_replacement_client_command(
         #[case] direction: mbv_daemon::SwapDirection,
@@ -442,22 +484,24 @@ mod tests {
         assert_eq!(resolved, Ok(expected));
     }
 
-    /// A launch with no terminal source, and a launch with no held `mbv`
-    /// program, both fail with a reason that names what is missing, so the
-    /// desktop notification does too (spec pin-swap "Neither set" and "No TUI
+    /// A launch with no terminal source, and a launch with no held program,
+    /// both fail with a reason that names what is missing, so the desktop
+    /// notification does too (spec pin-swap "Neither set" and "No Client
     /// program beside the Owner program").
     #[rstest]
-    #[case::neither_set_names_both(Some(HELD), None, None, "[panel] terminal")]
-    #[case::empty_terminal_env_counts_as_unset(Some(HELD), None, Some(""), "TERMINAL")]
-    #[case::no_sibling_mbv_at_start_names_the_program(None, None, Some("ghostty"), "mbv")]
+    #[case::neither_set_names_both(Unpin, Some(HELD), None, None, "[panel] terminal")]
+    #[case::empty_terminal_env_counts_as_unset(Unpin, Some(HELD), None, Some(""), "TERMINAL")]
+    #[case::no_sibling_tui_at_start_names_it(Unpin, None, None, Some("ghostty"), "no mbv-tui ")]
+    #[case::no_sibling_gui_at_start_names_it(Open, None, None, Some("ghostty"), "no mbv ")]
     fn swap_argv_without_a_launch_names_what_is_missing(
+        #[case] direction: mbv_daemon::SwapDirection,
         #[case] held_inode: Option<(u64, u64)>,
         #[case] panel_terminal: Option<&[&str]>,
         #[case] terminal_env: Option<&str>,
         #[case] named: &str,
     ) {
         let error = resolve(
-            mbv_daemon::SwapDirection::Unpin,
+            direction,
             held_inode,
             Some(HELD),
             panel_terminal,

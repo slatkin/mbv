@@ -11,7 +11,7 @@ description = "Native window Client for mbv, built with Dioxus Native on Blitz."
 readme = "../../README.md"
 
 [[bin]]
-name = "mbv-gui"
+name = "mbv"
 path = "src/main.rs"
 
 [lints]

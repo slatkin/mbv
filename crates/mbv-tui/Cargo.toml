@@ -9,10 +9,10 @@ keywords.workspace = true
 categories.workspace = true
 description = "mpv/Emby and Audiobookshelf front-end"
 readme = "../../README.md"
-default-run = "mbv"
+default-run = "mbv-tui"
 
 [[bin]]
-name = "mbv"
+name = "mbv-tui"
 path = "src/main.rs"
 
 # Lints mirror [workspace.lints] in the root Cargo.toml, minus the
@@ -151,7 +151,7 @@ rstest.workspace = true
 
 [package.metadata.deb]
 # The .deb keeps the `mbv` package name (not the crate name): it ships the
-# `mbv`, `mbv-gui`, and `mbv-owner` binaries, and the release workflow uploads
+# `mbv` (the GUI Client), `mbv-tui`, and `mbv-owner` binaries, and the release workflow uploads
 # `target/debian/mbv_*.deb`.
 name = "mbv"
 maintainer = "slatkin <slatkin@gmail.com>"
@@ -163,7 +163,7 @@ section = "video"
 priority = "optional"
 assets = [
     ["../../target/release/mbv", "usr/bin/mbv", "755"],
-    ["../../target/release/mbv-gui", "usr/bin/mbv-gui", "755"],
+    ["../../target/release/mbv-tui", "usr/bin/mbv-tui", "755"],
     ["../../target/release/mbv-owner", "usr/bin/mbv-owner", "755"],
     ["../../contrib/mbv.desktop", "usr/share/applications/mbv.desktop", "644"],
     ["../../assets/icon.svg", "usr/share/icons/hicolor/scalable/apps/mbv.svg", "644"],

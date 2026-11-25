@@ -8,29 +8,29 @@ the Tray uses, so every Tray action can in time be run from a shell or a composi
 
 ### Requirement: Each Owner action has exactly one CLI flag
 
-Each Owner action SHALL have exactly one `mbv` CLI flag, and `mbv --help` SHALL list every Owner
-action flag. Starting `mbv` with an Owner action flag SHALL run that action only: no TUI SHALL
+Each Owner action SHALL have exactly one `mbv-tui` CLI flag, and `mbv-tui --help` SHALL list every Owner
+action flag. Starting `mbv-tui` with an Owner action flag SHALL run that action only: no TUI SHALL
 start. Other arguments on the same command line SHALL be ignored. `--swap-panel` SHALL run the Pin
 swap. `--open` SHALL run Open.
 
 #### Scenario: Help lists the swap flag
 
-- **WHEN** the user runs `mbv --help`
+- **WHEN** the user runs `mbv-tui --help`
 - **THEN** the output SHALL list `--swap-panel`
 
 #### Scenario: Help lists the open flag
 
-- **WHEN** the user runs `mbv --help`
+- **WHEN** the user runs `mbv-tui --help`
 - **THEN** the output SHALL list `--open`
 
 #### Scenario: An Owner action flag starts no TUI
 
-- **WHEN** an Owner process runs and the user runs `mbv --swap-panel` in a terminal
+- **WHEN** an Owner process runs and the user runs `mbv-tui --swap-panel` in a terminal
 - **THEN** no TUI SHALL start in that terminal
 
 ### Requirement: The CLI asks the running Owner process and reports acceptance
 
-`mbv` with an Owner action flag SHALL send the action to this machine's Owner process and exit 0
+`mbv-tui` with an Owner action flag SHALL send the action to this machine's Owner process and exit 0
 once the Owner accepts it. It SHALL exit 1 with a message on stderr when no Owner process runs,
 when the Owner refuses the action, or when the Owner does not support Owner actions or does not
 support that action. It SHALL never start an Owner process and SHALL NOT wait for the action's
@@ -38,7 +38,7 @@ later outcome.
 
 #### Scenario: No Owner process
 
-- **WHEN** no Owner process runs and the user runs `mbv --swap-panel`
+- **WHEN** no Owner process runs and the user runs `mbv-tui --swap-panel`
 - **THEN** stderr SHALL say that no mbv is running
 - **THEN** mbv SHALL exit 1 and no Owner process SHALL start
 
@@ -56,7 +56,7 @@ later outcome.
 #### Scenario: Owner does not support this action
 
 - **WHEN** the running Owner process supports Owner actions but predates `--open`, and the user
-  runs `mbv --open`
+  runs `mbv-tui --open`
 - **THEN** stderr SHALL tell the user to restart mbv, and mbv SHALL exit 1
 
 ### Requirement: An Owner action request is not a Client
@@ -68,7 +68,7 @@ be accepted only from this machine and never over TCP.
 
 #### Scenario: Stay-alive off with a Client attached
 
-- **WHEN** `stay_alive` is false, one TUI is attached, and the user runs `mbv --swap-panel`
+- **WHEN** `stay_alive` is false, one TUI is attached, and the user runs `mbv-tui --swap-panel`
 - **THEN** the Owner process SHALL accept the action
 - **THEN** the attached TUI SHALL NOT be refused or disconnected by the request itself
 
@@ -80,10 +80,10 @@ be accepted only from this machine and never over TCP.
 ### Requirement: The Tray and the CLI run the same Owner action
 
 A Tray item that has an Owner action SHALL run it through the same Owner process path as that
-action's CLI flag, with the same behavior. The Tray SHALL NOT start an `mbv` process to do so.
+action's CLI flag, with the same behavior. The Tray SHALL NOT start an `mbv-tui` process to do so.
 
 #### Scenario: Pin from either trigger
 
 - **WHEN** the same Clients are attached and the user chooses **Pin** in the Tray, or runs
-  `mbv --swap-panel`
+  `mbv-tui --swap-panel`
 - **THEN** the Owner process SHALL pick the same direction and target Client in both cases

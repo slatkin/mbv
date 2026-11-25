@@ -275,10 +275,10 @@ jobs:
         run: cargo build --release --all-targets
 
       - name: Build GUI Client
-        # `mbv-gui` sits outside `default-members`, so the step above never
-        # builds it. The GUI starts its Owner from the sibling `mbv-owner`
-        # program and the handshake refuses a mismatched build, so all three
-        # ship from this one commit.
+        # `mbv-gui` (the `mbv` program) sits outside `default-members`, so the
+        # step above never builds it. The GUI starts its Owner from the
+        # sibling `mbv-owner` program and the handshake refuses a mismatched
+        # build, so all three ship from this one commit.
         run: cargo build --release -p mbv-gui
 
       - name: Test release
@@ -304,7 +304,7 @@ jobs:
           mkdir -p "${DIST}"
           cp target/release/mbv "${DIST}/"
           cp target/release/mbvd "${DIST}/"
-          cp target/release/mbv-gui "${DIST}/"
+          cp target/release/mbv-tui "${DIST}/"
           cp target/release/mbv-owner "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
           cp scripts/mbv_*.lua "${DIST}/"
@@ -336,7 +336,8 @@ jobs:
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libx11-6(,|$)'
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libfontconfig1(,|$)'
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libvulkan1(,|$)'
-          dpkg-deb --contents "${MBV_DEB}" | grep -Eq ' \./usr/bin/mbv-gui$'
+          dpkg-deb --contents "${MBV_DEB}" | grep -Eq ' \./usr/bin/mbv$'
+          dpkg-deb --contents "${MBV_DEB}" | grep -Eq ' \./usr/bin/mbv-tui$'
           dpkg-deb --contents "${MBV_DEB}" | grep -Eq ' \./usr/share/doc/mbv/LICENSES/MPL-2\.0\.txt$'
           if dpkg-deb --field "${MBVD_DEB}" Depends | grep -Eq '(^|, )(pipewire|libpipewire-0\.3-0)(,|$)'; then
             echo "mbvd must not depend on PipeWire runtime packages"

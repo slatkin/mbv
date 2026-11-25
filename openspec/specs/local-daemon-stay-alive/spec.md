@@ -9,7 +9,7 @@ TBD - created by archiving change retire-pty-relay-for-local-daemon-stay-alive. 
 
 The Player owner for a TUI SHALL be a local daemon: a user-owned background process on the same
 machine, holding no terminal, that binds the user's control socket. This SHALL hold whether stay-alive is enabled or not; stay-alive decides only the
-daemon's lifetime. The local daemon SHALL run from the `mbv-owner` program, never from the `mbv` program. The terminal SHALL NOT own the Player; it SHALL run as a client of that daemon.
+daemon's lifetime. The local daemon SHALL run from the `mbv-owner` program, never from a Client program (`mbv` or `mbv-tui`). The terminal SHALL NOT own the Player; it SHALL run as a client of that daemon.
 
 #### Scenario: Stay-alive is requested and no local daemon exists
 - **WHEN** mbv starts with stay-alive enabled and nothing is listening on the user's control socket

@@ -36,7 +36,7 @@ enum CommandShape {
     ApplyServiceSetupAudiobookshelf,
     SwapPrepared,
     RunOwnerActionSwapPanel,
-    RunOwnerActionOpenTerminal,
+    RunOwnerActionOpen,
     UnifiedQueue(UnifiedShape),
     NamedQueue(NamedQueueShape),
     UnifiedAdoptQueue,
@@ -74,7 +74,7 @@ impl CommandShape {
                 | CommandShape::ApplyServiceSetupAudiobookshelf
                 | CommandShape::SwapPrepared
                 | CommandShape::RunOwnerActionSwapPanel
-                | CommandShape::RunOwnerActionOpenTerminal
+                | CommandShape::RunOwnerActionOpen
                 | CommandShape::UnifiedAdoptQueue => shapes.push(shape),
             }
         }
@@ -98,7 +98,7 @@ impl CommandShape {
             }
             CommandShape::SwapPrepared => "SwapPrepared".into(),
             CommandShape::RunOwnerActionSwapPanel => "RunOwnerAction.SwapPanel".into(),
-            CommandShape::RunOwnerActionOpenTerminal => "RunOwnerAction.OpenTerminal".into(),
+            CommandShape::RunOwnerActionOpen => "RunOwnerAction.Open".into(),
             CommandShape::UnifiedQueue(shape) => shape.name().into(),
             CommandShape::NamedQueue(shape) => shape.name().into(),
             CommandShape::UnifiedAdoptQueue => "UnifiedAdoptQueue".into(),
@@ -132,9 +132,7 @@ impl CommandShape {
             CommandShape::RunOwnerActionSwapPanel => {
                 CtrlCmd::RunOwnerAction(OwnerAction::SwapPanel)
             }
-            CommandShape::RunOwnerActionOpenTerminal => {
-                CtrlCmd::RunOwnerAction(OwnerAction::OpenTerminal)
-            }
+            CommandShape::RunOwnerActionOpen => CtrlCmd::RunOwnerAction(OwnerAction::Open),
             CommandShape::UnifiedQueue(shape) => shape.build(),
             CommandShape::NamedQueue(shape) => shape.build(),
             CommandShape::UnifiedAdoptQueue => CtrlCmd::UnifiedAdoptQueue {
@@ -357,7 +355,7 @@ fn shape_of(cmd: &CtrlCmd) -> CommandShape {
         CtrlCmd::SwapPrepared => CommandShape::SwapPrepared,
         CtrlCmd::RunOwnerAction(action) => match action {
             OwnerAction::SwapPanel => CommandShape::RunOwnerActionSwapPanel,
-            OwnerAction::OpenTerminal => CommandShape::RunOwnerActionOpenTerminal,
+            OwnerAction::Open => CommandShape::RunOwnerActionOpen,
         },
         CtrlCmd::UnifiedQueueReplace {
             start_position_secs: Some(_),

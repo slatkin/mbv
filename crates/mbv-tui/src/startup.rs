@@ -155,8 +155,8 @@ fn config_diagnostic_summary(config: &Config) -> String {
 }
 
 pub(crate) fn print_usage() {
-    println!("mbv {}", env!("CARGO_PKG_VERSION"));
-    println!("Usage: mbv [OPTIONS]");
+    println!("mbv-tui {}", env!("CARGO_PKG_VERSION"));
+    println!("Usage: mbv-tui [OPTIONS]");
     println!();
     println!("Options:");
     println!(
@@ -164,7 +164,7 @@ pub(crate) fn print_usage() {
     );
     println!("  -q                        Stop the running local Player owner.");
     println!("      --pin                  Run the TUI in the pinwin panel named mbv.");
-    println!("                             The panel hosts a terminal that runs mbv.");
+    println!("                             The panel hosts a terminal that runs mbv-tui.");
     println!("      --toggle               Show or hide the running pinwin panel named");
     println!("                             mbv (bind this to a compositor key).");
     for action in OwnerAction::ALL {
@@ -203,7 +203,7 @@ fn pre_config_startup(args: &[String]) -> Option<StartupArgs> {
     }
 
     if has_flag(args, "--version") || has_flag(args, "-V") {
-        println!("mbv {}", env!("CARGO_PKG_VERSION"));
+        println!("mbv-tui {}", env!("CARGO_PKG_VERSION"));
         return None;
     }
 

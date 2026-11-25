@@ -146,12 +146,12 @@ The TUI Client SHALL NOT depend on GUI Client code, and the GUI Client SHALL NOT
 
 #### Scenario: The GUI program carries no terminal UI
 
-- **WHEN** the `mbv-gui` program is built
+- **WHEN** the `mbv` program is built
 - **THEN** its dependency graph contains no terminal library and no terminal UI framework
 
 #### Scenario: The TUI program carries no window stack
 
-- **WHEN** the `mbv` program is built
+- **WHEN** the `mbv-tui` program is built
 - **THEN** its dependency graph contains no GUI toolkit and no GUI Client code
 
 #### Scenario: Behaviour both Clients share changes once

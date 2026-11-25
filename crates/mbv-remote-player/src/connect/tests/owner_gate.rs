@@ -57,6 +57,7 @@ fn local_handshake_rejects_a_mismatched_owner_before_client_hello(
         &crate::ClientHelloClaims {
             pin_swap: Some(crate::PinSwapHello::default()),
             named_queues: false,
+            swap_token: None,
         },
     )
     .unwrap_err();
@@ -123,6 +124,7 @@ fn local_handshake_accepts_an_owner_with_a_different_build_id() {
         &crate::ClientHelloClaims {
             pin_swap: Some(crate::PinSwapHello::default()),
             named_queues: false,
+            swap_token: None,
         },
     )
     .unwrap();

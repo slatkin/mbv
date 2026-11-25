@@ -4,6 +4,13 @@ status: accepted
 
 # The Owner Runs From Its Own Program
 
+**Amended (2026-11-25):** the GUI Client is now the `mbv` program and the TUI
+Client is `mbv-tui`. The Owner holds two sibling programs from start, each
+with the held-file rule below: `mbv-tui` for Pin swap and Unpin, and `mbv`
+for Open, which now starts a GUI Client window. Where this record says the
+sibling `mbv` program, read the Client program that the launch starts. The
+`pin-swap` and `owner-program` specs hold the current launch rules.
+
 The per-user Owner process runs from its own program, `mbv-owner`, in the
 crate `crates/mbv-owner`. The `mbv` and `mbv-gui` programs never host the
 Owner process. This completes the split

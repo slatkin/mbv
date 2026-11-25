@@ -68,7 +68,7 @@ impl PendingSwapToken {
 enum LaunchKind {
     /// Replace one Client with another (the Pin swap).
     Swap,
-    /// Start a fresh terminal Client with no effect on any attached Client.
+    /// Start a fresh GUI Client window with no effect on any attached Client.
     Open,
 }
 
@@ -111,7 +111,7 @@ impl LaunchKind {
     fn spawned_message(self) -> &'static str {
         match self {
             LaunchKind::Swap => "panel swap replacement client spawned",
-            LaunchKind::Open => "open terminal client spawned",
+            LaunchKind::Open => "open window client spawned",
         }
     }
 
@@ -119,7 +119,7 @@ impl LaunchKind {
     fn spawn_failed_message(self) -> &'static str {
         match self {
             LaunchKind::Swap => "panel swap spawn failed",
-            LaunchKind::Open => "open terminal client spawn failed",
+            LaunchKind::Open => "open window client spawn failed",
         }
     }
 }
@@ -252,8 +252,8 @@ impl PinSwapState {
         }
     }
 
-    /// Opens a fresh terminal Client from an Owner action (spec pin-swap
-    /// "Open starts a terminal Client"). It reuses the swap launch machine
+    /// Opens a fresh GUI Client window from an Owner action (spec pin-swap
+    /// "Open starts a GUI Client"). It reuses the swap launch machine
     /// with no target: no `SwapPrepare` is sent, the registry is not read,
     /// and no attached Client is affected. The replacement attaches with the
     /// one-shot token and the admission path completes the launch as it
@@ -263,7 +263,7 @@ impl PinSwapState {
             return Err(self.busy_message().to_string());
         }
         let deadline = now + SWAP_DEADLINE;
-        let command = self.resolve_command(SwapDirection::Unpin, "terminal client")?;
+        let command = self.resolve_command(SwapDirection::Open, "window client")?;
         self.spawn_replacement(command, None, deadline, LaunchKind::Open);
         Ok(())
     }
@@ -659,7 +659,7 @@ mod tests {
         let result = swap.open(now);
 
         assert_eq!(result, Err("no terminal is configured".to_string()));
-        assert_eq!(*asked.lock().unwrap(), vec![SwapDirection::Unpin]);
+        assert_eq!(*asked.lock().unwrap(), vec![SwapDirection::Open]);
         assert!(
             client_rx.try_recv().is_err(),
             "open must not send SwapPrepare"

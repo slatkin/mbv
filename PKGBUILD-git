@@ -26,7 +26,8 @@ prepare() {
 
 build() {
     cd "${pkgname}"
-    # `mbv-gui` is outside default-members and needs its own build.
+    # `mbv-gui` (the `mbv` program) is outside default-members and needs its
+    # own build.
     cargo build --frozen --release
     cargo build --frozen --release -p mbv-gui
 }
@@ -35,7 +36,7 @@ package() {
     cd "${pkgname}"
     install -Dm755 "target/release/mbv" "${pkgdir}/usr/bin/mbv"
     install -Dm755 "target/release/mbvd" "${pkgdir}/usr/bin/mbvd"
-    install -Dm755 "target/release/mbv-gui" "${pkgdir}/usr/bin/mbv-gui"
+    install -Dm755 "target/release/mbv-tui" "${pkgdir}/usr/bin/mbv-tui"
     install -Dm755 "target/release/mbv-owner" "${pkgdir}/usr/bin/mbv-owner"
     install -Dm644 "contrib/mbv.desktop" "${pkgdir}/usr/share/applications/mbv.desktop"
     install -Dm644 "assets/icon.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/mbv.svg"

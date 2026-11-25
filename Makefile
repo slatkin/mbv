@@ -31,8 +31,11 @@ build:
 install: build
 	$(CARGO) build --release -p mbv-owner -p mbv-gui
 	$(INSTALL) -Dm755 target/release/$(BINARY) $(DESTDIR)$(PREFIX)/bin/$(BINARY)
+	# The GUI Client was `mbv-gui` before it became `mbv`; a stale copy would
+	# start an older build that the Owner refuses.
+	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/bin/mbv-gui
 	$(INSTALL) -Dm755 target/release/mbvd $(DESTDIR)$(PREFIX)/bin/mbvd
-	$(INSTALL) -Dm755 target/release/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-gui
+	$(INSTALL) -Dm755 target/release/mbv-tui $(DESTDIR)$(PREFIX)/bin/mbv-tui
 	$(INSTALL) -Dm755 target/release/mbv-owner $(DESTDIR)$(PREFIX)/bin/mbv-owner
 	$(INSTALL) -Dm644 contrib/mbv.desktop $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
 	$(INSTALL) -Dm644 assets/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
@@ -51,7 +54,7 @@ install: build
 	fi
 
 uninstall:
-	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/bin/$(BINARY) $(DESTDIR)$(PREFIX)/bin/mbvd $(DESTDIR)$(PREFIX)/bin/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-owner
+	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/bin/$(BINARY) $(DESTDIR)$(PREFIX)/bin/mbvd $(DESTDIR)$(PREFIX)/bin/mbv-tui $(DESTDIR)$(PREFIX)/bin/mbv-gui $(DESTDIR)$(PREFIX)/bin/mbv-owner
 	$(RM_ROOT) -rf $(DESTDIR)$(PREFIX)/share/mbv $(DESTDIR)$(PREFIX)/share/licenses/mbv
 	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/share/applications/mbv.desktop
 	$(RM_ROOT) -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/mbv.svg
@@ -71,10 +74,10 @@ clean:
 clean-dev:
 	cargo clean --profile dev
 
-# The GUI starts its Owner from the sibling `mbv-owner` program, and the
-# handshake refuses an Owner whose build id differs. `cargo run -p mbv-gui`
-# alone leaves `mbv-owner` stale after a commit, so build all three before the
-# window starts.
+# The GUI (`mbv`) starts its Owner from the sibling `mbv-owner` program, and
+# the handshake refuses an Owner whose build id differs. `cargo run -p mbv-gui`
+# alone leaves `mbv-owner` stale after a commit, so build all three (`mbv`,
+# `mbv-tui`, `mbv-owner`) before the window starts.
 dev:
 	cargo build -p mbv-tui -p mbv-owner -p mbv-gui
 	cargo run -p mbv-gui

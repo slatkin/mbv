@@ -1,12 +1,12 @@
 ## mbv
 
-`mbv` is a terminal media player: a Rust terminal UI that shows your Emby / Audiobookshelf / RSS-feed libraries and plays and syncs them through mpv in a child process. It runs as one background process per user (the "Owner") that holds the player and the queue; every TUI window is a client that talks to it over a local socket. 
+`mbv` is a media player: a Rust native window that shows your Emby / Audiobookshelf / RSS-feed libraries and plays and syncs them through mpv in a child process. `mbv-tui` is the same thing as a terminal UI. It runs as one background process per user (the "Owner") that holds the player and the queue; every window, GUI or TUI, is a client that talks to it over a local socket. 
 
 Full Emby client session remote control via WebSocket is also supported. `mbv` can control (and be remote-controlled by) standard Emby clients.
 
 `mbvd` uses Emby client protocols to act as a headless server that can be reached over the network; I use it on a small machine attached to my stereo amp like it was mbd but serving from my Emby library. 
 
-If you use Wayland, it comes with a small Smithay/libghostty-vt panel that allows you to pin the app as a layer that can be hidden as necessary. This is clearly bloat and scope creep, something that a third-party tool could easily do.
+If you use Wayland, it comes with a small Smithay/libghostty-vt panel that allows you to pin the TUI (`mbv-tui --pin`) as a layer that can be hidden as necessary. This is clearly bloat and scope creep, something that a third-party tool could easily do.
 
 You can download it. It's a vibe-coded funtime hobby though. And I probably have ADHD. I don't even care enough about licencing to type "MIT" on this! Danger.
 

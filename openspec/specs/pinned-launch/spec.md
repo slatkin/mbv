@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Defines mbv's pinned panel: `mbv --pin` runs mbv's TUI docked in a Wayland layer-shell panel, the
+Defines mbv's pinned panel: `mbv-tui --pin` runs mbv's TUI docked in a Wayland layer-shell panel, the
 panel layout is editable in the settings screen. The
 panel is part of mbv, not a separate program.
 
 ## Requirements
 
 ### Requirement: Pin flag
-mbv SHALL accept `--pin`, which runs the TUI in a pinwin panel named `mbv`: pinwin docks the pin
-terminal as the panel, and that terminal runs mbv with the hidden `--in-panel` flag. The process
+`mbv-tui` SHALL accept `--pin`, which runs the TUI in a pinwin panel named `mbv`: pinwin docks the pin
+terminal as the panel, and that terminal runs `mbv-tui` with the hidden `--in-panel` flag. The process
 that ran `--pin` SHALL wait until the panel's terminal ends. Without `--pin`, mbv SHALL start in the current terminal exactly as
 before; no config setting starts the panel. `--pin` SHALL combine with `--log-level`, and the mbv
 in the panel SHALL run with that log level. `-h`, `-V`, `-q` and `--toggle`
@@ -19,19 +19,19 @@ SHALL never start a panel. The panel SHALL close when mbv in it exits. At most o
 panel unchanged, open no second panel, start no TUI, and exit with status 0.
 
 #### Scenario: Pinned launch from a terminal
-- **WHEN** the user types `mbv --pin` in a terminal on a Wayland session with layer-shell
+- **WHEN** the user types `mbv-tui --pin` in a terminal on a Wayland session with layer-shell
 - **THEN** the TUI appears in the panel, and the terminal waits until the panel ends
 
 #### Scenario: Plain launch
-- **WHEN** the user types `mbv` in a terminal, including over ssh or inside tmux
+- **WHEN** the user types `mbv-tui` in a terminal, including over ssh or inside tmux
 - **THEN** mbv starts in that terminal as before, whatever `WAYLAND_DISPLAY` is
 
 #### Scenario: Second pinned launch while hidden
-- **WHEN** a pinned mbv is running with its panel hidden and the user starts `mbv --pin` again
+- **WHEN** a pinned mbv is running with its panel hidden and the user starts `mbv-tui --pin` again
 - **THEN** the running panel is shown, and the second mbv exits with status 0 without opening a panel
 
 #### Scenario: Second pinned launch while shown
-- **WHEN** a pinned mbv is running with its panel shown and the user starts `mbv --pin` again
+- **WHEN** a pinned mbv is running with its panel shown and the user starts `mbv-tui --pin` again
 - **THEN** the running panel is unchanged, and the second mbv exits with status 0
 
 ### Requirement: Panel start failure
@@ -47,15 +47,15 @@ error of the mbv in the panel SHALL be logged and sent as a desktop notification
 error.
 
 #### Scenario: Terminal fallback
-- **WHEN** the user types `mbv --pin` in a terminal with `WAYLAND_DISPLAY` unset
+- **WHEN** the user types `mbv-tui --pin` in a terminal with `WAYLAND_DISPLAY` unset
 - **THEN** one warning line is printed and mbv runs in that terminal
 
 #### Scenario: Saved layout does not fit
-- **WHEN** `mbv --pin` starts with a `[panel] width` that leaves the output no width
+- **WHEN** `mbv-tui --pin` starts with a `[panel] width` that leaves the output no width
 - **THEN** the panel does not open, and mbv exits with pinwin's failure status
 
 #### Scenario: Pinned launch without layer-shell
-- **WHEN** `mbv --pin` is launched from a compositor key or launcher on GNOME or X11
+- **WHEN** `mbv-tui --pin` is launched from a compositor key or launcher on GNOME or X11
 - **THEN** a notification says the panel could not open, the status stays in the log, and mbv exits with a non-zero status
 
 #### Scenario: Fatal start-up error in the panel
@@ -63,7 +63,7 @@ error.
 - **THEN** the error is logged and a desktop notification names it
 
 ### Requirement: Desktop entry
-`contrib/mbv.desktop` SHALL launch `mbv-gui` with `Terminal=false`, SHALL NOT carry the `ConsoleOnly` category, and SHALL set `StartupWMClass` to the GUI app id `io.github.slatkin.mbv-gui`. The pinned panel is started by `mbv --pin`, not by the desktop entry.
+`contrib/mbv.desktop` SHALL launch `mbv`, the GUI Client, with `Terminal=false`, SHALL NOT carry the `ConsoleOnly` category, and SHALL set `StartupWMClass` to the GUI app id `io.github.slatkin.mbv-gui`. The pinned panel is started by `mbv-tui --pin`, not by the desktop entry.
 
 #### Scenario: Launcher entry
 - **WHEN** the tarball, the `.deb` or an Arch package is installed
@@ -97,7 +97,7 @@ enabling reserves the strip beside the panel, and disabling leaves the panel cov
 already holds. A change to `Reserve space` while the panel is expanded SHALL send no request, and
 the saved value decides the reserve mode the next collapse requests. A saved disable SHALL be
 announced with a neutral toast saying a strip the panel already holds is released on the next
-`mbv --pin` launch; a saved enable while expanded SHALL be announced with a neutral toast saying
+`mbv-tui --pin` launch; a saved enable while expanded SHALL be announced with a neutral toast saying
 the strip is reserved on the next collapse. A change to
 an accent row SHALL NOT touch the running panel. A pinned panel request SHALL run off the TUI
 thread, and at most one SHALL be in flight. A step that arrives while a request is pending SHALL
@@ -126,7 +126,7 @@ accepted request saves the value, and a refusal flashes pinwin's reason and save
 
 #### Scenario: Disable reserve while pinned
 - **WHEN** mbv runs in the panel at its collapsed width and holding a reserved strip, and the user toggles `Reserve space` off
-- **THEN** the value is saved, the panel covers the strip it already holds, a neutral toast says the space is released on the next `mbv --pin` launch, and no tiled window moves
+- **THEN** the value is saved, the panel covers the strip it already holds, a neutral toast says the space is released on the next `mbv-tui --pin` launch, and no tiled window moves
 
 #### Scenario: Enable reserve while expanded
 - **WHEN** mbv runs in the panel at its expanded width started with `reserve = false` and the user toggles `Reserve space` on
@@ -134,7 +134,7 @@ accepted request saves the value, and a refusal flashes pinwin's reason and save
 
 #### Scenario: Change while not pinned
 - **WHEN** mbv runs in a terminal and the user changes a Panel row
-- **THEN** the value is saved and used the next time `mbv --pin` starts
+- **THEN** the value is saved and used the next time `mbv-tui --pin` starts
 
 #### Scenario: Rejected layout while pinned
 - **WHEN** mbv runs in the panel and a step would leave the panel's output with no width
@@ -149,7 +149,7 @@ accepted request saves the value, and a refusal flashes pinwin's reason and save
 - **THEN** both keys are ignored, one logged warning names them, and `width` and the other keys keep their values
 
 #### Scenario: mbv gutters win over pinwin's configuration
-- **WHEN** `[panel] gutter_top = 8` in mbv and pinwin's `[panel.mbv]` sets `gutter_top = 30`, and the user runs `mbv --pin`
+- **WHEN** `[panel] gutter_top = 8` in mbv and pinwin's `[panel.mbv]` sets `gutter_top = 30`, and the user runs `mbv-tui --pin`
 - **THEN** the panel starts 8 pixels below the output's top edge
 
 #### Scenario: Malformed accent colour
@@ -165,13 +165,13 @@ accepted request saves the value, and a refusal flashes pinwin's reason and save
 - **THEN** the key is ignored without a warning, and the other `[panel]` keys keep their values
 
 ### Requirement: Focus accent applies at launch
-`mbv --pin` SHALL start the panel with the focus accent from `[panel]`: on with `accent_color` and
+`mbv-tui --pin` SHALL start the panel with the focus accent from `[panel]`: on with `accent_color` and
 `accent_width` when `accent` is true, off otherwise. Because the accent is fixed when the panel
 starts, a change to an accent row while pinned SHALL be saved and announced with a neutral toast
-saying it applies on the next `mbv --pin` launch.
+saying it applies on the next `mbv-tui --pin` launch.
 
 #### Scenario: Default accent
-- **WHEN** `mbv --pin` starts with no accent keys in `config.toml` and the user clicks into the panel
+- **WHEN** `mbv-tui --pin` starts with no accent keys in `config.toml` and the user clicks into the panel
 - **THEN** a 1 px `#dabc7f` stroke appears around the panel's border while it holds focus
 
 #### Scenario: Accent off
@@ -180,7 +180,7 @@ saying it applies on the next `mbv --pin` launch.
 
 #### Scenario: Accent edit while pinned
 - **WHEN** mbv runs in the panel and the user toggles `Accent` in F2
-- **THEN** the value is saved, the panel is unchanged, and a neutral toast says the change applies on the next `mbv --pin` launch
+- **THEN** the value is saved, the panel is unchanged, and a neutral toast says the change applies on the next `mbv-tui --pin` launch
 
 ### Requirement: Panel toggle
 mbv SHALL accept `--toggle`, which asks pinwin on the current Wayland display to hide the panel
@@ -192,28 +192,28 @@ toggle while a pinned Client is attached; the Owner process sends the request th
 request is reported as a desktop notification.
 
 #### Scenario: Hide from a compositor key
-- **WHEN** the user presses a compositor key bound to `mbv --toggle` while the pinned panel is shown
-- **THEN** the panel hides, playback continues, and the `mbv --toggle` process exits with status 0
+- **WHEN** the user presses a compositor key bound to `mbv-tui --toggle` while the pinned panel is shown
+- **THEN** the panel hides, playback continues, and the `mbv-tui --toggle` process exits with status 0
 
 #### Scenario: Show from a compositor key
 - **WHEN** the user presses the same key while the panel is hidden
 - **THEN** the panel shows at the same width with the TUI as it was, and takes keyboard focus
 
 #### Scenario: Nothing pinned
-- **WHEN** the user runs `mbv --toggle` in a terminal with no `mbv` panel running
+- **WHEN** the user runs `mbv-tui --toggle` in a terminal with no `mbv` panel running
 - **THEN** one line gives pinwin's reason, and the process exits with status 1
 
 #### Scenario: Nothing pinned from a key
-- **WHEN** a compositor key runs `mbv --toggle` with no `mbv` panel running
+- **WHEN** a compositor key runs `mbv-tui --toggle` with no `mbv` panel running
 - **THEN** a desktop notification gives pinwin's reason, and no mbv starts
 
 #### Scenario: Toggle from the Tray
 - **WHEN** a pinned Client is attached and the user left-clicks the Tray icon
 - **THEN** the Owner process sends the same request, and the panel hides or shows as it did for
-  `mbv --toggle`
+  `mbv-tui --toggle`
 
 ### Requirement: Panel width decides pushing or covering
-`mbv --pin` SHALL build the collapsed panel layout in pushing mode when `[panel] reserve` is true
+`mbv-tui --pin` SHALL build the collapsed panel layout in pushing mode when `[panel] reserve` is true
 and in covering mode when it is false, and the expanded panel layout
 in covering mode always. A pushing panel makes the compositor reserve a strip
 beside it, so tiled windows move aside. A covering panel draws over the tiled windows and holds
@@ -221,11 +221,11 @@ the strip already reserved, so expanding and collapsing move no tiled window. mb
 runtime toggle for the expanded width's covering mode.
 
 #### Scenario: Collapsed panel pushes
-- **WHEN** `mbv --pin` starts with `reserve` unset or true
+- **WHEN** `mbv-tui --pin` starts with `reserve` unset or true
 - **THEN** the compositor reserves a strip beside the panel and tiled windows move aside
 
 #### Scenario: Collapsed panel covers
-- **WHEN** `mbv --pin` starts with `reserve = false`
+- **WHEN** `mbv-tui --pin` starts with `reserve = false`
 - **THEN** the panel draws over the tiled windows and no strip is reserved
 
 #### Scenario: Expanding leaves tiles in place
@@ -260,7 +260,7 @@ when `--pin` asked for the panel. A process that mbv starts, including the Owner
 NOT be pinned because its starter was.
 
 #### Scenario: Panel started by hand
-- **WHEN** the user runs `pinwin run --name tunes -- ghostty --gtk-single-instance=false -e mbv --in-panel`
+- **WHEN** the user runs `pinwin run --name tunes -- ghostty --gtk-single-instance=false -e mbv-tui --in-panel`
 - **THEN** that mbv runs as pinned, and `x` resizes the `tunes` panel
 
 #### Scenario: Panel started by hand without the launch flag
@@ -268,11 +268,11 @@ NOT be pinned because its starter was.
 - **THEN** that mbv runs as unpinned, `x` keeps its normal behavior, and its children inherit no `PINWIN_*`
 
 #### Scenario: Shell started inside the panel
-- **WHEN** a shell or tmux started in the panel terminal starts `mbv` without `--in-panel`
+- **WHEN** a shell or tmux started in the panel terminal starts `mbv-tui` without `--in-panel`
 - **THEN** that mbv runs as unpinned even though it inherited `PINWIN_PANEL`, and its children inherit no `PINWIN_*`
 
 #### Scenario: Terminal gives the launch to a running copy
-- **WHEN** `mbv --pin` runs with a pin terminal that gives its launch to a running copy of itself
+- **WHEN** `mbv-tui --pin` runs with a pin terminal that gives its launch to a running copy of itself
 - **THEN** mbv opens in that copy's normal window and runs as unpinned
 
 #### Scenario: Owner started from the panel
@@ -285,11 +285,11 @@ otherwise the `TERMINAL` environment variable followed by `-e`. mbv SHALL NOT fa
 other terminal. With neither set, `--pin` SHALL fail with a reason that names both sources.
 
 #### Scenario: Config value set
-- **WHEN** `pin_terminal = ["ghostty", "--gtk-single-instance=false", "-e"]` and the user runs `mbv --pin`
+- **WHEN** `pin_terminal = ["ghostty", "--gtk-single-instance=false", "-e"]` and the user runs `mbv-tui --pin`
 - **THEN** the panel holds a Ghostty window that runs mbv
 
 #### Scenario: Neither set
-- **WHEN** neither `pin_terminal` nor `TERMINAL` is set and the user runs `mbv --pin` in a terminal
+- **WHEN** neither `pin_terminal` nor `TERMINAL` is set and the user runs `mbv-tui --pin` in a terminal
 - **THEN** one line names both sources and mbv runs in that terminal
 
 ### Requirement: No panel library is linked
@@ -302,7 +302,7 @@ mbv binary SHALL link GTK or gtk4-layer-shell.
 - **THEN** the build succeeds and no pinwin, Wayland client, xkbcommon or fontconfig crate is involved
 
 #### Scenario: Runtime without pinwin
-- **WHEN** `pinwin` is not installed and the user runs `mbv --pin` in a terminal
+- **WHEN** `pinwin` is not installed and the user runs `mbv-tui --pin` in a terminal
 - **THEN** one line says that pinwin is not installed and mbv runs in that terminal
 
 ### Requirement: Retired pinned width keybinding

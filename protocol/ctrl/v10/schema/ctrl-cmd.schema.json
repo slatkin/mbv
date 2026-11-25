@@ -651,7 +651,7 @@
       ]
     },
     "OwnerAction": {
-      "description": "An action the Owner process runs on request from the Tray or its one CLI\nflag. Each variant has exactly one `mbv` CLI flag; `cli_flag`, `help`,\n`from_cli_flag`, and `ALL` are the only places a flag string lives.",
+      "description": "An action the Owner process runs on request from the Tray or its one CLI\nflag. Each variant has exactly one `mbv-tui` CLI flag; `cli_flag`, `help`,\n`from_cli_flag`, and `ALL` are the only places a flag string lives.",
       "oneOf": [
         {
           "const": "swap-panel",
@@ -660,7 +660,7 @@
         },
         {
           "const": "open-terminal",
-          "description": "Start a fresh terminal Client (a new terminal window) attached to\nthis Owner, with no effect on any attached Client.",
+          "description": "Start a fresh GUI Client window attached to this Owner, with no\neffect on any attached Client. The wire name predates the GUI Client\nand stays for compatibility.",
           "type": "string"
         }
       ]
