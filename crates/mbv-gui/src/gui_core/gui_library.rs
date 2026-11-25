@@ -90,8 +90,8 @@ pub use self::podcasts_projection::{
 #[cfg(test)]
 pub(crate) use self::projection::music_artist_row_art;
 pub use self::projection::{
-    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
-    GuiMusicTrackTotal,
+    GuiMusicAlbum, GuiMusicArtist, GuiMusicArtistPage, GuiMusicHero, GuiMusicHeroSubject,
+    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
 pub(crate) use self::request::GuiSectionRequest;
 pub(crate) use self::rows_in_view::queue_in_view_row_fetches;

@@ -88,12 +88,38 @@ pub struct GuiMusicTrackTotal {
     pub duration: String,
 }
 
-/// The Hero's facts for the picked album (design D5): the artist header, the
-/// picked album block, and its tracklist. The artwork is not here: the frame
+/// The Hero's subject (gui-music-artist-page design D1): the picked album,
+/// or the picked artist's page while the union still holds the artist.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GuiMusicHeroSubject {
+    /// The picked album, with its tracklist when the cache holds it.
+    Album(GuiMusicAlbum),
+    /// The picked artist's page.
+    Artist(GuiMusicArtistPage),
+}
+
+/// The artist page the Hero shows while an artist is picked
+/// (gui-music-artist-page design D1): the union's albums of the artist in the
+/// union's order, with the span of their release years.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiMusicArtistPage {
+    /// The artist's stable identity, the row the page pick names.
+    pub artist_key: ArtistKey,
+    /// The union's albums of the artist, in the union's order, with their
+    /// tracklists when the cache holds them.
+    pub albums: Vec<GuiMusicAlbum>,
+    /// The first and last release year of the albums that name one, in the
+    /// union's album order; `None` when no album names a year.
+    pub years: Option<(String, String)>,
+}
+
+/// The Hero's facts for the picked subject (design D5; gui-music-artist-page
+/// design D1): the artist header, and the subject — the picked album's block
+/// and tracklist, or the artist page. The artwork is not here: the frame
 /// carries it from the image cache (row 3.4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiMusicHero {
-    /// The picked album's artist.
+    /// The subject's artist.
     pub artist: String,
     /// The selected collection names in pill order, the header's
     /// `ARTIST · <collections>` line (design D6).
@@ -103,8 +129,9 @@ pub struct GuiMusicHero {
     /// The artist's track count and total time, present once every one of the
     /// artist's union albums holds a cached tracklist (design D5).
     pub artist_tracks: Option<GuiMusicTrackTotal>,
-    /// The picked album, with its tracklist when the cache holds it.
-    pub album: GuiMusicAlbum,
+    /// The picked subject: the artist page while the union holds the page's
+    /// artist, else the picked album (gui-music-artist-page design D1).
+    pub subject: GuiMusicHeroSubject,
 }
 
 /// The Music projection the GUI Library panel paints (design D5): the group
@@ -208,6 +235,11 @@ fn warm_music_hero_neighbours(app: &mut App, projection: &GuiMusicProjection) {
     let Some(picked) = projection.hero.as_ref() else {
         return;
     };
+    // The neighbour window follows the picked album through the tree. The
+    // artist page picks no album, so nothing warms while it shows.
+    let GuiMusicHeroSubject::Album(picked_album) = &picked.subject else {
+        return;
+    };
     let albums: Vec<&str> = projection
         .artists
         .iter()
@@ -216,7 +248,7 @@ fn warm_music_hero_neighbours(app: &mut App, projection: &GuiMusicProjection) {
         .collect();
     let Some(picked_index) = albums
         .iter()
-        .position(|album_id| *album_id == picked.album.album_id)
+        .position(|album_id| *album_id == picked_album.album_id)
     else {
         return;
     };
@@ -472,10 +504,13 @@ fn library_group_pick<'a>(
         .map(|(_, pick)| pick)
 }
 
-/// The Hero's facts for the picked album (design D5, D13): the artist header
-/// from the album's union row, and the album block with its tracklist. The
-/// picked album is the selected group's pick, or its first album, so the Hero
-/// is never blank while the group's albums are loaded.
+/// The Hero's facts for the picked subject (design D5, D13;
+/// gui-music-artist-page design D1): the artist page first — when the
+/// library's page pick names an `ArtistKey` the union still holds, the subject
+/// is that artist's page, built from its union row. Otherwise the subject is
+/// the picked album as before, and the header reads the album's union artist.
+/// The union test is the one rule that drops the page: a collection change
+/// clears no entry, so a dropped artist's page simply stops resolving.
 fn music_hero(
     app: &App,
     gui: &GuiClientState,
@@ -484,6 +519,23 @@ fn music_hero(
     artists: &[GuiMusicArtist],
     collections: &GuiCollections,
 ) -> Option<GuiMusicHero> {
+    if let Some(artist) = gui
+        .music_artist_pages
+        .get(&lib_idx)
+        .and_then(|key| artists.iter().find(|artist| &artist.artist_key == key))
+    {
+        return Some(GuiMusicHero {
+            artist: artist.name.clone(),
+            collections: collections.selected_names(),
+            album_count: artist.albums.len(),
+            artist_tracks: artist_tracks(app, artist),
+            subject: GuiMusicHeroSubject::Artist(GuiMusicArtistPage {
+                artist_key: artist.artist_key.clone(),
+                albums: artist.albums.clone(),
+                years: artist_years(artist),
+            }),
+        });
+    }
     let picked = picked_album_id(app, gui, lib_idx, set, artists)?;
     let (artist, album) = artists.iter().find_map(|artist| {
         artist
@@ -497,8 +549,22 @@ fn music_hero(
         collections: collections.selected_names(),
         album_count: artist.albums.len(),
         artist_tracks: artist_tracks(app, artist),
-        album: album.clone(),
+        subject: GuiMusicHeroSubject::Album(album.clone()),
     })
+}
+
+/// The artist page's year span (gui-music-artist-page design D1): the first
+/// and last non-empty release year of the artist's albums in the union's
+/// order, `None` when no album names a year.
+fn artist_years(artist: &GuiMusicArtist) -> Option<(String, String)> {
+    let mut years = artist
+        .albums
+        .iter()
+        .map(|album| album.year.as_str())
+        .filter(|year| !year.is_empty());
+    let first = years.next()?;
+    let last = years.next_back().unwrap_or(first);
+    Some((first.to_string(), last.to_string()))
 }
 
 /// The picked artist's track count and total time, once every one of its union

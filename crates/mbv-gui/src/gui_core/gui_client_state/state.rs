@@ -67,6 +67,13 @@ pub struct GuiClientState {
     pub(crate) library_picks: std::collections::HashMap<(usize, String), String>,
     /// The chosen Music union-group key, by library index.
     pub(crate) music_union_picks: std::collections::HashMap<usize, String>,
+    /// The Music artist page pick, by library index (gui-music-artist-page
+    /// design D1): the artist whose page the Hero shows while the union still
+    /// holds it. Session state — the launch file never saves it, and a pick
+    /// of an artist writes no album pick, so the group keeps the album shown
+    /// before the page.
+    pub(crate) music_artist_pages:
+        std::collections::HashMap<usize, mbv_ui_model::music_grouping::ArtistKey>,
     /// The row a library row menu was opened on.
     pub(crate) library_row_menu_target: Option<GuiLibraryMenuRow>,
     /// The artwork rows the GUI last had in view, by row-art scope.
@@ -182,6 +189,7 @@ impl GuiClientState {
             music_albums_refreshing: std::collections::HashSet::new(),
             library_picks: std::collections::HashMap::new(),
             music_union_picks: std::collections::HashMap::new(),
+            music_artist_pages: std::collections::HashMap::new(),
             library_row_menu_target: None,
             rows_in_view: std::collections::HashMap::new(),
             home_selection: None,

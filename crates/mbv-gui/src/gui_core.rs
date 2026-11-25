@@ -47,9 +47,9 @@ pub use self::gui_library::{
     GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, GuiFeedsSelection,
     GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu,
     GuiLibraryTab, GuiLibraryTabs, GuiListSort, GuiListSortFrame, GuiMusicAlbum, GuiMusicArtist,
-    GuiMusicHero, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPlayheadMarks,
-    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
-    GuiSearchProjection, GuiSearchRow, GuiSortTarget,
+    GuiMusicArtistPage, GuiMusicHero, GuiMusicHeroSubject, GuiMusicProjection, GuiMusicTrack,
+    GuiMusicTrackTotal, GuiPlayheadMarks, GuiPodcastEpisodeId, GuiPodcastsHero,
+    GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow, GuiSortTarget,
 };
 pub use self::gui_library::{
     GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,

@@ -9,11 +9,27 @@
 
 use super::*;
 use mbv_ui_model::music_grouping::ArtistKey;
-/// The album the Hero shows, by Service id (add-gui-library-panel design D13).
+use rstest::rstest;
+
+/// The album the Hero shows, by Service id (add-gui-library-panel design D13):
+/// the `Album` subject's id. The artist page picks no album, so a page
+/// subject reads as no album.
 fn hero_album_id(app: &mut App) -> Option<String> {
     gui_music_projection(app, 0)
         .hero
-        .map(|hero| hero.album.album_id)
+        .and_then(|hero| match hero.subject {
+            GuiMusicHeroSubject::Album(album) => Some(album.album_id),
+            GuiMusicHeroSubject::Artist(_) => None,
+        })
+}
+
+/// The Hero's picked album: the `Album` subject, which every test that seeds
+/// no artist page pick reads (gui-music-artist-page design D1).
+fn hero_album(hero: &GuiMusicHero) -> &GuiMusicAlbum {
+    match &hero.subject {
+        GuiMusicHeroSubject::Album(album) => album,
+        GuiMusicHeroSubject::Artist(_) => panic!("the test seeds no artist page pick"),
+    }
 }
 
 /// A group with no pick heroes its first album in list order, so the Hero is
@@ -115,7 +131,7 @@ fn the_picked_albums_neighbours_are_warmed() {
         projection
             .hero
             .as_ref()
-            .map(|hero| hero.album.album_id.as_str()),
+            .map(|hero| hero_album(hero).album_id.as_str()),
         Some("alb-3"),
         "alb-3 is the picked album"
     );
@@ -195,17 +211,17 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
     assert_eq!(hero.artist, "Beastie Boys");
     assert_eq!(hero.collections, ["Hip-Hop"]);
     assert_eq!(hero.album_count, 2, "the artist's albums in the union");
-    assert_eq!(hero.album.year, "1986");
-    assert_eq!(hero.album.name, "Licensed to Ill");
+    let album = hero_album(&hero);
+    assert_eq!(album.year, "1986");
+    assert_eq!(album.name, "Licensed to Ill");
     assert_eq!(
-        hero.album.total,
+        album.total,
         Some(GuiMusicTrackTotal {
             count: 2,
             duration: "8:43".to_string(),
         })
     );
-    let tracklist: Vec<(i64, &str, &str)> = hero
-        .album
+    let tracklist: Vec<(i64, &str, &str)> = album
         .tracks
         .iter()
         .flatten()
@@ -256,7 +272,7 @@ fn the_artist_total_waits_for_every_albums_tracklist() {
         .expect("the picked album has a Hero");
 
     assert!(
-        hero.album.total.is_some(),
+        hero_album(&hero).total.is_some(),
         "the picked album's tracks are cached"
     );
     assert_eq!(
@@ -464,4 +480,126 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
         music_artist_row_art(&app, &ArtistKey::Fallback("Beastie Boys".into())),
         GuiRowArt::NoSource
     );
+}
+
+/// What a Hero-subject case seeds as the library's artist page pick
+/// (gui-music-artist-page design D8).
+enum PagePick {
+    /// No pick: `music_artist_pages` stays empty.
+    None,
+    /// The union artist's own key, read from the projection so the case never
+    /// names the key kind the grouping rule derives.
+    UnionArtist,
+    /// A key the union does not hold.
+    OutsideUnion,
+}
+
+/// The Hero subject a case expects, with the facts the resolution rule owns.
+#[derive(Debug)]
+enum Subject {
+    /// The `Album` subject, by the album's Service id.
+    Album(&'static str),
+    /// The `Artist` page: its albums in the union's order, and its year span.
+    ArtistPage {
+        albums: &'static [&'static str],
+        years: Option<(&'static str, &'static str)>,
+    },
+}
+
+/// Seed the case's page pick in the GUI state the projection reads.
+fn seed_page_pick(app: &mut App, page_pick: PagePick) {
+    let key = match page_pick {
+        PagePick::None => return,
+        PagePick::UnionArtist => gui_music_projection(app, 0).artists[0].artist_key.clone(),
+        PagePick::OutsideUnion => ArtistKey::Fallback("No Such Artist".into()),
+    };
+    crate::gui_core::test_support::stub_gui_state(|gui| {
+        gui.music_artist_pages.insert(0, key);
+    });
+}
+
+/// Assert the Hero's subject against the case's expectation: the album by id,
+/// or the artist page with its albums in the union's order and its year span.
+fn assert_subject(hero: &GuiMusicHero, expected: Subject) {
+    match (&expected, &hero.subject) {
+        (Subject::Album(album_id), GuiMusicHeroSubject::Album(album)) => {
+            assert_eq!(album.album_id, *album_id);
+        }
+        (Subject::ArtistPage { albums, years }, GuiMusicHeroSubject::Artist(page)) => {
+            let ids: Vec<&str> = page
+                .albums
+                .iter()
+                .map(|album| album.album_id.as_str())
+                .collect();
+            assert_eq!(
+                ids, *albums,
+                "the page holds the artist's albums in the union's order"
+            );
+            let years = years.map(|(first, last)| (first.to_string(), last.to_string()));
+            assert_eq!(page.years, years, "the first and last release year");
+        }
+        _ => panic!("the subject {expected:?} does not match {:?}", hero.subject),
+    }
+}
+
+/// The Hero subject's resolution rule (gui-music-artist-page design D1, D8):
+/// no page pick heroes the album; a page pick for an artist the union holds
+/// heroes the artist page with the artist's albums in the union's order and
+/// the year span; a page pick for an artist the union does not hold heroes
+/// the album — the union test is the one rule that drops the page, the spec's
+/// "A selection that drops the artist"; and an album pick after a page pick
+/// heroes that album with the page entry gone, the spec's "An album row ends
+/// the artist page".
+#[rstest]
+#[case::no_page_pick(PagePick::None, None, Subject::Album("alb-ill"))]
+#[case::page_pick_the_union_holds(
+    PagePick::UnionArtist,
+    None,
+    Subject::ArtistPage {
+        albums: &["alb-ill", "alb-paul"],
+        years: Some(("1986", "1989")),
+    },
+)]
+#[case::page_pick_the_union_drops(PagePick::OutsideUnion, None, Subject::Album("alb-ill"))]
+#[case::an_album_pick_ends_the_page(
+    PagePick::UnionArtist,
+    Some("alb-paul"),
+    Subject::Album("alb-paul")
+)]
+fn the_hero_subject_resolves_the_page_pick_against_the_union(
+    #[case] page_pick: PagePick,
+    #[case] then_pick: Option<&str>,
+    #[case] expected: Subject,
+) {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![
+            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
+            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
+        ],
+        Vec::new(),
+    );
+    seed_page_pick(&mut app, page_pick);
+    if let Some(album_id) = then_pick {
+        apply_gui_library_command(
+            &mut app,
+            GuiLibraryCommand::ShowDetail {
+                item_id: album_id.to_string(),
+            },
+        );
+    }
+
+    let hero = gui_music_projection(&mut app, 0)
+        .hero
+        .expect("the Hero is never blank while the albums are loaded");
+
+    assert_subject(&hero, expected);
+    if then_pick.is_some() {
+        assert!(
+            crate::gui_core::test_support::stub_gui_state(|gui| !gui
+                .music_artist_pages
+                .contains_key(&0)),
+            "the album pick removes the library's page entry"
+        );
+    }
 }

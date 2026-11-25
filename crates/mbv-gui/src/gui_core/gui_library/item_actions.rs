@@ -97,12 +97,16 @@ impl GuiCore {
 
 /// Show `item_id` in the Hero (design D2, D13; gui-collection-dropdown design
 /// D11): one checked group's kept pick, or the session's union pick while All
-/// or several groups are checked.
+/// or several groups are checked. An album pick ends the library's artist
+/// page (gui-music-artist-page design D1): the page entry leaves first, also
+/// when the pick itself is unchanged, so a press on the album the page hides
+/// still ends the page.
 fn show_library_detail(app: &mut App, gui: &mut GuiClientState, item_id: &str) {
     let Some((lib_idx, item)) = library_item(app, gui, item_id) else {
         super::log_stale_library_item("showDetail", item_id);
         return;
     };
+    gui.music_artist_pages.remove(&lib_idx);
     let single_group = match super::projection::effective_music_set(app, gui, lib_idx).as_ref() {
         GuiCollectionSet::Checked(keys) if keys.len() == 1 => Some(keys[0].clone()),
         _ => None,
