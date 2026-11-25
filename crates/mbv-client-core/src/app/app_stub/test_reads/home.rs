@@ -430,6 +430,7 @@ impl App {
     #[cfg(any(test, feature = "test"))]
     pub fn clear_series_detail_loading_for_test(&mut self) {
         self.series_detail_loading.clear();
+        self.series_detail_fetches_in_flight.clear();
     }
 
     /// Note that `library_id`'s last TV Upcoming fetch finally failed.

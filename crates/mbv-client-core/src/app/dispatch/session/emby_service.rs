@@ -62,7 +62,10 @@ impl App {
         self.artist_artwork_status.clear();
         self.series_detail_cache.clear();
         self.series_detail_loading.clear();
+        self.series_detail_fetches_in_flight.clear();
+        self.series_detail_stale.clear();
         self.series_season_loading.clear();
+        self.series_season_stale.clear();
         self.pending_series_season_expansions.clear();
         // The shell's protocol store drops what this cleared at its next
         // drain (`Model::prune_image_protocols`): encodings never outlive

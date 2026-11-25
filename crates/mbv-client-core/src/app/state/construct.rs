@@ -280,6 +280,7 @@ impl App {
             artist_artwork_status: std::collections::HashMap::new(),
             series_detail_cache: IndexMap::new(),
             series_detail_loading: std::collections::HashSet::new(),
+            series_detail_fetches_in_flight: std::collections::HashSet::new(),
             series_detail_quiet: std::collections::HashSet::new(),
             series_detail_stale: std::collections::HashSet::new(),
             series_season_loading: std::collections::HashSet::new(),

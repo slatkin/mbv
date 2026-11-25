@@ -213,3 +213,46 @@ fn a_failed_detail_refetch_keeps_the_cached_detail_and_clears_the_stale_mark() {
         "a failed refetch clears the stale mark, so it never retries on each landing"
     );
 }
+
+/// A season landing keeps the detail refetch's loading mark while its fetch runs
+/// (unit 7 review, finding P1): the series' own detail fetch is still in flight,
+/// so the mark holds and the loader starts no second refetch, and the detail
+/// landing then clears it. Without the in-flight set the season landing cleared
+/// the mark, and the second refetch's landing ran without its quiet mark and
+/// started a first-season fetch nobody asked for.
+#[test]
+fn a_season_landing_keeps_the_running_detail_refetches_loading_mark() {
+    let http = MockHttp::new();
+    http.respond_repeated(200, EMPTY_ITEMS, 2);
+    let mut app = fetchable_app(&http);
+    let mut cached = series_detail("season-1");
+    cached
+        .episodes
+        .insert("season-1".into(), cached_episode("episode-1"));
+    app.cache_series_detail("show-1", cached);
+    app.mark_series_detail_stale("show-1");
+    app.mark_series_season_stale("show-1", "season-1");
+
+    app.refetch_series_detail("show-1");
+    app.refetch_series_season_episodes("show-1".into(), "season-1".into());
+    app.handle_lib_event(
+        LibEvent::Series(SeriesEvent::SeasonEpisodesFetched {
+            series_id: "show-1".into(),
+            season_id: "season-1".into(),
+            episodes: cached_episode("episode-2"),
+        }),
+        None,
+    );
+
+    assert!(
+        app.series_detail_loading("show-1"),
+        "a season landing keeps the loading mark of the detail fetch still running"
+    );
+
+    app.handle_series_detail_fetched_for_test("show-1", series_detail("season-1"));
+
+    assert!(
+        !app.series_detail_loading("show-1"),
+        "the detail landing itself clears the loading mark"
+    );
+}

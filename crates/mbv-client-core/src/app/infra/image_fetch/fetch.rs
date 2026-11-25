@@ -96,7 +96,9 @@ impl App {
 
     /// Proactively fetches TV series detail (seasons + episodes) so the
     /// Inline series detail pane can render without the user
-    /// drilling in first.
+    /// drilling in first. The id stays in `series_detail_fetches_in_flight`
+    /// until its landing, so a season landing keeps the derived loading mark
+    /// while this fetch runs (unit 7 review, finding P1).
     pub fn fetch_series_detail(&mut self, series_id: &str) {
         if series_id.is_empty() {
             return;
@@ -104,14 +106,17 @@ impl App {
         // A plain fetch supersedes a quiet in-view load of the same id (design
         // D6): its landing starts the first season as any pick expects.
         self.series_detail_quiet.remove(series_id);
-        if self.series_detail_loading.contains(series_id)
+        if self.series_detail_fetches_in_flight.contains(series_id)
             || self.series_detail_cache.contains_key(series_id)
         {
             return;
         }
         self.series_detail_loading.insert(series_id.to_string());
+        self.series_detail_fetches_in_flight
+            .insert(series_id.to_string());
         let Some(client) = self.emby_snapshot() else {
             self.series_detail_loading.remove(series_id);
+            self.series_detail_fetches_in_flight.remove(series_id);
             return;
         };
         let tx = self.channels.lib_tx.clone();
@@ -183,7 +188,8 @@ impl App {
     /// (design D9): the view paints the seasons and episodes it already holds
     /// until the landing replaces them, so a refresh never empties an open
     /// season. A series the cache lacks takes the quiet first load, and a series
-    /// whose fetch already runs is skipped. The fetch is a quiet one (design
+    /// whose detail or season fetch already runs is skipped, so a stale detail
+    /// waits for the running season to land. The fetch is a quiet one (design
     /// D6), so its landing starts no first-season episode fetch; the pending
     /// expansions still run. A failed refresh sends
     /// [`SeriesEvent::DetailRefreshFailed`] instead of the empty detail a first
@@ -196,13 +202,16 @@ impl App {
             self.fetch_series_detail_quiet(series_id);
             return;
         }
-        if self.series_detail_loading.contains(series_id) {
+        if self.series_fetch_running(series_id) {
             return;
         }
         self.series_detail_loading.insert(series_id.to_string());
+        self.series_detail_fetches_in_flight
+            .insert(series_id.to_string());
         self.series_detail_quiet.insert(series_id.to_string());
         let Some(client) = self.emby_snapshot() else {
             self.series_detail_loading.remove(series_id);
+            self.series_detail_fetches_in_flight.remove(series_id);
             self.series_detail_quiet.remove(series_id);
             return;
         };

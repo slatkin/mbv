@@ -292,6 +292,7 @@ impl App {
             self.cache_series_detail(series_id, detail);
         }
         self.series_detail_loading.remove(series_id);
+        self.series_detail_fetches_in_flight.remove(series_id);
         // A quiet in-view load (design D6) caches the detail without the first
         // season's episodes: the seasons stay closed until a pick or an
         // expansion asks for them. Pending expansions still run.
@@ -376,11 +377,13 @@ impl App {
 
     /// A failed stale-detail refresh (design D9): the cached detail stays,
     /// and the loading, quiet, and stale marks retire so the failure never
-    /// retries on each landing. One toast reports it.
+    /// retries on each landing. The loading mark still follows the season
+    /// fetches that run for the id. One toast reports it.
     pub(in crate::app) fn handle_series_detail_refresh_failed(&mut self, series_id: &str) {
-        self.series_detail_loading.remove(series_id);
+        self.series_detail_fetches_in_flight.remove(series_id);
         self.series_detail_quiet.remove(series_id);
         self.series_detail_stale.remove(series_id);
+        self.refresh_series_detail_loading(series_id);
         self.flash("Refresh failed".to_string(), ToastSeverity::Error);
     }
 
@@ -400,12 +403,21 @@ impl App {
         self.flash("Refresh failed".to_string(), ToastSeverity::Error);
     }
 
+    /// Whether a fetch for `series_id` runs: its own detail fetch, or one of its
+    /// seasons' episode fetches. The loading mark derives from both, so a season
+    /// landing never clears it while its series' detail fetch is still in flight
+    /// (unit 7 review, finding P1), and a stale detail waits for a running season
+    /// fetch before its refetch starts.
+    pub(in crate::app) fn series_fetch_running(&self, series_id: &str) -> bool {
+        self.series_detail_fetches_in_flight.contains(series_id)
+            || self
+                .series_season_loading
+                .iter()
+                .any(|(active_series, _)| active_series == series_id)
+    }
+
     fn refresh_series_detail_loading(&mut self, series_id: &str) {
-        if self
-            .series_season_loading
-            .iter()
-            .any(|(active_series, _)| active_series == series_id)
-        {
+        if self.series_fetch_running(series_id) {
             self.series_detail_loading.insert(series_id.to_owned());
         } else {
             self.series_detail_loading.remove(series_id);

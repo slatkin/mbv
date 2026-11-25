@@ -569,6 +569,12 @@ pub struct App {
     /// oldest entry.
     pub(in crate::app) series_detail_cache: IndexMap<String, SeriesDetail>,
     pub(in crate::app) series_detail_loading: std::collections::HashSet<String>,
+    /// Series whose own detail fetch runs, as distinct from the loading mark its
+    /// season fetches also hold (unit 7 review, finding P1): a season landing
+    /// keeps the derived mark while its series' detail fetch is in flight, and a
+    /// stale detail waits for a running season fetch. Only the detail landing and
+    /// the detail failure arm clear an id here.
+    pub(in crate::app) series_detail_fetches_in_flight: std::collections::HashSet<String>,
     /// Series ids whose running detail fetch is a quiet in-view load (design
     /// D6): its landing caches the detail but starts no first-season episode
     /// fetch. A plain `fetch_series_detail` for the same id drops the mark.
