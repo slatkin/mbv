@@ -144,6 +144,23 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
     let Some(chips) = props.chips.as_ref() else {
         return rsx! {};
     };
+    // An audio-only item paints its codec label alone, as the TUI's cluster
+    // does: track switching and subtitles mean nothing for an audio file, so
+    // no button paints and no chip region reports.
+    if let Some(codec) = chips.audio_only_codec.as_ref() {
+        return rsx! {
+            div {
+                class: "flex items-center justify-center font-mono text-xs tabular-nums",
+                span {
+                    class: "flex items-center rounded-full border px-2 py-0.5",
+                    style: "gap: calc(var(--mbv-cell-col) / 2); border-color: var(--mbv-border); background: var(--mbv-secondary); color: {role_var(GuiRole::TextPrimary)};",
+                    "data-chip": "codec",
+                    AudioLines { size: 12, color: role_var(GuiRole::IndicatorResolutionFg) }
+                    span { "{codec}" }
+                }
+            }
+        };
+    }
     // The marks, in the report's order (design D1): the two chips first, as
     // the former effect pushed them.
     let audio_mark = region_set.mark(RegionTarget::QueuePlayback(

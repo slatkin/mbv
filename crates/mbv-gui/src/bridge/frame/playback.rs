@@ -169,6 +169,10 @@ pub struct GuiTrackChips {
     /// The audio chip's pill text: the chosen track's two-letter language code,
     /// empty when none applies (the chip then paints the choice's label).
     pub audio_lang_code: String,
+    /// The codec label of an audio-only item, `None` for a video item. An
+    /// audio-only item paints this one label chip and no audio or subtitle
+    /// chip, as the TUI's cluster paints the codec alone.
+    pub audio_only_codec: Option<String>,
 }
 
 impl From<&TrackChips> for GuiTrackChips {
@@ -178,6 +182,7 @@ impl From<&TrackChips> for GuiTrackChips {
             audio: GuiTrackChip::from(&chips.audio),
             subtitles: GuiTrackChip::from(&chips.subtitles),
             audio_lang_code: chips.audio_lang_code.clone(),
+            audio_only_codec: chips.audio_only_codec.clone(),
         }
     }
 }

@@ -67,6 +67,7 @@ fn chips() -> GuiTrackChips {
             chosen: None,
         },
         audio_lang_code: "EN".to_owned(),
+        audio_only_codec: None,
     }
 }
 
@@ -304,6 +305,22 @@ fn an_audio_only_frame_paints_no_video_chip() {
     audio_only.video = None;
     let fixture = built(Some(audio_only), None);
     assert!(!fixture.text().contains("1080p"));
+}
+
+/// Contract (user request 2026-11-25, the TUI's status-indicator rule): an
+/// audio-only item paints its codec label alone — no audio chip and no
+/// subtitle chip, so no track-switching button and no chip region.
+#[test]
+fn an_audio_only_item_paints_the_codec_label_and_no_track_chips() {
+    let mut audio_only = chips();
+    audio_only.video = None;
+    audio_only.audio_only_codec = Some("FLAC".to_owned());
+    let fixture = built(Some(audio_only), None);
+
+    assert_eq!(fixture.text_of("[data-chip=\"codec\"]"), "FLAC");
+    assert!(!fixture.presents("[data-chip=\"audio\"]"));
+    assert!(!fixture.presents("[data-chip=\"subtitles\"]"));
+    assert_eq!(fixture.last_reported_targets(), Vec::<RegionTarget>::new());
 }
 
 /// Contract (`TrackChips.test.ts`): no chips paint while the local player

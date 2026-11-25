@@ -57,6 +57,12 @@ pub struct TrackChips {
     /// language code (`"EN"`), empty while no audio track is chosen or it names
     /// no language. The full label stays in the popover's choices.
     pub audio_lang_code: String,
+    /// The codec label (`"FLAC"`, `"MP3"`, `"--"` while unnamed) of an
+    /// audio-only item, `None` for a video item. It is the status-indicator
+    /// cluster's one audio-only pill: the TUI drops the audio and subtitle
+    /// labels for an audio-only item, and a Client that paints these chips
+    /// paints this label alone for one.
+    pub audio_only_codec: Option<String>,
 }
 
 /// One chip's facts: its choices and the chosen one.
@@ -255,6 +261,9 @@ impl App {
             )
             .to_string()
         });
+        let audio_only_codec = crate::app::LocalPlaybackTarget::indicator_data(self)
+            .filter(|data| data.flags.audio_only)
+            .map(|data| data.res_label.to_uppercase());
         Some(TrackChips {
             video,
             audio: TrackChip {
@@ -282,6 +291,7 @@ impl App {
                 chosen: (status.sub_id != 0).then_some(status.sub_id),
             },
             audio_lang_code: mbv_player::lang_short_code(&status.audio_lang),
+            audio_only_codec,
         })
     }
 

@@ -165,6 +165,7 @@ pub(super) fn chips() -> GuiTrackChips {
             chosen: None,
         },
         audio_lang_code: String::new(),
+        audio_only_codec: None,
     }
 }
 
