@@ -26,8 +26,8 @@ Each unit may leave dependent callers or the build broken for the next unit. A u
 
 ## 5. Queue rows (design D4)
 
-- [ ] 5.1 In `crates/mbv-gui/src/window/components/queue_panel/row_cells.rs`, apply design D4 "Queue row cells". Drop `strike` from `RowLook` and `line-through` from the title class. Keep the now-playing branch. Take the other rows' title tone and weight from `RowPlay::of_queue`, and keep the hover rule. Paint `PlayMark` between the ring and the duration in `RowChrome::Row` only. `RIGHT_COL_PX` does not change. Update the module doc and the `RowLook` doc. Verify: `cargo check -p mbv-gui` passes.
-- [ ] 5.2 Rewrite `the_rows_paint_the_watched_and_now_playing_states` in `crates/mbv-gui/src/window/components/queue_panel/tests/rows.rs`. The watched row's title has no `line-through` and paints `Grey1` at 400 with mark `played`. Add an `Ordinary` row that paints `Fg` at 600 with mark `unplayed`. The now-playing row keeps its green fill and title and has mark `none` (spec "Rows show their state"). Verify: `cargo nextest run -p mbv-gui queue_panel` passes.
+- [x] 5.1 In `crates/mbv-gui/src/window/components/queue_panel/row_cells.rs`, apply design D4 "Queue row cells". Drop `strike` from `RowLook` and `line-through` from the title class. Keep the now-playing branch. Take the other rows' title tone and weight from `RowPlay::of_queue`, and keep the hover rule. Paint `PlayMark` between the ring and the duration in `RowChrome::Row` only. `RIGHT_COL_PX` does not change. Update the module doc and the `RowLook` doc. Verify: `cargo check -p mbv-gui` passes.
+- [x] 5.2 Rewrite `the_rows_paint_the_watched_and_now_playing_states` in `crates/mbv-gui/src/window/components/queue_panel/tests/rows.rs`. The watched row's title has no `line-through` and paints `Grey1` at 400 with mark `played`. Add an `Ordinary` row that paints `Fg` at 600 with mark `unplayed`. The now-playing row keeps its green fill and title and has mark `none` (spec "Rows show their state"). Verify: `cargo nextest run -p mbv-gui queue_panel` passes.
 
 ## 6. Docs and integration
 
