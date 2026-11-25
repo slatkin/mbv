@@ -153,45 +153,12 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     }
 }
 
-/// The album branch of the Library Hero: the artist header with Shuffle
-/// artist, the album block with its square artwork and its action controls,
-/// and the album's tracklist.
-fn album_hero(
-    library: &LibraryState,
-    detail: &GuiMusicDetail,
-    hero: &GuiMusicHeroFrame,
-) -> Element {
-    // The Hero's More-actions entries (design D8): the frame carries the
-    // shared builder's entries in the builder's order — the order the core's
-    // execution rebuild indexes. The entries the Hero's own buttons already
-    // send (the Play entries and the add-to-queue entry) drop at paint time,
-    // so the menu names only what no button offers, and an album whose
-    // remainder is empty hides the control entirely.
-    const HERO_BUTTON_LABELS: [&str; 3] = ["Play", "Play All", "Add to Queue"];
-
-    let Some(album) = hero.album() else {
-        return rsx! {};
-    };
-
-    // The actions' sends (design D8): the picked album's own stable id.
-    let album_id = album.album_id.clone();
-    let play_library = library.clone();
-    let on_play = Callback::new(move |()| play_album(&play_library, &album_id));
-    let queue_library = library.clone();
-    let album_id = album.album_id.clone();
-    let on_queue = Callback::new(move |()| add_album_to_queue(&queue_library, &album_id));
-
-    let menu: Vec<GuiMusicMenuEntryFrame> = hero
-        .menu
-        .iter()
-        .filter(|entry| !HERO_BUTTON_LABELS.contains(&entry.label.as_str()))
-        .cloned()
-        .collect();
-
-    // Shuffle the artist (design D8): the albums of the current union, played
-    // shuffled.
+/// The album branch's Shuffle artist header action (design D8): the albums of
+/// the current union, played shuffled — the closure reads the current frame,
+/// so a Hero repaint never clones the union's albums or the tracklist for it.
+fn album_shuffle_action(library: &LibraryState) -> Element {
     let shuffle_library = library.clone();
-    let header_action = rsx! {
+    rsx! {
         button {
             "type": "button",
             class: "flex flex-none items-center",
@@ -206,19 +173,33 @@ fn album_hero(
             Shuffle { size: 15 }
             "Shuffle artist"
         }
-    };
+    }
+}
 
-    // The actions row (design D8): the shared actions painter, the picked
-    // item's More actions, and its menu.
+/// The album branch's actions row (design D8): the shared actions painter over
+/// the picked album's own stable id, the picked item's More actions — painted
+/// only while the frame's remainder carries entries — and its menu.
+fn album_actions_row(
+    library: &LibraryState,
+    album_id: &str,
+    menu: &[GuiMusicMenuEntryFrame],
+) -> Element {
+    let play_library = library.clone();
+    let play_id = album_id.to_owned();
+    let on_play = Callback::new(move |()| play_album(&play_library, &play_id));
+    let queue_library = library.clone();
+    let queue_id = album_id.to_owned();
+    let on_queue = Callback::new(move |()| add_album_to_queue(&queue_library, &queue_id));
+
     let item_menu_open = library.ui.cloned().item_menu_open;
     let menu_open_library = library.clone();
     let menu_library = library.clone();
     // The menu's press names the picked album, cloned once for the callback —
-    // the three play closures each moved their own copy.
-    let album_id = album.album_id.clone();
+    // the play closures each moved their own copy.
+    let menu_id = album_id.to_owned();
     let on_select =
-        Callback::new(move |index: usize| press_menu_entry(&menu_library, &album_id, index));
-    let actions = rsx! {
+        Callback::new(move |index: usize| press_menu_entry(&menu_library, &menu_id, index));
+    rsx! {
         LibraryHeroActions {
             attr: "",
             on_play: Some(on_play),
@@ -239,13 +220,44 @@ fn album_hero(
         if item_menu_open && !menu.is_empty() {
             QueueRowMenu {
                 cursor: None,
-                entries: row_menu_entries(&menu),
+                entries: row_menu_entries(menu),
                 top: "52px".to_owned(),
                 right: Some("0".to_owned()),
                 on_select: Some(on_select),
             }
         }
+    }
+}
+
+/// The album branch of the Library Hero: the artist header with Shuffle
+/// artist, the album block with its square artwork and its action controls,
+/// and the album's tracklist.
+fn album_hero(
+    library: &LibraryState,
+    detail: &GuiMusicDetail,
+    hero: &GuiMusicHeroFrame,
+) -> Element {
+    // The Hero's More-actions entries (design D8): the frame carries the
+    // shared builder's entries in the builder's order — the order the core's
+    // execution rebuild indexes. The entries the Hero's own buttons already
+    // send (the Play entries and the add-to-queue entry) drop at paint time,
+    // so the menu names only what no button offers, and an album whose
+    // remainder is empty hides the control entirely.
+    const HERO_BUTTON_LABELS: [&str; 3] = ["Play", "Play All", "Add to Queue"];
+
+    let Some(album) = hero.album() else {
+        return rsx! {};
     };
+
+    let menu: Vec<GuiMusicMenuEntryFrame> = hero
+        .menu
+        .iter()
+        .filter(|entry| !HERO_BUTTON_LABELS.contains(&entry.label.as_str()))
+        .cloned()
+        .collect();
+
+    let header_action = album_shuffle_action(library);
+    let actions = album_actions_row(library, &album.album_id, &menu);
 
     rsx! {
         LibraryHeroFrame {
