@@ -195,9 +195,9 @@ fn play_artist(app: &mut App, gui: &GuiClientState, album_ids: &[String]) {
 /// D4): the sequence is each album's cached playable tracks in `album_ids`
 /// order, every album sorted in disc and track order, concatenated, and
 /// playback starts at the track through the shared artist-tracks play path.
-/// An album id the cache does not hold, and a `track_id` the sequence does
-/// not hold, log and play nothing — the page the stale frame painted is not
-/// the page the cache serves.
+/// An album the cache does not hold yet adds nothing to the sequence — its
+/// miss logs and the concatenation continues; only a `track_id` the
+/// sequence does not hold logs and plays nothing.
 pub(in crate::gui_core::gui_library) fn play_gui_artist_track(
     app: &mut App,
     album_ids: &[String],
@@ -210,7 +210,7 @@ pub(in crate::gui_core::gui_library) fn play_gui_artist_track(
                 "playArtistTrack",
                 format_args!("the album {album_id} holds no cached tracklist"),
             );
-            return;
+            continue;
         };
         let mut album_tracks: Vec<EmbyItem> = cached
             .iter()

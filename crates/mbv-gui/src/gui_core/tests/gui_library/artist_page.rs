@@ -144,6 +144,44 @@ fn play_artist_track_queues_the_spanning_sequence_from_the_picked_track() {
     );
 }
 
+/// `PlayArtistTrack` skips an album the cache does not hold and still plays
+/// (gui-music-artist-page design D4; correction of the P1 early-return):
+/// the not-yet-loaded album adds nothing to the sequence, and playback
+/// starts at the picked track among the cached albums' tracks.
+#[test]
+fn play_artist_track_skips_an_uncached_album_and_still_plays() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(Vec::new());
+    app.seed_album_track_items_for_test(
+        "alb-ill",
+        vec![cached_track("trk-1", "Rhymin & Stealin", 1, 248)],
+    );
+    app.seed_album_track_items_for_test(
+        "alb-check",
+        vec![cached_track("trk-4", "The Sounds of Science", 1, 240)],
+    );
+
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::PlayArtistTrack {
+            album_ids: vec![
+                "alb-ill".to_string(),
+                "alb-paul".to_string(),
+                "alb-check".to_string(),
+            ],
+            track_id: "trk-4".to_string(),
+        },
+    );
+
+    let (ids, start) = sent_replacement(&cmd_rx).expect("the play replaced the queue");
+    assert_eq!(
+        ids,
+        ["trk-1", "trk-4"],
+        "the uncached album adds nothing to the sequence"
+    );
+    assert_eq!(start, Some(1), "playback starts at the picked track");
+}
+
 /// The Music destination's ensure pass requests the shown artist page's
 /// uncached albums, and nothing while no page shows (gui-music-artist-page
 /// design D3): the dependents step is the page's loader, so a page a
