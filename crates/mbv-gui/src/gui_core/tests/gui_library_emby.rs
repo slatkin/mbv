@@ -7,7 +7,7 @@
 //! destination set names the plain Emby libraries. The Emby boundary is the
 //! in-memory mock transport, so no request leaves the process and no worker
 //! outlives the assertion. The feed-group fetch path's tests live in the
-//! `feed_fetch` child module.
+//! `feed_fetch` child module, and the feed-group refresh's in `feed_refresh`.
 
 use super::*;
 
@@ -15,6 +15,7 @@ use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 mod feed_fetch;
+mod feed_refresh;
 mod root_refetch;
 
 const MOVIES_ID: &str = "lib-movies";

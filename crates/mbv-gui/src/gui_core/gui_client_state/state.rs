@@ -102,6 +102,14 @@ pub struct GuiClientState {
     pub(crate) emby_libs: std::collections::HashMap<usize, GuiEmbyLibrarySelection>,
     /// The Emby collection selection, by library index.
     pub(crate) emby_feed_sets: std::collections::HashMap<usize, GuiCollectionSelection>,
+    /// The feed-group targets one library's refresh wants, in paint order
+    /// (gui-list-header-buttons design D7a): the queue the selection step
+    /// takes its next fetch from, so a refresh refetches the targets the
+    /// destination paints instead of clearing the shared cache. A target
+    /// leaves the queue when its fetch starts, and on its landing or its
+    /// failure.
+    pub(crate) emby_feed_refresh_targets:
+        std::collections::HashMap<usize, Vec<FeedHomeVideoSelection>>,
     /// The Emby library's root items, by library index.
     pub(crate) emby_roots: std::collections::HashMap<usize, GuiEmbyRootItems>,
     /// The libraries whose root-list refetch is in flight (gui-list-header-
@@ -187,6 +195,7 @@ impl GuiClientState {
             tv_shows: std::collections::HashMap::new(),
             emby_libs: std::collections::HashMap::new(),
             emby_feed_sets: std::collections::HashMap::new(),
+            emby_feed_refresh_targets: std::collections::HashMap::new(),
             emby_roots: std::collections::HashMap::new(),
             emby_roots_refreshing: std::collections::HashSet::new(),
             abs_libs: std::collections::HashMap::new(),
@@ -250,6 +259,7 @@ impl GuiClientState {
             // A landed target retires its terminal failure mark, so a later
             // cache miss can fetch it again.
             ClientLibraryEffect::FeedTargetLanded { lib_idx, selection } => {
+                self.drop_feed_refresh_target(lib_idx, &selection);
                 if let Some(claim) = self
                     .emby_libs
                     .get_mut(&lib_idx)
@@ -261,6 +271,7 @@ impl GuiClientState {
             // A failed target records the mark, so the shown pass skips it
             // until a user press clears it and no repaint retries it.
             ClientLibraryEffect::FeedTargetFailed { lib_idx, selection } => {
+                self.drop_feed_refresh_target(lib_idx, &selection);
                 if let Some(claim) = self
                     .emby_libs
                     .get_mut(&lib_idx)
@@ -269,6 +280,24 @@ impl GuiClientState {
                     claim.failed.insert(selection);
                 }
             }
+        }
+    }
+
+    /// Drop `selection` from `lib_idx`'s feed-group refresh queue (design
+    /// D7a): a target's landing, its failure, or the start of its fetch ends
+    /// the refresh's interest in it, so the queue never refetches what already
+    /// arrived or is already running. An emptied queue leaves no entry behind.
+    pub(crate) fn drop_feed_refresh_target(
+        &mut self,
+        lib_idx: usize,
+        selection: &FeedHomeVideoSelection,
+    ) {
+        let Some(queue) = self.emby_feed_refresh_targets.get_mut(&lib_idx) else {
+            return;
+        };
+        queue.retain(|queued| queued != selection);
+        if queue.is_empty() {
+            self.emby_feed_refresh_targets.remove(&lib_idx);
         }
     }
 }
