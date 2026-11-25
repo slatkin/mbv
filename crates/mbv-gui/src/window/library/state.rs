@@ -64,19 +64,19 @@ pub struct LibraryUiState {
     /// design D7): `None` while the dropdown is closed, and `Some(filter)`
     /// while it is open, holding the filter text the open popover narrows its
     /// entries by. One value, so a close clears the filter by construction.
-    pub collections: Option<String>,
+    pub collections: DropdownState,
     /// The Shows Hero's season dropdown's interaction state (user request
     /// 2026-11-19, the season pills' replacement): `None` while closed, and
     /// `Some(filter)` while open, holding the filter text the open popover
     /// narrows its season rows by — the collection dropdown's one-value
     /// pattern, so a close clears the filter by construction.
-    pub shows_seasons: Option<String>,
+    pub shows_seasons: DropdownState,
     /// The Shows view dropdown's open fact (gui-collection-dropdown design D8,
     /// gtds design D15): `Open` while the All, New, and Upcoming rows paint
     /// under the trigger. The popover mounts no filter field, so the fact
     /// carries no text, and the collection dropdown's `collections` names the
     /// collection dropdowns alone.
-    pub shows_view_open: ShowsViewOpen,
+    pub shows_view: DropdownState,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
     pub open_nodes: Vec<String>,
@@ -109,9 +109,9 @@ impl LibraryUiState {
         Self {
             filter_open: false,
             filter: String::new(),
-            collections: None,
-            shows_seasons: None,
-            shows_view_open: ShowsViewOpen::Closed,
+            collections: DropdownState::default(),
+            shows_seasons: DropdownState::default(),
+            shows_view: DropdownState::default(),
             search_control: SearchControlState::default(),
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
@@ -121,28 +121,6 @@ impl LibraryUiState {
             item_menu_open: false,
             row_menu: None,
         }
-    }
-}
-
-/// Whether the Shows view dropdown paints its popover (gtds design D15): the
-/// trigger toggles it, a chosen view and every closing path clear it. The
-/// collection and season dropdowns carry their filter text instead, so their
-/// one value closes and clears together; this popover has no filter, so its
-/// open fact stands alone.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum ShowsViewOpen {
-    /// The popover paints no rows.
-    #[default]
-    Closed,
-    /// The popover paints the All, New, and Upcoming rows.
-    Open,
-}
-
-impl ShowsViewOpen {
-    /// Whether the popover paints.
-    #[must_use]
-    pub fn is_open(self) -> bool {
-        self == Self::Open
     }
 }
 
@@ -408,114 +386,107 @@ impl LibraryState {
             .library(GuiLibraryCommand::ShowsSetView { lib_idx, view });
     }
 
-    /// Open or close the collection dropdown (design D7): a press on the
-    /// trigger opens it when it is closed, and closes it when it is open. A
-    /// close drops the filter text, so the next open starts empty.
+    /// Open or close the collection dropdown (design D7): a press on the trigger opens it when it is
+    /// closed and closes it when it is open. A close drops the filter text.
     pub fn toggle_collections_dropdown(&self) {
-        if self.collections_open() {
-            self.close_collections_dropdown();
-        } else {
-            let mut ui = self.ui;
-            ui.with_mut(|ui| ui.collections = Some(String::new()));
-        }
+        self.write_dropdown(
+            |ui| &mut ui.collections,
+            |d| if d.is_open() { d.close() } else { d.open() },
+        );
     }
 
-    /// Close the collection dropdown and clear its filter text (design D7): a
-    /// press outside it, Esc, a destination change, and a second press on the
-    /// trigger all land here. A press while it is closed already writes
-    /// nothing: the window's every-press path calls this on each press, and the
-    /// write would repaint the panel for no change.
+    /// Close the collection dropdown (design D7) and clear its filter text. A close while closed writes
+    /// nothing: the every-press path calls this on each press, and a write
+    /// would repaint the panel for no change.
     pub fn close_collections_dropdown(&self) {
-        if !self.collections_open() {
-            return;
+        if self.collections_open() {
+            self.write_dropdown(|ui| &mut ui.collections, DropdownState::close);
         }
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.collections = None);
     }
 
-    /// Whether the collection dropdown is open: `Some(filter)` is open, `None`
-    /// is closed (design D7).
+    /// Whether the collection dropdown (design D7) is open.
     #[must_use]
     pub fn collections_open(&self) -> bool {
-        self.ui.peek().collections.is_some()
+        self.ui.peek().collections.is_open()
     }
 
     /// Type into the collection dropdown's filter (design D7): the entries
     /// narrow by the Library filter's match rule, and checks change nothing.
     pub fn set_collections_filter(&self, filter: String) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.collections = Some(filter));
+        self.write_dropdown(|ui| &mut ui.collections, |d| d.set_filter(filter));
     }
 
-    /// Open or close the Shows view dropdown (gui-collection-dropdown design
-    /// D8, gtds design D15): a press on the trigger opens it when it is closed
-    /// and closes it when it is open.
+    /// Open or close the Shows view dropdown (design D8, D15): a press on the trigger opens it when it is
+    /// closed and closes it when it is open. A close drops the filter text.
     pub fn toggle_shows_view_dropdown(&self) {
-        if self.shows_view_open() {
-            self.close_shows_view_dropdown();
-        } else {
-            let mut ui = self.ui;
-            ui.with_mut(|ui| ui.shows_view_open = ShowsViewOpen::Open);
-        }
+        self.write_dropdown(
+            |ui| &mut ui.shows_view,
+            |d| if d.is_open() { d.close() } else { d.open() },
+        );
     }
 
-    /// Close the Shows view dropdown (design D8, D15): a press outside it, Esc,
-    /// a destination change, a chosen view, and a second press on the trigger
-    /// all land here. A press while it is closed already writes nothing: the
-    /// window's every-press path calls this on each press, and the write would
-    /// repaint the panel for no change.
+    /// Close the Shows view dropdown (design D8, D15) and clear its filter text. A close while closed writes
+    /// nothing: the every-press path calls this on each press, and a write
+    /// would repaint the panel for no change.
     pub fn close_shows_view_dropdown(&self) {
-        if !self.shows_view_open() {
-            return;
+        if self.shows_view_open() {
+            self.write_dropdown(|ui| &mut ui.shows_view, DropdownState::close);
         }
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.shows_view_open = ShowsViewOpen::Closed);
     }
 
-    /// Whether the Shows view dropdown is open (design D8, D15).
+    /// Whether the Shows view dropdown (design D8, D15) is open.
     #[must_use]
     pub fn shows_view_open(&self) -> bool {
-        self.ui.peek().shows_view_open.is_open()
+        self.ui.peek().shows_view.is_open()
     }
 
-    /// Open or close the Shows Hero's season dropdown (user request
-    /// 2026-11-19): a press on the trigger opens it when it is closed and
-    /// closes it when it is open. A close drops the filter text, so the next
-    /// open starts empty.
+    /// Open or close the Shows Hero's season dropdown: a press on the trigger opens it when it is
+    /// closed and closes it when it is open. A close drops the filter text.
     pub fn toggle_shows_seasons_dropdown(&self) {
-        if self.shows_seasons_open() {
-            self.close_shows_seasons_dropdown();
-        } else {
-            let mut ui = self.ui;
-            ui.with_mut(|ui| ui.shows_seasons = Some(String::new()));
-        }
+        self.write_dropdown(
+            |ui| &mut ui.shows_seasons,
+            |d| if d.is_open() { d.close() } else { d.open() },
+        );
     }
 
-    /// Close the Shows Hero's season dropdown and clear its filter text: a
-    /// press outside it, Esc, a destination change, and a second press on the
-    /// trigger all land here. A press while it is closed already writes
-    /// nothing: the window's every-press path calls this on each press, and
-    /// the write would repaint the panel for no change.
+    /// Close the Shows Hero's season dropdown and clear its filter text. A close while closed writes
+    /// nothing: the every-press path calls this on each press, and a write
+    /// would repaint the panel for no change.
     pub fn close_shows_seasons_dropdown(&self) {
-        if !self.shows_seasons_open() {
-            return;
+        if self.shows_seasons_open() {
+            self.write_dropdown(|ui| &mut ui.shows_seasons, DropdownState::close);
         }
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.shows_seasons = None);
     }
 
-    /// Whether the Shows Hero's season dropdown is open: `Some(filter)` is
-    /// open, `None` is closed.
+    /// Whether the Shows Hero's season dropdown is open.
     #[must_use]
     pub fn shows_seasons_open(&self) -> bool {
-        self.ui.peek().shows_seasons.is_some()
+        self.ui.peek().shows_seasons.is_open()
     }
 
     /// Type into the Shows Hero's season dropdown's filter: the season rows
     /// narrow by the Library filter's match rule.
     pub fn set_shows_seasons_filter(&self, filter: String) {
+        self.write_dropdown(|ui| &mut ui.shows_seasons, |d| d.set_filter(filter));
+    }
+
+    /// Close every popover the window's every-press path closes: the three
+    /// dropdowns and the collapsed Search panel. A new popover joins here, and
+    /// the root press and a destination change pick it up.
+    pub fn close_popovers(&self) {
+        self.close_collections_dropdown();
+        self.close_shows_view_dropdown();
+        self.close_shows_seasons_dropdown();
+        self.close_search_panel();
+    }
+
+    fn write_dropdown(
+        &self,
+        pick: impl FnOnce(&mut LibraryUiState) -> &mut DropdownState,
+        write: impl FnOnce(&mut DropdownState),
+    ) {
         let mut ui = self.ui;
-        ui.with_mut(|ui| ui.shows_seasons = Some(filter));
+        ui.with_mut(|ui| write(pick(ui)));
     }
 
     /// Record the top bar's narrowness (user request 2026-11-19): the bar's
@@ -623,10 +594,8 @@ impl LibraryState {
             ui.hero_dismissed = true;
             ui.item_menu_open = false;
             ui.row_menu = None;
-            ui.collections = None;
-            ui.shows_seasons = None;
-            ui.shows_view_open = ShowsViewOpen::Closed;
         });
+        self.close_popovers();
     }
 
     /// Run the destination reset when the carried active tab changes from the
@@ -767,9 +736,11 @@ impl LibraryState {
     }
 }
 
+mod dropdown;
 mod hover;
 mod rows;
 
+pub use dropdown::DropdownState;
 pub use hover::RowHoverPresses;
 
 #[cfg(test)]

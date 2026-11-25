@@ -335,7 +335,7 @@ fn the_all_row_press_sends_all_without_opening_the_dropdown() {
             target: crate::gui_core::GuiCollectionTarget::Feeds,
         }]
     );
-    assert!(fixture.state.ui.peek().collections.is_none());
+    assert!(!fixture.state.ui.peek().collections.is_open());
 }
 
 /// Contract (design D6, spec "A check leaves the dropdown open"): a row's press
@@ -357,7 +357,7 @@ fn a_row_press_toggles_and_leaves_the_dropdown_open() {
             key: "g3".to_owned(),
         }]
     );
-    assert!(fixture.state.ui.peek().collections.is_some());
+    assert!(fixture.state.ui.peek().collections.is_open());
 }
 
 /// Contract (design D6): the rows paint a leading square checkbox, All first.

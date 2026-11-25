@@ -149,17 +149,8 @@ fn a_press_inside_the_panel_closes_the_open_collection_dropdown() {
     let state = fixture.state.clone();
     fixture.in_runtime(move || press_in_panel(&state));
 
-    assert!(fixture.state.ui.peek().collections.is_none());
-    assert_eq!(
-        fixture
-            .state
-            .ui
-            .peek()
-            .collections
-            .clone()
-            .unwrap_or_default(),
-        ""
-    );
+    assert!(!fixture.state.ui.peek().collections.is_open());
+    assert_eq!(fixture.state.ui.peek().collections.filter(), "");
     assert_eq!(fixture.library_commands(), []);
     assert!(!fixture.presents("[data-library-collections-menu]"));
 }

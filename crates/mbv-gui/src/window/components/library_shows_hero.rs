@@ -144,9 +144,9 @@ fn paint_season_dropdown(
     lib_idx: usize,
     library: &LibraryState,
 ) -> Element {
-    let filter = library.ui.cloned().shows_seasons;
-    let open = filter.is_some();
-    let rows = season_rows(seasons, filter.as_deref().unwrap_or_default());
+    let dropdown = library.ui.cloned().shows_seasons;
+    let open = dropdown.is_open();
+    let rows = season_rows(seasons, dropdown.filter());
     let label = seasons
         .iter()
         .find(|season| season.selected)
@@ -179,7 +179,7 @@ fn paint_season_dropdown(
             menu_attr: "data-library-shows-seasons-menu",
             row_attr: "data-library-shows-season",
             mark_attr: "data-library-shows-season-mark",
-            filter,
+            filter: open.then(|| dropdown.filter().to_owned()),
             filter_placeholder: Some("Find a season"),
             filter_attr: Some("data-library-shows-seasons-filter"),
             on_toggle,

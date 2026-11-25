@@ -40,7 +40,7 @@ fn view_rows(active: GuiShowsView) -> Vec<LibraryDropdownRow> {
 pub fn LibraryShowsViewDropdown(props: LibraryShowsViewDropdownProps) -> Element {
     let library = consume_context::<LibraryState>();
     let active = props.view;
-    let open = library.ui.cloned().shows_view_open.is_open();
+    let open = library.ui.cloned().shows_view.is_open();
     let lib_idx = library
         .sections
         .library_list

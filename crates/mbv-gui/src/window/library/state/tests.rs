@@ -454,3 +454,29 @@ fn collapse_all_under_a_filter_closes_the_filter_opened_artist_and_clears_the_op
         [format!("{a0}=false open_empty=true closed=true filter=One")]
     );
 }
+
+/// Issue 1028: one close point. A popover that joins `close_popovers` is
+/// closed by the root press and by a destination change, so none can stick.
+#[test]
+fn close_popovers_closes_every_dropdown_and_the_search_panel_and_clears_filters() {
+    let (facts, _rx) = run(|state, facts| {
+        state.set_search_collapsed(true);
+        state.set_collections_filter("rock".to_owned());
+        state.toggle_shows_view_dropdown();
+        state.set_shows_seasons_filter("s1".to_owned());
+        state.open_search_panel();
+        state.close_popovers();
+        let ui = state.ui.peek();
+        facts.lock().expect("facts").push(format!(
+            "collections={:?} view={} seasons={:?} search={}",
+            ui.collections.filter(),
+            ui.shows_view.is_open() || ui.collections.is_open() || ui.shows_seasons.is_open(),
+            ui.shows_seasons.filter(),
+            ui.search_control.panel_open,
+        ));
+    });
+    assert_eq!(
+        facts,
+        [r#"collections="" view=false seasons="" search=false"#]
+    );
+}

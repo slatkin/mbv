@@ -89,8 +89,8 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
     let library = consume_context::<LibraryState>();
     let collections = props.collections;
     let ui = library.ui.cloned();
-    let open = ui.collections.is_some();
-    let filter = ui.collections.clone().unwrap_or_default();
+    let open = ui.collections.is_open();
+    let filter = ui.collections.filter().to_owned();
     let label = collections.label();
     let placeholder = placeholder_for(collections.noun);
     let entries = if open {

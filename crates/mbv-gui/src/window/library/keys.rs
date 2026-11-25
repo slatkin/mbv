@@ -138,9 +138,9 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
         let ui = state.ui.peek();
         (
             ui.filter_open,
-            ui.collections.is_some(),
-            ui.shows_view_open.is_open(),
-            ui.shows_seasons.is_some(),
+            ui.collections.is_open(),
+            ui.shows_view.is_open(),
+            ui.shows_seasons.is_open(),
         )
     };
     if filter_open {

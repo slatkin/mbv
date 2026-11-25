@@ -476,8 +476,8 @@ fn ui_facts(state: &LibraryState) -> String {
         "filter_open={} filter={:?} collections_open={} collections_filter={:?} open={:?} dismissed={}",
         ui.filter_open,
         ui.filter,
-        ui.collections.is_some(),
-        ui.collections.clone().unwrap_or_default(),
+        ui.collections.is_open(),
+        ui.collections.filter().to_owned(),
         ui.open_nodes,
         ui.hero_dismissed,
     )

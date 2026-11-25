@@ -7,8 +7,6 @@
 
 use super::*;
 
-use crate::window::library::state::ShowsViewOpen;
-
 // Space with the pointer over the Library and the dropdown closed is the
 // core's key (design D7): the trigger holds no keyboard focus, so Space keeps
 // its play and pause, and the selection does not change.
@@ -34,7 +32,7 @@ fn the_open_dropdown_filter_keeps_the_keys_over_the_queue() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.collections = Some(String::new()));
+        ui.with_mut(|ui| ui.collections.open());
         route_under(state, facts, "t", "t", PointerZone::Queue);
         route_under(state, facts, "i", "i", PointerZone::Queue);
         route_under(state, facts, "backspace", "Backspace", PointerZone::Queue);
@@ -54,7 +52,7 @@ fn esc_closes_the_open_dropdown_over_the_queue() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.collections = Some("tifo".to_owned()));
+        ui.with_mut(|ui| ui.collections.set_filter("tifo".to_owned()));
         route_under(state, facts, "escape", "Escape", PointerZone::Queue);
         facts.lock().expect("facts").push(ui_facts(state));
     });
@@ -73,7 +71,7 @@ fn the_shows_view_popover_takes_no_typed_key() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), shows_detail());
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.shows_view_open = ShowsViewOpen::Open);
+        ui.with_mut(|ui| ui.shows_view.open());
         route_under(state, facts, "space", " ", PointerZone::Queue);
         route_under(state, facts, "n", "n", PointerZone::Queue);
         facts
@@ -96,7 +94,7 @@ fn esc_closes_the_shows_view_popover() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), shows_detail());
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.shows_view_open = ShowsViewOpen::Open);
+        ui.with_mut(|ui| ui.shows_view.open());
         route_under(state, facts, "escape", "Escape", PointerZone::Queue);
         facts
             .lock()
