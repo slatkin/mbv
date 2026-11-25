@@ -84,11 +84,12 @@ pub fn LibraryHeroDetail(props: LibraryHeroDetailProps) -> Element {
             }
             div {
                 class: "flex min-w-0 flex-1 flex-col",
-                style: if band {
-                    "gap: 18px; flex-basis: 320px; padding-top: 0;"
-                } else {
-                    "gap: 18px; flex-basis: 320px; padding-top: 8px;"
-                },
+                // A landscape still lines up level with the text; a square
+                // or portrait shape takes the 8 px top pad.
+                style: format!(
+                    "gap: 18px; flex-basis: 320px; padding-top: {}px;",
+                    if band { 0 } else { 8 }
+                ),
                 { children }
             }
         }

@@ -547,8 +547,13 @@ impl LibraryState {
     /// Open the collapsed Search control's panel (user request 2026-11-19):
     /// the `Ctrl+K` chord on a collapsed bar, and the icon's press, land
     /// here. The field the panel paints mounts on the fact, so the keyboard
-    /// arms the next frame.
+    /// arms the next frame. An open while the field paints inline, or while
+    /// the panel is already open, is a no-op — the close's mirror guard, so
+    /// the panel fact names the collapsed form's panel alone.
     pub fn open_search_panel(&self) {
+        if !self.search_collapsed() || self.search_panel_open() {
+            return;
+        }
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.search_control.panel_open = true);
     }

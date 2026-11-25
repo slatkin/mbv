@@ -234,6 +234,15 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
     // `0.0 - shift`, not `-shift`: a rest shift of zero paints `0`, not `-0`.
     let right = 0.0 - shift.cloned();
 
+    // One flag paints both alignments: the wrapper justifies the trigger to
+    // the flag's edge, and the popover anchors there — hung off the trigger's
+    // right edge by `{right}px`, or led from the wrapper's edge at `0`.
+    let (side, justify) = if align_end {
+        ("right", "justify-end")
+    } else {
+        ("left", "justify-start")
+    };
+
     let toggle_attrs = vec![Attribute::new(trigger_attr, "", None, false)];
     let menu_attrs = vec![Attribute::new(menu_attr, "", None, false)];
     let filter_attrs = filter_attr.map_or(Vec::new(), |name| {
@@ -242,11 +251,7 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
 
     rsx! {
         div {
-            class: if align_end {
-                "relative flex min-w-0 flex-1 items-center justify-end"
-            } else {
-                "relative flex min-w-0 flex-1 items-center justify-start"
-            },
+            class: "relative flex min-w-0 flex-1 items-center {justify}",
             role: "group",
             "aria-label": "{aria_label}",
             style: "gap: 12px;",
@@ -288,15 +293,9 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
                         class: "absolute z-20 flex flex-col",
                         role: "menu",
                         "aria-label": "{aria_label}",
-                        style: if align_end {
-                            format!(
-                                "top: 34px; right: {right}px; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
-                            )
-                        } else {
-                            format!(
-                                "top: 34px; left: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
-                            )
-                        },
+                        style: format!(
+                            "top: 34px; {side}: {right}px; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
+                        ),
                         ..menu_attrs,
                         if let Some(filter) = filter {
                             label {

@@ -110,16 +110,22 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
     // The collapsed panel's open fact: the render reads it through a
     // subscribed read (`peek` would arm no re-render).
     let panel_open = library.ui.read().search_control.panel_open;
-    if props.collapsed {
-        rsx! {
-            div {
-                class: "relative flex flex-none items-center",
-                // The panel is the control's own surface: a press inside it
-                // stops the outside-press rule, so typing into the field and
-                // pressing a row act on the control instead of closing it.
-                onpointerdown: move |event: PointerEvent| {
+    // Both forms paint the one wrapper (design D9): the collapsed form hangs
+    // the icon and panel off it and is the control's own surface — a press
+    // inside it stops the outside-press rule, so typing into the field and
+    // pressing a row act on the control instead of closing it — while the
+    // inline form holds no panel, so its presses stay outside-presses.
+    rsx! {
+        div {
+            class: "relative flex flex-none items-center",
+            onpointerdown: move |event: PointerEvent| {
+                if props.collapsed {
                     event.stop_propagation();
-                },
+                }
+            },
+            "data-library-search": (!props.collapsed).then_some(""),
+            style: if props.collapsed { "" } else { "flex: 0 1 220px; min-width: 0;" },
+            if props.collapsed {
                 button {
                     "type": "button",
                     class: "flex flex-none items-center justify-center",
@@ -133,28 +139,28 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
                 }
                 if panel_open {
                     // The collapsed control's panel: the same field, hint, and
-                    // results in the dropdown card's look, anchored under the
-                    // icon. The results open downward with the card.
+                    // results in the Library panel card's look, anchored under
+                    // the icon. The results open downward with the card.
                     div {
                         class: "absolute z-20 flex flex-col",
-                        style: "top: calc(100% + 4px); right: 0; width: 280px; background: var(--canvas-library-panel); border: 1px solid var(--canvas-border); border-radius: 6px; padding: 6px;",
+                        style: "top: calc(100% + 4px); right: 0; width: 280px; {SEARCH_CARD_STYLE} padding: 6px;",
                         "data-library-search-panel": "",
                         {field}
                     }
                 }
-            }
-        }
-    } else {
-        rsx! {
-            div {
-                class: "relative flex flex-none items-center",
-                "data-library-search": "",
-                style: "flex: 0 1 220px; min-width: 0;",
+            } else {
                 {field}
             }
         }
     }
 }
+
+/// The card the Search dropdowns paint in: the Library panel card look the
+/// collapsed panel and the results list share.
+const SEARCH_CARD_STYLE: &str = "background: var(--canvas-library-panel); border: 1px solid var(--canvas-border); border-radius: 6px;";
+
+/// The loading, failed, and empty notices' one-line look.
+const NOTICE_STYLE: &str = "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);";
 
 /// The field, its `Ctrl K` hint, and the results dropdown the frame carries
 /// (design D9): the markup both forms paint. The collapsed panel wraps it in
@@ -212,27 +218,27 @@ fn paint_search_results(
     rsx! {
         div {
             class: "absolute",
-            style: "left: 0; right: 0; top: calc(100% + 4px); max-height: 320px; overflow-y: auto; background: var(--canvas-library-panel); border: 1px solid var(--canvas-border); border-radius: 6px; padding: 2px 0; z-index: 30;",
+            style: "left: 0; right: 0; top: calc(100% + 4px); max-height: 320px; overflow-y: auto; {SEARCH_CARD_STYLE} padding: 2px 0; z-index: 30;",
             "data-library-search-results": "",
             role: "listbox",
             if search.loading {
                 div {
                     class: "font-mono",
-                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
+                    style: NOTICE_STYLE,
                     "data-library-search-loading": "",
                     "Searching…"
                 }
             } else if search.failed {
                 div {
                     class: "font-mono",
-                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
+                    style: NOTICE_STYLE,
                     "data-library-search-failed": "",
                     "Search failed"
                 }
             } else if search.results.is_empty() {
                 div {
                     class: "font-mono",
-                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
+                    style: NOTICE_STYLE,
                     "data-library-search-empty": "",
                     "No results"
                 }

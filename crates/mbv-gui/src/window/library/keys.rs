@@ -475,9 +475,12 @@ fn route_search_hold_key(
         && !key.modifiers.shift_key
         && matches!(key.key.as_str(), "k" | "K")
     {
-        if state.search_collapsed() && !state.search_panel_open() {
-            state.open_search_panel();
-        }
+        // The chord opens the collapsed panel first (user request 2026-11-19):
+        // the field the panel paints mounts and takes the keyboard the next
+        // frame. The call is unconditional — an open while the field paints
+        // inline, or while the panel is already open, is `open_search_panel`'s
+        // own no-op.
+        state.open_search_panel();
         if state.search_field_mounted() {
             state.focus_search_field();
             return Some(KeyOutcome::Handled);
