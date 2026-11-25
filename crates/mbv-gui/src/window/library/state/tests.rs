@@ -15,8 +15,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
-    GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
+    GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
@@ -290,7 +291,12 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
         collections: vec!["Rock".to_owned()],
         album_count: 1,
         artist_tracks: None,
-        album: album("al3", "One For All", "1990", Some(Vec::new())),
+        subject: GuiMusicHeroSubjectFrame::Album(album(
+            "al3",
+            "One For All",
+            "1990",
+            Some(Vec::new()),
+        )),
         menu: Vec::new(),
     };
     let list = music_list(artists.clone());

@@ -484,6 +484,7 @@ fn an_artist_row_shows_a_services_image_only_when_the_service_names_it() {
 
 /// What a Hero-subject case seeds as the library's artist page pick
 /// (gui-music-artist-page design D8).
+#[derive(Clone, Copy)]
 enum PagePick {
     /// No pick: `music_artist_pages` stays empty.
     None,
@@ -495,7 +496,7 @@ enum PagePick {
 }
 
 /// The Hero subject a case expects, with the facts the resolution rule owns.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Subject {
     /// The `Album` subject, by the album's Service id.
     Album(&'static str),

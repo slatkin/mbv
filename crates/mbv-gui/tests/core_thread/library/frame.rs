@@ -115,7 +115,7 @@ fn a_pick_sends_the_detail_and_no_list() {
     assert!(batch.library_list.is_none(), "the pick sends no list");
     let hero = music_detail(&test.held()).and_then(|detail| detail.hero);
     assert_eq!(
-        hero.map(|hero| hero.album.album_id),
+        hero.and_then(|hero| hero.album().map(|album| album.album_id.clone())),
         Some("alb-paul".to_string()),
         "the Hero moved to the picked album"
     );
@@ -147,4 +147,69 @@ fn the_hero_art_rides_the_section_after_the_image_lands() {
     test.waker.wake();
     assert!(test.core.step());
     assert_image(hero_art(&test.held()));
+}
+
+/// The artist page's detail follows the subject (gui-music-artist-page design
+/// D5): while the Hero's subject is the artist page, the detail carries the
+/// artist's own artwork — the fallback name's resolved Service artist image,
+/// never the album's — and an empty menu, because the page has no More
+/// actions. The album's card key stays uncached, so an album art path could
+/// paint no image here.
+#[test]
+fn the_artist_page_paints_the_artists_art_and_an_empty_menu() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+    test.core.app_mut().enable_card_images_for_test();
+    let key = music_list(&seeded_frame(&mut test))
+        .expect("the Music destination is active")
+        .artists[0]
+        .artist_key
+        .clone();
+    let mbv_gui::bridge::frame::library::GuiArtistKey::Fallback(name) = &key else {
+        panic!("the seeded artist groups by a fallback name, not {key:?}");
+    };
+    test.core
+        .app_mut()
+        .record_artist_name_for_test(name, "art-1");
+
+    let page = send_library_frame(
+        &mut test,
+        GuiLibraryCommand::ShowArtist {
+            lib_idx: 0,
+            artist_key: key,
+        },
+    );
+    let hero = music_detail(&page)
+        .and_then(|detail| detail.hero)
+        .expect("the artist page carries a Hero");
+    assert!(
+        matches!(
+            hero.subject,
+            mbv_gui::bridge::frame::library::GuiMusicHeroSubjectFrame::Artist(_)
+        ),
+        "the Hero's subject is the artist page, not {hero:?}"
+    );
+    assert!(
+        hero.menu.is_empty(),
+        "the artist page has no More actions, not {hero:?}"
+    );
+
+    // The artist's image lands in the cache: the next batch carries the
+    // artist's art, under the artist's own card key.
+    test.core.app_mut().complete_card_image_for_test(
+        &mbv_images::emby_card_cache_key("art-1", ""),
+        &image::DynamicImage::new_rgb8(4, 4),
+    );
+    test.waker.wake();
+    assert!(test.core.step());
+    let mbv_gui::art::GuiArtRef::Image { src } = hero_art(&test.held()) else {
+        panic!("the artist page paints the artist's cached art");
+    };
+    assert_eq!(
+        src,
+        mbv_gui::art::art_url(&mbv_gui::art::card_path(&mbv_images::emby_card_cache_key(
+            "art-1", ""
+        ))),
+        "the art is the artist's own image, keyed by the artist's id"
+    );
 }

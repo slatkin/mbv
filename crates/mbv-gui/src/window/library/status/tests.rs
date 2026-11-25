@@ -6,8 +6,8 @@ use super::*;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionEntry, GuiEmbyDetail, GuiEmbyList,
     GuiEmbyRowKindFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeHeroFrame,
-    GuiHomeList, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicList, GuiRowArtFrame,
-    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsList,
+    GuiHomeList, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicHeroSubjectFrame, GuiMusicList,
+    GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsList,
 };
 
 /// The fixture's tabs: Music at place 1, Audiobooks at place 2.
@@ -31,13 +31,13 @@ fn hero() -> GuiMusicHeroFrame {
         collections: vec!["Hip-Hop".to_owned()],
         album_count: 1,
         artist_tracks: None,
-        album: GuiMusicAlbumFrame {
+        subject: GuiMusicHeroSubjectFrame::Album(GuiMusicAlbumFrame {
             album_id: "al1".to_owned(),
             name: "Licensed To Ill".to_owned(),
             year: "1986".to_owned(),
             tracks: None,
             total: None,
-        },
+        }),
         menu: Vec::new(),
     }
 }

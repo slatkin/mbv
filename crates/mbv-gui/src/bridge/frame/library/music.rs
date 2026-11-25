@@ -346,3 +346,6 @@ impl From<GuiArtistKey> for ArtistKey {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

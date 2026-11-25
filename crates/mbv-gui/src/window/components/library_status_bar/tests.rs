@@ -24,8 +24,8 @@ use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
     GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail,
-    GuiMusicHeroFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList, GuiRowArtFrame,
-    GuiRowMediaKindFrame,
+    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList,
+    GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::SectionRef;
@@ -73,13 +73,13 @@ fn hero() -> GuiMusicHeroFrame {
         collections: vec!["Hip-Hop".to_owned()],
         album_count: 1,
         artist_tracks: None,
-        album: GuiMusicAlbumFrame {
+        subject: GuiMusicHeroSubjectFrame::Album(GuiMusicAlbumFrame {
             album_id: "al1".to_owned(),
             name: "Licensed To Ill".to_owned(),
             year: "1986".to_owned(),
             tracks: None,
             total: None,
-        },
+        }),
         menu: Vec::new(),
     }
 }

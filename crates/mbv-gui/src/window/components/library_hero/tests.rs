@@ -31,9 +31,9 @@ use super::LibraryHero;
 use super::{add_album_to_queue, play_album, press_menu_entry, run_menu_entry, shuffle_artist};
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
-    GuiMusicMenuEntryFrame, GuiMusicTrackFrame, GuiMusicTrackTotalFrame, GuiRowArtFrame,
-    GuiRowMediaKindFrame,
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
+    GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicMenuEntryFrame, GuiMusicTrackFrame,
+    GuiMusicTrackTotalFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -159,7 +159,7 @@ fn hero() -> GuiMusicHeroFrame {
             count: 2,
             duration: "7:02".to_owned(),
         }),
-        album: GuiMusicAlbumFrame {
+        subject: GuiMusicHeroSubjectFrame::Album(GuiMusicAlbumFrame {
             album_id: "al1".to_owned(),
             name: "Licensed To Ill".to_owned(),
             year: "1986".to_owned(),
@@ -181,7 +181,7 @@ fn hero() -> GuiMusicHeroFrame {
                 count: 2,
                 duration: "8:43".to_owned(),
             }),
-        },
+        }),
         menu: vec![
             GuiMusicMenuEntryFrame {
                 label: "Play All".to_owned(),
@@ -211,7 +211,13 @@ fn artists(facts: &GuiMusicHeroFrame) -> Vec<GuiMusicArtistFrame> {
         artist_key: GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
-        albums: vec![facts.album.clone(), pauls_boutique()],
+        albums: vec![
+            facts
+                .album()
+                .expect("the fixture's subject is an album")
+                .clone(),
+            pauls_boutique(),
+        ],
     }]
 }
 

@@ -10,8 +10,8 @@ use crate::bridge::frame::library::{
     GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame,
     GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame, GuiMusicDetail,
-    GuiMusicHeroFrame, GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail,
-    GuiShowsHeroFrame, GuiShowsList, GuiShowsRowFrame,
+    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiRowArtFrame,
+    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList, GuiShowsRowFrame,
 };
 
 /// The carried Music list part with no album picked.
@@ -58,13 +58,13 @@ pub(super) fn music_hero() -> GuiMusicHeroFrame {
         collections: vec!["Hip-Hop".to_owned()],
         album_count: 1,
         artist_tracks: None,
-        album: GuiMusicAlbumFrame {
+        subject: GuiMusicHeroSubjectFrame::Album(GuiMusicAlbumFrame {
             album_id: "al1".to_owned(),
             name: "Licensed To Ill".to_owned(),
             year: "1986".to_owned(),
             tracks: None,
             total: None,
-        },
+        }),
         menu: Vec::new(),
     }
 }
