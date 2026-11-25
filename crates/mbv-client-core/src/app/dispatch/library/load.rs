@@ -118,27 +118,7 @@ impl App {
             return;
         }
         match self.tab {
-            TabSelection::Home => {
-                // A Home refresh refetches both Services' `Recently added`
-                // data in the background (spec `home-latest-sections`). A failing Service contributes
-                // nothing; Continue Watching still refreshes below.
-                self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
-                self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
-                match self.fetch_home() {
-                    Ok(content) => {
-                        // The fetch runs synchronously (its App-side
-                        // side effects are order-sensitive); the
-                        // computed content travels into the stored
-                        // `home_content` via lib_tx (task 5.3d).
-                        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
-                        ));
-                    }
-                    Err(e) => {
-                        self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
-                    }
-                }
-            }
+            TabSelection::Home => self.refresh_home_content(),
             TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
             TabSelection::AudiobookshelfLibrary(index) => {
                 match self.audiobookshelf_kind_at(index) {
@@ -152,6 +132,33 @@ impl App {
                 }
             }
             TabSelection::Feeds => self.refresh_feeds(),
+        }
+    }
+
+    /// Refetch the Home destination's content (gui-list-header-buttons design
+    /// D7, D9): the Home arm of [`Self::refresh_current_view`], in its own
+    /// entry so the GUI Client's refresh command reaches it without naming a
+    /// tab. A failed fetch keeps the Home content it already shows and
+    /// flashes the error.
+    pub fn refresh_home_content(&mut self) {
+        // A Home refresh refetches both Services' `Recently added`
+        // data in the background (spec `home-latest-sections`). A failing Service contributes
+        // nothing; Continue Watching still refreshes below.
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
+        match self.fetch_home() {
+            Ok(content) => {
+                // The fetch runs synchronously (its App-side
+                // side effects are order-sensitive); the
+                // computed content travels into the stored
+                // `home_content` via lib_tx (task 5.3d).
+                let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                    ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                ));
+            }
+            Err(e) => {
+                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
+            }
         }
     }
 

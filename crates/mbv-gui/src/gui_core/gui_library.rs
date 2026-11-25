@@ -27,6 +27,7 @@ pub(crate) mod marks;
 pub(crate) mod podcasts;
 mod podcasts_projection;
 mod projection;
+pub(crate) mod refresh;
 mod request;
 mod rows_in_view;
 mod search;
@@ -246,6 +247,13 @@ pub enum GuiLibraryCommand {
         series: Vec<String>,
         seasons: Vec<(String, String)>,
     },
+    /// Refresh the active destination (gui-list-header-buttons design D7): the
+    /// destination's own content reloads in place, and a tree list also
+    /// reloads the children of its open rows in view. `album_ids` are the open
+    /// Music album rows the window paints in view, whose tracks reload with
+    /// it; every other destination passes an empty list. The F5 key stays
+    /// TUI-only, so the GUI has no key for this command.
+    Refresh { album_ids: Vec<String> },
     /// Select a plain Emby-library row (design D12, row 8.1): the row the
     /// Hero shows. A row the active list no longer holds changes nothing.
     EmbySelect { lib_idx: usize, row: String },
@@ -405,6 +413,7 @@ impl GuiCore {
             | GuiLibraryCommand::ShowsPlay { .. }
             | GuiLibraryCommand::ShowsQueue { .. }
             | GuiLibraryCommand::ShowsOpenInView { .. }
+            | GuiLibraryCommand::Refresh { .. }
             | GuiLibraryCommand::EmbySelect { .. }
             | GuiLibraryCommand::EmbyPlay { .. }
             | GuiLibraryCommand::EmbyQueue { .. }
@@ -452,6 +461,9 @@ impl GuiCore {
                 series,
                 seasons,
             } => self.apply_gui_shows_open_in_view(lib_idx, series, seasons),
+            GuiLibraryCommand::Refresh { album_ids } => {
+                self.refresh_gui_destination(album_ids);
+            }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => {
                 self.gui_emby_select(lib_idx, &row);
             }
