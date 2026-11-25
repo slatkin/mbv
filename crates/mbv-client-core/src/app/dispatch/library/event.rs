@@ -220,6 +220,22 @@ impl App {
                     &[ClientLibraryEffect::SeriesContentChanged],
                 );
             }
+            // A failed first-load fetch caches nothing (PR 1065 review, finding
+            // 1): the marks retire so a later report or landing starts the load
+            // again. No effect here: the pump would restart the failed load at
+            // once, and a sustained outage would retry it without backoff; the
+            // next report or landing runs the pump, which also frees the
+            // loader's slot. No toast: an in-view load is not an action the
+            // user took.
+            SeriesEvent::DetailLoadFailed { series_id } => {
+                self.handle_series_detail_load_failed(&series_id);
+            }
+            SeriesEvent::SeasonEpisodesLoadFailed {
+                series_id,
+                season_id,
+            } => {
+                self.handle_series_season_load_failed(&series_id, &season_id);
+            }
         }
     }
 

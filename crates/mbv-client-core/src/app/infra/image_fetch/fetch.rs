@@ -97,8 +97,11 @@ impl App {
     /// Proactively fetches TV series detail (seasons + episodes) so the
     /// Inline series detail pane can render without the user
     /// drilling in first. The id stays in `series_detail_fetches_in_flight`
-    /// until its landing, so a season landing keeps the derived loading mark
-    /// while this fetch runs (unit 7 review, finding P1).
+    /// until its landing or its failure retires it, so a season landing keeps
+    /// the derived loading mark while this fetch runs (unit 7 review, finding
+    /// P1). The pick path's first-load fallback is unchanged: a failed fetch
+    /// lands the empty detail (the quiet load takes the failure event
+    /// instead).
     pub fn fetch_series_detail(&mut self, series_id: &str) {
         if series_id.is_empty() {
             return;
@@ -106,6 +109,16 @@ impl App {
         // A plain fetch supersedes a quiet in-view load of the same id (design
         // D6): its landing starts the first season as any pick expects.
         self.series_detail_quiet.remove(series_id);
+        self.spawn_series_detail_fetch(series_id, false);
+    }
+
+    /// The one spawn body the plain pick fetch and the quiet in-view load
+    /// share: the marks go up, the worker sends `DetailFetched` on success,
+    /// and a failure takes the path the caller's mode names. A quiet load's
+    /// failure sends [`SeriesEvent::DetailLoadFailed`] so the view never holds
+    /// a cached empty detail (PR 1065 review, finding 1); the pick's failure
+    /// keeps its first-load empty fallback.
+    fn spawn_series_detail_fetch(&mut self, series_id: &str, quiet: bool) {
         if self.series_detail_fetches_in_flight.contains(series_id)
             || self.series_detail_cache.contains_key(series_id)
         {
@@ -122,16 +135,28 @@ impl App {
         let tx = self.channels.lib_tx.clone();
         let sid = series_id.to_string();
         std::thread::spawn(move || {
-            let (seasons, episodes) = client
-                .get_items_sorted(&sid, None, false, 0, PAGE_SIZE, "SortName", "Ascending")
-                .map(|(items, _total)| items)
-                .map(|seasons| (seasons, std::collections::HashMap::new()))
-                .unwrap_or_default();
-            let _ = tx.send(LibEvent::Series(SeriesEvent::DetailFetched {
-                series_id: sid,
-                seasons,
-                episodes,
-            }));
+            let event = match client.get_items_sorted(
+                &sid,
+                None,
+                false,
+                0,
+                PAGE_SIZE,
+                "SortName",
+                "Ascending",
+            ) {
+                Ok((seasons, _total)) => SeriesEvent::DetailFetched {
+                    series_id: sid,
+                    seasons,
+                    episodes: std::collections::HashMap::new(),
+                },
+                Err(_) if quiet => SeriesEvent::DetailLoadFailed { series_id: sid },
+                Err(_) => SeriesEvent::DetailFetched {
+                    series_id: sid,
+                    seasons: Vec::new(),
+                    episodes: std::collections::HashMap::new(),
+                },
+            };
+            let _ = tx.send(LibEvent::Series(event));
         });
     }
 
@@ -143,11 +168,14 @@ impl App {
     /// a call that joins a quiet fetch keeps the mark that fetch set, because
     /// it starts no fetch of its own. A plain `fetch_series_detail` of the same
     /// id drops the mark, and the landing then loads the first season as a pick
-    /// expects.
+    /// expects. A failed quiet load sends [`SeriesEvent::DetailLoadFailed`], so
+    /// the view never caches an empty detail.
     pub fn fetch_series_detail_quiet(&mut self, series_id: &str) {
         let joined = self.series_detail_loading.contains(series_id);
         let quiet_pending = self.series_detail_quiet.contains(series_id);
-        self.fetch_series_detail(series_id);
+        if !series_id.is_empty() {
+            self.spawn_series_detail_fetch(series_id, true);
+        }
         if (joined && quiet_pending) || (!joined && self.series_detail_loading.contains(series_id))
         {
             self.series_detail_quiet.insert(series_id.to_string());
@@ -241,8 +269,25 @@ impl App {
     /// Fetches one season only after the complete ordered Series detail is
     /// in the cache. The detail event handler arms the first season and any
     /// pending expansions; a season-pill click or a keyboard season move
-    /// arms the selected pill the same way.
+    /// arms the selected pill the same way. The pick path's first-load
+    /// fallback is unchanged: a failed fetch lands the empty list (the
+    /// in-view loader takes the failure event instead).
     pub fn fetch_series_season_episodes(&mut self, series_id: String, season_id: String) {
+        self.spawn_series_season_fetch(series_id, season_id, false);
+    }
+
+    /// Fetches one season's episodes for the in-view loader (design D5): the
+    /// same guards as [`Self::fetch_series_season_episodes`], but a failed
+    /// fetch sends [`SeriesEvent::SeasonEpisodesLoadFailed`] instead of the
+    /// empty list a pick's fetch falls back to, so an open season in view
+    /// never caches a failure (PR 1065 review, finding 1).
+    pub fn fetch_series_season_episodes_in_view(&mut self, series_id: String, season_id: String) {
+        self.spawn_series_season_fetch(series_id, season_id, true);
+    }
+
+    /// The one spawn body the pick's fetch and the in-view loader's fetch
+    /// share: a failed fetch takes the path the caller's mode names.
+    fn spawn_series_season_fetch(&mut self, series_id: String, season_id: String, for_view: bool) {
         let key = (series_id.clone(), season_id.clone());
         let Some(detail) = self.series_detail_cache.get(&series_id) else {
             if !series_id.is_empty() && !season_id.is_empty() {
@@ -266,23 +311,31 @@ impl App {
         self.series_season_loading.insert(key);
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
-            let episodes = client
-                .get_items_sorted(
-                    &season_id,
-                    None,
-                    false,
-                    0,
-                    PAGE_SIZE,
-                    "IndexNumber",
-                    "Ascending",
-                )
-                .map(|(items, _)| items)
-                .unwrap_or_default();
-            let _ = tx.send(LibEvent::Series(SeriesEvent::SeasonEpisodesFetched {
-                series_id,
-                season_id,
-                episodes,
-            }));
+            let event = match client.get_items_sorted(
+                &season_id,
+                None,
+                false,
+                0,
+                PAGE_SIZE,
+                "IndexNumber",
+                "Ascending",
+            ) {
+                Ok((episodes, _total)) => SeriesEvent::SeasonEpisodesFetched {
+                    series_id,
+                    season_id,
+                    episodes,
+                },
+                Err(_) if for_view => SeriesEvent::SeasonEpisodesLoadFailed {
+                    series_id,
+                    season_id,
+                },
+                Err(_) => SeriesEvent::SeasonEpisodesFetched {
+                    series_id,
+                    season_id,
+                    episodes: Vec::new(),
+                },
+            };
+            let _ = tx.send(LibEvent::Series(event));
         });
     }
 

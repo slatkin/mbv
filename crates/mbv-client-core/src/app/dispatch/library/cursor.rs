@@ -403,6 +403,35 @@ impl App {
         self.flash("Refresh failed".to_string(), ToastSeverity::Error);
     }
 
+    /// A failed quiet in-view detail load (PR 1065 review, finding 1): the
+    /// cache stores nothing, so the view never holds a poisoned empty detail
+    /// that no scroll or reopen could fill, and the marks retire so the load
+    /// starts again on a later report or landing. No toast: an in-view load is
+    /// not an action the user took, and a sustained outage would flash once per
+    /// open row. The failure raises no `SeriesContentChanged` effect: the pump
+    /// would restart the failed load at once, and a sustained outage would
+    /// retry it without backoff; the next report or landing runs the pump.
+    pub(in crate::app) fn handle_series_detail_load_failed(&mut self, series_id: &str) {
+        self.series_detail_fetches_in_flight.remove(series_id);
+        self.series_detail_quiet.remove(series_id);
+        self.refresh_series_detail_loading(series_id);
+    }
+
+    /// A failed in-view first episode fetch (PR 1065 review, finding 1): the
+    /// cache stores no empty episode list, and the loading marks retire so the
+    /// load starts again on a later report or landing. No toast, and no
+    /// `SeriesContentChanged` effect, for the same reasons the detail load's
+    /// failure takes neither.
+    pub(in crate::app) fn handle_series_season_load_failed(
+        &mut self,
+        series_id: &str,
+        season_id: &str,
+    ) {
+        let key = (series_id.to_string(), season_id.to_string());
+        self.series_season_loading.remove(&key);
+        self.refresh_series_detail_loading(series_id);
+    }
+
     /// Whether a fetch for `series_id` runs: its own detail fetch, or one of its
     /// seasons' episode fetches. The loading mark derives from both, so a season
     /// landing never clears it while its series' detail fetch is still in flight

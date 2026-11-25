@@ -82,7 +82,10 @@ impl GuiCore {
 /// library, because the report then describes a list the Client no longer
 /// paints. A started load whose fetch the core no longer runs, or whose detail
 /// has already landed, drops out first, so a landing or a failed fetch frees its
-/// slot. A series whose detail is stale keeps its slot while its refresh runs,
+/// slot. A failed first load caches nothing (its event retires the marks), so
+/// the next report or landing's pump starts it again; the failure itself raises
+/// no effect, so a sustained outage never retries without backoff. A series
+/// whose detail is stale keeps its slot while its refresh runs,
 /// because the detail the cache still paints is not the landing the loader
 /// waits for. The series rows start before the season rows, in report order, and
 /// a season starts only once its series' detail is cached. A stale entry starts
@@ -127,7 +130,7 @@ pub(crate) fn pump_shows_open_loads(app: &mut App, gui: &mut GuiClientState) {
         if app.series_season_stale(series_id, season_id) {
             app.refetch_series_season_episodes(series_id.clone(), season_id.clone());
         } else {
-            app.fetch_series_season_episodes(series_id.clone(), season_id.clone());
+            app.fetch_series_season_episodes_in_view(series_id.clone(), season_id.clone());
         }
         if app.series_season_loading(series_id, season_id) {
             gui.shows_open_season_loads

@@ -522,6 +522,42 @@ fn an_open_season_of_a_cached_series_starts_its_episode_fetch() {
     );
 }
 
+/// A failed in-view detail load caches nothing and starts no retry until the
+/// next report (PR 1065 review, finding 1): the failure raises no
+/// `SeriesContentChanged` effect, so a sustained outage retries no open row
+/// without backoff, and the cache never holds the empty detail the pick path's
+/// first-load fallback would store. The next report's pump restarts the load.
+#[test]
+fn a_failed_in_view_detail_load_caches_nothing_and_waits_for_the_next_report() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_when("ParentId=series-1", 500, "Error");
+    let mut app = tv_app(&http);
+    report_open_series(&mut app, &["series-1"]);
+
+    land_through_gui(&mut app);
+
+    assert!(
+        app.series_detail_snapshot("series-1").is_none(),
+        "a failed in-view load stores no empty detail"
+    );
+    assert!(
+        !app.series_detail_loading("series-1"),
+        "the failed load frees its loader slot"
+    );
+    assert!(
+        app.try_recv_lib_event().is_none(),
+        "the failure starts no retry until the next report or landing"
+    );
+
+    report_open_series(&mut app, &["series-1"]);
+
+    assert!(
+        app.series_detail_loading("series-1"),
+        "the next report's pump restarts the failed load"
+    );
+}
+
 /// A failed New refetch keeps the landed rows (gui-list-header-buttons design
 /// D8): the store keeps the list it already held, so a refresh that fails
 /// never empties the painted rows. The Emby boundary is the mock transport and

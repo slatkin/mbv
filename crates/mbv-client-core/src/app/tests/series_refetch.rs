@@ -7,6 +7,8 @@
 //! the seasons it still holds, a failed detail refetch keeps the cached detail,
 //! and a failed album-track refresh keeps the cached tracks.
 
+use std::time::Duration;
+
 use crate::app::tests::make_app_stub;
 use crate::app::{LibEvent, MusicEvent, SeriesEvent};
 use mbv_emby_model::test_support::make_item;
@@ -181,6 +183,62 @@ fn a_stale_detail_landing_replaces_the_seasons_and_keeps_the_old_episodes() {
     assert_eq!(
         detail.episodes["season-1"][0].id, "episode-1",
         "a season the new detail still holds keeps the episodes the cache holds"
+    );
+}
+
+/// A failed quiet in-view detail load caches nothing (PR 1065 review, finding
+/// 1): the view never holds a poisoned empty detail that no scroll or reopen
+/// could fill, and the loading mark retires so a later report or landing
+/// starts the load again. The pick path's failure keeps its empty fallback.
+#[test]
+fn a_failed_quiet_detail_load_caches_nothing_and_retires_the_marks() {
+    let http = MockHttp::new();
+    http.respond(500, "Error");
+    let mut app = fetchable_app(&http);
+
+    app.fetch_series_detail_quiet("show-1");
+    let event = app
+        .recv_lib_event_within_for_test(Duration::from_secs(2))
+        .expect("the quiet fetch's failure event");
+    app.handle_lib_event(event, None);
+
+    assert!(
+        app.series_detail_snapshot("show-1").is_none(),
+        "a failed quiet load stores no empty detail"
+    );
+    assert!(
+        !app.series_detail_loading("show-1"),
+        "a failed quiet load retires the loading mark so a later load starts"
+    );
+}
+
+/// A failed in-view first episode fetch stores no empty list (PR 1065 review,
+/// finding 1): the open season stays in its not-loaded state, so the loader's
+/// next pump starts the load again, and the view never paints a landed-but-
+/// empty season a retry could never fill.
+#[test]
+fn a_failed_in_view_season_load_stores_no_empty_episode_list() {
+    let http = MockHttp::new();
+    http.respond(500, "Error");
+    let mut app = fetchable_app(&http);
+    app.cache_series_detail("show-1", series_detail("season-1"));
+
+    app.fetch_series_season_episodes_in_view("show-1".into(), "season-1".into());
+    let event = app
+        .recv_lib_event_within_for_test(Duration::from_secs(2))
+        .expect("the season fetch's failure event");
+    app.handle_lib_event(event, None);
+
+    let detail = app
+        .series_detail_snapshot("show-1")
+        .expect("the cached detail stays");
+    assert!(
+        !detail.episodes.contains_key("season-1"),
+        "a failed in-view season load stores no empty episode list"
+    );
+    assert!(
+        !app.series_season_loading("show-1", "season-1"),
+        "a failed in-view season load retires the loading mark"
     );
 }
 
