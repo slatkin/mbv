@@ -68,17 +68,12 @@ impl App {
     /// first, so the peer's capabilities never decide whether a selection is
     /// possible. `None` while attached to a peer with no home link left.
     fn local_owner_link(&self) -> Option<&mbv_player::PlayerProxy> {
-        match (&self.suspended_local, &self.player_endpoint) {
-            (Some(suspended), _) => Some(&suspended.player),
-            (
-                None,
-                Some(
-                    mbv_remote_player::DaemonEndpoint::Tcp(_)
-                    | mbv_remote_player::DaemonEndpoint::Unix(_),
-                ),
-            ) => None,
-            (None, Some(mbv_remote_player::DaemonEndpoint::Local) | None) => Some(&self.player),
-        }
+        let on_peer_without_home = self.suspended_local.is_none()
+            && self
+                .player_endpoint
+                .as_ref()
+                .is_some_and(|endpoint| !endpoint.is_local());
+        (!on_peer_without_home).then(|| self.local_queue_player())
     }
 
     /// Whether the local Owner can host an Emby Session output. A peer this

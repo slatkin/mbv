@@ -374,3 +374,16 @@ fn activating_the_already_output_device_skips_the_fork() {
         "the switch sends nothing to the local Owner"
     );
 }
+
+/// #1031: attached to a peer with no home link left, the peer's capabilities
+/// never decide whether a playback-output selection is possible.
+#[test]
+fn a_peer_without_a_home_link_is_not_a_local_owner_output_host() {
+    let (mut app, _cmd_rx) = session_output_owner_app(false);
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Tcp(
+        "192.168.1.20:47788".parse().unwrap(),
+    ));
+
+    assert!(!app.local_owner_supports_playback_output());
+    assert!(!app.local_owner_supports_emby_session_output());
+}
