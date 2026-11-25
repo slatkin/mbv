@@ -553,6 +553,36 @@ fn music_hero(
     })
 }
 
+/// The album ids of the shown artist page, in the union's order
+/// (gui-music-artist-page design D3): the albums whose track loads the
+/// `ShowArtist` command and the Music ensure pass start. Empty while no page
+/// shows, and empty for a page pick the union no longer holds — the union
+/// test is the one rule that drops the page, so its loads drop with it.
+pub(in crate::gui_core::gui_library) fn artist_page_album_ids(
+    app: &App,
+    gui: &GuiClientState,
+    lib_idx: usize,
+) -> Vec<String> {
+    let Some(key) = gui.music_artist_pages.get(&lib_idx) else {
+        return Vec::new();
+    };
+    let set = effective_music_set(app, gui, lib_idx);
+    let selected = selected_groups(app, gui, lib_idx, set.as_ref());
+    let union = music_union(app, gui, lib_idx, &selected);
+    let artists = music_artists(app, &union);
+    artists
+        .iter()
+        .find(|artist| &artist.artist_key == key)
+        .map(|artist| {
+            artist
+                .albums
+                .iter()
+                .map(|album| album.album_id.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The artist page's year span (gui-music-artist-page design D1): the first
 /// and last non-empty release year of the artist's albums in the union's
 /// order, `None` when no album names a year.

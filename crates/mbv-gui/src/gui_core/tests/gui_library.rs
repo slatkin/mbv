@@ -18,6 +18,7 @@ use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
+mod artist_page;
 mod destinations;
 mod launch;
 mod projection;

@@ -9,7 +9,8 @@
 use mbv_emby_model::EmbyItem;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
-use mbv_ui_model::ui_util::is_playable;
+use mbv_ui_model::music_grouping::ArtistKey;
+use mbv_ui_model::ui_util::{is_playable, sort_audio_tracks};
 
 use super::GuiGroupAlbums;
 use super::collection::GuiCollectionSet;
@@ -66,6 +67,29 @@ impl GuiCore {
     /// are skipped.
     pub(super) fn shuffle_gui_artist(&mut self, album_ids: &[String]) {
         shuffle_artist(&mut self.app, &self.gui, album_ids);
+    }
+
+    /// Show the artist's page in the Hero (gui-music-artist-page design D1,
+    /// D2): the page pick replaces any earlier entry of the library, the
+    /// artist page's album track loads start through the core's bounded
+    /// intent, and navigation is stamped as an album pick stamps it, so the
+    /// pick move warms no neighbour art. A key the union does not hold still
+    /// stores: the union test in the projection is the one rule that drops
+    /// the page, and its album list then loads nothing.
+    pub(super) fn show_gui_artist_page(&mut self, lib_idx: usize, artist_key: ArtistKey) {
+        self.gui.music_artist_pages.insert(lib_idx, artist_key);
+        let album_ids = super::projection::artist_page_album_ids(&self.app, &self.gui, lib_idx);
+        self.app.request_albums_tracks(album_ids);
+        self.app.stamp_navigation();
+    }
+
+    /// Play the artist whose albums are `album_ids` (gui-music-artist-page
+    /// design D2): the albums the window content's union holds, played
+    /// through the shared album expansion in the given order with shuffle
+    /// off — the same blocking walk Shuffle artist runs with shuffle on. A
+    /// stale frame's album id is skipped and logged.
+    pub(super) fn play_gui_artist(&mut self, album_ids: &[String]) {
+        play_artist(&mut self.app, &self.gui, album_ids);
     }
 
     /// Play the item (design D8), as the GUI Library's explicit play: the
@@ -143,6 +167,67 @@ fn shuffle_artist(app: &mut App, gui: &GuiClientState, album_ids: &[String]) {
         return;
     }
     app.play_music_albums(albums, true, false);
+}
+
+/// Play the artist whose albums are `album_ids` in the given order
+/// (gui-music-artist-page design D2): the shuffle walk with shuffle off. An
+/// id the store no longer holds is skipped and logged, as a stale frame's
+/// id always is.
+fn play_artist(app: &mut App, gui: &GuiClientState, album_ids: &[String]) {
+    let mut albums: Vec<EmbyItem> = Vec::new();
+    for album_id in album_ids {
+        match library_item(app, gui, album_id) {
+            Some((_lib_idx, album)) => albums.push(album),
+            None => super::log_stale_library_item("playArtist", album_id),
+        }
+    }
+    if albums.is_empty() {
+        super::log_ignored_library_command(
+            "playArtist",
+            format_args!("the album ids name no album the Service data holds"),
+        );
+        return;
+    }
+    app.play_music_albums(albums, false, false);
+}
+
+/// Play the artist page's track `track_id` (gui-music-artist-page design
+/// D4): the sequence is each album's cached playable tracks in `album_ids`
+/// order, every album sorted in disc and track order, concatenated, and
+/// playback starts at the track through the shared artist-tracks play path.
+/// An album id the cache does not hold, and a `track_id` the sequence does
+/// not hold, log and play nothing — the page the stale frame painted is not
+/// the page the cache serves.
+pub(in crate::gui_core::gui_library) fn play_gui_artist_track(
+    app: &mut App,
+    album_ids: &[String],
+    track_id: &str,
+) {
+    let mut tracks: Vec<EmbyItem> = Vec::new();
+    for album_id in album_ids {
+        let Some(cached) = app.album_tracks(album_id) else {
+            super::log_ignored_library_command(
+                "playArtistTrack",
+                format_args!("the album {album_id} holds no cached tracklist"),
+            );
+            return;
+        };
+        let mut album_tracks: Vec<EmbyItem> = cached
+            .iter()
+            .filter(|track| is_playable(track))
+            .cloned()
+            .collect();
+        sort_audio_tracks(&mut album_tracks);
+        tracks.extend(album_tracks);
+    }
+    let Some(start_idx) = tracks.iter().position(|track| track.id == track_id) else {
+        super::log_ignored_library_command(
+            "playArtistTrack",
+            format_args!("the track {track_id} is not in the page's cached tracks"),
+        );
+        return;
+    };
+    app.play_artist_tracks(tracks, start_idx);
 }
 
 /// Play `item` as the GUI Library's explicit play (design D8): the row menu's

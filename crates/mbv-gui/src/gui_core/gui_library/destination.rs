@@ -63,6 +63,10 @@ impl GuiCore {
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }
             | GuiLibraryCommand::ShuffleArtist { .. }
+            | GuiLibraryCommand::ShowArtist { .. }
+            | GuiLibraryCommand::PlayArtist { .. }
+            | GuiLibraryCommand::AddArtistToQueue { .. }
+            | GuiLibraryCommand::PlayArtistTrack { .. }
             | GuiLibraryCommand::MenuEntry { .. }
             | GuiLibraryCommand::RowMenu { .. }
             | GuiLibraryCommand::Shuffle { .. } => log_ignored_library_command(
@@ -133,6 +137,10 @@ impl GuiCore {
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }
             | GuiLibraryCommand::ShuffleArtist { .. }
+            | GuiLibraryCommand::ShowArtist { .. }
+            | GuiLibraryCommand::PlayArtist { .. }
+            | GuiLibraryCommand::AddArtistToQueue { .. }
+            | GuiLibraryCommand::PlayArtistTrack { .. }
             | GuiLibraryCommand::MenuEntry { .. }
             | GuiLibraryCommand::RowMenu { .. }
             | GuiLibraryCommand::Shuffle { .. } => log_ignored_library_command(
@@ -213,6 +221,10 @@ impl GuiCore {
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }
             | GuiLibraryCommand::ShuffleArtist { .. }
+            | GuiLibraryCommand::ShowArtist { .. }
+            | GuiLibraryCommand::PlayArtist { .. }
+            | GuiLibraryCommand::AddArtistToQueue { .. }
+            | GuiLibraryCommand::PlayArtistTrack { .. }
             | GuiLibraryCommand::MenuEntry { .. }
             | GuiLibraryCommand::RowMenu { .. }
             | GuiLibraryCommand::Shuffle { .. } => log_ignored_library_command(
@@ -272,6 +284,10 @@ impl GuiCore {
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }
             | GuiLibraryCommand::ShuffleArtist { .. }
+            | GuiLibraryCommand::ShowArtist { .. }
+            | GuiLibraryCommand::PlayArtist { .. }
+            | GuiLibraryCommand::AddArtistToQueue { .. }
+            | GuiLibraryCommand::PlayArtistTrack { .. }
             | GuiLibraryCommand::MenuEntry { .. }
             | GuiLibraryCommand::RowMenu { .. }
             | GuiLibraryCommand::Shuffle { .. } => log_ignored_library_command(

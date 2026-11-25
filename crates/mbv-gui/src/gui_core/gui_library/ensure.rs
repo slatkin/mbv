@@ -207,6 +207,19 @@ impl GuiDestinationLoads for MusicLoads {
         super::store::fetch_group_albums(app, gui, self.lib_idx, group_id);
         GuiStepOutcome::LoadStarted
     }
+
+    /// Start the track loads of the shown artist page's albums
+    /// (gui-music-artist-page design D3): the loads are the core's bounded,
+    /// deduplicated per-album fan-out, so a repaint starts no second request,
+    /// and a page a collection change widened loads the albums the union
+    /// grew by. Nothing loads while no page shows — the album rows' own
+    /// opens and the pick's fetch own their loads.
+    fn ensure_dependents(&self, app: &mut App, gui: &mut GuiClientState) {
+        let album_ids = super::projection::artist_page_album_ids(app, gui, self.lib_idx);
+        if !album_ids.is_empty() {
+            app.request_albums_tracks(album_ids);
+        }
+    }
 }
 
 /// The Shows destination's site (design D3): the root step starts the All
