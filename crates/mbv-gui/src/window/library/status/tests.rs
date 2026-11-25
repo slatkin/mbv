@@ -4,10 +4,11 @@
 
 use super::*;
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionEntry, GuiEmbyDetail, GuiEmbyList,
-    GuiEmbyRowKindFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeHeroFrame,
-    GuiHomeList, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicHeroSubjectFrame, GuiMusicList,
-    GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsList,
+    GuiArtistKey, GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionEntry, GuiEmbyDetail,
+    GuiEmbyList, GuiEmbyRowKindFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail,
+    GuiHomeHeroFrame, GuiHomeList, GuiMusicAlbumFrame, GuiMusicArtistPageFrame, GuiMusicDetail,
+    GuiMusicHeroSubjectFrame, GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail,
+    GuiShowsList,
 };
 
 /// The fixture's tabs: Music at place 1, Audiobooks at place 2.
@@ -331,9 +332,10 @@ fn tab(position: usize, label: &str) -> GuiLibraryTabFrame {
 }
 
 // The location joins the destination, the selected collections, and the
-// picked artist.
+// picked album (gui-music-artist-page design D6: the picked name is the
+// subject's own — the album's title for an album subject).
 #[test]
-fn the_location_joins_the_destination_the_selected_collections_and_the_picked_artist() {
+fn the_location_joins_the_destination_the_selected_collections_and_the_picked_album() {
     let list = music_list();
     assert_eq!(
         library_location(
@@ -341,6 +343,28 @@ fn the_location_joins_the_destination_the_selected_collections_and_the_picked_ar
             Some(1),
             Some(&list),
             Some(&music_detail(Some(hero())))
+        ),
+        "Music › Hip-Hop › Soul › Licensed To Ill"
+    );
+}
+
+// While the Hero shows the artist page the picked name is the artist's name
+// (gui-music-artist-page design D6), so the location names the artist.
+#[test]
+fn the_location_names_the_artist_while_the_artist_page_shows() {
+    let list = music_list();
+    let mut page_hero = hero();
+    page_hero.subject = GuiMusicHeroSubjectFrame::Artist(GuiMusicArtistPageFrame {
+        artist_key: GuiArtistKey::Service("a1".to_owned()),
+        albums: Vec::new(),
+        years: Some(("1986".to_owned(), "1992".to_owned())),
+    });
+    assert_eq!(
+        library_location(
+            &tabs(),
+            Some(1),
+            Some(&list),
+            Some(&music_detail(Some(page_hero)))
         ),
         "Music › Hip-Hop › Soul › Beastie Boys"
     );

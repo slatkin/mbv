@@ -7,7 +7,6 @@
 //! a layout.
 
 use super::*;
-use crate::bridge::frame::library::GuiArtistKey;
 
 /// The track Brand Nubian's album holds.
 fn all_for_one() -> GuiMusicTrackFrame {

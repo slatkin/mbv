@@ -27,7 +27,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryList;
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail,
+    GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame,
+    GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
     GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -367,6 +368,27 @@ fn no_hero() -> GuiMusicDetail {
     }
 }
 
+/// The Music detail part whose Hero shows the Beastie Boys artist page
+/// (gui-music-artist-page design D6).
+fn artist_page() -> GuiMusicDetail {
+    GuiMusicDetail {
+        hero: Some(GuiMusicHeroFrame {
+            artist: "Beastie Boys".to_owned(),
+            collections: vec!["Hip-Hop".to_owned()],
+            album_count: 2,
+            artist_tracks: None,
+            subject: GuiMusicHeroSubjectFrame::Artist(GuiMusicArtistPageFrame {
+                artist_key: GuiArtistKey::Service("a1".to_owned()),
+                albums: Vec::new(),
+                years: Some(("1986".to_owned(), "1989".to_owned())),
+            }),
+            menu: Vec::new(),
+        }),
+        art: None,
+        playing_track_id: None,
+    }
+}
+
 /// One album of the refresh scenario, carrying its tracklist so opening its
 /// node sends no command.
 fn loaded_album(album_id: &str, name: &str, year: &str, track_id: &str) -> GuiMusicAlbumFrame {
@@ -499,6 +521,52 @@ fn a_press_on_an_album_picks_it_and_leaves_it_closed() {
         ),
         Some("false".to_owned()),
         "the pressed album stays closed"
+    );
+}
+
+/// Contract (gui-music-artist-page design D6, spec "An artist row is
+/// pressed"): a press on an artist row picks the artist — the command names
+/// the artist's stable key and the Music library index — and the row neither
+/// opens nor closes.
+#[test]
+fn a_press_on_an_artist_row_picks_the_artist_and_toggles_no_node() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
+    measure(&mut fixture, 240.0);
+
+    press_row(&mut fixture, "artist:service:a1");
+
+    assert_eq!(
+        fixture.library_commands(),
+        [crate::gui_core::GuiLibraryCommand::ShowArtist {
+            lib_idx: 0,
+            artist_key: mbv_ui_model::music_grouping::ArtistKey::Service("a1".to_owned()),
+        }]
+    );
+    assert_eq!(
+        fixture.attr_of(
+            "[data-library-row-id=\"artist:service:a1\"]",
+            local_name!("aria-expanded"),
+        ),
+        Some("false".to_owned()),
+        "the pressed artist row stays closed"
+    );
+}
+
+/// Contract (gui-music-artist-page design D6, spec "An artist row is
+/// pressed"): while the Hero shows the artist page, the artist's row paints
+/// the picked fill — it is the picked row.
+#[test]
+fn the_artist_row_paints_picked_while_the_artist_page_shows() {
+    let mut fixture = built(&music(&["Hip-Hop"]), &artist_page());
+    measure(&mut fixture, 240.0);
+
+    assert!(
+        fixture.presents("[data-library-row-id=\"artist:service:a1\"][data-library-selected]"),
+        "the artist row paints the picked fill while the subject is the artist page"
+    );
+    assert!(
+        !fixture.presents("[data-library-row-id=\"artist:service:a2\"][data-library-selected]"),
+        "no other row paints the picked fill"
     );
 }
 
