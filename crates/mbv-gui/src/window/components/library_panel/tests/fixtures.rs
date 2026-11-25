@@ -3,15 +3,16 @@
 //! Hero facts each mount contract needs.
 
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList, GuiAudiobooksRowFrame,
-    GuiAudiobooksWorkspaceFrame, GuiCollectionEntry, GuiCollections, GuiDestinationList,
-    GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
-    GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeDetail,
-    GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame,
-    GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame, GuiMusicDetail,
-    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiRowArtFrame,
-    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList, GuiShowsRowFrame,
+    GuiArtistKey, GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList,
+    GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame, GuiCollectionEntry, GuiCollections,
+    GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame,
+    GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList,
+    GuiHomeDetail, GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
+    GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame,
+    GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
+    GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsHeroFrame,
+    GuiShowsList, GuiShowsRowFrame,
 };
 
 /// The carried Music list part with no album picked.
@@ -64,6 +65,29 @@ pub(super) fn music_hero() -> GuiMusicHeroFrame {
             year: "1986".to_owned(),
             tracks: None,
             total: None,
+        }),
+        menu: Vec::new(),
+    }
+}
+
+/// The artist page's Hero facts (gui-music-artist-page design D6): the Hero
+/// the overlay shows after an artist row's View Detail.
+pub(super) fn music_artist_page() -> GuiMusicHeroFrame {
+    GuiMusicHeroFrame {
+        artist: "Beastie Boys".to_owned(),
+        collections: vec!["Hip-Hop".to_owned()],
+        album_count: 1,
+        artist_tracks: None,
+        subject: GuiMusicHeroSubjectFrame::Artist(GuiMusicArtistPageFrame {
+            artist_key: GuiArtistKey::Service("a1".to_owned()),
+            albums: vec![GuiMusicAlbumFrame {
+                album_id: "al1".to_owned(),
+                name: "Licensed To Ill".to_owned(),
+                year: "1986".to_owned(),
+                tracks: None,
+                total: None,
+            }],
+            years: Some(("1986".to_owned(), "1986".to_owned())),
         }),
         menu: Vec::new(),
     }
