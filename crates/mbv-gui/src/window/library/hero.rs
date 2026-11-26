@@ -67,6 +67,11 @@ pub fn join_meta_rows(rows: &[MetaRow]) -> Segments {
 /// the artist label with the selected collection names (design D5).
 #[must_use]
 pub fn hero_kicker(hero: &GuiMusicHeroFrame) -> Segments {
+    // The artist page carries its collections in the facts line, so its
+    // kicker stays empty: no repeated collection name and no kind word.
+    if matches!(hero.subject, GuiMusicHeroSubjectFrame::Artist(_)) {
+        return Vec::new();
+    }
     let line = if hero.collections.is_empty() {
         "artist".to_owned()
     } else {
