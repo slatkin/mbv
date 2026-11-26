@@ -98,6 +98,10 @@ Session output:
 The relation of a Player owner to the Emby Session that is its *Playback output*. The Owner keys it by the Emby device identity and never by the Session identity. It observes the Session by polling the Emby Sessions and infers its end from the Session. A user selection makes the Session the output. A selection while local playback or a Cast receiver is the output is a hand-off of the active slot. It differs from Direct remote control and from a *Session* used as a remote-control target. Those are Client relations to another device. The Session output is an Owner output relation.
 _Avoid_: session watch, attach (bare), session attach, monitor, remote session (bare), tracked session, tracking, Queue handoff
 
+Output switch:
+The user's own selection of a new *Playback output* that hands nothing off. The old output stops and the new output starts with no active slot. It is one of the two user-answered output sends (`SwitchPlaybackOutput`, beside the hand-off fork's `SelectPlaybackOutput`), the answer to the continue prompt when the local Owner advertises the output-switch capability. It is never a side effect of a sever. It differs from a *Session output* or *Cast attachment* selection with hand-off, which moves the active slot to the new output.
+_Avoid_: Queue handoff, Take, detach (bare)
+
 mpv script set:
 The entry script `mbv.lua` and its sibling Lua fragments. They build the mpv on-screen control overlay (OSC) and the Next-Up prompt. Exactly one copy is live per playback run. It is the copy of the running build. It is never a leftover from the removed installer, a prior version, or another build. It differs from mpv configuration and user scripts. mbv never reads or edits those.
 _Avoid_: OSC bundle, overlay bundle, Lua scripts (bare), script folder
