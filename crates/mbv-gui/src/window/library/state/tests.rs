@@ -101,6 +101,7 @@ fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCo
 /// The Music list section value: the given artists under the `Music` tab.
 fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: vec![GuiLibraryTabFrame {
             position: 1,
             label: "Music".to_owned(),

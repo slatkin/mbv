@@ -197,6 +197,7 @@ impl<D: Host> Fixture<D> {
             sections
                 .library_list
                 .set(Some(SectionRef::new(GuiLibraryList {
+                    refreshing: false,
                     tabs: Vec::new(),
                     current_tab: Some(D::TAB),
                     destination: D::wrap_list(list),

@@ -122,6 +122,7 @@ fn music_props(status: GuiStatusBar) -> LibraryStatusBarProps {
         }],
         current_tab: Some(1),
         list: Some(SectionRef::new(GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 1,
                 label: "Music".to_owned(),
@@ -412,6 +413,7 @@ fn destination_props(
         }],
         current_tab: Some(2),
         list: Some(SectionRef::new(GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 2,
                 label: label.to_owned(),

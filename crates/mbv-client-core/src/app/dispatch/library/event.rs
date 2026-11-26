@@ -44,6 +44,11 @@ impl App {
             } => self.accept_home_recently_added(source, generation, items),
             // A Home content write lands in the App's stored snapshot (row
             // 6.2). Every Client reaches it through this one arm.
+            // A refresh worker's drain retires its pending mark (the GUI list
+            // headers' refresh busy fact); a stale drain clears nothing.
+            ModelContentEvent::HomeRecentlyAddedDrained { kind, epoch } => {
+                self.end_home_recent_refresh(kind, epoch);
+            }
             ModelContentEvent::HomeContentRefreshed(content) => {
                 self.apply_home_content(Some(*content));
             }

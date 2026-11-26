@@ -245,6 +245,7 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
             FixtureProps {
                 sender,
                 list: SectionRef::new(GuiLibraryList {
+                    refreshing: false,
                     tabs: Vec::new(),
                     current_tab: Some(2),
                     destination: GuiDestinationList::Feeds(GuiFeedsList {

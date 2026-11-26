@@ -143,9 +143,13 @@ impl App {
     pub fn refresh_home_content(&mut self) {
         // A Home refresh refetches both Services' `Recently added`
         // data in the background (spec `home-latest-sections`). A failing Service contributes
-        // nothing; Continue Watching still refreshes below.
-        self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
-        self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
+        // nothing; Continue Watching still refreshes below. Each spawned
+        // worker carries its refresh's epoch, so its drain retires exactly
+        // its own pending mark (the GUI list headers' refresh busy fact).
+        let emby_epoch = self.begin_home_recent_refresh(mbv_queue::ServiceKind::Emby);
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby, emby_epoch);
+        let abs_epoch = self.begin_home_recent_refresh(mbv_queue::ServiceKind::Audiobookshelf);
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf, abs_epoch);
         match self.fetch_home() {
             Ok(content) => {
                 // The fetch runs synchronously (its App-side
@@ -434,11 +438,15 @@ impl App {
     /// `home-latest-sections`). Triggered when a Service becomes ready,
     /// in the Emby bootstrap, in `start_audiobookshelf_catalog_fetches`, and
     /// on every Home refresh.
-    pub(in crate::app) fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {
+    pub(in crate::app) fn spawn_home_recently_added(
+        &mut self,
+        service: mbv_queue::ServiceKind,
+        epoch: u64,
+    ) {
         match service {
-            mbv_queue::ServiceKind::Emby => self.spawn_home_emby_recently_added(),
+            mbv_queue::ServiceKind::Emby => self.spawn_home_emby_recently_added(epoch),
             mbv_queue::ServiceKind::Audiobookshelf => {
-                self.spawn_home_audiobookshelf_recently_added();
+                self.spawn_home_audiobookshelf_recently_added(epoch);
             }
         }
     }
@@ -447,8 +455,10 @@ impl App {
     /// eligible library — TV through `get_latest_episodes`, every other
     /// eligible library through `get_latest`. A failing library logs and
     /// contributes nothing; the other libraries still land.
-    fn spawn_home_emby_recently_added(&self) {
+    fn spawn_home_emby_recently_added(&mut self, epoch: u64) {
         let Some(client) = self.emby_snapshot() else {
+            // No worker goes out, so the refresh's pending mark retires here.
+            self.end_home_recent_refresh(mbv_queue::ServiceKind::Emby, epoch);
             return;
         };
         let generation = self.emby_runtime.generation();
@@ -464,6 +474,7 @@ impl App {
             })
             .collect();
         if libraries.is_empty() {
+            self.end_home_recent_refresh(mbv_queue::ServiceKind::Emby, epoch);
             return;
         }
         let tx = self.channels.lib_tx.clone();
@@ -500,6 +511,14 @@ impl App {
                     }
                 }
             }
+            // The worker's last fetch attempt is out: the refresh's pending
+            // mark retires, success or failure alike.
+            let _ = tx.send(LibEvent::ModelContent(
+                ModelContentEvent::HomeRecentlyAddedDrained {
+                    kind: mbv_queue::ServiceKind::Emby,
+                    epoch,
+                },
+            ));
         });
     }
 
@@ -507,7 +526,7 @@ impl App {
     /// shelf, bound to queue items. The shelf path builds no progress-resumed
     /// state, so each episode starts not-started; the browse state and the
     /// Player owner own live progress.
-    fn spawn_home_audiobookshelf_recently_added(&self) {
+    fn spawn_home_audiobookshelf_recently_added(&mut self, epoch: u64) {
         let generation = self.audiobookshelf_runtime.generation();
         let libraries: Vec<String> = self
             .audiobookshelf_libraries
@@ -520,6 +539,8 @@ impl App {
             .map(|library| library.id.clone())
             .collect();
         if libraries.is_empty() {
+            // No worker goes out, so the refresh's pending mark retires here.
+            self.end_home_recent_refresh(mbv_queue::ServiceKind::Audiobookshelf, epoch);
             return;
         }
         let config = self.config.lock().unwrap().clone();
@@ -528,6 +549,14 @@ impl App {
             let Ok((client, key)) =
                 crate::app::dispatch::session::service_startup::audiobookshelf_client(&config)
             else {
+                // No fetch attempt goes out: the pending mark still retires,
+                // so a failed client setup never strands the busy fact.
+                let _ = tx.send(LibEvent::ModelContent(
+                    ModelContentEvent::HomeRecentlyAddedDrained {
+                        kind: mbv_queue::ServiceKind::Audiobookshelf,
+                        epoch,
+                    },
+                ));
                 return;
             };
             for library_id in libraries {
@@ -562,6 +591,14 @@ impl App {
                     }
                 }
             }
+            // The worker's last fetch attempt is out: the refresh's pending
+            // mark retires, success or failure alike.
+            let _ = tx.send(LibEvent::ModelContent(
+                ModelContentEvent::HomeRecentlyAddedDrained {
+                    kind: mbv_queue::ServiceKind::Audiobookshelf,
+                    epoch,
+                },
+            ));
         });
     }
 }

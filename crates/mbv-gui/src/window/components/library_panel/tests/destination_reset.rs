@@ -40,6 +40,7 @@ fn a_new_carried_current_tab_closes_the_row_menu_and_dismisses_the_narrow_hero()
 
     let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
     let next = crate::bridge::frame::library::GuiLibraryList {
+        refreshing: false,
         tabs: vec![GuiLibraryTabFrame {
             position: 2,
             label: "Shows".to_owned(),

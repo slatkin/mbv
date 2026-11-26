@@ -158,15 +158,6 @@ fn audiobookshelf_library(id: &str, media_type: &str) -> AudiobookshelfLibrary {
 /// timeout to turn that into an assertion (the test rules forbid a real
 /// timeout). The suite's own timeout is the only bound, so read a hang here as
 /// "an expected fetch event never arrived".
-fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
-    let mut events = Vec::new();
-    for _ in 0..expected {
-        let event = app.recv_lib_event().expect("a library-fetch event");
-        events.push(event);
-    }
-    events
-}
-
 /// Task 3.3: an open-but-Empty receiver is returned to its slot rather than
 /// being dropped (the worker is still running; the drain just found no
 /// completion yet). Startup and test receivers share the bookkeeping.
@@ -330,7 +321,8 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
 fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::SetupGeneration) {
     let mut podcast_shows = 0;
     let mut book_fetches = 0;
-    for event in collect_library_events(app, 2) {
+    while podcast_shows + book_fetches < 2 {
+        let event = app.recv_lib_event().expect("a library-fetch event");
         match event {
             LibEvent::Audiobookshelf(AudiobookshelfEvent::ShowsFetched {
                 generation: event_generation,
@@ -350,6 +342,9 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
                 assert_eq!(library_id, "book-1");
                 book_fetches += 1;
             }
+            // The startup Home load's worker drain rides the same channel; a
+            // stub config fails its client setup, so it carries no fetch.
+            LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedDrained { .. }) => {}
             _ => panic!("unexpected library event for a stub-config Audiobookshelf catalog"),
         }
     }
@@ -358,10 +353,17 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
         (1, 1),
         "a podcast library requests shows and a book library requests books"
     );
-    assert!(
-        !app.has_queued_lib_event_for_test(),
-        "the startup catalog loop must not fetch the destination Latest shelf"
-    );
+    // What stays queued is the Home worker's drain, never a destination
+    // Latest fetch: the startup catalog loop starts no Latest shelf.
+    while let Some(event) = app.try_recv_lib_event() {
+        assert!(
+            matches!(
+                event,
+                LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedDrained { .. })
+            ),
+            "the startup catalog loop must not fetch the destination Latest shelf"
+        );
+    }
 }
 
 // ── Regression: a stale `library_position_state` album cursor must never

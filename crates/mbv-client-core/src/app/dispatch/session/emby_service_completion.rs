@@ -294,7 +294,8 @@ impl App {
         // Recently added fetch for the just-ready Service (spec
         // `home-latest-sections`, "Recently added loads at launch independent
         // of destinations": "when that Service becomes ready").
-        self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
+        let epoch = self.begin_home_recent_refresh(mbv_queue::ServiceKind::Emby);
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby, epoch);
 
         HomeContent {
             continue_items,

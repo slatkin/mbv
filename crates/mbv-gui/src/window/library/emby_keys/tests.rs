@@ -95,6 +95,7 @@ fn emby_content(
     hero: Option<GuiEmbyHeroFrame>,
 ) -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: vec![
             GuiLibraryTabFrame {
                 position: 1,

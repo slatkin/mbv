@@ -24,15 +24,20 @@ fn ready_emby_app(http: &MockHttp) -> crate::app::App {
 }
 
 fn model_content_events(app: &crate::app::App, expected: usize) -> Vec<ModelContentEvent> {
-    (0..expected)
-        .map(|_| match app.channels.lib_rx.recv().expect("fetch event") {
+    let mut events = Vec::new();
+    while events.len() < expected {
+        match app.channels.lib_rx.recv().expect("fetch event") {
             LibEvent::ModelContent(event) => match event {
-                ModelContentEvent::HomeRecentlyAddedFetched { .. } => event,
+                ModelContentEvent::HomeRecentlyAddedFetched { .. } => events.push(event),
+                // A worker's drain retires the refresh's pending mark and
+                // carries no payload the fetch tests read.
+                ModelContentEvent::HomeRecentlyAddedDrained { .. } => {}
                 other => panic!("unexpected ModelContentEvent: {other:?}"),
             },
             other => panic!("unexpected LibEvent: {other:?}"),
-        })
-        .collect()
+        }
+    }
+    events
 }
 
 /// Spec `home-latest-sections`, "Recently added combines every Latest-bearing
@@ -58,7 +63,8 @@ fn home_emby_fetch_uses_destination_latest_rules_per_eligible_library() {
     );
     http.respond(200, r#"[{"Id":"movie-1","Name":"Movie","Type":"Movie"}]"#);
 
-    app.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
+    let epoch = app.begin_home_recent_refresh(mbv_queue::ServiceKind::Emby);
+    app.spawn_home_recently_added(mbv_queue::ServiceKind::Emby, epoch);
     let events = model_content_events(&app, 2);
 
     let ids_of = |event: &ModelContentEvent| match event {
@@ -105,9 +111,94 @@ fn home_emby_fetch_uses_destination_latest_rules_per_eligible_library() {
 /// nothing, without a network call and without blocking the others.
 #[test]
 fn home_audiobookshelf_fetch_without_setup_contributes_nothing() {
-    let app = make_app_stub();
+    let mut app = make_app_stub();
 
-    app.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
+    let epoch = app.begin_home_recent_refresh(mbv_queue::ServiceKind::Audiobookshelf);
+    app.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf, epoch);
 
     app.channels.lib_rx.try_recv().unwrap_err();
+    assert!(
+        !app.home_recent_refresh_pending(),
+        "a spawn that sent no worker retires its pending mark"
+    );
+}
+
+/// The GUI Library list headers' refresh busy fact's Home half (design D7):
+/// a spawned `Recently added` worker is pending from its spawn until its
+/// drain event retires it, so the refresh glyph spins while the fetch runs
+/// and stops when it lands.
+#[test]
+fn a_home_recent_refresh_is_pending_until_its_workers_drain() {
+    let http = MockHttp::new();
+    let mut app = ready_emby_app(&http);
+    app.libs = vec![library_of("lib-movies", "Movies", "movies")];
+    http.respond(200, r#"[{"Id":"movie-1","Name":"Movie","Type":"Movie"}]"#);
+
+    let epoch = app.begin_home_recent_refresh(mbv_queue::ServiceKind::Emby);
+    app.spawn_home_recently_added(mbv_queue::ServiceKind::Emby, epoch);
+    assert!(
+        app.home_recent_refresh_pending(),
+        "the spawned worker is pending"
+    );
+
+    // The worker's fetch and its drain land; the drain retires the mark.
+    // The recv blocks on the drain: the worker sends it after its last fetch
+    // attempt, success or failure alike.
+    loop {
+        let event = app.channels.lib_rx.recv().expect("the worker's events");
+        if matches!(
+            &event,
+            LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedDrained { .. })
+        ) {
+            app.handle_lib_event(event, None);
+            break;
+        }
+        app.handle_lib_event(event, None);
+    }
+    assert!(
+        !app.home_recent_refresh_pending(),
+        "the drain retires the pending mark"
+    );
+}
+
+/// The busy fact's epoch guard: a drain that names a superseded refresh —
+/// one a newer refresh already replaced the mark of — clears nothing, so a
+/// newer refresh's glyph never stops at an older worker's drain, and the
+/// superseded worker's own epoch holds until its own drain retires it.
+#[test]
+fn a_stale_home_recent_drain_leaves_a_newer_refresh_pending() {
+    let http = MockHttp::new();
+    let mut app = ready_emby_app(&http);
+    app.libs = vec![library_of("lib-movies", "Movies", "movies")];
+    http.respond(200, r#"[{"Id":"movie-1","Name":"Movie","Type":"Movie"}]"#);
+
+    let stale_epoch = app.begin_home_recent_refresh(mbv_queue::ServiceKind::Emby);
+    app.spawn_home_recently_added(mbv_queue::ServiceKind::Emby, stale_epoch);
+    let fresh_epoch = app.begin_home_recent_refresh(mbv_queue::ServiceKind::Emby);
+
+    app.handle_lib_event(
+        LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedDrained {
+            kind: mbv_queue::ServiceKind::Emby,
+            epoch: stale_epoch,
+        }),
+        None,
+    );
+    assert!(
+        app.home_recent_refresh_pending(),
+        "the newer refresh's mark survives the stale drain"
+    );
+
+    // The newer refresh's own drain retires the last epoch, and the busy
+    // fact ends: no worker that went out is still running.
+    app.handle_lib_event(
+        LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedDrained {
+            kind: mbv_queue::ServiceKind::Emby,
+            epoch: fresh_epoch,
+        }),
+        None,
+    );
+    assert!(
+        !app.home_recent_refresh_pending(),
+        "the busy fact ends when every drained worker's epoch is retired"
+    );
 }

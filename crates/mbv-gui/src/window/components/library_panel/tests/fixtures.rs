@@ -37,6 +37,7 @@ pub(super) fn music_sections(
 ) -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 1,
                 label: "Music".to_owned(),
@@ -106,6 +107,7 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
     let row_id = GuiHomeRowIdFrame::Continue("e1".to_owned());
     (
         GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 1,
                 label: "Music".to_owned(),
@@ -191,6 +193,7 @@ pub(super) fn shows_detail() -> GuiShowsDetail {
 pub(super) fn shows_sections() -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 3,
                 label: "Shows".to_owned(),
@@ -207,6 +210,7 @@ pub(super) fn shows_sections() -> (GuiLibraryList, GuiLibraryDetail) {
 pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 3,
                 label: label.to_owned(),
@@ -267,6 +271,7 @@ pub(super) fn audiobooks_sections(
 ) -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 4,
                 label: "Audiobooks".to_owned(),
@@ -324,6 +329,7 @@ pub(super) fn feeds_sections(
 ) -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {
+            refreshing: false,
             tabs: vec![GuiLibraryTabFrame {
                 position: 5,
                 label: "Feeds".to_owned(),

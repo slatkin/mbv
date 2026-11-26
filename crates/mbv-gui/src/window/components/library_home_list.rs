@@ -214,6 +214,7 @@ pub fn LibraryHomeList() -> Element {
         view: None,
         sort: None,
         on_refresh: Callback::new(move |()| refresh_library.refresh_library_list()),
+        refreshing: carried.as_ref().is_some_and(|list| list.refreshing),
         tree: None,
         filter: filter.clone(),
         placeholder: "Filter home".to_owned(),

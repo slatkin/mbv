@@ -360,14 +360,15 @@ impl App {
     }
 
     fn start_audiobookshelf_catalog_fetches(
-        &self,
+        &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
         // Home fetches each podcast library's `Recently added` rows here
         // (spec `home-latest-sections`); the destination Latest shelf is
         // lazy (spec `destination-latest-modes`, "Destination Latest lists
         // load lazily") and fetches only while its Latest pill is selected.
-        self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
+        let epoch = self.begin_home_recent_refresh(mbv_queue::ServiceKind::Audiobookshelf);
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf, epoch);
         for (index, library) in self.audiobookshelf_libraries.iter().enumerate() {
             let book_kind =
                 mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(

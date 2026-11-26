@@ -384,6 +384,16 @@ pub enum ModelContentEvent {
         generation: SetupGeneration,
         items: Vec<QueueItem>,
     },
+    /// One Home Recently added refresh worker's drain: the spawn body sends
+    /// it after its last library fetch attempt, success or failure, so the
+    /// App retires that worker's pending mark for the refresh epoch it names
+    /// (`App::home_recent_refresh`). A stale drain — one a newer refresh's
+    /// epoch superseded — clears nothing, so the busy fact always ends when
+    /// the newest refresh's workers are out.
+    HomeRecentlyAddedDrained {
+        kind: mbv_queue::ServiceKind,
+        epoch: u64,
+    },
     /// A freshly computed Continue Watching snapshot delivered by an
     /// App-internal writer. App-internal callers cannot run the shell's
     /// assignment side (eviction and the owner push), so the result travels

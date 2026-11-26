@@ -132,6 +132,7 @@ fn added() -> GuiHomeItemRowFrame {
 /// rows, and the selection the frame paints.
 fn carry_home(state: &LibraryState) {
     let list = crate::bridge::frame::library::GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: crate::bridge::frame::library::GuiDestinationList::Home(GuiHomeList {
