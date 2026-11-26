@@ -2145,9 +2145,10 @@ title. The IMDb link is the IMDb fact pill, so the header carries no IMDb
 action.
 
 The album Hero passes no header pills. It passes its track count and total time
-as block pills. The artist page passes its album count, year span, and (once
-loaded) track count and total time as header pills. The page's block has no
-rows. The Tracks list sits under the Tracks section header.
+as block pills. The artist page passes the selected collections as the first
+header pill, then its album count, year span, and (once loaded) track count and
+total time. The page's block has no rows. The Tracks list sits under the Tracks
+section header.
 
 A pill is one short fact, `Fact pill`, in the pill style of the header. The
 fact pill text keeps today's formats (for example `01:37:32`).

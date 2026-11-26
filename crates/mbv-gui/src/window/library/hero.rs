@@ -113,15 +113,23 @@ pub fn album_pills(hero: &GuiMusicHeroFrame) -> Vec<GuiHeroPillFrame> {
 }
 
 /// The artist page header's pills (gui-music-artist-page design D6, design
-/// D5): the artist's album count in the union, the span of the artist's
-/// release years, and the track count and total time once every album of the
-/// artist has loaded its tracks. Empty while the subject is an album.
+/// D5): the selected collections as a label pill, the artist's album count in
+/// the union, the span of the artist's release years, and the track count and
+/// total time once every album of the artist has loaded its tracks. Empty
+/// while the subject is an album.
 #[must_use]
 pub fn artist_page_pills(hero: &GuiMusicHeroFrame) -> Vec<GuiHeroPillFrame> {
     let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject else {
         return Vec::new();
     };
-    let mut pills = vec![album_count_pill(hero.album_count)];
+    let mut pills = Vec::new();
+    if !hero.collections.is_empty() {
+        pills.push(fact_pill(vec![GuiMetaSegmentFrame {
+            text: hero.collections.join(" + "),
+            kind: GuiMetaKindFrame::Label,
+        }]));
+    }
+    pills.push(album_count_pill(hero.album_count));
     if let Some((first, last)) = page.years.as_ref() {
         pills.push(fact_pill(vec![GuiMetaSegmentFrame {
             text: year_span_text(first, last),

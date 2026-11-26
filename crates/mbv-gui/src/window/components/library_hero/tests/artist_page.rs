@@ -169,14 +169,14 @@ fn the_artist_page_header_pills_hold_the_album_count() {
 }
 
 /// Contract (spec "A picked Music artist shows an artist page"): the artist
-/// page's header band shows the artist name and its fact pills, with no
-/// eyebrow line above the title.
+/// page's header carries the selected collections as a label pill.
 #[test]
-fn the_artist_page_header_has_no_eyebrow_line() {
+fn the_artist_page_header_pills_carry_the_selected_collections() {
     let fixture = built_artist_page();
 
-    assert!(
-        !fixture.presents("[data-library-hero-kicker]"),
-        "the header band paints no eyebrow line"
+    assert_eq!(
+        fixture.text_of("[data-library-hero-pills] [data-meta-kind=\"label\"]"),
+        "Hip-Hop",
+        "the header's label pill is the selected collections"
     );
 }
