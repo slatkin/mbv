@@ -115,3 +115,35 @@ fn series_line_types_year_range_as_date() {
         Some(&MetaSegment::new("2026", MetaKind::Date)),
     );
 }
+
+/// An episode's Hero leads with its own `Primary` still, so Home heroes paint
+/// the episode, not the series (user-reported regression: the `Thumb`-first
+/// series chain addresses the series). The series-addressed kinds stay as the
+/// fallback for an episode that declares no still.
+#[test]
+fn episode_hero_art_leads_with_its_own_still() {
+    let mut item = episode("2026-07-20", 25);
+    item.series_id = "series-1".into();
+    item.image_tags.primary = "episode-still".into();
+    item.image_tags.series_thumb = "series-thumb".into();
+    let artwork = emby_artwork_policy(&item);
+    assert_eq!(artwork.shape, ArtworkShape::Landscape);
+    let Some(ArtworkSource::Emby {
+        item_id,
+        image_types,
+        ..
+    }) = artwork.source
+    else {
+        panic!("emby artwork source");
+    };
+    assert_eq!(item_id, item.id);
+    assert_eq!(
+        image_types,
+        vec![
+            "Primary".to_string(),
+            "Thumb".to_string(),
+            "Backdrop".to_string(),
+            "Logo".to_string(),
+        ]
+    );
+}

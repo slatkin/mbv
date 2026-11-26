@@ -44,8 +44,11 @@ pub struct HeroContentData {
 /// declares available in the order Landscape > Square > Portrait — a
 /// declared `Thumb`/backdrop (an episode's series tags included) is
 /// Landscape, a declared `Primary` poster alone is Portrait — and nothing
-/// declared falls back to Landscape with the placeholder. Availability is
-/// provider metadata only, so the arm is stable before the image loads.
+/// declared falls back to Landscape with the placeholder. An episode's own
+/// `Primary` still counts as Landscape: the server serves an episode's
+/// `Thumb`/`Backdrop`/`Logo` from its series, so `Primary` is the only art the
+/// episode itself owns. Availability is provider metadata only, so the arm is
+/// stable before the image loads.
 #[must_use]
 pub fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
     let music = item.item_type == "MusicAlbum" || item.is_audio();
@@ -58,10 +61,12 @@ pub fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
         };
     }
     let tags = &item.image_tags;
+    let episode = item.item_type == "Episode";
     let landscape_declared = !tags.thumb.is_empty()
         || !tags.backdrops.is_empty()
         || !tags.series_thumb.is_empty()
-        || !tags.series_backdrops.is_empty();
+        || !tags.series_backdrops.is_empty()
+        || (episode && !tags.primary.is_empty());
     let poster_declared = !tags.primary.is_empty();
     if item.id.is_empty() {
         // Nothing to fetch: the Landscape placeholder (design D5's
@@ -228,20 +233,29 @@ pub fn music_album_artwork(item: &EmbyItem) -> HeroArtwork {
 }
 
 /// The landscape chain for a non-music item with a declared landscape image:
-/// Series and episodes use the `Thumb`-first series chain; other videos keep
-/// the movie hero's backdrop-first chain with `Thumb` in front (design D5).
-/// `Thumb` is load-bearing here: this arm is also reached by a `Thumb`-only
-/// declaration (`landscape_declared` counts `ImageTags.Thumb`), and a home
-/// video's landscape image is commonly a `Thumb` with no Primary/Backdrop at
-/// all — omitting it left those items fetching nothing and painting the
-/// placeholder while the artwork existed.
+/// an episode leads with its own `Primary` still and then falls back to the
+/// series-addressed kinds; a Series uses the `Thumb`-first series chain; other
+/// videos keep the movie hero's backdrop-first chain with `Thumb` in front
+/// (design D5). `Thumb` is load-bearing here: this arm is also reached by a
+/// `Thumb`-only declaration (`landscape_declared` counts `ImageTags.Thumb`),
+/// and a home video's landscape image is commonly a `Thumb` with no
+/// Primary/Backdrop at all — omitting it left those items fetching nothing and
+/// painting the placeholder while the artwork existed.
 fn landscape_image_chain(item: &EmbyItem) -> &'static [&'static str] {
     match item.item_type.as_str() {
-        "Series" | "Episode" => SERIES_LANDSCAPE_IMAGE_TYPES,
+        "Episode" => EPISODE_LANDSCAPE_IMAGE_TYPES,
+        "Series" => SERIES_LANDSCAPE_IMAGE_TYPES,
         "Movie" => &["Backdrop", "Primary"],
         _ => &["Thumb", "Backdrop", "Primary", "Logo"],
     }
 }
+
+/// The episode's landscape chain: its own `Primary` still first — a `Thumb`
+/// request addresses the series, so a `Thumb`-first chain painted the show
+/// where the episode has art of its own (the queue card's episode rule,
+/// `card_image_types`) — then the series-addressed kinds the fetch falls back
+/// to when the episode declares no still of its own.
+const EPISODE_LANDSCAPE_IMAGE_TYPES: &[&str] = &["Primary", "Thumb", "Backdrop", "Logo"];
 
 /// Emby `ArtworkSource` for `chain`: Series keep the `:ser:`-infix key the
 /// Series artwork family and the image-completion gate are keyed by; every
