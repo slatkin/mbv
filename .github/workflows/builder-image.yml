@@ -36,8 +36,12 @@ on:
       - '.github/workflows/builder-image.yml'
   workflow_dispatch:
 
+# contents: write is not for pushing commits — draft releases are invisible
+# to tokens without push access (GitHub lists drafts only for push access),
+# so a contents:read token can never see the ci-mbv-builder-shuttle draft and
+# every run falls back to the throttled straight docker build.
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
