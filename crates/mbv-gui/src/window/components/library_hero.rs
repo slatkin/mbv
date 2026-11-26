@@ -305,7 +305,6 @@ fn album_hero(
             art: detail.art.clone(),
             art_title: album.name.clone(),
             art_placeholder: Some("[Album art · Emby Primary]".to_owned()),
-            disc: true,
             backdrop,
             actions: Some(actions),
             overview: None,

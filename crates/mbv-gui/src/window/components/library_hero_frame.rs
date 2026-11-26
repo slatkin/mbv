@@ -7,7 +7,7 @@
 //!      background, when the destination passes one;
 //!   2. the header band — the kicker as the eyebrow with a leading dot, the
 //!      title, and the fact pills row, with an optional action on its right;
-//!   3. the detail block — the artwork box (inset frame, optional vinyl disc)
+//!   3. the detail block — the artwork box (inset frame)
 //!      and, beside it, the picked item's eyebrow, name, block pills, action
 //!      row, and labelled fact rows;
 //!   4. the bands, each under a titled section header with a rule — the
@@ -66,10 +66,6 @@ pub struct LibraryHeroFrameProps {
     /// The artwork box's placeholder while no art is carried.
     #[props(default)]
     pub art_placeholder: Option<String>,
-    /// The artwork box's vinyl disc behind a square sleeve (design D2): the
-    /// album branch sets it, no other Hero.
-    #[props(default)]
-    pub disc: bool,
     /// The detail block's action row.
     #[props(default)]
     pub actions: Option<Element>,
@@ -105,7 +101,6 @@ impl std::fmt::Debug for LibraryHeroFrameProps {
             .field("art", &self.art)
             .field("art_title", &self.art_title)
             .field("art_placeholder", &self.art_placeholder)
-            .field("disc", &self.disc)
             .field("actions", &self.actions.is_some())
             .field("overview", &self.overview)
             .field("cast", &self.cast)
@@ -219,7 +214,6 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
         art,
         art_title,
         art_placeholder,
-        disc,
         actions,
         overview,
         cast,
@@ -312,7 +306,6 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                 art,
                 art_title,
                 art_placeholder,
-                disc,
                 if painted(block.eyebrow.as_ref())
                     || named(block.name.as_deref())
                     || !block.pills.is_empty()

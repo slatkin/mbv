@@ -170,10 +170,8 @@
 	--canvas-playing-row: #333f4a; /* the row the playhead is on */
 	--canvas-list-stripe: #2b3338; /* every second row of a free list: a slight lift over the pane */
 	/* The Hero's part values (gui-hero-design-polish design D2): the inset
-	   frame's bezel around the Hero's art and the vinyl disc behind a square
-	   album sleeve. */
+	   frame's thin bezel around the Hero's art. */
 	--canvas-art-frame: #1c2226; /* the inset frame around the Hero's art */
-	--canvas-hero-disc: #171d21; /* the vinyl disc behind a square album sleeve */
 	/* The GUI trees' indent guides (gui-tree-indent-guides design D5): the
 	   neutral tone a top-level parent's guide paints in — Everforest bg5, the
 	   nearest palette value to the mockup's #4f5862, which reads as a rule and

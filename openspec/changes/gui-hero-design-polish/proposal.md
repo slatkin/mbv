@@ -22,7 +22,7 @@ The GUI Client's Hero looks plain next to the "mbv detail pane polish" artboards
 - **Music album Hero.**
   - The artist facts line (album count, the artist's track count, and the artist's total time) is removed from the album Hero. The album count shows only on the artist page (`gui-music-artist-page`).
   - The album's track count and duration are detail-block pills, in the same style as the movie Hero's pills.
-  - The layout does not change otherwise: Shuffle artist stays at the top right, and the vinyl disc behind the cover is for the album Hero only.
+  - The layout does not change otherwise: Shuffle artist stays at the top right. The Hero paints no vinyl disc behind the cover.
 - **The row that plays now.** In a Hero list (tracks, episodes, chapters, entries), the row that plays now gets a fill, a bold title, and a bars mark in place of its number. The Shows and Feeds projections gain the playing episode or entry identity that their Workspace rows need for this look. **BREAKING (spec):** this replaces the rule "a highlight marks focus only, so the playing row SHALL NOT paint a green fill", and the current play glyph beside the title.
 - **The artist page** (from `gui-music-artist-page`, which lands before this change) gets the same parts: its header facts (album count, year span, track count, total time) become pills, its selected collections move to the eyebrow line, its album groups sit in the Tracks section, and it shows no progress.
 - The Narrow arrangement keeps its current wrap: the text block drops below the artwork when the Hero is too narrow for two columns.

@@ -74,7 +74,7 @@ Alternatives considered:
 
 `HeroBlock` loses `facts` and `meta` and gets `rows: Vec<GuiHeroFactRow>` and `pills: Vec<GuiHeroPill>` (the block pills, used by the album). `HeroHeader.facts` becomes `pills`. `hero_layout`, `HeroLayoutFacts`, `HeroMetaRow`, `HeroMetaRole`, `hero_meta_rows`, and `join_meta_rows` are deleted with their tests, because no progress or duration role remains. The overview moves to a frame prop.
 
-The detail block keeps its wrap rule. A landscape art box takes the larger share of the row beside the text column (the artboard's proportion) and drops above the text when the Hero is too narrow. Square and portrait art keep their box. The album's square art gets the vinyl disc behind it through a `disc: bool` prop on `LibraryHeroArt`, which only the album branch sets.
+The detail block keeps its wrap rule. A landscape art box takes the larger share of the row beside the text column (the artboard's proportion) and drops above the text when the Hero is too narrow. Square and portrait art keep their box.
 
 Fonts: each new part takes the font of the text it replaces. The eyebrow and the section headers use the kicker's label font. The pills use the font of today's facts line. A row's label uses the label font, and its value uses today's meta row font. A cast name and role use today's credit name and role fonts. Sizes, colours, radii, and spacing come from the artboards. New colour values become `--canvas-*` tokens in `crates/mbv-gui/assets/app.css`, and `make gui-css` regenerates `app.generated.css`.
 

@@ -2,10 +2,8 @@
 //! rework of `LibraryHeroArt`): every art paints inside an inset frame — the
 //! artboard's dark bezel with its rounded corners — and a landscape box takes
 //! the larger share of the row beside the text column, dropping above the
-//! text when the Hero is too narrow (the detail block's wrap rule, kept). A
-//! square sleeve paints the vinyl disc behind itself when the destination
-//! passes `disc` (the album branch, design D2). Square and portrait keep
-//! their 300 px box.
+//! text when the Hero is too narrow (the detail block's wrap rule, kept).
+//! Square and portrait keep their 300 px box.
 //!
 //! `attr` names the destination's own attributes (`data-library-shows-hero-art`),
 //! so a destination's tests keep their hook.
@@ -46,13 +44,7 @@ const BAND_FLEX_BASIS_PX: f32 = 380.0;
 
 /// The inset frame's look (design D2): the artboard's dark bezel around the
 /// art, with the art's own corners rounded inside it.
-const FRAME_STYLE: &str = "padding: 8px; background: var(--canvas-art-frame); border-radius: 14px; box-sizing: border-box; position: relative;";
-
-/// The vinyl disc's look behind a square sleeve (design D2): the dark circle
-/// behind the sleeve, peeking out at its right by 28 px — inside the detail
-/// block's 32 px column gap, so the disc never paints or hit-tests over the
-/// text column beside it (review 2026-11-26).
-const DISC_STYLE: &str = "position: absolute; width: 100%; aspect-ratio: 1 / 1; right: -28px; top: 50%; transform: translateY(-50%); border-radius: 999px; background: var(--canvas-hero-disc); border: 1px solid var(--canvas-library-control);";
+const FRAME_STYLE: &str = "padding: 2px; background: var(--canvas-art-frame); border-radius: 10px; box-sizing: border-box; position: relative;";
 
 /// The box's text while no art is carried.
 const DEFAULT_PLACEHOLDER: &str = "[No art · the window's placeholder]";
@@ -72,10 +64,6 @@ pub struct LibraryHeroArtProps {
     /// The box's text while no art is carried.
     #[props(default)]
     pub placeholder: Option<String>,
-    /// The vinyl disc behind a square sleeve (design D2): only the album
-    /// branch sets it.
-    #[props(default)]
-    pub disc: bool,
 }
 
 /// The shape's wire name, as the former union spells it.
@@ -133,8 +121,7 @@ fn box_attrs(
     ]
 }
 
-/// The Library Hero's artwork box: the inset frame's sizing per arm, the disc
-/// behind a square sleeve, and the art over the placeholder fill.
+/// The Library Hero's artwork box: the inset frame's sizing per arm and the art over the placeholder fill.
 #[component]
 pub fn LibraryHeroArt(props: LibraryHeroArtProps) -> Element {
     let band = band(props.shape);
@@ -195,15 +182,11 @@ pub fn LibraryHeroArt(props: LibraryHeroArtProps) -> Element {
         .unwrap_or_else(|| DEFAULT_PLACEHOLDER.to_owned());
     let muted = canvas_var("muted");
     let attrs = box_attrs(props.attr, props.art.as_ref(), props.shape);
-    let disc = props.disc && props.shape == GuiArtShapeFrame::Square;
 
     rsx! {
         div {
             style: "{root_style}",
             ..attrs,
-            if disc {
-                div { style: "{DISC_STYLE}", }
-            }
             div {
                 style: "{frame}",
                 div {

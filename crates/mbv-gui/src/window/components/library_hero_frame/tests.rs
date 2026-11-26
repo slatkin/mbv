@@ -56,7 +56,6 @@ fn props() -> LibraryHeroFrameProps {
         art: None,
         art_title: "The Long Road Home".to_owned(),
         art_placeholder: None,
-        disc: false,
         actions: None,
         overview: None,
         cast: Vec::new(),
