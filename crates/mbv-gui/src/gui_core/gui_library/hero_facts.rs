@@ -11,6 +11,7 @@ use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
 };
+use mbv_ui_model::library_hero::{seasons_label, series_years_range};
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::ui_util::{fmt_duration_hms, fmt_publish_date, format_release_date};
 
@@ -173,25 +174,24 @@ pub fn hero_facts_abs_book(book: &AudiobookshelfBookQueueItem) -> GuiHeroFacts {
 /// over the Published row.
 #[must_use]
 pub fn hero_facts_abs_episode(episode: &AudiobookshelfQueueItem) -> GuiHeroFacts {
-    let mut facts = GuiHeroFacts::default();
-    if let Some(seconds) = duration_seconds(episode.duration_ticks) {
-        facts.pills.push(duration_pill(seconds));
-    }
-    if let Some(secs) = episode.pub_date_secs {
-        facts.rows.push(published_row(secs));
-    }
-    facts
+    duration_and_published(episode.duration_ticks, episode.pub_date_secs)
 }
 
 /// The feed entry's facts (design D1): the duration pill over the Published
 /// row (when the entry has a date).
 #[must_use]
 pub fn hero_facts_feed(entry: &FeedEntry) -> GuiHeroFacts {
+    duration_and_published(entry.duration_ticks, entry.pub_date_secs)
+}
+
+/// The duration pill over the Published row, each present only when the source
+/// carries it: the shape the episode and feed-entry Heroes share.
+fn duration_and_published(duration_ticks: Option<u64>, pub_date_secs: Option<u64>) -> GuiHeroFacts {
     let mut facts = GuiHeroFacts::default();
-    if let Some(seconds) = duration_seconds(entry.duration_ticks) {
+    if let Some(seconds) = duration_seconds(duration_ticks) {
         facts.pills.push(duration_pill(seconds));
     }
-    if let Some(secs) = entry.pub_date_secs {
+    if let Some(secs) = pub_date_secs {
         facts.rows.push(published_row(secs));
     }
     facts
@@ -272,32 +272,6 @@ fn cast_initials(name: &str) -> String {
 fn duration_seconds(ticks: Option<u64>) -> Option<i64> {
     let ticks = ticks.filter(|ticks| *ticks > 0)?;
     Some(i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX))
-}
-
-/// The show's year range (design D1): `1982 - 1993` for an ended show,
-/// `2026 - Present` for an ongoing one, `1982` for a single-year series —
-/// the shared series producer's own range text.
-fn series_years_range(series: &EmbyItem) -> Option<String> {
-    let start = series.production_year;
-    (start > 0).then(|| {
-        if series.end_year > start {
-            format!("{start} - {}", series.end_year)
-        } else if series.end_year > 0 {
-            start.to_string()
-        } else {
-            format!("{start} - Present")
-        }
-    })
-}
-
-/// The season-count pill's text (design D1): the shared series producer's
-/// pluralised season label.
-fn seasons_label(seasons: usize) -> String {
-    if seasons == 1 {
-        "1 Season".to_owned()
-    } else {
-        format!("{seasons} Seasons")
-    }
 }
 
 /// The year pill (design D1): the production year as a `Date` pill, omitted

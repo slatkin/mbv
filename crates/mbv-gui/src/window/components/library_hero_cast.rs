@@ -18,7 +18,7 @@ const PHOTO_BOX_PX: f32 = 40.0;
 const MEMBER_STYLE: &str = "gap: 12px; padding: 10px 12px; border-radius: 8px;";
 
 /// The props of the cast grid (the `LibraryHeroCast` props, in order).
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroCastProps {
     /// The cast members, in Emby order.
     pub members: Vec<GuiHeroCastMemberFrame>,
@@ -27,16 +27,6 @@ pub struct LibraryHeroCastProps {
     pub attr: &'static str,
     /// The grid's own attribute part, as in `cast`.
     pub hook: &'static str,
-}
-
-impl std::fmt::Debug for LibraryHeroCastProps {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LibraryHeroCastProps")
-            .field("members", &self.members)
-            .field("attr", &self.attr)
-            .field("hook", &self.hook)
-            .finish()
-    }
 }
 
 /// The Hero's cast: the two-column grid that wraps to one column, each member

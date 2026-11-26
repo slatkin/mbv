@@ -22,7 +22,7 @@ const LINK_PILL_STYLE: &str =
     "cursor: pointer; color: var(--canvas-source); text-decoration: underline;";
 
 /// The props of the pills row (the `LibraryHeroPills` props, in order).
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroPillsProps {
     /// The pills, in paint order.
     pub pills: Vec<GuiHeroPillFrame>,
@@ -31,16 +31,6 @@ pub struct LibraryHeroPillsProps {
     pub attr: &'static str,
     /// The row's own attribute part, as in `pills` or `block-pills`.
     pub hook: &'static str,
-}
-
-impl std::fmt::Debug for LibraryHeroPillsProps {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LibraryHeroPillsProps")
-            .field("pills", &self.pills)
-            .field("attr", &self.attr)
-            .field("hook", &self.hook)
-            .finish()
-    }
 }
 
 /// The Hero's fact pills row: one pill per fact, the link pills clickable.

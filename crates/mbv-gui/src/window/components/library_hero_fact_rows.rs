@@ -49,7 +49,7 @@ fn label_wire(label: GuiHeroFactLabelFrame) -> &'static str {
 }
 
 /// The props of the fact rows (the `LibraryHeroFactRows` props, in order).
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroFactRowsProps {
     /// The labelled rows, in paint order.
     pub rows: Vec<GuiHeroFactRowFrame>,
@@ -58,16 +58,6 @@ pub struct LibraryHeroFactRowsProps {
     pub attr: &'static str,
     /// The block's own attribute part, as in `rows`.
     pub hook: &'static str,
-}
-
-impl std::fmt::Debug for LibraryHeroFactRowsProps {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LibraryHeroFactRowsProps")
-            .field("rows", &self.rows)
-            .field("attr", &self.attr)
-            .field("hook", &self.hook)
-            .finish()
-    }
 }
 
 /// The Hero's labelled fact rows.

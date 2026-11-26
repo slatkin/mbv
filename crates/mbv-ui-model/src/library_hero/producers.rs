@@ -471,7 +471,9 @@ pub fn hero_content_series_with_episode(
 
 /// The show's year range: `1982 - 1993` for an ended show, `2026 - Present`
 /// for an ongoing one (no end year), `1982` for a single-year series.
-fn series_years_range(series: &EmbyItem) -> Option<String> {
+/// The show's year range: shared with the GUI Hero facts.
+#[must_use]
+pub fn series_years_range(series: &EmbyItem) -> Option<String> {
     let start = series.production_year;
     (start > 0).then(|| {
         if series.end_year > start {
@@ -490,7 +492,9 @@ fn series_network(series: &EmbyItem) -> Option<String> {
 }
 
 /// The show's season count, pluralised.
-fn seasons_label(seasons: usize) -> String {
+/// The pluralised season-count label: shared with the GUI Hero facts.
+#[must_use]
+pub fn seasons_label(seasons: usize) -> String {
     if seasons == 1 {
         "1 Season".to_string()
     } else {

@@ -55,7 +55,7 @@ pub struct LibraryHeroProps {
 /// The header band's glow (design D4): the shared art-to-glow mapping over the
 /// Hero's own art, `None` while the art is absent, still loading, or the
 /// bundled placeholder.
-fn hero_glow(art: Option<&GuiArtRef>) -> Option<GuiArtRef> {
+pub(super) fn hero_glow(art: Option<&GuiArtRef>) -> Option<GuiArtRef> {
     art.and_then(glow_from_art)
         .map(|src| GuiArtRef::Image { src })
 }

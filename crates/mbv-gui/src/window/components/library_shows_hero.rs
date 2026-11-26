@@ -22,7 +22,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::art::{GuiArtRef, glow_from_art};
+use super::library_hero::hero_glow;
 use crate::bridge::frame::library::{
     GuiHeroPillFrame, GuiLibraryDetail, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsSeasonPillFrame,
     GuiShowsWorkspaceFrame,
@@ -388,11 +388,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
     // The header band's glow (design D4): the shared art-to-glow mapping over
     // the Hero's own art, `None` while the art is absent, still loading, or
     // the bundled placeholder.
-    let glow = hero
-        .art
-        .as_ref()
-        .and_then(glow_from_art)
-        .map(|src| GuiArtRef::Image { src });
+    let glow = hero_glow(hero.art.as_ref());
 
     rsx! {
         LibraryHeroFrame {

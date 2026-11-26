@@ -102,7 +102,9 @@ impl CoreThread {
             return;
         };
         let mut reply = GlowReply(Some(reply));
-        let spawned = std::thread::Builder::new()
+        // Detached: the thread owns the answer through the guard. A failed spawn
+        // drops the closure with its guard, which answers `Missing`.
+        let _detached = std::thread::Builder::new()
             .name("mbv-art-glow".into())
             .spawn(move || {
                 let Some(png) = glow_png(&source.bytes) else {
@@ -115,12 +117,6 @@ impl CoreThread {
                     });
                 }
             });
-        match spawned {
-            // Detached: the thread owns the answer through the guard.
-            Ok(_handle) => {}
-            // The closure dropped with its guard; the drop answered `Missing`.
-            Err(_error) => {}
-        }
     }
 }
 
