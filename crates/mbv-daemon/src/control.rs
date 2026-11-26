@@ -431,12 +431,15 @@ fn dispatch_ctrl_command(
         // The commands the event loop consumes before this dispatcher: the
         // swap machine takes its target's `SwapPrepared` (tray-pin-swap task
         // 3.3), the owner-action handler takes `RunOwnerAction` (task 3.5),
-        // and the Cast connector lives on the loop for `SelectPlaybackOutput`
-        // (cast-owner-output task 3.2). Direct callers that bypass the loop
-        // have no swap machine, owner-action path, or connector to consult.
+        // and the Cast connector lives on the loop for the two output-prompt
+        // answers (cast-owner-output task 3.2). Direct callers that bypass the
+        // loop have no swap machine, owner-action path, or connector to
+        // consult.
         CtrlCmd::SwapPrepared => log_swap_prepared_outside_loop(),
         CtrlCmd::RunOwnerAction(_) => log_owner_action_outside_loop(),
-        CtrlCmd::SelectPlaybackOutput(_) => log_select_output_outside_loop(),
+        CtrlCmd::SelectPlaybackOutput(_) | CtrlCmd::SwitchPlaybackOutput(_) => {
+            log_output_selection_outside_loop();
+        }
         cmd @ (CtrlCmd::NamedQueueCreate { .. }
         | CtrlCmd::NamedQueueRename { .. }
         | CtrlCmd::NamedQueueClose { .. }
@@ -569,8 +572,8 @@ fn log_owner_action_outside_loop() {
 
 /// Documented no-op: the Cast connector lives on the event loop, which
 /// `CtrlContext` does not carry.
-fn log_select_output_outside_loop() {
-    tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
+fn log_output_selection_outside_loop() {
+    tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring an output selection outside the event-loop selection path");
 }
 
 fn log_unexpected_hello_after_negotiation() {

@@ -21,6 +21,19 @@ use crate::cast::PlaybackOutput;
 use crate::cast::{StopScope, broadcast_output_change, queue_teardown_job, stop_active_output};
 use crate::send_to;
 
+/// What the user asked for when they picked a playback output
+/// (switch-output-without-hand-off design D5). `Continue` is the hand-off the
+/// prompt's continue answer asks for: the old output's active playback moves
+/// to the target. `SwitchOnly` is the just-switch answer: the target becomes
+/// the output and the old output stops, with nothing handed over.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum SelectionIntent {
+    /// Continue the old output's active playback on the target.
+    Continue,
+    /// Make the target the output and hand nothing off.
+    SwitchOnly,
+}
+
 /// The active playback a selection captures from the old output for the
 /// hand-off (design D10 step 1, row 7.1): the slot, its position, and its
 /// pause state.

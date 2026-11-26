@@ -9,6 +9,7 @@ use super::super::{
 };
 use super::EventOutcome;
 use crate::control::intent_span;
+use crate::output::handoff::SelectionIntent;
 use crate::reconciliation::remaining;
 use mbv_ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use mbv_emby_model::EmbyItem;
@@ -53,11 +54,29 @@ impl DaemonLoop {
             }
             return EventOutcome::CONTINUE;
         }
+        // Both output-prompt answers reach the one selection handler before
+        // the ctrl dispatcher (cast-owner-output task 3.2), because the Cast
+        // connector lives on the loop, which `CtrlContext` does not carry.
+        // They carry the same target and differ only in intent
+        // (switch-output-without-hand-off design D5): a selection continues
+        // the active playback on the target, a switch makes the target the
+        // output and hands nothing off.
         if let CtrlCmd::SelectPlaybackOutput(selection) = cmd {
-            // Playback-output selection is handled before the ctrl dispatcher
-            // (cast-owner-output task 3.2): the Cast connector lives on the
-            // loop, which `CtrlContext` does not carry.
-            crate::cast::handle_select_playback_output(self, reply_tx, selection);
+            crate::cast::handle_select_playback_output(
+                self,
+                reply_tx,
+                selection,
+                SelectionIntent::Continue,
+            );
+            return EventOutcome::CONTINUE;
+        }
+        if let CtrlCmd::SwitchPlaybackOutput(selection) = cmd {
+            crate::cast::handle_select_playback_output(
+                self,
+                reply_tx,
+                selection,
+                SelectionIntent::SwitchOnly,
+            );
             return EventOutcome::CONTINUE;
         }
         let persist_after_command = cmd.mutates_owner_queue();

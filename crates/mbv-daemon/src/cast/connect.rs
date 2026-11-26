@@ -10,7 +10,7 @@ use std::time::Instant;
 use mbv_cast::{CastClient, CastJob, CastReceiver, ConnectMode, spawn_cast_worker};
 use mbv_ctrl::{CtrlEvent, OutputConnection, OutputSelection};
 
-use crate::output::handoff::{HandoffPlayback, hand_remote_output_back_to_local};
+use crate::output::handoff::{HandoffPlayback, SelectionIntent, hand_remote_output_back_to_local};
 use crate::{CtrlSender, send_to};
 
 use super::DaemonLoop;
@@ -69,12 +69,17 @@ pub fn local_cast_connector() -> CastConnector {
     })
 }
 
-/// `CtrlCmd::SelectPlaybackOutput` (design D3, task 3.2). Called by the event
-/// loop before the ctrl dispatcher, because the connector lives on the loop.
+/// `CtrlCmd::SelectPlaybackOutput` and `CtrlCmd::SwitchPlaybackOutput` (design
+/// D3, task 3.2). Called by the event loop before the ctrl dispatcher, because
+/// the connector lives on the loop. `intent` is the user's answer to the output
+/// prompt (switch-output-without-hand-off design D5): `Continue` moves the old
+/// output's active playback to the target, `SwitchOnly` makes the target the
+/// output and hands nothing off.
 pub fn handle_select_playback_output(
     daemon: &mut DaemonLoop,
     reply_tx: &CtrlSender,
     selection: OutputSelection,
+    intent: SelectionIntent,
 ) {
     match selection {
         OutputSelection::Local => {
@@ -204,7 +209,7 @@ pub fn handle_select_playback_output(
         // The Emby Session selection resolves its device on the Session's own
         // worker (emby-session-owner-output design D4, task 3.2).
         OutputSelection::EmbySession { device_id, name } => {
-            crate::emby_session::connect::select(daemon, reply_tx, device_id, name);
+            crate::emby_session::connect::select(daemon, reply_tx, device_id, name, intent);
         }
     }
 }

@@ -17,7 +17,7 @@ use crate::emby_session::load::{
 };
 use crate::emby_session::worker::spawn_emby_session_worker;
 use crate::event_loop::DaemonLoop;
-use crate::output::handoff::HandoffPlayback;
+use crate::output::handoff::{HandoffPlayback, SelectionIntent};
 use crate::{CtrlSender, DaemonEvent, send_to};
 
 use super::EmbySessionEvent;
@@ -42,12 +42,14 @@ pub(crate) struct PendingEmbySessionSelect {
 /// `OutputSelection::EmbySession` (design D2, D4). Rejects the selection when
 /// the runtime does not host the output, when the owner has no Emby context,
 /// or when the device is not a listed Session; selecting the device that is
-/// already the output does nothing.
+/// already the output does nothing. `intent` is the user's answer to the output
+/// prompt (switch-output-without-hand-off design D5).
 pub(crate) fn select(
     daemon: &mut DaemonLoop,
     reply_tx: &CtrlSender,
     device_id: String,
     name: String,
+    _intent: SelectionIntent,
 ) {
     if !daemon.emby_session_output {
         send_to(

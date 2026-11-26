@@ -512,6 +512,14 @@ fn daemon_hello(
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT.to_string());
     }
+    // A runtime that hosts a remote output can switch to it and hand nothing
+    // off (switch-output-without-hand-off design D4). Packaged `mbvd` hosts
+    // none, so it advertises neither capability.
+    if caps.playback_output || caps.emby_session_output {
+        daemon_hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_OUTPUT_SWITCH.to_string());
+    }
     // Only the Local Owner holds Named queues.
     if role == DaemonRole::Local {
         daemon_hello

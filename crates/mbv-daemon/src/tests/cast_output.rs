@@ -151,6 +151,17 @@ fn spawn_output_peer(
     client_caps: ClientOutputCaps,
     owner_output: OutputState,
 ) -> BufReader<UnixStream> {
+    spawn_output_peer_for_role(caps, client_caps, owner_output, DaemonRole::Local)
+}
+
+/// [`spawn_output_peer`] for a runtime of the given role, so a test can observe
+/// what a packaged `mbvd` advertises.
+fn spawn_output_peer_for_role(
+    caps: crate::DaemonHelloCaps,
+    client_caps: ClientOutputCaps,
+    owner_output: OutputState,
+    role: DaemonRole,
+) -> BufReader<UnixStream> {
     let (client, peer) = UnixStream::pair().unwrap();
     client
         .set_read_timeout(Some(std::time::Duration::from_secs(1)))
@@ -169,7 +180,7 @@ fn spawn_output_peer(
         player.status,
         queue_state,
         caps,
-        DaemonRole::Local,
+        role,
         crate::owner_settings::fixed_reader(false),
     );
     let reader = BufReader::new(client.try_clone().unwrap());
@@ -213,7 +224,8 @@ fn daemon_caps(playback_output: bool, emby_session_output: bool) -> crate::Daemo
 }
 
 /// Contract: cast-owner-output row 3.1 — the daemon Hello advertises
-/// `playback-output` when the runtime supplies a Cast connector.
+/// `playback-output` when the runtime supplies a Cast connector, and with it
+/// `output-switch` (switch-output-without-hand-off design D4).
 #[test]
 fn the_daemon_hello_advertises_playback_output_with_a_connector() {
     let mut reader = spawn_cast_peer(daemon_caps(true, false), ClientOutputCaps::default());
@@ -221,6 +233,26 @@ fn the_daemon_hello_advertises_playback_output_with_a_connector() {
         panic!("expected daemon hello");
     };
     assert!(hello.supports_playback_output());
+    assert!(
+        hello.supports_output_switch(),
+        "a runtime that hosts a remote output offers the switch to it"
+    );
+}
+
+/// Contract: switch-output-without-hand-off design D4 / row 2.1 — a packaged
+/// `mbvd` hosts no remote output, so its Hello advertises no `output-switch`.
+#[test]
+fn the_daemon_hello_hides_output_switch_for_a_packaged_owner() {
+    let mut reader = spawn_output_peer_for_role(
+        daemon_caps(false, false),
+        ClientOutputCaps::default(),
+        OutputState::Local,
+        DaemonRole::Packaged,
+    );
+    let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
+        panic!("expected daemon hello");
+    };
+    assert!(!hello.supports_output_switch());
 }
 
 /// Contract: cast-owner-output row 3.1 — the daemon Hello hides
