@@ -46,23 +46,6 @@ pub fn label_segments(text: &str) -> Segments {
     }]
 }
 
-/// The segments of several meta rows on one line, joined by ` · ` as the
-/// frames order them.
-#[must_use]
-pub fn join_meta_rows(rows: &[MetaRow]) -> Segments {
-    let mut joined: Segments = Vec::new();
-    for (index, row) in rows.iter().filter(|row| !row.is_empty()).enumerate() {
-        if index > 0 {
-            joined.push(GuiMetaSegmentFrame {
-                text: " · ".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            });
-        }
-        joined.extend(row.iter().cloned());
-    }
-    joined
-}
-
 /// The artist header's first line, `ARTIST · HIP-HOP` as the canvas prints it:
 /// the artist label with the selected collection names (design D5).
 #[must_use]
@@ -105,6 +88,14 @@ pub fn track_total_facts(
             kind: GuiMetaKindFrame::Time,
         },
     ]
+}
+
+/// The ` · ` separator the Music facts lines join their parts with.
+fn facts_separator() -> GuiMetaSegmentFrame {
+    GuiMetaSegmentFrame {
+        text: " · ".to_owned(),
+        kind: GuiMetaKindFrame::Plain,
+    }
 }
 
 /// An album count's row, `3 albums` in the singular when the count is one.
@@ -159,10 +150,12 @@ fn track_total_row(
 /// holds a cached tracklist.
 #[must_use]
 pub fn artist_facts(hero: &GuiMusicHeroFrame) -> Segments {
-    join_meta_rows(&[
-        album_count_row(hero.album_count),
-        track_total_row(hero.artist_tracks.as_ref()),
-    ])
+    let mut facts = album_count_row(hero.album_count);
+    if let Some(total) = hero.artist_tracks.as_ref() {
+        facts.push(facts_separator());
+        facts.extend(track_total_facts(total));
+    }
+    facts
 }
 
 /// The album block's facts line, empty while the album's tracklist has not
@@ -186,12 +179,21 @@ pub fn artist_page_facts(hero: &GuiMusicHeroFrame) -> Segments {
     let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject else {
         return Vec::new();
     };
-    join_meta_rows(&[
-        plain_segments(&hero.collections.join(" + ")),
+    let mut facts = plain_segments(&hero.collections.join(" + "));
+    for row in [
         album_count_row(hero.album_count),
         year_span_row(page.years.as_ref()),
         track_total_row(hero.artist_tracks.as_ref()),
-    ])
+    ] {
+        if row.is_empty() {
+            continue;
+        }
+        if !facts.is_empty() {
+            facts.push(facts_separator());
+        }
+        facts.extend(row);
+    }
+    facts
 }
 
 /// The artist's albums in the union, which Shuffle artist plays (design D8).
@@ -230,63 +232,6 @@ pub fn artist_union_albums(
                 .collect()
         },
     )
-}
-
-/// One meta row of a single-row Hero, with the role the frame paints it in.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HeroMetaRow {
-    /// The row's typed segments.
-    pub segments: Segments,
-    /// The role the row paints in.
-    pub role: HeroMetaRole,
-}
-
-/// The role one Hero meta row paints in (design D15).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HeroMetaRole {
-    /// A plain facts row.
-    Meta,
-    /// The row the runtime marks.
-    Duration,
-    /// The row the progress marks.
-    Progress,
-}
-
-impl HeroMetaRole {
-    /// The role's wire name, as the former union spells it (design D15).
-    #[must_use]
-    pub fn wire(self) -> &'static str {
-        match self {
-            Self::Meta => "meta",
-            Self::Duration => "duration",
-            Self::Progress => "progress",
-        }
-    }
-}
-
-/// The meta rows of a Hero that shows one selected row (`add-gui-library-panel`
-/// design D15): each row's typed segments with its duration or progress role, as
-/// the core's `durationRow` and `progressRow` indices mark them.
-#[must_use]
-pub fn hero_meta_rows(
-    meta_rows: &[MetaRow],
-    duration_row: Option<usize>,
-    progress_row: Option<usize>,
-) -> Vec<HeroMetaRow> {
-    meta_rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| HeroMetaRow {
-            segments: row.clone(),
-            role: if Some(index) == duration_row {
-                HeroMetaRole::Duration
-            } else if Some(index) == progress_row {
-                HeroMetaRole::Progress
-            } else {
-                HeroMetaRole::Meta
-            },
-        })
-        .collect()
 }
 
 /// The attribute name of one part of a destination's Hero (`add-gui-library-panel`
@@ -331,97 +276,6 @@ pub fn hero_command<D: LetteredDestination>(
         return;
     };
     command(state, item_id);
-}
-
-/// The facts every Hero carries, as the core's frames declare them.
-#[derive(Debug)]
-pub struct HeroLayoutFacts<'a> {
-    /// The item's title.
-    pub title: &'a str,
-    /// The largest unit's name (show, feed, series), when the item has one.
-    pub parent: Option<&'a str>,
-    /// The selected item's meta rows.
-    pub meta_rows: &'a [MetaRow],
-    /// The meta row the runtime marks.
-    pub duration_row: Option<usize>,
-    /// The meta row the progress marks.
-    pub progress_row: Option<usize>,
-    /// The item's overview.
-    pub overview: Option<&'a str>,
-    /// Whether the item is an episode. An episode titles the block's name line
-    /// under its parent, and that line paints one step smaller
-    /// (user request 2026-11-24).
-    pub episode: bool,
-}
-
-/// The Hero's painted header and block (`add-gui-library-panel` design D15).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HeroLayout {
-    /// The header above the artwork.
-    pub header: HeroLayoutHeader,
-    /// The block beside the artwork.
-    pub block: HeroLayoutBlock,
-}
-
-/// The Hero header's lines (design D15).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HeroLayoutHeader {
-    /// The section label's line.
-    pub kicker: Segments,
-    /// The big title: the largest unit.
-    pub title: String,
-    /// The plain facts on one line.
-    pub facts: Segments,
-}
-
-/// The Hero block's lines beside the artwork (design D15).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HeroLayoutBlock {
-    /// The block's label: the item's title.
-    pub label: String,
-    /// The selected item's name, only when a parent took the header.
-    pub name: Option<String>,
-    /// Whether the name names an episode: the Hero paints an episode's name one
-    /// step smaller than a series-level item's (user request 2026-11-24).
-    pub name_episode: bool,
-    /// The duration and progress rows.
-    pub meta: Vec<HeroMetaRow>,
-    /// The item's overview.
-    pub overview: Option<String>,
-}
-
-/// The frame's header and block for one Hero (`add-gui-library-panel` design D15,
-/// invariant 30): the header's big title is the largest unit — the parent when
-/// the item has one, else the item itself — over the plain facts on one line;
-/// the block beside the art holds the selected item's name (only when a parent
-/// took the header), its duration and progress rows, and its overview.
-#[must_use]
-pub fn hero_layout(facts: &HeroLayoutFacts<'_>, kicker: &str) -> HeroLayout {
-    let rows = hero_meta_rows(facts.meta_rows, facts.duration_row, facts.progress_row);
-    let parent = facts.parent.filter(|parent| !parent.is_empty());
-    HeroLayout {
-        header: HeroLayoutHeader {
-            kicker: label_segments(kicker),
-            title: parent.unwrap_or(facts.title).to_owned(),
-            facts: join_meta_rows(
-                &rows
-                    .iter()
-                    .filter(|row| row.role == HeroMetaRole::Meta)
-                    .map(|row| row.segments.clone())
-                    .collect::<Vec<_>>(),
-            ),
-        },
-        block: HeroLayoutBlock {
-            label: facts.title.to_owned(),
-            name: parent.map(|_| facts.title.to_owned()),
-            name_episode: facts.episode,
-            meta: rows
-                .into_iter()
-                .filter(|row| row.role != HeroMetaRole::Meta)
-                .collect(),
-            overview: facts.overview.map(str::to_owned),
-        },
-    }
 }
 
 #[cfg(test)]
