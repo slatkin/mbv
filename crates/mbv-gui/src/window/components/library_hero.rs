@@ -20,6 +20,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::art::{GuiArtRef, glow_from_art};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicArtistFrame,
     GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
@@ -34,7 +35,7 @@ use crate::window::components::library_tracklist::LibraryTracklist;
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::{Ellipsis, Shuffle};
 use crate::window::library::hero::{
-    album_facts, artist_facts, artist_page_facts, artist_union_albums, hero_kicker,
+    album_pills, artist_page_pills, artist_union_albums, hero_kicker,
 };
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::sections::SectionRef;
@@ -49,6 +50,14 @@ pub struct LibraryHeroProps {
     /// (design D2, D5), as the one handle every reader clones
     /// (`share-gui-sections-by-rc` design D3).
     pub detail: SectionRef<GuiLibraryDetail>,
+}
+
+/// The header band's glow (design D4): the shared art-to-glow mapping over the
+/// Hero's own art, `None` while the art is absent, still loading, or the
+/// bundled placeholder.
+fn hero_glow(art: Option<&GuiArtRef>) -> Option<GuiArtRef> {
+    art.and_then(glow_from_art)
+        .map(|src| GuiArtRef::Image { src })
 }
 
 /// The Hero's play (design D8): the shared play-or-activate path, so the
@@ -263,6 +272,7 @@ fn album_hero(
 
     let header_action = album_shuffle_action(library);
     let actions = album_actions_row(library, &album.album_id, &menu);
+    let glow = hero_glow(detail.art.as_ref());
 
     rsx! {
         LibraryHeroFrame {
@@ -271,7 +281,7 @@ fn album_hero(
             header: HeroHeader {
                 kicker: hero_kicker(hero),
                 title: hero.artist.clone(),
-                facts: artist_facts(hero),
+                pills: Vec::new(),
             },
             header_action: Some(header_action),
             block: HeroBlock {
@@ -282,15 +292,18 @@ fn album_hero(
                 }]),
                 name: Some(album.name.clone()),
                 name_episode: false,
-                facts: Some(album_facts(hero)),
-                meta: Vec::new(),
-                overview: None,
+                pills: album_pills(hero),
+                rows: Vec::new(),
             },
             art_shape: GuiArtShapeFrame::Square,
             art: detail.art.clone(),
             art_title: album.name.clone(),
             art_placeholder: Some("[Album art · Emby Primary]".to_owned()),
+            disc: true,
+            glow,
             actions: Some(actions),
+            overview: None,
+            list_title: Some("Tracks".to_owned()),
             children: Some(rsx! {
                 LibraryTracklist {
                     tracks: album.tracks.clone().unwrap_or_default(),
@@ -302,9 +315,9 @@ fn album_hero(
 }
 
 /// The artist branch of the Library Hero (gui-music-artist-page design D6):
-/// the artist page — the header with the artist facts that include the year
-/// span and the Shuffle artist action, the block with the artist's name and
-/// the year-span facts, the actions row with Play and Add to queue and no
+/// the artist page — the header with the artist's fact pills (the year span
+/// among them) and the Shuffle artist action, the block with the artist's
+/// name and no rows, the actions row with Play and Add to queue and no
 /// More actions control, the artist's art in the square shape, and the
 /// artist's tracks grouped by album.
 fn artist_hero(
@@ -313,6 +326,8 @@ fn artist_hero(
     hero: &GuiMusicHeroFrame,
     page: &GuiMusicArtistPageFrame,
 ) -> Element {
+    let glow = hero_glow(detail.art.as_ref());
+
     // The actions' sends (design D6): the page's album ids in the page's
     // order. While the page has albums that are still loading, they still
     // play, because the commands name the albums and the core's walk fetches
@@ -359,7 +374,7 @@ fn artist_hero(
             header: HeroHeader {
                 kicker: hero_kicker(hero),
                 title: hero.artist.clone(),
-                facts: artist_page_facts(hero),
+                pills: artist_page_pills(hero),
             },
             header_action: Some(header_action),
             block: HeroBlock {
@@ -367,15 +382,17 @@ fn artist_hero(
                 eyebrow: None,
                 name: None,
                 name_episode: false,
-                facts: None,
-                meta: Vec::new(),
-                overview: None,
+                pills: Vec::new(),
+                rows: Vec::new(),
             },
             art_shape: GuiArtShapeFrame::Square,
             art: detail.art.clone(),
             art_title: hero.artist.clone(),
             art_placeholder: Some("[Artist art · Emby Primary]".to_owned()),
+            glow,
             actions: Some(actions),
+            overview: None,
+            list_title: Some("Tracks".to_owned()),
             children: Some(rsx! {
                 LibraryArtistTracklist {
                     albums: page.albums.clone(),
