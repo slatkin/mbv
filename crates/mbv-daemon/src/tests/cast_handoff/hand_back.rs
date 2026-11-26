@@ -178,3 +178,117 @@ fn the_owner_shutdown_queues_no_stop_and_no_teardown_on_the_receiver() {
         "the shutdown stops neither the receiver media nor its app: {calls:?}"
     );
 }
+
+/// Contract: switch-output-without-hand-off row 2.5 and row 2.6 — a
+/// `SwitchPlaybackOutput` to Local while a Cast receiver plays captures no
+/// hand-off: the receiver's media stops and its app tears down, Local becomes
+/// the output, no local run is submitted, the queue keeps its order, and the
+/// observed active slot is recorded and published as none (invariant 25).
+#[test]
+fn a_switch_to_local_stops_the_receiver_and_submits_no_local_run() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let status = CastStatus {
+        duration_seconds: Some(10.0),
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    };
+    let (client_id, _rx, calls) = select_cast_output(&mut t, status);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    load_slot_on_receiver(&mut t, client_id, slot);
+    // One tick runs the status poll, so the receiver presents the loaded item
+    // and the loaded slot becomes the observed one.
+    t.event_loop.tick(std::time::Instant::now());
+    pump(&mut t);
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        Some(slot),
+        "the receiver's loaded slot is the observed slot before the switch"
+    );
+    t.event_loop
+        .shared_queue
+        .publish_observed(&t.event_loop.owner.core);
+    let queue_before: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    // A submission that reuses a live local run would reach this spy; one
+    // that cold-starts instead seeds the local status as active below.
+    let commands = t.event_loop.player.spy_on_commands();
+    let (release_tx, worker) = hold_cast_worker(&t);
+
+    switch_output(
+        &mut t,
+        client_id,
+        &mpsc::channel().0,
+        OutputSelection::Local,
+    );
+    let _ = release_tx.send(());
+    let (done_tx, done_rx) = mpsc::channel();
+    let _ = worker.send(Box::new(move |_| {
+        let _ = done_tx.send(());
+    }));
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the switch's queued jobs ran before the sentinel");
+
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the switch makes Local the output"
+    );
+    let calls = calls.lock().unwrap();
+    let stop = calls
+        .iter()
+        .position(|call| *call == "stop")
+        .expect("the receiver's media stops");
+    let teardown = calls
+        .iter()
+        .position(|call| *call == "teardown")
+        .expect("the receiver's app is torn down");
+    assert!(
+        stop < teardown,
+        "the teardown runs after the media stop, in worker FIFO order: {calls:?}"
+    );
+    assert!(
+        commands.try_recv().is_err(),
+        "a switch submits no local run and pauses nothing"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "no local run starts, so the local output presents no playback"
+    );
+    let queue_after: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    assert_eq!(
+        queue_after, queue_before,
+        "the queue and its order are unchanged"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        None,
+        "the switch records no observed active slot"
+    );
+    assert_eq!(
+        *t.event_loop
+            .shared_queue
+            .observed_active_slot
+            .lock()
+            .unwrap(),
+        None,
+        "the switch publishes the observed slot as none (invariant 25)"
+    );
+}

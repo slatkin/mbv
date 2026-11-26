@@ -530,6 +530,14 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_emby_session_output
     }
 
+    /// The owner accepts `CtrlCmd::SwitchPlaybackOutput`, which changes the
+    /// playback output without handing playback off to it
+    /// (switch-output-without-hand-off design D6).
+    #[must_use]
+    pub fn supports_output_switch(&self) -> bool {
+        self.ctrl_compatibility.supports_output_switch
+    }
+
     /// The owner accepts Twitch items in unified queue commands
     /// (twitch-url-playback design D6).
     #[must_use]

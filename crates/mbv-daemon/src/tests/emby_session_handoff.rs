@@ -6,7 +6,7 @@
 
 use std::time::Instant;
 
-use super::cast_output::{connect_output_client_with_caps, select_output};
+use super::cast_output::{connect_output_client_with_caps, select_output, switch_output};
 use super::cast_playback::drained_events;
 use super::emby_session_output::{
     host_session_output, inject_lookup_outcome, loop_with_injected_lookups, play_calls, poll_once,
@@ -128,6 +128,83 @@ fn a_local_handoff_plays_the_session_at_the_local_position() {
         output.loaded.as_ref().map(|loaded| loaded.slot),
         Some(slot),
         "the captured slot is the loaded one"
+    );
+}
+
+/// Contract: switch-output-without-hand-off row 2.4 and row 2.6 — a
+/// `SwitchPlaybackOutput` to an Emby Session while Local plays captures no
+/// hand-off: the lookup resolves, the Session becomes the output, the local
+/// run stops, the device is given no load, the queue keeps its order, and the
+/// observed active slot is recorded and published as none (invariant 25).
+#[test]
+fn a_switch_to_a_session_stops_local_playback_and_loads_nothing() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let mut t = test_loop_with_queue(
+        DaemonRole::Local,
+        vec![timed("movie", 600 * SECOND_TICKS)],
+        0,
+    );
+    let calls = fake.calls();
+    host_session_output(&mut t, fake);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    local_playing(&mut t, slot, 42 * SECOND_TICKS, false);
+    let queue_before = queue_slot_ids(&t);
+    // The local run's slot is the published observed slot before the switch.
+    t.event_loop
+        .shared_queue
+        .publish_observed(&t.event_loop.owner.core);
+    assert_eq!(
+        *t.event_loop
+            .shared_queue
+            .observed_active_slot
+            .lock()
+            .unwrap(),
+        Some(slot),
+        "the local run's slot is published before the switch"
+    );
+
+    let (client_id, reply_tx, _rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    switch_output(&mut t, client_id, &reply_tx, session_selection());
+    pump_session_event(&mut t);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output after the switch");
+    };
+    assert_eq!(
+        output.device_id, "device-1",
+        "the selected Session is the output after the switch"
+    );
+    assert_eq!(
+        output.loaded.as_ref().map(|loaded| loaded.slot),
+        None,
+        "a switch loads nothing on the device"
+    );
+    let plays = play_calls(&calls);
+    assert!(plays.is_empty(), "the device receives no play: {plays:?}");
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "the local run stops"
+    );
+    assert_eq!(
+        queue_slot_ids(&t),
+        queue_before,
+        "the queue and its order are unchanged"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        None,
+        "the switch records no observed active slot"
+    );
+    assert_eq!(
+        *t.event_loop
+            .shared_queue
+            .observed_active_slot
+            .lock()
+            .unwrap(),
+        None,
+        "the switch publishes the observed slot as none (invariant 25)"
     );
 }
 

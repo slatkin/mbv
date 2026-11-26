@@ -120,3 +120,12 @@ fn queue_item_person_payload_without_image_fields_decodes_empty() {
 fn owner_persists_only_after_queue_edits(#[case] cmd: CtrlCmd, #[case] persists: bool) {
     assert_eq!(cmd.mutates_owner_queue(), persists);
 }
+
+// switch-output-without-hand-off task 1.3: the new command's wire tag is
+// pinned by an explicit `serde(rename)`, so a Rust-side rename cannot move it.
+#[test]
+fn switch_playback_output_tag_is_pinned() {
+    let wire = serde_json::to_string(&CtrlCmd::SwitchPlaybackOutput(OutputSelection::Local))
+        .expect("the command encodes");
+    assert_eq!(wire, r#"{"SwitchPlaybackOutput":"Local"}"#);
+}

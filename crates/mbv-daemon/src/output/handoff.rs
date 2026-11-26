@@ -21,6 +21,19 @@ use crate::cast::PlaybackOutput;
 use crate::cast::{StopScope, broadcast_output_change, queue_teardown_job, stop_active_output};
 use crate::send_to;
 
+/// What the user asked for when they picked a playback output
+/// (switch-output-without-hand-off design D5). `Continue` is the hand-off the
+/// prompt's continue answer asks for: the old output's active playback moves
+/// to the target. `SwitchOnly` is the just-switch answer: the target becomes
+/// the output and the old output stops, with nothing handed over.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum SelectionIntent {
+    /// Continue the old output's active playback on the target.
+    Continue,
+    /// Make the target the output and hand nothing off.
+    SwitchOnly,
+}
+
 /// The active playback a selection captures from the old output for the
 /// hand-off (design D10 step 1, row 7.1): the slot, its position, and its
 /// pause state.
@@ -40,6 +53,35 @@ pub(crate) fn capture_handoff_for_selection(daemon: &DaemonLoop) -> Option<Hando
         PlaybackOutput::Local => capture_local_handoff(daemon),
         PlaybackOutput::Cast(_) => capture_cast_handoff(daemon),
         PlaybackOutput::EmbySession(_) => capture_emby_session_handoff(daemon),
+    }
+}
+
+/// A switch hands nothing off, so the new output plays nothing: the observed
+/// active slot is recorded as none and published, so no Client highlights the
+/// slot that stopped (invariant 25).
+pub(crate) fn clear_observed_slot_after_switch(daemon: &mut DaemonLoop) {
+    daemon.owner.core.note_observed_active_slot(None);
+    daemon.shared_queue.publish_observed(&daemon.owner.core);
+}
+
+/// The hand-off a selection captures for its intent
+/// (switch-output-without-hand-off design D5): a `Continue` answer pins the
+/// presented position to the selection instant and captures the old output's
+/// active playback; a `SwitchOnly` answer captures nothing, because the switch
+/// hands nothing over.
+pub(crate) fn capture_handoff_for_intent(
+    daemon: &mut DaemonLoop,
+    intent: SelectionIntent,
+) -> Option<HandoffPlayback> {
+    match intent {
+        SelectionIntent::Continue => {
+            // One re-derivation pins the presented position to the selection
+            // instant without a fresh poll (row 7.1 dispatch B), and the
+            // capture reads it.
+            refresh_active_output_presentation(daemon, Instant::now());
+            capture_handoff_for_selection(daemon)
+        }
+        SelectionIntent::SwitchOnly => None,
     }
 }
 
@@ -161,11 +203,19 @@ fn teardown_old_receiver_app(daemon: &DaemonLoop) {
 /// fresh local run at the captured position, paused when the old output was
 /// paused (row 7.2). The stop reports go out before the local run starts
 /// (design D9).
-pub(crate) fn hand_remote_output_back_to_local(daemon: &mut DaemonLoop, reply_tx: &CtrlSender) {
-    let handoff = {
-        refresh_active_output_presentation(daemon, Instant::now());
-        capture_handoff_for_selection(daemon)
-    };
+///
+/// `intent` is the user's answer to the output prompt (switch-output-without-
+/// hand-off design D5): a `Continue` answer captures the remote playback and
+/// continues it locally, while a `SwitchOnly` answer captures nothing, so the
+/// remote output stops and no local run starts. Either way the swap stops the
+/// old output, and a switch clears and publishes the observed slot, so no
+/// Client highlights the slot that stopped (invariant 25).
+pub(crate) fn hand_remote_output_back_to_local(
+    daemon: &mut DaemonLoop,
+    reply_tx: &CtrlSender,
+    intent: SelectionIntent,
+) {
+    let handoff = capture_handoff_for_intent(daemon, intent);
     stop_old_output_for_handoff(daemon);
     // A stop makes every awaited transition identity unobservable (the same
     // rule the ctrl stop applies), so the fresh run starts with a clear gate.
@@ -177,6 +227,8 @@ pub(crate) fn hand_remote_output_back_to_local(daemon: &mut DaemonLoop, reply_tx
     broadcast_output_change(daemon);
     if let Some(handoff) = handoff {
         continue_slot_on_local(daemon, handoff, reply_tx);
+    } else if matches!(intent, SelectionIntent::SwitchOnly) {
+        clear_observed_slot_after_switch(daemon);
     }
 }
 

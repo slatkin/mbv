@@ -17,7 +17,7 @@ use crate::emby_session::load::{
 };
 use crate::emby_session::worker::spawn_emby_session_worker;
 use crate::event_loop::DaemonLoop;
-use crate::output::handoff::HandoffPlayback;
+use crate::output::handoff::{HandoffPlayback, SelectionIntent, clear_observed_slot_after_switch};
 use crate::{CtrlSender, DaemonEvent, send_to};
 
 use super::EmbySessionEvent;
@@ -28,26 +28,31 @@ use super::worker::SessionApi;
 /// A Session selection waiting for its worker's device lookup (design D4). The
 /// worker it will own on success, the selected device, the reply path for a
 /// rejection, and the old output's active playback captured at the selection
-/// (design D11; `None` when the old output was idle). A newer selection
-/// displaces it (last selection wins), and the displaced worker's dropped
-/// sender ends its thread.
+/// (design D11; `None` when the old output was idle). The intent is kept with
+/// the pending selection so the outcome applies the answer the user gave
+/// (switch-output-without-hand-off design D5). A newer selection displaces it
+/// (last selection wins), and the displaced worker's dropped sender ends its
+/// thread.
 pub(crate) struct PendingEmbySessionSelect {
     pub(crate) worker: mpsc::Sender<EmbySessionJob>,
     pub(crate) device_id: String,
     pub(crate) name: String,
     pub(crate) reply_tx: CtrlSender,
     pub(crate) handoff: Option<HandoffPlayback>,
+    pub(crate) intent: SelectionIntent,
 }
 
 /// `OutputSelection::EmbySession` (design D2, D4). Rejects the selection when
 /// the runtime does not host the output, when the owner has no Emby context,
 /// or when the device is not a listed Session; selecting the device that is
-/// already the output does nothing.
+/// already the output does nothing. `intent` is the user's answer to the output
+/// prompt (switch-output-without-hand-off design D5).
 pub(crate) fn select(
     daemon: &mut DaemonLoop,
     reply_tx: &CtrlSender,
     device_id: String,
     name: String,
+    intent: SelectionIntent,
 ) {
     if !daemon.emby_session_output {
         send_to(
@@ -113,15 +118,16 @@ pub(crate) fn select(
     // The hand-off is captured at the selection (design D10 step 1, D11):
     // the old output (Local, a receiver, or another Session) hands its active
     // playback over once this Session is resolved. The presented position is
-    // pinned to this instant, so a slow lookup cannot move it.
-    crate::output::handoff::refresh_active_output_presentation(daemon, Instant::now());
-    let handoff = crate::output::handoff::capture_handoff_for_selection(daemon);
+    // pinned to this instant, so a slow lookup cannot move it. A switch-only
+    // answer captures nothing (switch-output-without-hand-off design D5).
+    let handoff = crate::output::handoff::capture_handoff_for_intent(daemon, intent);
     daemon.owner.pending_emby_session_select = Some(PendingEmbySessionSelect {
         worker,
         device_id,
         name,
         reply_tx: reply_tx.clone(),
         handoff,
+        intent,
     });
 }
 
@@ -210,7 +216,9 @@ pub(super) fn handle_selected(
 /// (task 3.2). The output starts `Connected` with the Session the lookup
 /// returned as its first observation, so the status projection has a value
 /// before the first poll (task 5.1), and the captured hand-off — when the old
-/// output had playback — continues on it (design D11, task 6.1).
+/// output had playback — continues on it (design D11, task 6.1). A switch-only
+/// answer continues nothing, so the new output plays nothing and the observed
+/// slot is cleared and published (invariant 25).
 fn install_output(
     daemon: &mut DaemonLoop,
     pending: PendingEmbySessionSelect,
@@ -222,6 +230,7 @@ fn install_output(
         name,
         reply_tx,
         handoff,
+        intent,
     } = pending;
     // Local playback may have started after the selection captured nothing
     // active. Swapping now would discard it silently, so the resolved worker
@@ -229,8 +238,12 @@ fn install_output(
     // connect applies (design D11: the Cast D10 sequence holds unchanged,
     // review r6). The guard is narrow: it fires only while the output is still
     // Local, so an Emby Session→Emby Session selection never trips it, even
-    // when the old device presents content the Owner did not load.
-    let local_playback_started = matches!(daemon.owner.output, PlaybackOutput::Local)
+    // when the old device presents content the Owner did not load. A
+    // switch-only answer asks for exactly the swap that stops the old output,
+    // so the guard does not apply to it (switch-output-without-hand-off
+    // design D5).
+    let local_playback_started = matches!(intent, SelectionIntent::Continue)
+        && matches!(daemon.owner.output, PlaybackOutput::Local)
         && handoff.is_none()
         && daemon.player.status.lock().unwrap().active;
     if local_playback_started {
@@ -294,6 +307,8 @@ fn install_output(
         // bookkeeping a Cast hand-off applies.
         let _ = daemon.owner.core.queue.set_active_slot(handoff.slot);
         load_handoff(daemon, handoff, &reply_tx);
+    } else if matches!(intent, SelectionIntent::SwitchOnly) {
+        clear_observed_slot_after_switch(daemon);
     }
     crate::emby_session::status::refresh_presentation(daemon, Instant::now());
     broadcast_output_change(daemon);

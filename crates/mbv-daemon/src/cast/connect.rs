@@ -10,7 +10,10 @@ use std::time::Instant;
 use mbv_cast::{CastClient, CastJob, CastReceiver, ConnectMode, spawn_cast_worker};
 use mbv_ctrl::{CtrlEvent, OutputConnection, OutputSelection};
 
-use crate::output::handoff::{HandoffPlayback, hand_remote_output_back_to_local};
+use crate::output::handoff::{
+    HandoffPlayback, SelectionIntent, clear_observed_slot_after_switch,
+    hand_remote_output_back_to_local,
+};
 use crate::{CtrlSender, send_to};
 
 use super::DaemonLoop;
@@ -22,13 +25,16 @@ use super::status::refresh_presentation;
 /// broadcast is the reply. `handoff` is the active playback the selection
 /// captured from the old output — the local run or the receiver that was the
 /// output (design D10, row 7.1); `None` when the output was idle at the
-/// selection.
+/// selection. `intent` is the user's answer to the output prompt, kept with the
+/// connect so the outcome applies the answer the user gave
+/// (switch-output-without-hand-off design D5).
 pub struct PendingCastConnect {
     receiver: CastReceiver,
     /// `pub(crate)` so a newer Emby Session selection can tell the displaced
     /// selector that its connect loses (design D11, last selection wins).
     pub(crate) reply_tx: CtrlSender,
     handoff: Option<HandoffPlayback>,
+    intent: SelectionIntent,
 }
 
 /// What a Cast connector needs for one connect attempt.
@@ -69,12 +75,17 @@ pub fn local_cast_connector() -> CastConnector {
     })
 }
 
-/// `CtrlCmd::SelectPlaybackOutput` (design D3, task 3.2). Called by the event
-/// loop before the ctrl dispatcher, because the connector lives on the loop.
+/// `CtrlCmd::SelectPlaybackOutput` and `CtrlCmd::SwitchPlaybackOutput` (design
+/// D3, task 3.2). Called by the event loop before the ctrl dispatcher, because
+/// the connector lives on the loop. `intent` is the user's answer to the output
+/// prompt (switch-output-without-hand-off design D5): `Continue` moves the old
+/// output's active playback to the target, `SwitchOnly` makes the target the
+/// output and hands nothing off.
 pub fn handle_select_playback_output(
     daemon: &mut DaemonLoop,
     reply_tx: &CtrlSender,
     selection: OutputSelection,
+    intent: SelectionIntent,
 ) {
     match selection {
         OutputSelection::Local => {
@@ -100,10 +111,12 @@ pub fn handle_select_playback_output(
             // Selecting Local while a remote output is the output hands the
             // active slot back (design D10, row 7.1 dispatch B; design D11):
             // capture, stop and tear down the receiver or the Session, then
-            // continue the slot on a fresh local run.
+            // continue the slot on a fresh local run. A switch-only answer
+            // continues nothing (switch-output-without-hand-off design D5):
+            // the remote output stops and no local run starts.
             match &daemon.owner.output {
                 PlaybackOutput::Cast(_) | PlaybackOutput::EmbySession(_) => {
-                    hand_remote_output_back_to_local(daemon, reply_tx);
+                    hand_remote_output_back_to_local(daemon, reply_tx, intent);
                 }
                 PlaybackOutput::Local => {}
             }
@@ -155,14 +168,9 @@ pub fn handle_select_playback_output(
             // selection while Local plays hands the active slot over. Either
             // way the active slot's state is captured at the selection and
             // continues after a successful connect; an idle output hands
-            // nothing over.
-            let handoff = {
-                // One re-derivation pins the presented position to the
-                // selection instant without a fresh poll (row 7.1 dispatch
-                // B), and the capture reads it.
-                crate::output::handoff::refresh_active_output_presentation(daemon, Instant::now());
-                crate::output::handoff::capture_handoff_for_selection(daemon)
-            };
+            // nothing over, and a switch-only answer captures nothing at all
+            // (switch-output-without-hand-off design D5).
+            let handoff = crate::output::handoff::capture_handoff_for_intent(daemon, intent);
             let Some(connector) = daemon.cast_connector.as_ref() else {
                 send_to(
                     reply_tx,
@@ -189,6 +197,7 @@ pub fn handle_select_playback_output(
                 receiver,
                 reply_tx: reply_tx.clone(),
                 handoff,
+                intent,
             });
             let merged_tx = daemon.merged_tx.clone();
             std::thread::spawn(move || {
@@ -204,7 +213,7 @@ pub fn handle_select_playback_output(
         // The Emby Session selection resolves its device on the Session's own
         // worker (emby-session-owner-output design D4, task 3.2).
         OutputSelection::EmbySession { device_id, name } => {
-            crate::emby_session::connect::select(daemon, reply_tx, device_id, name);
+            crate::emby_session::connect::select(daemon, reply_tx, device_id, name, intent);
         }
     }
 }
@@ -248,10 +257,19 @@ pub(super) fn handle_connect_outcome(
         receiver,
         reply_tx,
         handoff,
+        intent,
     } = pending;
     match outcome {
         CastConnectOutcome::Connected(worker) => {
-            apply_connected_output(daemon, receiver_id, worker, receiver, reply_tx, handoff);
+            apply_connected_output(
+                daemon,
+                receiver_id,
+                worker,
+                receiver,
+                reply_tx,
+                handoff,
+                intent,
+            );
         }
         CastConnectOutcome::Failed(reason) => {
             tracing::warn!(name: "daemon.cast_output.connect_failed", target: "daemon", receiver = %receiver_id, error = %reason, "cast connect failed; playback output unchanged");
@@ -266,7 +284,9 @@ pub(super) fn handle_connect_outcome(
 /// Applies one successful connect to the owner's output (task 3.2): the swap
 /// stops the old output, installs the new receiver as the output, re-presents
 /// it (row 6.1: the presented status starts clean), and continues a captured
-/// hand-off on the new receiver.
+/// hand-off on the new receiver. A switch-only answer continues nothing, so the
+/// new output plays nothing and the observed slot is cleared and published
+/// (invariant 25).
 fn apply_connected_output(
     daemon: &mut DaemonLoop,
     receiver_id: &str,
@@ -274,13 +294,16 @@ fn apply_connected_output(
     receiver: CastReceiver,
     reply_tx: CtrlSender,
     handoff: Option<HandoffPlayback>,
+    intent: SelectionIntent,
 ) {
     let active_now = daemon.player.status.lock().unwrap().active;
-    if handoff.is_none() && active_now {
+    if matches!(intent, SelectionIntent::Continue) && handoff.is_none() && active_now {
         // Playback may have started on the old output after the
         // select (the select-time capture found nothing active).
         // Swapping now would leave two live outputs, so the connect
-        // is discarded and reported instead.
+        // is discarded and reported instead. A switch-only answer asks
+        // for exactly this swap, so the guard does not apply to it
+        // (switch-output-without-hand-off design D5).
         drop(worker);
         send_to(
             &reply_tx,
@@ -319,6 +342,8 @@ fn apply_connected_output(
         // the same bookkeeping a Cast dispatch does.
         let _ = daemon.owner.core.queue.set_active_slot(handoff.slot);
         spawn_handoff_resolve(daemon, handoff);
+    } else if matches!(intent, SelectionIntent::SwitchOnly) {
+        clear_observed_slot_after_switch(daemon);
     }
 }
 

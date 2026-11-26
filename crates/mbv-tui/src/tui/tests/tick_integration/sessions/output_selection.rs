@@ -41,6 +41,7 @@ fn tick_sessions_cast_row_activation_sends_the_owner_output_selection() {
         mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
             target: Some(SessionTargetKey::Cast("r-1".into())),
             name: "Living Room".to_string(),
+            switch_only: false,
         }
     );
     assert!(

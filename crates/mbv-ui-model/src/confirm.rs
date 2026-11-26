@@ -65,9 +65,18 @@ pub enum ConfirmAction {
     },
     /// The continue-playback confirm (confirm-output-handoff change): the user
     /// selected a playback target while a slot is active on the local Owner's
-    /// current output. Enter (Yes) runs the selection's hand-off — the Owner
-    /// stops the old output and continues the active slot on the target; Esc
-    /// (No) cancels: nothing changes and the current output keeps playing.
+    /// current output. Enter runs the selection's hand-off — the Owner stops
+    /// the old output and continues the active slot on the target.
+    ///
+    /// `switch_only` records whether the local Owner advertised the
+    /// `output-switch` capability when the prompt was raised
+    /// (switch-output-without-hand-off design D6). With it the prompt reads
+    /// Continue / Just switch, and the second answer switches the output
+    /// without a hand-off. Without it the prompt reads Yes / No and No
+    /// cancels: an Owner started before the capability existed is never sent
+    /// a command it cannot decode. The flag is captured at raise time, so the
+    /// answer always matches the buttons the user saw.
+    ///
     /// `Some` names a remote target by its kind-qualified identity, resolved
     /// against the live target snapshot at answer time so a target that left
     /// it acts on nothing; `None` is this machine's own output, whose answer
@@ -76,6 +85,7 @@ pub enum ConfirmAction {
     ContinueOutputHandOff {
         target: Option<SessionTargetKey>,
         name: String,
+        switch_only: bool,
     },
     /// The GUI Client's close control on a local Named queue that plays
     /// (`gui-named-queues` spec `gui-queue-chooser` "The close control closes

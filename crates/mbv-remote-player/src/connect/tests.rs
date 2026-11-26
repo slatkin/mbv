@@ -346,91 +346,87 @@ fn connect_endpoint_maps_owner_admission_refusals() {
     assert_eq!(shutting_down.to_string(), "the owner is shutting down");
 }
 
-#[test]
-fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
-    use std::io::{BufRead, BufReader, Write};
-    use std::os::unix::net::UnixStream;
-
+/// Run a handshake against a fake Owner whose Hello `mutate` shapes on top of
+/// [`CtrlHello::current`], and return the compatibility this Client
+/// negotiated from it.
+fn negotiated_compatibility(
+    mutate: impl FnOnce(&mut CtrlHello) + Send + 'static,
+) -> CtrlCompatibility {
     let (client, daemon) = UnixStream::pair().unwrap();
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();
         let mut reader = BufReader::new(daemon);
         let mut hello = CtrlHello::current();
+        mutate(&mut hello);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
+            status: PlayerStatus::default(),
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
+            source: QueueSource::Unknown,
+            lineage: mbv_queue::QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        });
+        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
+    });
+
+    let (_reader, _state, compatibility, _) =
+        perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
+    peer.join().unwrap();
+    compatibility
+}
+
+#[test]
+fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
+    let compatibility = negotiated_compatibility(|hello| {
         hello
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
         hello.capabilities.push("future-capability".to_string());
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
-        )
-        .unwrap();
-        let mut client_hello = String::new();
-        reader.read_line(&mut client_hello).unwrap();
-        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
-            queue: None,
-            start_slot: None,
-            status: PlayerStatus::default(),
-            slots: Vec::new(),
-            active_slot: None,
-            revision: 0,
-            source: QueueSource::Unknown,
-            lineage: mbv_queue::QueueLineage::default(),
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        });
-        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });
 
-    let (_reader, _state, compatibility, _) =
-        perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(compatibility.supports_audio_only);
     assert!(compatibility.supports_answered_queue_ops);
-    peer.join().unwrap();
 }
 
 #[test]
 fn handshake_without_audio_only_capability_defaults_to_video_capable() {
-    use std::io::{BufRead, BufReader, Write};
-    use std::os::unix::net::UnixStream;
-
-    let (client, daemon) = UnixStream::pair().unwrap();
-    let peer = std::thread::spawn(move || {
-        let mut writer = daemon.try_clone().unwrap();
-        let mut reader = BufReader::new(daemon);
-        let mut hello = CtrlHello::current();
+    let compatibility = negotiated_compatibility(|hello| {
         hello
             .capabilities
             .retain(|cap| cap != mbv_ctrl::CTRL_CAP_ANSWERED_QUEUE_OPS);
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
-        )
-        .unwrap();
-        let mut client_hello = String::new();
-        reader.read_line(&mut client_hello).unwrap();
-        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
-            queue: None,
-            start_slot: None,
-            status: PlayerStatus::default(),
-            slots: Vec::new(),
-            active_slot: None,
-            revision: 0,
-            source: QueueSource::Unknown,
-            lineage: mbv_queue::QueueLineage::default(),
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        });
-        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });
 
-    let (_reader, _state, compatibility, _) =
-        perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(!compatibility.supports_audio_only);
     assert!(!compatibility.supports_answered_queue_ops);
-    peer.join().unwrap();
+}
+
+/// switch-output-without-hand-off design D6: the Client's compatibility
+/// records the Owner's `output-switch` capability, which is the gate the
+/// continue-playback prompt reads. An Owner that predates the capability
+/// leaves the flag clear, so the Client keeps today's prompt.
+#[rstest]
+#[case::advertised(true)]
+#[case::absent(false)]
+fn handshake_records_output_switch_capability(#[case] advertised: bool) {
+    let compatibility = negotiated_compatibility(move |hello| {
+        hello
+            .capabilities
+            .extend(advertised.then(|| mbv_ctrl::CTRL_CAP_OUTPUT_SWITCH.to_string()));
+    });
+
+    assert_eq!(compatibility.supports_output_switch, advertised);
 }
 
 /// A fake daemon whose Hello advertises `playback-output`, whose Client

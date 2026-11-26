@@ -1,8 +1,8 @@
 //! Command (`commands/`) corpus: one golden `CtrlCmd` per variant —
 //! `PlayerCmd` per `WireCommand` tag, `PlaybackIntent` per
-//! `PlaybackIntentAction`, `SelectPlaybackOutput` per `OutputSelection`,
-//! `RunOwnerAction` per `OwnerAction`, and `ApplyServiceSetup` per
-//! `ServiceKind` (design D4).
+//! `PlaybackIntentAction`, `SelectPlaybackOutput` and `SwitchPlaybackOutput`
+//! per `OutputSelection`, `RunOwnerAction` per `OwnerAction`, and
+//! `ApplyServiceSetup` per `ServiceKind` (design D4).
 
 use mbv_queue::{QueueLineage, ServiceKind};
 use strum::IntoEnumIterator;
@@ -41,6 +41,7 @@ enum CommandShape {
     NamedQueue(NamedQueueShape),
     UnifiedAdoptQueue,
     SelectPlaybackOutput(OutputChoice),
+    SwitchPlaybackOutput(OutputChoice),
 }
 
 impl CommandShape {
@@ -66,6 +67,9 @@ impl CommandShape {
                 }
                 CommandShape::SelectPlaybackOutput(_) => {
                     shapes.extend(OutputChoice::iter().map(CommandShape::SelectPlaybackOutput));
+                }
+                CommandShape::SwitchPlaybackOutput(_) => {
+                    shapes.extend(OutputChoice::iter().map(CommandShape::SwitchPlaybackOutput));
                 }
                 CommandShape::Hello
                 | CommandShape::Stop
@@ -105,6 +109,9 @@ impl CommandShape {
             CommandShape::SelectPlaybackOutput(choice) => {
                 format!("SelectPlaybackOutput.{}", choice.name())
             }
+            CommandShape::SwitchPlaybackOutput(choice) => {
+                format!("SwitchPlaybackOutput.{}", choice.name())
+            }
         }
     }
 
@@ -142,6 +149,9 @@ impl CommandShape {
             },
             CommandShape::SelectPlaybackOutput(choice) => {
                 CtrlCmd::SelectPlaybackOutput(choice.build())
+            }
+            CommandShape::SwitchPlaybackOutput(choice) => {
+                CtrlCmd::SwitchPlaybackOutput(choice.build())
             }
         }
     }
@@ -387,6 +397,9 @@ fn shape_of(cmd: &CtrlCmd) -> CommandShape {
         CtrlCmd::UnifiedAdoptQueue { .. } => CommandShape::UnifiedAdoptQueue,
         CtrlCmd::SelectPlaybackOutput(selection) => {
             CommandShape::SelectPlaybackOutput(output_of(selection))
+        }
+        CtrlCmd::SwitchPlaybackOutput(selection) => {
+            CommandShape::SwitchPlaybackOutput(output_of(selection))
         }
         CtrlCmd::NamedQueueCreate { .. } => CommandShape::NamedQueue(NamedQueueShape::Create),
         CtrlCmd::NamedQueueRename { .. } => CommandShape::NamedQueue(NamedQueueShape::Rename),

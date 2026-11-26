@@ -2,10 +2,10 @@ use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
     CTRL_CAP_EMBY_PERSON_IMAGES, CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN,
-    CTRL_CAP_NAMED_QUEUES, CTRL_CAP_OWNER_ACTION, CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE,
-    CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE, CTRL_CAP_PLAYBACK_OUTPUT,
-    CTRL_CAP_QUEUE_REPLACE_START_POSITION, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
-    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
+    CTRL_CAP_NAMED_QUEUES, CTRL_CAP_OUTPUT_SWITCH, CTRL_CAP_OWNER_ACTION,
+    CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
+    CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_REPLACE_START_POSITION, CTRL_CAP_QUEUE_SHUFFLE,
+    CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_CAP_TWITCH_QUEUE, CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
@@ -289,6 +289,16 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_EMBY_SESSION_OUTPUT)
     }
 
+    /// The peer accepts `CtrlCmd::SwitchPlaybackOutput`, which changes the
+    /// playback output without handing playback off to it (design D4 of
+    /// `switch-output-without-hand-off`).
+    #[must_use]
+    pub fn supports_output_switch(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_OUTPUT_SWITCH)
+    }
+
     #[must_use]
     pub fn supports_pin_swap(&self) -> bool {
         self.capabilities.iter().any(|cap| cap == CTRL_CAP_PIN_SWAP)
@@ -368,6 +378,11 @@ pub struct CtrlCompatibility {
     /// (emby-session-owner-output design D3); set from the peer Hello's
     /// `emby-session-output` capability by the Client's handshake.
     pub supports_emby_session_output: bool,
+    /// The peer accepts `CtrlCmd::SwitchPlaybackOutput`, which changes the
+    /// playback output without handing playback off to it
+    /// (switch-output-without-hand-off design D6); set from the peer Hello's
+    /// `output-switch` capability by the Client's handshake.
+    pub supports_output_switch: bool,
     /// The peer can decode `QueueItem::Twitch` in unified queue commands,
     /// snapshots, and broadcasts (twitch-url-playback design D6); set from
     /// the peer Hello's `twitch-queue` capability by the Client's handshake.
@@ -397,6 +412,7 @@ impl CtrlCompatibility {
                 supports_queue_replace_start_position: false,
                 supports_playback_output: false,
                 supports_emby_session_output: false,
+                supports_output_switch: false,
                 supports_twitch_queue: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),

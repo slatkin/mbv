@@ -63,8 +63,12 @@ impl App {
             // The continue-playback confirm (confirm-output-handoff): Enter
             // (Yes) runs the selection's hand-off; Esc and every other key
             // cancel — nothing changes and the current output keeps playing.
-            ConfirmAction::ContinueOutputHandOff { target, name } => {
-                self.confirm_continue_output_hand_off(target.as_ref(), &name, key);
+            ConfirmAction::ContinueOutputHandOff {
+                target,
+                name,
+                switch_only,
+            } => {
+                self.confirm_continue_output_hand_off(target.as_ref(), &name, switch_only, key);
             }
             // The close control's prompt (gui-named-queues design D8): Enter
             // sends the close to the local Owner, and any other answer — Esc

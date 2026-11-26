@@ -81,6 +81,16 @@ impl App {
             .is_some_and(|link| link.remote().supports_emby_session_output())
     }
 
+    /// Whether the local Owner accepts `CtrlCmd::SwitchPlaybackOutput`
+    /// (`output-switch`, switch-output-without-hand-off design D6). A peer
+    /// this Client controls does not take part: the selection severs to the
+    /// local Owner before it is sent, as for
+    /// `local_owner_supports_emby_session_output`.
+    pub(in crate::app) fn local_owner_supports_output_switch(&self) -> bool {
+        self.local_owner_link()
+            .is_some_and(|link| link.remote().supports_output_switch())
+    }
+
     /// Whether the local Owner can host a Cast output (`playback-output`).
     /// A peer this Client controls does not take part, as for
     /// `local_owner_supports_emby_session_output`.
@@ -120,37 +130,67 @@ impl App {
     }
 
     /// Raise the shared continue-playback confirm (confirm-output-handoff):
-    /// the prompt names the target, Enter (Yes) runs today's hand-off
-    /// unchanged, and Esc (No) cancels — nothing changes and the current
-    /// output keeps playing.
+    /// the prompt names the target, Enter runs today's hand-off unchanged,
+    /// and the other answer — Esc — either switches the output with no
+    /// hand-off or cancels, depending on what this Owner advertised when the
+    /// prompt was raised (switch-output-without-hand-off design D6).
+    ///
+    /// An Owner that advertises `output-switch` gets the Continue / Just
+    /// switch prompt; one that does not gets Yes / No, where No cancels, so a
+    /// Client meeting an Owner started before the upgrade behaves as it did
+    /// and sends nothing that Owner cannot decode. The capability is read
+    /// here, once, and stored in the action, so the answer always matches the
+    /// buttons the user saw.
     pub(in crate::app) fn ask_continue_output_hand_off(
         &mut self,
         target: Option<SessionTargetKey>,
         name: String,
     ) {
-        self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
-            format!("Continue playback on {name}?"),
-            "Yes",
-            "No",
-            mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff { target, name },
-        ));
+        let switch_only = self.local_owner_supports_output_switch();
+        let message = format!("Continue playback on {name}?");
+        let action = mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
+            target,
+            name,
+            switch_only,
+        };
+        let modal = if switch_only {
+            mbv_ui_model::confirm::ConfirmModal::two_button(
+                message,
+                "Continue",
+                "Just switch",
+                action,
+            )
+        } else {
+            mbv_ui_model::confirm::ConfirmModal::two_button(message, "Yes", "No", action)
+        };
+        self.ask_confirm(modal);
     }
 
-    /// The continue-playback confirm's answer: Enter (Yes) runs the
-    /// selection's hand-off exactly as an unasked selection would — a remote
-    /// target resolves against the displayed target snapshot (a target the
-    /// snapshot no longer holds acts on nothing), and Local detaches the
-    /// Owner's remote output to this machine. Esc and every other key
-    /// cancel: nothing changes and the current output keeps playing.
+    /// The continue-playback confirm's answer. Enter runs the selection's
+    /// hand-off exactly as an unasked selection would — a remote target
+    /// resolves against the displayed target snapshot (a target the snapshot
+    /// no longer holds acts on nothing), and Local detaches the Owner's
+    /// remote output to this machine. With `switch_only` set, Esc is the
+    /// switch answer: the same target becomes the output and the active slot
+    /// stays where it was (design D2, D7 of `switch-output-without-hand-off`).
+    /// Without it, Esc and every other key cancel: nothing changes and the
+    /// current output keeps playing.
     pub(in crate::app) fn confirm_continue_output_hand_off(
         &mut self,
         target: Option<&SessionTargetKey>,
         name: &str,
+        switch_only: bool,
         key: KeyEvent,
     ) {
-        if key.code != Key::Enter {
-            return;
+        match key.code {
+            Key::Enter => self.continue_output_hand_off(target, name),
+            Key::Esc if switch_only => self.switch_output_hand_off(target, name),
+            _ => {}
         }
+    }
+
+    /// The continue answer: run the selection's hand-off.
+    fn continue_output_hand_off(&mut self, target: Option<&SessionTargetKey>, name: &str) {
         let Some(target) = target else {
             self.detach_to_local_confirmed();
             return;
@@ -165,6 +205,47 @@ impl App {
         match resolved {
             PanelTarget::Emby(sess) => self.activate_session_target_without_hand_off(&sess),
             PanelTarget::Cast(receiver) => self.select_cast_output(receiver),
+        }
+    }
+
+    /// The switch answer (design D2): the prompt's target becomes the output
+    /// and nothing is handed off. The sever sends no playback command
+    /// (invariant 31); the switch is the user's own answer, so it follows the
+    /// same sever the continue answer does (design D7).
+    fn switch_output_hand_off(&mut self, target: Option<&SessionTargetKey>, name: &str) {
+        let Some(target) = target else {
+            self.sever_connections_without_output_change();
+            self.switch_playback_output(mbv_ctrl::OutputSelection::Local);
+            self.flash(
+                "Switched to local playback".to_string(),
+                ToastSeverity::Success,
+            );
+            return;
+        };
+        let Some(resolved) = resolve_session_target(&self.panel_targets, target) else {
+            self.flash(
+                format!("\"{name}\" is no longer available"),
+                ToastSeverity::Warning,
+            );
+            return;
+        };
+        self.sever_connections_without_output_change();
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
+        match resolved {
+            PanelTarget::Emby(sess) => {
+                self.switch_playback_output(mbv_ctrl::OutputSelection::EmbySession {
+                    device_id: sess.device_id.clone(),
+                    name: sess.device_name.clone(),
+                });
+            }
+            PanelTarget::Cast(receiver) => {
+                self.switch_playback_output(mbv_ctrl::OutputSelection::Cast {
+                    receiver_id: receiver.id,
+                    name: receiver.friendly_name,
+                    host: receiver.host,
+                    port: receiver.port,
+                });
+            }
         }
     }
 }
