@@ -4,29 +4,26 @@
 
 use super::*;
 
+/// One feed-group row.
+fn feed_row(id: &str, title: &str, year: &str, kind: GuiEmbyRowKindFrame) -> GuiEmbyRowFrame {
+    GuiEmbyRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+        id: id.to_owned(),
+        title: title.to_owned(),
+        subtitle: None,
+        date: Some(year.to_owned()),
+        sort_letter: None,
+        kind,
+        state: GuiHomeRowStateFrame::Ordinary,
+    }
+}
+
 /// The feed-group mode's date-ordered rows, with a boxset collection row.
 fn feed_rows() -> Vec<GuiEmbyRowFrame> {
     vec![
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "f1".to_owned(),
-            title: "Family".to_owned(),
-            subtitle: None,
-            date: Some("1998".to_owned()),
-            sort_letter: None,
-            kind: GuiEmbyRowKindFrame::Collection,
-        },
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "f2".to_owned(),
-            title: "Fargo".to_owned(),
-            subtitle: None,
-            date: Some("1996".to_owned()),
-            sort_letter: None,
-            kind: GuiEmbyRowKindFrame::Media,
-        },
+        feed_row("f1", "Family", "1998", GuiEmbyRowKindFrame::Collection),
+        feed_row("f2", "Fargo", "1996", GuiEmbyRowKindFrame::Media),
     ]
 }
 
@@ -119,6 +116,44 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
             row: crate::gui_core::GuiLibraryMenuRow::Item("m2".to_owned()),
         }],
         "the row-menu command names the row's item id"
+    );
+}
+
+/// Contract (gui-emby-row-played-marks design D3, `gui-client` spec "An Emby
+/// library row carries the shared play state"): the painter passes the row's
+/// carried state to the flat row, so a played row paints the played mark and
+/// the played title weight, and an ordinary row paints the unplayed mark.
+#[test]
+fn a_played_row_paints_the_played_mark_and_weight_and_an_ordinary_row_the_unplayed_mark() {
+    let mut rows = EmbyList::rows();
+    rows[0].state = GuiHomeRowStateFrame::Played;
+    let mut fixture = built::<EmbyList>(
+        EmbyList::frame(rows, false, false),
+        EmbyList::detail_of(None),
+    );
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.attr_of(
+            &format!("{} [data-play-mark]", row_selector::<EmbyList>("m1")),
+            "data-play-mark",
+        ),
+        Some("played".to_owned()),
+        "the played row paints the played mark"
+    );
+    assert!(
+        fixture
+            .attr_of(&part_selector::<EmbyList>("m1", "title"), "style")
+            .is_some_and(|style| style.contains("font-weight: 400")),
+        "the played row paints the played title weight"
+    );
+    assert_eq!(
+        fixture.attr_of(
+            &format!("{} [data-play-mark]", row_selector::<EmbyList>("m2")),
+            "data-play-mark",
+        ),
+        Some("unplayed".to_owned()),
+        "the ordinary row paints the unplayed mark"
     );
 }
 

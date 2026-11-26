@@ -9,7 +9,7 @@ use crate::gui_core::{
 };
 
 use super::hero_facts::{GuiHeroCastMemberFrame, GuiHeroFactsFrame};
-use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
+use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
 /// The plain Emby-library destination's list part (row 8.1; design D8): the
@@ -66,7 +66,10 @@ pub enum GuiEmbyRowKindFrame {
     Media,
 }
 
-/// One row of the plain Emby-library list (row 8.1).
+/// One row of the plain Emby-library list (row 8.1). The row carries the
+/// shared media-list row state (`GuiHomeRowStateFrame`), through the one
+/// conversion the Home rows already use (gui-emby-row-played-marks design
+/// D2): no second frame state type exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyRowFrame {
     /// The row's stable identity (design D2, row 8.1): a command names it,
@@ -82,6 +85,9 @@ pub struct GuiEmbyRowFrame {
     pub sort_letter: Option<char>,
     /// The row's kind.
     pub kind: GuiEmbyRowKindFrame,
+    /// The row's played/progress state, the shared media-list row state the
+    /// Home rows carry (`GuiHomeRowStateFrame`).
+    pub state: GuiHomeRowStateFrame,
     /// The row's art (gui-delineated-rows design D4).
     pub art: GuiRowArtFrame,
     /// The media kind the row shows when it has no image (design D4).
@@ -152,6 +158,7 @@ impl From<&GuiEmbyRow> for GuiEmbyRowFrame {
             date: row.date.clone(),
             sort_letter: row.sort_letter,
             kind: GuiEmbyRowKindFrame::from(row.kind),
+            state: GuiHomeRowStateFrame::from(&row.state),
             art: GuiRowArtFrame::from(&row.art),
             media: GuiRowMediaKindFrame::from(row.media),
         }

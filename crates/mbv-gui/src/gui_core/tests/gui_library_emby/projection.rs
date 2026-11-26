@@ -5,6 +5,7 @@
 
 use super::*;
 use mbv_emby_model::EmbyPerson;
+use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use mbv_ui_model::meta::MetaKind;
 use rstest::rstest;
 
@@ -45,6 +46,126 @@ fn plain_movies_app(items: Vec<EmbyItem>) -> App {
         );
     });
     app
+}
+
+/// A stub `App` whose feed-view library is active with the All group holding
+/// `items`, as a landed feed fetch leaves it (row 8.1): the state the
+/// projection's feed-group mode reads with no Service behind it.
+fn feed_state_app(items: Vec<EmbyItem>) -> App {
+    let mut app = make_app_stub();
+    let mut library = make_item("YouTube", "CollectionFolder");
+    library.id = FEED_ID.into();
+    library.collection_type = "homevideos".into();
+    library.is_folder = true;
+    app.push_library_for_test(LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    app.config_for_test(|config| config.feed_view_libraries.push("youtube".into()));
+    app.edit_library_for_test(0, |library| {
+        library.nav_stack.push(level(
+            FEED_ID,
+            "YouTube",
+            vec![folder_item("folder-1", "Channel 1")],
+        ));
+        library.feed_home_video = Some(FeedHomeVideoState {
+            items: [(FeedHomeVideoSelection::All, items)].into_iter().collect(),
+            ..FeedHomeVideoState::default()
+        });
+    });
+    app
+}
+
+/// The stub `App` one state case projects through: the plain list's root-list
+/// store in the plain mode, the feed group's All list in the feed-group mode.
+fn state_app(feed: bool, item: EmbyItem) -> App {
+    if feed {
+        feed_state_app(vec![item])
+    } else {
+        plain_movies_app(vec![item])
+    }
+}
+
+/// A played movie, as a server's watched flag leaves it.
+fn state_played_item() -> EmbyItem {
+    let mut item = movie_item(
+        "s-1",
+        "Watched",
+        2001,
+        100 * mbv_emby_model::TICKS_PER_SECOND,
+    );
+    item.played = true;
+    item
+}
+
+/// A partly played movie with a resumable position a tenth into its runtime.
+fn state_partly_played_item() -> EmbyItem {
+    let mut item = movie_item("s-2", "Halfway", 0, 6000 * mbv_emby_model::TICKS_PER_SECOND);
+    item.playback_position_ticks = 600 * mbv_emby_model::TICKS_PER_SECOND;
+    item
+}
+
+/// A movie with no played or resume fact.
+fn state_unplayed_item() -> EmbyItem {
+    movie_item("s-3", "Fresh", 0, 200 * mbv_emby_model::TICKS_PER_SECOND)
+}
+
+/// A played music track, whose stored played fact the derivation ignores.
+fn state_played_music_item() -> EmbyItem {
+    let mut item = make_item("Song", "Audio");
+    item.id = "s-4".into();
+    item.media_type = "Audio".into();
+    item.played = true;
+    item.runtime_ticks = 200 * mbv_emby_model::TICKS_PER_SECOND;
+    item
+}
+
+/// An Emby library row carries the shared play state (gui-emby-row-played-
+/// marks row 1.2; spec "An Emby library row carries the shared play state"):
+/// the row's `state` is what the one derivation derives — a played item to
+/// `Played`, a resumable position to `Active`, an unplayed item to
+/// `Ordinary`, and a played music item to `Ordinary` through the music
+/// exception — in both the plain mode's and the feed-group mode's rows. The
+/// derivation internals are `mbv-ui-model`'s.
+#[rstest]
+#[case::a_played_item_is_played(
+    state_played_item(),
+    MediaSemanticState::Played,
+    "a played item's row is Played"
+)]
+#[case::a_resumable_position_is_active(
+    state_partly_played_item(),
+    MediaSemanticState::Active {
+        progress: Some(ActiveProgress::new(10))
+    },
+    "a partly played item with a resumable position is Active with its percentage"
+)]
+#[case::an_unplayed_item_is_ordinary(
+    state_unplayed_item(),
+    MediaSemanticState::Ordinary,
+    "an item with no played or resume fact is Ordinary"
+)]
+#[case::a_played_music_item_is_ordinary(
+    state_played_music_item(),
+    MediaSemanticState::Ordinary,
+    "a played music item is Ordinary through the music exception"
+)]
+fn an_emby_row_carries_the_shared_play_state(
+    #[values(false, true)] feed: bool,
+    #[case] item: EmbyItem,
+    #[case] expected: MediaSemanticState,
+    #[case] why: &str,
+) {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let id = item.id.clone();
+    let mut app = state_app(feed, item);
+
+    let projection = gui_emby_projection(&mut app, 0);
+
+    let row = projection
+        .rows
+        .iter()
+        .find(|row| row.id == id)
+        .expect("the item's row projects");
+    assert_eq!(row.state, expected, "{why}");
 }
 
 /// The plain mode's projection (row 8.1, contract a): the rows are the
