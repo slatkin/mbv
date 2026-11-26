@@ -78,7 +78,10 @@ blitz-traits = { version = "=0.3.0-beta.4", default-features = false }
 # the headless tests.
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false, features = ["woff"] }
 # The ellipsis measure (D12); the same version as Blitz, so Cargo unifies one copy.
-parley = { version = "=0.12.0", default-features = false, features = ["std"] }
+# `complex-scripts` loads the Thai and Chinese/Japanese word dictionaries; the
+# feature unifies into the Blitz layout, which otherwise prints an ICU4X data
+# error for each such run of text.
+parley = { version = "=0.12.0", default-features = false, features = ["std", "complex-scripts"] }
 # The window channel (D4).
 futures-channel = { version = "=0.3.34" }
 futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
