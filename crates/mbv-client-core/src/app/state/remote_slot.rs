@@ -171,7 +171,7 @@ impl App {
     /// Only an Owner that advertised `output-switch` takes this command
     /// (`local_owner_supports_output_switch`); an older Owner never decodes
     /// it. Best-effort like every other fire-and-forget player send.
-    pub fn switch_playback_output(&mut self, selection: OutputSelection) {
+    pub(in crate::app) fn switch_playback_output(&mut self, selection: OutputSelection) {
         let _ = self
             .player
             .send_ctrl_cmd(CtrlCmd::SwitchPlaybackOutput(selection));

@@ -145,12 +145,17 @@ fn expected_selection(kind: SwitchTargetKind) -> mbv_ctrl::OutputSelection {
     }
 }
 
-/// The confirm action the gate raised.
-fn pending_confirm_action(app: &crate::app::App) -> mbv_ui_model::confirm::ConfirmAction {
+/// The confirm modal the gate raised.
+fn pending_confirm_modal(app: &crate::app::App) -> &mbv_ui_model::confirm::ConfirmModal {
     match &app.pending_overlay {
-        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal,
         other => panic!("the gate must raise the confirm modal, got {other:?}"),
     }
+}
+
+/// The confirm action the gate raised.
+fn pending_confirm_action(app: &crate::app::App) -> mbv_ui_model::confirm::ConfirmAction {
+    pending_confirm_modal(app).on_confirm.clone()
 }
 
 /// Assert that the switch answer sent exactly the output switch for `kind`'s
@@ -203,10 +208,7 @@ fn a_declined_cast_hand_off_sends_nothing_and_keeps_the_output() {
         port: 8009,
     }));
 
-    let modal = match &app.pending_overlay {
-        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal,
-        other => panic!("the gate must raise the confirm modal, got {other:?}"),
-    };
+    let modal = pending_confirm_modal(&app);
     assert!(
         modal.message.contains("Living Room"),
         "the prompt names the target, got {:?}",
@@ -258,10 +260,7 @@ fn the_continue_prompt_follows_the_owner_output_switch_capability(
         port: 8009,
     }));
 
-    let modal = match &app.pending_overlay {
-        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal,
-        other => panic!("the gate must raise the confirm modal, got {other:?}"),
-    };
+    let modal = pending_confirm_modal(&app);
     assert_eq!(modal.buttons[0].label, affirmative);
     assert_eq!(modal.buttons[1].label, cancel);
     assert_eq!(
@@ -387,10 +386,7 @@ fn detaching_to_local_with_an_active_remote_output_asks_first() {
 
     app.detach_to_local();
 
-    let action = match &app.pending_overlay {
-        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
-        other => panic!("the gate must raise the confirm modal, got {other:?}"),
-    };
+    let action = pending_confirm_action(&app);
     assert_eq!(
         action,
         mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
@@ -492,10 +488,7 @@ fn a_confirmed_hand_off_fork_while_thin_client_sends_the_selection_to_the_home_o
 
     app.activate_session_target(&target);
 
-    let modal = match &app.pending_overlay {
-        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal,
-        other => panic!("the hand-off fork must be raised, got {other:?}"),
-    };
+    let modal = pending_confirm_modal(&app);
     assert_eq!(
         modal.on_confirm,
         mbv_ui_model::confirm::ConfirmAction::HandOffPlaybackToSession {
@@ -542,10 +535,7 @@ fn a_confirmed_local_detach_while_thin_client_hands_the_home_owner_back_to_local
 
     app.detach_to_local();
 
-    let modal = match &app.pending_overlay {
-        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal,
-        other => panic!("the gate must raise the confirm modal, got {other:?}"),
-    };
+    let modal = pending_confirm_modal(&app);
     assert_eq!(
         modal.on_confirm,
         mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
