@@ -189,6 +189,22 @@ pub struct App {
     /// rows derive at merge time.
     pub(in crate::app) home_recently_added:
         std::collections::HashMap<DestinationLatestSource, Vec<mbv_queue::QueueItem>>,
+    /// The epochs of the Home Recently added refresh workers still out, by
+    /// their Service: the pending half of the GUI Library list header's
+    /// refresh busy fact (`App::home_recent_refresh_pending`). A Home
+    /// refresh marks each spawned worker's Service with the refresh's epoch
+    /// (`App::begin_home_recent_refresh`), the worker's drain event retires
+    /// its epoch, and an epoch not in the set clears nothing. A superseded
+    /// worker keeps its epoch until its own drain, so the busy fact holds
+    /// while any worker that went out still runs. The Continue Watching half
+    /// of a Home refresh runs synchronously inside the dispatch, so it needs
+    /// no mark.
+    pub(in crate::app) home_recent_refresh:
+        std::collections::HashMap<mbv_queue::ServiceKind, std::collections::HashSet<u64>>,
+    /// The ordinal the last Home Recently added refresh epoch handed out.
+    /// Monotonic for the App's lifetime, so a drain never names a live
+    /// worker's epoch by reuse.
+    pub(in crate::app) home_recent_refresh_epoch: u64,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
     /// lookup -- see `mbv_remote_player::resolve_library_route`.

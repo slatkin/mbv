@@ -46,6 +46,7 @@ fn hero() -> GuiMusicHeroFrame {
 /// `selected_names` names the line's segments from (design D6).
 fn music_list() -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Music(GuiMusicList {
@@ -100,6 +101,7 @@ fn emby_row(id: &str, title: &str, sort_letter: Option<char>) -> GuiEmbyRowFrame
 /// The plain mode's Emby library content (row 8.1).
 fn emby_plain() -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
@@ -127,6 +129,7 @@ fn emby_plain() -> (GuiLibraryList, GuiLibraryDetail) {
 /// The feed-group mode's Emby library content (row 8.1).
 fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
@@ -176,6 +179,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
 /// The Audiobooks content (row 9.1).
 fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {
@@ -217,6 +221,7 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
 /// The Feeds content (row 11.1).
 fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Feeds(GuiFeedsList {
@@ -256,6 +261,7 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
 /// The Home content (row 6.2).
 fn home_content() -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Home(GuiHomeList {
@@ -281,6 +287,7 @@ fn home_content() -> (GuiLibraryList, GuiLibraryDetail) {
 /// The Shows content (row 7.1).
 fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Shows(GuiShowsList {

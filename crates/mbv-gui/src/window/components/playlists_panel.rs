@@ -446,9 +446,13 @@ fn tree_column(
                 onpress: Callback::new(move |()| {
                     refresh_link.playlists(GuiPlaylistsCommand::Refresh { id: None });
                 }),
+                // The refresh glyph spins while the playlist list's fetch is
+                // out — a press's refresh included, which sets the same
+                // loading flag the empty line reads.
                 RefreshCcw {
                     size: HEADER_ICON_SIZE,
                     stroke_width: HEADER_ICON_STROKE_WIDTH,
+                    class: if frame.loading { "animate-spin" } else { "" },
                 }
             }
         }

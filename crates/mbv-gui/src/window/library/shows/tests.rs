@@ -97,6 +97,7 @@ fn commands(rx: &mpsc::Receiver<CoreInput>) -> Vec<crate::gui_core::GuiLibraryCo
 /// The Shows list section value: the given series under the `Shows` tab.
 fn shows_list(series: Vec<GuiShowsSeriesFrame>) -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {

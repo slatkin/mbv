@@ -45,10 +45,14 @@ pub(crate) fn build(core: &mut GuiCore) -> LibraryPass {
     // The right-click item menu is the Library's, not one destination's (design
     // D8, D15): a row of any destination opens it.
     let row_menu = core.gui_library_row_menu();
+    // The refresh busy fact is read after the parts: the load pass the parts
+    // ran may have started the refresh's own loads.
+    let refreshing = core.gui_destination_refreshing();
     LibraryPass {
         list: Some(GuiLibraryList {
             tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
             current_tab: current,
+            refreshing,
             destination: list,
         }),
         detail: Some(detail),

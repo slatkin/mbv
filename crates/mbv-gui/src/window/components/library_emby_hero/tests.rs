@@ -77,6 +77,7 @@ fn detail(facts: Option<GuiEmbyHeroFrame>) -> GuiEmbyDetail {
 /// from (design D12).
 fn emby_library_list() -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {

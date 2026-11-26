@@ -45,6 +45,7 @@ fn added_row() -> GuiHomeItemRowFrame {
 /// the flat list's rules, and the Home rows.
 fn home_content() -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: vec![GuiLibraryTabFrame {
             position: 1,
             label: "Music".to_owned(),

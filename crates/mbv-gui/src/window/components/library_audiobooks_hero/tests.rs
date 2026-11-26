@@ -112,6 +112,7 @@ fn detail(
 /// from (design D12).
 fn audiobooks_library_list() -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {

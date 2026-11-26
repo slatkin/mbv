@@ -63,8 +63,11 @@ impl Model {
             ModelContentEvent::HomeRecentlyAddedFetched { .. } => {
                 ModelContentFollowUp::RecentlyAdded
             }
-            // The drain loop's tail projects the TV workspace.
-            ModelContentEvent::TvUpcomingSnapshotFetched { .. }
+            // A refresh worker's drain retires its pending mark in the App
+            // and projects nothing here; the drain loop's tail projects the
+            // TV workspace.
+            ModelContentEvent::HomeRecentlyAddedDrained { .. }
+            | ModelContentEvent::TvUpcomingSnapshotFetched { .. }
             | ModelContentEvent::TvUpcomingSnapshotFailed { .. } => ModelContentFollowUp::None,
         };
         self.app.handle_model_content_event(event);

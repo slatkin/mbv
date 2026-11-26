@@ -103,6 +103,7 @@ fn podcasts_content(
 ) -> (GuiLibraryList, GuiLibraryDetail) {
     let selected = rows.first().map(|row| row.id.clone());
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: vec![
             GuiLibraryTabFrame {
                 position: 1,

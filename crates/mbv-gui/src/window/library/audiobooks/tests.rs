@@ -126,6 +126,7 @@ fn book(
 /// The carried Audiobooks content with `selected` picked (row 9.1).
 fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: vec![GuiLibraryTabFrame {
             position: 4,
             label: "Audiobooks".to_owned(),

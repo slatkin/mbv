@@ -83,7 +83,8 @@ impl App {
                 // Client's shell assignment and a GUI Home projection read
                 // the same facts.
                 self.home_content = content.clone();
-                self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
+                let epoch = self.begin_home_recent_refresh(mbv_queue::ServiceKind::Emby);
+                self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby, epoch);
                 Some(content)
             }
             Err(error) => {

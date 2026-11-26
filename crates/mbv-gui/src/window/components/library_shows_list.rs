@@ -559,6 +559,7 @@ pub fn LibraryShowsList() -> Element {
         view: frame.map(|frame| frame.view),
         sort,
         on_refresh: Callback::new(move |()| refresh_library.refresh_library_list()),
+        refreshing: carried.as_ref().is_some_and(|list| list.refreshing),
         tree,
         filter: shows_ui.filter.clone(),
         placeholder: filter_placeholder,

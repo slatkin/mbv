@@ -400,6 +400,7 @@ fn hero() -> GuiMusicHeroFrame {
 /// is picked.
 fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: vec![GuiLibraryTabFrame {
             position: 1,
             label: "Music".to_owned(),
@@ -419,6 +420,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
 /// dropdown has its own open fact and mounts no filter field (design D8, D15).
 fn shows_list() -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {

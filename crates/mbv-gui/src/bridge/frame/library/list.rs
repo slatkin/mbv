@@ -18,6 +18,11 @@ pub struct GuiLibraryList {
     /// tabs (design D2); `None` for Home and every destination the GUI does
     /// not present yet.
     pub current_tab: Option<usize>,
+    /// Whether the active destination's refresh is in flight: the Library
+    /// list header's refresh glyph spins on it (gui-list-header-buttons
+    /// design D7). The fact is the active destination's own — no other
+    /// destination reports.
+    pub refreshing: bool,
     /// The active destination's list part (design D8).
     pub destination: GuiDestinationList,
 }

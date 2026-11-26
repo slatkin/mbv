@@ -221,6 +221,7 @@ impl Fixture {
         self.doc.vdom.in_runtime(move || {
             list.set(Some(SectionRef::new(
                 crate::bridge::frame::library::GuiLibraryList {
+                    refreshing: false,
                     tabs,
                     current_tab,
                     destination: crate::bridge::frame::library::GuiDestinationList::Music(
@@ -251,6 +252,7 @@ impl Fixture {
         let mut detail = self.sections.library_detail;
         self.doc.vdom.in_runtime(move || {
             list.set(Some(SectionRef::new(GuiLibraryList {
+                refreshing: false,
                 tabs: two_tabs(),
                 current_tab: None,
                 destination: GuiDestinationList::Home(GuiHomeList {

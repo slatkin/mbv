@@ -134,6 +134,7 @@ impl Fixture {
             sections
                 .library_list
                 .set(Some(SectionRef::new(GuiLibraryList {
+                    refreshing: false,
                     tabs: Vec::new(),
                     current_tab: Some(2),
                     destination: GuiDestinationList::Shows(list),

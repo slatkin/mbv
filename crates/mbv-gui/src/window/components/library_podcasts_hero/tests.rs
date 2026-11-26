@@ -74,6 +74,7 @@ fn detail(facts: Option<GuiPodcastsHeroFrame>) -> GuiPodcastsDetail {
 /// from (design D12).
 fn podcasts_library_list() -> GuiLibraryList {
     GuiLibraryList {
+        refreshing: false,
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Podcasts(GuiPodcastsList {

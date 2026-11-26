@@ -139,6 +139,7 @@ fn feeds_content_selected(
 ) -> (GuiLibraryList, GuiLibraryDetail) {
     let selected = selected.map(str::to_owned);
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: vec![
             GuiLibraryTabFrame {
                 position: 1,

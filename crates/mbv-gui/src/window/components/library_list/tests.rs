@@ -157,6 +157,7 @@ impl Fixture {
             library_list: Some(GuiSection {
                 revision: 1,
                 value: Some(GuiLibraryList {
+                    refreshing: false,
                     tabs: vec![GuiLibraryTabFrame {
                         position: 1,
                         label: "Music".to_owned(),

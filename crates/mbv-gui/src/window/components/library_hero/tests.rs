@@ -121,6 +121,7 @@ fn hero_app(props: FixtureProps) -> Element {
     sections
         .library_list
         .set(Some(SectionRef::new(GuiLibraryList {
+            refreshing: false,
             tabs: Vec::new(),
             current_tab: None,
             destination: GuiDestinationList::Music(GuiMusicList {

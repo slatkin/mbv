@@ -40,6 +40,7 @@ fn dropdown_app(props: FixtureProps) -> Element {
         library_list: Some(crate::bridge::sections::GuiSection {
             revision: 1,
             value: Some(GuiLibraryList {
+                refreshing: false,
                 tabs: Vec::new(),
                 current_tab: None,
                 destination: GuiDestinationList::Shows(GuiShowsList {

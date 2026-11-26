@@ -37,6 +37,9 @@ enum RefreshCase {
     /// A Shows destination in Upcoming with a stored snapshot: the fetch state
     /// is in flight.
     ShowsUpcoming,
+    /// A Shows destination in All: the App root level's loading flag a
+    /// refresh sets (design D7).
+    ShowsAll,
 }
 
 impl RefreshCase {
@@ -47,6 +50,7 @@ impl RefreshCase {
             Self::PlainEmbyRoot => "the refreshed root list is in flight",
             Self::ShowsNew => "the refreshed New list is in flight",
             Self::ShowsUpcoming => "the Upcoming snapshot fetch is in flight",
+            Self::ShowsAll => "the refreshed root level is in flight",
         }
     }
 }
@@ -169,6 +173,12 @@ fn shows_upcoming_app(http: &MockHttp) -> App {
     app
 }
 
+/// The Shows destination of design D7 in All: the root level the refresh
+/// refetches is the App's own level.
+fn shows_all_app(http: &MockHttp) -> App {
+    shows_app(http)
+}
+
 /// The destination `case` names, with the store its refresh refetches loaded.
 fn refreshed_destination_app(case: RefreshCase, http: &MockHttp) -> App {
     match case {
@@ -176,6 +186,7 @@ fn refreshed_destination_app(case: RefreshCase, http: &MockHttp) -> App {
         RefreshCase::PlainEmbyRoot => plain_emby_app(http),
         RefreshCase::ShowsNew => shows_new_app(http),
         RefreshCase::ShowsUpcoming => shows_upcoming_app(http),
+        RefreshCase::ShowsAll => shows_all_app(http),
     }
 }
 
@@ -189,6 +200,7 @@ fn refresh_running(app: &App, case: RefreshCase) -> bool {
         RefreshCase::PlainEmbyRoot => stub_gui_state(|gui| gui.emby_roots_refreshing.contains(&0)),
         RefreshCase::ShowsNew => stub_gui_state(|gui| gui.shows_new_refreshing.contains(TV_ID)),
         RefreshCase::ShowsUpcoming => app.tv_upcoming_fetch_in_flight_for_test(TV_ID),
+        RefreshCase::ShowsAll => app.emby_library_level(0).is_some_and(|level| level.loading),
     }
 }
 
@@ -200,6 +212,7 @@ fn refresh_running(app: &App, case: RefreshCase) -> bool {
 #[case::plain_emby_root(RefreshCase::PlainEmbyRoot)]
 #[case::shows_new(RefreshCase::ShowsNew)]
 #[case::shows_upcoming(RefreshCase::ShowsUpcoming)]
+#[case::shows_all(RefreshCase::ShowsAll)]
 fn a_refresh_leaves_the_destinations_own_in_flight_mark(#[case] case: RefreshCase) {
     let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let http = MockHttp::new();
@@ -213,6 +226,31 @@ fn a_refresh_leaves_the_destinations_own_in_flight_mark(#[case] case: RefreshCas
     );
 
     assert!(refresh_running(&app, case), "{}", case.label());
+}
+
+/// The header's refresh busy fact (design D7): each destination's own mark
+/// makes the active destination report refreshing, so the header's refresh
+/// glyph spins while that fetch runs.
+#[rstest::rstest]
+#[case::music_group(RefreshCase::MusicGroup)]
+#[case::plain_emby_root(RefreshCase::PlainEmbyRoot)]
+#[case::shows_new(RefreshCase::ShowsNew)]
+#[case::shows_upcoming(RefreshCase::ShowsUpcoming)]
+#[case::shows_all(RefreshCase::ShowsAll)]
+fn a_refresh_makes_the_active_destination_report_refreshing(#[case] case: RefreshCase) {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = refreshed_destination_app(case, &http);
+
+    apply_gui_library_command(
+        &mut app,
+        GuiLibraryCommand::Refresh {
+            album_ids: Vec::new(),
+        },
+    );
+
+    let refreshing = with_stub_gui(&mut app, |core| core.gui_destination_refreshing());
+    assert!(refreshing, "{}", case.label());
 }
 
 /// A Shows All refresh marks stale the series the last in-view report names and

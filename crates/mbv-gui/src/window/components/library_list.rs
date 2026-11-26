@@ -33,6 +33,7 @@ use std::rc::Rc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiLibraryList;
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
@@ -49,6 +50,7 @@ use crate::window::library::list::{LETTER_ROW_HEIGHT, LibraryRow, letter_rail};
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
+use crate::window::sections::SectionRef;
 use crate::window::service_mark::ServiceMark;
 
 /// Whether the row is the album the Hero shows.
@@ -281,6 +283,12 @@ fn paint_album_row(
     }
 }
 
+/// Whether the carried list section marks the active destination's refresh
+/// in flight (the header's refresh busy fact, design D7).
+fn carried_refreshing(list: Option<&SectionRef<GuiLibraryList>>) -> bool {
+    list.is_some_and(|list| list.refreshing)
+}
+
 /// The Library list. It reads
 /// the carried Music frames from the section store itself, so a panel
 /// repaint never deep-clones the union's artists for it (the port review's
@@ -415,6 +423,7 @@ pub fn LibraryList() -> Element {
         view: None,
         sort: None,
         on_refresh: Callback::new(move |()| refresh_library.refresh_music_list()),
+        refreshing: carried_refreshing(carried.as_ref()),
         tree,
         filter: ui.filter.clone(),
         placeholder: filter_placeholder,

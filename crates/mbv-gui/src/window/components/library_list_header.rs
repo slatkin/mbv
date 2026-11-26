@@ -97,6 +97,10 @@ pub struct LibraryListHeaderProps {
     /// The list's refresh press (gui-list-header-buttons design D1): every
     /// destination paints one, left of its dropdown, label, or sort control.
     pub on_refresh: Callback<()>,
+    /// Whether the destination's refresh is in flight (the frame's busy
+    /// fact, design D7): the refresh glyph spins while it holds.
+    #[props(default)]
+    pub refreshing: bool,
     /// The tree list's Expand all and Collapse all presses
     /// (gui-list-header-buttons design D1); `None` on a flat list.
     #[props(default)]
@@ -136,6 +140,7 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
         view,
         sort,
         on_refresh,
+        refreshing,
         tree,
         filter,
         placeholder,
@@ -180,9 +185,12 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
                         label: "Refresh",
                         hook: "data-library-refresh",
                         onpress: on_refresh,
+                        // The refresh glyph spins while the destination's
+                        // refresh is in flight (design D7).
                         RefreshCcw {
                             size: HEADER_ICON_SIZE,
                             stroke_width: HEADER_ICON_STROKE_WIDTH,
+                            class: if refreshing { "animate-spin" } else { "" },
                         }
                     }
                     if let Some(tree) = tree {

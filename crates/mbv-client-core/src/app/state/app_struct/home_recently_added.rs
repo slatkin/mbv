@@ -7,9 +7,48 @@
 
 use crate::app::state::app_struct::App;
 use crate::app::state::playback::DestinationLatestSource;
-use mbv_queue::QueueItem;
+use mbv_queue::{QueueItem, ServiceKind};
 
 impl App {
+    /// Marks one Home Recently added refresh worker out and returns the
+    /// refresh's epoch: the pending half of the GUI Library list header's
+    /// refresh busy fact. The epoch is the App's monotonic counter's next
+    /// value, so a drain never names a live worker's epoch by reuse, and a
+    /// superseded worker keeps its epoch in its Service's set until its own
+    /// drain retires it.
+    pub(crate) fn begin_home_recent_refresh(&mut self, kind: ServiceKind) -> u64 {
+        self.home_recent_refresh_epoch += 1;
+        let epoch = self.home_recent_refresh_epoch;
+        self.home_recent_refresh
+            .entry(kind)
+            .or_default()
+            .insert(epoch);
+        epoch
+    }
+
+    /// Retires one Home Recently added refresh worker's pending epoch: the
+    /// drain event's arm. A drain that names an epoch not in the Service's
+    /// set — a stale one, or one already retired — clears nothing.
+    pub(crate) fn end_home_recent_refresh(&mut self, kind: ServiceKind, epoch: u64) {
+        if let Some(epochs) = self.home_recent_refresh.get_mut(&kind) {
+            epochs.remove(&epoch);
+            if epochs.is_empty() {
+                self.home_recent_refresh.remove(&kind);
+            }
+        }
+    }
+
+    /// Whether a Home Recently added refresh worker is still out: the GUI
+    /// Library list header's refresh busy fact for the Home destination.
+    /// The Continue Watching half of a Home refresh runs synchronously inside
+    /// the dispatch, so it is never pending.
+    #[must_use]
+    pub fn home_recent_refresh_pending(&self) -> bool {
+        self.home_recent_refresh
+            .values()
+            .any(|epochs| !epochs.is_empty())
+    }
+
     /// Evict fetched `Recently added` sources whose Service library no
     /// longer exists: an Emby source without a surviving library tab (a
     /// rebuilt or replaced setup dropped it), or an Audiobookshelf source

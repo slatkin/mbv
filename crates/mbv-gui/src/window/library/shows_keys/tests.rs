@@ -264,6 +264,7 @@ fn shows_content(
 ) -> (GuiLibraryList, GuiLibraryDetail) {
     let selected = series.first().map(|node| node.id.clone());
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: vec![
             GuiLibraryTabFrame {
                 position: 1,

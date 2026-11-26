@@ -42,14 +42,15 @@ const FIXTURE_CSS: &str = concat!(
     "[data-library-list-header] { width: 600px; }",
 );
 
-/// The harness's props: the heading, the carried collections, and the
-/// selection label.
+/// The harness's props: the heading, the carried collections, the selection
+/// label, and the frame's refresh busy fact.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
     heading: LibraryListHeading,
     collections: Option<GuiCollections>,
     label: String,
+    refreshing: bool,
 }
 
 /// The root: provides the Library store and paints the header, as a
@@ -60,6 +61,7 @@ fn header_app(props: FixtureProps) -> Element {
         heading,
         collections,
         label,
+        refreshing,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
     let state = use_hook(move || {
@@ -77,6 +79,7 @@ fn header_app(props: FixtureProps) -> Element {
             heading,
             label,
             collections,
+            refreshing,
             on_refresh: move |()| {},
             tree: None,
             filter: String::new(),
@@ -126,12 +129,13 @@ impl Fixture {
     }
 }
 
-/// Build the document over the heading, the carried collections, and the
-/// selection label and resolve its layout.
-fn built_with(
+/// Build the document over the heading, the carried collections, the
+/// selection label, and the refresh busy fact and resolve its layout.
+fn built_with_refreshing(
     heading: LibraryListHeading,
     collections: Option<GuiCollections>,
     label: String,
+    refreshing: bool,
 ) -> Fixture {
     let (sender, _receiver) = mpsc::channel::<CoreInput>();
     let mut doc = DioxusDocument::new(
@@ -142,6 +146,7 @@ fn built_with(
                 heading,
                 collections,
                 label,
+                refreshing,
             },
         ),
         DocumentConfig {
@@ -161,7 +166,7 @@ fn built_with(
 /// Build the document over the carried collections and the selection label,
 /// under a Service mark heading.
 fn built_with_label(collections: Option<GuiCollections>, label: String) -> Fixture {
-    built_with(ServiceMark::Rss.into(), collections, label)
+    built_with_refreshing(ServiceMark::Rss.into(), collections, label, false)
 }
 
 /// Build the document over the carried collections and the default `All`
@@ -205,10 +210,11 @@ fn the_heading_line_paints_the_mark_and_the_trigger() {
 /// heading paints its text and no Service mark, as Home does.
 #[test]
 fn a_title_heading_paints_the_title_and_no_mark() {
-    let fixture = built_with(
+    let fixture = built_with_refreshing(
         LibraryListHeading::Title("Home".into()),
         None,
         "All".to_owned(),
+        false,
     );
 
     assert_eq!(fixture.text_of("[data-library-list-title]"), "Home");
@@ -242,4 +248,28 @@ fn an_empty_label_paints_no_selection_label() {
 
     assert!(!fixture.presents("[data-library-selection-label]"));
     assert!(!fixture.presents("[data-library-collections-trigger]"));
+}
+
+/// Contract (design D7): the refresh glyph spins while the destination's
+/// refresh is in flight — the svg carries the spin class the stylesheet
+/// animates — and does not carry it at rest.
+#[test]
+fn the_refresh_glyph_spins_only_while_the_refresh_is_in_flight() {
+    let spinning = built_with_refreshing(ServiceMark::Rss.into(), None, "All".to_owned(), true);
+    let at_rest = built_with_label(None, "All".to_owned());
+
+    let spinning_class = spinning
+        .attr_of("[data-library-refresh] svg", "class")
+        .expect("the refresh glyph paints");
+    let rest_class = at_rest
+        .attr_of("[data-library-refresh] svg", "class")
+        .expect("the refresh glyph paints");
+    assert!(
+        spinning_class.contains("animate-spin"),
+        "a refreshing glyph carries the spin class: {spinning_class}"
+    );
+    assert!(
+        !rest_class.contains("animate-spin"),
+        "a resting glyph carries no spin class: {rest_class}"
+    );
 }

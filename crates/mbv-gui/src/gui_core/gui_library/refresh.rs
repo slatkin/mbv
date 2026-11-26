@@ -22,6 +22,64 @@ use super::shows_view::GuiShowsView;
 use super::{emby, projection, shows, shows_open_loads, store};
 
 impl GuiCore {
+    /// Whether the active destination's refresh is in flight: the Library
+    /// list header's refresh busy fact, which its refresh glyph spins on
+    /// (design D7). Each destination's own refresh path keeps the fact — the
+    /// GUI store's refetch marks where the store keeps its list in place,
+    /// the App's own fetch flags where the App paths do — and no destination
+    /// other than the active one reports.
+    #[must_use]
+    pub fn gui_destination_refreshing(&self) -> bool {
+        match self.gui_active_destination() {
+            None => false,
+            // The Home refresh's Continue Watching half runs synchronously
+            // inside the dispatch, so only the two Services' Recently added
+            // workers can still be out.
+            Some(GuiDestinationKind::Home) => self.app.home_recent_refresh_pending(),
+            Some(GuiDestinationKind::Music { lib_idx }) => self
+                .gui
+                .music_albums_refreshing
+                .iter()
+                .any(|(refresh_lib_idx, _)| *refresh_lib_idx == lib_idx),
+            Some(GuiDestinationKind::Shows { lib_idx }) => {
+                shows_refreshing(&self.app, &self.gui, lib_idx)
+            }
+            Some(GuiDestinationKind::Library { lib_idx }) => {
+                self.gui.emby_roots_refreshing.contains(&lib_idx)
+                    || self.gui.emby_feed_refresh_targets.contains_key(&lib_idx)
+            }
+            Some(GuiDestinationKind::Audiobooks { lib_idx }) => self
+                .app
+                .audiobookshelf_book_browse_state(lib_idx)
+                .is_some_and(|state| state.replacement.is_some()),
+            Some(GuiDestinationKind::Podcasts { lib_idx }) => self
+                .app
+                .audiobookshelf_browse_state(lib_idx)
+                .is_some_and(|state| state.replacement.is_some()),
+            Some(GuiDestinationKind::Feeds) => self.app.feeds_state().loading,
+        }
+    }
+}
+
+/// The Shows destination's refresh busy fact (design D7): the All view's
+/// root-level fetch — the App level's loading flag a refresh sets and its
+/// landing clears — the New view's store refetch mark, and the Upcoming
+/// snapshot's fetch mark.
+fn shows_refreshing(app: &App, gui: &GuiClientState, lib_idx: usize) -> bool {
+    match shows::shows_view(gui, lib_idx) {
+        GuiShowsView::All => app
+            .emby_library_level(lib_idx)
+            .is_some_and(|level| level.loading),
+        GuiShowsView::New => app
+            .emby_library_id(lib_idx)
+            .is_some_and(|library_id| gui.shows_new_refreshing.contains(library_id)),
+        GuiShowsView::Upcoming => app
+            .emby_library_id(lib_idx)
+            .is_some_and(|library_id| app.tv_upcoming_fetch_in_flight(library_id)),
+    }
+}
+
+impl GuiCore {
     /// Refresh the active destination, keeping the rows it paints (design D7):
     /// `album_ids` are the open Music album rows the window paints in view, so
     /// their tracks reload in place. A session that presents no destination is

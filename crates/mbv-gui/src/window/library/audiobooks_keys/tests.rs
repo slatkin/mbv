@@ -136,6 +136,7 @@ fn audiobooks_hero() -> GuiAudiobooksHeroFrame {
 /// `None`.
 fn content(hero: Option<GuiAudiobooksHeroFrame>) -> (GuiLibraryList, GuiLibraryDetail) {
     let list = GuiLibraryList {
+        refreshing: false,
         tabs: vec![
             GuiLibraryTabFrame {
                 position: 1,
