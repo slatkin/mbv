@@ -12,15 +12,18 @@ use std::sync::mpsc;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::tests::*;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+use rstest::rstest;
 
 fn key(code: Key) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
 
-/// An owner attached as the local Owner that advertises `playback-output`,
-/// holding one cast receiver, with `active` marking the stub slot active.
+/// An owner attached as the local Owner that advertises `playback-output`
+/// and, when `output_switch` is set, `output-switch`, holding one cast
+/// receiver, with `active` marking the stub slot active.
 fn cast_output_owner_app(
     active: bool,
+    output_switch: bool,
 ) -> (
     crate::app::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
@@ -30,6 +33,7 @@ fn cast_output_owner_app(
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
     compatibility.supports_playback_output = true;
+    compatibility.supports_output_switch = output_switch;
     remote.set_ctrl_compatibility_for_test(compatibility);
     remote.update_status(|status| status.active = active);
     app.player = mbv_player::PlayerProxy::from_remote(remote, false);
@@ -50,7 +54,7 @@ fn cast_output_owner_app(
 /// playing (confirm-output-handoff).
 #[test]
 fn a_declined_cast_hand_off_sends_nothing_and_keeps_the_output() {
-    let (mut app, cmd_rx) = cast_output_owner_app(true);
+    let (mut app, cmd_rx) = cast_output_owner_app(true, false);
 
     app.select_panel_target(PanelTarget::Cast(mbv_cast::discovery::CastReceiver {
         id: "receiver-1".to_string(),
@@ -75,6 +79,7 @@ fn a_declined_cast_hand_off_sends_nothing_and_keeps_the_output() {
                 "receiver-1".to_string()
             )),
             name: "Living Room".to_string(),
+            switch_only: false,
         }
     );
     assert!(
@@ -90,11 +95,52 @@ fn a_declined_cast_hand_off_sends_nothing_and_keeps_the_output() {
     );
 }
 
+/// The continue-playback prompt's buttons and stored flag follow the local
+/// Owner's `output-switch` capability at raise time (design D6 of
+/// `switch-output-without-hand-off`): an Owner that advertises it gets
+/// Continue / Just switch, and an Owner that predates it keeps Yes / No, so
+/// the old answer still cancels and no command the Owner cannot decode is
+/// ever sent.
+#[rstest]
+#[case::switch_capable(true, "Continue", "Just switch")]
+#[case::without_capability(false, "Yes", "No")]
+fn the_continue_prompt_follows_the_owner_output_switch_capability(
+    #[case] output_switch: bool,
+    #[case] affirmative: &str,
+    #[case] cancel: &str,
+) {
+    let (mut app, _cmd_rx) = cast_output_owner_app(true, output_switch);
+
+    app.select_panel_target(PanelTarget::Cast(mbv_cast::discovery::CastReceiver {
+        id: "receiver-1".to_string(),
+        friendly_name: "Living Room".to_string(),
+        host: "192.168.0.5".to_string(),
+        port: 8009,
+    }));
+
+    let modal = match &app.pending_overlay {
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal,
+        other => panic!("the gate must raise the confirm modal, got {other:?}"),
+    };
+    assert_eq!(modal.buttons[0].label, affirmative);
+    assert_eq!(modal.buttons[1].label, cancel);
+    assert_eq!(
+        modal.on_confirm,
+        mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
+            target: Some(mbv_ui_model::panel_targets::SessionTargetKey::Cast(
+                "receiver-1".to_string()
+            )),
+            name: "Living Room".to_string(),
+            switch_only: output_switch,
+        }
+    );
+}
+
 /// A Cast selection with no active slot selects without asking
 /// (confirm-output-handoff "No prompt when nothing is active").
 #[test]
 fn a_cast_selection_with_no_active_slot_selects_without_asking() {
-    let (mut app, cmd_rx) = cast_output_owner_app(false);
+    let (mut app, cmd_rx) = cast_output_owner_app(false, false);
 
     app.select_panel_target(PanelTarget::Cast(mbv_cast::discovery::CastReceiver {
         id: "receiver-1".to_string(),
@@ -121,7 +167,7 @@ fn a_cast_selection_with_no_active_slot_selects_without_asking() {
 /// output back to Local (confirm-output-handoff).
 #[test]
 fn detaching_to_local_with_an_active_remote_output_asks_first() {
-    let (mut app, cmd_rx) = cast_output_owner_app(true);
+    let (mut app, cmd_rx) = cast_output_owner_app(true, false);
     let output = mbv_ctrl::OutputState::Cast {
         receiver_id: "receiver-1".to_string(),
         name: "Living Room".to_string(),
@@ -143,6 +189,7 @@ fn detaching_to_local_with_an_active_remote_output_asks_first() {
         mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
             target: None,
             name: mbv_emby::device_name(),
+            switch_only: false,
         }
     );
     assert!(
@@ -297,6 +344,7 @@ fn a_confirmed_local_detach_while_thin_client_hands_the_home_owner_back_to_local
         mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
             target: None,
             name: mbv_emby::device_name(),
+            switch_only: false,
         }
     );
     assert!(

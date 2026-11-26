@@ -81,6 +81,16 @@ impl App {
             .is_some_and(|link| link.remote().supports_emby_session_output())
     }
 
+    /// Whether the local Owner accepts `CtrlCmd::SwitchPlaybackOutput`
+    /// (`output-switch`, switch-output-without-hand-off design D6). A peer
+    /// this Client controls does not take part: the selection severs to the
+    /// local Owner before it is sent, as for
+    /// `local_owner_supports_emby_session_output`.
+    pub(in crate::app) fn local_owner_supports_output_switch(&self) -> bool {
+        self.local_owner_link()
+            .is_some_and(|link| link.remote().supports_output_switch())
+    }
+
     /// Whether the local Owner can host a Cast output (`playback-output`).
     /// A peer this Client controls does not take part, as for
     /// `local_owner_supports_emby_session_output`.
@@ -120,20 +130,40 @@ impl App {
     }
 
     /// Raise the shared continue-playback confirm (confirm-output-handoff):
-    /// the prompt names the target, Enter (Yes) runs today's hand-off
-    /// unchanged, and Esc (No) cancels — nothing changes and the current
-    /// output keeps playing.
+    /// the prompt names the target, Enter runs today's hand-off unchanged,
+    /// and the other answer — Esc — either switches the output with no
+    /// hand-off or cancels, depending on what this Owner advertised when the
+    /// prompt was raised (switch-output-without-hand-off design D6).
+    ///
+    /// An Owner that advertises `output-switch` gets the Continue / Just
+    /// switch prompt; one that does not gets Yes / No, where No cancels, so a
+    /// Client meeting an Owner started before the upgrade behaves as it did
+    /// and sends nothing that Owner cannot decode. The capability is read
+    /// here, once, and stored in the action, so the answer always matches the
+    /// buttons the user saw.
     pub(in crate::app) fn ask_continue_output_hand_off(
         &mut self,
         target: Option<SessionTargetKey>,
         name: String,
     ) {
-        self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
-            format!("Continue playback on {name}?"),
-            "Yes",
-            "No",
-            mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff { target, name },
-        ));
+        let switch_only = self.local_owner_supports_output_switch();
+        let message = format!("Continue playback on {name}?");
+        let action = mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
+            target,
+            name,
+            switch_only,
+        };
+        let modal = if switch_only {
+            mbv_ui_model::confirm::ConfirmModal::two_button(
+                message,
+                "Continue",
+                "Just switch",
+                action,
+            )
+        } else {
+            mbv_ui_model::confirm::ConfirmModal::two_button(message, "Yes", "No", action)
+        };
+        self.ask_confirm(modal);
     }
 
     /// The continue-playback confirm's answer: Enter (Yes) runs the
@@ -142,10 +172,16 @@ impl App {
     /// snapshot no longer holds acts on nothing), and Local detaches the
     /// Owner's remote output to this machine. Esc and every other key
     /// cancel: nothing changes and the current output keeps playing.
+    ///
+    /// `_switch_only` is the capability the prompt was raised with
+    /// (`ConfirmAction::ContinueOutputHandOff`, design D6 of
+    /// `switch-output-without-hand-off`). The switch answer that reads it is
+    /// not wired yet, so every key but Enter still cancels.
     pub(in crate::app) fn confirm_continue_output_hand_off(
         &mut self,
         target: Option<&SessionTargetKey>,
         name: &str,
+        _switch_only: bool,
         key: KeyEvent,
     ) {
         if key.code != Key::Enter {
