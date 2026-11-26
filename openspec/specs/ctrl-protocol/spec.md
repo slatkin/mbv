@@ -416,6 +416,20 @@ The ctrl hello SHALL advertise an additive capability for Twitch item queue tran
 - **WHEN** the Client's Player owner did not advertise the Twitch queue capability and the user submits a Twitch URL
 - **THEN** the Client does not send the item and tells the user that this Player owner cannot play Twitch items
 
+### Requirement: Emby person image fields are additively negotiated
+
+The ctrl hello SHALL advertise the additive `emby-person-images` capability without changing `CTRL_PROTOCOL_VERSION`. The capability SHALL mean that the peer can decode and re-emit the optional person id and primary image tag in unified queue item payloads. Missing fields SHALL decode as empty and SHALL mean that no person photo is known.
+
+#### Scenario: Capable peers round-trip person image fields
+
+- **WHEN** a queue item payload carrying a person id and primary image tag passes between peers that advertise the capability
+- **THEN** the receiver decodes both values and re-emits them unchanged
+
+#### Scenario: A payload predates person image fields
+
+- **WHEN** a queue item payload without the person id or primary image tag is decoded
+- **THEN** the decode succeeds and both values are empty
+
 ### Requirement: The hello carries a wire identity
 
 Every ctrl hello SHALL carry a wire identity: a short deterministic digest of the sender's wire shape. The digest covers the wire shapes of the command, event, and hello messages. The ctrl protocol version and documentation text SHALL NOT affect it; the protocol version keeps its own check. Two binaries with the same wire shape SHALL report the same value. The field SHALL be additive: it SHALL NOT change the protocol version, and a peer that predates it SHALL decode an absent value as empty.
