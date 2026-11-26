@@ -10,7 +10,7 @@ use crate::gui_core::{
 use mbv_queue::QueueItemContentId;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
-use super::hero_facts::GuiHeroFactsFrame;
+use super::hero_facts::{GuiHeroCastMemberFrame, GuiHeroFactsFrame};
 use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
@@ -162,6 +162,10 @@ pub struct GuiHomeHeroFrame {
     /// art from the image cache; the window paints its own placeholder
     /// while `None`.
     pub art: Option<GuiArtRef>,
+    /// The movie's cast (gui-hero-design-polish design D3): the people that
+    /// are not directors, in the order Emby gives. Empty on every other
+    /// item kind.
+    pub cast: Vec<GuiHeroCastMemberFrame>,
 }
 
 impl From<&GuiHomeRow> for GuiHomeRowFrame {
@@ -261,6 +265,7 @@ impl From<&GuiHomeHero> for GuiHomeHeroFrame {
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),
+            cast: hero.cast.iter().map(GuiHeroCastMemberFrame::from).collect(),
         }
     }
 }
