@@ -3506,7 +3506,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-audiobookshelf"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-config",
  "mbv-emby-model",
@@ -3524,7 +3524,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-cast"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "flume",
  "mbv-audiobookshelf",
@@ -3538,7 +3538,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-client-core"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "image",
  "indexmap",
@@ -3581,7 +3581,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-components"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "criterion",
  "foldhash 0.2.0",
@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-config"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-keybinds",
  "mbv-queue",
@@ -3624,7 +3624,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-core"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "log",
  "mbv-audiobookshelf",
@@ -3642,7 +3642,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-ctrl"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "jsonschema",
  "mbv-emby-model",
@@ -3657,7 +3657,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-daemon"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "libc",
  "mbv-audiobookshelf",
@@ -3684,7 +3684,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-desktop"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "ksni",
  "mbv-ctrl",
@@ -3700,7 +3700,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-emby"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-cast",
  "mbv-config",
@@ -3722,7 +3722,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-emby-model"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-ids",
  "rstest",
@@ -3733,7 +3733,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-feed"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-config",
  "mbv-emby-model",
@@ -3750,7 +3750,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-gui"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "anyrender",
  "blitz-dom",
@@ -3798,7 +3798,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-ids"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "schemars",
  "serde",
@@ -3806,7 +3806,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-images"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "ab_glyph",
  "foldhash 0.2.0",
@@ -3819,14 +3819,14 @@ dependencies = [
 
 [[package]]
 name = "mbv-keybinds"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "tracing",
 ]
 
 [[package]]
 name = "mbv-net"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-core",
  "percent-encoding",
@@ -3838,7 +3838,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-owner"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "libc",
  "mbv-config",
@@ -3854,7 +3854,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-player"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "libc",
  "mbv-audiobookshelf",
@@ -3877,7 +3877,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-queue"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-emby-model",
  "rand 0.10.4",
@@ -3889,7 +3889,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-remote-player"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-config",
  "mbv-ctrl",
@@ -3904,7 +3904,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-render"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "criterion",
  "mbv-config",
@@ -3926,7 +3926,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-surfaces"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-queue",
  "mbv-ui-model",
@@ -3936,21 +3936,21 @@ dependencies = [
 
 [[package]]
 name = "mbv-text"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "fuzzy-matcher",
 ]
 
 [[package]]
 name = "mbv-theme"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "mbv-tui"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "crossterm",
  "image",
@@ -3995,7 +3995,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-tui-support"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "image",
  "mbv-images",
@@ -4009,7 +4009,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-ui-model"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-audiobookshelf",
  "mbv-config",
@@ -4027,7 +4027,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-ui-msg"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-emby-model",
  "mbv-ids",
@@ -4037,7 +4037,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-visualizer"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "pipewire",
  "tracing",
@@ -4045,7 +4045,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-ws"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "mbv-net",
  "rstest",
@@ -4056,7 +4056,7 @@ dependencies = [
 
 [[package]]
 name = "mbvd"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "libc",
  "mbv-audiobookshelf",
