@@ -24,27 +24,25 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Same pinned base-devel snapshot as the PKGBUILD workflow, so this job has
-    # a reproducible pacman/makepkg/git toolchain.
-    container: archlinux/archlinux:base-devel-20260818.0.575430
+    # Same frozen mbv-builder image as the PKGBUILD workflow: pacman,
+    # makepkg, git, openssh, and github-cli are baked in, and this job never
+    # touches rolling package state. (Before the frozen image, this job ran a
+    # full `pacman -Syu` against the live mirrors on every publish.)
+    container:
+      image: ghcr.io/slatkin/mbv-builder:20260818-rust1.99.0
+      # The package publishes private; the job authenticates the
+      # pull with its own automatically-minted GITHUB_TOKEN (the
+      # package is connected to this repo, so read access is
+      # implied) — no personal credentials anywhere in the chain.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: write
+      packages: read
 
     steps:
       - uses: actions/checkout@v7
-
-      - name: Update system and install tooling
-        run: |
-          pacman_retry() {
-            for attempt in 1 2 3; do
-              "$@" && return 0
-              pacman -Syy --noconfirm
-              sleep $((attempt * 10))
-            done
-            "$@"
-          }
-          pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed github-cli openssh git
 
       - name: Normalize version input
         env:

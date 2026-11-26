@@ -1,0 +1,80 @@
+name: Builder image
+
+# Publishes the frozen CI builder image (ci/mbv-builder.Dockerfile) to GHCR
+# with the workflow's own GITHUB_TOKEN — no personal access tokens, no manual
+# docker logins anywhere in the chain.
+#
+# Why the shuttle exists: this image CANNOT be built on GitHub-hosted runners.
+# Its build downloads the pinned package snapshot from archive.archlinux.org,
+# and the Arch Linux Archive throttles GitHub's datacenter egress to under
+# 1 byte/sec (observed 2026-11-26: both the initial run and its retry died
+# mid-transaction, one of them on extra.db itself within 20 seconds). So the
+# image is built off-GitHub — see the Dockerfile header for the exact docker
+# build command — exported with:
+#
+#   docker save ghcr.io/slatkin/mbv-builder:<tag> | zstd -T0 -3 -o mbv-builder-image.tar.zst
+#
+# and uploaded to the draft release `ci-mbv-builder-shuttle`:
+#
+#   gh release upload ci-mbv-builder-shuttle mbv-builder-image.tar.zst --clobber
+#
+# This job downloads that asset, loads it, and re-pushes it to GHCR. When no
+# shuttle asset exists it falls back to a straight docker build, which works
+# on infrastructure the Archive does not throttle (e.g. a self-hosted runner).
+#
+# Runs whenever a push touches the Dockerfile or this workflow, on any branch,
+# and by hand. The tag is the single source of truth tying image contents to
+# consumers: keep TAG in sync with the Dockerfile header and the container
+# literals in build.yml and aur.yml. Tags are never reused: a rebuild with new
+# content gets a new tag, so old commits always build in the environment they
+# were written for.
+
+on:
+  push:
+    paths:
+      - 'ci/mbv-builder.Dockerfile'
+      - '.github/workflows/builder-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish mbv-builder
+        # TAG must match the Dockerfile header and the container literals in
+        # build.yml/aur.yml.
+        env:
+          TAG: 20260818-rust1.99.0
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          IMAGE: ghcr.io/slatkin/mbv-builder
+        run: |
+          set -euo pipefail
+          if gh release view ci-mbv-builder-shuttle --json assets \
+            --jq '.assets[].name' 2>/dev/null | grep -qx mbv-builder-image.tar.zst; then
+            echo "Shuttle asset present: loading the off-GitHub build."
+            gh release download ci-mbv-builder-shuttle \
+              -p mbv-builder-image.tar.zst --clobber
+            zstd -dc mbv-builder-image.tar.zst | docker load
+            docker push "${IMAGE}:${TAG}"
+          else
+            echo "No shuttle asset: building here (only viable off GitHub-hosted runners)."
+            docker build \
+              -f ci/mbv-builder.Dockerfile \
+              -t "${IMAGE}:${TAG}" \
+              ci
+            docker push "${IMAGE}:${TAG}"
+          fi
