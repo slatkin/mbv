@@ -102,33 +102,62 @@ pub fn track_total_facts(
     ]
 }
 
-/// The artist header's third line (design D5): the artist's album count in the
-/// union, and the track count and total time once every one of those albums
-/// holds a cached tracklist.
-#[must_use]
-pub fn artist_facts(hero: &GuiMusicHeroFrame) -> Segments {
-    let mut albums: Segments = vec![
+/// An album count's row, `3 albums` in the singular when the count is one.
+fn album_count_row(count: usize) -> Segments {
+    vec![
         GuiMetaSegmentFrame {
-            text: hero.album_count.to_string(),
+            text: count.to_string(),
             kind: GuiMetaKindFrame::Count,
         },
         GuiMetaSegmentFrame {
-            text: match hero.album_count {
+            text: match count {
                 1 => " album",
                 _ => " albums",
             }
             .to_owned(),
             kind: GuiMetaKindFrame::Plain,
         },
-    ];
-    if let Some(tracks) = &hero.artist_tracks {
-        albums.push(GuiMetaSegmentFrame {
-            text: " · ".to_owned(),
-            kind: GuiMetaKindFrame::Plain,
-        });
-        albums.extend(track_total_facts(tracks));
+    ]
+}
+
+/// A year span's text (gui-music-artist-page design D6): the year alone when
+/// the span's ends meet, `1986–1989` otherwise.
+fn year_span_text(first: &str, last: &str) -> String {
+    if first == last {
+        first.to_owned()
+    } else {
+        format!("{first}\u{2013}{last}")
     }
-    albums
+}
+
+/// A year span's row: the span in the date kind, empty while no album names
+/// a year.
+fn year_span_row(years: Option<&(String, String)>) -> Segments {
+    let Some((first, last)) = years else {
+        return Vec::new();
+    };
+    vec![GuiMetaSegmentFrame {
+        text: year_span_text(first, last),
+        kind: GuiMetaKindFrame::Date,
+    }]
+}
+
+/// A track count and total time's row, empty while the total has not landed.
+fn track_total_row(
+    total: Option<&crate::bridge::frame::library::GuiMusicTrackTotalFrame>,
+) -> Segments {
+    total.map_or_else(Vec::new, track_total_facts)
+}
+
+/// The artist header's third line (design D5): the artist's album count in the
+/// union, and the track count and total time once every one of those albums
+/// holds a cached tracklist.
+#[must_use]
+pub fn artist_facts(hero: &GuiMusicHeroFrame) -> Segments {
+    join_meta_rows(&[
+        album_count_row(hero.album_count),
+        track_total_row(hero.artist_tracks.as_ref()),
+    ])
 }
 
 /// The album block's facts line, empty while the album's tracklist has not
@@ -152,51 +181,12 @@ pub fn artist_page_facts(hero: &GuiMusicHeroFrame) -> Segments {
     let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject else {
         return Vec::new();
     };
-    let mut facts: Segments = Vec::new();
-    if !hero.collections.is_empty() {
-        facts.push(GuiMetaSegmentFrame {
-            text: hero.collections.join(" + "),
-            kind: GuiMetaKindFrame::Plain,
-        });
-        facts.push(GuiMetaSegmentFrame {
-            text: " · ".to_owned(),
-            kind: GuiMetaKindFrame::Plain,
-        });
-    }
-    facts.push(GuiMetaSegmentFrame {
-        text: hero.album_count.to_string(),
-        kind: GuiMetaKindFrame::Count,
-    });
-    facts.push(GuiMetaSegmentFrame {
-        text: match hero.album_count {
-            1 => " album",
-            _ => " albums",
-        }
-        .to_owned(),
-        kind: GuiMetaKindFrame::Plain,
-    });
-    if let Some((first, last)) = &page.years {
-        facts.push(GuiMetaSegmentFrame {
-            text: " · ".to_owned(),
-            kind: GuiMetaKindFrame::Plain,
-        });
-        facts.push(GuiMetaSegmentFrame {
-            text: if first == last {
-                first.clone()
-            } else {
-                format!("{first}\u{2013}{last}")
-            },
-            kind: GuiMetaKindFrame::Date,
-        });
-    }
-    if let Some(tracks) = &hero.artist_tracks {
-        facts.push(GuiMetaSegmentFrame {
-            text: " · ".to_owned(),
-            kind: GuiMetaKindFrame::Plain,
-        });
-        facts.extend(track_total_facts(tracks));
-    }
-    facts
+    join_meta_rows(&[
+        plain_segments(&hero.collections.join(" + ")),
+        album_count_row(hero.album_count),
+        year_span_row(page.years.as_ref()),
+        track_total_row(hero.artist_tracks.as_ref()),
+    ])
 }
 
 /// The artist page block's facts line (gui-music-artist-page design D6): the
@@ -208,17 +198,7 @@ pub fn artist_year_span_facts(hero: &GuiMusicHeroFrame) -> Segments {
     let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject else {
         return Vec::new();
     };
-    let Some((first, last)) = &page.years else {
-        return Vec::new();
-    };
-    vec![GuiMetaSegmentFrame {
-        text: if first == last {
-            first.clone()
-        } else {
-            format!("{first}\u{2013}{last}")
-        },
-        kind: GuiMetaKindFrame::Date,
-    }]
+    year_span_row(page.years.as_ref())
 }
 
 /// The artist's albums in the union, which Shuffle artist plays (design D8).

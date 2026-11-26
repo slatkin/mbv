@@ -42,7 +42,6 @@ use crate::window::sections::SectionRef;
 
 use crate::window::library::state::LibraryState;
 
-/// The labels the Hero's own buttons already send (design D8): the menu's
 /// The props of the Music Hero (the `LibraryHero` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroProps {
@@ -153,27 +152,34 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     }
 }
 
-/// The album branch's Shuffle artist header action (design D8): the albums of
-/// the current union, played shuffled — the closure reads the current frame,
-/// so a Hero repaint never clones the union's albums or the tracklist for it.
-fn album_shuffle_action(library: &LibraryState) -> Element {
-    let shuffle_library = library.clone();
+/// The Shuffle artist header action's button (design D6, D8): one painter
+/// for both branches — only the press's send differs, so the markup cannot
+/// drift.
+fn shuffle_artist_button(send: impl Fn() + 'static) -> Element {
     rsx! {
         button {
             "type": "button",
             class: "flex flex-none items-center",
             style: "height: 40px; padding: 0 14px; gap: 8px; background: none; border: 1px solid var(--canvas-library-control); border-radius: 6px; color: var(--canvas-text); font-size: 14px; cursor: pointer;",
             "data-library-hero-shuffle": "",
-            onclick: move |_| {
-                let Some((artists, hero)) = current_union(&shuffle_library) else {
-                    return;
-                };
-                shuffle_artist(&shuffle_library, &artists, &hero);
-            },
+            onclick: move |_| send(),
             Shuffle { size: 15 }
             "Shuffle artist"
         }
     }
+}
+
+/// The album branch's Shuffle artist header action (design D8): the albums of
+/// the current union, played shuffled — the closure reads the current frame,
+/// so a Hero repaint never clones the union's albums or the tracklist for it.
+fn album_shuffle_action(library: &LibraryState) -> Element {
+    let shuffle_library = library.clone();
+    shuffle_artist_button(move || {
+        let Some((artists, hero)) = current_union(&shuffle_library) else {
+            return;
+        };
+        shuffle_artist(&shuffle_library, &artists, &hero);
+    })
 }
 
 /// The album branch's actions row (design D8): the shared actions painter over
@@ -328,21 +334,13 @@ fn artist_hero(
     // same send the album branch's union walk builds.
     let shuffle_ids = album_ids.clone();
     let shuffle_library = library.clone();
-    let header_action = rsx! {
-        button {
-            "type": "button",
-            class: "flex flex-none items-center",
-            style: "height: 40px; padding: 0 14px; gap: 8px; background: none; border: 1px solid var(--canvas-library-control); border-radius: 6px; color: var(--canvas-text); font-size: 14px; cursor: pointer;",
-            "data-library-hero-shuffle": "",
-            onclick: move |_| {
-                shuffle_library.link.library(GuiLibraryCommand::ShuffleArtist {
-                    album_ids: shuffle_ids.clone(),
-                });
-            },
-            Shuffle { size: 15 }
-            "Shuffle artist"
-        }
-    };
+    let header_action = shuffle_artist_button(move || {
+        shuffle_library
+            .link
+            .library(GuiLibraryCommand::ShuffleArtist {
+                album_ids: shuffle_ids.clone(),
+            });
+    });
 
     // The actions row (design D6): Play and Add to queue over the whole
     // artist. The artist page offers no More actions control — the frame

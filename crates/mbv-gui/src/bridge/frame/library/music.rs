@@ -236,16 +236,29 @@ impl GuiMusicHeroFrame {
     #[must_use]
     pub fn picked_row_id(&self) -> String {
         match &self.subject {
-            GuiMusicHeroSubjectFrame::Album(album) => format!("album:{}", album.album_id),
-            GuiMusicHeroSubjectFrame::Artist(page) => {
-                let (kind, id) = match &page.artist_key {
-                    GuiArtistKey::Service(id) => ("service", id),
-                    GuiArtistKey::Fallback(id) => ("fallback", id),
-                };
-                format!("artist:{kind}:{id}")
-            }
+            GuiMusicHeroSubjectFrame::Album(album) => gui_album_row_id(&album.album_id),
+            GuiMusicHeroSubjectFrame::Artist(page) => gui_artist_row_id(&page.artist_key),
         }
     }
+}
+
+/// An artist row's id in the window list's encoding: the artist's stable
+/// identity, prefixed so an artist and an album of the same Service id cannot
+/// collide. The list's rows and the Hero's picked row share this one encoding,
+/// so a pick always names the row the list paints.
+#[must_use]
+pub fn gui_artist_row_id(artist_key: &GuiArtistKey) -> String {
+    let (kind, id) = match artist_key {
+        GuiArtistKey::Service(id) => ("service", id),
+        GuiArtistKey::Fallback(id) => ("fallback", id),
+    };
+    format!("artist:{kind}:{id}")
+}
+
+/// An album row's id in the window list's encoding.
+#[must_use]
+pub fn gui_album_row_id(album_id: &str) -> String {
+    format!("album:{album_id}")
 }
 
 impl From<&GuiMusicArtist> for GuiMusicArtistFrame {

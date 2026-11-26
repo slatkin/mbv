@@ -311,7 +311,7 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
         let GuiLibraryDetail::Music(detail) = &*detail_part.expect("detail") else {
             panic!("detail fixture");
         };
-        state.reveal_picked_album(music, detail);
+        state.reveal_picked_row(music, detail);
         state.measure_library_list(40.0);
         facts.lock().expect("facts").push(music_scroll(state));
     });
@@ -366,7 +366,7 @@ fn a_reveal_of_the_artist_page_scrolls_the_artist_row_into_view_and_opens_nothin
         let GuiLibraryDetail::Music(detail) = &*detail_part.expect("detail") else {
             panic!("detail fixture");
         };
-        state.reveal_picked_album(music, detail);
+        state.reveal_picked_row(music, detail);
         state.measure_library_list(40.0);
         facts.lock().expect("facts").push(music_scroll(state));
         facts

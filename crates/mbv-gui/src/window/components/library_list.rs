@@ -346,7 +346,7 @@ pub fn LibraryList() -> Element {
         }
         *revealed = picked_row_id;
         drop(revealed);
-        reveal_library.reveal_picked_album(list, detail);
+        reveal_library.reveal_picked_row(list, detail);
     });
 
     // The selected collection names in selector order (design D6): the

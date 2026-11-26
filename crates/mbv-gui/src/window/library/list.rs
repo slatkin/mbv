@@ -198,20 +198,17 @@ impl GeometryRow for LibraryRow {
 }
 
 /// An artist row's id: the artist's stable identity, prefixed so an artist and
-/// an album of the same Service id cannot collide.
+/// an album of the same Service id cannot collide. The encoding is the frame's
+/// own — the Hero's picked row names the row the list paints through it.
 #[must_use]
 pub fn artist_row_id(artist: &GuiMusicArtistFrame) -> String {
-    let (kind, id) = match &artist.artist_key {
-        crate::bridge::frame::library::GuiArtistKey::Service(id) => ("service", id),
-        crate::bridge::frame::library::GuiArtistKey::Fallback(id) => ("fallback", id),
-    };
-    format!("artist:{kind}:{id}")
+    crate::bridge::frame::library::gui_artist_row_id(&artist.artist_key)
 }
 
-/// An album row's id.
+/// An album row's id, through the same shared encoding.
 #[must_use]
 pub fn album_row_id(album_id: &str) -> String {
-    format!("album:{album_id}")
+    crate::bridge::frame::library::gui_album_row_id(album_id)
 }
 
 /// A track row's id.

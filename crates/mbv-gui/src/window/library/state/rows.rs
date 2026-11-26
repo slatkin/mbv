@@ -152,7 +152,7 @@ impl LibraryState {
     /// nothing, so a restored pick and a pill's last pick reach the Hero on a
     /// row in view. An album whose tracks are not loaded is opened through the
     /// same command a press sends, which is what loads them.
-    pub fn reveal_picked_album(&self, list: &GuiMusicList, detail: &GuiMusicDetail) {
+    pub fn reveal_picked_row(&self, list: &GuiMusicList, detail: &GuiMusicDetail) {
         let Some(hero) = detail.hero.as_ref() else {
             return;
         };

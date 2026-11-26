@@ -154,41 +154,42 @@ fn show_library_detail(app: &mut App, gui: &mut GuiClientState, item_id: &str) {
 
 /// Shuffle the artist whose albums are `album_ids` (design D8).
 fn shuffle_artist(app: &mut App, gui: &GuiClientState, album_ids: &[String]) {
-    let albums: Vec<EmbyItem> = album_ids
-        .iter()
-        .filter_map(|album_id| library_item(app, gui, album_id))
-        .map(|(_lib_idx, album)| album)
-        .collect();
-    if albums.is_empty() {
-        super::log_ignored_library_command(
-            "shuffleArtist",
-            format_args!("the album ids name no album the Service data holds"),
-        );
-        return;
-    }
-    app.play_music_albums(albums, true, false);
+    play_artist_albums(app, gui, album_ids, true, "shuffleArtist");
 }
 
 /// Play the artist whose albums are `album_ids` in the given order
-/// (gui-music-artist-page design D2): the shuffle walk with shuffle off. An
-/// id the store no longer holds is skipped and logged, as a stale frame's
-/// id always is.
+/// (gui-music-artist-page design D2): the shuffle walk with shuffle off.
 fn play_artist(app: &mut App, gui: &GuiClientState, album_ids: &[String]) {
+    play_artist_albums(app, gui, album_ids, false, "playArtist");
+}
+
+/// The one album walk Shuffle artist and the artist page's Play share (design
+/// D8; gui-music-artist-page design D2): the ids resolve in their given order,
+/// an id the store no longer holds is skipped and logged as a stale frame's
+/// id always is, and the albums play through `play_music_albums` with the
+/// caller's shuffle.
+fn play_artist_albums(
+    app: &mut App,
+    gui: &GuiClientState,
+    album_ids: &[String],
+    shuffle: bool,
+    command: &'static str,
+) {
     let mut albums: Vec<EmbyItem> = Vec::new();
     for album_id in album_ids {
         match library_item(app, gui, album_id) {
             Some((_lib_idx, album)) => albums.push(album),
-            None => super::log_stale_library_item("playArtist", album_id),
+            None => super::log_stale_library_item(command, album_id),
         }
     }
     if albums.is_empty() {
         super::log_ignored_library_command(
-            "playArtist",
+            command,
             format_args!("the album ids name no album the Service data holds"),
         );
         return;
     }
-    app.play_music_albums(albums, false, false);
+    app.play_music_albums(albums, shuffle, false);
 }
 
 /// Play the artist page's track `track_id` (gui-music-artist-page design
