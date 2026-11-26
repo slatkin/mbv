@@ -585,10 +585,10 @@ fn a_track_s_play_gesture_sends_that_track_play() {
 }
 
 /// Contract (`LibraryHero.test.ts`): the tracklist marks the frame playing
-/// track with a play glyph, not a fill — a highlight marks focus only, so the
-/// playing row keeps its own fill.
+/// track with the bars mark in its number cell, not a fill — a highlight marks
+/// focus only, so the playing row keeps its own fill.
 #[test]
-fn the_playing_track_marks_the_play_glyph_and_keeps_its_own_fill() {
+fn the_playing_track_marks_the_bars_mark_and_keeps_its_own_fill() {
     let facts = hero();
     let fixture = built(artists(&facts), detail(facts, Some("t1".to_owned())));
 
@@ -598,8 +598,8 @@ fn the_playing_track_marks_the_play_glyph_and_keeps_its_own_fill() {
         "the playing row carries the playing mark"
     );
     assert!(
-        fixture.presents("[data-library-track=\"t1\"] [data-library-track-glyph]"),
-        "the playing row paints its play glyph"
+        fixture.presents("[data-library-track=\"t1\"] [data-library-track-number] svg"),
+        "the playing row paints the bars mark in its number cell"
     );
     assert!(
         fixture

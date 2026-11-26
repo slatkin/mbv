@@ -196,10 +196,12 @@ fn a_rows_play_state_decides_its_title_tone_and_its_resume_run(
     );
 }
 
-/// Contract (gui-played-row-marks design D4, the `gui-client` spec's "The
-/// playing Workspace row keeps its own mark"): a playing row keeps its own
-/// heading tone whatever state it carries, and paints the mark's empty slot, so
-/// its duration stays aligned with the other rows.
+/// Contract (gui-played-row-marks design D4, gui-hero-design-polish design D6,
+/// the `gui-client` spec's "The playing Workspace row keeps its own mark"): a
+/// playing row keeps its heading tone and weight 600 whatever state it carries,
+/// paints the bars mark in its number cell with no glyph beside its title, and
+/// paints the mark's empty slot, so its duration stays aligned with the other
+/// rows.
 #[test]
 fn a_playing_row_keeps_its_heading_tone_and_paints_no_play_mark() {
     let doc = built(
@@ -218,6 +220,27 @@ fn a_playing_row_keeps_its_heading_tone_and_paints_no_play_mark() {
     assert!(
         title.contains("color: var(--canvas-heading)"),
         "the playing row keeps its heading tone: {title}"
+    );
+    assert!(
+        title.contains("font-weight: 600"),
+        "the playing row's title weighs 600: {title}"
+    );
+    let dom = doc.inner();
+    assert!(
+        dom.query_selector(&format!(
+            "[data-library-track=\"{ROW_ID}\"] [data-library-track-number] svg.lucide-chart-no-axes-column"
+        ))
+        .expect("the selector is valid")
+        .is_some(),
+        "the playing row paints the bars mark in its number cell"
+    );
+    assert!(
+        dom.query_selector(&format!(
+            "[data-library-track=\"{ROW_ID}\"] [data-library-track-glyph]"
+        ))
+        .expect("the selector is valid")
+        .is_none(),
+        "the playing row paints no glyph beside its title"
     );
     assert_eq!(
         play_mark_value(&doc).as_deref(),

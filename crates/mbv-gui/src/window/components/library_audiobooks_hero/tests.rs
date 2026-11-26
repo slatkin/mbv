@@ -474,7 +474,7 @@ fn the_workspace_paints_the_chapter_rows_once_the_chapters_have_landed() {
 }
 
 /// Contract (`LibraryAudiobooksHero.test.ts`, design D5): the chapter whose
-/// span holds the predicted position carries the tracklist's play glyph,
+/// span holds the predicted position carries the bars mark in its number cell,
 /// while the Hero's book is the playing book — a highlight marks focus only,
 /// so the row keeps its own fill.
 #[test]
@@ -495,8 +495,8 @@ fn the_workspace_marks_the_chapter_the_predicted_position_holds() {
         "the marked chapter carries the playing mark"
     );
     assert!(
-        fixture.presents("[data-library-abs-chapter=\"2\"] [data-library-abs-chapter-glyph]"),
-        "the marked chapter paints its play glyph"
+        fixture.presents("[data-library-abs-chapter=\"2\"] [data-library-abs-chapter-number] svg"),
+        "the marked chapter paints the bars mark in its number cell"
     );
     assert!(
         fixture
@@ -508,8 +508,8 @@ fn the_workspace_marks_the_chapter_the_predicted_position_holds() {
         "no other chapter carries it"
     );
     assert!(
-        !fixture.presents("[data-library-abs-chapter=\"1\"] [data-library-abs-chapter-glyph]"),
-        "no other chapter paints a glyph"
+        !fixture.presents("[data-library-abs-chapter=\"1\"] [data-library-abs-chapter-number] svg"),
+        "no other chapter paints the mark"
     );
 }
 

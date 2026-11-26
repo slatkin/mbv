@@ -9,8 +9,8 @@
 //! on that track, which appends to the queue's tail, and play it; each sends
 //! the track's own id. A track also plays from a double-click on the row: the
 //! queue is replaced, and under autoload the album plays from that track
-//! onward. The row of the track playing at the playhead shows a play glyph
-//! beside its title (the `GuiQueue` frame names `active`); a highlight marks
+//! onward. The row of the track playing at the playhead shows the bars mark
+//! in its number cell (the `GuiQueue` frame names `active`); a highlight marks
 //! focus only, so it keeps its own fill.
 
 use dioxus_native::prelude::*;

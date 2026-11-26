@@ -2,7 +2,7 @@
 //! of `LibraryWorkspaceTable`; add-gui-library-panel design D15,
 //! invariant 30): the one table every destination's Workspace paints —
 //! Music's tracklist, Shows' episodes, Audiobooks' chapters, and Feeds'
-//! entries. The header row, the row grid, the playing glyph, the trailing cell,
+//! entries. The header row, the row grid, the playing mark, the trailing cell,
 //! the resume run, the hover controls, and the loading line are painted here
 //! once, so a fix lands in every list.
 //!
@@ -20,7 +20,8 @@
 //! [`RowPlay`] (gui-played-row-marks design D1, D4), and its trailing cell
 //! paints the shared cluster — the play mark, then the duration — that the
 //! hover controls hide together (design D3). The playing row keeps its own
-//! heading tone and weight and paints the mark's empty slot, so its duration
+//! heading tone and weight 600, paints the bars mark in its number cell, and
+//! paints the mark's empty slot in its trailing cell, so its duration
 //! stays aligned with the other rows. A row that carries no play state keeps
 //! the bare duration it always painted.
 
@@ -28,10 +29,11 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_attr::library_attr;
+use crate::window::components::list_row::row_host_style;
 use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::typed_text::TypedText;
-use crate::window::icons::Play;
+use crate::window::icons::ChartNoAxesColumn;
 use crate::window::input::f32_from_f64;
 use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
@@ -129,7 +131,7 @@ impl std::fmt::Debug for LibraryWorkspaceTableProps {
 
 /// A row's title tone (`gui-shared-workspace-row-state` design D1, D2;
 /// gui-played-row-marks design D1, D4): the playing row's own heading tone —
-/// the table's mark beside its glyph, which no carried state changes —
+/// the playing mark in the number cell, which no carried state changes —
 /// otherwise the tone [`RowPlay`] derives from the row's carried state, or the
 /// text tone on a row that carries none.
 fn title_tone(row: &WorkspaceRow) -> String {
@@ -142,12 +144,12 @@ fn title_tone(row: &WorkspaceRow) -> String {
     }
 }
 
-/// A row's title weight (gui-played-row-marks design D1, D4): the weight
-/// [`RowPlay`] derives from the row's carried state; the playing row and a row
-/// that carries no state keep 400.
+/// A row's title weight (gui-played-row-marks design D1, D4; gui-hero-design-polish
+/// design D6): the playing row's 600, otherwise the weight [`RowPlay`] derives
+/// from the row's carried state; a row that carries no state keeps 400.
 fn title_weight(row: &WorkspaceRow) -> f32 {
     if row.playing {
-        return 400.0;
+        return 600.0;
     }
     match row.state.as_ref() {
         Some(state) => RowPlay::of_row(state).title_weight(),
@@ -175,15 +177,30 @@ fn resume_progress(row: &WorkspaceRow) -> Option<f32> {
     row.state.as_ref().and_then(episode_progress).map(f32::from)
 }
 
-/// The play glyph the playing row paints beside its title: twelve pixels,
-/// filled in the accent.
-fn play_glyph() -> Element {
+/// The playing mark the playing row paints in its number cell: twelve pixels,
+/// in the accent (gui-hero-design-polish design D6).
+fn playing_mark() -> Element {
     rsx! {
-        Play {
+        ChartNoAxesColumn {
             size: 12,
-            fill: canvas_var("accent"),
             color: canvas_var("accent"),
         }
+    }
+}
+
+/// A row's fill (gui-hero-design-polish design D6): the playing row's
+/// `--canvas-playing-row`, the striped rows' lighter panel on every second row
+/// from the second, and the column's own fill on the rest. The fill lives on
+/// the host as `--row-fill`, so the hover controls' cover never goes
+/// transparent over the title.
+fn row_fill(row: &WorkspaceRow, index: usize) -> String {
+    if row.playing {
+        return canvas_var("playing-row");
+    }
+    if index.is_multiple_of(2) {
+        canvas_var("library-column")
+    } else {
+        canvas_var("library-panel")
     }
 }
 
@@ -249,12 +266,21 @@ fn paint_number_cell(hook: &'static str, row: &WorkspaceRow) -> Element {
         None,
         false,
     )];
+    // The playing row's mark stands in for the number (gui-hero-design-polish
+    // design D6): the cell still paints, with the mark as its content.
+    let content: Element = if row.playing {
+        playing_mark()
+    } else {
+        rsx! {
+            "{row.number}"
+        }
+    };
     rsx! {
         span {
-            class: "flex-none font-mono tabular-nums",
+            class: "row-hover-face flex flex-none items-center font-mono tabular-nums",
             style: "font-size: 11px; color: var(--canvas-ordinal);",
             ..number_attrs,
-            "{row.number}"
+            {content}
         }
     }
 }
@@ -269,7 +295,6 @@ fn paint_name_button(
     on_play: Callback<String>,
 ) -> Element {
     let name_attrs = vec![Attribute::new(library_attr(hook, "name"), "", None, false)];
-    let glyph_attrs = vec![Attribute::new(library_attr(hook, "glyph"), "", None, false)];
     let label = format!("{noun} {}", row.name);
     let row_id = row.id.clone();
     let double_click_id = row.id.clone();
@@ -278,7 +303,7 @@ fn paint_name_button(
     rsx! {
         button {
             "type": "button",
-            class: "flex w-full min-w-0 items-center",
+            class: "row-hover-face flex w-full min-w-0 items-center",
             style: "background: none; border: 0; padding: 0; text-align: left; cursor: pointer;",
             "aria-label": "{label}",
             onclick: move |_| on_press.call(row_id.clone()),
@@ -286,15 +311,6 @@ fn paint_name_button(
             ..name_attrs,
             span {
                 class: "flex min-w-0 flex-1 items-center",
-                style: "gap: 6px;",
-                if row.playing {
-                    // The playing row's play glyph sits beside its title: a
-                    // highlight marks focus only.
-                    span {
-                        ..glyph_attrs,
-                        { play_glyph() }
-                    }
-                }
                 Truncate {
                     text: row.name.clone(),
                     class: "min-w-0 flex-1".to_owned(),
@@ -398,7 +414,7 @@ fn paint_trailing_cell(
 
 /// One row of the table: the cells over the row grid, the hover host, and the
 /// resume run.
-fn paint_row(row: &WorkspaceRow, paint: &RowPaint) -> Element {
+fn paint_row(row: &WorkspaceRow, index: usize, paint: &RowPaint) -> Element {
     let RowPaint {
         hook,
         noun,
@@ -413,14 +429,18 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint) -> Element {
         None,
         false,
     )];
-    let row_style = format!("{GRID_COLUMNS} height: 34px; padding: 0 8px; border-radius: 4px;");
+    let fill = row_fill(row, index);
+    let host_style = row_host_style(&fill, 0.0);
+    let row_style = format!(
+        "{GRID_COLUMNS} height: 34px; padding: 0 8px; border-radius: 4px; overflow: hidden; background: var(--row-fill); {host_style}"
+    );
     let context_id = row.id.clone();
     let resume = resume_progress(row);
 
     rsx! {
         li {
             key: "{row.id}",
-            class: "row-hover-host grid items-center",
+            class: "row-hover-host row-hover-row grid items-center",
             style: "{row_style}",
             oncontextmenu: move |event: MouseEvent| {
                 if let Some(on_context) = on_context {
@@ -487,8 +507,8 @@ pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
                 ol {
                     class: "flex flex-col",
                     style: "margin: 4px 0 0; padding: 0; list-style: none;",
-                    for row in props.rows.iter() {
-                        { paint_row(row, &paint) }
+                    for (index, row) in props.rows.iter().enumerate() {
+                        { paint_row(row, index, &paint) }
                     }
                 }
             }

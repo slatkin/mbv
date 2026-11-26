@@ -166,6 +166,14 @@ lucide_icons! {
         line { x1: "2", x2: "2.01", y1: "20", y2: "20" }
     }
 
+    /// The Lucide `chart-no-axes-column` icon: three bars, the playing row's
+    /// mark in the Workspace table's number cell (gui-hero-design-polish D6).
+    ChartNoAxesColumn("chart-no-axes-column") {
+        path { d: "M12 20V10" }
+        path { d: "M18 20V4" }
+        path { d: "M6 20v-4" }
+    }
+
     /// The Lucide `check` icon.
     Check("check") {
         path { d: "M20 6 9 17l-5-5" }
