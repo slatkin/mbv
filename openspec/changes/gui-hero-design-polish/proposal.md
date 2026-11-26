@@ -24,7 +24,7 @@ The GUI Client's Hero looks plain next to the "mbv detail pane polish" artboards
   - The album's track count and duration are detail-block pills, in the same style as the movie Hero's pills.
   - The layout does not change otherwise: Shuffle artist stays at the top right, and the vinyl disc behind the cover is for the album Hero only.
 - **The row that plays now.** In a Hero list (tracks, episodes, chapters, entries), the row that plays now gets a fill, a bold title, and a bars mark in place of its number. The Shows and Feeds projections gain the playing episode or entry identity that their Workspace rows need for this look. **BREAKING (spec):** this replaces the rule "a highlight marks focus only, so the playing row SHALL NOT paint a green fill", and the current play glyph beside the title.
-- **The artist page** (from `gui-music-artist-page`, which lands before this change) gets the same parts: its header facts (album count, year span, track count, total time) become pills, its album groups sit in the Tracks section, and it shows no progress.
+- **The artist page** (from `gui-music-artist-page`, which lands before this change) gets the same parts: its header facts (album count, year span, track count, total time) become pills, its selected collections move to the eyebrow line, its album groups sit in the Tracks section, and it shows no progress.
 - The Narrow arrangement keeps its current wrap: the text block drops below the artwork when the Hero is too narrow for two columns.
 
 ### Decisions made while planning
@@ -48,7 +48,7 @@ None.
 
 ### Modified Capabilities
 
-- `gui-client`: the requirements "The Hero shows the picked item with its actions" (the album Hero's header facts, the row that plays now) and "Every Hero is one frame with the largest unit as its title" (no progress in the detail block, the pills and rows rule, the Cast band, the glow, the largest-unit title, the conditional list bands, and the Movie and Home Heroes on the frame), and "Library lists and Workspace tables paint through shared parts" (the Hero's fact pills as a shared part, and the look and identity of the row that plays now) change.
+- `gui-client`: the requirements "The Hero shows the picked item with its actions" (the album Hero's header facts, the row that plays now) and "Every Hero is one frame with the largest unit as its title" (no progress in the detail block, the pills and rows rule, the Cast band, the glow, the largest-unit title, the conditional list bands, and the Movie and Home Heroes on the frame), and "A picked Music artist shows an artist page" (its header facts as pills, the selected collections on the eyebrow), and "Library lists and Workspace tables paint through shared parts" (the Hero's fact pills as a shared part, and the look and identity of the row that plays now) change.
 - `ctrl-protocol`: the additive `emby-person-images` capability for the person id and primary image tag in unified queue item payloads is added.
 
 ## Impact
