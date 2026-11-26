@@ -33,7 +33,7 @@ use crate::window::components::list_row::row_host_style;
 use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
 use crate::window::components::typed_text::TypedText;
-use crate::window::icons::ChartNoAxesColumn;
+use crate::window::icons::PlayingBars;
 use crate::window::input::f32_from_f64;
 use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
@@ -181,7 +181,7 @@ fn resume_progress(row: &WorkspaceRow) -> Option<f32> {
 /// in the accent (gui-hero-design-polish design D6).
 fn playing_mark() -> Element {
     rsx! {
-        ChartNoAxesColumn {
+        PlayingBars {
             size: 12,
             color: canvas_var("accent"),
         }

@@ -166,14 +166,6 @@ lucide_icons! {
         line { x1: "2", x2: "2.01", y1: "20", y2: "20" }
     }
 
-    /// The Lucide `chart-no-axes-column` icon: three bars, the playing row's
-    /// mark in the Workspace table's number cell (gui-hero-design-polish D6).
-    ChartNoAxesColumn("chart-no-axes-column") {
-        path { d: "M12 20V10" }
-        path { d: "M18 20V4" }
-        path { d: "M6 20v-4" }
-    }
-
     /// The Lucide `check` icon.
     Check("check") {
         path { d: "M20 6 9 17l-5-5" }
@@ -471,6 +463,33 @@ lucide_icons! {
     /// The Lucide `zap` icon.
     Zap("zap") {
         path { d: "M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" }
+    }
+}
+
+/// The playing mark (gui-hero-design-polish design D6, artboard
+/// `album-proposed-wide.png`): three solid bars, bottom-aligned, the tallest in
+/// the middle, each 4 px wide with 4 px gaps on a 20 px mark. It is not a Lucide
+/// icon, so it paints filled rectangles with no stroke, in the svg's computed
+/// `color`. The viewBox is 24 units, so each bar is 4.8 units (the artboard's
+/// 4 px, scaled 1.2), and the mark fills the box at any size.
+#[component]
+pub fn PlayingBars(props: IconProps) -> Element {
+    let size = props.size;
+    let color = &props.color;
+    rsx! {
+        svg {
+            xmlns: "http://www.w3.org/2000/svg",
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "currentColor",
+            class: "playing-bars",
+            style: "color: {color};",
+            "aria-hidden": "true",
+            rect { x: "0", y: "7.2", width: "4.8", height: "16.8", stroke: "none" }
+            rect { x: "9.6", y: "0", width: "4.8", height: "24", stroke: "none" }
+            rect { x: "19.2", y: "12", width: "4.8", height: "12", stroke: "none" }
+        }
     }
 }
 

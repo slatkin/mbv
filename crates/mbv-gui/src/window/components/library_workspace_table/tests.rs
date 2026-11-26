@@ -228,7 +228,7 @@ fn a_playing_row_keeps_its_heading_tone_and_paints_no_play_mark() {
     let dom = doc.inner();
     assert!(
         dom.query_selector(&format!(
-            "[data-library-track=\"{ROW_ID}\"] [data-library-track-number] svg.lucide-chart-no-axes-column"
+            "[data-library-track=\"{ROW_ID}\"] [data-library-track-number] svg.playing-bars"
         ))
         .expect("the selector is valid")
         .is_some(),
