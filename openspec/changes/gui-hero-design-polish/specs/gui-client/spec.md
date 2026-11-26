@@ -35,21 +35,34 @@ The Hero SHALL show the picked album with its artist header, its square artwork,
 
 ### Requirement: Every Hero is one frame with the largest unit as its title
 
-The Hero of Music, Shows, Podcasts, Audiobooks, Feeds, Home, and every plain Emby library (Movies included) SHALL paint one frame: a header band, a detail block beside or above the art, and the bands below it. The header band SHALL show the Hero's kind label, its title, and its short facts as a row of fact pills. The header band's title SHALL be the name of the largest unit: the artist, the series, the podcast, the feed, or, for a book, a movie, or another single item, the item. A blurred glow made from the Hero's own artwork SHALL show behind the header band, and a Hero with no artwork SHALL show no glow. The detail block SHALL show the artwork and, beside it or under it when the Hero is narrow, the selected smaller unit's name when a larger unit took the title, its Play and Add to queue actions, and its labelled facts as label and value rows. The Music artist page SHALL be the one Hero whose detail block shows the largest unit: it has no smaller unit, so the block shows the artist's artwork and the actions.
+The Hero of Music, Shows, Podcasts, Audiobooks, Feeds, Home, and every plain Emby library (Movies included) SHALL paint one frame: a header band, a detail block beside or above the art, and the bands below it. The header band SHALL show the Hero's kind label, its title, and, except for the Music album totals this requirement names, its short facts as a row of fact pills. The header band's title SHALL be the name of the largest unit the item belongs to: the artist for Music, the series for a series or one of its episodes, the podcast for a podcast episode, the feed for a feed entry, the book for an audiobook, or the item itself for a movie or another item without a containing unit. A blurred glow made from the Hero's own artwork SHALL show behind the header band, and a Hero with no artwork SHALL show no glow. The detail block SHALL show the artwork and, beside it or under it when the Hero is narrow, the selected smaller unit's name when a larger unit took the title, its Play and Add to queue actions, and its labelled facts as label and value rows. The Music artist page SHALL be the one Hero whose detail block shows the largest unit: it has no smaller unit, so the block shows the artist's artwork and the actions.
 
-Each fact SHALL show in one place only. The short facts (a year, a genre, a runtime or duration, a count, an external link) SHALL be fact pills, and the facts that need a label (a director, a full release date, a studio or network, an author, a publish date) SHALL be label and value rows. A full release date row MAY show while a pill shows the year. A fact pill that names an external link SHALL open that link when pressed.
+Each fact SHALL show in one place only. The short facts (a year, a genre, a runtime or duration, a count, an external link) SHALL be fact pills, and the facts that need a label (a director, a full release date, a studio or network, an author, a publish date) SHALL be label and value rows. The Music album Hero is the exception to the header-facts rule: its track count and total time SHALL be fact pills in the detail block, not in the header. A full release date row MAY show while a pill shows the year. A fact pill that names an external link SHALL open that link when pressed.
 
-Below the detail block, each band SHALL have a titled section header: the overview when the item has one, the cast when the item has one, and the destination's list (the tracks, the episodes, the chapters, the entries). The cast section SHALL show each person who is not a director with the person's photo from the Service, or the person's initials when the Service has no photo, and the person's name and role. A director SHALL show in a director row and not in the cast.
+Below the detail block, each present band SHALL have a titled section header: the overview when the item has one, the cast when the item has one, and the destination's Hero list when one is defined. Music, a Shows series, Audiobooks, and Feeds SHALL show their Hero list bands. Home, Podcasts, plain Emby libraries, and a flat Shows episode Hero SHALL NOT show a list band. The cast section SHALL show each person who is not a director with the person's photo from the Service, or the person's initials when the Service has no photo, and the person's name and role. A director SHALL show in a director row and not in the cast.
 
 No Hero SHALL show playback progress: no progress bar, no resume position, and no remaining time. The queue handles playback, and Play SHALL still resume from the stored position.
 
-A destination SHALL map its facts onto this frame and SHALL NOT remove a band, add a layout, or paint its own copy of a part.
+A destination SHALL map its facts onto this frame and SHALL NOT remove a band this requirement gives it, add a layout, or paint its own copy of a part.
 
 #### Scenario: A Podcasts episode's Hero
 
 - **WHEN** the Hero shows an episode of a podcast
 - **THEN** the header title is the podcast's name
 - **AND** the detail block shows the episode's name, its actions, and its publish date row, and the header band shows its duration as a fact pill
+- **AND** no Episodes list band shows in the Hero
+
+#### Scenario: A flat episode uses its series or show as the Hero title
+
+- **WHEN** a Home or flat Shows Hero shows an episode whose payload names a series or show
+- **THEN** the header band's title is the series or show name
+- **AND** the detail block shows the episode's name
+
+#### Scenario: A Home feed entry uses its feed as the Hero title
+
+- **WHEN** a Home Hero shows a feed entry whose payload names its feed
+- **THEN** the header band's title is the feed name
+- **AND** the detail block shows the entry's name
 
 #### Scenario: A Feeds entry's Hero
 
@@ -139,6 +152,12 @@ A destination SHALL supply the row's data, its state, its hook prefix, and its h
 - **WHEN** the row paints
 - **THEN** the whole row shows as the playing row, its title is emphasised, and the playing mark shows in place of its number
 - **AND** the row's carried play state does not change that look, and the row shows no played or unplayed mark
+
+#### Scenario: A playing episode or entry shows the playing mark
+
+- **GIVEN** a Shows episode or Feeds entry in a Hero list is the one playing at the playhead
+- **WHEN** its Workspace row paints
+- **THEN** the row shows the playing mark in place of its number
 
 #### Scenario: A partly played row with no percent stays ordinary
 
