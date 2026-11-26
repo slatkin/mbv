@@ -34,8 +34,7 @@ use crate::window::components::library_tracklist::LibraryTracklist;
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::{Ellipsis, Shuffle};
 use crate::window::library::hero::{
-    album_facts, artist_facts, artist_page_facts, artist_union_albums, artist_year_span_facts,
-    hero_kicker,
+    album_facts, artist_facts, artist_page_facts, artist_union_albums, hero_kicker,
 };
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::sections::SectionRef;
@@ -368,7 +367,7 @@ fn artist_hero(
                 eyebrow: None,
                 name: None,
                 name_episode: false,
-                facts: Some(artist_year_span_facts(hero)),
+                facts: None,
                 meta: Vec::new(),
                 overview: None,
             },
