@@ -25,15 +25,17 @@ pub struct LibraryHeroActionsProps {
     pub on_queue: Option<Callback<()>>,
 }
 
-/// The accent Play pill's style, shared with the Playlists hero.
-pub(crate) const ACCENT_STYLE: &str = "height: 44px; padding: 0 18px 0 14px; gap: 8px; background: var(--canvas-accent); border: 0; border-radius: 22px; color: var(--canvas-ink); font-size: 15px; font-weight: 600; cursor: pointer;";
+/// The accent Play pill's style, shared with the Playlists hero. The buttons
+/// stay a step above the fact pills and under the heading's own size (user
+/// request 2026-11-26): 13px text in a 34px pill.
+pub(crate) const ACCENT_STYLE: &str = "height: 34px; padding: 0 14px 0 11px; gap: 6px; background: var(--canvas-accent); border: 0; border-radius: 17px; color: var(--canvas-ink); font-size: 13px; font-weight: 600; cursor: pointer;";
 
 /// The destructive action pill's style: the raised pill with the destructive
 /// outline and text, for the Playlists hero's Delete.
-pub(crate) const DESTRUCTIVE_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background: none; border: 1px solid var(--canvas-destructive-border); border-radius: 22px; color: var(--canvas-destructive); font-size: 14px; cursor: pointer;";
+pub(crate) const DESTRUCTIVE_STYLE: &str = "height: 34px; padding: 0 12px; gap: 6px; background: none; border: 1px solid var(--canvas-destructive-border); border-radius: 17px; color: var(--canvas-destructive); font-size: 13px; cursor: pointer;";
 
 /// The raised action pill's style: the Add-to-queue button's look.
-pub(crate) const RAISED_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background: var(--canvas-library-raise); border: 1px solid var(--canvas-library-control); border-radius: 22px; color: var(--canvas-text); font-size: 14px; cursor: pointer;";
+pub(crate) const RAISED_STYLE: &str = "height: 34px; padding: 0 12px; gap: 6px; background: var(--canvas-library-raise); border: 1px solid var(--canvas-library-control); border-radius: 17px; color: var(--canvas-text); font-size: 13px; cursor: pointer;";
 
 /// The Hero's action buttons: the accent Play pill, and the raised
 #[component]
@@ -51,7 +53,7 @@ pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
                 style: ACCENT_STYLE,
                 onclick: move |_| on_play.call(()),
                 ..play_attrs,
-                Play { size: 16, fill: "var(--canvas-ink)".to_owned(), stroke_width: 0.0 }
+                Play { size: 14, fill: "var(--canvas-ink)".to_owned(), stroke_width: 0.0 }
                 "Play"
             }
             if let Some(on_queue) = on_queue {

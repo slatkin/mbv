@@ -13,13 +13,17 @@ use crate::window::components::typed_text::TypedText;
 use crate::window::library::state::LibraryState;
 
 /// One pill's look (the artboard's rounded fact pill): the raised panel fill
-/// over the pane, one control border, and the fully round end caps.
-const PILL_STYLE: &str = "padding: 4px 14px; background: var(--canvas-library-panel); border: 1px solid var(--canvas-library-control); border-radius: 999px; font-size: 13px; color: var(--canvas-heading);";
+/// over the pane, one control border, and the fully round end caps. The pill
+/// stays compact (user request 2026-11-26): a small mono face and tight
+/// padding, so the facts sit under the title as a fine row rather than as a
+/// second heading.
+const PILL_STYLE: &str = "padding: 2px 8px; background: var(--canvas-library-panel); border: 1px solid var(--canvas-library-control); border-radius: 999px; font-size: 11px; line-height: 1.35; letter-spacing: 0.02em; color: var(--canvas-heading);";
 
-/// The look a link pill adds: the date hue of a link and the underline the
-/// former `IMDb` action painted.
+/// The look a link pill adds: the date hue of a link and the dotted underline
+/// the former `IMDb` action painted.
 const LINK_PILL_STYLE: &str =
-    "cursor: pointer; color: var(--canvas-source); text-decoration: underline;";
+    "cursor: pointer; color: var(--canvas-source); text-decoration: underline dotted;
+     text-decoration-thickness: 1px; text-underline-offset: 3px;";
 
 /// The props of the pills row (the `LibraryHeroPills` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
@@ -40,7 +44,10 @@ pub fn LibraryHeroPills(props: LibraryHeroPillsProps) -> Element {
     rsx! {
         div {
             class: "flex flex-wrap items-center",
-            style: "gap: 8px;",
+            // The row's own left edge pulls back by the pill's side padding and
+            // its border, so the first pill's text lines up with the title
+            // above it (user request 2026-11-26).
+            style: "gap: 6px; margin-left: -9px;",
             ..vec![Attribute::new(own(props.attr, props.hook), "", None, false)],
             for (index, pill) in props.pills.iter().enumerate() {
                 {
