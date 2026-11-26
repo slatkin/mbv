@@ -1,0 +1,42 @@
+# Tasks
+
+Each group lands its own tests and docs. A group's checks may fail to build until the next group
+lands when a task says so; the next group then expects it.
+
+## 1. Protocol vocabulary (`mbv-ctrl`)
+
+- [ ] 1.1 Add `CTRL_CAP_OUTPUT_SWITCH` (`"output-switch"`) in `crates/mbv-ctrl/src/protocol.rs` with a doc comment that says additive, no version bump. Re-export it from `lib.rs`. Add `CtrlHello::supports_output_switch` in `hello.rs` beside `supports_emby_session_output`. Verify: `make checks PKG=mbv-ctrl` passes and a case in `crates/mbv-ctrl/tests/ctrl/handshake.rs` shows the accessor is true for a hello that lists the capability and false for one that does not.
+- [ ] 1.2 Add `CtrlCmd::SwitchPlaybackOutput(OutputSelection)` in `crates/mbv-ctrl/src/commands.rs` with a pinned `#[serde(rename = "SwitchPlaybackOutput")]` wire tag and a doc comment that names the `output-switch` capability. Give it an arm in `CtrlCmd::requires_owner` (`OwnerGate::Any`) and in `mutates_owner_queue` (`false`), beside `SelectPlaybackOutput`. Verify: `make checks PKG=mbv-ctrl` passes with no wildcard arm added.
+- [ ] 1.3 Extend the conformance corpus in `crates/mbv-ctrl/tests/ctrl/conformance/commands.rs`: a `CommandShape::SwitchPlaybackOutput(OutputChoice)` with its builder and fixture rows. Bless with `MBV_PROTOCOL_BLESS=1 make test PKG=mbv-ctrl`, which writes `protocol/ctrl/v10/fixtures/commands/SwitchPlaybackOutput.{Local,Cast,EmbySession}.json` and the schema. Extend the pinned-tag test in `tests/ctrl/wire.rs`. Verify: `make test PKG=mbv-ctrl` passes without the bless variable, and the blessed diff adds only those three fixtures and the schema entry for the new variant.
+
+## 2. Owner (`mbv-daemon`)
+
+Group 1 lands first. Tests use the fake Cast connector and the fake Emby Session worker that the existing hand-off tests use.
+
+- [ ] 2.1 Advertise the capability in `crates/mbv-daemon/src/core_ctrl_spawn.rs`, in the block that pushes `CTRL_CAP_PLAYBACK_OUTPUT` and `CTRL_CAP_EMBY_SESSION_OUTPUT`: push `CTRL_CAP_OUTPUT_SWITCH` when `caps.playback_output || caps.emby_session_output`. Verify: extend the existing hello-capability case in `crates/mbv-daemon/src/tests/cast_output.rs` so a runtime with a Cast connector advertises it, and a runtime with neither output (packaged `mbvd` role) does not. `make test PKG=mbv-daemon` passes.
+- [ ] 2.2 Add `SelectionIntent { Continue, SwitchOnly }` in `crates/mbv-daemon/src/output/handoff.rs`. Add it as a parameter of `handle_select_playback_output` and `emby_session::connect::select`. In `event_loop/control_events.rs`, route `CtrlCmd::SwitchPlaybackOutput` to the same handler as `SelectPlaybackOutput` with `SwitchOnly`; the existing arm passes `Continue`. Behavior of `Continue` stays the same. Verify: `make checks PKG=mbv-daemon` passes and the existing hand-off tests in `crates/mbv-daemon/src/tests` still pass.
+- [ ] 2.3 Cast path with `SwitchOnly`: capture no hand-off, store the intent in `PendingCastConnect`, and skip the "playback started while connecting" guard in `apply_connected_output` for it. The swap still stops the old output after the connect succeeds. Verify with tests in `crates/mbv-daemon/src/tests/cast_handoff/receiver_swap.rs`: (a) local plays, a switch to a receiver connects, then local stops, the output is the receiver, nothing loads on it, the queue is unchanged; (b) the connect fails, and local keeps playing with a rejection sent; (c) a `Continue` selection that captured nothing while local starts to play still trips the guard (guards the guard; cite the existing guard's commit or change in the test comment).
+- [ ] 2.4 Emby Session path with `SwitchOnly`: the same three changes in `crates/mbv-daemon/src/emby_session/connect.rs` (`select`, the pending record, `install_output`'s `local_playback_started` guard). Verify with a test in `crates/mbv-daemon/src/tests/emby_session_handoff.rs`: local plays, a switch to a Session installs it, local stops, and the device receives no load.
+- [ ] 2.5 Local arm with `SwitchOnly`: `hand_remote_output_back_to_local` gets the intent and captures no hand-off when it is `SwitchOnly`, so the old remote output stops and no local run starts. Verify with a test in `crates/mbv-daemon/src/tests/cast_handoff/hand_back.rs`: a Cast receiver plays a slot, a switch to Local makes Local the output, the receiver stops, and no local submission is made.
+- [ ] 2.6 After each `SwitchOnly` swap, record the observed active slot as none and publish it (`note_observed_active_slot(None)` then `publish_observed`), per invariant 25. Add the new path to "How the code maintains it today" in `docs/invariants/25-observed-active-slot-follows-the-output.md`. Verify: the test from 2.3(a) also asserts the published observed slot is none; `make test PKG=mbv-daemon` passes.
+
+## 3. Client (`mbv-remote-player`, `mbv-client-core`, `mbv-ui-model`)
+
+Groups 1 and 2 land first.
+
+- [ ] 3.1 Carry the capability to the Client: add `supports_output_switch` to the compatibility struct in `crates/mbv-ctrl/src/hello.rs`, set it in `crates/mbv-remote-player/src/connect/handshake.rs` beside `supports_emby_session_output`, and add `RemotePlayer::supports_output_switch` in `crates/mbv-remote-player/src/lib.rs`. Verify: a case in `crates/mbv-remote-player/src/connect/tests.rs` shows the compatibility flag follows the Hello capability; `make checks PKG=mbv-remote-player` passes.
+- [ ] 3.2 Add `App::switch_playback_output(selection)` in `crates/mbv-client-core/src/app/state/remote_slot.rs`, which sends `CtrlCmd::SwitchPlaybackOutput` as `select_playback_output` sends its command. Add `local_owner_supports_output_switch()` in `dispatch/session/output_handoff.rs`, read through the local Owner link as `local_owner_supports_emby_session_output` is. Verify: `make checks PKG=mbv-client-core` passes.
+- [ ] 3.3 Give `ConfirmAction::ContinueOutputHandOff` a `switch_only: bool` field in `crates/mbv-ui-model/src/confirm.rs` and update its doc comment. `ask_continue_output_hand_off` sets it from `local_owner_supports_output_switch()`. With it set, the modal is `ConfirmModal::two_button(title, "Continue", "Just switch", ..)`; without it, Yes and No as today. Update every constructor of the variant, including the tests in `crates/mbv-client-core/src/app/tests/output_handoff.rs` and `crates/mbv-tui/src/tui/tests/tick_integration/sessions/output_selection.rs`. Verify: `make checks` passes for `mbv-ui-model`, `mbv-client-core`, `mbv-tui`, and `mbv-gui`.
+- [ ] 3.4 Make `confirm_continue_output_hand_off` act on Esc when `switch_only` is set, by target kind: for an Emby Session with no direct endpoint and for a Cast receiver, call `sever_connections_without_output_change`, dismiss the Sessions sidebar, and send `switch_playback_output` with the same selection the continue answer sends; for the local target, sever and send `switch_playback_output(OutputSelection::Local)` and flash a success toast. Enter keeps today's behavior. With `switch_only` false, Esc and every other key keep today's cancel. Verify with a `#[case]` table over the three target kinds in `crates/mbv-client-core/src/app/tests/output_handoff.rs`, where each case shows the Owner channel receives `SwitchPlaybackOutput` with the expected selection and no `SelectPlaybackOutput`; one case shows Enter still sends `SelectPlaybackOutput`; one shows an Owner without the capability keeps the cancel and sends nothing. `make test PKG=mbv-client-core` passes.
+- [ ] 3.5 Update `docs/invariants/31-severing-a-target-stops-no-playback.md`: its scope and items 3 and 4 name `SwitchPlaybackOutput` as a second user-answered output send. Add the *Output switch* term to `CONTEXT.md` with an *Avoid* line (Queue handoff, Take, bare detach). Verify: `rg -n "Output switch" CONTEXT.md` shows the term and `rg -n "SwitchPlaybackOutput" docs/invariants/31-severing-a-target-stops-no-playback.md` shows the update.
+
+## 4. Integration
+
+- [ ] 4.1 Run `make format`, then `make checks` and `make test` for the whole workspace, in the foreground. Verify: both pass with no change left uncommitted.
+- [ ] 4.2 Run `make check-code-file-lines` just before the push. Verify: it passes; split any file the change took over 800 lines along its responsibility seam.
+
+## Workflow follow-up
+
+- Sync the delta specs into `openspec/specs/` and archive this change as the last commit before
+  merge, when the PR is approved for merge. Do not sync or archive when the PR opens.
+- The ctrl-protocol main spec records the output-switch capability when the delta syncs.
