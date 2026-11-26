@@ -75,8 +75,9 @@ pub struct LibraryHeroFrameProps {
     /// The item's cast, under its Cast section (design D3).
     #[props(default)]
     pub cast: Vec<GuiHeroCastMemberFrame>,
-    /// The list band's section title, as in `Tracks` or `Episodes`. The list
-    /// band paints only when the title and the children are both present.
+    /// The list band's section title, as in `Episodes`. A titled list band
+    /// paints inside a section header; a list band with no title paints its
+    /// children bare, as the Music track list does (user direction 2026-11-26).
     #[props(default)]
     pub list_title: Option<String>,
     /// The list band.

@@ -407,6 +407,23 @@ fn built_hero() -> Fixture {
     built(artists(&facts), detail(facts, None))
 }
 
+/// Contract (user direction 2026-11-26, spec "Every Hero is one frame with
+/// the largest unit as its title"): the album's track list paints bare under
+/// the frame, so no list section header and no label rule paints above it.
+#[test]
+fn the_album_hero_paints_its_track_list_without_a_section_header() {
+    let fixture = built_hero();
+
+    assert!(
+        fixture.presents("[data-library-tracklist]"),
+        "the album's track list paints"
+    );
+    assert!(
+        !fixture.presents("[data-library-hero-list]"),
+        "the track list paints no section header"
+    );
+}
+
 /// Contract (`LibraryHero.test.ts`): Play sends the picked album's id.
 #[test]
 fn play_sends_the_picked_album_s_id() {

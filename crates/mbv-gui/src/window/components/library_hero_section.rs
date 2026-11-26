@@ -1,8 +1,10 @@
 //! The Hero's section band (gui-hero-design-polish design D2): a titled
 //! header — the artboard's small caps word with the rule that fills the rest
 //! of the line — over the section's children. The Overview, Cast, and list
-//! bands (Tracks, Episodes, Chapters, Entries) each paint through it, so one
-//! header look carries every Hero section.
+//! bands (Episodes, Chapters, Entries) each paint through it, so one header
+//! look carries every Hero section. The Music track list passes no title, so
+//! it paints bare under the frame without a label rule (user direction
+//! 2026-11-26).
 
 use dioxus_native::prelude::*;
 
