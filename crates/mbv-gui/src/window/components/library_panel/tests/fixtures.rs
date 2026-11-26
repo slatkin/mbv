@@ -239,6 +239,7 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
                     date: feed_group.then(|| "1979".to_owned()),
                     sort_letter: (!feed_group).then_some('A'),
                     kind: GuiEmbyRowKindFrame::Media,
+                    state: GuiHomeRowStateFrame::Ordinary,
                 }],
             }),
         },

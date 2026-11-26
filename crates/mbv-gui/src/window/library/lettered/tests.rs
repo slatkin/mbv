@@ -7,7 +7,9 @@
 //! the geometry is asserted without a layout.
 
 use super::*;
-use crate::bridge::frame::library::{GuiEmbyRowKindFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
+use crate::bridge::frame::library::{
+    GuiEmbyRowKindFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
+};
 use crate::window::library::list::{LETTER_ROW_HEIGHT, carries_letters};
 
 /// One plain-mode row: the name-sorted library's row under its rail letter.
@@ -21,6 +23,7 @@ fn plain(id: &str, title: &str, sort_letter: char) -> GuiEmbyRowFrame {
         date: None,
         sort_letter: Some(sort_letter),
         kind: GuiEmbyRowKindFrame::Media,
+        state: GuiHomeRowStateFrame::Ordinary,
     }
 }
 
@@ -36,6 +39,7 @@ fn feed(id: &str, title: &str, date: &str) -> GuiEmbyRowFrame {
         date: Some(date.to_owned()),
         sort_letter: None,
         kind: GuiEmbyRowKindFrame::Media,
+        state: GuiHomeRowStateFrame::Ordinary,
     }
 }
 

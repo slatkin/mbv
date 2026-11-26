@@ -1689,7 +1689,7 @@ The Library's pills, the Hero's fact pills, letter headings, scrollers, Workspac
 - A nested parent row (the Music album row's look) is a Music album or a Shows season. It SHALL paint through the tree row.
 - A leaf row (the Music track row's look) is a Music track, a Shows episode, or a Playlists item. It SHALL paint through the tree row.
 
-A destination SHALL supply the row's data, its state, its hook prefix, and its handlers, and SHALL NOT supply or restate the row's look. The list row parts and the Workspace table rows SHALL carry one play state, and the played title tone and the resume percent SHALL come from one derivation shared by both; no destination SHALL convert the play state into a second state of its own. A row whose item carries a play state SHALL show its played or unplayed mark and look, as the requirement "Rows mark their played state" states; a row whose item carries no play state SHALL show neither. A Workspace table SHALL paint a header row, a number cell, a title, a duration, and a progress run. The row that plays at the playhead SHALL show as the playing row over its whole width, with its title emphasised and a playing mark in place of its number. A highlight that is not the playing row SHALL still mark focus only. An Audiobooks chapter row SHALL show its number when it is not the playing row.
+A destination SHALL supply the row's data, its state, its hook prefix, and its handlers, and SHALL NOT supply or restate the row's look. The list row parts and the Workspace table rows SHALL carry one play state, and the played title tone and the resume percent SHALL come from one derivation shared by both; no destination SHALL convert the play state into a second state of its own. A plain Emby library's row SHALL carry the play state its item carries, derived by the one shared Emby derivation the TUI's rows use, in plain mode and in feed-group mode alike. A row whose item carries a play state SHALL show its played or unplayed mark and look, as the requirement "Rows mark their played state" states; a row whose item carries no play state SHALL show neither. A Workspace table SHALL paint a header row, a number cell, a title, a duration, and a progress run. The row that plays at the playhead SHALL show as the playing row over its whole width, with its title emphasised and a playing mark in place of its number. A highlight that is not the playing row SHALL still mark focus only. An Audiobooks chapter row SHALL show its number when it is not the playing row.
 
 #### Scenario: A list row looks the same in every destination
 
@@ -1713,9 +1713,19 @@ A destination SHALL supply the row's data, its state, its hook prefix, and its h
 - **WHEN** the item is played
 - **THEN** the row shows the played mark and the played look
 
+#### Scenario: An Emby library row carries the shared play state
+
+- **GIVEN** a plain Emby library row whose item is played, partly played with a resumable position, or not played
+- **WHEN** the row paints, in plain mode or in feed-group mode
+- **THEN** a played item's row shows the played mark and the played look
+- **AND** a partly played item's row shows the unplayed mark and the unplayed look
+- **AND** a row of an item that is not played shows the unplayed mark
+- **AND** a collection row (a folder, a boxset, or a series) carries the same state by the same derivation
+- **AND** a music item's row is ordinary, whatever its stored played or resume facts
+
 #### Scenario: A row with no play state shows no mark
 
-- **GIVEN** a Music track row, an Emby library row, or a Playlists item row, whose item carries no play state
+- **GIVEN** a Music track row or a Playlists item row, whose item carries no play state
 - **WHEN** the row paints
 - **THEN** the row shows no played or unplayed mark and keeps its present look
 

@@ -6,9 +6,12 @@
 //! destination keeps only its data and its paint code.
 //!
 //! The row painters paint the shared top-level row part: each destination's
-//! rows keep their attributes, their kinds, and their trail parts, and the two
-//! entry lists pass their carried play state so the part derives the title's
-//! tone and the thumb's run. The press and the double-click ride the adapter's
+//! rows keep their attributes, their kinds, and their trail parts, and the
+//! three lists that carry a play state — the Emby library and the two entry
+//! lists — pass it so the part derives the title's tone and weight, the
+//! subtitle's and the trail's tones, the thumb's opacity, and the mark
+//! (`gui-emby-row-played-marks` design D3). The press and the double-click ride
+//! the adapter's
 //! command methods, so the generic component calls one press path for all
 //! four. The rows' hover controls ride those same methods
 //! (`gui-row-hover-actions` design D3, D4), and only an Emby `Collection`
@@ -180,6 +183,7 @@ fn paint_emby_row(
                     subtitle: item.row.subtitle.clone(),
                     trail: item.row.date.clone(),
                     trail_part: LibraryTrailPart::Date,
+                    play: Some(item.row.state.clone()),
                     selected: selected_row,
                     thumb: Some(LibraryRowThumb {
                         art: item.row.art.clone(),

@@ -8,7 +8,11 @@
 //! facts with no Workspace. The row and label rules are the TUI's own
 //! (`row_for` and the All view's gutter,
 //! `crates/mbv-components/src/emby_library_content.rs`), so the two Clients
-//! cannot drift, and the projection reads `App` data only.
+//! cannot drift, and the projection reads `App` data only. Each row carries
+//! the shared play state the one Emby derivation names
+//! (`MediaSemanticState::from_emby`, gui-emby-row-played-marks design D1):
+//! collections included, and music ordinary through the derivation's music
+//! exception.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -18,6 +22,7 @@ use mbv_ui_model::feed::FeedHomeVideoTarget;
 use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::library_hero::ArtworkSource;
 use mbv_ui_model::library_hero::producers::hero_content_emby;
+use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
@@ -45,6 +50,10 @@ pub enum GuiEmbyRowKind {
 
 /// One row of the plain Emby-library list (row 8.1). The identity is the
 /// stable Service id a select or play command sends, never a row position.
+/// The row carries the shared play state (gui-emby-row-played-marks design
+/// D1): the one derivation the TUI's rows use
+/// (`MediaSemanticState::from_emby`), collections included, and music
+/// ordinary through `from_emby`'s music exception.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEmbyRow {
     /// The row's stable identity.
@@ -68,6 +77,10 @@ pub struct GuiEmbyRow {
     pub art: GuiRowArt,
     /// The media kind the row shows when it has no image (design D4).
     pub media: GuiRowMediaKind,
+    /// The row's shared play state (gui-emby-row-played-marks design D1):
+    /// the one derivation the TUI's rows use, collections included, music
+    /// ordinary through the derivation's exception.
+    pub state: MediaSemanticState,
 }
 
 /// The Hero's facts for the selected row (row 8.1): the item's facts as the
@@ -512,31 +525,17 @@ fn gather_feed_target<'a>(
     false
 }
 
-/// One row of the plain list (row 8.1): the TUI browse row's primary label
-/// and gutter facts, with the year on `subtitle` — the plain list's rail
-/// replaces the TUI's letter-range pill row, and the row carries no gutter
-/// date — and the row art its item's Hero artwork policy declares
-/// (gui-delineated-rows design D5), read from the cache alone.
+/// One row of the plain list (row 8.1): the TUI browse row's primary label,
+/// with the year on `subtitle` — the plain list's rail replaces the TUI's
+/// letter-range pill row, so the row carries no gutter date.
 fn plain_row(app: &App, item: &EmbyItem, sort_letter: Option<char>) -> GuiEmbyRow {
-    GuiEmbyRow {
-        id: item.id.clone(),
-        title: row_title(item),
-        subtitle: row_secondary(item),
-        date: None,
-        sort_letter,
-        kind: row_kind(item),
-        art: row_art(app, emby_row_source(item).as_ref()),
-        media: emby_media_kind(item),
-    }
+    emby_row(app, item, row_secondary(item), None, sort_letter)
 }
 
 /// One row of the feed-group lists (row 8.1): the TUI row's primary label,
-/// the programme (root folder) the item sits in underneath it — the user
-/// rule of 2026-12-30, so a flat All row names the programme it belongs to
-/// — the gutter date (the New list's date added, the All and folder lists'
-/// production year), the rail letter only while the list's sort is a name
-/// sort, and the row art its item's Hero artwork policy declares
-/// (gui-delineated-rows design D5), read from the cache alone.
+/// with the programme (root folder) the item sits in on `subtitle` — the user
+/// rule of 2026-12-30, so a flat All row names the programme it belongs to —
+/// and the list's production-year date in the gutter.
 fn feed_row(
     app: &App,
     item: &EmbyItem,
@@ -544,15 +543,31 @@ fn feed_row(
     programme: Option<String>,
     sort_letter: Option<char>,
 ) -> GuiEmbyRow {
+    emby_row(app, item, programme, date, sort_letter)
+}
+
+/// One row of the active list (row 8.1): the TUI row's primary label and
+/// kind, the mode's own subtitle, date, and rail letter, the row art its
+/// item's Hero artwork policy declares (gui-delineated-rows design D5), read
+/// from the cache alone, and the shared play state the one Emby derivation
+/// gives the item.
+fn emby_row(
+    app: &App,
+    item: &EmbyItem,
+    subtitle: Option<String>,
+    date: Option<String>,
+    sort_letter: Option<char>,
+) -> GuiEmbyRow {
     GuiEmbyRow {
         id: item.id.clone(),
         title: row_title(item),
-        subtitle: programme,
+        subtitle,
         date,
         sort_letter,
         kind: row_kind(item),
         art: row_art(app, emby_row_source(item).as_ref()),
         media: emby_media_kind(item),
+        state: MediaSemanticState::from_emby(item),
     }
 }
 
