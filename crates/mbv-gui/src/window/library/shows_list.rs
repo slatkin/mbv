@@ -237,6 +237,21 @@ impl ShowsListRow {
         }
     }
 
+    /// The row's stable Service id, where the core's selection names one: a
+    /// series', season's, or episode's own id, a flat row's id, and no id for a
+    /// heading. The selection test and the list's reveal both read it, so the
+    /// raised row and the revealed row are one row.
+    #[must_use]
+    pub fn source_id(&self) -> Option<&str> {
+        match self {
+            ShowsListRow::Heading(_) => None,
+            ShowsListRow::Series(row) => Some(&row.source_id),
+            ShowsListRow::Season(row) => Some(&row.source_id),
+            ShowsListRow::Episode(row) => Some(&row.source_id),
+            ShowsListRow::Flat(row) => Some(&row.id),
+        }
+    }
+
     /// The row's node key when the row is a node the open and close acts
     /// apply to: a series or a season. A leaf and a heading name none.
     #[must_use]

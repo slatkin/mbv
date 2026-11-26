@@ -203,6 +203,44 @@ pub fn scroll_top_to_show_cursor<Row: GeometryRow>(
     }
 }
 
+/// The scroll offset a measured viewport leaves: the held offset inside the
+/// new range, and the selected row scrolled fully back into view when the
+/// measurement moved the viewport and the row showed in the old one. A
+/// selection the user had already scrolled out of view stays out of view, so
+/// a resize never pulls the list back to a row the user left. A first
+/// measurement — no viewport before it — scrolls nothing.
+#[must_use]
+pub fn measure_scroll_top<Row: GeometryRow>(
+    rows: &[Row],
+    selected: Option<&str>,
+    held: ListScroll,
+    viewport_height: f32,
+) -> f32 {
+    let clamped = clamp_scroll_top(rows, held.scroll_top, viewport_height);
+    if !viewport_moved(held.viewport_height, viewport_height)
+        || !selected_shows(rows, selected, held)
+    {
+        return clamped;
+    }
+    scroll_top_to_show_cursor(rows, selected, clamped, viewport_height)
+}
+
+/// Whether a measurement moves the viewport: a difference under one pixel is
+/// the same height, so a repaint of an unchanged box scrolls nothing.
+fn viewport_moved(before: f32, after: f32) -> bool {
+    (after - before).abs() >= 1.0
+}
+
+/// Whether the selected row showed, at least in part, in the viewport `held`
+/// names: the row a resize's reveal starts from.
+fn selected_shows(rows: &[impl GeometryRow], selected: Option<&str>, held: ListScroll) -> bool {
+    let top = held.scroll_top.max(0.0);
+    let bottom = top + held.viewport_height;
+    rows.iter()
+        .find(|row| Some(row.id()) == selected)
+        .is_some_and(|row| row.top() < bottom && row.top() + row.height() > top)
+}
+
 /// The scroll offset a movement key leaves (design D6 of
 /// `gui-pointer-target-interaction`): Up and Down move by the height of the row
 /// at the top edge, Page Up and Page Down by the viewport height, and Home and

@@ -236,6 +236,73 @@ fn view(scroll_top: f32) -> crate::window::library::scroll::ListScroll {
     }
 }
 
+/// A view of the fixture list at `scroll_top` with `viewport_height` of rows in
+/// view: the view a resize hands the next measurement.
+fn view_at(scroll_top: f32, viewport_height: f32) -> crate::window::library::scroll::ListScroll {
+    crate::window::library::scroll::ListScroll {
+        scroll_top,
+        viewport_height,
+    }
+}
+
+// The resize's reveal (spec "A resize keeps the selected row in view"): a
+// measurement that narrows the viewport scrolls the selected row, which the
+// narrower viewport pushed below the fold, back into view.
+#[test]
+fn a_narrowed_viewport_scrolls_the_selected_row_back_into_view() {
+    assert_eq!(
+        measure_scroll_top(
+            &rows(),
+            Some("artist:service:a2"),
+            view_at(0.0, 400.0),
+            60.0
+        ),
+        272.0
+    );
+}
+
+// A measurement that widens the viewport keeps the scroll: the selected row
+// that now shows in full pulls nothing.
+#[test]
+fn a_widened_viewport_keeps_the_scroll() {
+    assert_eq!(
+        measure_scroll_top(
+            &rows(),
+            Some("artist:service:a3"),
+            view_at(0.0, 60.0),
+            400.0
+        ),
+        0.0
+    );
+}
+
+// A resize never pulls the list back to a selection the user had already
+// scrolled out of view: the measurement holds the offset inside the range and
+// scrolls nothing.
+#[test]
+fn a_resize_leaves_a_selection_scrolled_out_of_view_alone() {
+    assert_eq!(
+        measure_scroll_top(
+            &rows(),
+            Some("artist:service:a3"),
+            view_at(200.0, 60.0),
+            40.0
+        ),
+        200.0
+    );
+}
+
+// The first measurement has no viewport to compare with, so it takes the
+// cursor's row only through its own reveal (design D9): the measurement itself
+// scrolls nothing.
+#[test]
+fn the_first_measurement_scrolls_nothing_to_the_selection() {
+    assert_eq!(
+        measure_scroll_top(&rows(), Some("artist:service:a2"), view_at(0.0, 0.0), 60.0),
+        0.0
+    );
+}
+
 // The row step moves by the height of the row at the top edge.
 #[test]
 fn the_row_step_moves_by_the_height_of_the_top_row() {

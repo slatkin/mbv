@@ -18,8 +18,8 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
-use crate::window::library::parts::library_shows_list;
+use crate::window::library::list::{ListMove, jump_to_letter, measure_scroll_top, scroll_step};
+use crate::window::library::parts::{library_shows_detail, library_shows_list};
 use crate::window::library::scroll::set_scroll_top;
 use crate::window::library::shows_list::{
     ShowsListRow, ShowsRowsFacts, ShowsTreeState, build_shows_rows, shows_letter_rail,
@@ -367,11 +367,29 @@ impl LibraryState {
     }
 
     /// Report the list's measured viewport height (design D12): the rows in
-    /// view follow it, and the scroll offset stays inside the narrower range.
+    /// view follow it, the scroll offset stays inside the narrower range, and a
+    /// measurement that moves the viewport keeps the selected row in view.
     pub fn measure_shows_list(&self, viewport_height: f32) {
         let mut shows = self.scrolls.shows;
+        let held = *shows.peek();
         shows.with_mut(|scroll| scroll.viewport_height = viewport_height);
-        self.clamp_shows_scroll();
+        let rows = self.shows_rows();
+        let selected = self.shows_selected_row(&rows);
+        let top = measure_scroll_top(&rows, selected.as_deref(), held, viewport_height);
+        set_scroll_top(shows, &rows, top);
+    }
+
+    /// The painted row of the core's Shows selection (design D2, D12): the row
+    /// whose Service id the carried detail names, by the list's own row key.
+    /// `None` while the frame names no selection or the list paints no such
+    /// row.
+    fn shows_selected_row(&self, rows: &[ShowsListRow]) -> Option<String> {
+        let detail = self.sections.library_detail.peek();
+        let selected =
+            library_shows_detail(detail.as_deref()).and_then(|detail| detail.selected.as_deref());
+        rows.iter()
+            .find(|row| row.source_id() == selected)
+            .map(|row| row.id().to_owned())
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll

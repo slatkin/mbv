@@ -57,21 +57,10 @@ use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
 
-/// The stable Service id a row names, or `None` on a heading: the item the
-/// menu and the double-click act on.
-fn row_source_id(row: &ShowsListRow) -> Option<&str> {
-    match row {
-        ShowsListRow::Heading(_) => None,
-        ShowsListRow::Series(series) => Some(&series.source_id),
-        ShowsListRow::Season(season) => Some(&season.source_id),
-        ShowsListRow::Episode(episode) => Some(&episode.source_id),
-        ShowsListRow::Flat(row) => Some(&row.id),
-    }
-}
-
 /// Whether the row is the core's selected one: the series the Hero shows.
 fn is_selected_row(row: &ShowsListRow, selected: Option<&str>) -> bool {
-    row_source_id(row).is_some_and(|source_id| Some(source_id) == selected)
+    row.source_id()
+        .is_some_and(|source_id| Some(source_id) == selected)
 }
 
 /// The carried play state of an episode leaf (`gui-unified-list-rows` design
@@ -142,7 +131,8 @@ fn paint_shows_series(
     let on_toggle = series
         .expandable
         .then(|| Callback::new(move |()| toggle_library.toggle_shows_node(&toggle_id)));
-    let menu_id = row_source_id(row)
+    let menu_id = row
+        .source_id()
         .map(str::to_owned)
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();
@@ -198,7 +188,8 @@ fn paint_shows_season(
     let press_library = library.clone();
     let toggle_node = season.expandable.then(|| row.id().to_owned());
     let toggle_library = library.clone();
-    let menu_id = row_source_id(row)
+    let menu_id = row
+        .source_id()
         .map(str::to_owned)
         .map(LibraryState::row_menu_item);
     let menu_library = library.clone();

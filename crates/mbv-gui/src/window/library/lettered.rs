@@ -24,7 +24,7 @@ use crate::bridge::frame::library::{
 use crate::bridge::library::GuiRowArtScopeFrame;
 use crate::window::library::list::{
     GeometryRow, LIBRARY_ROW_HEIGHT, LetteredRow, ListMove, SortLetter, build_lettered_rows,
-    filter_match, jump_to_letter, lettered_rail, scroll_step,
+    filter_match, jump_to_letter, lettered_rail, measure_scroll_top, scroll_step,
 };
 use crate::window::library::scroll::{ListScroll, set_scroll_top};
 use crate::window::pointer_target::PointerList;
@@ -357,11 +357,16 @@ impl LibraryState {
     }
 
     /// Report destination `D`'s measured viewport height: the rows in view
-    /// follow it, and the scroll offset stays inside the narrower range.
+    /// follow it, the scroll offset stays inside the narrower range, and a
+    /// measurement that moves the viewport keeps the selected row in view.
     pub fn measure_lettered_list<D: LetteredDestination>(&self, viewport_height: f32) {
         let mut scroll = D::scroll(self);
+        let held = *scroll.peek();
         scroll.with_mut(|scroll| scroll.viewport_height = viewport_height);
-        self.clamp_lettered_scroll::<D>();
+        let rows = D::painted_rows(self);
+        let selected = self.lettered_selected_row::<D>();
+        let top = measure_scroll_top(&rows, selected.as_deref(), held, viewport_height);
+        set_scroll_top(scroll, &rows, top);
     }
 
     /// Report destination `D`'s native scroll offset: a user scroll moves the
@@ -369,6 +374,16 @@ impl LibraryState {
     pub fn scroll_lettered_list<D: LetteredDestination>(&self, scroll_top: f32) {
         let rows = D::painted_rows(self);
         set_scroll_top(D::scroll(self), &rows, scroll_top);
+    }
+
+    /// The row destination `D`'s list paints raised: the core's selected row
+    /// in the carried detail (design D4, D12), or `None` while the window
+    /// carries no such detail.
+    fn lettered_selected_row<D: LetteredDestination>(&self) -> Option<String> {
+        let detail = self.sections.library_detail.peek();
+        D::detail(detail.as_deref())
+            .and_then(D::selected)
+            .map(str::to_owned)
     }
 
     /// Hold destination `D`'s scroll offset inside the rows the filter leaves.

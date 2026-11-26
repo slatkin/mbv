@@ -1936,6 +1936,22 @@ When the surface size of the GUI Client window changes, the next presented frame
 - **WHEN** the user drags a window edge
 - **THEN** each presented frame lays out the content at that frame's surface size
 
+### Requirement: A resize keeps the selected row in view
+
+A Library list whose viewport a resize moves SHALL scroll so that the destination's selected row — the row the core's detail part names — is fully visible, when that row showed in the viewport before the resize. A selection the user had already scrolled out of view SHALL stay out of view, and the first measurement of a list SHALL scroll nothing on the selection's account.
+
+#### Scenario: The window narrows under a selected row
+
+- **GIVEN** a Music list scrolled to its top, with the selected album's row in view and the list taller than the window
+- **WHEN** the user drags the window's bottom edge up so the album's row no longer fits
+- **THEN** the list scrolls so that the album's row is fully visible
+
+#### Scenario: A scrolled-away selection stays away
+
+- **GIVEN** the selected row is above the viewport, because the user scrolled the list down
+- **WHEN** the user resizes the window
+- **THEN** the list does not scroll the selected row into view
+
 ### Requirement: Pointer input never stops the GUI Client
 
 A click, double-click, drag, or wheel step on any point of the window SHALL NOT end the GUI Client process. This holds when the input arrives after an earlier input changed the document.

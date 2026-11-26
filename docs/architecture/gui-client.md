@@ -1045,7 +1045,13 @@ goes through one scaffold, `library_list_column`
 lines, the shell's measure, scroll, and rows-in-view reports, and the row that
 holds the shell beside the letter rail. Each list keeps its own row model, its
 header facts, its notice texts, and its row painter, so the scaffold shares the
-wiring, not the list (`gui-tech-debt-simplification` design D14). Each list
+wiring, not the list (`gui-tech-debt-simplification` design D14). A list's
+viewport report reaches its own scroll store through `measure_scroll_top`
+(`src/window/library/list/geometry.rs`): the store holds the offset inside the
+list's range, and a report that moves the viewport scrolls the destination's
+selected row — the row the core's detail part names — fully back into view when
+that row showed before the move, so a resize never hides the selection and
+never pulls the list back to a row the user had scrolled away. Each list
 paints its own header: `LibraryListHeader` paints the heading line — the
 destination's Service mark, or Home's text title alone, and one trailing
 control group — on that line (gui-list-header-buttons design D1). The group

@@ -12,8 +12,8 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsList,
-    GuiShowsSeasonFrame, GuiShowsSeriesFrame,
+    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiShowsDetail, GuiShowsList, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
@@ -157,6 +157,61 @@ fn carry(state: &LibraryState, list: GuiLibraryList) {
     };
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
+}
+
+/// The Shows detail part naming `selected` as the core's selection.
+fn shows_detail(selected: &str) -> GuiLibraryDetail {
+    GuiLibraryDetail::Shows(GuiShowsDetail {
+        workspace_loading: false,
+        selected: Some(selected.to_owned()),
+        hero: None,
+        playing_episode_id: None,
+    })
+}
+
+/// Carry the given Shows list and detail into the store's sections.
+fn carry_detail(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
+    let batch = GuiSectionBatch {
+        library_list: Some(GuiSection {
+            revision: 1,
+            value: Some(list),
+        }),
+        library_detail: Some(GuiSection {
+            revision: 1,
+            value: Some(detail),
+        }),
+        ..GuiSectionBatch::default()
+    };
+    let mut sections = state.sections.clone();
+    sections.apply_batch(&batch);
+}
+
+/// The Shows scroll facts, as the tests read them.
+fn scroll_facts(state: &LibraryState) -> String {
+    let scroll = *state.scrolls.shows.peek();
+    format!(
+        "top={} viewport={}",
+        scroll.scroll_top, scroll.viewport_height
+    )
+}
+
+/// Spec "A resize keeps the selected row in view": a measurement that narrows
+/// the viewport scrolls the selected series row, named by its Service id, back
+/// into view.
+#[test]
+fn a_narrowed_viewport_scrolls_the_selected_series_back_into_view() {
+    let list = shows_list(tree());
+    let detail = shows_detail("s2");
+    let (facts, _rx) = run(move |state, facts| {
+        carry_detail(state, list.clone(), detail.clone());
+        state.measure_shows_list(200.0);
+        state.measure_shows_list(40.0);
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    // The selected second series' row ends at 136 px under the `A` heading and
+    // both closed series rows, so the 40 px viewport scrolls to 96 and shows it
+    // whole.
+    assert_eq!(facts, ["top=96 viewport=40"]);
 }
 
 /// The open mark of every painted series and season row, in paint order, as

@@ -15,9 +15,9 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiHomeRowIdFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::home_list::{HomeListRow, build_home_rows};
-use crate::window::library::list::{ListMove, scroll_step};
-use crate::window::library::parts::library_home_list;
+use crate::window::library::home_list::{HomeListRow, build_home_rows, home_row_key};
+use crate::window::library::list::{ListMove, measure_scroll_top, scroll_step};
+use crate::window::library::parts::{library_home_detail, library_home_list};
 use crate::window::library::scroll::set_scroll_top;
 
 use super::state::LibraryState;
@@ -138,15 +138,28 @@ impl LibraryState {
     }
 
     /// Report the Home list's measured viewport height (design D12): the rows
-    /// in view follow it, and the scroll offset stays inside the narrower
-    /// range.
+    /// in view follow it, the scroll offset stays inside the narrower range,
+    /// and a measurement that moves the viewport keeps the selected row in
+    /// view.
     pub fn measure_home_list(&self, viewport_height: f32) {
         let mut home = self.scrolls.home;
+        let held = *home.peek();
         home.with_mut(|scroll| scroll.viewport_height = viewport_height);
         let filter = self.home_ui.peek().filter.clone();
         let rows = self.home_rows(&filter);
-        let held = *home.peek();
-        set_scroll_top(home, &rows, held.scroll_top);
+        let selected = self.home_selected_row();
+        let top = measure_scroll_top(&rows, selected.as_deref(), held, viewport_height);
+        set_scroll_top(home, &rows, top);
+    }
+
+    /// The painted row of the core's Home selection (design D12): the row key
+    /// the carried detail names. `None` while the frame names no selection or
+    /// the filter paints no such row.
+    fn home_selected_row(&self) -> Option<String> {
+        let detail = self.sections.library_detail.peek();
+        library_home_detail(detail.as_deref())
+            .and_then(|detail| detail.selected.as_ref())
+            .map(home_row_key)
     }
 
     /// Report the Home list's native scroll offset (design D12): a user scroll

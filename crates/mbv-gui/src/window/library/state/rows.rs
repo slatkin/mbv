@@ -7,12 +7,14 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicHeroSubjectFrame, GuiMusicList};
+use crate::bridge::frame::library::{
+    GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList,
+};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::gui_core::GuiLibraryMenuRow;
 use crate::window::library::list::{
     LibraryRow, LibraryTree, ListMove, MusicRowsFacts, album_row_id, artist_row_id,
-    build_library_rows, jump_to_letter, letter_rail, list_window, scroll_step,
+    build_library_rows, jump_to_letter, letter_rail, list_window, measure_scroll_top, scroll_step,
     scroll_top_to_show_cursor,
 };
 use crate::window::library::parts::{library_music_detail, library_music_list};
@@ -469,22 +471,37 @@ impl LibraryState {
     }
 
     /// Report the list's measured viewport height (design D7): the rows in view
-    /// follow it, and the scroll offset stays inside the narrower range.
+    /// follow it, and the scroll offset stays inside the narrower range. A
+    /// reveal that waited for the first measurement takes it, and any other
+    /// measurement keeps the Hero's selected row in view.
     pub fn measure_library_list(&self, viewport_height: f32) {
         let mut music_scroll = self.music_scroll;
+        let held = *music_scroll.peek();
         music_scroll.with_mut(|scroll| scroll.viewport_height = viewport_height);
         let ui = self.ui.peek().clone();
         let rows = self.rows_of(&ui);
         let pending = self.pending_reveal_row.peek().clone();
-        let held = *music_scroll.peek();
-        let Some(row) = pending.filter(|_| viewport_height > 0.0) else {
-            set_scroll_top(music_scroll, &rows, held.scroll_top);
+        if let Some(row) = pending.filter(|_| viewport_height > 0.0) {
+            let mut pending = self.pending_reveal_row;
+            pending.set(None);
+            let top =
+                scroll_top_to_show_cursor(&rows, Some(&row), held.scroll_top, viewport_height);
+            set_scroll_top(music_scroll, &rows, top);
             return;
-        };
-        let mut pending = self.pending_reveal_row;
-        pending.set(None);
-        let top = scroll_top_to_show_cursor(&rows, Some(&row), held.scroll_top, viewport_height);
+        }
+        let selected = self.music_selected_row();
+        let top = measure_scroll_top(&rows, selected.as_deref(), held, viewport_height);
         set_scroll_top(music_scroll, &rows, top);
+    }
+
+    /// The row the Music list paints raised: the Hero's own row id
+    /// (gui-music-artist-page design D6), or `None` while the window shows no
+    /// Music pick.
+    fn music_selected_row(&self) -> Option<String> {
+        let detail = self.sections.library_detail.peek();
+        library_music_detail(detail.as_deref())
+            .and_then(|detail| detail.hero.as_ref())
+            .map(GuiMusicHeroFrame::picked_row_id)
     }
 
     /// Report the list's native scroll offset (design D7): a user scroll moves the

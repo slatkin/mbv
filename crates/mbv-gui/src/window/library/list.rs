@@ -16,7 +16,8 @@ mod lettered;
 
 pub use geometry::{
     GeometryRow, ListMove, ListWindow, ROWS_IN_VIEW_OVERSCAN, clamp_scroll_top, list_window,
-    move_index, rows_height, rows_in_view_ids, scroll_step, scroll_top_to_show_cursor,
+    measure_scroll_top, move_index, rows_height, rows_in_view_ids, scroll_step,
+    scroll_top_to_show_cursor,
 };
 pub use lettered::{
     LetterHeading, LetteredRow, SortLetter, build_lettered_rows, carries_letters, lettered_rail,
