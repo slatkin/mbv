@@ -24,6 +24,11 @@ pub struct NaturalCap {
     pub max_width: f32,
     /// The `max-height` value, in CSS pixels.
     pub max_height: f32,
+    /// The width the image paints at once both caps hold and its aspect
+    /// stays, in CSS pixels. A box that hugs the image reads its width from
+    /// the image's own width, so this is the width it must see (a width the
+    /// height cap shrank would otherwise leave the box at the wider cap).
+    pub fitted_width: f32,
 }
 
 /// The cap for an image whose natural size is `natural_width` ×
@@ -52,8 +57,11 @@ pub fn capped_natural_size(
     let width = f32_from_f64(f64::from(natural_width) / ratio);
     let height = f32_from_f64(f64::from(natural_height) / ratio);
     let bounded = |side: f32, bound: Option<f32>| bound.map_or(side, |bound| side.min(bound));
+    let max_width = bounded(width, bounds.and_then(|bounds| bounds.width));
+    let max_height = bounded(height, bounds.and_then(|bounds| bounds.height));
     Some(NaturalCap {
-        max_width: bounded(width, bounds.and_then(|bounds| bounds.width)),
-        max_height: bounded(height, bounds.and_then(|bounds| bounds.height)),
+        max_width,
+        max_height,
+        fitted_width: max_width.min(width * max_height / height),
     })
 }

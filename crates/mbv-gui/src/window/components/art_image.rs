@@ -267,7 +267,11 @@ fn capped_style(style: &str, cap: Option<NaturalCap>, bounds: Option<NaturalSize
     let mut style = style.to_owned();
     if let Some(cap) = cap {
         if bounds.is_some() {
-            let _ = write!(style, "max-width: min({}px, 100%); ", cap.max_width);
+            let _ = write!(
+                style,
+                "width: {}px; height: auto; max-width: min({}px, 100%); ",
+                cap.fitted_width, cap.max_width
+            );
         } else {
             let _ = write!(style, "max-width: {}px; ", cap.max_width);
         }
