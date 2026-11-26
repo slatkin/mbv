@@ -62,7 +62,7 @@ This change starts after `gui-music-artist-page` has merged to `main`. Each unit
 
 ## 10. Gates
 
-- [ ] 10.1 Run `make gui-css` and commit any change to `crates/mbv-gui/assets/app.generated.css`. Then run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-gui`, `cargo nextest run -p mbv-emby`, `cargo nextest run -p mbv-ctrl`, `cargo nextest run -p mbv-ctrl conformance`, and `cargo nextest run -p mbvd`, each in the foreground with no pipe. Run `make check-code-file-lines`. Fix every red gate, including a file over 800 lines. Verify: all commands exit 0.
+- [x] 10.1 Run `make gui-css` and commit any change to `crates/mbv-gui/assets/app.generated.css`. Then run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-gui`, `cargo nextest run -p mbv-emby`, `cargo nextest run -p mbv-ctrl`, `cargo nextest run -p mbv-ctrl conformance`, and `cargo nextest run -p mbvd`, each in the foreground with no pipe. Run `make check-code-file-lines`. Fix every red gate, including a file over 800 lines. Verify: all commands exit 0.
 
 ## Workflow follow-up
 
