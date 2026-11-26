@@ -46,9 +46,18 @@ jobs:
     # this job needs the same makedeps and the toolchain pin from
     # rust-toolchain.toml.
     runs-on: ubuntu-latest
-    container: archlinux/archlinux:base-devel-20260818.0.575430
+    container:
+      image: ghcr.io/slatkin/mbv-builder:20260818-rust1.99.0
+      # The package publishes private; the job authenticates the
+      # pull with its own automatically-minted GITHUB_TOKEN (the
+      # package is connected to this repo, so read access is
+      # implied) — no personal credentials anywhere in the chain.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
+      packages: read
     # sccache: object-level rustc cache in a local disk store,
     # shared by every job. The gui and feature-matrix jobs recompile the same
     # crates in their own containers; a shared rustc cache turns their
@@ -57,28 +66,10 @@ jobs:
       RUSTC_WRAPPER: sccache
 
     steps:
-      # Same makedeps as `build` (clippy runs the crates' build scripts with
-      # pkg-config probes for mpv/pipewire/openssl), and checkout needs git
-      # for a real clone (see the comment on the matching step in `build`).
-      - name: Update system and install makedeps
-        run: |
-          # Same Arch Linux Archive pin as `build`; keep the date in sync with
-          # the image, the cache key, and the `build` job.
-          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
-            > /etc/pacman.d/mirrorlist
-          pacman_retry() {
-            for attempt in 1 2 3; do
-              "$@" && return 0
-              pacman -Syy --noconfirm
-              sleep $((attempt * 10))
-            done
-            "$@"
-          }
-          pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed \
-            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ast-grep editorconfig-checker
-
+      # No provisioning step: the mbv-builder image already carries every
+      # makedep and cargo tool (clippy runs the crates' build scripts with
+      # pkg-config probes for mpv/pipewire/openssl, so they must be present),
+      # plus git for a real clone (see the comment in `build`).
       - uses: actions/checkout@v7
 
       - name: Cache Rust build
@@ -87,18 +78,16 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cargo/bin
             ~/.cargo/advisory-db
-            ~/.rustup/toolchains
             target
           # Own key family (`check-`, deliberately not under `build`'s
           # `cargo-` prefix): fmt and clippy leave only check artifacts, and
           # whichever job saves last would otherwise hand the release build a
           # check-only target. Same hashFiles inputs as `build`; the
-          # base-devel literal must match the `container:` image above.
-          key: ${{ runner.os }}-check-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          # mbv-builder literal must match the `container:` image above.
+          key: ${{ runner.os }}-check-mbv-builder-20260818-rust1.99.0-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-check-base-devel-20260818.0.575430-ala20260818-
+            ${{ runner.os }}-check-mbv-builder-20260818-rust1.99.0-
 
       - name: Cache sccache
         uses: actions/cache@v6
@@ -112,12 +101,6 @@ jobs:
           key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
           restore-keys: |
             sccache-${{ runner.os }}-
-
-      - name: Install sccache
-        uses: taiki-e/install-action@sccache
-
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@cargo-audit
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -152,63 +135,36 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    # Pin a dated snapshot of the Arch base-devel builder image instead of the
-    # floating `base-devel` tag. Arch is rolling, so bump this periodically
-    # (dated archlinux tags are retained ~18 months on Docker Hub). The image
-    # date, the Arch Linux Archive date in the setup step below, and the
-    # `-ala...` suffix in the cargo cache key must all move together: the image
-    # pin alone does not hold, because `pacman -Syu` otherwise upgrades past it
-    # to the live repos (that is how OpenSSL 4 reached the .deb).
-    container: archlinux/archlinux:base-devel-20260818.0.575430
+    # The frozen builder image (ci/mbv-builder.Dockerfile): an Arch Linux
+    # Archive snapshot with every makedep, cargo tool, and the pinned rustup
+    # toolchain baked in. Nothing below provisions at runtime — no pacman, no
+    # rustup downloads, no install-actions — so a run never depends on mirror
+    # or rolling-release state. The image tag's literal must stay in sync
+    # with the cache-key literals below; bump both when the image rebuilds.
+    container:
+      image: ghcr.io/slatkin/mbv-builder:20260818-rust1.99.0
+      # The package publishes private; the job authenticates the
+      # pull with its own automatically-minted GITHUB_TOKEN (the
+      # package is connected to this repo, so read access is
+      # implied) — no personal credentials anywhere in the chain.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: write
       actions: write
+      packages: read
     # sccache: object-level rustc cache in a local disk store,
     # shared by every job (see the same block on `checks`).
     env:
       RUSTC_WRAPPER: sccache
 
     steps:
-      # The pinned archlinux base-devel image ships no git, and
-      # actions/checkout falls back to a REST API archive download when git is
-      # missing from the PATH. That yields no .git directory, which breaks the
-      # "Commit PKGBUILD" step below. Install makedeps (including git) first so
-      # checkout performs a real git clone.
-      - name: Update system and install makedeps
-        run: |
-          # Pin the package snapshot to the builder image's date. `pacman -Syu`
-          # against the live mirrors upgraded past the image pin and pulled
-          # OpenSSL 4 (libssl.so.4, released 2026-10-24) into a .deb that then
-          # failed to load on Debian 13 (libssl.so.3 only; mbvd exit 127). The
-          # Arch Linux Archive keeps the dated snapshot, so the whole toolchain
-          # stays consistent at OpenSSL 3.6.3. Bump this date with the image.
-          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
-            > /etc/pacman.d/mirrorlist
-          pacman_retry() {
-            for attempt in 1 2 3; do
-              "$@" && return 0
-              pacman -Syy --noconfirm
-              sleep $((attempt * 10))
-            done
-            "$@"
-          }
-          pacman_retry pacman -Syu --noconfirm
-          # `rustup` instead of `rust`: the Arch `rust` package is rebuilt for
-          # every upstream point release and package revision, and each bump
-          # invalidates the cargo cache below (~17 min full rebuild). The
-          # toolchain comes from the pinned rust-toolchain.toml instead, so it
-          # changes only when that pin is bumped deliberately. clang stays a
-          # system package (native build-script tooling, not a cache-keyed
-          # compiler).
-          # ttf-dejavu gives the GUI's headless layout tests a system font:
-          # with no font installed, Blitz emits no inline text fragments and
-          # text nodes return no layout box, so a get_client_bounding_rect
-          # call panics (runs on 2026-11-18 and 2026-11-19 failed exactly
-          # there).
-          pacman_retry pacman -S --noconfirm --needed \
-            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ttf-dejavu
-
+      # No provisioning step: the image carries every makedep and cargo tool.
+      # git in particular must be present before checkout: actions/checkout
+      # falls back to a REST API archive download when git is missing from the
+      # PATH, which yields no .git directory and breaks the "Commit PKGBUILD"
+      # step below.
       - uses: actions/checkout@v7
 
       - name: Cache Rust build
@@ -217,26 +173,22 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cargo/bin
             ~/.cargo/advisory-db
-            ~/.rustup/toolchains
             target
           # Key covers: pinned builder image + pinned toolchain file (build
           # environment), the dependency lockfile, and all workspace manifests.
           # rust-toolchain.toml pins an exact channel, so hashing it stands in
           # for the rustc version and lets this restore run before the first
-          # rustc invocation, keeping the toolchain warm. The base-devel-...
-          # literal must match the `container:` image above and the
-          # feature-matrix job below; the `-ala...` suffix is the pinned Arch
-          # Linux Archive date and must match the setup step's mirrorlist pin.
-          # Bump them together with rust-toolchain.toml.
+          # rustc invocation, keeping the toolchain warm. The
+          # mbv-builder-... literal must match the `container:` image above
+          # and the other jobs below. Bump it when the image tag moves.
           # NOTE: this step must stay the first thing after checkout. Every
           # cargo/rustc use below (tool installs, fmt, clippy, build) hits the
           # warmed toolchain/registry/target instead of refetching. That is
           # what keeps fmt/clippy at seconds instead of minutes.
-          key: ${{ runner.os }}-cargo-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-mbv-builder-20260818-rust1.99.0-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-base-devel-20260818.0.575430-ala20260818-
+            ${{ runner.os }}-cargo-mbv-builder-20260818-rust1.99.0-
 
       - name: Cache sccache
         uses: actions/cache@v6
@@ -247,18 +199,6 @@ jobs:
           key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
           restore-keys: |
             sccache-${{ runner.os }}-
-
-      - name: Install sccache
-        uses: taiki-e/install-action@sccache
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
-
-      - name: Install cargo-deb
-        # Prebuilt via install-action like the other two. The old
-        # `cargo install cargo-deb --locked` fallback compiled from source
-        # (~minutes) on every cache miss; this is seconds, always.
-        uses: taiki-e/install-action@cargo-deb
 
       - name: Set version from tag
         run: |
@@ -433,39 +373,27 @@ jobs:
     # container above and with the cache key below): `cargo check` still runs
     # every build script, so this job needs the same makedeps and the same
     # toolchain pin from rust-toolchain.toml.
-    container: archlinux/archlinux:base-devel-20260818.0.575430
+    container:
+      image: ghcr.io/slatkin/mbv-builder:20260818-rust1.99.0
+      # The package publishes private; the job authenticates the
+      # pull with its own automatically-minted GITHUB_TOKEN (the
+      # package is connected to this repo, so read access is
+      # implied) — no personal credentials anywhere in the chain.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
+      packages: read
     # sccache: object-level rustc cache in a local disk store,
     # shared by every job (see the same block on `checks`).
     env:
       RUSTC_WRAPPER: sccache
 
     steps:
-      # Same makedeps as `build` (check runs build scripts with pkg-config
-      # probes for mpv/pipewire/openssl), and checkout needs git for a real
-      # clone (see the comment on the matching step in `build`).
-      - name: Update system and install makedeps
-        run: |
-          # Same Arch Linux Archive pin as `build`; keep the date in sync with
-          # the image, the cache key, and the `build` job.
-          # ttf-dejavu: see the matching step in `build` (the GUI layout tests
-          # need a system font).
-          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
-            > /etc/pacman.d/mirrorlist
-          pacman_retry() {
-            for attempt in 1 2 3; do
-              "$@" && return 0
-              pacman -Syy --noconfirm
-              sleep $((attempt * 10))
-            done
-            "$@"
-          }
-          pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed \
-            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ttf-dejavu
-
+      # No provisioning step: the image carries every makedep (check runs
+      # build scripts with pkg-config probes for mpv/pipewire/openssl) and
+      # git for a real clone (see the comment in `build`).
       - uses: actions/checkout@v7
 
       - name: Cache Rust build
@@ -474,20 +402,17 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cargo/bin
             ~/.cargo/advisory-db
-            ~/.rustup/toolchains
             target
           # Own key family (`hack-`, deliberately not under `build`'s
           # `cargo-` restore-keys prefix): otherwise whichever job saves last
           # wins the shared key, and the release build could restore this
           # job's check-only target instead of its own release warmness. Same
-          # hashFiles inputs as `build`; the base-devel literal must match the
-          # `container:` image above, and the `-ala...` suffix the setup
-          # step's mirrorlist pin.
-          key: ${{ runner.os }}-hack-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          # hashFiles inputs as `build`; the mbv-builder literal must match
+          # the `container:` image above.
+          key: ${{ runner.os }}-hack-mbv-builder-20260818-rust1.99.0-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-hack-base-devel-20260818.0.575430-ala20260818-
+            ${{ runner.os }}-hack-mbv-builder-20260818-rust1.99.0-
 
       - name: Cache sccache
         uses: actions/cache@v6
@@ -498,12 +423,6 @@ jobs:
           key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
           restore-keys: |
             sccache-${{ runner.os }}-
-
-      - name: Install sccache
-        uses: taiki-e/install-action@sccache
-
-      - name: Install cargo-hack
-        uses: taiki-e/install-action@cargo-hack
 
       - name: Check feature matrix
         # `--each-feature`, not `--feature-powerset`: the 12+ `test` features
@@ -523,38 +442,26 @@ jobs:
     runs-on: ubuntu-latest
     # Same pinned builder image as `build` (keep the literal in sync with the
     # containers and cache keys above).
-    container: archlinux/archlinux:base-devel-20260818.0.575430
+    container:
+      image: ghcr.io/slatkin/mbv-builder:20260818-rust1.99.0
+      # The package publishes private; the job authenticates the
+      # pull with its own automatically-minted GITHUB_TOKEN (the
+      # package is connected to this repo, so read access is
+      # implied) — no personal credentials anywhere in the chain.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
+      packages: read
     # sccache: object-level rustc cache in a local disk store,
     # shared by every job (see the same block on `checks`).
     env:
       RUSTC_WRAPPER: sccache
 
     steps:
-      # Same makedeps as `build` (pkg-config probes for mpv/pipewire/openssl),
-      # and checkout needs git for a real clone.
-      - name: Update system and install makedeps
-        run: |
-          # Same Arch Linux Archive pin as `build`; keep the date in sync with
-          # the image, the cache key, and the `build` job.
-          # ttf-dejavu: see the matching step in `build` (the GUI layout tests
-          # need a system font).
-          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
-            > /etc/pacman.d/mirrorlist
-          pacman_retry() {
-            for attempt in 1 2 3; do
-              "$@" && return 0
-              pacman -Syy --noconfirm
-              sleep $((attempt * 10))
-            done
-            "$@"
-          }
-          pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed \
-            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ttf-dejavu
-
+      # No provisioning step: the image carries every makedep (pkg-config
+      # probes for mpv/pipewire/openssl) and git for a real clone.
       - uses: actions/checkout@v7
 
       - name: Cache Rust build
@@ -563,21 +470,18 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cargo/bin
             ~/.cargo/advisory-db
-            ~/.rustup/toolchains
             target
           # Own key family (`gui-`, deliberately not under `build`'s `cargo-`
           # or feature-matrix's `hack-` restore-keys prefixes): whichever job
           # saves last would otherwise win a shared key and the wrong
-          # warmness. Same hashFiles inputs as `build`; the base-devel
-          # literal must match the `container:` image above, and the `-ala...`
-          # suffix the setup step's mirrorlist pin.
+          # warmness. Same hashFiles inputs as `build`; the mbv-builder
+          # literal must match the `container:` image above.
           key: >-
-            ${{ runner.os }}-gui-base-devel-20260818.0.575430-ala20260818-${{ hashFiles(
+            ${{ runner.os }}-gui-mbv-builder-20260818-rust1.99.0-${{ hashFiles(
             'rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-gui-base-devel-20260818.0.575430-ala20260818-
+            ${{ runner.os }}-gui-mbv-builder-20260818-rust1.99.0-
 
       - name: Cache sccache
         uses: actions/cache@v6
@@ -588,12 +492,6 @@ jobs:
           key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
           restore-keys: |
             sccache-${{ runner.os }}-
-
-      - name: Install sccache
-        uses: taiki-e/install-action@sccache
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
 
       - name: Test mbv-gui
         # Same release + throttled invocation as `build`'s nextest step (see
