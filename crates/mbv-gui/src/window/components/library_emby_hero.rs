@@ -1,7 +1,7 @@
 //! The plain Emby-library Hero (gui-hero-design-polish design D2, D3, D4):
 //! the frame (`LibraryHeroFrame`) over the selected row. The header band
 //! carries the item's kind word as the kicker, the title, and the fact pills
-//! — the IMDb link is a link pill, as every Hero's link fact is. The detail
+//! — the `IMDb` link is a link pill, as every Hero's link fact is. The detail
 //! block beside the art holds the labelled fact rows and the action row; the
 //! Overview and Cast sections follow when the item has them; the glow behind
 //! the header band is the shared art-to-glow mapping over the Hero's own art.

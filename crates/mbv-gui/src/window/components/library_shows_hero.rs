@@ -218,57 +218,54 @@ fn header_and_block(
     workspace: Option<&GuiShowsWorkspaceFrame>,
     workspace_loading: bool,
 ) -> (HeroHeader, HeroBlock) {
-    match workspace {
-        Some(workspace) => {
-            let season_name = workspace
-                .seasons
-                .iter()
-                .find(|season| season.selected)
-                .map(|season| season.name.clone())
-                .unwrap_or_default();
-            (
-                HeroHeader {
-                    kicker: label_segments("series"),
-                    title: hero.title.clone(),
-                    pills: hero.facts.pills.clone(),
-                },
-                HeroBlock {
-                    label: hero.title.clone(),
-                    eyebrow: None,
-                    name: Some(season_name),
-                    name_episode: false,
-                    pills: season_pills(
-                        !workspace_loading && !workspace.episodes.is_empty(),
-                        workspace.episodes.len(),
-                    ),
-                    rows: hero.facts.rows.clone(),
-                },
-            )
-        }
-        None => {
-            let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
-            (
-                HeroHeader {
-                    kicker: label_segments(if parent.is_some() {
-                        "series"
-                    } else {
-                        "episode"
-                    }),
-                    title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
-                    pills: hero.facts.pills.clone(),
-                },
-                HeroBlock {
-                    label: hero.title.clone(),
-                    eyebrow: None,
-                    name: parent.map(|_| hero.title.clone()),
-                    // A Latest Hero's item is an episode, whose name line
-                    // paints one step smaller than a season's.
-                    name_episode: true,
-                    pills: Vec::new(),
-                    rows: hero.facts.rows.clone(),
-                },
-            )
-        }
+    if let Some(workspace) = workspace {
+        let season_name = workspace
+            .seasons
+            .iter()
+            .find(|season| season.selected)
+            .map(|season| season.name.clone())
+            .unwrap_or_default();
+        (
+            HeroHeader {
+                kicker: label_segments("series"),
+                title: hero.title.clone(),
+                pills: hero.facts.pills.clone(),
+            },
+            HeroBlock {
+                label: hero.title.clone(),
+                eyebrow: None,
+                name: Some(season_name),
+                name_episode: false,
+                pills: season_pills(
+                    !workspace_loading && !workspace.episodes.is_empty(),
+                    workspace.episodes.len(),
+                ),
+                rows: hero.facts.rows.clone(),
+            },
+        )
+    } else {
+        let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
+        (
+            HeroHeader {
+                kicker: label_segments(if parent.is_some() {
+                    "series"
+                } else {
+                    "episode"
+                }),
+                title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
+                pills: hero.facts.pills.clone(),
+            },
+            HeroBlock {
+                label: hero.title.clone(),
+                eyebrow: None,
+                name: parent.map(|_| hero.title.clone()),
+                // A Latest Hero's item is an episode, whose name line
+                // paints one step smaller than a season's.
+                name_episode: true,
+                pills: Vec::new(),
+                rows: hero.facts.rows.clone(),
+            },
+        )
     }
 }
 

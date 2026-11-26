@@ -250,7 +250,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                         ..vec![Attribute::new(own(attr, "glow"), "", None, false)],
                         ArtImage {
                             art: Some(glow),
-                            alt: "".to_owned(),
+                            alt: String::new(),
                             uncapped: true,
                             class: "block".to_owned(),
                             style: "width: 100%; height: 100%; object-fit: cover; opacity: 0.55;".to_owned(),

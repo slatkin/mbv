@@ -2,7 +2,7 @@
 //! `GuiHeroPillFrame`, in paint order. A pill paints its typed segments
 //! through `TypedText`, so the value's text and type colour stay as today; a
 //! link pill opens its URL through the core's open-url command, as the former
-//! IMDb header action did — the core scheme-gates the url.
+//! `IMDb` header action did — the core scheme-gates the url.
 
 use dioxus_native::prelude::*;
 
@@ -17,7 +17,7 @@ use crate::window::library::state::LibraryState;
 const PILL_STYLE: &str = "padding: 4px 14px; background: var(--canvas-library-panel); border: 1px solid var(--canvas-library-control); border-radius: 999px; font-size: 13px; color: var(--canvas-heading);";
 
 /// The look a link pill adds: the date hue of a link and the underline the
-/// former IMDb action painted.
+/// former `IMDb` action painted.
 const LINK_PILL_STYLE: &str =
     "cursor: pointer; color: var(--canvas-source); text-decoration: underline;";
 

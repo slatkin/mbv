@@ -1,10 +1,10 @@
 //! Headless tests of the plain Emby-library Hero (gui-hero-design-polish
 //! design D2, D3, D4): the contracts of the movie case of the spec scenario
 //! "A movie's Hero" — the header band paints the kind word's kicker, the
-//! movie's title, and the fact pills in the frame's order with the IMDb link
+//! movie's title, and the fact pills in the frame's order with the `IMDb` link
 //! as a link pill; the detail block paints the labelled rows in the frame's
 //! order and no runtime row; the cast grid paints the members in the frame's
-//! order, a member with no photo shows the member's initials; no IMDb header
+//! order, a member with no photo shows the member's initials; no `IMDb` header
 //! action paints; the Hero's art makes its glow through the shared
 //! art-to-glow mapping; a Hero without facts paints nothing; no Workspace
 //! and no tracklist paint; and the actions send the Emby commands with the
@@ -78,7 +78,7 @@ fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
 
 /// The selected row's Hero facts: the movie case of the spec scenario
 /// "A movie's Hero" — pills for the year, the genre, the runtime, and the
-/// IMDb link; rows for the director, the release date, and the studio, and
+/// `IMDb` link; rows for the director, the release date, and the studio, and
 /// no runtime row.
 fn movie_hero(art_shape: GuiArtShapeFrame) -> GuiEmbyHeroFrame {
     GuiEmbyHeroFrame {
@@ -234,24 +234,6 @@ impl Fixture {
             .to_owned()
     }
 
-    /// The attribute of the first node the selector names.
-    fn attr_of(&self, selector: &str, attribute: &str) -> Option<String> {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_node(id)
-            .expect("the node is in the document")
-            .attr(LocalName::from(attribute))
-            .map(str::to_owned)
-    }
-
-    /// The style attribute of the first node the selector names.
-    fn style_of(&self, selector: &str) -> String {
-        self.attr_of(selector, "style").unwrap_or_default()
-    }
-
     /// The attribute of every node the selector names, in paint order.
     fn all_attrs(&self, selector: &str, attribute: &str) -> Vec<String> {
         let dom = self.doc.inner();
@@ -350,7 +332,7 @@ fn the_header_paints_the_item_kind_s_kicker_and_the_movie_s_title() {
 
 /// Contract (spec scenario "A movie's Hero", gui-hero-design-polish D2): the
 /// header band paints the movie's fact pills in the frame's order — the year,
-/// each genre, the runtime, and the IMDb link as the one link pill.
+/// each genre, the runtime, and the `IMDb` link as the one link pill.
 #[test]
 fn the_header_paints_the_movie_s_pills_in_the_frame_s_order() {
     let fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
@@ -491,8 +473,8 @@ fn a_cast_member_with_no_photo_shows_the_member_s_initials() {
     );
 }
 
-/// Contract (gui-hero-design-polish D2, the deleted IMDb header action): no
-/// IMDb button paints in the header band — the IMDb link is the link pill,
+/// Contract (gui-hero-design-polish D2, the deleted `IMDb` header action): no
+/// `IMDb` button paints in the header band — the `IMDb` link is the link pill,
 /// and no other header action paints.
 #[test]
 fn no_imdb_header_action_paints() {

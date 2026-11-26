@@ -391,9 +391,8 @@ fn all_merges_two_subscriptions_in_date_order_with_the_default_hero() {
         Some("Feed A"),
         "the feed is the largest unit"
     );
-    assert_eq!(
+    assert!(
         hero.facts.pills.is_empty(),
-        true,
         "an entry of no duration adds no pill, and the feed name is the parent"
     );
     assert_eq!(

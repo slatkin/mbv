@@ -155,19 +155,10 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
     );
     // The cast (design D3): the people that are not directors, with Jane
     // Doe's photo fetched — the director paints in the Director row only.
-    let cast: Vec<(&str, &str, &str, bool)> = hero
-        .cast
-        .iter()
-        .map(|member| {
-            (
-                member.name.as_str(),
-                member.role.as_str(),
-                member.initials.as_str(),
-                member.photo.is_some(),
-            )
-        })
-        .collect();
-    assert_eq!(cast, vec![("Jane Doe", "Lead", "JD", true)]);
+    assert_eq!(
+        cast_facts(&hero.cast),
+        vec![("Jane Doe", "Lead", "JD", true)]
+    );
     assert!(hero.overview.is_none());
     // No image tag declares a source, so the Hero carries none and the
     // window paints its own placeholder.
@@ -363,6 +354,20 @@ fn pill_facts(facts: &GuiHeroFacts) -> Vec<(String, Option<MetaKind>, Option<Str
 }
 
 /// One row of `facts` as `(label, text)`, in paint order.
+/// The cast as `(name, role, initials, has photo)`, in the order the Hero carries it.
+fn cast_facts(cast: &[GuiHeroCastMember]) -> Vec<(&str, &str, &str, bool)> {
+    cast.iter()
+        .map(|member| {
+            (
+                member.name.as_str(),
+                member.role.as_str(),
+                member.initials.as_str(),
+                member.photo.is_some(),
+            )
+        })
+        .collect()
+}
+
 fn row_facts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
     facts
         .rows
@@ -418,17 +423,5 @@ fn the_cast_carries_the_non_directors_and_their_photo_rules(
     let projection = gui_emby_projection(&mut app, 0);
 
     let hero = projection.hero.expect("the Hero paints");
-    let cast: Vec<(&str, &str, &str, bool)> = hero
-        .cast
-        .iter()
-        .map(|member| {
-            (
-                member.name.as_str(),
-                member.role.as_str(),
-                member.initials.as_str(),
-                member.photo.is_some(),
-            )
-        })
-        .collect();
-    assert_eq!(cast, expected, "{why}");
+    assert_eq!(cast_facts(&hero.cast), expected, "{why}");
 }
