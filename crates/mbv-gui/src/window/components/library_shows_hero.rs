@@ -1,14 +1,17 @@
 //! The Shows Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryShowsHero`; add-gui-library-panel design D12, D14, D15):
-//! the Music Hero's frame (`LibraryHeroFrame`) over the series, as the TUI
-//! paints the TV and Music heroes through one hero and one Workspace. The
-//! header band is the series — its genre, years, season count, and network —
-//! and the detail block is the series' Primary poster beside the selected
-//! season and the series' overview. The Workspace is the list band: the
-//! season dropdown, with the core's selected season as its label, and that season's
-//! episodes as rows. The Latest mode's Hero is the selected episode's facts
-//! and carries no Workspace, and the Upcoming mode carries no Hero at all, so
-//! the pane paints nothing there.
+//! `LibraryShowsHero`; add-gui-library-panel design D12, D14, D15;
+//! gui-hero-design-polish design D2, D4): the shared frame
+//! (`LibraryHeroFrame`) over the series, as the TUI paints the TV and Music
+//! heroes through one hero and one Workspace. The header band is the series
+//! — its fact pills (the years, genres, and season count) — and the detail
+//! block is the series' poster beside the selected season and the series'
+//! network row, with the series' overview under its section. The Workspace
+//! is the list band under the Episodes section: the season dropdown, with the core's selected
+//! season as its label, and that season's episodes as rows. The Latest
+//! mode's Hero is the selected episode — its series titles the header and
+//! the episode paints in the block — and carries no Workspace and no list
+//! band, and the Upcoming mode carries no Hero at all, so the pane paints
+//! nothing there.
 //!
 //! The Workspace keeps no cursor (`gui-pointer-target-interaction` D6): the keys
 //! act on the row the pointer marks, a press on a row does nothing, a
@@ -19,8 +22,10 @@
 
 use dioxus_native::prelude::*;
 
+use crate::art::{GuiArtRef, glow_from_art};
 use crate::bridge::frame::library::{
-    GuiLibraryDetail, GuiShowsDetail, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
+    GuiHeroPillFrame, GuiLibraryDetail, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsSeasonPillFrame,
+    GuiShowsWorkspaceFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_dropdown::{
@@ -31,9 +36,7 @@ use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, Libra
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
-use crate::window::library::hero::{
-    HeroLayoutFacts, hero_layout, join_meta_rows, label_segments, plain_segments,
-};
+use crate::window::library::hero::{label_segments, plain_segments};
 use crate::window::library::list::filter_match;
 use crate::window::library::parts::library_shows_detail;
 use crate::window::library::state::LibraryState;
@@ -191,6 +194,84 @@ fn paint_season_dropdown(
     }
 }
 
+/// The selected season's episode count, as one block pill: empty while the
+/// season's episodes have not landed.
+fn season_pills(loaded: bool, count: usize) -> Vec<GuiHeroPillFrame> {
+    if !loaded || count == 0 {
+        return Vec::new();
+    }
+    vec![GuiHeroPillFrame {
+        segments: plain_segments(&format!(
+            "{count} {}",
+            if count == 1 { "episode" } else { "episodes" }
+        )),
+        link: None,
+    }]
+}
+
+/// The frame's header and block for the Hero (invariant 30): the series Hero
+/// carries the series in the header over the selected season in the block;
+/// a Latest episode's header titles the episode's series — the parent — and
+/// the episode paints in the block's name line, one step smaller.
+fn header_and_block(
+    hero: &GuiShowsHeroFrame,
+    workspace: Option<&GuiShowsWorkspaceFrame>,
+    workspace_loading: bool,
+) -> (HeroHeader, HeroBlock) {
+    match workspace {
+        Some(workspace) => {
+            let season_name = workspace
+                .seasons
+                .iter()
+                .find(|season| season.selected)
+                .map(|season| season.name.clone())
+                .unwrap_or_default();
+            (
+                HeroHeader {
+                    kicker: label_segments("series"),
+                    title: hero.title.clone(),
+                    pills: hero.facts.pills.clone(),
+                },
+                HeroBlock {
+                    label: hero.title.clone(),
+                    eyebrow: None,
+                    name: Some(season_name),
+                    name_episode: false,
+                    pills: season_pills(
+                        !workspace_loading && !workspace.episodes.is_empty(),
+                        workspace.episodes.len(),
+                    ),
+                    rows: hero.facts.rows.clone(),
+                },
+            )
+        }
+        None => {
+            let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
+            (
+                HeroHeader {
+                    kicker: label_segments(if parent.is_some() {
+                        "series"
+                    } else {
+                        "episode"
+                    }),
+                    title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
+                    pills: hero.facts.pills.clone(),
+                },
+                HeroBlock {
+                    label: hero.title.clone(),
+                    eyebrow: None,
+                    name: parent.map(|_| hero.title.clone()),
+                    // A Latest Hero's item is an episode, whose name line
+                    // paints one step smaller than a season's.
+                    name_episode: true,
+                    pills: Vec::new(),
+                    rows: hero.facts.rows.clone(),
+                },
+            )
+        }
+    }
+}
+
 /// The Shows Hero: the frame
 /// over the series or the Latest episode, with the season pills and the
 /// selected season's episodes as the Workspace.
@@ -210,72 +291,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
     // The series Hero's Workspace, or `None` on a Hero that paints none.
     let workspace: Option<&GuiShowsWorkspaceFrame> = hero.workspace.as_ref();
 
-    // The selected season's name: the detail block's name, as the album's is
-    // Music's. Empty on a Hero that paints no Workspace.
-    let season_name = workspace
-        .and_then(|workspace| workspace.seasons.iter().find(|season| season.selected))
-        .map(|season| season.name.clone())
-        .unwrap_or_default();
-
-    // The selected season's episode count, once its episodes have landed.
-    let season_facts = match workspace {
-        Some(workspace) if !detail.workspace_loading && !workspace.episodes.is_empty() => {
-            let count = workspace.episodes.len();
-            format!(
-                "{count} {}",
-                if count == 1 { "episode" } else { "episodes" }
-            )
-        }
-        _ => String::new(),
-    };
-
-    // A Latest episode's header and block (invariant 30): the series is the
-    // largest unit and titles the header, and the episode is the block's
-    // name. `None` on the series Hero, whose Workspace holds the seasons.
-    let episode_layout = workspace.is_none().then(|| {
-        let kicker = if hero.parent.as_deref().unwrap_or("").is_empty() {
-            "episode"
-        } else {
-            "series"
-        };
-        hero_layout(
-            &HeroLayoutFacts {
-                title: &hero.title,
-                parent: hero.parent.as_deref(),
-                meta_rows: &hero.meta_rows,
-                duration_row: hero.duration_row,
-                progress_row: hero.progress_row,
-                overview: hero.overview.as_deref(),
-                // A Latest Hero's item is an episode, whose name line paints one
-                // step smaller than a season's.
-                episode: true,
-            },
-            kicker,
-        )
-    });
-
-    let (header, block) = match &episode_layout {
-        Some(layout) => (
-            HeroHeader::from(layout.header.clone()),
-            HeroBlock::from(layout.block.clone()),
-        ),
-        None => (
-            HeroHeader {
-                kicker: label_segments("series"),
-                title: hero.title.clone(),
-                facts: join_meta_rows(&hero.meta_rows),
-            },
-            HeroBlock {
-                label: hero.title.clone(),
-                eyebrow: None,
-                name: Some(season_name),
-                name_episode: false,
-                facts: Some(plain_segments(&season_facts)),
-                meta: Vec::new(),
-                overview: hero.overview.clone(),
-            },
-        ),
-    };
+    let (header, block) = header_and_block(hero, workspace, detail.workspace_loading);
 
     // The Workspace table's rows: each episode with the play state it carries.
     let rows: Vec<WorkspaceRow> = workspace.map_or_else(Vec::new, |workspace| {
@@ -340,7 +356,9 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
     });
 
     // The series Hero's Workspace (design D12): the season pills, then the
-    // selected season's episodes.
+    // selected season's episodes. A list band paints only under the Episodes
+    // section on a Hero that has a Workspace — a flat Shows episode Hero
+    // passes no list title and no children (design D2).
     let loading = detail.workspace_loading.then(|| WorkspaceLoading {
         text: "Loading episodes…".to_owned(),
         attr: "data-library-shows-episodes-loading",
@@ -369,6 +387,15 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
         }
     });
 
+    // The header band's glow (design D4): the shared art-to-glow mapping over
+    // the Hero's own art, `None` while the art is absent, still loading, or
+    // the bundled placeholder.
+    let glow = hero
+        .art
+        .as_ref()
+        .and_then(glow_from_art)
+        .map(|src| GuiArtRef::Image { src });
+
     rsx! {
         LibraryHeroFrame {
             attr: "shows",
@@ -379,6 +406,9 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
             art: hero.art.clone(),
             art_title: hero.title.clone(),
             actions: Some(actions),
+            overview: hero.overview.clone(),
+            glow,
+            list_title: children.is_some().then(|| "Episodes".to_owned()),
             children,
         }
     }

@@ -16,7 +16,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame,
-    GuiAudiobooksWorkspaceFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiAudiobooksWorkspaceFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -142,22 +142,10 @@ fn chapter(
 fn hero(rows: Vec<GuiAudiobooksChapterRowFrame>) -> GuiAudiobooksHeroFrame {
     GuiAudiobooksHeroFrame {
         title: "The Caves of Steel".to_owned(),
-        meta_rows: vec![
-            vec![GuiMetaSegmentFrame {
-                text: "Isaac Asimov".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "9 h 51 m".to_owned(),
-                kind: GuiMetaKindFrame::Time,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "17%".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-        ],
-        duration_row: Some(1),
-        progress_row: Some(2),
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         overview: None,
         art_shape: GuiArtShapeFrame::Portrait,
         art: None,

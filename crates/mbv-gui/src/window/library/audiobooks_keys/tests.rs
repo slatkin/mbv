@@ -17,8 +17,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame,
     GuiAudiobooksList, GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame, GuiDestinationList,
-    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
-    GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::window::library::keys_shared::tests::{
@@ -96,18 +95,10 @@ fn audiobooks_detail(hero: Option<GuiAudiobooksHeroFrame>) -> GuiAudiobooksDetai
 fn audiobooks_hero() -> GuiAudiobooksHeroFrame {
     GuiAudiobooksHeroFrame {
         title: "Aftermath".to_owned(),
-        meta_rows: vec![
-            vec![GuiMetaSegmentFrame {
-                text: "Bill Wyman".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "4:32".to_owned(),
-                kind: GuiMetaKindFrame::Time,
-            }],
-        ],
-        duration_row: Some(1),
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         overview: None,
         art_shape: GuiArtShapeFrame::Portrait,
         art: None,

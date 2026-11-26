@@ -330,9 +330,10 @@ fn series_hero() -> GuiShowsHeroFrame {
     GuiShowsHeroFrame {
         title: "Better Call Saul".to_owned(),
         parent: None,
-        meta_rows: Vec::new(),
-        duration_row: None,
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         overview: None,
         art_shape: GuiArtShapeFrame::Landscape,
         art: None,

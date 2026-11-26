@@ -1,11 +1,12 @@
 //! The Podcasts Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryPodcastsHero`; add-gui-library-panel design D12, row 10.1):
-//! the selected episode's detail pane in the Emby Hero look — the artwork box
-//! the `artShape` arm names, the title, the meta rows with their duration and
-//! progress roles, and the episode description as the overview.
-//!
-//! A podcast Hero is episode information only: it carries no Workspace and no
-//! tracklist, so only Play and Add to queue paint.
+//! `LibraryPodcastsHero`; add-gui-library-panel design D12, row 10.1;
+//! gui-hero-design-polish design D2, D4): the selected episode's detail pane
+//! on the shared frame — the artwork box the `artShape` arm names, the
+//! podcast's name as the header title, the episode in the block with its
+//! publish date row, the duration as a fact pill, and the episode
+//! description as the Overview section. No Episodes list band paints: a
+//! podcast Hero is episode information only, and the episodes stay in the
+//! Library list (design D2). Only Play and Add to queue paint.
 //!
 //! Play and Add to queue send the Podcasts destination's commands with the
 //! frame's selected episode (design D12) — the core owns the selection, so the
@@ -14,10 +15,11 @@
 
 use dioxus_native::prelude::*;
 
+use crate::art::{GuiArtRef, glow_from_art};
 use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
-use crate::window::library::hero::{HeroLayoutFacts, hero_command, hero_layout};
+use crate::window::library::hero::{hero_command, label_segments};
 use crate::window::library::lettered::{LetteredDestination, PodcastsList};
 use crate::window::library::parts::library_podcasts_detail;
 use crate::window::library::state::LibraryState;
@@ -49,18 +51,25 @@ pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
         return rsx! {};
     };
 
-    // The frame's header and block for the Hero (invariant 30).
-    let facts = HeroLayoutFacts {
-        title: &hero.title,
-        parent: hero.parent.as_deref(),
-        meta_rows: &hero.meta_rows,
-        duration_row: hero.duration_row,
-        progress_row: hero.progress_row,
-        overview: hero.overview.as_deref(),
-        // A Podcasts Hero's item is always an episode.
-        episode: true,
+    // The frame's header and block for the Hero (invariant 30): the podcast
+    // is the largest unit and titles the header, and the episode is the
+    // block's name line, one step smaller. No list title and no children
+    // pass — the Hero paints no list band (design D2).
+    let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
+    let header = HeroHeader {
+        kicker: label_segments("podcast"),
+        title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
+        pills: hero.facts.pills.clone(),
     };
-    let layout = hero_layout(&facts, "podcast");
+    let block = HeroBlock {
+        label: hero.title.clone(),
+        eyebrow: None,
+        name: parent.map(|_| hero.title.clone()),
+        // A Podcasts Hero's item is always an episode.
+        name_episode: true,
+        pills: Vec::new(),
+        rows: hero.facts.rows.clone(),
+    };
 
     // The actions' sends (design D12, row 10.1): the Podcasts destination's
     // commands over the picked episode's own stable id.
@@ -82,16 +91,27 @@ pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
         }
     };
 
+    // The header band's glow (design D4): the shared art-to-glow mapping over
+    // the Hero's own art, `None` while the art is absent, still loading, or
+    // the bundled placeholder.
+    let glow = hero
+        .art
+        .as_ref()
+        .and_then(glow_from_art)
+        .map(|src| GuiArtRef::Image { src });
+
     rsx! {
         LibraryHeroFrame {
             attr: "podcasts",
             root: "data-library-podcasts-hero",
-            header: HeroHeader::from(layout.header),
-            block: HeroBlock::from(layout.block),
+            header,
+            block,
             art_shape: hero.art_shape,
             art: hero.art.clone(),
             art_title: hero.title.clone(),
             actions: Some(actions),
+            overview: hero.overview.clone(),
+            glow,
         }
     }
 }

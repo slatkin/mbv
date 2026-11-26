@@ -1,8 +1,9 @@
 //! Headless tests of the Feeds Hero (D16): the contracts of
 //! `LibraryFeedsHero.test.ts` — the placeholder artwork box takes the arm
 //! every Hero shares (a feed entry has no artwork source), the feed titles
-//! the header with the entry in the block and the duration beside the art, no
-//! overview paints, no Workspace and no tracklist paint, the actions send the
+//! the header with the entry in the block, the duration as a fact pill and
+//! the publish date row, no overview paints, no Workspace and no tracklist
+//! paint, the actions send the
 //! Feeds commands for the frame's selected entry with no library index, and the
 //! list band holds the Hero's feed's entries alone. The IPC of the earlier
 //! tests is the mock core link here;
@@ -24,8 +25,9 @@ use rstest::rstest;
 use super::LibraryFeedsHero;
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail,
-    GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiFeedsHeroFrame, GuiFeedsList, GuiHeroFactLabelFrame, GuiHeroFactRowFrame, GuiHeroFactsFrame,
+    GuiHeroPillFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiMetaKindFrame,
+    GuiMetaSegmentFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -36,19 +38,41 @@ use crate::window::library::lettered::{FeedsList, LetteredDestination};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::{SectionRef, Sections};
 
-/// The selected entry's Hero facts: the feed as the parent and the duration
-/// row with its role (design D12, row 11.1). A feed entry has no artwork
-/// source and no overview, so neither rides here.
+/// One typed segment, as the pills and the row values carry their text.
+fn segment(text: &str, kind: GuiMetaKindFrame) -> GuiMetaSegmentFrame {
+    GuiMetaSegmentFrame {
+        text: text.to_owned(),
+        kind,
+    }
+}
+
+/// One fact pill: its typed segments, no link.
+fn pill(segments: Vec<GuiMetaSegmentFrame>) -> GuiHeroPillFrame {
+    GuiHeroPillFrame {
+        segments,
+        link: None,
+    }
+}
+
+/// One labelled fact row: the label word its enum names, one plain value.
+fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
+    GuiHeroFactRowFrame {
+        label,
+        value: vec![segment(value, GuiMetaKindFrame::Plain)],
+    }
+}
+
+/// The selected entry's Hero facts: the feed as the parent, the duration
+/// pill, and the publish date row (design D12, row 11.1; design D1). A feed
+/// entry has no artwork source and no overview, so neither rides here.
 fn hero(art_shape: GuiArtShapeFrame) -> GuiFeedsHeroFrame {
     GuiFeedsHeroFrame {
         title: "The Long Road Home".to_owned(),
         parent: Some("Bits and Bites".to_owned()),
-        meta_rows: vec![vec![GuiMetaSegmentFrame {
-            text: "0 h 54 m".to_owned(),
-            kind: GuiMetaKindFrame::Time,
-        }]],
-        duration_row: Some(0),
-        progress_row: None,
+        facts: GuiHeroFactsFrame {
+            pills: vec![pill(vec![segment("0 h 54 m", GuiMetaKindFrame::Time)])],
+            rows: vec![row(GuiHeroFactLabelFrame::Published, "08 Oct")],
+        },
         art_shape,
     }
 }
@@ -297,7 +321,7 @@ fn built_hero() -> Fixture {
 /// the landscape fills the Hero content width at 16:9.
 #[rstest]
 #[case::square(GuiArtShapeFrame::Square, "width: 300px", "height: 300px")]
-#[case::landscape(GuiArtShapeFrame::Landscape, "width: 100%", "height: auto")]
+#[case::landscape(GuiArtShapeFrame::Landscape, "width: 100%", "aspect-ratio: 16 / 9")]
 fn a_hero_places_its_placeholder_artwork_box_at_the_shared_arm(
     #[case] shape: GuiArtShapeFrame,
     #[case] width: &str,
@@ -305,7 +329,7 @@ fn a_hero_places_its_placeholder_artwork_box_at_the_shared_arm(
 ) {
     let fixture = built(Some(hero(shape)), rows(Vec::new()));
 
-    let style = fixture.style_of("[data-library-feeds-hero-art]");
+    let style = fixture.style_of("[data-library-feeds-hero-art] > div > div");
     assert!(
         style.contains(width) && style.contains(height),
         "the box holds the {width} by {height} arm, painted: {style}"
@@ -319,9 +343,10 @@ fn a_hero_places_its_placeholder_artwork_box_at_the_shared_arm(
 }
 
 /// Contract (`LibraryFeedsHero.test.ts`): the Hero paints the feed as its
-/// title, the entry in the block, and the duration beside the art.
+/// title, the entry in the block with its publish date row, and the duration
+/// as the header band's fact pill.
 #[test]
-fn the_hero_paints_the_feed_as_its_title_the_entry_in_the_block_and_the_duration() {
+fn the_hero_paints_the_feed_as_its_title_the_entry_in_the_block_and_the_duration_pill() {
     let fixture = built_hero();
 
     assert_eq!(
@@ -335,17 +360,22 @@ fn the_hero_paints_the_feed_as_its_title_the_entry_in_the_block_and_the_duration
         "the entry paints in the block"
     );
     assert_eq!(
-        fixture.all_attrs(
-            "[data-library-feeds-hero-role]",
-            "data-library-feeds-hero-role"
-        ),
-        vec!["duration".to_owned()],
-        "the duration row paints its role"
+        fixture.all_texts("[data-library-feeds-hero-pills] [data-library-feeds-hero-pill]"),
+        vec!["0 h 54 m".to_owned()],
+        "the duration paints as the header band's fact pill"
     );
     assert_eq!(
-        fixture.all_texts("[data-library-feeds-hero-role]"),
-        vec!["0 h 54 m".to_owned()],
-        "the duration row paints its text"
+        fixture.all_attrs(
+            "[data-library-feeds-hero-row]",
+            "data-library-feeds-hero-row"
+        ),
+        vec!["published".to_owned()],
+        "the block paints the publish date row"
+    );
+    assert_eq!(
+        fixture.all_texts("[data-library-feeds-hero-row-value]"),
+        vec!["08 Oct".to_owned()],
+        "the row paints its value beside the label"
     );
 }
 
@@ -436,9 +466,9 @@ fn add_to_queue_sends_the_enqueue_command_for_the_selected_entry() {
 }
 
 /// Contract (`LibraryFeedsHero.test.ts`, invariant 30): a feed is a
-/// collection — the list band holds the feed's entries alone, and no entry
-/// carries a cursor: the Workspace keeps none
-/// (`gui-pointer-target-interaction` D6).
+/// collection — the list band paints under the Entries section and holds the
+/// feed's entries alone, and no entry carries a cursor: the Workspace keeps
+/// none (`gui-pointer-target-interaction` D6).
 #[test]
 fn the_list_band_holds_the_feed_entries_alone() {
     let extra = vec![
@@ -465,6 +495,11 @@ fn the_list_band_holds_the_feed_entries_alone() {
     ];
     let fixture = built(Some(hero(GuiArtShapeFrame::Square)), rows(extra));
 
+    assert_eq!(
+        fixture.text_of("section[data-library-feeds-hero-list] span"),
+        "Entries",
+        "the list band's section header names Entries"
+    );
     assert_eq!(
         fixture.all_attrs("[data-library-feeds-entry]", "data-library-feeds-entry"),
         vec!["sub1:guid12".to_owned(), "sub1:guid11".to_owned()],

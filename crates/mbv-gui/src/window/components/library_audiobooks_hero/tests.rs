@@ -1,7 +1,7 @@
 //! Headless tests of the Audiobooks Hero (D16): the contracts of
-//! `LibraryAudiobooksHero.test.ts` — the portrait cover-box, the title and
-//! the meta rows with their duration and progress roles, no overview, the
-//! chapter rows once they have landed, the chapter the predicted position
+//! `LibraryAudiobooksHero.test.ts` — the portrait cover-box, the title, the
+//! duration fact pill, the author row, no progress element and no overview,
+//! the chapter rows once they have landed, the chapter the predicted position
 //! holds marked while the Hero's book plays, the loading line while the
 //! detail has not landed, and the commands the chapter gestures and the
 //! Hero's buttons send. The IPC of the earlier tests is the mock core
@@ -23,8 +23,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::{LibraryAudiobooksHero, play_chapter_row};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame,
-    GuiAudiobooksList, GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiLibraryDetail,
-    GuiLibraryList, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiAudiobooksList, GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiHeroFactLabelFrame,
+    GuiHeroFactRowFrame, GuiHeroFactsFrame, GuiHeroPillFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -63,27 +64,39 @@ fn chapters() -> Vec<GuiAudiobooksChapterRowFrame> {
     ]
 }
 
-/// The selected book's Hero facts: the author, the duration, and the progress
-/// rows with their roles, and the chapter Workspace (design D12, row 9.1).
+/// One typed segment, as the pills and the row values carry their text.
+fn segment(text: &str, kind: GuiMetaKindFrame) -> GuiMetaSegmentFrame {
+    GuiMetaSegmentFrame {
+        text: text.to_owned(),
+        kind,
+    }
+}
+
+/// One fact pill: its typed segments, no link.
+fn pill(segments: Vec<GuiMetaSegmentFrame>) -> GuiHeroPillFrame {
+    GuiHeroPillFrame {
+        segments,
+        link: None,
+    }
+}
+
+/// One labelled fact row: the label word its enum names, one plain value.
+fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
+    GuiHeroFactRowFrame {
+        label,
+        value: vec![segment(value, GuiMetaKindFrame::Plain)],
+    }
+}
+
+/// The selected book's Hero facts: the duration pill, the author row, and
+/// the chapter Workspace (design D12, row 9.1; design D1).
 fn hero(overrides: impl FnOnce(&mut GuiAudiobooksHeroFrame)) -> GuiAudiobooksHeroFrame {
     let mut facts = GuiAudiobooksHeroFrame {
         title: "The Caves of Steel".to_owned(),
-        meta_rows: vec![
-            vec![GuiMetaSegmentFrame {
-                text: "Isaac Asimov".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "9 h 51 m".to_owned(),
-                kind: GuiMetaKindFrame::Time,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "17%".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-        ],
-        duration_row: Some(1),
-        progress_row: Some(2),
+        facts: GuiHeroFactsFrame {
+            pills: vec![pill(vec![segment("9 h 51 m", GuiMetaKindFrame::Time)])],
+            rows: vec![row(GuiHeroFactLabelFrame::Author, "Isaac Asimov")],
+        },
         overview: None,
         art_shape: GuiArtShapeFrame::Portrait,
         art: None,
@@ -353,17 +366,18 @@ fn chapter_two_position() -> f64 {
 fn the_portrait_hero_places_its_artwork_box_at_the_portrait_size() {
     let fixture = built_book();
 
-    let style = fixture.style_of("[data-library-abs-hero-art]");
+    let style = fixture.style_of("[data-library-abs-hero-art] > div > div");
     assert!(
         style.contains("width: 300px") && style.contains("height: 450px"),
         "the portrait box holds 300 px by 450 px, painted: {style}"
     );
 }
 
-/// Contract (`LibraryAudiobooksHero.test.ts`): the Hero paints its title, its
-/// plain facts under it, and its duration and progress beside the art.
+/// Contract (`LibraryAudiobooksHero.test.ts`, design D2): the Hero paints
+/// its title, the book's duration as the header band's fact pill, and the
+/// book's author as the block's labelled row.
 #[test]
-fn the_hero_paints_its_title_its_plain_facts_and_its_duration_and_progress() {
+fn the_hero_paints_its_title_its_duration_pill_and_its_author_row() {
     let fixture = built_book();
 
     assert_eq!(
@@ -372,19 +386,55 @@ fn the_hero_paints_its_title_its_plain_facts_and_its_duration_and_progress() {
         "the title paints"
     );
     assert_eq!(
-        fixture.text_of("[data-library-abs-hero-facts]"),
-        "Isaac Asimov",
-        "the plain facts paint under the title"
+        fixture.all_texts("[data-library-abs-hero-pills] [data-library-abs-hero-pill]"),
+        vec!["9 h 51 m".to_owned()],
+        "the duration paints as the header band's fact pill"
     );
     assert_eq!(
-        fixture.all_attrs("[data-library-abs-hero-role]", "data-library-abs-hero-role"),
-        vec!["duration".to_owned(), "progress".to_owned()],
-        "the duration and progress rows paint their roles"
+        fixture.all_attrs("[data-library-abs-hero-row]", "data-library-abs-hero-row"),
+        vec!["author".to_owned()],
+        "the block paints the author row"
     );
     assert_eq!(
-        fixture.all_texts("[data-library-abs-hero-role]"),
-        vec!["9 h 51 m".to_owned(), "17%".to_owned()],
-        "the duration and progress rows paint their texts"
+        fixture.all_texts("[data-library-abs-hero-row-value]"),
+        vec!["Isaac Asimov".to_owned()],
+        "the row paints its value beside the label"
+    );
+}
+
+/// Contract (spec scenario "A partly played item shows no progress"): a book
+/// played past its half shows no progress element — no progress bar, no
+/// resume position, and no remaining time; Play still resumes from the stored
+/// position through the queue.
+#[test]
+fn a_partly_played_item_shows_no_progress() {
+    let fixture = built_at(
+        Some(hero(|_| ())),
+        false,
+        Some("book1"),
+        chapter_two_position(),
+    );
+
+    assert!(
+        !fixture.presents("[data-library-abs-hero-role]"),
+        "no duration or progress role row paints"
+    );
+    assert!(
+        !fixture.text_of("[data-library-abs-hero]").contains('%'),
+        "no painted text holds a progress percent"
+    );
+}
+
+/// Contract (gui-hero-design-polish D2): the list band paints under the
+/// Chapters section header.
+#[test]
+fn the_list_band_paints_under_the_chapters_section() {
+    let fixture = built_book();
+
+    assert_eq!(
+        fixture.text_of("section[data-library-abs-hero-list] span"),
+        "Chapters",
+        "the list band's section header names Chapters"
     );
 }
 

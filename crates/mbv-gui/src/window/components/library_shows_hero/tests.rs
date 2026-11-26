@@ -26,7 +26,8 @@ use super::{
     select_season,
 };
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiMetaKindFrame,
+    GuiArtShapeFrame, GuiHeroFactLabelFrame, GuiHeroFactRowFrame, GuiHeroFactsFrame,
+    GuiHeroPillFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiMetaKindFrame,
     GuiMetaSegmentFrame, GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame,
     GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
 };
@@ -40,6 +41,30 @@ use crate::window::sections::{SectionRef, Sections};
 
 /// The library index the Shows commands name.
 const LIB_IDX: usize = 2;
+
+/// One typed segment, as the pills and the row values carry their text.
+fn segment(text: &str, kind: GuiMetaKindFrame) -> GuiMetaSegmentFrame {
+    GuiMetaSegmentFrame {
+        text: text.to_owned(),
+        kind,
+    }
+}
+
+/// One fact pill: its typed segments, no link.
+fn pill(segments: Vec<GuiMetaSegmentFrame>) -> GuiHeroPillFrame {
+    GuiHeroPillFrame {
+        segments,
+        link: None,
+    }
+}
+
+/// One labelled fact row: the label word its enum names, one plain value.
+fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
+    GuiHeroFactRowFrame {
+        label,
+        value: vec![segment(value, GuiMetaKindFrame::Plain)],
+    }
+}
 
 /// The selected season's episodes: one played, one untouched.
 fn episodes() -> Vec<GuiShowsEpisodeRowFrame> {
@@ -81,23 +106,19 @@ fn workspace() -> GuiShowsWorkspaceFrame {
     }
 }
 
-/// The selected row's Hero facts: the series' facts with its Workspace.
+/// The selected row's Hero facts: the series' fact pills (the kind word, the
+/// season count), its Network row, and its Workspace.
 fn hero(overrides: impl FnOnce(&mut GuiShowsHeroFrame)) -> GuiShowsHeroFrame {
     let mut facts = GuiShowsHeroFrame {
         title: "Better Call Saul".to_owned(),
         parent: None,
-        meta_rows: vec![
-            vec![GuiMetaSegmentFrame {
-                text: "TV Series".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "5 seasons".to_owned(),
-                kind: GuiMetaKindFrame::Count,
-            }],
-        ],
-        duration_row: None,
-        progress_row: None,
+        facts: GuiHeroFactsFrame {
+            pills: vec![
+                pill(vec![segment("TV Series", GuiMetaKindFrame::Plain)]),
+                pill(vec![segment("5 seasons", GuiMetaKindFrame::Count)]),
+            ],
+            rows: vec![row(GuiHeroFactLabelFrame::Network, "AMC")],
+        },
         overview: Some("A lawyer turns to the wrong clients.".to_owned()),
         art_shape: GuiArtShapeFrame::Landscape,
         art: None,
@@ -322,7 +343,7 @@ fn a_cover_hero_places_its_artwork_box_at_300_px_wide(
 ) {
     let fixture = built(Some(hero(|facts| facts.art_shape = shape)));
 
-    let style = fixture.style_of("[data-library-shows-hero-art]");
+    let style = fixture.style_of("[data-library-shows-hero-art] > div > div");
     assert!(
         style.contains("width: 300px") && style.contains(&format!("height: {height}")),
         "the box holds 300 px by {height}, painted: {style}"
@@ -361,18 +382,18 @@ fn the_detail_block_wraps_its_text_below_the_art_for_every_shape(#[case] shape: 
 fn a_landscape_hero_fills_the_hero_content_width_at_16_9() {
     let fixture = built_series();
 
-    let style = fixture.style_of("[data-library-shows-hero-art]");
+    let style = fixture.style_of("[data-library-shows-hero-art] > div > div");
     assert!(
-        style.contains("width: 100%")
-            && style.contains("aspect-ratio: 16 / 9")
-            && style.contains("height: auto"),
+        style.contains("width: 100%") && style.contains("aspect-ratio: 16 / 9"),
         "the landscape still fills the content width at 16:9, painted: {style}"
     );
 }
 
-/// Contract (`LibraryShowsHero.test.ts`): the Hero paints the series in the
-/// header band and the series' detail beside its poster — the selected season
-/// where Music paints the album, and the series' overview under it.
+/// Contract (`LibraryShowsHero.test.ts`, gui-hero-design-polish D2): the Hero
+/// paints the series in the header band — the series' fact pills — and the
+/// series' detail beside its poster: the selected season where Music paints
+/// the album, the season's episode count as the block's pill, the series'
+/// Network row, and the series' overview under its section.
 #[test]
 fn the_hero_paints_the_series_in_the_header_and_the_season_s_detail_beside_its_poster() {
     let fixture = built_series();
@@ -388,9 +409,9 @@ fn the_hero_paints_the_series_in_the_header_and_the_season_s_detail_beside_its_p
         "the title is the series"
     );
     assert_eq!(
-        fixture.text_of("[data-library-shows-hero-facts]"),
-        "TV Series · 5 seasons",
-        "the header's facts join the series' meta rows"
+        fixture.all_texts("[data-library-shows-hero-pills] [data-library-shows-hero-pill]"),
+        vec!["TV Series".to_owned(), "5 seasons".to_owned()],
+        "the header paints the series' fact pills"
     );
     assert_eq!(
         fixture.text_of("[data-library-shows-hero-block-name]"),
@@ -398,14 +419,40 @@ fn the_hero_paints_the_series_in_the_header_and_the_season_s_detail_beside_its_p
         "the block's name is the selected season"
     );
     assert_eq!(
-        fixture.text_of("[data-library-shows-hero-block-facts]"),
-        "2 episodes",
-        "the block's facts are the selected season's episode count"
+        fixture.all_texts("[data-library-shows-hero-block-pills] [data-library-shows-hero-pill]"),
+        vec!["2 episodes".to_owned()],
+        "the block's pill is the selected season's episode count"
     );
     assert_eq!(
-        fixture.text_of("[data-library-shows-hero-overview]"),
+        fixture.all_attrs(
+            "[data-library-shows-hero-row]",
+            "data-library-shows-hero-row"
+        ),
+        vec!["network".to_owned()],
+        "the block paints the series' labelled row"
+    );
+    assert_eq!(
+        fixture.all_texts("[data-library-shows-hero-row-value]"),
+        vec!["AMC".to_owned()],
+        "the row paints its value beside the label"
+    );
+    assert_eq!(
+        fixture.text_of("p[data-library-shows-hero-overview]"),
         "A lawyer turns to the wrong clients.",
-        "the overview paints under the block"
+        "the overview paints under its section"
+    );
+}
+
+/// Contract (gui-hero-design-polish D2): a series Hero's list band paints
+/// under the Episodes section header.
+#[test]
+fn the_series_hero_s_list_band_paints_under_the_episodes_section() {
+    let fixture = built_series();
+
+    assert_eq!(
+        fixture.text_of("section[data-library-shows-hero-list] span"),
+        "Episodes",
+        "the list band's section header names Episodes"
     );
 }
 
@@ -464,8 +511,9 @@ fn the_workspace_paints_the_selected_season_s_episodes() {
     );
 }
 
-/// Contract (`LibraryShowsHero.test.ts`): the Latest mode's Hero paints its
-/// facts and no Workspace.
+/// Contract (`LibraryShowsHero.test.ts`, gui-hero-design-polish D2): the
+/// Latest mode's Hero paints its facts and no Workspace — a flat Shows
+/// episode Hero passes no list title and no list children.
 #[test]
 fn the_latest_mode_s_hero_paints_its_facts_and_no_workspace() {
     let fixture = built(Some(hero(|facts| facts.workspace = None)));
@@ -483,6 +531,10 @@ fn the_latest_mode_s_hero_paints_its_facts_and_no_workspace() {
     assert!(
         !fixture.presents("[data-library-shows-workspace]"),
         "no Workspace paints"
+    );
+    assert!(
+        !fixture.presents("[data-library-shows-hero-list]"),
+        "no list band paints"
     );
 }
 

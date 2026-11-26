@@ -178,9 +178,10 @@ pub(super) fn shows_detail() -> GuiShowsDetail {
         hero: Some(GuiShowsHeroFrame {
             title: "Atlanta".to_owned(),
             parent: None,
-            meta_rows: vec![segment("4 seasons", GuiMetaKindFrame::Count)],
-            duration_row: None,
-            progress_row: None,
+            facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                pills: Vec::new(),
+                rows: Vec::new(),
+            },
             overview: None,
             art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
             art: None,
@@ -309,12 +310,10 @@ pub(super) fn audiobooks_hero(
 ) -> GuiAudiobooksHeroFrame {
     GuiAudiobooksHeroFrame {
         title: "Aftermath".to_owned(),
-        meta_rows: vec![
-            segment("Bill Wyman", GuiMetaKindFrame::Plain),
-            segment("4:32", GuiMetaKindFrame::Time),
-        ],
-        duration_row: Some(1),
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         overview: None,
         art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Portrait,
         art: None,
@@ -374,12 +373,10 @@ pub(super) fn feeds_hero() -> GuiFeedsHeroFrame {
     GuiFeedsHeroFrame {
         title: "Entry A".to_owned(),
         parent: None,
-        meta_rows: vec![
-            segment("Sub One", GuiMetaKindFrame::Plain),
-            segment("12:30", GuiMetaKindFrame::Time),
-        ],
-        duration_row: Some(1),
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
     }
 }

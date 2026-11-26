@@ -1,17 +1,18 @@
 //! The Audiobooks Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryAudiobooksHero`; add-gui-library-panel design D12, row 9.1):
-//! the selected book's detail pane in the Home and Shows Hero look — the
-//! portrait cover-box the book artwork policy declares, the title, and the
-//! meta rows with their duration and progress roles. The facts carry no
-//! overview, no narrator, and no series: the Hero keeps the TUI's facts.
-//!
-//! The book's chapters are the Hero's Workspace (the `GuiAudiobooksWorkspaceFrame`
-//! rows): title and duration, with the chapter the book plays at marked with
-//! the tracklist's play glyph. The Workspace keeps no cursor
-//! (`gui-pointer-target-interaction` D6): the keys act on the chapter the
-//! pointer marks, a press on a row does nothing, a double-click plays or seeks
-//! from the chapter, and the row's hover controls (gui-row-hover-actions D5)
-//! paint Play only. A chapter enqueues nothing, so the table takes no `on_queue`.
+//! `LibraryAudiobooksHero`; add-gui-library-panel design D12, row 9.1;
+//! gui-hero-design-polish design D2, D4): the selected book's detail pane on
+//! the shared frame — the portrait cover-box the book artwork policy
+//! declares, the book's duration as the header band's fact pill, and the
+//! book's author row. No playback progress paints anywhere in the Hero: the
+//! queue handles playback, and Play still resumes from the stored position.
+//! The book's chapters are the Hero's Workspace under the Chapters section
+//! (the `GuiAudiobooksWorkspaceFrame` rows): title and duration, with the
+//! chapter the book plays at marked with the tracklist's play glyph. The
+//! Workspace keeps no cursor (`gui-pointer-target-interaction` D6): the keys
+//! act on the chapter the pointer marks, a press on a row does nothing, a
+//! double-click plays or seeks from the chapter, and the row's hover controls
+//! (gui-row-hover-actions D5) paint Play only. A chapter enqueues nothing, so
+//! the table takes no `on_queue`.
 //!
 //! Play, and Add to queue (`a`), send the Audiobooks destination's commands
 //! with the frame's selected book (design D12) — the core owns the selection,
@@ -20,6 +21,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::art::{GuiArtRef, glow_from_art};
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksWorkspaceFrame, GuiLibraryDetail,
 };
@@ -30,7 +32,7 @@ use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
 use crate::window::library::audiobooks_workspace::{marked_chapter_of, workspace_of};
-use crate::window::library::hero::{HeroLayoutFacts, hero_command, hero_layout};
+use crate::window::library::hero::{hero_command, label_segments};
 use crate::window::library::lettered::{AudiobooksList, LetteredDestination};
 use crate::window::library::parts::library_audiobooks_detail;
 use crate::window::library::state::LibraryState;
@@ -124,18 +126,23 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     // Workspace only when the mark moves.
     let marked = marked_chapter_of(detail, Some(position));
 
-    // The frame's header and block for the Hero (invariant 30).
-    let facts = HeroLayoutFacts {
-        title: &hero.title,
-        parent: None,
-        meta_rows: &hero.meta_rows,
-        duration_row: hero.duration_row,
-        progress_row: hero.progress_row,
-        overview: hero.overview.as_deref(),
-        // A book is the Hero's own largest unit, so it titles the header.
-        episode: false,
+    // The frame's header and block for the Hero (invariant 30): a book is
+    // its own largest unit, so it titles the header, and the block holds its
+    // author row. The facts carry no overview, no narrator, and no series:
+    // the Hero keeps the TUI's facts. No progress paints (design D2).
+    let header = HeroHeader {
+        kicker: label_segments("audiobook"),
+        title: hero.title.clone(),
+        pills: hero.facts.pills.clone(),
     };
-    let layout = hero_layout(&facts, "audiobook");
+    let block = HeroBlock {
+        label: hero.title.clone(),
+        eyebrow: None,
+        name: None,
+        name_episode: false,
+        pills: Vec::new(),
+        rows: hero.facts.rows.clone(),
+    };
 
     // The Workspace table's rows: each chapter with its number, its title,
     // its duration, and the playing mark from the predicted position (design
@@ -210,16 +217,28 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
         }
     });
 
+    // The header band's glow (design D4): the shared art-to-glow mapping over
+    // the Hero's own art, `None` while the art is absent, still loading, or
+    // the bundled placeholder.
+    let glow = hero
+        .art
+        .as_ref()
+        .and_then(glow_from_art)
+        .map(|src| GuiArtRef::Image { src });
+
     rsx! {
         LibraryHeroFrame {
             attr: "abs",
             root: "data-library-abs-hero",
-            header: HeroHeader::from(layout.header),
-            block: HeroBlock::from(layout.block),
+            header,
+            block,
             art_shape: hero.art_shape,
             art: hero.art.clone(),
             art_title: hero.title.clone(),
             actions: Some(actions),
+            overview: hero.overview.clone(),
+            glow,
+            list_title: children.is_some().then(|| "Chapters".to_owned()),
             children,
         }
     }
