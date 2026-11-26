@@ -195,11 +195,19 @@ fn teardown_old_receiver_app(daemon: &DaemonLoop) {
 /// fresh local run at the captured position, paused when the old output was
 /// paused (row 7.2). The stop reports go out before the local run starts
 /// (design D9).
-pub(crate) fn hand_remote_output_back_to_local(daemon: &mut DaemonLoop, reply_tx: &CtrlSender) {
-    let handoff = {
-        refresh_active_output_presentation(daemon, Instant::now());
-        capture_handoff_for_selection(daemon)
-    };
+///
+/// `intent` is the user's answer to the output prompt (switch-output-without-
+/// hand-off design D5): a `Continue` answer captures the remote playback and
+/// continues it locally, while a `SwitchOnly` answer captures nothing, so the
+/// remote output stops and no local run starts. Either way the swap stops the
+/// old output, and a switch clears and publishes the observed slot, so no
+/// Client highlights the slot that stopped (invariant 25).
+pub(crate) fn hand_remote_output_back_to_local(
+    daemon: &mut DaemonLoop,
+    reply_tx: &CtrlSender,
+    intent: SelectionIntent,
+) {
+    let handoff = capture_handoff_for_intent(daemon, intent);
     stop_old_output_for_handoff(daemon);
     // A stop makes every awaited transition identity unobservable (the same
     // rule the ctrl stop applies), so the fresh run starts with a clear gate.
@@ -211,6 +219,12 @@ pub(crate) fn hand_remote_output_back_to_local(daemon: &mut DaemonLoop, reply_tx
     broadcast_output_change(daemon);
     if let Some(handoff) = handoff {
         continue_slot_on_local(daemon, handoff, reply_tx);
+    } else if matches!(intent, SelectionIntent::SwitchOnly) {
+        // A switch hands nothing off, so the new local output plays nothing:
+        // the observed active slot is recorded as none and published, so no
+        // Client highlights the slot that stopped (invariant 25).
+        daemon.owner.core.note_observed_active_slot(None);
+        daemon.shared_queue.publish_observed(&daemon.owner.core);
     }
 }
 

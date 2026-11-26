@@ -108,10 +108,12 @@ pub fn handle_select_playback_output(
             // Selecting Local while a remote output is the output hands the
             // active slot back (design D10, row 7.1 dispatch B; design D11):
             // capture, stop and tear down the receiver or the Session, then
-            // continue the slot on a fresh local run.
+            // continue the slot on a fresh local run. A switch-only answer
+            // continues nothing (switch-output-without-hand-off design D5):
+            // the remote output stops and no local run starts.
             match &daemon.owner.output {
                 PlaybackOutput::Cast(_) | PlaybackOutput::EmbySession(_) => {
-                    hand_remote_output_back_to_local(daemon, reply_tx);
+                    hand_remote_output_back_to_local(daemon, reply_tx, intent);
                 }
                 PlaybackOutput::Local => {}
             }
