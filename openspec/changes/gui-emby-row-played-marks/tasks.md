@@ -14,8 +14,8 @@ All work is in `crates/mbv-gui`. Every verification names `-p mbv-gui`. Tests fo
 
 ## 3. The row paints the state (design D3)
 
-- [ ] 3.1 In `crates/mbv-gui/src/window/library/lettered/adapters.rs`, pass `play: Some(crate::window::components::play_mark::RowPlay::of_row(&item.row.state))` in `paint_emby_row`'s `FlatRow`. No other painter change: the flat row owns the whole look (design D3). Update the module doc. Verify: `cargo check -p mbv-gui` passes.
-- [ ] 3.2 In `crates/mbv-gui/src/window/components/library_lettered_list/tests/emby.rs`, write one test: a played row paints `data-play-mark="played"` and the played title weight, and an ordinary row paints `data-play-mark="unplayed"`. The contract is the prop pass (spec "An Emby library row carries the shared play state"). Do not re-cover the mark's rendering or the flat row's look; `play_mark` and `list_row` own those. Verify: `cargo nextest run -p mbv-gui library_lettered_list` passes.
+- [x] 3.1 In `crates/mbv-gui/src/window/library/lettered/adapters.rs`, pass `play: Some(crate::window::components::play_mark::RowPlay::of_row(&item.row.state))` in `paint_emby_row`'s `FlatRow`. No other painter change: the flat row owns the whole look (design D3). Update the module doc. Verify: `cargo check -p mbv-gui` passes.
+- [x] 3.2 In `crates/mbv-gui/src/window/components/library_lettered_list/tests/emby.rs`, write one test: a played row paints `data-play-mark="played"` and the played title weight, and an ordinary row paints `data-play-mark="unplayed"`. The contract is the prop pass (spec "An Emby library row carries the shared play state"). Do not re-cover the mark's rendering or the flat row's look; `play_mark` and `list_row` own those. Verify: `cargo nextest run -p mbv-gui library_lettered_list` passes.
 
 ## 4. Gates
 
