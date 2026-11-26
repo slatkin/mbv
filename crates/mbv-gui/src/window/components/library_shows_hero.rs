@@ -37,7 +37,7 @@ use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, Libra
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
-use crate::window::library::hero::{label_segments, plain_segments};
+use crate::window::library::hero::plain_segments;
 use crate::window::library::list::filter_match;
 use crate::window::library::parts::library_shows_detail;
 use crate::window::library::state::LibraryState;
@@ -228,7 +228,6 @@ fn header_and_block(
             .unwrap_or_default();
         (
             HeroHeader {
-                kicker: label_segments("series"),
                 title: hero.title.clone(),
                 pills: hero.facts.pills.clone(),
             },
@@ -248,11 +247,6 @@ fn header_and_block(
         let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
         (
             HeroHeader {
-                kicker: label_segments(if parent.is_some() {
-                    "series"
-                } else {
-                    "episode"
-                }),
                 title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
                 pills: hero.facts.pills.clone(),
             },

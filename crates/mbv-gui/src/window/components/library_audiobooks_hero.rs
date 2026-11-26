@@ -33,7 +33,7 @@ use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
 use crate::window::library::audiobooks_workspace::{marked_chapter_of, workspace_of};
-use crate::window::library::hero::{hero_command, label_segments};
+use crate::window::library::hero::hero_command;
 use crate::window::library::lettered::{AudiobooksList, LetteredDestination};
 use crate::window::library::parts::library_audiobooks_detail;
 use crate::window::library::state::LibraryState;
@@ -132,7 +132,6 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     // author row. The facts carry no overview, no narrator, and no series:
     // the Hero keeps the TUI's facts. No progress paints (design D2).
     let header = HeroHeader {
-        kicker: label_segments("audiobook"),
         title: hero.title.clone(),
         pills: hero.facts.pills.clone(),
     };

@@ -38,42 +38,12 @@ pub fn plain_segments(text: &str) -> Segments {
     }
 }
 
-/// A section label's line, which paints the label token (design D14).
-#[must_use]
-pub fn label_segments(text: &str) -> Segments {
-    vec![GuiMetaSegmentFrame {
-        text: text.to_owned(),
-        kind: GuiMetaKindFrame::Label,
-    }]
-}
-
 /// One fact pill over its typed segments (design D1): a plain fact, no link.
 fn fact_pill(segments: Segments) -> GuiHeroPillFrame {
     GuiHeroPillFrame {
         segments,
         link: None,
     }
-}
-
-/// The artist header's first line, `ARTIST · HIP-HOP` as the canvas prints it:
-/// the artist label with the selected collection names (design D5). The
-/// artist page's eyebrow is its selected collections alone, in the label style
-/// (design D5), empty when none is selected.
-#[must_use]
-pub fn hero_kicker(hero: &GuiMusicHeroFrame) -> Segments {
-    if matches!(hero.subject, GuiMusicHeroSubjectFrame::Artist(_)) {
-        return if hero.collections.is_empty() {
-            Vec::new()
-        } else {
-            label_segments(&hero.collections.join(" + "))
-        };
-    }
-    let line = if hero.collections.is_empty() {
-        "artist".to_owned()
-    } else {
-        format!("artist · {}", hero.collections.join(" + ").to_uppercase())
-    };
-    label_segments(&line)
 }
 
 /// `13 tracks` and `44:25` as two pills: the track count, then the total time.

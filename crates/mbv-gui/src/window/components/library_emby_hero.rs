@@ -1,7 +1,7 @@
 //! The plain Emby-library Hero (gui-hero-design-polish design D2, D3, D4):
 //! the frame (`LibraryHeroFrame`) over the selected row. The header band
-//! carries the item's kind word as the kicker, the title, and the fact pills
-//! — the `IMDb` link is a link pill, as every Hero's link fact is. The detail
+//! carries the title and the fact pills — the `IMDb` link is a link pill, as
+//! every Hero's link fact is. The detail
 //! block beside the art holds the labelled fact rows and the action row; the
 //! Overview and Cast sections follow when the item has them; the backdrop behind
 //! the header band is the shared art-to-backdrop mapping over the Hero's own art.
@@ -22,7 +22,7 @@ use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
-use crate::window::library::hero::{hero_command, label_segments};
+use crate::window::library::hero::hero_command;
 use crate::window::library::lettered::{EmbyList, LetteredDestination};
 use crate::window::library::parts::library_emby_detail;
 use crate::window::library::state::LibraryState;
@@ -41,9 +41,9 @@ pub struct LibraryEmbyHeroProps {
 }
 
 /// The plain Emby-library Hero:
-/// the frame over the selected row — the kind kicker and the fact pills in
-/// the header band, the labelled rows in the detail block, and the Overview
-/// and Cast sections when the item has them.
+/// the frame over the selected row — the fact pills in the header band, the
+/// labelled rows in the detail block, and the Overview and Cast sections when
+/// the item has them.
 #[component]
 pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
@@ -59,9 +59,8 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
     };
 
     // The header band (invariant 30): the item is its own largest unit, so
-    // it titles the header, and its kind word in upper case is the kicker.
+    // it titles the header.
     let header = HeroHeader {
-        kicker: label_segments(&hero.kind.to_uppercase()),
         title: hero.title.clone(),
         pills: hero.facts.pills.clone(),
     };

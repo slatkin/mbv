@@ -614,21 +614,14 @@ fn the_playing_track_marks_the_bars_mark_and_keeps_its_own_fill() {
 }
 
 /// Contract (spec "The Hero paints a picked album"): the album's header
-/// carries no artist facts, so it paints no fact pills, and its kicker names
-/// the artist's selected collections.
+/// carries no artist facts, so it paints no fact pills.
 #[test]
-fn the_album_header_carries_no_fact_pills_and_names_the_collections() {
+fn the_album_header_carries_no_fact_pills() {
     let fixture = built_hero();
 
     assert!(
         !fixture.presents("[data-library-hero-pills]"),
         "the album header paints no fact pills"
-    );
-    assert!(
-        fixture
-            .text_of("[data-library-hero-kicker]")
-            .contains("HIP-HOP"),
-        "the kicker names the selected collections"
     );
 }
 

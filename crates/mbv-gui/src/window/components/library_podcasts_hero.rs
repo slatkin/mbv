@@ -20,7 +20,7 @@ use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
-use crate::window::library::hero::{hero_command, label_segments};
+use crate::window::library::hero::hero_command;
 use crate::window::library::lettered::{LetteredDestination, PodcastsList};
 use crate::window::library::parts::library_podcasts_detail;
 use crate::window::library::state::LibraryState;
@@ -58,7 +58,6 @@ pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
     // pass — the Hero paints no list band (design D2).
     let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
     let header = HeroHeader {
-        kicker: label_segments("podcast"),
         title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
         pills: hero.facts.pills.clone(),
     };

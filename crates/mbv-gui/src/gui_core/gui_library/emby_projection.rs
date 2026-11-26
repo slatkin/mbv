@@ -89,10 +89,6 @@ pub struct GuiEmbyRow {
 /// Hero has no Workspace, so none rides here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEmbyHero {
-    /// The item's kind word for the Hero's kicker (design D17): the item
-    /// type's lowercase word — `movie`, `video` — the kind's own word, so a
-    /// library of mixed kinds names each item's.
-    pub kind: String,
     /// The hero's title.
     pub title: String,
     /// The item's facts (gui-hero-design-polish design D1): the header
@@ -340,7 +336,6 @@ impl GuiCore {
             super::artwork::emby_hero_art(&mut self.app, content.facts.artwork.source.as_ref());
         let cast = hero_cast_emby(&mut self.app, item);
         GuiEmbyHero {
-            kind: item.item_type.to_lowercase(),
             title: content.facts.title.clone(),
             facts: hero_facts_emby(item),
             overview: content.overview.clone(),

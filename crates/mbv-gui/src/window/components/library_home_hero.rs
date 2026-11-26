@@ -20,7 +20,7 @@ use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::{GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiLibraryDetail};
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
-use crate::window::library::hero::{Segments, selected_with_hero};
+use crate::window::library::hero::selected_with_hero;
 use crate::window::library::parts::library_home_detail;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
@@ -56,12 +56,11 @@ fn press(
 /// The frame's header and block for the Home Hero (invariant 30): a parent
 /// titles the header, and the item's own name paints in the block's name line,
 /// one step smaller. With no parent the item titles the header and the block
-/// names nothing. The kicker is empty: the Home frame carries no kind word.
+/// names nothing.
 fn header_and_block(hero: &GuiHomeHeroFrame) -> (HeroHeader, HeroBlock) {
     let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
     (
         HeroHeader {
-            kicker: Segments::default(),
             title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
             pills: hero.facts.pills.clone(),
         },

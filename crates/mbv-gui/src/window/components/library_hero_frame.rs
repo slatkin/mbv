@@ -5,8 +5,8 @@
 //!   1. the backdrop layer — the blurred copy of the Hero's art (design D4),
 //!      cover-fit behind the header band under a fade to the pane's
 //!      background, when the destination passes one;
-//!   2. the header band — the kicker as the eyebrow with a leading dot, the
-//!      title, and the fact pills row, with an optional action on its right;
+//!   2. the header band — the title and the fact pills row, with an optional
+//!      action on its right;
 //!   3. the detail block — the artwork box (inset frame)
 //!      and, beside it, the picked item's eyebrow, name, block pills, action
 //!      row, and labelled fact rows;
@@ -50,8 +50,7 @@ pub struct LibraryHeroFrameProps {
     /// The root's own attribute, the hook the panel's tests take.
     pub root: &'static str,
     /// The header band: always painted, so every Hero shares the one look.
-    /// The kicker is the eyebrow's label, and the pills carry each value's
-    /// data type (design D14).
+    /// The pills carry each value's data type (design D14).
     pub header: HeroHeader,
     /// The header band's trailing control, when the destination has one.
     #[props(default)]
@@ -114,8 +113,6 @@ impl std::fmt::Debug for LibraryHeroFrameProps {
 /// The header band's lines.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeroHeader {
-    /// The section label's line (the eyebrow, painted with a leading dot).
-    pub kicker: Segments,
     /// The big title: the largest unit.
     pub title: String,
     /// The fact pills, in paint order (design D2: the facts line's
@@ -187,10 +184,6 @@ const HERO_NAME_PX: f32 = 18.0;
 /// (user request 2026-11-24).
 const HERO_EPISODE_NAME_PX: f32 = 16.0;
 
-/// The eyebrow's leading dot (design D2): the artboard's small round mark
-/// before the kicker's label, in the label kind's hue.
-const EYEBROW_DOT_STYLE: &str = "width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--canvas-type-label);";
-
 /// The pane's painted width in CSS pixels, provided by the Library panel: the
 /// Heroes bake the backdrop at the next 200 px step above it.
 #[derive(Debug, Clone, Copy)]
@@ -223,7 +216,6 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
     } = props;
 
     let root_attrs = vec![Attribute::new(root, "", None, false)];
-    let kicker_attrs = vec![Attribute::new(own(attr, "kicker"), "", None, false)];
     let title_attrs = vec![Attribute::new(own(attr, "title"), "", None, false)];
     let overview_attrs = vec![Attribute::new(own(attr, "overview"), "", None, false)];
     // The name line's size (user request 2026-11-24): an episode's name paints
@@ -265,19 +257,6 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                 div {
                     class: "relative flex min-w-0 flex-col",
                     style: "gap: 6px;",
-                    if !header.kicker.is_empty() {
-                        div {
-                            class: "flex items-center",
-                            style: "gap: 8px;",
-                            span { style: "{EYEBROW_DOT_STYLE}", }
-                            span {
-                                class: "font-mono",
-                                style: "font-size: 12px; letter-spacing: 0.08em;",
-                                ..kicker_attrs,
-                                TypedText { segments: header.kicker.clone() }
-                            }
-                        }
-                    }
                     h1 {
                         style: format!("{HERO_HEADING_STYLE} font-size: {HERO_TITLE_PX}px;"),
                         ..title_attrs,

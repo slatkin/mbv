@@ -28,7 +28,6 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::ArtEvents;
-use crate::window::library::hero::label_segments;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
@@ -39,7 +38,6 @@ fn props() -> LibraryHeroFrameProps {
         attr: "abs",
         root: "data-library-abs-hero",
         header: HeroHeader {
-            kicker: label_segments("audiobook"),
             title: "The Long Road Home".to_owned(),
             pills: Vec::new(),
         },
@@ -226,24 +224,20 @@ fn built(props: LibraryHeroFrameProps) -> Fixture {
 }
 
 /// Contract (the frame's one look, `LibraryHeroFrame.test.ts`): the frame
-/// paints its header band above the artwork — the kicker over the title, both
-/// before the art box.
+/// paints its header band above the artwork — the title before the art box.
 #[test]
 fn the_frame_paints_its_header_band_above_the_artwork() {
     let fixture = built(props());
 
-    assert_eq!(
-        fixture.text_of("[data-library-abs-hero-kicker]"),
-        "audiobook",
-        "the kicker is the header band's label"
-    );
     assert_eq!(
         fixture.tag_of("[data-library-abs-hero-title]"),
         "h1",
         "the title paints in the header band's h1"
     );
     let text = fixture.text_of("[data-library-abs-hero]");
-    let header = text.find("audiobook").expect("the header band paints");
+    let header = text
+        .find("The Long Road Home")
+        .expect("the header band paints");
     let art = text.find("[No art").expect("the art box paints");
     assert!(header < art, "the header band paints above the artwork");
 }

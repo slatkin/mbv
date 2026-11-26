@@ -2123,7 +2123,7 @@ governs these. `LibraryHeroFrame` is the only Hero layout, for Home, Music, Show
 Audiobooks, Feeds, and Movies (gui-hero-design-polish D2). It paints, top to
 bottom: the backdrop layer, the header band, the detail block, and the bands.
 
-The header band holds the kicker as the eyebrow, the title, and the fact pills
+The header band holds the title and the fact pills
 (`LibraryHeroPills`). The backdrop is the Hero's art, blurred and baked as one
 opaque image behind the header and the detail block at the pane's full width
 (`Hero backdrop`, the `backdrop/` art path). The detail block
@@ -2146,9 +2146,8 @@ action.
 
 The album Hero passes no header pills. It passes its track count and total time
 as block pills. The artist page passes its album count, year span, and (once
-loaded) track count and total time as header pills, and its selected
-collections as the eyebrow, joined with ` + `. The page's block has no rows.
-The Tracks list sits under the Tracks section header.
+loaded) track count and total time as header pills. The page's block has no
+rows. The Tracks list sits under the Tracks section header.
 
 A pill is one short fact, `Fact pill`, in the pill style of the header. The
 fact pill text keeps today's formats (for example `01:37:32`).

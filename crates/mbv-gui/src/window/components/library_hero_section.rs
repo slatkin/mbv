@@ -8,8 +8,8 @@ use dioxus_native::prelude::*;
 
 use crate::window::components::library_hero_frame::own;
 
-/// The section title's look: the kicker's label font (design D2), in the
-/// artboard's small muted capitals.
+/// The section title's look: the label style (design D2), in the artboard's
+/// small muted capitals.
 const TITLE_STYLE: &str = "font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--canvas-muted);";
 
 /// The props of the section band (the `LibraryHeroSection` props, in order).

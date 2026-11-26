@@ -245,10 +245,6 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
         "the first row is the Hero default"
     );
     let hero = projection.hero.expect("the Hero paints");
-    assert_eq!(
-        hero.kind, "movie",
-        "the kicker's kind word is the item type's lowercase word"
-    );
     assert_eq!(hero.title, "A Movie");
     // The D1 movie builder's facts (spec scenario "A movie's Hero"): the
     // year, runtime, and IMDb-link pills over the Director and Released

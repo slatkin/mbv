@@ -1,7 +1,7 @@
 //! Headless tests of the plain Emby-library Hero (gui-hero-design-polish
 //! design D2, D3, D4): the contracts of the movie case of the spec scenario
-//! "A movie's Hero" — the header band paints the kind word's kicker, the
-//! movie's title, and the fact pills in the frame's order with the `IMDb` link
+//! "A movie's Hero" — the header band paints the movie's title and the fact
+//! pills in the frame's order with the `IMDb` link
 //! as a link pill; the detail block paints the labelled rows in the frame's
 //! order and no runtime row; the cast grid paints the members in the frame's
 //! order, a member with no photo shows the member's initials; no `IMDb` header
@@ -82,7 +82,6 @@ fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
 /// no runtime row.
 fn movie_hero(art_shape: GuiArtShapeFrame) -> GuiEmbyHeroFrame {
     GuiEmbyHeroFrame {
-        kind: "movie".to_owned(),
         title: "Heat".to_owned(),
         facts: GuiHeroFactsFrame {
             pills: vec![
@@ -311,17 +310,11 @@ fn built(facts: Option<GuiEmbyHeroFrame>) -> Fixture {
 }
 
 /// Contract (`LibraryEmbyHero.test.ts`, invariant 30): the header's big title
-/// is the movie itself (a movie is its own largest unit), and the kicker is
-/// the item's kind word in upper case.
+/// is the movie itself (a movie is its own largest unit).
 #[test]
-fn the_header_paints_the_item_kind_s_kicker_and_the_movie_s_title() {
+fn the_header_paints_the_movie_s_title() {
     let fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
 
-    assert_eq!(
-        fixture.text_of("[data-library-emby-hero-kicker]"),
-        "MOVIE",
-        "the kicker is the kind word in upper case"
-    );
     assert_eq!(
         fixture.text_of("[data-library-emby-hero-title]"),
         "Heat",

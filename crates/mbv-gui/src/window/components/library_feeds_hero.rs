@@ -20,7 +20,7 @@ use crate::bridge::frame::library::{GuiEntryRowFrame, GuiLibraryDetail, GuiLibra
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{LibraryWorkspaceTable, WorkspaceRow};
-use crate::window::library::hero::{hero_command, label_segments};
+use crate::window::library::hero::hero_command;
 use crate::window::library::lettered::{FeedsList, LetteredDestination};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
@@ -64,7 +64,6 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     // name line, one step smaller.
     let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
     let header = HeroHeader {
-        kicker: label_segments("feed"),
         title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
         pills: hero.facts.pills.clone(),
     };

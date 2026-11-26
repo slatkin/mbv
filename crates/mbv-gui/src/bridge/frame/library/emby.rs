@@ -98,9 +98,6 @@ pub struct GuiEmbyRowFrame {
 /// plain Emby-library Hero carries none.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyHeroFrame {
-    /// The item's kind word for the Hero's kicker (design D17): `movie`,
-    /// `video`, as the projection carries it.
-    pub kind: String,
     /// The hero's title.
     pub title: String,
     /// The item's facts (gui-hero-design-polish design D1): the header
@@ -177,7 +174,6 @@ impl From<GuiEmbyRowKind> for GuiEmbyRowKindFrame {
 impl From<&GuiEmbyHero> for GuiEmbyHeroFrame {
     fn from(hero: &GuiEmbyHero) -> Self {
         Self {
-            kind: hero.kind.clone(),
             title: hero.title.clone(),
             facts: GuiHeroFactsFrame::from(&hero.facts),
             overview: hero.overview.clone(),

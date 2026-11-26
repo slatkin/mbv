@@ -15,8 +15,8 @@ use crate::window::components::typed_text::TypedText;
 /// (`DIRECTOR`) plus the artboard's gap to the value column.
 const LABEL_WIDTH_PX: f32 = 110.0;
 
-/// The label word's look: the kicker's label font (design D2), in the
-/// artboard's small capitals.
+/// The label word's look: the label style (design D2), in the artboard's small
+/// capitals.
 const LABEL_STYLE: &str = "font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--canvas-muted);";
 
 /// The value line's look: today's meta row font (design D2) in the artboard's

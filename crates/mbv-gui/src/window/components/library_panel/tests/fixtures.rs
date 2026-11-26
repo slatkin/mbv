@@ -246,7 +246,6 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
         GuiLibraryDetail::Emby(GuiEmbyDetail {
             selected: Some("m1".to_owned()),
             hero: Some(GuiEmbyHeroFrame {
-                kind: "movie".to_owned(),
                 title: "Alien".to_owned(),
                 facts: crate::bridge::frame::library::GuiHeroFactsFrame {
                     pills: Vec::new(),

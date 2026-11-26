@@ -404,11 +404,6 @@ fn the_hero_paints_the_series_in_the_header_and_the_season_s_detail_beside_its_p
     let fixture = built_series();
 
     assert_eq!(
-        fixture.text_of("[data-library-shows-hero-kicker]"),
-        "series",
-        "the kicker is the series label"
-    );
-    assert_eq!(
         fixture.text_of("[data-library-shows-hero-title]"),
         "Better Call Saul",
         "the title is the series"
@@ -523,11 +518,6 @@ fn the_workspace_paints_the_selected_season_s_episodes() {
 fn the_latest_mode_s_hero_paints_its_facts_and_no_workspace() {
     let fixture = built(Some(hero(|facts| facts.workspace = None)));
 
-    assert_eq!(
-        fixture.text_of("[data-library-shows-hero-kicker]"),
-        "episode",
-        "the Latest Hero's kicker is the episode label"
-    );
     assert_eq!(
         fixture.text_of("[data-library-shows-hero-title]"),
         "Better Call Saul",

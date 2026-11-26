@@ -37,9 +37,7 @@ use crate::window::components::library_panel::row_menu_entries;
 use crate::window::components::library_tracklist::LibraryTracklist;
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::{Ellipsis, Shuffle};
-use crate::window::library::hero::{
-    album_pills, artist_page_pills, artist_union_albums, hero_kicker,
-};
+use crate::window::library::hero::{album_pills, artist_page_pills, artist_union_albums};
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::sections::SectionRef;
 
@@ -285,7 +283,6 @@ fn album_hero(
             attr: "",
             root: "data-library-hero",
             header: HeroHeader {
-                kicker: hero_kicker(hero),
                 title: hero.artist.clone(),
                 pills: Vec::new(),
             },
@@ -377,7 +374,6 @@ fn artist_hero(
             attr: "",
             root: "data-library-hero",
             header: HeroHeader {
-                kicker: hero_kicker(hero),
                 title: hero.artist.clone(),
                 pills: artist_page_pills(hero),
             },
