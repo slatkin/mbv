@@ -32,8 +32,8 @@ Groups 1 and 2 land first.
 
 ## 4. Integration
 
-- [ ] 4.1 Run `make format`, then `make checks` and `make test` for the whole workspace, in the foreground. Verify: both pass with no change left uncommitted.
-- [ ] 4.2 Run `make check-code-file-lines` just before the push. Verify: it passes; split any file the change took over 800 lines along its responsibility seam.
+- [x] 4.1 Run `make format`, then `make checks` and `make test` for the whole workspace, in the foreground. Verify: both pass with no change left uncommitted.
+- [x] 4.2 Run `make check-code-file-lines` just before the push. Verify: it passes; split any file the change took over 800 lines along its responsibility seam.
 
 ## Workflow follow-up
 
