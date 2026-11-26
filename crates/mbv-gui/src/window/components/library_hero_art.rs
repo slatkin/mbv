@@ -90,12 +90,12 @@ fn band(shape: GuiArtShapeFrame) -> bool {
     shape == GuiArtShapeFrame::Landscape
 }
 
-/// Whether a loaded image sizes its own box: a portrait or square box hugs
-/// the image (never above its natural size) instead of holding the fixed art
-/// box around a smaller, centered picture. The landscape box always fills its
-/// flex share (design D2).
-fn hugs(art: Option<&GuiArtRef>, shape: GuiArtShapeFrame) -> bool {
-    !band(shape) && art.is_some_and(|art| *art != GuiArtRef::Loading)
+/// Whether a loaded image sizes its own box: the frame hugs the image (never
+/// above its natural size) instead of holding a fixed art box around a
+/// smaller picture, so the bezel stays a thin, even stroke on every side. A
+/// landscape box keeps its 16:9 flex share only while no image is loaded.
+fn hugs(art: Option<&GuiArtRef>) -> bool {
+    art.is_some_and(|art| *art != GuiArtRef::Loading)
 }
 
 /// The arm's index into [`ART_HEIGHT`]: the aspect the shape reserves.
@@ -125,7 +125,7 @@ fn box_attrs(
 #[component]
 pub fn LibraryHeroArt(props: LibraryHeroArtProps) -> Element {
     let band = band(props.shape);
-    let hugs = hugs(props.art.as_ref(), props.shape);
+    let hugs = hugs(props.art.as_ref());
     let art_height = ART_HEIGHT[height_index(props.shape)];
 
     // The root's placement in the detail block's wrapped row (design D2): the
@@ -140,23 +140,23 @@ pub fn LibraryHeroArt(props: LibraryHeroArtProps) -> Element {
     // The inset frame's width (design D2): the landscape frame fills its
     // flex share; the square and portrait frames wrap their box.
     let mut frame = FRAME_STYLE.to_owned();
-    if band {
-        let _ = write!(frame, " width: 100%;");
-    } else if hugs {
+    if hugs {
         let _ = write!(frame, " width: fit-content; max-width: 100%;");
+    } else if band {
+        let _ = write!(frame, " width: 100%;");
     }
 
     // The art area's own sizing inside the frame: the landscape area holds
     // the 16:9 aspect up to the band's height cap; a square or portrait area
     // keeps its fixed box, or hugs the image.
     let mut area = "overflow: hidden; border-radius: 8px;".to_owned();
-    if band {
+    if hugs {
+        let _ = write!(area, " width: fit-content; max-width: 100%;");
+    } else if band {
         let _ = write!(
             area,
             " width: 100%; aspect-ratio: 16 / 9; max-height: {BAND_MAX_HEIGHT}px; box-sizing: border-box;"
         );
-    } else if hugs {
-        let _ = write!(area, " width: fit-content; max-width: 100%;");
     } else {
         let _ = write!(area, " width: {ART_WIDTH}px; height: {art_height}px;");
     }
