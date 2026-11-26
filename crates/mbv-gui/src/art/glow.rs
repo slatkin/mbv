@@ -8,8 +8,12 @@ use image::DynamicImage;
 use image::ImageFormat;
 use std::io::Cursor;
 
+mod worker;
+
 #[cfg(test)]
 mod tests;
+
+pub(crate) use worker::GlowWorker;
 
 /// The thumbnail's long side, in pixels (design D4).
 const GLOW_LONG_SIDE: u32 = 64;

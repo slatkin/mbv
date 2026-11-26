@@ -17,24 +17,8 @@ use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
 
 use super::{CoreInput, CoreThread};
-use crate::art::glow::glow_png;
 use crate::art::{ArtPath, ArtReply, ArtRequest, ArtResponse, parse_path};
 use crate::sections::{DrainHook, marks_for_hook};
-
-/// The one-shot art reply edge that answers `Missing` when its glow thread
-/// never runs it (design D4): a failed spawn drops the closure, a panic in
-/// the glow work drops the guard, and a `None` from [`glow_png`] leaves the
-/// guard untouched — the drop answers in each case, so every request is
-/// still answered exactly once.
-struct GlowReply(Option<ArtReply>);
-
-impl Drop for GlowReply {
-    fn drop(&mut self) {
-        if let Some(reply) = self.0.take() {
-            reply(ArtResponse::Missing);
-        }
-    }
-}
 
 /// Whether a pointer event marks the gated sections (design D3 rule 1): a
 /// press or a right press. A gesture resolves on its press, and an outside
@@ -91,32 +75,23 @@ impl CoreThread {
         }
     }
 
-    /// Answer one glow request (design D4): read the cached source bytes on
-    /// the core thread, then move them and the reply edge to a worker thread
-    /// named `mbv-art-glow` that encodes the glow PNG off this thread. No
-    /// source answers `Missing`; a failed spawn, a panic, or a source the
-    /// encoder rejects answers `Missing` through the [`GlowReply`] guard.
+    /// Answer one glow request (design D4): a cached glow PNG answers on the
+    /// core thread with no source read. Otherwise read the cached source bytes
+    /// here and queue the encode on the one glow worker thread. No source
+    /// answers `Missing`.
     fn answer_glow(&self, cache_key: &str, reply: ArtReply) {
+        if let Some(png) = self.glow.cached(cache_key) {
+            reply(ArtResponse::Found {
+                mime: "image/png",
+                bytes: png.to_vec(),
+            });
+            return;
+        }
         let Some(source) = self.core.gui_art_source(cache_key) else {
             reply(ArtResponse::Missing);
             return;
         };
-        let mut reply = GlowReply(Some(reply));
-        // Detached: the thread owns the answer through the guard. A failed spawn
-        // drops the closure with its guard, which answers `Missing`.
-        let _detached = std::thread::Builder::new()
-            .name("mbv-art-glow".into())
-            .spawn(move || {
-                let Some(png) = glow_png(&source.bytes) else {
-                    return; // the guard's drop answers `Missing`.
-                };
-                if let Some(reply) = reply.0.take() {
-                    reply(ArtResponse::Found {
-                        mime: "image/png",
-                        bytes: png,
-                    });
-                }
-            });
+        self.glow.submit(cache_key.to_owned(), source.bytes, reply);
     }
 }
 
