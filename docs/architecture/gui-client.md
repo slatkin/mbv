@@ -2133,10 +2133,11 @@ block's eyebrow and name lines, the action row, and the fact rows
 frame, not the block. Each band sits under a section header with a rule
 (`LibraryHeroSection`): Overview when the item has one, Cast when it has cast
 (`LibraryHeroCast`, a two-column grid of round photos or initials, one column
-when narrow), then the destination's list band. Music passes Tracks, a Shows
-series passes Episodes, Audiobooks passes Chapters, and Feeds passes Entries.
-Podcasts, Home, the plain Emby libraries, and a flat Shows episode pass no list
-band.
+when narrow), then the destination's list band. A Shows series passes Episodes,
+Audiobooks passes Chapters, and Feeds passes Entries. Music passes no list title,
+so its track list paints bare under the frame with no label rule (user direction
+2026-11-26). Podcasts, Home, the plain Emby libraries, and a flat Shows episode
+pass no list band.
 
 The Hero title follows the parent rule: when the queue item has a parent (a
 series, a show, an artist, or a feed), the header title is the parent and the
@@ -2147,8 +2148,8 @@ action.
 The album Hero passes no header pills. It passes its track count and total time
 as block pills. The artist page passes the selected collections as the first
 header pill, then its album count, year span, and (once loaded) track count and
-total time. The page's block has no rows. The Tracks list sits under the Tracks
-section header.
+total time. The page's block has no rows. The track list sits bare under the
+detail block, with no section header.
 
 A pill is one short fact, `Fact pill`, in the pill style of the header. The
 fact pill text keeps today's formats (for example `01:37:32`).

@@ -305,7 +305,7 @@ fn album_hero(
             backdrop,
             actions: Some(actions),
             overview: None,
-            list_title: Some("Tracks".to_owned()),
+            list_title: None,
             children: Some(rsx! {
                 LibraryTracklist {
                     tracks: album.tracks.clone().unwrap_or_default(),
@@ -393,7 +393,7 @@ fn artist_hero(
             backdrop,
             actions: Some(actions),
             overview: None,
-            list_title: Some("Tracks".to_owned()),
+            list_title: None,
             children: Some(rsx! {
                 LibraryArtistTracklist {
                     albums: page.albums.clone(),

@@ -101,6 +101,10 @@ fn the_artist_page_paints_its_header_labels_and_loaded_tracks() {
         !fixture.presents("[data-library-hero-more]"),
         "the artist page offers no More actions control"
     );
+    assert!(
+        !fixture.presents("[data-library-hero-list]"),
+        "the track list paints no section header (user direction 2026-11-26)"
+    );
 }
 
 /// Contract (gui-music-artist-page design D6, spec "Play acts on the whole
