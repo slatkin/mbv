@@ -36,6 +36,21 @@ impl App {
             .map_or(&self.player, |home| &home.player)
     }
 
+    /// The link to the local Owner, the only Player owner a local queue or a
+    /// local playback output belongs to: the suspended home link while this
+    /// Client is attached to a peer (packaged `mbvd` or another machine's
+    /// Owner), the current link otherwise, and `None` while attached to a peer
+    /// with no home link left.
+    pub(in crate::app) fn local_owner_link(&self) -> Option<&mbv_player::PlayerProxy> {
+        // An unset endpoint (before the first connect) is the local Owner.
+        let on_peer_without_home = self.suspended_local.is_none()
+            && self
+                .player_endpoint
+                .as_ref()
+                .is_some_and(|endpoint| !endpoint.is_local());
+        (!on_peer_without_home).then(|| self.local_queue_player())
+    }
+
     /// The `PlayerProxy` that owns `link`'s queue and playback: the suspended
     /// home link for `Local` while a peer attachment holds the active link,
     /// else the active link's own proxy. Every status write and every owner

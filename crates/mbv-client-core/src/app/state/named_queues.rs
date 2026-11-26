@@ -232,15 +232,24 @@ impl App {
     /// Send one confirmed close to the local Owner (design D3, D8): it deletes a
     /// resting queue and stops playback to close the current one, then publishes
     /// the queue list the panel follows to the current queue. It returns the
-    /// `op` it recorded, or `None` when the send failed.
+    /// `op` it recorded, or `None` when the send failed or no local Owner link
+    /// is held. A close is never sent to a peer: the queues it names belong to
+    /// the local Owner, and `self.player` holds a peer once the local link is
+    /// lost.
     pub(in crate::app) fn send_named_queue_close(
         &mut self,
         queue: NamedQueueId,
     ) -> Option<QueueOpId> {
-        let sent = self
-            .local_queue_player()
-            .remote()
-            .send_named_queue_close(queue);
+        let Some(local) = self.local_owner_link() else {
+            tracing::warn!(
+                name: "queue.command.no_local_owner",
+                target: "queue",
+                command = "close",
+                "a named queue command had no local Owner link to reach"
+            );
+            return None;
+        };
+        let sent = local.remote().send_named_queue_close(queue);
         let op = self.report_named_queue_send("close", sent);
         if let Some(op) = op {
             self.note_named_queue_op(op);
@@ -252,12 +261,20 @@ impl App {
     /// control closes the shown entry"): the only local queue never closes, and
     /// the current queue asks the shared confirmation while it plays, because
     /// closing it stops playback. Every other local queue closes at once.
+    ///
+    /// The playback that decides is the local Owner's own, read from its link
+    /// and never from the shown entry's: a peer's playback is not something
+    /// any local queue's close can stop, and once the local link is lost there
+    /// is no local Owner to close a queue of at all, so the control does
+    /// nothing.
     fn request_close_local_queue(&mut self, queue: NamedQueueId) {
         if self.named_queues.entries().len() < 2 {
             return;
         }
-        let plays =
-            self.named_queues.current() == Some(queue) && self.shown_playback_status().active;
+        let Some(local) = self.local_owner_link() else {
+            return;
+        };
+        let plays = self.named_queues.current() == Some(queue) && local.status_snapshot().active;
         if !plays {
             let _ = self.send_named_queue_close(queue);
             return;

@@ -421,3 +421,29 @@ fn the_connection_is_lost_shows_the_current_queue() {
         "the active row rests on the shown queue's start slot"
     );
 }
+
+/// A close never warns on a playback the local queues do not own. With the
+/// local Owner's link gone — a lost daemon — the peer alone plays, so closing
+/// the stale local current queue asks nothing and reaches no owner at all: the
+/// prompt and the close used to land on the peer through the lost link's own
+/// stand-in (spec `gui-queue-chooser` "The close control closes the shown
+/// entry": confirmation is for the current queue while it plays, and only a
+/// local queue's close is ever confirmed).
+#[test]
+fn a_close_behind_a_lost_local_link_asks_nothing_and_reaches_no_peer() {
+    let (mut app, _home_cmd_rx, peer_cmd_rx) = app_with_connected_peer();
+    app.suspended_local = None;
+    app.show_local_current_entry();
+    app.clear_pending_overlay_for_test();
+
+    app.request_close_shown_queue();
+
+    assert!(
+        app.pending_overlay_is_none_for_test(),
+        "the peer's playback arms no stop warning for a local queue's close"
+    );
+    assert!(
+        peer_cmd_rx.try_iter().next().is_none(),
+        "no local queue command reaches the peer"
+    );
+}

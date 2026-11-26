@@ -73,21 +73,6 @@ impl App {
         }
     }
 
-    /// The link to the local Owner, the Owner that every playback-output
-    /// selection lands on: the suspended home link while this Client is
-    /// attached to a peer (packaged `mbvd` or another machine's Owner), the
-    /// current link otherwise. A selection from F3 severs the peer link
-    /// first, so the peer's capabilities never decide whether a selection is
-    /// possible. `None` while attached to a peer with no home link left.
-    fn local_owner_link(&self) -> Option<&mbv_player::PlayerProxy> {
-        let on_peer_without_home = self.suspended_local.is_none()
-            && self
-                .player_endpoint
-                .as_ref()
-                .is_some_and(|endpoint| !endpoint.is_local());
-        (!on_peer_without_home).then(|| self.local_queue_player())
-    }
-
     /// Whether the local Owner can host an Emby Session output. A peer this
     /// Client controls does not take part: the selection severs to the local
     /// Owner before it is sent.
