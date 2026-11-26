@@ -197,12 +197,12 @@ fn presenting_an_empty_shows_root_starts_the_root_load_once_without_an_open_dest
     );
 }
 
-/// The series Hero comes from the TUI's series producer (design D14): the
-/// genre, the show's year range, the season count, and the network, with no
-/// duration row while the Workspace has no focus — and the Workspace holds the
+/// The series Hero comes from the D1 series builder (design D14;
+/// gui-hero-design-polish design D1): the year range, each genre, and the
+/// season count as pills over the Network row — and the Workspace holds the
 /// season pills on the first season with the episodes' played/progress states.
 #[test]
-fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
+fn the_series_hero_carries_the_d1_facts_and_the_workspace() {
     let _guard = TestStateDirGuard::new();
     let mut app = series_tree_app();
 
@@ -211,13 +211,18 @@ fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
     let hero = projection.hero.expect("the series Hero paints");
     assert_eq!(hero.title, "Alfred");
     assert_eq!(
-        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
-        vec!["DRAMA", "2013 - 2022", "2 Seasons", "FX"],
-        "the Hero carries the TUI series producer's rows"
+        hero.parent, None,
+        "a series is its own largest unit, so it has no parent"
     );
     assert_eq!(
-        hero.duration_row, None,
-        "the unfocused Workspace leaves the series without a duration row"
+        pill_texts(&hero.facts),
+        vec!["2013 - 2022", "Drama", "2 Seasons"],
+        "the Hero carries the D1 series builder's pills"
+    );
+    assert_eq!(
+        row_texts(&hero.facts),
+        vec![(GuiHeroFactLabel::Network, "FX".to_owned())],
+        "the network is the one row"
     );
     assert_eq!(
         hero.art_shape,
@@ -402,7 +407,13 @@ fn the_new_view_paints_the_merged_latest_episodes() {
     assert_eq!(projection.rows[0].title, "Show");
     assert_eq!(projection.rows[0].subtitle.as_deref(), Some("New"));
     assert_eq!(projection.selected.as_deref(), Some("ep-new"));
-    assert_eq!(projection.hero.expect("the Hero paints").title, "New");
+    let hero = projection.hero.expect("the Hero paints");
+    assert_eq!(hero.title, "New");
+    assert_eq!(
+        hero.parent.as_deref(),
+        Some("Show"),
+        "the flat episode's parent is its series, from the split title"
+    );
 }
 
 /// Contract (design D9): Upcoming paints the merged premieres, soonest first,
@@ -540,4 +551,27 @@ fn an_upcoming_row_shows_its_series_image() {
         "the premiere row shows the series image under the series' tag"
     );
     assert_eq!(projection.rows[0].media, GuiRowMediaKind::Video);
+}
+
+/// One pill's text of `facts`, in paint order.
+fn pill_texts(facts: &GuiHeroFacts) -> Vec<String> {
+    facts
+        .pills
+        .iter()
+        .map(|pill| pill.segments.iter().map(|s| s.text.as_str()).collect())
+        .collect()
+}
+
+/// One row of `facts` as `(label, text)`, in paint order.
+fn row_texts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
+    facts
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.label,
+                row.value.iter().map(|s| s.text.as_str()).collect(),
+            )
+        })
+        .collect()
 }

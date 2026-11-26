@@ -154,7 +154,7 @@ fn the_open_destination_command_opens_the_audiobooks_tab() {
 /// The frame carries the book list after the open (row 9.1): the opened
 /// destination's section names the library index, carries the books in the
 /// TUI's order with their rail letters, and the first book is the Hero
-/// default with the TUI hero producer's facts.
+/// default with the D1 builder's facts.
 #[test]
 fn the_frame_carries_the_book_list_after_the_open() {
     let (mut test, _cmd_rx) = seeded_audiobooks_core();
@@ -194,15 +194,32 @@ fn the_frame_carries_the_book_list_after_the_open() {
     );
     let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
-    let texts: Vec<String> = hero
-        .meta_rows
+    let pill_texts: Vec<String> = hero
+        .facts
+        .pills
         .iter()
-        .map(|row| row.iter().map(|segment| segment.text.as_str()).collect())
+        .map(|pill| {
+            pill.segments
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect()
+        })
+        .collect();
+    let row_texts: Vec<String> = hero
+        .facts
+        .rows
+        .iter()
+        .map(|row| {
+            row.value
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect()
+        })
         .collect();
     assert_eq!(
-        texts,
-        ["Jane Austen", "02:00:00"],
-        "the TUI hero producer's facts ride"
+        (pill_texts, row_texts),
+        (vec!["02:00:00".to_owned()], vec!["Jane Austen".to_owned()]),
+        "the D1 book builder's duration pill and Author row ride"
     );
 }
 

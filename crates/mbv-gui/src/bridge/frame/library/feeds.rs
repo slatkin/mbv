@@ -12,7 +12,7 @@ use mbv_feed::FeedPlatform;
 
 use super::GuiArtShapeFrame;
 use super::entry_list::GuiEntryRowFrame;
-use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::hero_facts::GuiHeroFactsFrame;
 
 /// The Feeds destination's list part (add-gui-library-panel design D12, row
 /// 11.1; `gui-change-driven-sections` design D8): the subscription selector and
@@ -56,24 +56,20 @@ pub struct GuiFeedsDetail {
     pub hero: Option<GuiFeedsHeroFrame>,
 }
 
-/// The selected entry's Hero facts (row 11.1): the shared
-/// `hero_content_feed` producer's title and duration behind the subscription
-/// name, and the placeholder artwork's shape. A feed entry has no artwork
-/// source and no overview, so neither rides here.
+/// The selected entry's Hero facts (row 11.1; gui-hero-design-polish design
+/// D1): the D1 feed builder's facts — the duration pill over the Published
+/// row (when the entry has a date) — and the placeholder artwork's shape. A
+/// feed entry has no artwork source and no overview, so neither rides here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFeedsHeroFrame {
     /// The hero's title: the entry title.
     pub title: String,
     /// The name of the largest unit the item belongs to; see the projection.
     pub parent: Option<String>,
-    /// The meta rows in display order: the duration when the entry
-    /// declares one (the subscription name is the parent).
-    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role; `None` on every entry, as the
-    /// shared producer fills none.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFactsFrame,
     /// The artwork box the Hero reserves: Square for a podcast feed, Landscape
     /// otherwise. The Hero paints its placeholder, because a feed entry has no
     /// artwork source.
@@ -114,9 +110,7 @@ impl From<&GuiFeedsHero> for GuiFeedsHeroFrame {
         Self {
             title: hero.title.clone(),
             parent: hero.parent.clone(),
-            meta_rows: gui_meta_rows(&hero.meta_rows),
-            duration_row: hero.duration_row,
-            progress_row: hero.progress_row,
+            facts: GuiHeroFactsFrame::from(&hero.facts),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
         }
     }

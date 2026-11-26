@@ -10,7 +10,7 @@ use crate::gui_core::{
 use mbv_queue::QueueItemContentId;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
-use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::hero_facts::GuiHeroFactsFrame;
 use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
@@ -138,18 +138,22 @@ pub enum GuiHomeRowKindFrame {
     Media,
 }
 
-/// The Hero's facts for the selected row (design D12): the meta rows with
-/// their duration and progress roles, the overview, and the artwork.
+/// The Hero's facts for the selected row (design D12; gui-hero-design-polish
+/// design D1): the split title's parent, the D1 queue builder's pills and
+/// rows, the overview, and the artwork.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiHomeHeroFrame {
-    /// The hero's title.
+    /// The hero's title: the item's own name. When a parent took the header
+    /// title, the detail block paints this name.
     pub title: String,
-    /// The meta rows in display order.
-    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does.
-    pub progress_row: Option<usize>,
+    /// The name of the largest unit the item belongs to (the invariant 30
+    /// header title rule); see the projection. `None` when the item is its
+    /// own largest unit.
+    pub parent: Option<String>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFactsFrame,
     /// The cleaned overview text, when the item's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves (the artwork policy's arm).
@@ -252,9 +256,8 @@ impl From<&GuiHomeHero> for GuiHomeHeroFrame {
     fn from(hero: &GuiHomeHero) -> Self {
         Self {
             title: hero.title.clone(),
-            meta_rows: gui_meta_rows(&hero.meta_rows),
-            duration_row: hero.duration_row,
-            progress_row: hero.progress_row,
+            parent: hero.parent.clone(),
+            facts: GuiHeroFactsFrame::from(&hero.facts),
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),

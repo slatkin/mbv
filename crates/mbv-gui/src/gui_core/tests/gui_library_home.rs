@@ -239,10 +239,18 @@ fn the_seeded_sections_project_as_heading_rows_in_order() {
     );
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Movie One");
-    assert_eq!(hero.duration_row, Some(0), "the duration meta row leads");
     assert_eq!(
-        hero.progress_row, None,
-        "the shared Emby hero producer fills none"
+        hero.parent, None,
+        "a movie is its own largest unit, so it has no parent"
+    );
+    assert_eq!(
+        pill_texts(&hero.facts),
+        vec!["20:00"],
+        "the runtime is the one pill"
+    );
+    assert!(
+        hero.facts.rows.is_empty(),
+        "the stub item carries no labelled row"
     );
     assert!(hero.overview.is_none(), "the stub item carries no overview");
 }
@@ -447,5 +455,79 @@ fn a_recently_added_row_keeps_its_date() {
         item_of(&projection.rows[1]).trailing.as_deref(),
         Some(date.as_str()),
         "the row keeps the projection's gutter date"
+    );
+}
+
+/// One pill's text of `facts`, in paint order.
+fn pill_texts(facts: &GuiHeroFacts) -> Vec<String> {
+    facts
+        .pills
+        .iter()
+        .map(|pill| pill.segments.iter().map(|s| s.text.as_str()).collect())
+        .collect()
+}
+
+/// The parent-rule case the table runs: which Home item the Hero shows.
+#[derive(Clone, Copy, Debug)]
+enum ParentCase {
+    /// A `Continue watching` episode with a series name.
+    Episode,
+    /// A `Recently added` feed entry under its subscription.
+    FeedEntry,
+}
+
+/// The stub `App` and the row id whose Hero the case reads.
+fn parent_case(case: ParentCase) -> (App, GuiHomeRowId) {
+    match case {
+        ParentCase::Episode => {
+            let mut episode = make_item("An episode", "Episode");
+            episode.id = "cw-ep".into();
+            episode.series_name = "The Show".into();
+            let app = home_app(vec![episode]);
+            (app, GuiHomeRowId::Continue("cw-ep".to_string()))
+        }
+        ParentCase::FeedEntry => {
+            let now = mbv_ui_model::feed_age::current_time_secs();
+            let mut app = home_app(Vec::new());
+            app.push_feed_subscription_for_test(FeedSubscription {
+                name: "Tone Feed".into(),
+                url: "https://feed.example/rss".into(),
+                kind: mbv_queue::FeedKind::Audio,
+            });
+            app.seed_feed_entries_for_test(vec![recent_feed_entry("feed-entry", now - 2 * 3600)]);
+            (
+                app,
+                GuiHomeRowId::Recent(QueueItemContentId::Feed("feed-entry".into())),
+            )
+        }
+    }
+}
+
+/// The Home Hero's parent is the split title's context (gui-hero-design-
+/// polish design D1; spec scenarios "A flat episode uses its series or show
+/// as the Hero title" and "A Home feed entry uses its feed as the Hero
+/// title"): an episode's parent is its series or show and a feed entry's
+/// parent is its feed. A movie — its own largest unit — is covered by the
+/// seeded-sections test; an Audiobookshelf book never reaches a Home Hero,
+/// because a book carries no provider timestamp and belongs to no Latest
+/// window.
+#[rstest]
+#[case::an_episode_uses_its_series(ParentCase::Episode, Some("The Show"))]
+#[case::a_feed_entry_uses_its_feed(ParentCase::FeedEntry, Some("Tone Feed"))]
+fn the_home_heros_parent_is_the_split_titles_context(
+    #[case] case: ParentCase,
+    #[case] expected: Option<&str>,
+) {
+    let _guard = TestStateDirGuard::new();
+    let (mut app, selection) = parent_case(case);
+    crate::gui_core::test_support::stub_gui_state(|gui| {
+        gui.home_selection = Some(selection);
+    });
+
+    let projection = gui_home_projection(&mut app);
+
+    assert_eq!(
+        projection.hero.expect("the Hero paints").parent.as_deref(),
+        expected,
     );
 }

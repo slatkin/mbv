@@ -114,12 +114,13 @@ fn the_projection_carries_the_rows_letters_and_the_default_pick() {
     );
 }
 
-/// The book Hero projects the TUI's facts and the chapter Workspace (row
-/// 9.1, contract a): the shared producer's meta rows — author, duration,
-/// and the `N%` progress row — the portrait art shape, and the chapter rows
-/// in the TUI's order with their durations.
+/// The book Hero projects the D1 builder's facts and the chapter Workspace
+/// (row 9.1, contract a; gui-hero-design-polish design D1): the duration
+/// pill over the Author row, the portrait art shape, and the chapter rows
+/// in the TUI's order with their durations. No progress row rides — the
+/// Hero paints no playback progress.
 #[test]
-fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
+fn the_book_hero_projects_the_d1_facts_and_the_chapter_workspace() {
     let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
@@ -142,12 +143,15 @@ fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
     assert_eq!(
-        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
-        vec!["Jane Austen", "01:00:00", "50%"],
-        "the TUI hero producer's facts ride"
+        pill_texts(&hero.facts),
+        vec!["01:00:00"],
+        "the chapters' span is the one pill"
     );
-    assert_eq!(hero.duration_row, Some(1));
-    assert_eq!(hero.progress_row, Some(2));
+    assert_eq!(
+        row_texts(&hero.facts),
+        vec![(GuiHeroFactLabel::Author, "Jane Austen".to_owned())],
+        "the author is the one row"
+    );
     assert_eq!(
         hero.art_shape,
         GuiArtShape::Portrait,
@@ -620,12 +624,12 @@ fn the_select_command_stores_the_pick() {
     );
 }
 
-/// The TUI's book Hero restores the catalog-only facts on top of the shared
-/// producer (design D15): `Read by <narrator>`, the published year, and the
-/// description overview. The GUI's Hero painted neither before D15 — the same
-/// class of deviation as the Shows Hero's wrong producer in D14.
+/// The book Hero keeps the catalog's description as the overview, and its
+/// facts stay the D1 builder's (gui-hero-design-polish design D1): the
+/// narrator and the published year the TUI's Hero restores ride in no GUI
+/// pill or row.
 #[test]
-fn the_book_hero_restores_the_narrator_year_and_description() {
+fn the_book_hero_keeps_the_description_and_no_restored_rows() {
     let _guard = mbv_client_core::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
@@ -650,9 +654,14 @@ fn the_book_hero_restores_the_narrator_year_and_description() {
 
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(
-        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
-        vec!["Jane Austen", "30:00", "Read by Anna Fields", "1999"],
-        "the catalog's narrator and year ride the producer's rows"
+        pill_texts(&hero.facts),
+        vec!["30:00"],
+        "the chapters' span is the one pill, with no narrator or year pill"
+    );
+    assert_eq!(
+        row_texts(&hero.facts),
+        vec![(GuiHeroFactLabel::Author, "Jane Austen".to_owned())],
+        "the author is the one row, with no narrator or year row"
     );
     assert_eq!(
         hero.overview.as_deref(),
@@ -702,4 +711,27 @@ fn a_book_row_shows_its_cover() {
         "the row shows the cached book cover under its row key"
     );
     assert_eq!(projection.rows[0].media, GuiRowMediaKind::Audio);
+}
+
+/// One pill's text of `facts`, in paint order.
+fn pill_texts(facts: &GuiHeroFacts) -> Vec<String> {
+    facts
+        .pills
+        .iter()
+        .map(|pill| pill.segments.iter().map(|s| s.text.as_str()).collect())
+        .collect()
+}
+
+/// One row of `facts` as `(label, text)`, in paint order.
+fn row_texts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
+    facts
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.label,
+                row.value.iter().map(|s| s.text.as_str()).collect(),
+            )
+        })
+        .collect()
 }
