@@ -166,27 +166,31 @@ impl App {
         self.ask_confirm(modal);
     }
 
-    /// The continue-playback confirm's answer: Enter (Yes) runs the
-    /// selection's hand-off exactly as an unasked selection would — a remote
-    /// target resolves against the displayed target snapshot (a target the
-    /// snapshot no longer holds acts on nothing), and Local detaches the
-    /// Owner's remote output to this machine. Esc and every other key
-    /// cancel: nothing changes and the current output keeps playing.
-    ///
-    /// `_switch_only` is the capability the prompt was raised with
-    /// (`ConfirmAction::ContinueOutputHandOff`, design D6 of
-    /// `switch-output-without-hand-off`). The switch answer that reads it is
-    /// not wired yet, so every key but Enter still cancels.
+    /// The continue-playback confirm's answer. Enter runs the selection's
+    /// hand-off exactly as an unasked selection would — a remote target
+    /// resolves against the displayed target snapshot (a target the snapshot
+    /// no longer holds acts on nothing), and Local detaches the Owner's
+    /// remote output to this machine. With `switch_only` set, Esc is the
+    /// switch answer: the same target becomes the output and the active slot
+    /// stays where it was (design D2, D7 of `switch-output-without-hand-off`).
+    /// Without it, Esc and every other key cancel: nothing changes and the
+    /// current output keeps playing.
     pub(in crate::app) fn confirm_continue_output_hand_off(
         &mut self,
         target: Option<&SessionTargetKey>,
         name: &str,
-        _switch_only: bool,
+        switch_only: bool,
         key: KeyEvent,
     ) {
-        if key.code != Key::Enter {
-            return;
+        match key.code {
+            Key::Enter => self.continue_output_hand_off(target, name),
+            Key::Esc if switch_only => self.switch_output_hand_off(target, name),
+            _ => {}
         }
+    }
+
+    /// The continue answer: run the selection's hand-off.
+    fn continue_output_hand_off(&mut self, target: Option<&SessionTargetKey>, name: &str) {
         let Some(target) = target else {
             self.detach_to_local_confirmed();
             return;
@@ -201,6 +205,47 @@ impl App {
         match resolved {
             PanelTarget::Emby(sess) => self.activate_session_target_without_hand_off(&sess),
             PanelTarget::Cast(receiver) => self.select_cast_output(receiver),
+        }
+    }
+
+    /// The switch answer (design D2): the prompt's target becomes the output
+    /// and nothing is handed off. The sever sends no playback command
+    /// (invariant 31); the switch is the user's own answer, so it follows the
+    /// same sever the continue answer does (design D7).
+    fn switch_output_hand_off(&mut self, target: Option<&SessionTargetKey>, name: &str) {
+        let Some(target) = target else {
+            self.sever_connections_without_output_change();
+            self.switch_playback_output(mbv_ctrl::OutputSelection::Local);
+            self.flash(
+                "Switched to local playback".to_string(),
+                ToastSeverity::Success,
+            );
+            return;
+        };
+        let Some(resolved) = resolve_session_target(&self.panel_targets, target) else {
+            self.flash(
+                format!("\"{name}\" is no longer available"),
+                ToastSeverity::Warning,
+            );
+            return;
+        };
+        self.sever_connections_without_output_change();
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
+        match resolved {
+            PanelTarget::Emby(sess) => {
+                self.switch_playback_output(mbv_ctrl::OutputSelection::EmbySession {
+                    device_id: sess.device_id.clone(),
+                    name: sess.device_name.clone(),
+                });
+            }
+            PanelTarget::Cast(receiver) => {
+                self.switch_playback_output(mbv_ctrl::OutputSelection::Cast {
+                    receiver_id: receiver.id,
+                    name: receiver.friendly_name,
+                    host: receiver.host,
+                    port: receiver.port,
+                });
+            }
         }
     }
 }

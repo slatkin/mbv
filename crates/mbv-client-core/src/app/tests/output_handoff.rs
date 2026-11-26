@@ -49,6 +49,146 @@ fn cast_output_owner_app(
     (app, cmd_rx)
 }
 
+/// The three target kinds the capable continue-playback prompt can name.
+#[derive(Clone, Copy, Debug)]
+enum SwitchTargetKind {
+    Cast,
+    EmbySession,
+    Local,
+}
+
+/// The Cast receiver row every Cast case selects.
+fn switch_cast_receiver() -> mbv_cast::discovery::CastReceiver {
+    mbv_cast::discovery::CastReceiver {
+        id: "receiver-1".to_string(),
+        friendly_name: "Living Room".to_string(),
+        host: "192.168.0.5".to_string(),
+        port: 8009,
+    }
+}
+
+/// An Emby Session row that offers no direct endpoint: the site that raises
+/// the capable prompt for an Emby target.
+fn no_direct_endpoint_session() -> mbv_emby::SessionInfo {
+    let mut sess = make_session("Bedroom TV", "Emby");
+    sess.id = "sess-2".to_string();
+    sess.device_id = "device-2".to_string();
+    sess
+}
+
+/// A local Owner that advertises the output switch, holds an active slot,
+/// and offers `kind` as the target its prompt names.
+fn switch_capable_app(
+    kind: SwitchTargetKind,
+) -> (crate::app::App, mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    match kind {
+        SwitchTargetKind::Cast => cast_output_owner_app(true, true),
+        SwitchTargetKind::EmbySession => {
+            let mut app = make_app_stub();
+            let (mut remote, player_rx, cmd_rx) =
+                mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+            let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
+            compatibility.supports_emby_session_output = true;
+            compatibility.supports_output_switch = true;
+            remote.set_ctrl_compatibility_for_test(compatibility);
+            remote.update_status(|status| status.active = true);
+            app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+            app.player_rx = player_rx;
+            app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+            app.panel_targets = vec![PanelTarget::Emby(Box::new(no_direct_endpoint_session()))];
+            (app, cmd_rx)
+        }
+        SwitchTargetKind::Local => {
+            let (mut app, cmd_rx) = cast_output_owner_app(true, true);
+            let output = mbv_ctrl::OutputState::Cast {
+                receiver_id: "receiver-1".to_string(),
+                name: "Living Room".to_string(),
+                connection: mbv_ctrl::OutputConnection::Connected,
+            };
+            app.player
+                .remote()
+                .update_playback_output_for_test(output.clone());
+            app.playback_output = Some(output);
+            (app, cmd_rx)
+        }
+    }
+}
+
+/// Raise the capable prompt by selecting `kind`'s target through the site
+/// that raises it.
+fn raise_switch_prompt(app: &mut crate::app::App, kind: SwitchTargetKind) {
+    match kind {
+        SwitchTargetKind::Cast => {
+            app.select_panel_target(PanelTarget::Cast(switch_cast_receiver()));
+        }
+        SwitchTargetKind::EmbySession => {
+            app.activate_session_target(&no_direct_endpoint_session());
+        }
+        SwitchTargetKind::Local => app.detach_to_local(),
+    }
+}
+
+/// The output selection both answers send for `kind`'s target.
+fn expected_selection(kind: SwitchTargetKind) -> mbv_ctrl::OutputSelection {
+    match kind {
+        SwitchTargetKind::Cast => mbv_ctrl::OutputSelection::Cast {
+            receiver_id: "receiver-1".to_string(),
+            name: "Living Room".to_string(),
+            host: "192.168.0.5".to_string(),
+            port: 8009,
+        },
+        SwitchTargetKind::EmbySession => mbv_ctrl::OutputSelection::EmbySession {
+            device_id: "device-2".to_string(),
+            name: "Bedroom TV".to_string(),
+        },
+        SwitchTargetKind::Local => mbv_ctrl::OutputSelection::Local,
+    }
+}
+
+/// The confirm action the gate raised.
+fn pending_confirm_action(app: &crate::app::App) -> mbv_ui_model::confirm::ConfirmAction {
+    match &app.pending_overlay {
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        other => panic!("the gate must raise the confirm modal, got {other:?}"),
+    }
+}
+
+/// Assert that the switch answer sent exactly the output switch for `kind`'s
+/// target and no output selection.
+fn assert_switch_sent(cmd_rx: &mpsc::Receiver<mbv_ctrl::CtrlCmd>, kind: SwitchTargetKind) {
+    match cmd_rx
+        .try_recv()
+        .expect("the switch answer sends one command")
+    {
+        mbv_ctrl::CtrlCmd::SwitchPlaybackOutput(selection) => {
+            assert_eq!(selection, expected_selection(kind));
+        }
+        other => panic!("the switch answer must send an output switch, got {other:?}"),
+    }
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the switch answer sends no output selection"
+    );
+}
+
+/// Assert that the continue answer sent exactly `expected` and no switch.
+fn assert_selection_sent(
+    cmd_rx: &mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+    expected: &mbv_ctrl::OutputSelection,
+) {
+    match cmd_rx
+        .try_recv()
+        .expect("the continue answer sends one command")
+    {
+        mbv_ctrl::CtrlCmd::SelectPlaybackOutput(selection) => assert_eq!(&selection, expected),
+        other => panic!("the continue answer must send an output selection, got {other:?}"),
+    }
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the continue answer sends no output switch"
+    );
+}
+
 /// A Cast selection with a slot active on the current output asks first, and
 /// No cancels: no command reaches the Owner and the current output keeps
 /// playing (confirm-output-handoff).
@@ -134,6 +274,73 @@ fn the_continue_prompt_follows_the_owner_output_switch_capability(
             switch_only: output_switch,
         }
     );
+}
+
+/// The capable prompt's switch answer sends the output switch for the same
+/// target the continue answer selects, and no output selection (design D2,
+/// D7 of `switch-output-without-hand-off`).
+#[rstest]
+#[case::cast(SwitchTargetKind::Cast)]
+#[case::emby_session(SwitchTargetKind::EmbySession)]
+#[case::local(SwitchTargetKind::Local)]
+fn the_switch_answer_sends_the_output_switch_for_the_target(#[case] kind: SwitchTargetKind) {
+    let (mut app, cmd_rx) = switch_capable_app(kind);
+    raise_switch_prompt(&mut app, kind);
+
+    let action = pending_confirm_action(&app);
+    assert!(
+        matches!(
+            &action,
+            mbv_ui_model::confirm::ConfirmAction::ContinueOutputHandOff {
+                switch_only: true,
+                ..
+            }
+        ),
+        "the capable prompt stores the switch answer, got {action:?}"
+    );
+
+    app.apply_confirm_action(action, key(Key::Esc));
+
+    assert_switch_sent(&cmd_rx, kind);
+}
+
+/// The capable prompt's Enter answer keeps today's continue hand-off: the
+/// output selection reaches the Owner and no switch does.
+#[test]
+fn the_capable_prompt_enter_still_sends_the_continue_selection() {
+    let (mut app, cmd_rx) = switch_capable_app(SwitchTargetKind::Cast);
+    raise_switch_prompt(&mut app, SwitchTargetKind::Cast);
+
+    app.apply_confirm_action(pending_confirm_action(&app), key(Key::Enter));
+
+    assert_selection_sent(&cmd_rx, &expected_selection(SwitchTargetKind::Cast));
+}
+
+/// An Owner without the output switch keeps today's cancel: Esc sends
+/// nothing and the current output keeps playing (design D6).
+#[test]
+fn an_owner_without_the_output_switch_keeps_the_cancel() {
+    let (mut app, cmd_rx) = cast_output_owner_app(true, false);
+    raise_switch_prompt(&mut app, SwitchTargetKind::Cast);
+
+    app.apply_confirm_action(pending_confirm_action(&app), key(Key::Esc));
+
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "No cancels: the Owner receives nothing and the output keeps playing"
+    );
+}
+
+/// The local switch answer reports the switch: the remote output stops and
+/// local playback becomes the output with nothing playing.
+#[test]
+fn the_local_switch_answer_reports_the_switch() {
+    let (mut app, _cmd_rx) = switch_capable_app(SwitchTargetKind::Local);
+    raise_switch_prompt(&mut app, SwitchTargetKind::Local);
+
+    app.apply_confirm_action(pending_confirm_action(&app), key(Key::Esc));
+
+    assert_eq!(app.newest_toast_text(), "Switched to local playback");
 }
 
 /// A Cast selection with no active slot selects without asking
