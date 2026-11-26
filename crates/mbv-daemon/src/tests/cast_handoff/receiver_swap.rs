@@ -315,6 +315,168 @@ fn a_swap_without_a_captured_handoff_still_tears_the_old_receiver_down() {
     );
 }
 
+/// Contract: switch-output-without-hand-off row 2.3(a) and row 2.6 — a
+/// `SwitchPlaybackOutput` to a receiver while Local plays captures no hand-off:
+/// the connect succeeds, the local run stops, the receiver becomes the output
+/// and is given no load, the queue keeps its order, and the observed active
+/// slot is recorded and published as none (invariant 25).
+#[test]
+fn a_switch_to_a_receiver_stops_local_playback_and_loads_nothing() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    local_playing(&mut t, slot, 42 * mbv_emby_model::TICKS_PER_SECOND, false);
+    let queue_before: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    // The local run's slot is the published observed slot before the switch.
+    t.event_loop
+        .shared_queue
+        .publish_observed(&t.event_loop.owner.core);
+    assert_eq!(
+        *t.event_loop
+            .shared_queue
+            .observed_active_slot
+            .lock()
+            .unwrap(),
+        Some(slot),
+        "the local run's slot is published before the switch"
+    );
+
+    let (connector, calls) = fake_connector();
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, _rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    switch_output(&mut t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        crate::cast::output_state(&t.event_loop.owner.output),
+        OutputState::Cast {
+            receiver_id: "rcv-1".to_string(),
+            name: "Living room".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+        },
+        "the selected receiver is the output after the switch"
+    );
+    let receiver_calls = calls.lock().unwrap();
+    assert!(
+        receiver_calls.is_empty(),
+        "a switch loads nothing on the receiver: {receiver_calls:?}"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "the local run stops, and the clean receiver presents no playback"
+    );
+    let queue_after: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    assert_eq!(
+        queue_after, queue_before,
+        "the queue and its order are unchanged"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        None,
+        "the switch records no observed active slot"
+    );
+    assert_eq!(
+        *t.event_loop
+            .shared_queue
+            .observed_active_slot
+            .lock()
+            .unwrap(),
+        None,
+        "the switch publishes the observed slot as none (invariant 25)"
+    );
+}
+
+/// Contract: switch-output-without-hand-off row 2.3(b) — a failed connect for a
+/// switch keeps the old output untouched: local playback keeps running at its
+/// position, and the selecting Client is told the reason.
+#[test]
+fn a_failed_switch_connect_leaves_local_playback_running() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    local_playing(&mut t, slot, 42 * mbv_emby_model::TICKS_PER_SECOND, false);
+    t.event_loop.cast_connector = Some(failing_connector("receiver unreachable"));
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+
+    switch_output(&mut t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(&mut t);
+
+    let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
+        panic!("a failed connect reports to the selecting Client");
+    };
+    assert!(reason.contains("receiver unreachable"), "reason: {reason}");
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the old output stays after a failed switch"
+    );
+    let status = t.event_loop.player.status.lock().unwrap();
+    assert!(
+        status.active && status.position_ticks == 42 * mbv_emby_model::TICKS_PER_SECOND,
+        "local playback keeps running untouched"
+    );
+}
+
+/// Contract: switch-output-without-hand-off row 2.3(c) — the connect-time guard
+/// the switch skips still trips for a `Continue` selection that captured
+/// nothing while playback started during the connect (the guard of
+/// cast-owner-output, commit 6edcdad7f): the connect is discarded, the old
+/// output stays, and the selector is told.
+#[test]
+fn a_continue_selection_that_captured_nothing_still_trips_the_connect_guard() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    // The local output is idle at the selection, so the capture finds nothing.
+    t.event_loop.cast_connector = Some(fake_connector().0);
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    // Playback starts on the old output while the connect is in flight.
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    local_playing(&mut t, slot, 0, false);
+    pump_cast_event(&mut t);
+
+    let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
+        panic!("the guard reports to the selecting Client");
+    };
+    assert!(
+        reason.contains("playback started while connecting"),
+        "reason: {reason}"
+    );
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the connect is discarded and the old output stays"
+    );
+    assert!(
+        t.event_loop.player.status.lock().unwrap().active,
+        "the playback that started while connecting keeps running"
+    );
+}
+
 /// Contract: correction P2 on row 7.1 — selecting the receiver that is
 /// already the output displaces a connect that is still in flight (last
 /// selection wins): the pending selector is told, the same-receiver

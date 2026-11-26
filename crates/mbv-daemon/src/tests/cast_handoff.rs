@@ -11,7 +11,7 @@ use mbv_ctrl::{OutputSelection, OutputState};
 
 use super::cast_output::{
     cast_selection, connect_output_client, failing_connector, fake_connector, pump_cast_event,
-    select_output,
+    select_output, switch_output,
 };
 use super::cast_playback::{feed_qi_with_url, playing_status_at, pump, select_cast_output};
 use super::cast_resolve::wait_for_worker_jobs;

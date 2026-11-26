@@ -56,6 +56,27 @@ pub(crate) fn capture_handoff_for_selection(daemon: &DaemonLoop) -> Option<Hando
     }
 }
 
+/// The hand-off a selection captures for its intent
+/// (switch-output-without-hand-off design D5): a `Continue` answer pins the
+/// presented position to the selection instant and captures the old output's
+/// active playback; a `SwitchOnly` answer captures nothing, because the switch
+/// hands nothing over.
+pub(crate) fn capture_handoff_for_intent(
+    daemon: &mut DaemonLoop,
+    intent: SelectionIntent,
+) -> Option<HandoffPlayback> {
+    match intent {
+        SelectionIntent::Continue => {
+            // One re-derivation pins the presented position to the selection
+            // instant without a fresh poll (row 7.1 dispatch B), and the
+            // capture reads it.
+            refresh_active_output_presentation(daemon, Instant::now());
+            capture_handoff_for_selection(daemon)
+        }
+        SelectionIntent::SwitchOnly => None,
+    }
+}
+
 /// Pins the active remote output's presented status to the selection instant
 /// (design D10 step 1, row 7.1 dispatch B), so the hand-off capture reads the
 /// position at the selection without a fresh poll. A local output needs no

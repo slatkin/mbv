@@ -124,6 +124,21 @@ pub(super) fn select_output(
     ));
 }
 
+/// The output prompt's switch answer (switch-output-without-hand-off design
+/// D5): the same target as `select_output`, with the switch intent.
+pub(super) fn switch_output(
+    t: &mut TestLoop,
+    client_id: u64,
+    reply_tx: &CtrlSender,
+    selection: OutputSelection,
+) {
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::SwitchPlaybackOutput(selection),
+        client_id,
+        reply_tx.clone(),
+    ));
+}
+
 /// The output capabilities the spawned Client negotiates at its Hello.
 #[derive(Clone, Copy, Default)]
 struct ClientOutputCaps {
