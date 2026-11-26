@@ -124,6 +124,44 @@ fn a_right_click_on_a_row_sends_the_row_menu_command_with_its_id() {
     );
 }
 
+/// Contract (gui-emby-row-played-marks design D3, `gui-client` spec "An Emby
+/// library row carries the shared play state"): the painter passes the row's
+/// carried state to the flat row, so a played row paints the played mark and
+/// the played title weight, and an ordinary row paints the unplayed mark.
+#[test]
+fn a_played_row_paints_the_played_mark_and_weight_and_an_ordinary_row_the_unplayed_mark() {
+    let mut rows = EmbyList::rows();
+    rows[0].state = GuiHomeRowStateFrame::Played;
+    let mut fixture = built::<EmbyList>(
+        EmbyList::frame(rows, false, false),
+        EmbyList::detail_of(None),
+    );
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.attr_of(
+            &format!("{} [data-play-mark]", row_selector::<EmbyList>("m1")),
+            "data-play-mark",
+        ),
+        Some("played".to_owned()),
+        "the played row paints the played mark"
+    );
+    assert!(
+        fixture
+            .attr_of(&part_selector::<EmbyList>("m1", "title"), "style")
+            .is_some_and(|style| style.contains("font-weight: 400")),
+        "the played row paints the played title weight"
+    );
+    assert_eq!(
+        fixture.attr_of(
+            &format!("{} [data-play-mark]", row_selector::<EmbyList>("m2")),
+            "data-play-mark",
+        ),
+        Some("unplayed".to_owned()),
+        "the ordinary row paints the unplayed mark"
+    );
+}
+
 /// Contract (gui-row-hover-actions design D3, D4): an Emby collection row's
 /// menu carries Shuffle, so its hover offers Play, Add, and Shuffle; a media
 /// row offers Play and Add alone.
