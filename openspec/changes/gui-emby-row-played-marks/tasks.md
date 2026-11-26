@@ -19,7 +19,7 @@ All work is in `crates/mbv-gui`. Every verification names `-p mbv-gui`. Tests fo
 
 ## 4. Gates
 
-- [ ] 4.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`, each in the foreground, with no pipe. Verify: all three exit 0.
+- [x] 4.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`, each in the foreground, with no pipe. Verify: all three exit 0.
 
 ## Workflow follow-up
 
