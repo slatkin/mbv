@@ -286,6 +286,63 @@ fn continue_watching_request_enables_user_data() {
 }
 
 #[test]
+fn continue_watching_request_carries_home_facts_fields() {
+    // gui-hero-design-polish task 1.7, design D3: Home's Resume request must
+    // ask for the fields the Hero facts and movie cast read from the payload.
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(200, r#"{"Items":[]}"#);
+    client.get_continue_watching(10).unwrap();
+    let request = &http.requests()[0];
+    assert!(request.contains("Fields="));
+    for field in [
+        "ProductionYear",
+        "Genres",
+        "Studios",
+        "ExternalUrls",
+        "People",
+    ] {
+        assert!(request.contains(field), "Resume Fields missing {field}");
+    }
+}
+
+#[test]
+fn latest_requests_carry_home_facts_fields() {
+    // gui-hero-design-polish task 1.7, design D3: Recently Added must ask for
+    // the Home facts fields, and Latest Episodes for the episode year pill's
+    // `ProductionYear`.
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond_when("Items/Latest", 200, "[]");
+    http.respond(200, r#"{"Items":[]}"#);
+    client.get_latest("library-7", 10).unwrap();
+    client.get_latest_episodes("library-7", 10).unwrap();
+
+    let requests = http.requests();
+    let latest = requests
+        .iter()
+        .find(|request| request.contains("Items/Latest"))
+        .expect("Latest request must arrive");
+    assert!(latest.contains("Fields="));
+    for field in [
+        "ProductionYear",
+        "Genres",
+        "Studios",
+        "ExternalUrls",
+        "People",
+    ] {
+        assert!(latest.contains(field), "Latest Fields missing {field}");
+    }
+
+    let episodes = requests
+        .iter()
+        .find(|request| request.contains("IsPlayed=false"))
+        .expect("Latest Episodes request must arrive");
+    assert!(episodes.contains("Fields="));
+    assert!(episodes.contains("ProductionYear"));
+}
+
+#[test]
 fn playlist_items_request_includes_external_urls_field() {
     let (mut client, http) = mock_client(TEST_URL);
     client.user_id = "user".into();

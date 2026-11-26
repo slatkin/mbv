@@ -78,6 +78,12 @@ pub struct EmbyPerson {
     pub name: String,
     pub role: String,
     pub kind: String,
+    /// Emby item Id of the person; empty when the payload omits it.
+    #[serde(default)]
+    pub id: String,
+    /// Tag of the person's Primary image; empty when the payload omits it.
+    #[serde(default)]
+    pub primary_image_tag: String,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]

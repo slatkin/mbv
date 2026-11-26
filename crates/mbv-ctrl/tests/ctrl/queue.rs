@@ -1,49 +1,6 @@
 use super::*;
 use mbv_queue::{QueueItem, QueueLineage, QueueSource};
 
-fn stub_media_item() -> mbv_emby_model::EmbyItem {
-    mbv_emby_model::EmbyItem {
-        id: "item1".into(),
-        name: "Test Item".into(),
-        item_type: "Episode".into(),
-        is_folder: false,
-        child_count: None,
-        media_type: "Video".into(),
-        collection_type: String::new(),
-        runtime_ticks: 0,
-        played: false,
-        playback_position_ticks: 0,
-        series_id: String::new(),
-        series_name: String::new(),
-        album_id: String::new(),
-        album: String::new(),
-        index_number: 0,
-        parent_index_number: 0,
-        unplayed_item_count: 0,
-        parent_id: String::new(),
-        path: String::new(),
-        artist: String::new(),
-        track_artist: String::new(),
-        artist_items: Vec::new(),
-        sort_name: String::new(),
-        production_year: 0,
-        end_year: 0,
-        studios: Vec::new(),
-        overview: String::new(),
-        premiere_date: String::new(),
-        date_added: String::new(),
-        total_count: 0,
-        container: String::new(),
-        video_info: String::new(),
-        audio_info: String::new(),
-        genres: Vec::new(),
-        people: Vec::new(),
-        external_urls: Vec::new(),
-        playlist_item_id: String::new(),
-        image_tags: mbv_emby_model::EmbyImageTags::default(),
-    }
-}
-
 // ── Unified queue wire types ──────────────────────────────────────────────
 
 fn stub_feed_entry() -> mbv_queue::FeedEntry {
@@ -229,6 +186,70 @@ fn unified_queue_replace_round_trips_a_twitch_item() {
     assert_eq!(slots.len(), 1);
     assert_eq!(slots[0].slot_id, 1);
     assert!(matches!(&slots[0].item, QueueItem::Twitch(_)));
+}
+
+// gui-hero-design-polish task 1.4: the Emby person `id` and `primary_image_tag`
+// are additive on the unified queue item payload (design D3) — a person with
+// image identity round-trips unchanged through a queue command, and a payload
+// from a peer that predates the fields decodes both as empty.
+#[test]
+fn unified_queue_replace_round_trips_person_image_fields_and_a_stale_payload_decodes_empty() {
+    let mut item = stub_media_item();
+    item.people = vec![mbv_emby_model::EmbyPerson {
+        name: "Jane Doe".into(),
+        role: "Lead".into(),
+        kind: "Actor".into(),
+        id: "person-9".into(),
+        primary_image_tag: "tag-9".into(),
+    }];
+    let cmd = CtrlCmd::UnifiedQueueReplace {
+        items: vec![QueueItem::Emby(Box::new(item.clone()))],
+        slots: vec![UnifiedQueueSlot {
+            slot_id: 1,
+            item: QueueItem::Emby(Box::new(item)),
+        }],
+        start_idx: Some(0),
+        source: QueueSource::Unknown,
+        start_position_secs: None,
+        op: None,
+        queue: None,
+    };
+
+    let wire = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&wire).unwrap();
+
+    // The decode re-encodes to the same wire bytes, so no field was dropped.
+    assert_eq!(wire, serde_json::to_string(&decoded).unwrap());
+    let CtrlCmd::UnifiedQueueReplace { items, slots, .. } = decoded else {
+        panic!("expected UnifiedQueueReplace")
+    };
+    for carried in [items, slots.into_iter().map(|slot| slot.item).collect()] {
+        let [QueueItem::Emby(emby)] = carried.as_slice() else {
+            panic!("expected one Emby item")
+        };
+        assert_eq!(emby.people.len(), 1);
+        assert_eq!(emby.people[0].id, "person-9");
+        assert_eq!(emby.people[0].primary_image_tag, "tag-9");
+    }
+
+    // A payload from a peer that predates the fields decodes both as empty.
+    let mut stale: serde_json::Value = serde_json::from_str(&wire).unwrap();
+    for item in stale["UnifiedQueueReplace"]["items"]
+        .as_array_mut()
+        .unwrap()
+    {
+        let person = &mut item["people"][0];
+        person.as_object_mut().unwrap().remove("id");
+        person.as_object_mut().unwrap().remove("primary_image_tag");
+    }
+    let CtrlCmd::UnifiedQueueReplace { items, .. } = serde_json::from_value(stale).unwrap() else {
+        panic!("expected UnifiedQueueReplace")
+    };
+    let [QueueItem::Emby(emby)] = items.as_slice() else {
+        panic!("expected one Emby item")
+    };
+    assert_eq!(emby.people[0].id, "");
+    assert_eq!(emby.people[0].primary_image_tag, "");
 }
 
 // queue-handoff-and-take task 2.1: `start_position_secs` is additive — a

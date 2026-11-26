@@ -55,11 +55,15 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
                     name: "Kirsten Johnson".into(),
                     role: String::new(),
                     kind: "Director".into(),
+                    id: String::new(),
+                    primary_image_tag: String::new(),
                 },
                 mbv_emby_model::EmbyPerson {
                     name: "Jane Doe".into(),
                     role: "Lead".into(),
                     kind: "Actor".into(),
+                    id: "person-9".into(),
+                    primary_image_tag: "tag-9".into(),
                 },
             ];
             item.external_urls = vec![mbv_emby_model::EmbyLink {

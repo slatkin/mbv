@@ -129,6 +129,10 @@ pub const CTRL_CAP_TWITCH_QUEUE: &str = "twitch-queue";
 /// local Owner advertises it — a packaged `mbvd` keeps one queue (design D3 of
 /// `gui-named-queues`). Additive — no protocol-version bump.
 pub const CTRL_CAP_NAMED_QUEUES: &str = "named-queues";
+/// Peer can decode the optional Emby person `id` and `primary_image_tag` in
+/// unified queue item payloads and re-emit them unchanged. A payload without
+/// the fields decodes both as empty. Additive — no protocol-version bump.
+pub const CTRL_CAP_EMBY_PERSON_IMAGES: &str = "emby-person-images";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;

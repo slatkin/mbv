@@ -466,10 +466,20 @@
     },
     "EmbyPerson": {
       "properties": {
+        "id": {
+          "default": "",
+          "description": "Emby item Id of the person; empty when the payload omits it.",
+          "type": "string"
+        },
         "kind": {
           "type": "string"
         },
         "name": {
+          "type": "string"
+        },
+        "primary_image_tag": {
+          "default": "",
+          "description": "Tag of the person's Primary image; empty when the payload omits it.",
           "type": "string"
         },
         "role": {
