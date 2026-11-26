@@ -5,8 +5,8 @@
 //! as a link pill; the detail block paints the labelled rows in the frame's
 //! order and no runtime row; the cast grid paints the members in the frame's
 //! order, a member with no photo shows the member's initials; no `IMDb` header
-//! action paints; the Hero's art makes its glow through the shared
-//! art-to-glow mapping; a Hero without facts paints nothing; no Workspace
+//! action paints; the Hero's art makes its backdrop through the shared
+//! art-to-backdrop mapping; a Hero without facts paints nothing; no Workspace
 //! and no tracklist paint; and the actions send the Emby commands with the
 //! frame's selected row. The IPC of the earlier tests is the mock core link
 //! here; the asserted commands are the same neutral shapes. A headless
@@ -491,7 +491,7 @@ fn no_imdb_header_action_paints() {
 }
 
 /// The one case table (gui-hero-design-polish D4, spec scenario "The Hero's
-/// artwork makes its glow"): the glow paints through the shared art-to-glow
+/// artwork makes its backdrop"): the backdrop paints through the shared art-to-backdrop
 /// mapping exactly when the Hero carries art with a card source — none paints
 /// without art, with the bundled placeholder, or with art still loading.
 #[rstest]
@@ -503,15 +503,15 @@ fn no_imdb_header_action_paints() {
 #[case::card_art(Some(GuiArtRef::Image {
     src: art_url("card/backdrop"),
 }), true)]
-fn the_hero_s_art_makes_its_glow(#[case] art: Option<GuiArtRef>, #[case] paints: bool) {
+fn the_hero_s_art_makes_its_backdrop(#[case] art: Option<GuiArtRef>, #[case] paints: bool) {
     let mut hero = movie_hero(GuiArtShapeFrame::Landscape);
     hero.art = art;
     let fixture = built(Some(hero));
 
     assert_eq!(
-        fixture.presents("[data-library-emby-hero-glow]"),
+        fixture.presents("[data-library-emby-hero-backdrop]"),
         paints,
-        "the glow paints exactly when the Hero carries card art"
+        "the backdrop paints exactly when the Hero carries card art"
     );
 }
 

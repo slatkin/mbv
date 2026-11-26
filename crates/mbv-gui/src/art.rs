@@ -12,9 +12,10 @@
 use std::fmt;
 use std::fmt::Write as _;
 
-/// The glow encoder (design D4): the pure bytes-to-PNG step the glow
+/// The backdrop encoder (design D4): the pure bytes-to-JPEG step the backdrop
 /// request's worker thread runs.
-pub(crate) mod glow;
+pub(crate) mod backdrop;
+use backdrop::{BackdropRequest, BackdropStyle};
 
 /// The scheme host the window loads images through (design D7).
 /// The net provider answers the scheme `mbv-art://localhost/<path>`.
@@ -66,25 +67,26 @@ pub fn card_path(cache_key: &str) -> String {
     format!("card/{}", percent_encode(cache_key))
 }
 
-/// The request path for the glow rendition of the image-cache entry
-/// `cache_key` names (design D4): the same encoded key a [`card_path`] names.
+/// The backdrop URL for the artwork `art` names (design D4): the `mbv-art`
+/// backdrop URL for the same cache key the art's image URL names, baked at
+/// `width` in `style`. A `Placeholder` names no cache key and a `Loading`
+/// reference names no URL, so both map to `None`, as does an image URL that
+/// names no card.
 #[must_use]
-pub fn glow_path(cache_key: &str) -> String {
-    format!("glow/{}", percent_encode(cache_key))
-}
-
-/// The glow URL for the artwork `art` names (design D4): the `mbv-art` glow
-/// URL for the same cache key the art's image URL names. A `Placeholder`
-/// names no cache key and a `Loading` reference names no URL, so both map to
-/// `None`, as does an image URL that names no card.
-#[must_use]
-pub fn glow_from_art(art: &GuiArtRef) -> Option<String> {
+pub(crate) fn backdrop_from_art(
+    art: &GuiArtRef,
+    width: u32,
+    style: BackdropStyle,
+) -> Option<String> {
     match art {
         GuiArtRef::Image { src } => {
             let path = src.strip_prefix(SCHEME_HOST)?.strip_prefix('/')?;
             match parse_path(path) {
-                Some(ArtPath::Card(key)) => Some(art_url(&glow_path(&key))),
-                Some(ArtPath::Glow(_) | ArtPath::Placeholder) | None => None,
+                Some(ArtPath::Card(key)) => {
+                    let request = BackdropRequest { key, width, style };
+                    Some(art_url(&format!("backdrop/{}", request.path_tail())))
+                }
+                Some(ArtPath::Backdrop(_) | ArtPath::Placeholder) | None => None,
             }
         }
         GuiArtRef::Placeholder { .. } | GuiArtRef::Loading => None,
@@ -130,15 +132,15 @@ pub enum ArtResponse {
 }
 
 /// The path an art request names (design D7): the image-cache key a card
-/// names, the glow rendition key, or the placeholder.
+/// names, the backdrop rendition key, or the placeholder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ArtPath {
     Card(String),
-    Glow(String),
+    Backdrop(BackdropRequest),
     Placeholder,
 }
 
-/// Parse a request path (design D7): the three forms only. A card or glow
+/// Parse a request path (design D7): the three forms only. A card or backdrop
 /// segment is percent-decoded; another prefix, a missing segment, or an
 /// undecodable one is malformed, and the request answers `Missing`.
 pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
@@ -148,7 +150,7 @@ pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
     let (kind, rest) = path.split_once('/')?;
     match kind {
         "card" => Some(ArtPath::Card(percent_decode(rest)?)),
-        "glow" => Some(ArtPath::Glow(percent_decode(rest)?)),
+        "backdrop" => BackdropRequest::parse_tail(rest).map(ArtPath::Backdrop),
         _ => None,
     }
 }

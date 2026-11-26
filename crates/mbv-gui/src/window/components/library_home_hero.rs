@@ -6,7 +6,7 @@
 //! payload names one, else the item itself. When a parent took the title, the
 //! detail block names the item beneath it. The facts map onto the header's
 //! pills and the block's labelled rows, the cast and the overview paint
-//! under their sections, and the glow comes from the shared art-to-glow
+//! under their sections, and the backdrop comes from the shared art-to-backdrop
 //! mapping. Home has no list band.
 //!
 //! Play and Add to queue (`a`) send the Home destination's row commands with
@@ -15,7 +15,8 @@
 
 use dioxus_native::prelude::*;
 
-use super::library_hero::hero_glow;
+use super::library_hero::hero_backdrop;
+use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::{GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiLibraryDetail};
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
@@ -112,10 +113,10 @@ pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {
         }
     };
 
-    // The header band's glow (design D4): the shared art-to-glow mapping over
+    // The header band's backdrop (design D4): the shared art-to-backdrop mapping over
     // the Hero's own art, `None` while the art is absent, still loading, or
     // the bundled placeholder.
-    let glow = hero_glow(hero.art.as_ref());
+    let backdrop = hero_backdrop(hero.art.as_ref(), BackdropStyle::Video);
 
     rsx! {
         LibraryHeroFrame {
@@ -129,7 +130,7 @@ pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {
             actions: Some(actions),
             overview: hero.overview.clone(),
             cast: hero.cast.clone(),
-            glow,
+            backdrop,
         }
     }
 }

@@ -20,7 +20,8 @@
 
 use dioxus_native::prelude::*;
 
-use crate::art::{GuiArtRef, glow_from_art};
+use crate::art::backdrop::{BackdropStyle, baked_width};
+use crate::art::{GuiArtRef, backdrop_from_art};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicArtistFrame,
     GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
@@ -29,7 +30,9 @@ use crate::bridge::frame::library::{
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_artist_tracklist::LibraryArtistTracklist;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
-use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
+use crate::window::components::library_hero_frame::{
+    FALLBACK_PANE_WIDTH, HeroBlock, HeroHeader, HeroPaneWidth, LibraryHeroFrame,
+};
 use crate::window::components::library_panel::row_menu_entries;
 use crate::window::components::library_tracklist::LibraryTracklist;
 use crate::window::components::queue_row_menu::QueueRowMenu;
@@ -52,11 +55,14 @@ pub struct LibraryHeroProps {
     pub detail: SectionRef<GuiLibraryDetail>,
 }
 
-/// The header band's glow (design D4): the shared art-to-glow mapping over the
+/// The header band's backdrop (design D4): the shared art-to-backdrop mapping over the
 /// Hero's own art, `None` while the art is absent, still loading, or the
 /// bundled placeholder.
-pub(super) fn hero_glow(art: Option<&GuiArtRef>) -> Option<GuiArtRef> {
-    art.and_then(glow_from_art)
+pub(super) fn hero_backdrop(art: Option<&GuiArtRef>, style: BackdropStyle) -> Option<GuiArtRef> {
+    let pane =
+        try_consume_context::<HeroPaneWidth>().map_or(FALLBACK_PANE_WIDTH, |pane| *pane.0.read());
+    let width = baked_width(pane);
+    art.and_then(|art| backdrop_from_art(art, width, style))
         .map(|src| GuiArtRef::Image { src })
 }
 
@@ -272,7 +278,7 @@ fn album_hero(
 
     let header_action = album_shuffle_action(library);
     let actions = album_actions_row(library, &album.album_id, &menu);
-    let glow = hero_glow(detail.art.as_ref());
+    let backdrop = hero_backdrop(detail.art.as_ref(), BackdropStyle::Music);
 
     rsx! {
         LibraryHeroFrame {
@@ -300,7 +306,7 @@ fn album_hero(
             art_title: album.name.clone(),
             art_placeholder: Some("[Album art · Emby Primary]".to_owned()),
             disc: true,
-            glow,
+            backdrop,
             actions: Some(actions),
             overview: None,
             list_title: Some("Tracks".to_owned()),
@@ -326,7 +332,7 @@ fn artist_hero(
     hero: &GuiMusicHeroFrame,
     page: &GuiMusicArtistPageFrame,
 ) -> Element {
-    let glow = hero_glow(detail.art.as_ref());
+    let backdrop = hero_backdrop(detail.art.as_ref(), BackdropStyle::Music);
 
     // The actions' sends (design D6): the page's album ids in the page's
     // order. While the page has albums that are still loading, they still
@@ -389,7 +395,7 @@ fn artist_hero(
             art: detail.art.clone(),
             art_title: hero.artist.clone(),
             art_placeholder: Some("[Artist art · Emby Primary]".to_owned()),
-            glow,
+            backdrop,
             actions: Some(actions),
             overview: None,
             list_title: Some("Tracks".to_owned()),

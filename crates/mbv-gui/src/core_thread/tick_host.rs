@@ -17,6 +17,7 @@ use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
 
 use super::{CoreInput, CoreThread};
+use crate::art::backdrop::BackdropRequest;
 use crate::art::{ArtPath, ArtReply, ArtRequest, ArtResponse, parse_path};
 use crate::sections::{DrainHook, marks_for_hook};
 
@@ -70,28 +71,28 @@ impl CoreThread {
                         });
                 (request.reply)(response);
             }
-            Some(ArtPath::Glow(key)) => self.answer_glow(&key, request.reply),
+            Some(ArtPath::Backdrop(backdrop)) => self.answer_backdrop(backdrop, request.reply),
             None => (request.reply)(ArtResponse::Missing),
         }
     }
 
-    /// Answer one glow request (design D4): a cached glow PNG answers on the
+    /// Answer one backdrop request (design D4): a cached backdrop JPEG answers on the
     /// core thread with no source read. Otherwise read the cached source bytes
-    /// here and queue the encode on the one glow worker thread. No source
+    /// here and queue the encode on the one backdrop worker thread. No source
     /// answers `Missing`.
-    fn answer_glow(&self, cache_key: &str, reply: ArtReply) {
-        if let Some(png) = self.glow.cached(cache_key) {
+    fn answer_backdrop(&self, request: BackdropRequest, reply: ArtReply) {
+        if let Some(jpeg) = self.backdrop.cached(&request) {
             reply(ArtResponse::Found {
-                mime: "image/png",
-                bytes: png.to_vec(),
+                mime: "image/jpeg",
+                bytes: jpeg.to_vec(),
             });
             return;
         }
-        let Some(source) = self.core.gui_art_source(cache_key) else {
+        let Some(source) = self.core.gui_art_source(&request.key) else {
             reply(ArtResponse::Missing);
             return;
         };
-        self.glow.submit(cache_key.to_owned(), source.bytes, reply);
+        self.backdrop.submit(request, source.bytes, reply);
     }
 }
 

@@ -2,7 +2,7 @@
 //! layout every Hero paints — Music, Shows, Emby, Audiobooks, Podcasts,
 //! Feeds, and Home. Top to bottom:
 //!
-//!   1. the glow layer — the blurred copy of the Hero's art (design D4),
+//!   1. the backdrop layer — the blurred copy of the Hero's art (design D4),
 //!      cover-fit behind the header band under a fade to the pane's
 //!      background, when the destination passes one;
 //!   2. the header band — the kicker as the eyebrow with a leading dot, the
@@ -27,6 +27,7 @@
 use dioxus_native::prelude::*;
 
 use crate::art::GuiArtRef;
+use crate::art::backdrop::BACKDROP_HEIGHT;
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiHeroCastMemberFrame, GuiHeroFactRowFrame, GuiHeroPillFrame,
 };
@@ -86,10 +87,10 @@ pub struct LibraryHeroFrameProps {
     /// The list band.
     #[props(default)]
     pub children: Option<Element>,
-    /// The header band's glow (design D4): the blurred art copy the frame
-    /// paints cover-fit behind the band under a fade. `None` paints no glow.
+    /// The blurred-artwork backdrop (design D4): the baked image the frame paints
+    /// behind the header and the detail block. `None` paints no backdrop.
     #[props(default)]
-    pub glow: Option<GuiArtRef>,
+    pub backdrop: Option<GuiArtRef>,
 }
 
 impl std::fmt::Debug for LibraryHeroFrameProps {
@@ -110,7 +111,7 @@ impl std::fmt::Debug for LibraryHeroFrameProps {
             .field("cast", &self.cast)
             .field("list_title", &self.list_title)
             .field("children", &self.children.is_some())
-            .field("glow", &self.glow)
+            .field("backdrop", &self.backdrop)
             .finish()
     }
 }
@@ -195,12 +196,16 @@ const HERO_EPISODE_NAME_PX: f32 = 16.0;
 /// before the kicker's label, in the label kind's hue.
 const EYEBROW_DOT_STYLE: &str = "width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--canvas-type-label);";
 
-/// The glow layer's fade (design D4): the blurred art dissolves into the
-/// pane's background at the band's bottom edge.
-const GLOW_FADE_STYLE: &str = "background: linear-gradient(to bottom, var(--canvas-hero-glow-veil), var(--canvas-library-column));";
+/// The pane's painted width in CSS pixels, provided by the Library panel: the
+/// Heroes bake the backdrop at the next 200 px step above it.
+#[derive(Debug, Clone, Copy)]
+pub struct HeroPaneWidth(pub Signal<f32>);
+
+/// The pane width a Hero assumes while no panel provides one.
+pub const FALLBACK_PANE_WIDTH: f32 = 1200.0;
 
 /// The Library Hero's frame:
-/// the glow behind the header band, the detail block with the artwork and the
+/// the backdrop behind the header band, the detail block with the artwork and the
 /// picked item's text, and the destination's bands under their sections.
 #[component]
 pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
@@ -220,7 +225,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
         cast,
         list_title,
         children,
-        glow,
+        backdrop,
     } = props;
 
     let root_attrs = vec![Attribute::new(root, "", None, false)];
@@ -237,30 +242,32 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
 
     rsx! {
         div {
-            class: "flex flex-col",
-            style: "padding: 28px 32px; gap: 28px;",
+            class: "relative",
             ..root_attrs,
+            // The blurred-artwork backdrop (design D4): one opaque image the core
+            // baked, pinned to the top of the scrolling content at the pane's
+            // width, so it scrolls away with the Hero. It paints nothing while
+            // the core bakes it.
+            if let Some(backdrop) = backdrop.filter(|backdrop| backdrop.src().is_some()) {
+                div {
+                    class: "absolute",
+                    style: "left: 0; top: 0; width: 100%; height: {BACKDROP_HEIGHT}px; overflow: hidden;",
+                    ..vec![Attribute::new(own(attr, "backdrop"), "", None, false)],
+                    ArtImage {
+                        art: Some(backdrop),
+                        alt: String::new(),
+                        uncapped: true,
+                        class: "block".to_owned(),
+                        style: format!("width: 100%; height: {BACKDROP_HEIGHT}px; object-fit: cover;"),
+                    }
+                }
+            }
+            div {
+                class: "relative flex flex-col",
+                style: "padding: 28px 32px; gap: 28px;",
             div {
                 class: "relative flex items-end justify-between",
                 style: "gap: 24px; padding-bottom: 8px;",
-                if let Some(glow) = glow.filter(|glow| glow.src().is_some()) {
-                    div {
-                        class: "absolute overflow-hidden",
-                        style: "left: 0; right: 0; top: 0; bottom: 0; border-radius: 12px;",
-                        ..vec![Attribute::new(own(attr, "glow"), "", None, false)],
-                        ArtImage {
-                            art: Some(glow),
-                            alt: String::new(),
-                            uncapped: true,
-                            class: "block".to_owned(),
-                            style: "width: 100%; height: 100%; object-fit: cover; opacity: 0.55;".to_owned(),
-                        }
-                        div {
-                            class: "absolute",
-                            style: "left: 0; right: 0; top: 0; bottom: 0; {GLOW_FADE_STYLE}",
-                        }
-                    }
-                }
                 div {
                     class: "relative flex min-w-0 flex-col",
                     style: "gap: 6px;",
@@ -289,7 +296,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                 if let Some(action) = header_action {
                     div {
                         // The action's own stacking context (as the detail
-                        // block's actions row): the glow layer is absolute, so
+                        // block's actions row): the backdrop layer is absolute, so
                         // a bare static action would paint and hit-test under
                         // it (review 2026-11-26).
                         class: "relative flex-none",
@@ -386,6 +393,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                 } else {
                     { children }
                 }
+            }
             }
         }
     }

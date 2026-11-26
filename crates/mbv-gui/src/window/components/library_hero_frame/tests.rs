@@ -2,10 +2,10 @@
 //! destination's Hero paints through. The frame paints the header band's
 //! pills in their order, the block's labelled rows in theirs, the present
 //! section headers — Overview, then Cast, then the list band — in theirs, no
-//! playback progress anywhere, and the glow only when loaded art is carried
-//! (spec scenario "The Hero's artwork makes its glow": a Hero whose artwork
-//! has loaded shows the glow behind the header band, and a Hero with no
-//! artwork shows no glow). The per-destination Hero suites keep their own
+//! playback progress anywhere, and the backdrop only when loaded art is carried
+//! (spec scenario "The Hero's artwork makes its backdrop": a Hero whose artwork
+//! has loaded shows the backdrop behind the header band, and a Hero with no
+//! artwork shows no backdrop). The per-destination Hero suites keep their own
 //! facts, actions, and rows. The art painter's contexts travel in as the
 //! root's, and the pills' store rides a mock core link, so no test opens a
 //! window, sleeps, or reaches the core.
@@ -33,7 +33,7 @@ use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
 /// The frame's props: a destination's attributes over the two bands' text,
-/// with no pills, rows, sections, or glow carried.
+/// with no pills, rows, sections, or backdrop carried.
 fn props() -> LibraryHeroFrameProps {
     LibraryHeroFrameProps {
         attr: "abs",
@@ -62,7 +62,7 @@ fn props() -> LibraryHeroFrameProps {
         cast: Vec::new(),
         list_title: None,
         children: None,
-        glow: None,
+        backdrop: None,
     }
 }
 
@@ -357,25 +357,25 @@ fn the_frame_paints_no_progress_element() {
 }
 
 /// The one case table (design D4, the spec scenario "The Hero's artwork makes
-/// its glow"): the glow paints only when the frame carries art with a source
-/// — none paints without the prop or with a glow still loading.
+/// its backdrop"): the backdrop paints only when the frame carries art with a source
+/// — none paints without the prop or with a backdrop still loading.
 #[rstest]
-#[case::no_glow_prop(None, false)]
-#[case::a_glow_without_a_source(Some(GuiArtRef::Loading), false)]
-#[case::loaded_glow_art(Some(GuiArtRef::Image {
-    src: art_url("glow/cover"),
+#[case::no_backdrop_prop(None, false)]
+#[case::a_backdrop_without_a_source(Some(GuiArtRef::Loading), false)]
+#[case::loaded_backdrop_art(Some(GuiArtRef::Image {
+    src: art_url("backdrop/cover"),
 }), true)]
-fn the_glow_paints_only_when_the_frame_carries_loaded_art(
-    #[case] glow: Option<GuiArtRef>,
+fn the_backdrop_paints_only_when_the_frame_carries_loaded_art(
+    #[case] backdrop: Option<GuiArtRef>,
     #[case] paints: bool,
 ) {
     let mut props = props();
-    props.glow = glow;
+    props.backdrop = backdrop;
     let fixture = built(props);
 
     assert_eq!(
-        fixture.presents("[data-library-abs-hero-glow]"),
+        fixture.presents("[data-library-abs-hero-backdrop]"),
         paints,
-        "the glow paints exactly when loaded art is carried"
+        "the backdrop paints exactly when loaded art is carried"
     );
 }

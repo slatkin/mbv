@@ -306,10 +306,10 @@ fn a_feed_entry_titles_the_header_with_its_feed_and_names_the_entry() {
     );
 }
 
-/// Contract (design D4): the Hero's card art makes its glow, and no art paints
+/// Contract (design D4): the Hero's card art makes its backdrop, and no art paints
 /// none.
 #[test]
-fn the_hero_s_card_art_makes_its_glow() {
+fn the_hero_s_card_art_makes_its_backdrop() {
     let mut frame = hero(GuiArtShapeFrame::Landscape);
     frame.art = Some(GuiArtRef::Image {
         src: art_url("card/backdrop"),
@@ -317,8 +317,8 @@ fn the_hero_s_card_art_makes_its_glow() {
     let fixture = built(frame);
 
     assert!(
-        fixture.presents("[data-library-home-hero-glow]"),
-        "the glow paints from the card art"
+        fixture.presents("[data-library-home-hero-backdrop]"),
+        "the backdrop paints from the card art"
     );
 }
 

@@ -151,7 +151,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
             art: None,
             art_title: hero.title.clone(),
             actions: Some(actions),
-            // A feed entry has no artwork source, so no glow maps (design D4).
+            // A feed entry has no artwork source, so no backdrop maps (design D4).
             list_title: Some("Entries".to_owned()),
             children: Some(rsx! {
                 LibraryWorkspaceTable {

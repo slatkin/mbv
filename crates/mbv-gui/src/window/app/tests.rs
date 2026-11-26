@@ -354,7 +354,7 @@ fn the_window_stylesheet_applies_preflight_utilities_and_the_font() {
 /// on it. It fails when the rule never reaches the document — the sheet drops
 /// the class, or a gate around it stops matching — which is the look a port
 /// of the former hover state must not lose. The divider is the one hover
-/// utility the test can drive without a library frame (the Table's glow
+/// utility the test can drive without a library frame (the Table's backdrop
 /// button needs one).
 #[test]
 fn a_hover_utility_paints_under_the_pointer() {

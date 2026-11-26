@@ -15,7 +15,8 @@
 
 use dioxus_native::prelude::*;
 
-use super::library_hero::hero_glow;
+use super::library_hero::hero_backdrop;
+use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
@@ -91,10 +92,10 @@ pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
         }
     };
 
-    // The header band's glow (design D4): the shared art-to-glow mapping over
+    // The header band's backdrop (design D4): the shared art-to-backdrop mapping over
     // the Hero's own art, `None` while the art is absent, still loading, or
     // the bundled placeholder.
-    let glow = hero_glow(hero.art.as_ref());
+    let backdrop = hero_backdrop(hero.art.as_ref(), BackdropStyle::Video);
 
     rsx! {
         LibraryHeroFrame {
@@ -107,7 +108,7 @@ pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
             art_title: hero.title.clone(),
             actions: Some(actions),
             overview: hero.overview.clone(),
-            glow,
+            backdrop,
         }
     }
 }

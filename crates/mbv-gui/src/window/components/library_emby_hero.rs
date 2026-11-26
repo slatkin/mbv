@@ -3,8 +3,8 @@
 //! carries the item's kind word as the kicker, the title, and the fact pills
 //! — the `IMDb` link is a link pill, as every Hero's link fact is. The detail
 //! block beside the art holds the labelled fact rows and the action row; the
-//! Overview and Cast sections follow when the item has them; the glow behind
-//! the header band is the shared art-to-glow mapping over the Hero's own art.
+//! Overview and Cast sections follow when the item has them; the backdrop behind
+//! the header band is the shared art-to-backdrop mapping over the Hero's own art.
 //!
 //! A plain Emby library carries no Workspace and no tracklist: a folder or a
 //! boxset plays through the TUI's folder-play rule, so the pane is the frame
@@ -17,7 +17,8 @@
 
 use dioxus_native::prelude::*;
 
-use super::library_hero::hero_glow;
+use super::library_hero::hero_backdrop;
+use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
@@ -96,10 +97,10 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
         }
     };
 
-    // The header band's glow (design D4): the shared art-to-glow mapping over
+    // The header band's backdrop (design D4): the shared art-to-backdrop mapping over
     // the Hero's own art, `None` while the art is absent, still loading, or
     // the bundled placeholder.
-    let glow = hero_glow(hero.art.as_ref());
+    let backdrop = hero_backdrop(hero.art.as_ref(), BackdropStyle::Video);
 
     rsx! {
         LibraryHeroFrame {
@@ -113,7 +114,7 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
             actions: Some(actions),
             overview: hero.overview.clone(),
             cast: hero.cast.clone(),
-            glow,
+            backdrop,
         }
     }
 }

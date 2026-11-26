@@ -169,12 +169,10 @@
 	   glance. Estimated from the album artboard; confirm live. */
 	--canvas-playing-row: #2f3b46; /* the row the playhead is on */
 	/* The Hero's part values (gui-hero-design-polish design D2): the inset
-	   frame's bezel around the Hero's art, the vinyl disc behind a square
-	   album sleeve, and the veil over the header band's glow, whose fade
-	   lands on the pane's `--canvas-library-column`. */
+	   frame's bezel around the Hero's art and the vinyl disc behind a square
+	   album sleeve. */
 	--canvas-art-frame: #1c2226; /* the inset frame around the Hero's art */
 	--canvas-hero-disc: #171d21; /* the vinyl disc behind a square album sleeve */
-	--canvas-hero-glow-veil: rgba(39, 46, 51, 0.2); /* the fade over the Hero glow's top edge */
 	/* The GUI trees' indent guides (gui-tree-indent-guides design D5): the
 	   neutral tone a top-level parent's guide paints in — Everforest bg5, the
 	   nearest palette value to the mockup's #4f5862, which reads as a rule and
@@ -324,7 +322,7 @@
 }
 
 /* Every interactive control answers the pointer (design D16): one rule, so a
-   new button cannot be born without the hover, and the glow is a veil rather
+   new button cannot be born without the hover, and the backdrop is a veil rather
    than a fill because the controls paint their own fills inline. The veil is
    a one-colour gradient in `background-image`: it composites over the inline
    `background-color` and under the label, which is why a pill, a selected
@@ -345,7 +343,7 @@
    out of `box-shadow`.
    A control that paints its own pointer look sets `--hover-veil: transparent`
    on itself or on an ancestor (the Queue header's bar, the Queue chooser's
-   card, the seekbar's row), so the shared glow does not wash the look and no
+   card, the seekbar's row), so the shared backdrop does not wash the look and no
    rule has to name the component. */
 button:not(:disabled):hover,
 [role='menuitem']:not([aria-disabled='true']):hover,

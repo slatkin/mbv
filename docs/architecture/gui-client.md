@@ -2115,11 +2115,12 @@ one handling:
 Invariant 30 (`docs/invariants/30-shared-ui-is-never-bent-to-fit-a-consumer.md`)
 governs these. `LibraryHeroFrame` is the only Hero layout, for Home, Music, Shows, Podcasts,
 Audiobooks, Feeds, and Movies (gui-hero-design-polish D2). It paints, top to
-bottom: the glow layer, the header band, the detail block, and the bands.
+bottom: the backdrop layer, the header band, the detail block, and the bands.
 
 The header band holds the kicker as the eyebrow, the title, and the fact pills
-(`LibraryHeroPills`). The glow is the Hero's art, blurred, behind the header
-band under a fade (`Hero glow`, the `glow/` art path). The detail block
+(`LibraryHeroPills`). The backdrop is the Hero's art, blurred and baked as one
+opaque image behind the header and the detail block at the pane's full width
+(`Hero backdrop`, the `backdrop/` art path). The detail block
 (`LibraryHeroDetail`) holds the art in an inset frame, the text column with the
 block's eyebrow and name lines, the action row, and the fact rows
 (`LibraryHeroFactRows`, a label word and its value). The overview sits in the
@@ -2155,14 +2156,17 @@ art. The ctrl wire carries `EmbyPerson` `id` and `primary_image_tag` under the
 additive `emby-person-images` capability (`CTRL_CAP_EMBY_PERSON_IMAGES`), with no
 protocol version bump.
 
-The glow is a pre-blurred image on the `glow/<key>` art path (`ArtPath::Glow`).
-`art.rs` maps the Hero's `image` card URL to that path. A `placeholder` or
-`Loading` art has no glow. The core reads the cached source bytes on the core
-thread, and a thread named `mbv-art-glow` decodes them, shrinks them to a 64 px
-long side that keeps the aspect ratio, blurs them at sigma 4, and answers
-`image/png`. A decode or encode failure answers missing. Nothing is memoised: the
-window keeps the image while the Hero shows it, and a new Hero makes a new
-request. The window paints no CSS blur filter.
+The backdrop is a baked image on the `backdrop/{style}/{width}/{key}` art path
+(`ArtPath::Backdrop`). `art.rs` maps the Hero's `image` card URL to that path,
+and the Library panel provides the pane width the Hero asks for (rounded up to
+a 200 px step). A `placeholder` or `Loading` art has no backdrop. A cached JPEG
+answers on the core thread. Otherwise the core reads the cached source bytes and
+queues them to the one `mbv-art-backdrop` worker, which shrinks them to 32 px,
+cover-fits them to the width by 560 px, blurs them at sigma 8, bakes the
+vertical and horizontal scrims over the pane colour `#272e33`, and answers
+`image/jpeg`. The worker keeps the last 32 results. The bottom row equals the
+pane colour, and the title area keeps 4.5:1 against the title colour, so the
+window paints no CSS opacity, gradient, or blur filter.
 `LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play and Add to queue buttons,
 `LibraryDropdown` the Shows Workspace's season dropdown (a radio row per

@@ -114,7 +114,7 @@ The artist page SHALL load the tracks of every album of the artist when the arti
 
 ### Requirement: Every Hero is one frame with the largest unit as its title
 
-The Hero of Music, Shows, Podcasts, Audiobooks, Feeds, Home, and every plain Emby library (Movies included) SHALL paint one frame: a header band, a detail block beside or above the art, and the bands below it. The header band SHALL show the Hero's eyebrow (the kind label, with the selected collections where the destination has them), its title, and, except for the Music album totals this requirement names, its short facts as a row of fact pills. The header band's title SHALL be the name of the largest unit the item belongs to: the artist for Music, the series for a series or one of its episodes, the podcast for a podcast episode, the feed for a feed entry, the book for an audiobook, or the item itself for a movie or another item without a containing unit. A blurred glow made from the Hero's own artwork SHALL show behind the header band, and a Hero with no artwork SHALL show no glow. The detail block SHALL show the artwork and, beside it or under it when the Hero is narrow, the selected smaller unit's name when a larger unit took the title, its Play and Add to queue actions, and its labelled facts as label and value rows. The Music artist page SHALL be the one Hero whose detail block shows the largest unit: it has no smaller unit, so the block shows the artist's artwork and the actions.
+The Hero of Music, Shows, Podcasts, Audiobooks, Feeds, Home, and every plain Emby library (Movies included) SHALL paint one frame: a header band, a detail block beside or above the art, and the bands below it. The header band SHALL show the Hero's eyebrow (the kind label, with the selected collections where the destination has them), its title, and, except for the Music album totals this requirement names, its short facts as a row of fact pills. The header band's title SHALL be the name of the largest unit the item belongs to: the artist for Music, the series for a series or one of its episodes, the podcast for a podcast episode, the feed for a feed entry, the book for an audiobook, or the item itself for a movie or another item without a containing unit. A blurred backdrop made from the Hero's own artwork SHALL show behind the header band, and a Hero with no artwork SHALL show no backdrop. The detail block SHALL show the artwork and, beside it or under it when the Hero is narrow, the selected smaller unit's name when a larger unit took the title, its Play and Add to queue actions, and its labelled facts as label and value rows. The Music artist page SHALL be the one Hero whose detail block shows the largest unit: it has no smaller unit, so the block shows the artist's artwork and the actions.
 
 Each fact SHALL show in one place only. The short facts (a year, a genre, a runtime or duration, a count, an external link) SHALL be fact pills, and the facts that need a label (a director, a full release date, a studio or network, an author, a publish date) SHALL be label and value rows. The Music album Hero is the exception to the header-facts rule: its track count and total time SHALL be fact pills in the detail block, not in the header. A full release date row MAY show while a pill shows the year. A fact pill that names an external link SHALL open that link when pressed.
 
@@ -175,10 +175,12 @@ A destination SHALL map its facts onto this frame and SHALL NOT remove a band th
 - **THEN** the Hero shows no progress bar, no resume position, and no remaining time
 - **AND** a press on Play starts the item from its stored position
 
-#### Scenario: The Hero's artwork makes its glow
+#### Scenario: The Hero's artwork makes its backdrop
 
 - **WHEN** the Hero shows an item whose artwork has loaded
-- **THEN** a blurred glow made from that artwork shows behind the header band
+- **THEN** a blurred copy of that artwork, baked as one opaque image, shows behind the header and the detail block at the full width of the Hero pane
+- **AND** it fades to the pane's background colour towards the bottom, and scrolls away with the Hero
+- **AND** it paints nothing while it is baked
 
 ### Requirement: Library lists and Workspace tables paint through shared parts
 

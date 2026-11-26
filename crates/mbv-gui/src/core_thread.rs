@@ -29,7 +29,7 @@ use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, Position};
 
 use crate::art::ArtRequest;
-use crate::art::glow::GlowWorker;
+use crate::art::backdrop::BackdropWorker;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::keys::KeyTarget;
 use crate::bridge::layout::{LayoutReport, LayoutSize, ListId, RegionTarget, hit_map};
@@ -239,9 +239,9 @@ pub struct CoreThread {
     idle_cadence: Duration,
     /// The saved GUI launch location and its restore phase (design D9).
     launch_restore: GuiLaunchRestore,
-    /// The glow encoder thread and its cache of encoded glow PNGs (design D4
+    /// The backdrop encoder thread and its cache of encoded backdrop PNGs (design D4
     /// of `gui-hero-design-polish`).
-    glow: GlowWorker,
+    backdrop: BackdropWorker,
 }
 
 impl CoreThread {
@@ -314,7 +314,7 @@ impl CoreThread {
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
             launch_restore,
-            glow: GlowWorker::spawn(),
+            backdrop: BackdropWorker::spawn(),
         };
         // The saved location applies over the core's startup state (design
         // D9): a launch the attach brought a catalog for restores here, and a

@@ -13,10 +13,10 @@ The GUI Client's Hero looks plain next to the "mbv detail pane polish" artboards
   - the labelled facts as key/value rows beside the artwork, under the action row;
   - a section header with a rule for each band below the detail block that the destination has (for example, Overview, Cast, Tracks, Episodes);
   - rounded, striped list rows;
-  - a blurred glow behind the header band, from the Hero's own artwork.
+  - a blurred backdrop behind the header and the detail block, from the Hero's own artwork.
 - **No font changes.** Each text keeps its current family, size, and weight. The one exception is the bold title of the row that plays now (below).
 - **Pills and rows rule, for every Hero.** Pills hold the short facts: the year, the genres, the runtime or duration, the track count, and the IMDb link. The key/value rows hold the labelled facts: for example, Director, Released (the full date), Studio, Author, Network, Published. A fact shows in one of the two places, not in both. A Released row can show the full date while a pill shows the year. The movie Hero has no Runtime row, because the runtime pill shows it.
-- **Images from the Service.** The glow is made from the Hero's own artwork: for a movie that is the Emby backdrop, and for the others it is the cover or art that the Hero already shows (album cover, artist image, book cover, podcast art). Feed entries have no artwork source, so a Feeds Hero shows no glow. A Hero with no artwork shows no glow. The cast entries of an Emby Hero show the person's photo from Emby. An entry with no photo shows the person's initials. To get the photos, the Emby item model keeps each person's `Id` and `PrimaryImageTag`.
+- **Images from the Service.** The backdrop is made from the Hero's own artwork: for a movie that is the Emby backdrop, and for the others it is the cover or art that the Hero already shows (album cover, artist image, book cover, podcast art). Feed entries have no artwork source, so a Feeds Hero shows no backdrop. A Hero with no artwork shows no backdrop. The cast entries of an Emby Hero show the person's photo from Emby. An entry with no photo shows the person's initials. To get the photos, the Emby item model keeps each person's `Id` and `PrimaryImageTag`.
 - **Cast as a grid.** The Emby credits become a Cast band: a two-column grid of the photo or initials, the name, and the role. The grid wraps to one column when the Hero is narrow. The director moves out of the credits into the Director row.
 - **No progress in any Hero.** The Hero shows no progress bar, no resume position, and no time left, in every destination. The queue handles playback. Play still resumes from the stored position.
 - **Music album Hero.**
@@ -33,7 +33,7 @@ The GUI Client's Hero looks plain next to the "mbv detail pane polish" artboards
 - The Shows and Feeds playing rows get real playhead identity; the playing-row scope does not shrink to tracks and chapters.
 - An episode's or entry's containing unit (series, show, or feed) is the Hero's header title, and the episode or entry is the detail-block name.
 - Podcasts does not duplicate its Library-list episodes inside the Hero. Music, a Shows series, Audiobooks, and Feeds keep their Hero list bands; Home, Podcasts, and plain Emby libraries have none.
-- Both Emby images (the backdrop glow and the cast photos) are in scope, and the glow applies to every Hero.
+- Both Emby images (the backdrop and the cast photos) are in scope, and the backdrop applies to every Hero.
 - The seekbar of the movie artboard, its resume position, and its time left are not built. The progress leaves every Hero.
 - One pills-and-rows rule applies to every Hero. A fact is not shown two times.
 - The album count belongs to the artist page only.
@@ -48,7 +48,7 @@ None.
 
 ### Modified Capabilities
 
-- `gui-client`: the requirements "The Hero shows the picked item with its actions" (the album Hero's header facts, the row that plays now) and "Every Hero is one frame with the largest unit as its title" (no progress in the detail block, the pills and rows rule, the Cast band, the glow, the largest-unit title, the conditional list bands, and the Movie and Home Heroes on the frame), and "A picked Music artist shows an artist page" (its header facts as pills, the selected collections on the eyebrow), and "Library lists and Workspace tables paint through shared parts" (the Hero's fact pills as a shared part, and the look and identity of the row that plays now) change.
+- `gui-client`: the requirements "The Hero shows the picked item with its actions" (the album Hero's header facts, the row that plays now) and "Every Hero is one frame with the largest unit as its title" (no progress in the detail block, the pills and rows rule, the Cast band, the backdrop, the largest-unit title, the conditional list bands, and the Movie and Home Heroes on the frame), and "A picked Music artist shows an artist page" (its header facts as pills, the selected collections on the eyebrow), and "Library lists and Workspace tables paint through shared parts" (the Hero's fact pills as a shared part, and the look and identity of the row that plays now) change.
 - `ctrl-protocol`: the additive `emby-person-images` capability for the person id and primary image tag in unified queue item payloads is added.
 
 ## Impact
@@ -57,8 +57,8 @@ None.
 - `crates/mbv-emby`: the parse of `People` keeps those two values. The Resume and Latest field lists gain the Home facts fields (`ProductionYear`, `Genres`, `Studios`, `ExternalUrls`, `People`); Latest Episodes gains `ProductionYear`.
 - `crates/mbv-ctrl`, `crates/mbv-daemon`, `protocol/ctrl/v10`: the two fields are additive (`#[serde(default)]`), so no version bump is needed. The ctrl hello advertises the additive `emby-person-images` capability, the daemon advertises it, the wire and handshake tests cover it, and the schemas are regenerated.
 - `crates/mbv-client-core`: none expected. The TUI keeps its Hero facts, its progress, and its credits table. The GUI splits the shared facts into pills and rows, and drops the progress, in its own projection.
-- `crates/mbv-gui/src/bridge/frame/library`: the Hero frames carry the pills, the key/value rows, the glow image, and the cast photos.
-- `crates/mbv-gui/src/gui_core`: the art requests for the glow image and the person photos, the parent/title data for queue-backed Heroes, and the playing episode or entry identity for Shows and Feeds.
+- `crates/mbv-gui/src/bridge/frame/library`: the Hero frames carry the pills, the key/value rows, the backdrop image, and the cast photos.
+- `crates/mbv-gui/src/gui_core`: the art requests for the backdrop image and the person photos, the parent/title data for queue-backed Heroes, and the playing episode or entry identity for Shows and Feeds.
 - `crates/mbv-gui/src/window/components`: `LibraryHeroFrame`, `LibraryHeroDetail`, `LibraryHeroArt`, every destination Hero (`library_*_hero.rs`), `LibraryTracklist`, and the Workspace lists.
 - `crates/mbv-gui/src/window/library/hero.rs`: the album Hero's header facts and the facts layout.
 - The artist page that `gui-music-artist-page` adds (`LibraryHero`'s artist branch, `LibraryArtistTracklist`, `artist_page_facts`).
