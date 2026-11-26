@@ -9,8 +9,8 @@ All work is in `crates/mbv-gui`. Every verification names `-p mbv-gui`. Tests fo
 
 ## 2. The frame carries the state (design D2)
 
-- [ ] 2.1 In `crates/mbv-gui/src/bridge/frame/library/emby.rs`, add `state: GuiHomeRowStateFrame` to `GuiEmbyRowFrame` and set it in `GuiEmbyRowFrame::from` through the existing `GuiHomeRowStateFrame::from(&MediaSemanticState)` conversion (design D2: no second frame state type). Update the struct doc. Fix every construction site in tests and fixtures the new field breaks. Verify: `cargo check -p mbv-gui` passes.
-- [ ] 2.2 Run `cargo nextest run -p mbv-gui` in the foreground and fix every fixture the field breaks. No new test: the conversion is shared and already covered, and the derivation contract landed in task 1.2. Verify: the suite passes.
+- [x] 2.1 In `crates/mbv-gui/src/bridge/frame/library/emby.rs`, add `state: GuiHomeRowStateFrame` to `GuiEmbyRowFrame` and set it in `GuiEmbyRowFrame::from` through the existing `GuiHomeRowStateFrame::from(&MediaSemanticState)` conversion (design D2: no second frame state type). Update the struct doc. Fix every construction site in tests and fixtures the new field breaks. Verify: `cargo check -p mbv-gui` passes.
+- [x] 2.2 Run `cargo nextest run -p mbv-gui` in the foreground and fix every fixture the field breaks. No new test: the conversion is shared and already covered, and the derivation contract landed in task 1.2. Verify: the suite passes.
 
 ## 3. The row paints the state (design D3)
 
