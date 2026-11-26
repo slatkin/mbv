@@ -49,8 +49,10 @@ const BAND_FLEX_BASIS_PX: f32 = 380.0;
 const FRAME_STYLE: &str = "padding: 8px; background: var(--canvas-art-frame); border-radius: 14px; box-sizing: border-box; position: relative;";
 
 /// The vinyl disc's look behind a square sleeve (design D2): the dark circle
-/// peeking out at the sleeve's right, centred on it.
-const DISC_STYLE: &str = "position: absolute; width: 100%; aspect-ratio: 1 / 1; left: 35%; top: 50%; transform: translateY(-50%); border-radius: 999px; background: var(--canvas-hero-disc); border: 1px solid var(--canvas-library-control);";
+/// behind the sleeve, peeking out at its right by 28 px — inside the detail
+/// block's 32 px column gap, so the disc never paints or hit-tests over the
+/// text column beside it (review 2026-11-26).
+const DISC_STYLE: &str = "position: absolute; width: 100%; aspect-ratio: 1 / 1; right: -28px; top: 50%; transform: translateY(-50%); border-radius: 999px; background: var(--canvas-hero-disc); border: 1px solid var(--canvas-library-control);";
 
 /// The box's text while no art is carried.
 const DEFAULT_PLACEHOLDER: &str = "[No art · the window's placeholder]";

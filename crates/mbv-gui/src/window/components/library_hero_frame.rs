@@ -287,7 +287,14 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                     }
                 }
                 if let Some(action) = header_action {
-                    { action }
+                    div {
+                        // The action's own stacking context (as the detail
+                        // block's actions row): the glow layer is absolute, so
+                        // a bare static action would paint and hit-test under
+                        // it (review 2026-11-26).
+                        class: "relative flex-none",
+                        { action }
+                    }
                 }
             }
             LibraryHeroDetail {
