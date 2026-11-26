@@ -1,0 +1,51 @@
+# EditorConfig for mbv. https://editorconfig.org
+# Editors pick this up natively or through a plugin; `editorconfig-checker`
+# (or the `ec` binary) enforces it across every file type.
+
+root = true
+
+# Universal rules: every text file is UTF-8, LF-terminated, ends in a final
+# newline, and carries no trailing whitespace. Indent width is enforced only
+# for the machine-formatted config types below; everywhere else a formatter
+# or the content itself owns indentation, so only the spaces-vs-tabs style
+# is fixed.
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# Machine-formatted config: consistent two-space indentation.
+[*.{yaml,yml,toml,json}]
+indent_size = 2
+
+# Rust: rustfmt owns indentation width, and its output is not a multiple of
+# four everywhere (macro patterns, continuations). clippy covers the rest.
+[*.rs]
+indent_size = unset
+
+# Makefiles require hard tabs; anything else is a syntax error.
+[{Makefile,makefile,*.mk}]
+indent_style = tab
+indent_size = unset
+
+# Hand-written CSS indents its rules with hard tabs (the house style of
+# assets/app.css). Width stays unset: block-comment continuation lines are
+# prose-aligned, not code-indented.
+[*.css]
+indent_style = tab
+
+# Shell helpers, the Arch package build scripts and the mpv Lua scripts:
+# indentation width varies with continuation alignment, so only the
+# spaces-vs-tabs style is fixed.
+[{PKGBUILD,PKGBUILD-git,*.sh,*.bash,*.lua}]
+indent_size = unset
+
+# Markdown: hard line breaks are two trailing spaces, so trailing whitespace
+# is meaningful and must not be trimmed. List indentation is content (a nested
+# item's depth is its meaning), not style, so no indent width is enforced.
+[*.md]
+trim_trailing_whitespace = false
+indent_size = unset
+indent_style = unset

@@ -235,11 +235,11 @@ end
 
 -- set volume
 function set_volume(val)
-	if user_opts.processvolume then
-		val = 10*math.sqrt(val)
-	end
-	mp.commandv('set', 'volume', val)
-	mp.commandv('add', 'volume', 0)		--this prevent volume exceeds limit
+    if user_opts.processvolume then
+        val = 10*math.sqrt(val)
+    end
+    mp.commandv('set', 'volume', val)
+    mp.commandv('add', 'volume', 0)     --this prevent volume exceeds limit
 end
 --
 -- Tracklist Management

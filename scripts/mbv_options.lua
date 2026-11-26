@@ -262,22 +262,22 @@ function osc_init()
         local duration = mp.get_property_number('duration', nil)
         if not ((duration == nil) or (pos == nil)) then
             local possec = duration * (pos / 100)
-			local chapters = mp.get_property_native('chapter-list', {})
-			if #chapters > 0 then
-				local ch = #chapters
-				local i
-				for i = 1, #chapters do
-					if chapters[i].time / duration * 100 >= pos then
-						ch = i - 1
-						break
-					end
-				end
-				if ch == 0 then
-					return string.format('[%s] [0/%d]', mp.format_time(possec), #chapters)
-				elseif chapters[ch].title then
-					return string.format('[%s] [%d/%d][%s]', mp.format_time(possec), ch, #chapters, chapters[ch].title)
-				end
-			end
+            local chapters = mp.get_property_native('chapter-list', {})
+            if #chapters > 0 then
+                local ch = #chapters
+                local i
+                for i = 1, #chapters do
+                    if chapters[i].time / duration * 100 >= pos then
+                        ch = i - 1
+                        break
+                    end
+                end
+                if ch == 0 then
+                    return string.format('[%s] [0/%d]', mp.format_time(possec), #chapters)
+                elseif chapters[ch].title then
+                    return string.format('[%s] [%d/%d][%s]', mp.format_time(possec), ch, #chapters, chapters[ch].title)
+                end
+            end
             return mp.format_time(possec)
         else
             return ''
@@ -360,15 +360,15 @@ function osc_init()
     ne.visible = (osc_param.playresx >= 700) and user_opts.volumecontrol
     ne.enabled = (get_track('audio')>0)
     ne.slider.tooltipF =
-		function (pos)
-			local refpos = state.proc_volume
-			if refpos > 100 then refpos = 100 end
-			if pos+3 >= refpos and pos-3 <= refpos then
-				return string.format('%d', state.proc_volume)
-			else
-				return ''
-			end
-		end
+        function (pos)
+            local refpos = state.proc_volume
+            if refpos > 100 then refpos = 100 end
+            if pos+3 >= refpos and pos-3 <= refpos then
+                return string.format('%d', state.proc_volume)
+            else
+                return ''
+            end
+        end
     ne.slider.markerF = nil
     ne.slider.seekRangesF = nil
     ne.slider.posF =
@@ -393,18 +393,18 @@ function osc_init()
         end
     ne.eventresponder['mbtn_left_up'] =
         function (element)
-			element.state.mbtnleft = false
-		end
+            element.state.mbtnleft = false
+        end
     ne.eventresponder['reset'] =
         function (element) element.state.lastseek = nil end
     ne.eventresponder['wheel_up_press'] =
         function (element)
-			set_volume(state.proc_volume+5)
-		end
+            set_volume(state.proc_volume+5)
+        end
     ne.eventresponder['wheel_down_press'] =
         function (element)
-			set_volume(state.proc_volume-5)
-		end
+            set_volume(state.proc_volume-5)
+        end
     -- tc_left (current pos)
     ne = new_element('tc_left', 'button')
     ne.content = function ()

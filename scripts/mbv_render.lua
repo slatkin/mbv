@@ -162,7 +162,7 @@ function render_elements(master_ass)
                 ass_draw_cir_cw(elem_ass, xp, elem_geo.h/2, rh)
                 elem_ass:rect_cw(0, slider_lo.gap, xp, elem_geo.h - slider_lo.gap)
             end
-			if element.slider.seekRangesF ~= nil then seekRanges = element.slider.seekRangesF() end
+            if element.slider.seekRangesF ~= nil then seekRanges = element.slider.seekRangesF() end
             if seekRanges then
                 elem_ass:draw_stop()
                 elem_ass:merge(element.style_ass)

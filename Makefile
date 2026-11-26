@@ -4,7 +4,7 @@ BINARY     := mbv
 PREFIX     ?= /usr
 TAILWINDCSS ?= tailwindcss
 
-.PHONY: all build install uninstall clean clean-dev gui-css check-code-file-lines test-check-code-file-lines dev dev-release checks format format-check test run ast audit build-release test-release feature-matrix release release-preflight release-tag
+.PHONY: all build install uninstall clean clean-dev gui-css check-code-file-lines test-check-code-file-lines dev dev-release checks format format-check editorconfig test run ast audit build-release test-release feature-matrix release release-preflight release-tag
 
 all: build
 
@@ -93,6 +93,13 @@ format:
 # (CI: Check formatting)
 format-check:
 	$(CARGO) fmt --all -- --check
+
+# Everything rustfmt does not cover: indentation style, final newlines,
+# trailing whitespace and line endings in every file type. The rules live
+# in .editorconfig, the exclusions in .editorconfig-checker.json.
+# (CI: EditorConfig)
+editorconfig:
+	editorconfig-checker
 
 test:
 	$(CARGO) nextest run $(SCOPE)
@@ -195,7 +202,7 @@ release-preflight:
 	@! git ls-remote --exit-code --tags origin "refs/tags/$(TAG)" >/dev/null 2>&1 || { echo 'error: tag $(TAG) already exists on origin'; exit 1; }
 	@echo "==> Releasing $(TAG): $(SUMMARY)"
 
-release: release-preflight format-check checks ast audit build-release test-release feature-matrix
+release: release-preflight format-check editorconfig checks ast audit build-release test-release feature-matrix
 	@echo "==> Bumping Cargo.toml to $(RELVERSION)..."
 	sed -i 's/^version = ".*"/version = "$(RELVERSION)"/' Cargo.toml
 	@echo "==> Bumping PKGBUILD to $(RELVERSION)..."

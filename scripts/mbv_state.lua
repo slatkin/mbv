@@ -40,7 +40,7 @@ local user_opts = {
     visibility = 'auto',        -- only used at init to set visibility_mode(...)
     windowcontrols = 'auto',    -- whether to show window controls
     volumecontrol = true,       -- whether to show mute button and volumne slider
-    processvolume = false,		-- disabled: mbv Rust side handles volume sqrt scaling
+    processvolume = false,      -- disabled: mbv Rust side handles volume sqrt scaling
     language = 'eng',            -- eng=English, chs=Chinese
 }
 
@@ -140,9 +140,9 @@ local state = {
     maximized = false,
     osd = mp.create_osd_overlay('ass-events'),
     mute = false,
-    lastvisibility = user_opts.visibility,		-- save last visibility on pause if showtitle
-    sys_volume,									--system volume
-    proc_volume,								--processed volume
+    lastvisibility = user_opts.visibility,      -- save last visibility on pause if showtitle
+    sys_volume,                                 --system volume
+    proc_volume,                                --processed volume
 }
 
 local window_control_box_width = 138

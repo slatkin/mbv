@@ -1,0 +1,15 @@
+{
+  "Exclude": [
+    "^\\.pi/",
+    "^target/",
+    "^LICENSES/",
+    "OFL",
+    "(^|/)LICENSE$",
+    "^docs/\\.obsidian/",
+    "^docs/palette\\.(json|html)$",
+    "^crates/mbv-gui/assets/vendor/",
+    "^crates/mbv-gui/assets/app\\.generated\\.css$",
+    "^crates/mbv-gui/assets/app\\.css$",
+    "\\.diff$"
+  ]
+}

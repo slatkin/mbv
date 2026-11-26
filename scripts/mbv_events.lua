@@ -202,14 +202,14 @@ mp.observe_property('mute', 'bool',
     end
 )
 mp.observe_property('volume', 'number',
-	function(name, val)
-		state.sys_volume = val
-		if user_opts.processvolume then
-			state.proc_volume = val*val/100
-		else
-			state.proc_volume = val
-		end
-	end
+    function(name, val)
+        state.sys_volume = val
+        if user_opts.processvolume then
+            state.proc_volume = val*val/100
+        else
+            state.proc_volume = val
+        end
+    end
 )
 mp.observe_property('border', 'bool',
     function(name, val)

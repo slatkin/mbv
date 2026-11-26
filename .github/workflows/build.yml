@@ -77,7 +77,7 @@ jobs:
           pacman_retry pacman -Syu --noconfirm
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ast-grep
+            zig wayland libxkbcommon fontconfig ast-grep editorconfig-checker
 
       - uses: actions/checkout@v7
 
@@ -121,6 +121,11 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      # Everything rustfmt does not cover: indentation style, final newlines,
+      # trailing whitespace and line endings in every non-Rust file type.
+      - name: EditorConfig
+        run: editorconfig-checker
 
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
