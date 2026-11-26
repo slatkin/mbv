@@ -139,8 +139,9 @@ fn run_width(doc: &DioxusDocument) -> Option<String> {
 /// design D1, D4, the `gui-client` spec's Workspace play-state scenarios): a
 /// row's title tone, its play mark, and its resume run come from the one shared
 /// derivation — a played row paints the greyed tone and the played mark, a
-/// partly played row with a percent paints its run at that percent, and a row
-/// with no play state paints the text tone, no mark, and no run.
+/// partly played row with a percent paints its run at that percent and keeps
+/// the empty mark slot (user request 2026-11-26), and a row with no play state
+/// paints the text tone, no mark, and no run.
 #[rstest]
 #[case(None, "var(--canvas-text)", None, None)]
 #[case(
@@ -159,7 +160,7 @@ fn run_width(doc: &DioxusDocument) -> Option<String> {
     Some(GuiHomeRowStateFrame::Active { progress: Some(42) }),
     "var(--ef-fg)",
     Some("42%"),
-    Some("unplayed")
+    Some("none")
 )]
 #[case(
     Some(GuiHomeRowStateFrame::Active { progress: None }),

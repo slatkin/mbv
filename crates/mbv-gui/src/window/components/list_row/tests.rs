@@ -672,7 +672,9 @@ fn assert_title_weight(fixture: &Fixture, weight: Option<&str>) {
 /// row's title tone and weight follow its play state, and its play mark names
 /// the state — no play state paints the level's own tone and weight and no
 /// mark, an unplayed row the `ef` text tone at 600 with the `unplayed` mark,
-/// and a played row the `ef` grey tone at 400 with the `played` mark.
+/// and a played row the `ef` grey tone at 400 with the `played` mark. A nested
+/// row paints no resume mark, so an in-progress row keeps its mark (user
+/// request 2026-11-26).
 #[rstest]
 #[case(None, "var(--canvas-muted)", None, None)]
 #[case(
@@ -686,6 +688,12 @@ fn assert_title_weight(fixture: &Fixture, weight: Option<&str>) {
     "var(--ef-grey1)",
     Some("font-weight: 400"),
     Some("played")
+)]
+#[case(
+    Some(GuiHomeRowStateFrame::Active { progress: Some(40) }),
+    "var(--ef-fg)",
+    Some("font-weight: 600"),
+    Some("unplayed")
 )]
 fn a_nested_rows_title_paints_its_play_tone(
     #[case] play: Option<GuiHomeRowStateFrame>,
@@ -717,19 +725,26 @@ fn a_nested_rows_title_paints_its_play_tone(
 /// Contract (gui-played-row-marks design D1–D3, `gui-client` spec "A played
 /// row" and "The hover controls cover the trailing end"): a flat row that
 /// carries a play state paints its mark in the one trailing cluster the trail
-/// text shares — no state paints no mark, an unplayed row the `unplayed` mark,
-/// a played row the `played` mark with its thumb dimmed to the played opacity.
+/// text shares — no state paints no cluster, an unplayed row the `unplayed`
+/// mark, a played row the `played` mark with its thumb dimmed to the played
+/// opacity, and an in-progress row the empty mark slot, because its thumb run
+/// carries the state (user request 2026-11-26).
 #[rstest]
 #[case(None, None, false)]
 #[case(Some(GuiHomeRowStateFrame::Ordinary), Some("unplayed"), false)]
 #[case(Some(GuiHomeRowStateFrame::Played), Some("played"), true)]
+#[case(
+    Some(GuiHomeRowStateFrame::Active { progress: Some(40) }),
+    Some("none"),
+    false
+)]
 fn a_flat_rows_mark_shares_the_trailing_cluster_with_the_trail_text(
     #[case] play: Option<GuiHomeRowStateFrame>,
     #[case] mark: Option<&str>,
     #[case] dimmed: bool,
 ) {
     let fixture = flat_built(FlatSpec {
-        play,
+        play: play.clone(),
         trail: Some("2026-11-24".to_owned()),
         hover_play: true,
         ..FlatSpec::default()
@@ -752,7 +767,7 @@ fn a_flat_rows_mark_shares_the_trailing_cluster_with_the_trail_text(
         && fixture.presents(".row-hover-trail [data-library-test-date]");
     assert_eq!(
         shared,
-        mark.is_some(),
+        play.is_some(),
         "the mark and the trail text share the one row-hover-trail cluster"
     );
 }

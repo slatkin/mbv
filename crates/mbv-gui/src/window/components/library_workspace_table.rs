@@ -362,7 +362,13 @@ fn paint_trailing_cell(
     // its mono face, and its size.
     let trailing: Element = if let Some(state) = row.state.as_ref() {
         let row_play = RowPlay::of_row(state);
-        let mark = if row.playing { None } else { Some(row_play) };
+        // An in-progress row keeps the empty mark slot, because its own resume
+        // run carries the state (user request 2026-11-26).
+        let mark = if row.playing {
+            None
+        } else {
+            RowPlay::mark_of_row(state)
+        };
         let tone = row_play
             .trail_tone()
             .map_or_else(String::new, |tone| format!(" color: {tone};"));

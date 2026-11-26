@@ -299,7 +299,8 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     // play state paints the one trailing cluster — the mark, then the trailing
     // text — and the cluster carries the hover swap, so the mark and the text
     // hide together while the hover controls show. A row that carries no play
-    // state keeps the bare trailing text it always painted.
+    // state keeps the bare trailing text it always painted. A nested row paints
+    // no resume mark, so it keeps its play mark (user request 2026-11-26).
     let trail_tone = row_play.and_then(RowPlay::trail_tone);
     let trailing: Option<Element> = if let Some(play) = row_play {
         // The text inside the cluster never carries the trail marker — the

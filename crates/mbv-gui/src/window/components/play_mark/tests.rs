@@ -70,6 +70,39 @@ fn a_queue_rows_state_derives_its_play(
     assert_eq!(RowPlay::of_queue(&state), play);
 }
 
+/// Contract (design D1, user request 2026-11-26): a Library row that paints
+/// its resume run carries no play mark, because the run says it is in progress;
+/// a row whose percent is unknown paints no run, so it keeps the unplayed mark.
+/// The derivation leaves the row's look alone, and a nested tree row, which
+/// paints no run, keeps the mark its state gives it.
+#[rstest]
+#[case(GuiHomeRowStateFrame::Ordinary, Some(RowPlay::Unplayed))]
+#[case(GuiHomeRowStateFrame::Played, Some(RowPlay::Played))]
+#[case(GuiHomeRowStateFrame::Active { progress: Some(40) }, None)]
+#[case(GuiHomeRowStateFrame::Active { progress: None }, Some(RowPlay::Unplayed))]
+fn a_library_row_paints_no_mark_while_it_is_in_progress(
+    #[case] state: GuiHomeRowStateFrame,
+    #[case] mark: Option<RowPlay>,
+) {
+    assert_eq!(RowPlay::mark_of_row(&state), mark);
+}
+
+/// Contract (design D1, user request 2026-11-26): a queue row paints no play
+/// mark while its progress ring carries the in-progress fact, and the
+/// now-playing row paints none either.
+#[rstest]
+#[case(GuiSemanticState::Ordinary, Some(RowPlay::Unplayed))]
+#[case(GuiSemanticState::Played, Some(RowPlay::Played))]
+#[case(GuiSemanticState::Active { progress: Some(40) }, None)]
+#[case(GuiSemanticState::Active { progress: None }, Some(RowPlay::Unplayed))]
+#[case(GuiSemanticState::NowPlaying { tracks_progress: true }, None)]
+fn a_queue_row_paints_no_mark_while_it_is_in_progress(
+    #[case] state: GuiSemanticState,
+    #[case] mark: Option<RowPlay>,
+) {
+    assert_eq!(RowPlay::mark_of_queue(&state), mark);
+}
+
 /// Contract (design D1, `gui-client` spec "Rows mark their played state"):
 /// the slot names the state in `data-play-mark` and carries the role and the
 /// accessible label while the mark is meaningful — and neither on the empty

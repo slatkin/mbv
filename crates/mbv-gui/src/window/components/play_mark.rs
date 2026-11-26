@@ -10,6 +10,13 @@
 //! the trailing content — that carries a row's hover swap (design D3), so the
 //! cluster's mechanics have one owner.
 //!
+//! A row that paints its own progress mark carries no play mark (user request
+//! 2026-11-26): the thumb's resume run on a flat Library row, the resume run on
+//! a Workspace row, and the progress ring on a queue row each already say the
+//! item is in progress. [`RowPlay::mark_of_row`] and [`RowPlay::mark_of_queue`]
+//! own that rule, so no painter restates it. A nested tree row paints no
+//! progress mark, so it keeps its play mark.
+//!
 //! A sibling module of `list_row` and not a part of it, because the queue and
 //! the Workspace table use the same rule and `list_row` is the Library and
 //! Playlists row vocabulary.
@@ -19,7 +26,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiHomeRowStateFrame;
 use crate::bridge::frame::queue::GuiSemanticState;
 use crate::window::icons::Check;
-use crate::window::library::episode::is_played_episode;
+use crate::window::library::episode::{episode_progress, is_played_episode};
 use crate::window::theme::{EfToken, ef_var};
 
 /// The mark slot's width and height in logical pixels (design D1): the larger
@@ -67,6 +74,31 @@ impl RowPlay {
             Self::Played
         } else {
             Self::Unplayed
+        }
+    }
+
+    /// The mark a Library row paints (user request 2026-11-26): none while the
+    /// row paints its own resume run, which carries the fact, and the state's
+    /// own mark otherwise. The row's look still derives from [`Self::of_row`],
+    /// so such a row keeps the unplayed look. A nested tree row paints no
+    /// resume run, so it keeps the mark [`Self::of_row`] gives it.
+    #[must_use]
+    pub fn mark_of_row(state: &GuiHomeRowStateFrame) -> Option<Self> {
+        match episode_progress(state) {
+            Some(_) => None,
+            None => Some(Self::of_row(state)),
+        }
+    }
+
+    /// The mark a queue row paints (user request 2026-11-26): none while the
+    /// row shows its progress ring, because the ring carries the in-progress
+    /// fact. The row's look still derives from [`Self::of_queue`], so an
+    /// in-progress row keeps the unplayed look.
+    #[must_use]
+    pub fn mark_of_queue(state: &GuiSemanticState) -> Option<Self> {
+        match state {
+            GuiSemanticState::Active { progress: Some(_) } => None,
+            _ => Self::of_queue(state),
         }
     }
 

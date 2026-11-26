@@ -232,11 +232,14 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     // text — and the cluster carries the hover swap, so the mark and the text
     // hide together while the hover controls show. The text keeps its hook,
     // its mono face, and its size. A row that carries no play state keeps the
-    // bare trailing text it always painted.
-    let trailing: Option<Element> = if let Some(play) = row_play {
+    // bare trailing text it always painted. An in-progress row keeps the
+    // cluster with the mark's empty slot, because its own progress mark
+    // carries the state (user request 2026-11-26).
+    let trailing: Option<Element> = if row_play.is_some() {
         // The text inside the cluster never carries the trail marker — the
         // cluster does — so it paints the trail class of a row nothing covers.
         let inner_class = hover_trail_class(false);
+        let mark = props.play.as_ref().and_then(RowPlay::mark_of_row);
         let text = trail_text.as_ref().map(|trail| {
             let attrs = trail_attrs.clone();
             let css = trail_css.clone();
@@ -251,7 +254,7 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
             }
         });
         Some(rsx! {
-            PlayCluster { class: trail_class, play: Some(play), {text} }
+            PlayCluster { class: trail_class, play: mark, {text} }
         })
     } else {
         trail_text.as_ref().map(|trail| {

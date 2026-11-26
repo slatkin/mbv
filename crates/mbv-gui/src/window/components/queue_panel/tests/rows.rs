@@ -87,11 +87,12 @@ fn durations(fixture: &Fixture) -> Vec<Option<String>> {
         .collect()
 }
 
-/// Contract (spec `gui-client` "Rows show their state", design D3): the row's
-/// progress ring paints in the right column, directly before the duration —
-/// on a partial row and on the
-/// now-playing row, which follows the playhead — and a new or watched row
-/// carries none. The `data-progress` value is the percent the ring fills to.
+/// Contract (spec `gui-client` "Rows show their state", design D3, user
+/// request 2026-11-26): the row's progress ring paints in the right column,
+/// directly before the duration — on a partial row and on the now-playing row,
+/// which follows the playhead — and a new or watched row carries none. The
+/// `data-progress` value is the percent the ring fills to. The partial row's
+/// ring is its in-progress fact, so the row paints the empty mark slot.
 #[test]
 fn only_a_row_with_progress_paints_the_ring() {
     let rows = vec![
@@ -113,6 +114,18 @@ fn only_a_row_with_progress_paints_the_ring() {
     assert_eq!(
         ring_percents(&fixture),
         vec![None, Some("42".to_owned()), None, Some("30".to_owned())]
+    );
+
+    // The ring carries the partial row's in-progress fact, so the row paints no
+    // play mark; the new and watched rows keep theirs.
+    assert_eq!(
+        mark_values(&fixture),
+        vec![
+            Some("unplayed".to_owned()),
+            Some("none".to_owned()),
+            Some("played".to_owned()),
+            Some("none".to_owned())
+        ]
     );
 
     // The ring and the duration paint as one cluster in the right column
@@ -153,6 +166,19 @@ fn only_a_row_with_progress_paints_the_ring() {
         ring_position < duration_position,
         "the ring leads the duration"
     );
+}
+
+/// The `data-play-mark` value of each of the four fixture rows, `None` where
+/// the row paints no slot.
+fn mark_values(fixture: &Fixture) -> Vec<Option<String>> {
+    (1..=4_u64)
+        .map(|slot| {
+            fixture.attr_of(
+                &format!("[data-slot=\"{slot}\"] [data-play-mark]"),
+                blitz_dom::LocalName::from("data-play-mark"),
+            )
+        })
+        .collect()
 }
 
 /// The `data-progress` value of each of the four fixture rows' ring, `None`

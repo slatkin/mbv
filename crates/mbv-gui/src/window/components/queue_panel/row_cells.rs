@@ -333,7 +333,9 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
             // cluster right-aligned in the column (user request 2026-11-23,
             // design D4 of `gui-played-row-marks`). The mark comes from
             // `RowPlay::of_queue`, whose `None` is the now-playing row's empty
-            // slot. The hovered row and the drag ghost paint no mark.
+            // slot, and `RowPlay::mark_of_queue` drops it on an in-progress row
+            // whose ring already carries the in-progress fact (user request
+            // 2026-11-26). The hovered row and the drag ghost paint no mark.
             span {
                 class: "shrink-0 flex items-center justify-end",
                 style: format!(
@@ -345,7 +347,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                     {progress_ring(look, percent)}
                 }
                 if chrome == RowChrome::Row {
-                    PlayMark { play: RowPlay::of_queue(&row.state) }
+                    PlayMark { play: RowPlay::mark_of_queue(&row.state) }
                 }
                 if let Some(duration) = duration {
                     span {
