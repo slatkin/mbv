@@ -25,70 +25,50 @@ use crate::window::library::lettered::EmbyList;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 
+/// One plain-mode movie row.
+fn movie(id: &str, title: &str, year: &str, sort_letter: char) -> GuiEmbyRowFrame {
+    GuiEmbyRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+        id: id.to_owned(),
+        title: title.to_owned(),
+        subtitle: Some(year.to_owned()),
+        date: None,
+        sort_letter: Some(sort_letter),
+        kind: GuiEmbyRowKindFrame::Media,
+        state: GuiHomeRowStateFrame::Ordinary,
+    }
+}
+
+/// One feed-group row.
+fn feed_row(id: &str, title: &str, year: &str, kind: GuiEmbyRowKindFrame) -> GuiEmbyRowFrame {
+    GuiEmbyRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+        id: id.to_owned(),
+        title: title.to_owned(),
+        subtitle: None,
+        date: Some(year.to_owned()),
+        sort_letter: None,
+        kind,
+        state: GuiHomeRowStateFrame::Ordinary,
+    }
+}
+
 /// The plain mode's name-sorted rows: two `A` movies and one `B` movie.
 fn movies() -> Vec<GuiEmbyRowFrame> {
     vec![
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "m1".to_owned(),
-            title: "Alien".to_owned(),
-            subtitle: Some("1979".to_owned()),
-            date: None,
-            sort_letter: Some('A'),
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "m2".to_owned(),
-            title: "Amélie".to_owned(),
-            subtitle: Some("2001".to_owned()),
-            date: None,
-            sort_letter: Some('A'),
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "m3".to_owned(),
-            title: "Brazil".to_owned(),
-            subtitle: Some("1985".to_owned()),
-            date: None,
-            sort_letter: Some('B'),
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
+        movie("m1", "Alien", "1979", 'A'),
+        movie("m2", "Amélie", "2001", 'A'),
+        movie("m3", "Brazil", "1985", 'B'),
     ]
 }
 
 /// The feed-group mode's date-ordered rows, with a folder as the first.
 fn feed_rows() -> Vec<GuiEmbyRowFrame> {
     vec![
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "f1".to_owned(),
-            title: "Family".to_owned(),
-            subtitle: None,
-            date: Some("1998".to_owned()),
-            sort_letter: None,
-            kind: GuiEmbyRowKindFrame::Collection,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "f2".to_owned(),
-            title: "Fargo".to_owned(),
-            subtitle: None,
-            date: Some("1996".to_owned()),
-            sort_letter: None,
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
+        feed_row("f1", "Family", "1998", GuiEmbyRowKindFrame::Collection),
+        feed_row("f2", "Fargo", "1996", GuiEmbyRowKindFrame::Media),
     ]
 }
 

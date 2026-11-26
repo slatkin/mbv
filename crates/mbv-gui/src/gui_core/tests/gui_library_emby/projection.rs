@@ -66,8 +66,6 @@ fn feed_state_app(items: Vec<EmbyItem>) -> App {
             "YouTube",
             vec![folder_item("folder-1", "Channel 1")],
         ));
-    });
-    app.edit_library_for_test(0, |library| {
         library.feed_home_video = Some(FeedHomeVideoState {
             items: [(FeedHomeVideoSelection::All, items)].into_iter().collect(),
             ..FeedHomeVideoState::default()
@@ -125,15 +123,21 @@ fn state_played_music_item() -> EmbyItem {
 /// the row's `state` is what the one derivation derives — a played item to
 /// `Played`, a resumable position to `Active`, an unplayed item to
 /// `Ordinary`, and a played music item to `Ordinary` through the music
-/// exception — in both the plain mode's `plain_row` and the feed-group
-/// mode's `feed_row`. The derivation internals are `mbv-ui-model`'s.
+/// exception — in both the plain mode's and the feed-group mode's rows. The
+/// derivation internals are `mbv-ui-model`'s.
 #[rstest]
 #[case::a_played_item_is_played(
     state_played_item(),
     MediaSemanticState::Played,
     "a played item's row is Played"
 )]
-#[case::a_resumable_position_is_active(state_partly_played_item(), MediaSemanticState::Active { progress: ActiveProgress::of_ticks(600 * mbv_emby_model::TICKS_PER_SECOND, 6000 * mbv_emby_model::TICKS_PER_SECOND) }, "a partly played item with a resumable position is Active with its percentage")]
+#[case::a_resumable_position_is_active(
+    state_partly_played_item(),
+    MediaSemanticState::Active {
+        progress: Some(ActiveProgress::new(10))
+    },
+    "a partly played item with a resumable position is Active with its percentage"
+)]
 #[case::an_unplayed_item_is_ordinary(
     state_unplayed_item(),
     MediaSemanticState::Ordinary,

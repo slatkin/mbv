@@ -4,31 +4,26 @@
 
 use super::*;
 
+/// One feed-group row.
+fn feed_row(id: &str, title: &str, year: &str, kind: GuiEmbyRowKindFrame) -> GuiEmbyRowFrame {
+    GuiEmbyRowFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+        id: id.to_owned(),
+        title: title.to_owned(),
+        subtitle: None,
+        date: Some(year.to_owned()),
+        sort_letter: None,
+        kind,
+        state: GuiHomeRowStateFrame::Ordinary,
+    }
+}
+
 /// The feed-group mode's date-ordered rows, with a boxset collection row.
 fn feed_rows() -> Vec<GuiEmbyRowFrame> {
     vec![
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "f1".to_owned(),
-            title: "Family".to_owned(),
-            subtitle: None,
-            date: Some("1998".to_owned()),
-            sort_letter: None,
-            kind: GuiEmbyRowKindFrame::Collection,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "f2".to_owned(),
-            title: "Fargo".to_owned(),
-            subtitle: None,
-            date: Some("1996".to_owned()),
-            sort_letter: None,
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
+        feed_row("f1", "Family", "1998", GuiEmbyRowKindFrame::Collection),
+        feed_row("f2", "Fargo", "1996", GuiEmbyRowKindFrame::Media),
     ]
 }
 

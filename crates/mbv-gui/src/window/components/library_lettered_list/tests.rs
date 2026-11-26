@@ -423,42 +423,33 @@ fn built<D: Host>(list: D::List, detail: D::Detail) -> Fixture<D> {
     fixture
 }
 
+/// One Emby plain-mode movie row.
+fn emby_movie(
+    id: &str,
+    title: &str,
+    year: &str,
+    sort_letter: char,
+    art: GuiRowArtFrame,
+) -> GuiEmbyRowFrame {
+    GuiEmbyRowFrame {
+        art,
+        media: GuiRowMediaKindFrame::Video,
+        id: id.to_owned(),
+        title: title.to_owned(),
+        subtitle: Some(year.to_owned()),
+        date: None,
+        sort_letter: Some(sort_letter),
+        kind: GuiEmbyRowKindFrame::Media,
+        state: GuiHomeRowStateFrame::Ordinary,
+    }
+}
+
 /// The Emby plain mode's sample rows: two `A` movies and one `B` movie.
 fn emby_movies() -> Vec<GuiEmbyRowFrame> {
     vec![
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::Loading,
-            media: GuiRowMediaKindFrame::Video,
-            id: "m1".to_owned(),
-            title: "Alien".to_owned(),
-            subtitle: Some("1979".to_owned()),
-            date: None,
-            sort_letter: Some('A'),
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "m2".to_owned(),
-            title: "Amélie".to_owned(),
-            subtitle: Some("2001".to_owned()),
-            date: None,
-            sort_letter: Some('A'),
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
-        GuiEmbyRowFrame {
-            art: GuiRowArtFrame::NoSource,
-            media: GuiRowMediaKindFrame::Video,
-            id: "m3".to_owned(),
-            title: "Brazil".to_owned(),
-            subtitle: Some("1985".to_owned()),
-            date: None,
-            sort_letter: Some('B'),
-            kind: GuiEmbyRowKindFrame::Media,
-            state: GuiHomeRowStateFrame::Ordinary,
-        },
+        emby_movie("m1", "Alien", "1979", 'A', GuiRowArtFrame::Loading),
+        emby_movie("m2", "Amélie", "2001", 'A', GuiRowArtFrame::NoSource),
+        emby_movie("m3", "Brazil", "1985", 'B', GuiRowArtFrame::NoSource),
     ]
 }
 
