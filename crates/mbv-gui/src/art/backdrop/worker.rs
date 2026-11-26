@@ -125,21 +125,29 @@ impl BackdropWorker {
     }
 }
 
-/// The job's backdrop JPEG: the cached one when an earlier job for the same key
-/// encoded it, else a fresh encode that enters the cache. `None` when the
+/// The job's backdrop JPEG: the memory cache's, else the disk cache's (a bake
+/// from an earlier run), else a fresh bake that enters both. `None` when the
 /// source does not decode.
 fn encode_once(cache: &Mutex<BackdropCache>, job: &BackdropJob) -> Option<Arc<[u8]>> {
+    let id = job.request.cache_id();
     let cached = cache
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .get(&job.request.cache_id());
+        .get(&id);
     if cached.is_some() {
         return cached;
     }
-    let jpeg: Arc<[u8]> = backdrop_jpeg(&job.source, job.request.width, job.request.style)?.into();
+    let bytes = if let Some(bytes) = mbv_config::read_image_disk_cache(&id) {
+        bytes
+    } else {
+        let baked = backdrop_jpeg(&job.source, job.request.width, job.request.style)?;
+        mbv_config::write_image_disk_cache(&id, &baked);
+        baked
+    };
+    let jpeg: Arc<[u8]> = bytes.into();
     cache
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .insert(job.request.cache_id(), Arc::clone(&jpeg));
+        .insert(id, Arc::clone(&jpeg));
     Some(jpeg)
 }

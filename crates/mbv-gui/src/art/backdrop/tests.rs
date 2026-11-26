@@ -9,8 +9,8 @@ use std::io::Cursor;
 use image::{Rgb, RgbImage};
 
 use super::{
-    BACKDROP_HEIGHT, BackdropStyle, MIN_TITLE_CONTRAST, PANE_BG, backdrop_jpeg, bake, baked_width,
-    blurred_fields, title_contrast,
+    BACKDROP_HEIGHT, BackdropRequest, BackdropStyle, MIN_TITLE_CONTRAST, PANE_BG, backdrop_jpeg,
+    bake, baked_width, blurred_fields, title_contrast,
 };
 
 /// The baked width the tests use.
@@ -75,4 +75,15 @@ fn undecodable_bytes_give_none() {
 fn the_width_rounds_up_to_the_next_step() {
     assert_eq!(baked_width(1001.0), 1200);
     assert_eq!(baked_width(1000.0), 1000);
+}
+
+#[test]
+fn the_cache_id_names_the_source_size_strength_and_version() {
+    let request = BackdropRequest {
+        key: "item-1:P:BD".to_owned(),
+        width: 1200,
+        style: BackdropStyle::Video,
+    };
+
+    assert_eq!(request.cache_id(), "backdrop:item-1:P:BD:1200:560:0.55:v1");
 }

@@ -315,6 +315,16 @@ pub enum ImageRendition {
     #[default]
     Hero,
     Row(RowRendition),
+    /// The tiny image the Hero backdrop blurs: a few pixels wide, under the
+    /// source's `{key}:BD` key. A 32 px request is what makes the blur cheap.
+    Backdrop,
+}
+
+/// The cache key of the tiny backdrop source for the Hero art cached under
+/// `cache_key`.
+#[must_use]
+pub fn backdrop_cache_key(cache_key: &str) -> String {
+    format!("{cache_key}:BD")
 }
 
 /// The resolved data of one `Row` request (design D6): the declared artwork

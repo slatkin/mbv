@@ -76,11 +76,19 @@ impl CoreThread {
         }
     }
 
-    /// Answer one backdrop request (design D4): a cached backdrop JPEG answers on the
-    /// core thread with no source read. Otherwise read the cached source bytes
-    /// here and queue the encode on the one backdrop worker thread. No source
-    /// answers `Missing`.
-    fn answer_backdrop(&self, request: BackdropRequest, reply: ArtReply) {
+    /// Answer one backdrop request (design D4): a cached backdrop JPEG answers
+    /// on the core thread. Otherwise queue the source bytes to the one backdrop
+    /// worker thread, which reads the disk cache before it bakes. No source,
+    /// or a tiny Backdrop image still in flight, answers `Missing`.
+    fn answer_backdrop(&self, mut request: BackdropRequest, reply: ArtReply) {
+        // Bake from the tiny Backdrop image once it landed, else from the
+        // Hero's own art; the request then names the source it bakes, so the
+        // two never share a cache entry.
+        let Some((source_key, source)) = self.core.gui_backdrop_source(&request.key) else {
+            reply(ArtResponse::Missing);
+            return;
+        };
+        request.key = source_key;
         if let Some(jpeg) = self.backdrop.cached(&request) {
             reply(ArtResponse::Found {
                 mime: "image/jpeg",
@@ -88,10 +96,6 @@ impl CoreThread {
             });
             return;
         }
-        let Some(source) = self.core.gui_art_source(&request.key) else {
-            reply(ArtResponse::Missing);
-            return;
-        };
         self.backdrop.submit(request, source.bytes, reply);
     }
 }

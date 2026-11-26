@@ -48,9 +48,16 @@ impl BackdropRequest {
         })
     }
 
-    /// The id the worker's cache keys on.
+    /// The id the worker's cache and the disk cache key on: the source key,
+    /// the baked size, the scrim strength, and the bake's version. A change to
+    /// any of them is a different image.
     pub(crate) fn cache_id(&self) -> String {
-        format!("{}|{}|{}", self.key, self.width, self.style.code())
+        format!(
+            "backdrop:{}:{}:{BACKDROP_HEIGHT}:{}:v1",
+            self.key,
+            self.width,
+            self.style.strength()
+        )
     }
 }
 

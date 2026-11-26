@@ -95,7 +95,9 @@ fn fetch_audiobookshelf_image(
             mbv_audiobookshelf::ROW_BOOK_COVER_WIDTH,
             bound,
         ),
-        ImageRendition::Hero => client.cover_bounded(api_key, item_id, bound),
+        ImageRendition::Hero | ImageRendition::Backdrop => {
+            client.cover_bounded(api_key, item_id, bound)
+        }
     };
     match result {
         Ok(bytes) => {

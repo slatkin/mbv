@@ -2159,12 +2159,18 @@ protocol version bump.
 The backdrop is a baked image on the `backdrop/{style}/{width}/{key}` art path
 (`ArtPath::Backdrop`). `art.rs` maps the Hero's `image` card URL to that path,
 and the Library panel provides the pane width the Hero asks for (rounded up to
-a 200 px step). A `placeholder` or `Loading` art has no backdrop. A cached JPEG
-answers on the core thread. Otherwise the core reads the cached source bytes and
-queues them to the one `mbv-art-backdrop` worker, which shrinks them to 32 px,
+a 200 px step). A `placeholder` or `Loading` art has no backdrop. The source is
+a tiny (`maxWidth=32`) Backdrop image that the Emby Hero's projection fetches
+under the key `{art key}:BD` (the series' Backdrop for an episode, Primary when
+the item has none); a Music Hero blurs its own art. While the tiny image is in
+flight the request answers missing and the window retries. A cached JPEG
+answers on the core thread. Otherwise the core queues the source bytes to the
+one `mbv-art-backdrop` worker, which reads the image disk cache first, then
+shrinks them to 32 px,
 cover-fits them to the width by 560 px, blurs them at sigma 8, bakes the
 vertical and horizontal scrims over the pane colour `#272e33`, and answers
-`image/jpeg`. The worker keeps the last 32 results. The bottom row equals the
+`image/jpeg`. The worker keeps the last 32 results and writes each bake to the
+image disk cache, so a restart does not bake again. The bottom row equals the
 pane colour, and the title area keeps 4.5:1 against the title colour, so the
 window paints no CSS opacity, gradient, or blur filter.
 Two lists stripe, with two rules that stay apart. The cast card
