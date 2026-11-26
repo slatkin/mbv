@@ -12,12 +12,20 @@
 use std::fmt;
 use std::fmt::Write as _;
 
+/// The glow encoder (design D4): the pure bytes-to-PNG step the glow
+/// request's worker thread runs.
+pub(crate) mod glow;
+
 /// The scheme host the window loads images through (design D7).
 /// The net provider answers the scheme `mbv-art://localhost/<path>`.
 const SCHEME_HOST: &str = "mbv-art://localhost";
 
 /// The path that names the queue card's bundled placeholder bytes.
 pub const PLACEHOLDER_PATH: &str = "placeholder";
+
+/// The one-shot reply edge an art request carries: a boxed [`FnOnce`] the
+/// one answer travels through exactly once.
+pub type ArtReply = Box<dyn FnOnce(ArtResponse) + Send>;
 
 /// The image reference a section DTO carries (design D7): the window paints
 /// `src` as the image's URL, and a `loading` reference paints the loading
@@ -58,6 +66,31 @@ pub fn card_path(cache_key: &str) -> String {
     format!("card/{}", percent_encode(cache_key))
 }
 
+/// The request path for the glow rendition of the image-cache entry
+/// `cache_key` names (design D4): the same encoded key a [`card_path`] names.
+#[must_use]
+pub fn glow_path(cache_key: &str) -> String {
+    format!("glow/{}", percent_encode(cache_key))
+}
+
+/// The glow URL for the artwork `art` names (design D4): the `mbv-art` glow
+/// URL for the same cache key the art's image URL names. A `Placeholder`
+/// names no cache key and a `Loading` reference names no URL, so both map to
+/// `None`, as does an image URL that names no card.
+#[must_use]
+pub fn glow_from_art(art: &GuiArtRef) -> Option<String> {
+    match art {
+        GuiArtRef::Image { src } => {
+            let path = src.strip_prefix(SCHEME_HOST)?.strip_prefix('/')?;
+            match parse_path(path) {
+                Some(ArtPath::Card(key)) => Some(art_url(&glow_path(&key))),
+                Some(ArtPath::Glow(_) | ArtPath::Placeholder) | None => None,
+            }
+        }
+        GuiArtRef::Placeholder { .. } | GuiArtRef::Loading => None,
+    }
+}
+
 /// One request the window's image load raised (design D7): the percent-encoded
 /// request path and the one-shot edge that answers it. Production wires the
 /// `reply` to the net provider's responder; the tests mock it, so
@@ -69,7 +102,7 @@ pub struct ArtRequest {
     /// The edge the one answer travels through. Every request is answered
     /// exactly once; the pre-attach campaign answers `Missing`, so no
     /// responder is left open before the attach.
-    pub reply: Box<dyn FnOnce(ArtResponse) + Send>,
+    pub reply: ArtReply,
 }
 
 impl fmt::Debug for ArtRequest {
@@ -97,16 +130,17 @@ pub enum ArtResponse {
 }
 
 /// The path an art request names (design D7): the image-cache key a card
-/// names, or the placeholder.
+/// names, the glow rendition key, or the placeholder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ArtPath {
     Card(String),
+    Glow(String),
     Placeholder,
 }
 
-/// Parse a request path (design D7): the two forms only. A card segment is
-/// percent-decoded; another prefix, a missing segment, or an undecodable one
-/// is malformed, and the request answers `Missing`.
+/// Parse a request path (design D7): the three forms only. A card or glow
+/// segment is percent-decoded; another prefix, a missing segment, or an
+/// undecodable one is malformed, and the request answers `Missing`.
 pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
     if path == PLACEHOLDER_PATH {
         return Some(ArtPath::Placeholder);
@@ -114,6 +148,7 @@ pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
     let (kind, rest) = path.split_once('/')?;
     match kind {
         "card" => Some(ArtPath::Card(percent_decode(rest)?)),
+        "glow" => Some(ArtPath::Glow(percent_decode(rest)?)),
         _ => None,
     }
 }
@@ -166,3 +201,6 @@ fn hex_digit(byte: u8) -> Option<u8> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests;

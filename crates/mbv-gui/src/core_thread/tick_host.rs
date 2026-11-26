@@ -17,8 +17,24 @@ use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
 
 use super::{CoreInput, CoreThread};
-use crate::art::{ArtPath, ArtRequest, ArtResponse, parse_path};
+use crate::art::glow::glow_png;
+use crate::art::{ArtPath, ArtReply, ArtRequest, ArtResponse, parse_path};
 use crate::sections::{DrainHook, marks_for_hook};
+
+/// The one-shot art reply edge that answers `Missing` when its glow thread
+/// never runs it (design D4): a failed spawn drops the closure, a panic in
+/// the glow work drops the guard, and a `None` from [`glow_png`] leaves the
+/// guard untouched — the drop answers in each case, so every request is
+/// still answered exactly once.
+struct GlowReply(Option<ArtReply>);
+
+impl Drop for GlowReply {
+    fn drop(&mut self) {
+        if let Some(reply) = self.0.take() {
+            reply(ArtResponse::Missing);
+        }
+    }
+}
 
 /// Whether a pointer event marks the gated sections (design D3 rule 1): a
 /// press or a right press. A gesture resolves on its press, and an outside
@@ -46,29 +62,65 @@ impl CoreThread {
     }
 
     /// Answer one art request (design D7 of `gui-change-driven-sections`):
-    /// the path parses to one of the two forms, and the answer reads only the
-    /// read-only cache query — never `queue_card_artwork` or
+    /// the path parses to one of the three forms, and the answer reads only
+    /// the read-only cache query — never `queue_card_artwork` or
     /// `gui_library_artwork`, whose projections start fetches. A malformed
     /// path, an unknown key, or an empty cache entry answers `Missing`. The
     /// request sets no mark and no `input_received`: it changes no section
     /// the window paints.
     fn answer_art(&mut self, request: ArtRequest) {
-        let response = match parse_path(&request.path) {
-            Some(ArtPath::Placeholder) => ArtResponse::Found {
-                mime: "image/webp",
-                bytes: QUEUE_CARD_PLACEHOLDER_BYTES.to_vec(),
-            },
-            Some(ArtPath::Card(key)) => {
-                self.core
-                    .gui_art_source(&key)
-                    .map_or(ArtResponse::Missing, |source| ArtResponse::Found {
-                        mime: source.mime,
-                        bytes: source.bytes,
-                    })
+        match parse_path(&request.path) {
+            Some(ArtPath::Placeholder) => {
+                (request.reply)(ArtResponse::Found {
+                    mime: "image/webp",
+                    bytes: QUEUE_CARD_PLACEHOLDER_BYTES.to_vec(),
+                });
             }
-            None => ArtResponse::Missing,
+            Some(ArtPath::Card(key)) => {
+                let response =
+                    self.core
+                        .gui_art_source(&key)
+                        .map_or(ArtResponse::Missing, |source| ArtResponse::Found {
+                            mime: source.mime,
+                            bytes: source.bytes,
+                        });
+                (request.reply)(response);
+            }
+            Some(ArtPath::Glow(key)) => self.answer_glow(&key, request.reply),
+            None => (request.reply)(ArtResponse::Missing),
+        }
+    }
+
+    /// Answer one glow request (design D4): read the cached source bytes on
+    /// the core thread, then move them and the reply edge to a worker thread
+    /// named `mbv-art-glow` that encodes the glow PNG off this thread. No
+    /// source answers `Missing`; a failed spawn, a panic, or a source the
+    /// encoder rejects answers `Missing` through the [`GlowReply`] guard.
+    fn answer_glow(&self, cache_key: &str, reply: ArtReply) {
+        let Some(source) = self.core.gui_art_source(cache_key) else {
+            reply(ArtResponse::Missing);
+            return;
         };
-        (request.reply)(response);
+        let mut reply = GlowReply(Some(reply));
+        let spawned = std::thread::Builder::new()
+            .name("mbv-art-glow".into())
+            .spawn(move || {
+                let Some(png) = glow_png(&source.bytes) else {
+                    return; // the guard's drop answers `Missing`.
+                };
+                if let Some(reply) = reply.0.take() {
+                    reply(ArtResponse::Found {
+                        mime: "image/png",
+                        bytes: png,
+                    });
+                }
+            });
+        match spawned {
+            // Detached: the thread owns the answer through the guard.
+            Ok(_handle) => {}
+            // The closure dropped with its guard; the drop answered `Missing`.
+            Err(_error) => {}
+        }
     }
 }
 
