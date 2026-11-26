@@ -43,7 +43,7 @@ use crate::window::truncate::{TextStyle, Truncate};
 /// The row grid the header and every row paint (the former client
 /// `grid-template-columns`): the number, the title, and the trailing cell that
 /// holds the duration and the hover controls.
-const GRID_COLUMNS: &str = "grid-template-columns: 40px minmax(0, 1fr) 88px;";
+const GRID_COLUMNS: &str = "grid-template-columns: 16px minmax(0, 1fr) 88px; column-gap: 14px;";
 
 /// One row of the table, as the destination maps its rows (the former client
 /// `WorkspaceRow` interface).
@@ -189,8 +189,10 @@ fn playing_mark() -> Element {
 }
 
 /// A row's fill (gui-hero-design-polish design D6): the playing row's
-/// `--canvas-playing-row`, the striped rows' lighter panel on every second row
-/// from the second, and the column's own fill on the rest. The fill lives on
+/// `--canvas-playing-row`, the slight lift (`--canvas-list-stripe`) on every
+/// second row from the second, and the pane's own fill on the rest. The
+/// stripe counts from 0 within the list, and the playing row keeps its fill
+/// whatever its index. The fill lives on
 /// the host as `--row-fill`, so the hover controls' cover never goes
 /// transparent over the title.
 fn row_fill(row: &WorkspaceRow, index: usize) -> String {
@@ -200,7 +202,7 @@ fn row_fill(row: &WorkspaceRow, index: usize) -> String {
     if index.is_multiple_of(2) {
         canvas_var("library-column")
     } else {
-        canvas_var("library-panel")
+        canvas_var("list-stripe")
     }
 }
 
@@ -278,7 +280,7 @@ fn paint_number_cell(hook: &'static str, row: &WorkspaceRow) -> Element {
     rsx! {
         span {
             class: "row-hover-face flex flex-none items-center font-mono tabular-nums",
-            style: "font-size: 11px; color: var(--canvas-ordinal);",
+            style: "justify-content: flex-end; font-size: 12px; color: var(--canvas-muted);",
             ..number_attrs,
             {content}
         }
@@ -314,8 +316,8 @@ fn paint_name_button(
                 Truncate {
                     text: row.name.clone(),
                     class: "min-w-0 flex-1".to_owned(),
-                    css: format!("font-size: 13.5px; color: {color}; font-weight: {weight};"),
-                    style: TextStyle::sans(13.5, weight),
+                    css: format!("font-size: 14px; color: {color}; font-weight: {weight};"),
+                    style: TextStyle::sans(14.0, weight),
                 }
             }
         }
@@ -432,7 +434,7 @@ fn paint_row(row: &WorkspaceRow, index: usize, paint: &RowPaint) -> Element {
     let fill = row_fill(row, index);
     let host_style = row_host_style(&fill, 0.0);
     let row_style = format!(
-        "{GRID_COLUMNS} height: 34px; padding: 0 8px; border-radius: 4px; overflow: hidden; background: var(--row-fill); {host_style}"
+        "{GRID_COLUMNS} padding: 8px 12px; border-radius: 6px; overflow: hidden; background: var(--row-fill); {host_style}"
     );
     let context_id = row.id.clone();
     let resume = resume_progress(row);
@@ -499,14 +501,14 @@ pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
             } else {
                 div {
                     class: "grid items-center font-mono",
-                    style: "{GRID_COLUMNS} height: 32px; padding: 0 8px; border-bottom: 1px solid var(--canvas-border); font-size: 12px; letter-spacing: 0.08em; color: var(--canvas-type-label);",
+                    style: "{GRID_COLUMNS} height: 32px; padding: 0 12px; border-bottom: 1px solid var(--canvas-border); font-size: 12px; letter-spacing: 0.08em; color: var(--canvas-type-label);",
                     span { "#" }
                     span { "TITLE" }
                     span { style: "text-align: right;", "TIME" }
                 }
                 ol {
                     class: "flex flex-col",
-                    style: "margin: 4px 0 0; padding: 0; list-style: none;",
+                    style: "margin: 4px 0 0; padding: 0; list-style: none; gap: 2px;",
                     for (index, row) in props.rows.iter().enumerate() {
                         { paint_row(row, index, &paint) }
                     }

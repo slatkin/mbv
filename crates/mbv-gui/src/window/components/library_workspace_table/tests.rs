@@ -11,7 +11,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
-use super::{LibraryWorkspaceTable, WorkspaceRow};
+use super::{LibraryWorkspaceTable, WorkspaceRow, row_fill};
 use crate::bridge::frame::library::GuiHomeRowStateFrame;
 use crate::window::pointer_target::PointerList;
 
@@ -301,4 +301,21 @@ fn the_table_and_its_rows_carry_the_pointer_markers() {
             .attr(LocalName::from("data-pointer-row")),
         Some("t1")
     );
+}
+
+/// A free list stripes by index from 0 (every second row lifts), and the
+/// playing row keeps its own fill whatever its index.
+#[rstest]
+#[case::even_row_is_the_pane(0, false, "var(--canvas-library-column)")]
+#[case::odd_row_lifts(1, false, "var(--canvas-list-stripe)")]
+#[case::playing_even_row(2, true, "var(--canvas-playing-row)")]
+#[case::playing_odd_row(3, true, "var(--canvas-playing-row)")]
+fn a_row_fills_by_its_index_unless_it_is_playing(
+    #[case] index: usize,
+    #[case] playing: bool,
+    #[case] expected: &str,
+) {
+    let row = WorkspaceRow { playing, ..row() };
+
+    assert_eq!(row_fill(&row, index), expected);
 }

@@ -2167,6 +2167,14 @@ vertical and horizontal scrims over the pane colour `#272e33`, and answers
 `image/jpeg`. The worker keeps the last 32 results. The bottom row equals the
 pane colour, and the title area keeps 4.5:1 against the title colour, so the
 window paints no CSS opacity, gradient, or blur filter.
+Two lists stripe, with two rules that stay apart. The cast card
+(`LibraryHeroCast`) is a bordered, rounded grid with no gap: it stripes by
+visual row (`#2e383c`, then `#232a2e`), both cells of a row share a fill, an
+empty last cell takes its row's fill, and it paints two columns from a 640 px
+pane. A free list (`LibraryWorkspaceTable`: tracks and episodes) has no
+container, `gap: 2px` between rows, and stripes by index from 0 within the
+list: even rows are the pane's `#272e33`, odd rows `--canvas-list-stripe`
+`#2b3338`. The playing row overrides the stripe with `#333f4a`.
 `LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play and Add to queue buttons,
 `LibraryDropdown` the Shows Workspace's season dropdown (a radio row per

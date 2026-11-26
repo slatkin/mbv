@@ -167,7 +167,8 @@
 	/* The playing Workspace row's fill (gui-hero-design-polish design D6): a
 	   blue-grey lifted above the striped rows, so the playing row reads at a
 	   glance. Estimated from the album artboard; confirm live. */
-	--canvas-playing-row: #2f3b46; /* the row the playhead is on */
+	--canvas-playing-row: #333f4a; /* the row the playhead is on */
+	--canvas-list-stripe: #2b3338; /* every second row of a free list: a slight lift over the pane */
 	/* The Hero's part values (gui-hero-design-polish design D2): the inset
 	   frame's bezel around the Hero's art and the vinyl disc behind a square
 	   album sleeve. */

@@ -19,11 +19,15 @@ const CARD_STYLE: &str =
 
 /// The member's look: the artboard's row padding around the box and the
 /// name-and-role column.
-const MEMBER_STYLE: &str = "gap: 12px; padding: 10px 14px;";
+const MEMBER_STYLE: &str = "gap: 10px; padding: 8px 12px;";
 
-/// The pane width from which the grid paints two columns: two members of 340
-/// px and the Hero's side padding.
-const TWO_COLUMN_MIN_PANE_PX: f32 = 744.0;
+/// The pane width from which the grid paints two columns.
+/// The two row fills of the zebra: the light row over the dark one, both
+/// opaque and both away from the pane, so the card reads as one box.
+const CAST_LIGHT_ROW: &str = "#2e383c";
+const CAST_DARK_ROW: &str = "#232a2e";
+
+const TWO_COLUMN_MIN_PANE_PX: f32 = 640.0;
 
 /// The props of the cast grid (the `LibraryHeroCast` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
@@ -43,7 +47,6 @@ pub struct LibraryHeroCastProps {
 /// initials in it) beside the name and role.
 #[component]
 pub fn LibraryHeroCast(props: LibraryHeroCastProps) -> Element {
-    let muted = crate::window::theme::canvas_var("muted");
     let pane =
         try_consume_context::<HeroPaneWidth>().map_or(FALLBACK_PANE_WIDTH, |pane| *pane.0.read());
     let columns: usize = if pane >= TWO_COLUMN_MIN_PANE_PX { 2 } else { 1 };
@@ -54,11 +57,7 @@ pub fn LibraryHeroCast(props: LibraryHeroCastProps) -> Element {
             for (index, member) in props.members.iter().enumerate() {
                 {
                     let initials = member.initials.clone();
-                    let fill = if (index / columns).is_multiple_of(2) {
-                        "var(--canvas-library-panel)"
-                    } else {
-                        "var(--canvas-queue-column)"
-                    };
+                    let fill = row_fill(index, columns);
                     rsx! {
                         div {
                             key: "{index}",
@@ -67,7 +66,7 @@ pub fn LibraryHeroCast(props: LibraryHeroCastProps) -> Element {
                             ..vec![Attribute::new(own(props.attr, "cast-member"), "", None, false)],
                             div {
                                 class: "flex flex-none items-center justify-center overflow-hidden",
-                                style: "width: {PHOTO_BOX_PX}px; height: {PHOTO_BOX_PX}px; border-radius: 999px; background: var(--canvas-library-control);",
+                                style: "width: {PHOTO_BOX_PX}px; height: {PHOTO_BOX_PX}px; border-radius: 999px; background: #414b50;",
                                 ..vec![Attribute::new(own(props.attr, "cast-photo"), "", None, false)],
                                 ArtImage {
                                     art: member.photo.clone(),
@@ -78,7 +77,7 @@ pub fn LibraryHeroCast(props: LibraryHeroCastProps) -> Element {
                                     fallback: Some(rsx! {
                                         span {
                                             class: "font-mono",
-                                            style: "font-size: 10px; color: {muted};",
+                                            style: "font-size: 10px; color: #d3c6aa;",
                                             ..vec![Attribute::new(own(props.attr, "cast-initials"), "", None, false)],
                                             "{initials}"
                                         }
@@ -90,13 +89,13 @@ pub fn LibraryHeroCast(props: LibraryHeroCastProps) -> Element {
                                 style: "gap: 2px;",
                                 span {
                                     class: "min-w-0",
-                                    style: "font-size: 15px; color: var(--canvas-text);",
+                                    style: "font-size: 14px; color: #d3c6aa;",
                                     ..vec![Attribute::new(own(props.attr, "cast-name"), "", None, false)],
                                     "{member.name}"
                                 }
                                 span {
                                     class: "font-mono min-w-0",
-                                    style: "font-size: 12px; color: var(--canvas-muted);",
+                                    style: "font-size: 11px; color: #9da9a0;",
                                     ..vec![Attribute::new(own(props.attr, "cast-role"), "", None, false)],
                                     "{member.role}"
                                 }
@@ -105,6 +104,24 @@ pub fn LibraryHeroCast(props: LibraryHeroCastProps) -> Element {
                     }
                 }
             }
+            // A last row with one member: the empty cell takes the row's fill,
+            // so no hole shows the pane through the card.
+            if !props.members.len().is_multiple_of(columns) {
+                div { style: "background: {row_fill(props.members.len(), columns)};" }
+            }
         }
     }
 }
+
+/// The fill of the member at `index`: both cells of a visual row share one
+/// colour, and the rows alternate from the light one.
+fn row_fill(index: usize, columns: usize) -> &'static str {
+    if (index / columns).is_multiple_of(2) {
+        CAST_LIGHT_ROW
+    } else {
+        CAST_DARK_ROW
+    }
+}
+
+#[cfg(test)]
+mod tests;
