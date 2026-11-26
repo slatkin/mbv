@@ -29,12 +29,12 @@ use super::GuiSortTarget;
 use super::artwork::{feed_media_kind, feed_row_source, row_art};
 use super::collection::{GuiCollectionTarget, GuiCollections};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
+use super::hero_facts::{GuiHeroFacts, hero_facts_feed};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
-use mbv_ui_model::meta::MetaSegment;
 
 /// One entry's stable identity across every list view and every
 /// subscription (row 11.1): the subscription's URL — the feed identity the
@@ -107,26 +107,23 @@ impl GuiFeedEntryId {
 /// a row position.
 pub type GuiFeedsRow = GuiEntryRow;
 
-/// The selected entry's Hero facts (row 11.1): the shared `hero_content_feed`
-/// producer's title and duration, the subscription name ahead of them, and the
-/// placeholder artwork's shape. A feed entry has no artwork source and no
-/// overview, so neither rides here, and Feeds has no Workspace.
+/// The selected entry's Hero facts (row 11.1; gui-hero-design-polish design
+/// D1): the D1 feed builder's facts — the duration pill over the Published
+/// row (when the entry has a date) — and the placeholder artwork's shape. A
+/// feed entry has no artwork source and no overview, so neither rides here,
+/// and Feeds has no Workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiFeedsHero {
     /// The hero's title: the entry title.
     pub title: String,
     /// The name of the largest unit the item belongs to (the invariant 30 header
     /// title rule): the show, the feed, or the series. `None` when the item is
-    /// its own largest unit. The meta rows never repeat it.
+    /// its own largest unit. The facts never repeat it.
     pub parent: Option<String>,
-    /// The meta rows in display order: the duration when the entry
-    /// declares one (the subscription name is the parent).
-    pub meta_rows: Vec<Vec<MetaSegment>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role. The shared producer fills
-    /// none for a feed entry, so this is `None` exactly as the TUI's is.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFacts,
     /// The artwork box the Hero reserves: Square for a podcast feed
     /// (`FeedKind::Audio`), Landscape otherwise — the shared producer's
     /// feed policy, which has no source for either, so the Hero paints its
@@ -316,12 +313,12 @@ fn feeds_selected(gui: &GuiClientState, rows: &[GuiFeedsRow]) -> Option<String> 
     )
 }
 
-/// The selected entry's Hero (row 11.1): the shared `hero_content_feed`
-/// producer's title and duration behind the subscription name, and the feed
-/// artwork policy's shape. The entry has no artwork source, so no image rides
-/// here and the Hero paints its placeholder. `listed` is the projection's
-/// sorted selection list — the list the Hero's row came from — so the lookup
-/// re-reads it instead of rebuilding it.
+/// The selected entry's Hero (row 11.1): the D1 feed builder's facts and the
+/// feed artwork policy's shape, with the subscription name as the parent. The
+/// entry has no artwork source, so no image rides here and the Hero paints
+/// its placeholder. `listed` is the projection's sorted selection list — the
+/// list the Hero's row came from — so the lookup re-reads it instead of
+/// rebuilding it.
 fn feeds_hero(app: &App, entry: &GuiFeedEntryId, listed: &[&FeedEntry]) -> Option<GuiFeedsHero> {
     let entry = listed
         .iter()
@@ -331,9 +328,7 @@ fn feeds_hero(app: &App, entry: &GuiFeedEntryId, listed: &[&FeedEntry]) -> Optio
     Some(GuiFeedsHero {
         title: content.facts.title.clone(),
         parent,
-        meta_rows: content.facts.meta_rows.clone(),
-        duration_row: content.facts.duration_row,
-        progress_row: content.facts.progress_row,
+        facts: hero_facts_feed(entry),
         art_shape: artwork_shape(content.facts.artwork.shape),
     })
 }

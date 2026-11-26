@@ -19,6 +19,7 @@ use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_row_source, row_art, upcoming_row_source};
+use super::hero_facts::GuiHeroFacts;
 use super::home::GuiArtShape;
 use super::list_sort::gui_title_sort_key;
 use super::projection::sort_letter;
@@ -28,7 +29,6 @@ use super::tabs::GuiDestinationKind;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
-use mbv_ui_model::meta::MetaSegment;
 use mbv_ui_model::sort_filter::effective_sort_str;
 
 /// One flat row of the New or Upcoming list (gui-collection-dropdown design
@@ -147,8 +147,9 @@ pub struct GuiShowsWorkspace {
     pub episodes: Vec<GuiShowsEpisodeRow>,
 }
 
-/// The Hero's facts for the selected series (design D12, D8): the shared
-/// series producer's facts, the series' `Primary` poster, and the series Hero's
+/// The Hero's facts for the selected series (design D12, D8;
+/// gui-hero-design-polish design D1): the item's facts as the D1 builders
+/// split them, the series' `Primary` poster, and the series Hero's
 /// Workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiShowsHero {
@@ -156,16 +157,13 @@ pub struct GuiShowsHero {
     pub title: String,
     /// The name of the largest unit the item belongs to (the invariant 30 header
     /// title rule): the show, the feed, or the series. `None` when the item is
-    /// its own largest unit. The meta rows never repeat it.
+    /// its own largest unit. A series is its own largest unit; a New list's
+    /// flat episode fills the series name from the split title.
     pub parent: Option<String>,
-    /// The meta rows in display order.
-    pub meta_rows: Vec<Vec<MetaSegment>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does. The shared
-    /// Emby hero producer fills none, so a Shows hero carries `None` exactly
-    /// as the TUI's does.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFacts,
     /// The cleaned overview text, when the item's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves: the series' declared portrait arm,

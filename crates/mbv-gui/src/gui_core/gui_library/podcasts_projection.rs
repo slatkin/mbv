@@ -5,9 +5,9 @@
 //! newest first with undated episodes last while Newest — the core's selected
 //! episode, and its Hero. All merges every listed show's episodes; a checked
 //! set merges the checked shows'. The list shows the letter rail exactly while
-//! its sort is a name sort. The Hero is the shared
-//! `hero_content_abs_episode` producer's facts — the episode title, the show,
-//! the duration, and the publish date — its description, and the parent
+//! its sort is a name sort. The Hero is the
+//! D1 episode builder's facts — the duration pill and the publish date row —
+//! its description, and the parent
 //! show's Square cover, which the Service-scoped cover chain caches. The
 //! per-show episode views are the TUI's own
 //! (`AudiobookshelfBrowseState::visible_episodes`, `visible_episodes_from`),
@@ -32,13 +32,13 @@ use super::GuiSortTarget;
 use super::artwork::{GuiRowMediaKind, catalog_show_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
+use super::hero_facts::{GuiHeroFacts, hero_facts_abs_episode};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
 use mbv_client_core::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
-use mbv_ui_model::meta::MetaSegment;
 
 /// One episode's stable identity across every list view (row 10.1): the
 /// provider's `(library_item_id, episode_id)` pair — the identity the progress
@@ -132,27 +132,23 @@ impl From<&PodcastEpisodeTarget> for GuiPodcastEpisodeId {
 /// command sends, never a row position.
 pub type GuiPodcastsRow = GuiEntryRow;
 
-/// The selected episode's Hero facts (row 10.1): the shared
-/// `hero_content_abs_episode` producer's facts — the episode title, the show
-/// title, the duration, and the publish date — with the cleaned description as
-/// the overview, and the parent show's Square cover. Podcasts have no
-/// Workspace, so none rides here.
+/// The selected episode's Hero facts (row 10.1; gui-hero-design-polish
+/// design D1): the D1 episode builder's facts — the duration pill over the
+/// Published row — with the cleaned description as the overview, and the
+/// parent show's Square cover. Podcasts have no Workspace, so none rides
+/// here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiPodcastsHero {
     /// The hero's title: the episode title.
     pub title: String,
     /// The name of the largest unit the item belongs to (the invariant 30 header
     /// title rule): the show, the feed, or the series. `None` when the item is
-    /// its own largest unit. The meta rows never repeat it.
+    /// its own largest unit. The facts never repeat it.
     pub parent: Option<String>,
-    /// The meta rows in display order: the show title, the duration, and the
-    /// publish date, exactly as the producer orders them.
-    pub meta_rows: Vec<Vec<MetaSegment>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role. The shared producer fills
-    /// none for an episode, so this is `None` exactly as the TUI's is.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFacts,
     /// The cleaned description text, when the episode's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves: the episode artwork policy's
@@ -346,20 +342,13 @@ fn podcast_hero(
         }) => podcast_episode_artwork(app, library_item_id),
         Some(_) | None => None,
     };
-    // The show is the largest unit and rides as the parent: the producer puts
-    // it first, so the rows drop it and the duration index follows.
+    // The show is the largest unit and rides as the parent: the D1 episode
+    // builder's rows never repeat it.
     let parent = item.show_title.clone().filter(|show| !show.is_empty());
-    let skip = usize::from(parent.is_some());
-    let duration_row = content
-        .facts
-        .duration_row
-        .and_then(|row| row.checked_sub(skip));
     Some(GuiPodcastsHero {
         title: content.facts.title.clone(),
         parent,
-        meta_rows: content.facts.meta_rows.iter().skip(skip).cloned().collect(),
-        duration_row,
-        progress_row: content.facts.progress_row,
+        facts: hero_facts_abs_episode(&item),
         overview: content.overview.clone(),
         art_shape: artwork_shape(super::artwork::hero_shape(
             app,

@@ -6,12 +6,15 @@
 //! so the text and the type colour do not change. A fact with no value is
 //! left out. Facts do not decide the Hero title.
 
+use mbv_client_core::App;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
 };
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::ui_util::{fmt_duration_hms, fmt_publish_date, format_release_date};
+
+use super::GuiLibraryArtwork;
 
 /// The Hero's facts for one item (design D1): the header band's pills and the
 /// detail block's labelled rows, both in paint order.
@@ -208,6 +211,59 @@ pub fn hero_facts_queue(item: &QueueItem) -> GuiHeroFacts {
         QueueItem::Feed(entry) => hero_facts_feed(entry),
         QueueItem::Twitch(_) => GuiHeroFacts::default(),
     }
+}
+
+/// One member of a movie's cast section (design D3): the person's name and
+/// role, the initials the photo's round box falls back to, and the photo the
+/// Service serves when the person carries an id and a tag.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiHeroCastMember {
+    /// The person's name.
+    pub name: String,
+    /// The role painted beside the name: the person's role, else their kind.
+    pub role: String,
+    /// The initials the photo box paints when no photo shows: the first
+    /// letter of the name's first two words, upper case.
+    pub initials: String,
+    /// The person's Primary photo, read from the image cache. `None` with no
+    /// id or no tag; `Some` holds the fetch's loading state while it runs.
+    pub photo: Option<GuiLibraryArtwork>,
+}
+
+/// The movie's cast (design D3): the people that are not directors, in the
+/// order Emby gives, each with its role, initials, and photo. A non-movie
+/// carries no cast, as the shared producer's credits table does. A person
+/// with an id and a tag starts its photo fetch, so the section paints the
+/// loading state until the bytes land.
+#[must_use]
+pub fn hero_cast_emby(app: &mut App, item: &EmbyItem) -> Vec<GuiHeroCastMember> {
+    if item.item_type != "Movie" {
+        return Vec::new();
+    }
+    item.people
+        .iter()
+        .filter(|person| person.kind != "Director")
+        .map(|person| GuiHeroCastMember {
+            role: if person.role.is_empty() {
+                person.kind.clone()
+            } else {
+                person.role.clone()
+            },
+            name: person.name.clone(),
+            initials: cast_initials(&person.name),
+            photo: super::artwork::emby_person_photo(app, &person.id, &person.primary_image_tag),
+        })
+        .collect()
+}
+
+/// The initials of one cast member's name (design D3): the first letter of
+/// the name's first two words, upper case.
+fn cast_initials(name: &str) -> String {
+    name.split_whitespace()
+        .filter_map(|word| word.chars().next())
+        .take(2)
+        .flat_map(char::to_uppercase)
+        .collect()
 }
 
 /// The duration seconds behind a u64 tick source (design D1): `None` when the

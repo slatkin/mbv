@@ -305,6 +305,29 @@ pub(in crate::gui_core::gui_library) fn home_hero_artwork(
     resolve_gui_art(app, cache_key)
 }
 
+/// One cast member's photo (gui-hero-design-polish design D3): the person's
+/// Primary image under the person's own card key, fetched here and read from
+/// the image cache. `None` with no id or no tag — the person paints their
+/// initials — and `Some` with the fetch's loading state while it runs, so a
+/// started fetch never looks like a person with no photo.
+pub(in crate::gui_core::gui_library) fn emby_person_photo(
+    app: &mut App,
+    person_id: &str,
+    image_tag: &str,
+) -> Option<GuiLibraryArtwork> {
+    if person_id.is_empty() || image_tag.is_empty() {
+        return None;
+    }
+    let cache_key = mbv_images::emby_card_cache_key(person_id, "");
+    app.fetch_card_image(
+        cache_key.clone(),
+        person_id.to_owned(),
+        String::new(),
+        &["Primary"],
+    );
+    Some(resolve_gui_art(app, &cache_key))
+}
+
 /// The cached art under `cache_key`, as the server sent it, or the empty
 /// fetch's placeholder and the in-flight fetch's loading state — the queue
 /// card's resolution. One resolution for every Library art: the Hero's box and

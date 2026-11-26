@@ -39,8 +39,8 @@ pub use self::gui_library::{
     GuiAudiobooksWorkspace,
 };
 pub use self::gui_library::{
-    GuiDestinationKind, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow,
-    GuiEmbyRowKind, GuiHeroFactLabel, GuiHeroFactRow, GuiHeroFacts, GuiHeroPill,
+    GuiDestinationKind, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+    GuiHeroCastMember, GuiHeroFactLabel, GuiHeroFactRow, GuiHeroFacts, GuiHeroPill,
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
 };
