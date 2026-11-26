@@ -371,7 +371,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                 LibraryHeroSection {
                     attr,
                     hook: "cast",
-                    title: "Cast".to_owned(),
+                    title: "Cast & Crew".to_owned(),
                     LibraryHeroCast { attr, hook: "cast-grid", members: cast.clone() }
                 }
             }
