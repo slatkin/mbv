@@ -59,6 +59,9 @@ pub struct GuiShowsDetail {
     /// The selected row's Hero facts; `None` in the Upcoming mode and while
     /// no row is selected.
     pub hero: Option<GuiShowsHeroFrame>,
+    /// The Emby episode playing at the playhead (design D6), by its stable
+    /// Service id; the Workspace row with this id is the playing row.
+    pub playing_episode_id: Option<String>,
 }
 
 /// One series node of the All series tree (design D14), the Music artist
@@ -219,6 +222,7 @@ impl GuiShowsDetail {
             workspace_loading: projection.workspace_loading,
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiShowsHeroFrame::from),
+            playing_episode_id: projection.playing_episode_id.clone(),
         }
     }
 }

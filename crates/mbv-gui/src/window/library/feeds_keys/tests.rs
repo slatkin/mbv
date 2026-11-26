@@ -157,7 +157,11 @@ fn feeds_content_selected(
             rows: rows.to_owned(),
         }),
     };
-    let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail { selected, hero });
+    let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        selected,
+        hero,
+        playing_entry_id: None,
+    });
     (list, detail)
 }
 

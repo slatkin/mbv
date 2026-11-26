@@ -253,6 +253,7 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
         }),
     };
     let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        playing_entry_id: None,
         selected: Some("sub1:guid12".to_owned()),
         hero: None,
     });
@@ -326,6 +327,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: Some("s2".to_owned()),
         hero: None,

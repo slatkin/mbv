@@ -575,3 +575,33 @@ fn row_texts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
         })
         .collect()
 }
+
+/// The playing episode rides the Shows projection (gui-hero-design-polish
+/// design D6): an Emby episode at the displayed playhead names its id, and
+/// another Emby item or an idle playhead names none.
+#[rstest]
+#[case::an_active_episode("Episode", true, Some("ep-1"))]
+#[case::an_active_music_track("Audio", true, None)]
+#[case::an_idle_episode("Episode", false, None)]
+fn the_playing_episode_rides_the_shows_projection(
+    #[case] item_type: &str,
+    #[case] active: bool,
+    #[case] expected: Option<&str>,
+) {
+    let mut app = empty_shows_app();
+    let mut item = make_item("Pilot", item_type);
+    item.id = "ep-1".into();
+    app.adopt_playing_queue_items_with_active_for_test(
+        vec![mbv_queue::QueueItem::Emby(Box::new(item))],
+        0,
+        0,
+    );
+    app.edit_player_status_for_test(|status| {
+        status.active = active;
+        status.current_idx = 0;
+    });
+
+    let projection = crate::gui_core::test_support::gui_shows_projection(&mut app, 0);
+
+    assert_eq!(projection.playing_episode_id.as_deref(), expected);
+}

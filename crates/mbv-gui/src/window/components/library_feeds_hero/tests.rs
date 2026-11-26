@@ -94,8 +94,9 @@ fn rows(extra: Vec<GuiEntryRowFrame>) -> Vec<GuiEntryRowFrame> {
 }
 
 /// The Feeds detail part with the hero picked.
-fn detail(facts: Option<GuiFeedsHeroFrame>) -> GuiFeedsDetail {
+fn detail(facts: Option<GuiFeedsHeroFrame>, playing: Option<&str>) -> GuiFeedsDetail {
     GuiFeedsDetail {
+        playing_entry_id: playing.map(str::to_owned),
         selected: Some("sub1:guid12".to_owned()),
         hero: facts,
     }
@@ -261,6 +262,15 @@ impl Fixture {
 /// Build the document over the carried content and let the first render and
 /// effects land.
 fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixture {
+    built_playing(facts, rows, None)
+}
+
+/// Build the document with the playing entry id the detail carries.
+fn built_playing(
+    facts: Option<GuiFeedsHeroFrame>,
+    rows: Vec<GuiEntryRowFrame>,
+    playing: Option<&str>,
+) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -286,7 +296,7 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
                         rows,
                     }),
                 }),
-                detail: SectionRef::new(GuiLibraryDetail::Feeds(detail(facts))),
+                detail: SectionRef::new(GuiLibraryDetail::Feeds(detail(facts, playing))),
                 handle: Rc::clone(&handle),
             },
         ),
@@ -513,5 +523,41 @@ fn the_list_band_holds_the_feed_entries_alone() {
         fixture.attr_of("[data-pointer-row]", "data-pointer-row"),
         Some("sub1:guid12".to_owned()),
         "the first entry carries the pointer marker"
+    );
+}
+
+/// Contract (gui-hero-design-polish design D6, row 8.2): the entry row whose
+/// id the playing entry carries takes the playing mark, and an idle playhead
+/// marks no row.
+#[rstest]
+#[case::the_playing_entry(Some("sub1:guid11"), vec!["sub1:guid11"])]
+#[case::an_idle_playhead(None, Vec::new())]
+fn the_playing_entry_marks_its_own_entry_row(
+    #[case] playing: Option<&str>,
+    #[case] expected: Vec<&str>,
+) {
+    let earlier = GuiEntryRowFrame {
+        sort_letter: None,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+        id: "sub1:guid11".to_owned(),
+        title: "The Earlier Road".to_owned(),
+        subtitle: Some("Bits and Bites".to_owned()),
+        date: Some("01 Oct".to_owned()),
+        state: GuiHomeRowStateFrame::Ordinary,
+    };
+    let fixture = built_playing(
+        Some(hero(GuiArtShapeFrame::Square)),
+        rows(vec![earlier]),
+        playing,
+    );
+
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-feeds-entry-playing]",
+            "data-library-feeds-entry"
+        ),
+        expected,
+        "only the playing entry's row carries the playing mark"
     );
 }

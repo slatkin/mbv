@@ -54,6 +54,9 @@ pub struct GuiFeedsDetail {
     pub selected: Option<String>,
     /// The selected entry's Hero facts; `None` while no entry is selected.
     pub hero: Option<GuiFeedsHeroFrame>,
+    /// The feed entry playing at the playhead, in the row id form; the row
+    /// whose id it equals is the playing row.
+    pub playing_entry_id: Option<String>,
 }
 
 /// The selected entry's Hero facts (row 11.1; gui-hero-design-polish design
@@ -101,6 +104,7 @@ impl GuiFeedsDetail {
         Self {
             selected: projection.list.selected.clone(),
             hero: projection.list.hero.as_ref().map(GuiFeedsHeroFrame::from),
+            playing_entry_id: projection.playing_entry_id.clone(),
         }
     }
 }

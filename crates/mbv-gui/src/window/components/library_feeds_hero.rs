@@ -85,6 +85,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     // never clones them (`share-gui-sections-by-rc` design D3).
     let rows: &[GuiEntryRowFrame] =
         library_feeds_list(Some(&props.list)).map_or(&[][..], |list| list.rows.as_slice());
+    let playing_entry_id = detail.playing_entry_id.as_deref();
     let entry_rows: Vec<WorkspaceRow> = match hero.parent.as_deref() {
         None => Vec::new(),
         Some(parent) => rows
@@ -96,7 +97,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
                 number: (index + 1).to_string(),
                 name: row.title.clone(),
                 duration: row.date.clone().unwrap_or_default(),
-                playing: false,
+                playing: playing_entry_id == Some(row.id.as_str()),
                 state: Some(row.state.clone()),
             })
             .collect(),

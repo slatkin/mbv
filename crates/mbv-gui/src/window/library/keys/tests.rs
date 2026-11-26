@@ -438,6 +438,7 @@ fn shows_list() -> GuiLibraryList {
 /// The Shows detail section value: no Hero.
 fn shows_detail() -> GuiLibraryDetail {
     GuiLibraryDetail::Shows(GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: None,
         hero: None,

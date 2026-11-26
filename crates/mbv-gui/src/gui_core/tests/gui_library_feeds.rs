@@ -679,3 +679,35 @@ fn row_texts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
         })
         .collect()
 }
+
+/// The playing feed entry rides the Feeds projection and the playhead marks
+/// (gui-hero-design-polish design D6): an active entry names its row id in
+/// both reads, and an idle playhead names none.
+#[rstest]
+#[case::an_active_entry(true, Some(entry_id(FEED_A, "a-new")))]
+#[case::an_idle_playhead(false, None)]
+fn the_playing_feed_entry_rides_the_projection_and_the_marks(
+    #[case] active: bool,
+    #[case] expected: Option<String>,
+) {
+    let mut app = fetched_feeds_app();
+    let entry = gui_feeds_entries_seeded(&app)
+        .into_iter()
+        .find(|entry| entry.guid == "a-new")
+        .expect("the a-new entry is listed");
+    app.adopt_playing_queue_items_with_active_for_test(
+        vec![mbv_queue::QueueItem::Feed(entry)],
+        0,
+        0,
+    );
+    app.edit_player_status_for_test(|status| {
+        status.active = active;
+        status.current_idx = 0;
+    });
+
+    let projection = gui_feeds_projection_seeded(&app);
+    let marks = crate::gui_core::gui_library::marks::playhead_marks(&app);
+
+    assert_eq!(projection.playing_entry_id, expected);
+    assert_eq!(marks.feed_entry, expected);
+}

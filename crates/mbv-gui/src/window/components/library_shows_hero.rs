@@ -291,6 +291,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
     let (header, block) = header_and_block(hero, workspace, detail.workspace_loading);
 
     // The Workspace table's rows: each episode with the play state it carries.
+    let playing_episode_id = detail.playing_episode_id.as_deref();
     let rows: Vec<WorkspaceRow> = workspace.map_or_else(Vec::new, |workspace| {
         workspace
             .episodes
@@ -300,7 +301,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                 number: episode.number.to_string(),
                 name: episode.name.clone(),
                 duration: episode.duration.clone(),
-                playing: false,
+                playing: playing_episode_id == Some(episode.episode_id.as_str()),
                 state: Some(episode.state.clone()),
             })
             .collect()

@@ -168,6 +168,9 @@ pub struct GuiFeedsProjection {
     /// mixed or generic check set, and for an empty one, where the header
     /// keeps the RSS mark.
     pub platform: Option<FeedPlatform>,
+    /// The feed entry playing at the playhead (design D6), in the row id form.
+    /// The window marks the row whose id it equals. `None` while idle.
+    pub playing_entry_id: Option<String>,
 }
 
 impl GuiCore {
@@ -256,6 +259,7 @@ pub(crate) fn feeds_projection(app: &App, gui: &mut GuiClientState) -> GuiFeedsP
             hero,
         },
         platform,
+        playing_entry_id: super::marks::playing_feed_entry_id(app),
     }
 }
 
@@ -286,13 +290,20 @@ fn feeds_rows(app: &App, entries: &[&FeedEntry], sort: GuiListSort) -> Vec<GuiFe
 /// sort gives it (design D6), the art its artwork policy declares
 /// (gui-delineated-rows design D5: none, so the row is the no-source state),
 /// and the media kind that state shows.
+/// The row id an entry's Feeds row carries (design D6): the entry's
+/// `GuiFeedEntryId`, encoded, with an entry that has no feed id using the empty
+/// feed. The Feeds rows and the playing-entry mark both read it, so they agree.
+pub(crate) fn feed_entry_row_id(entry: &FeedEntry) -> String {
+    GuiFeedEntryId::new(
+        entry.feed_id.clone().unwrap_or_default(),
+        entry.guid.clone(),
+    )
+    .encode()
+}
+
 fn feeds_row(app: &App, entry: &FeedEntry, sort: GuiListSort) -> GuiFeedsRow {
     GuiFeedsRow {
-        id: GuiFeedEntryId::new(
-            entry.feed_id.clone().unwrap_or_default(),
-            entry.guid.clone(),
-        )
-        .encode(),
+        id: feed_entry_row_id(entry),
         title: entry.title.clone(),
         subtitle: feeds_subscription_name(app, entry.feed_id.as_deref()).map(str::to_string),
         date: row_date(entry.pub_date_secs),

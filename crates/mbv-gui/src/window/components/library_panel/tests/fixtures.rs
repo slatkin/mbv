@@ -167,6 +167,7 @@ pub(super) fn shows_list() -> GuiShowsList {
 /// The carried Shows detail part: the selected series and its Hero.
 pub(super) fn shows_detail() -> GuiShowsDetail {
     GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: Some("s1".to_owned()),
         hero: Some(GuiShowsHeroFrame {
@@ -356,6 +357,7 @@ pub(super) fn feeds_sections(
             }),
         },
         GuiLibraryDetail::Feeds(GuiFeedsDetail {
+            playing_entry_id: None,
             selected: Some("s1::e1".to_owned()),
             hero,
         }),

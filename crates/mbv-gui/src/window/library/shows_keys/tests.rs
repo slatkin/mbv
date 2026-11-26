@@ -287,6 +287,7 @@ fn shows_content(
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected,
         hero,

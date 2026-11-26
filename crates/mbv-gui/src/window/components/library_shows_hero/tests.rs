@@ -129,8 +129,9 @@ fn hero(overrides: impl FnOnce(&mut GuiShowsHeroFrame)) -> GuiShowsHeroFrame {
 }
 
 /// The Shows detail part: the series row selected, with the Hero `facts`.
-fn detail(facts: Option<GuiShowsHeroFrame>) -> GuiShowsDetail {
+fn detail(facts: Option<GuiShowsHeroFrame>, playing: Option<&str>) -> GuiShowsDetail {
     GuiShowsDetail {
+        playing_episode_id: playing.map(str::to_owned),
         workspace_loading: false,
         selected: Some("series1".to_owned()),
         hero: facts,
@@ -295,6 +296,11 @@ impl Fixture {
 /// Build the document over the carried content and let the first render and
 /// effects land.
 fn built(facts: Option<GuiShowsHeroFrame>) -> Fixture {
+    built_playing(facts, None)
+}
+
+/// Build the document with the playing episode id the detail carries.
+fn built_playing(facts: Option<GuiShowsHeroFrame>, playing: Option<&str>) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -302,7 +308,7 @@ fn built(facts: Option<GuiShowsHeroFrame>) -> Fixture {
             shows_hero_app,
             FixtureProps {
                 sender,
-                detail: SectionRef::new(GuiLibraryDetail::Shows(detail(facts))),
+                detail: SectionRef::new(GuiLibraryDetail::Shows(detail(facts, playing))),
                 handle: Rc::clone(&handle),
             },
         ),
@@ -657,5 +663,27 @@ fn the_latest_hero_add_to_queue_sends_the_queue_command_for_the_selected_episode
             item_id: "series1".to_owned(),
         }],
         "the enqueue command names the frame's selected episode"
+    );
+}
+
+/// Contract (gui-hero-design-polish design D6, row 8.2): the Workspace row
+/// whose episode plays carries the playing mark, and an idle playhead marks
+/// no row.
+#[rstest]
+#[case::the_playing_episode(Some("ep2"), vec!["ep2"])]
+#[case::an_idle_playhead(None, Vec::new())]
+fn the_playing_episode_marks_its_own_workspace_row(
+    #[case] playing: Option<&str>,
+    #[case] expected: Vec<&str>,
+) {
+    let fixture = built_playing(Some(hero(|_| ())), playing);
+
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-shows-episode-playing]",
+            "data-library-shows-episode"
+        ),
+        expected,
+        "only the playing episode's row carries the playing mark"
     );
 }

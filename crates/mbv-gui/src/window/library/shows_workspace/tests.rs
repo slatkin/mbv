@@ -156,6 +156,7 @@ fn shows_detail(episodes: Vec<GuiShowsEpisodeRowFrame>, selected_season: &str) -
         workspace: Some(workspace(episodes, selected_season)),
     };
     GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: Some("series1".to_owned()),
         hero: Some(hero),

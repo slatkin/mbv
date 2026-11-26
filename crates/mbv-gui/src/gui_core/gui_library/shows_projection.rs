@@ -208,6 +208,10 @@ pub struct GuiShowsProjection {
     pub selected: Option<String>,
     /// The selected series' Hero facts; `None` while no series is selected.
     pub hero: Option<GuiShowsHero>,
+    /// The Emby episode playing at the playhead (design D6), by its stable
+    /// Service id: the Workspace row whose id equals it is the playing row.
+    /// `None` while no episode plays or the item at the playhead is not one.
+    pub playing_episode_id: Option<String>,
 }
 
 impl GuiCore {
@@ -310,6 +314,7 @@ impl GuiCore {
             series,
             selected,
             hero,
+            playing_episode_id: crate::gui_core::gui_library::marks::playing_episode_id(&self.app),
         };
         if view == GuiShowsView::All {
             self.warm_shows_hero_neighbours(lib_idx, &projection);
