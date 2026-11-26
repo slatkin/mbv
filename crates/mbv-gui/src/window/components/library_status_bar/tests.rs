@@ -329,6 +329,7 @@ fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
             date: None,
             sort_letter: Some('H'),
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         }],
     });
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {

@@ -14,8 +14,8 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame,
-    GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail,
+    GuiLibraryList, GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::window::library::keys_shared::tests::{
@@ -37,6 +37,7 @@ fn movies() -> Vec<GuiEmbyRowFrame> {
             date: None,
             sort_letter: Some('A'),
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEmbyRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -47,6 +48,7 @@ fn movies() -> Vec<GuiEmbyRowFrame> {
             date: None,
             sort_letter: Some('A'),
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEmbyRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -57,6 +59,7 @@ fn movies() -> Vec<GuiEmbyRowFrame> {
             date: None,
             sort_letter: Some('B'),
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
     ]
 }
@@ -73,6 +76,7 @@ fn feed_rows() -> Vec<GuiEmbyRowFrame> {
             date: Some("1998".to_owned()),
             sort_letter: None,
             kind: GuiEmbyRowKindFrame::Collection,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEmbyRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -83,6 +87,7 @@ fn feed_rows() -> Vec<GuiEmbyRowFrame> {
             date: Some("1996".to_owned()),
             sort_letter: None,
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
     ]
 }

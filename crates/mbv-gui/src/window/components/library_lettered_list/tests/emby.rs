@@ -16,6 +16,7 @@ fn feed_rows() -> Vec<GuiEmbyRowFrame> {
             date: Some("1998".to_owned()),
             sort_letter: None,
             kind: GuiEmbyRowKindFrame::Collection,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEmbyRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -26,6 +27,7 @@ fn feed_rows() -> Vec<GuiEmbyRowFrame> {
             date: Some("1996".to_owned()),
             sort_letter: None,
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
     ]
 }

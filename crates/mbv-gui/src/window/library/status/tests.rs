@@ -6,9 +6,9 @@ use super::*;
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionEntry, GuiEmbyDetail,
     GuiEmbyList, GuiEmbyRowKindFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail,
-    GuiHomeHeroFrame, GuiHomeList, GuiMusicAlbumFrame, GuiMusicArtistPageFrame, GuiMusicDetail,
-    GuiMusicHeroSubjectFrame, GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail,
-    GuiShowsList,
+    GuiHomeHeroFrame, GuiHomeList, GuiHomeRowStateFrame, GuiMusicAlbumFrame,
+    GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroSubjectFrame, GuiMusicList,
+    GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsList,
 };
 
 /// The fixture's tabs: Music at place 1, Audiobooks at place 2.
@@ -96,6 +96,7 @@ fn emby_row(id: &str, title: &str, sort_letter: Option<char>) -> GuiEmbyRowFrame
         date: None,
         sort_letter,
         kind: GuiEmbyRowKindFrame::Media,
+        state: GuiHomeRowStateFrame::Ordinary,
     }
 }
 
@@ -167,6 +168,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
                 date: Some("2019".to_owned()),
                 sort_letter: None,
                 kind: GuiEmbyRowKindFrame::Media,
+                state: GuiHomeRowStateFrame::Ordinary,
             }],
         }),
     };

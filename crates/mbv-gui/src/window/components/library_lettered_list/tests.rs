@@ -435,6 +435,7 @@ fn emby_movies() -> Vec<GuiEmbyRowFrame> {
             date: None,
             sort_letter: Some('A'),
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEmbyRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -445,6 +446,7 @@ fn emby_movies() -> Vec<GuiEmbyRowFrame> {
             date: None,
             sort_letter: Some('A'),
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
         GuiEmbyRowFrame {
             art: GuiRowArtFrame::NoSource,
@@ -455,6 +457,7 @@ fn emby_movies() -> Vec<GuiEmbyRowFrame> {
             date: None,
             sort_letter: Some('B'),
             kind: GuiEmbyRowKindFrame::Media,
+            state: GuiHomeRowStateFrame::Ordinary,
         },
     ]
 }
