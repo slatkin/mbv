@@ -32,6 +32,9 @@ pub struct LibraryHeroDetailProps {
     /// The artwork box's placeholder while no art is carried.
     #[props(default)]
     pub art_placeholder: Option<String>,
+    /// The artwork box's vinyl disc behind a square sleeve (design D2).
+    #[props(default)]
+    pub disc: bool,
     /// The text column's lines.
     pub children: Element,
 }
@@ -46,6 +49,7 @@ impl std::fmt::Debug for LibraryHeroDetailProps {
             .field("art", &self.art)
             .field("art_title", &self.art_title)
             .field("art_placeholder", &self.art_placeholder)
+            .field("disc", &self.disc)
             .finish_non_exhaustive()
     }
 }
@@ -61,6 +65,7 @@ pub fn LibraryHeroDetail(props: LibraryHeroDetailProps) -> Element {
         art,
         art_title,
         art_placeholder,
+        disc,
         children,
     } = props;
     let band = art_shape == GuiArtShapeFrame::Landscape;
@@ -81,6 +86,7 @@ pub fn LibraryHeroDetail(props: LibraryHeroDetailProps) -> Element {
                 title: art_title,
                 attr,
                 placeholder: art_placeholder,
+                disc,
             }
             div {
                 class: "flex min-w-0 flex-1 flex-col",

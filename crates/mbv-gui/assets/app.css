@@ -164,6 +164,13 @@
 	--canvas-library-panel: #2d353b; /* the list column's and the Search dropdown's raised fill */
 	--canvas-library-raise: #343f44; /* the Hero's raised fill: the hovered and cursor track row, the album art box, and the secondary controls */
 	--canvas-library-control: #475258; /* the Hero's control border */
+	/* The Hero's part values (gui-hero-design-polish design D2): the inset
+	   frame's bezel around the Hero's art, the vinyl disc behind a square
+	   album sleeve, and the veil over the header band's glow, whose fade
+	   lands on the pane's `--canvas-library-column`. */
+	--canvas-art-frame: #1c2226; /* the inset frame around the Hero's art */
+	--canvas-hero-disc: #171d21; /* the vinyl disc behind a square album sleeve */
+	--canvas-hero-glow-veil: rgba(39, 46, 51, 0.2); /* the fade over the Hero glow's top edge */
 	/* The GUI trees' indent guides (gui-tree-indent-guides design D5): the
 	   neutral tone a top-level parent's guide paints in — Everforest bg5, the
 	   nearest palette value to the mockup's #4f5862, which reads as a rule and
