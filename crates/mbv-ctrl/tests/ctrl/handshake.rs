@@ -111,6 +111,25 @@ fn peer_without_emby_person_images_capability_reads_false() {
     peer.validate_peer().unwrap();
 }
 
+// switch-output-without-hand-off task 1.1: the output-switch capability is
+// additive, so a hello that lists it reads true and one that does not reads
+// false — the Client must not send `SwitchPlaybackOutput` to that peer
+// (design D4).
+#[test]
+fn supports_output_switch_follows_the_capability() {
+    let mut advertised = CtrlHello::current();
+    advertised
+        .capabilities
+        .push(CTRL_CAP_OUTPUT_SWITCH.to_string());
+    assert!(advertised.supports_output_switch());
+
+    let mut absent = CtrlHello::current();
+    absent
+        .capabilities
+        .retain(|cap| cap != CTRL_CAP_OUTPUT_SWITCH);
+    assert!(!absent.supports_output_switch());
+}
+
 #[test]
 fn current_hello_has_no_service_credential_field() {
     let json = serde_json::to_string(&CtrlHello::current()).unwrap();

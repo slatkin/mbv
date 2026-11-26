@@ -105,6 +105,11 @@ pub const CTRL_CAP_PLAYBACK_OUTPUT: &str = "playback-output";
 /// bump. The Owner advertises it only when it can host an Emby Session
 /// output, and sends that output state only to peers that negotiated it.
 pub const CTRL_CAP_EMBY_SESSION_OUTPUT: &str = "emby-session-output";
+/// Peer accepts `CtrlCmd::SwitchPlaybackOutput`: it changes the playback
+/// output without handing the queue's playback off to the new output.
+/// Additive — no protocol-version bump. The Owner advertises it only when it
+/// can host a remote output (a Cast output or an Emby Session output).
+pub const CTRL_CAP_OUTPUT_SWITCH: &str = "output-switch";
 /// Peer supports `CtrlCmd::UnifiedQueueShuffle`, the one-time reorder of the
 /// queue contents. Additive — no protocol-version bump.
 pub const CTRL_CAP_QUEUE_SHUFFLE: &str = "queue-shuffle";

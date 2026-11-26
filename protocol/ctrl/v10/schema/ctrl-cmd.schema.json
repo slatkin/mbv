@@ -1936,6 +1936,19 @@
     },
     {
       "additionalProperties": false,
+      "description": "Change the Owner's playback output without handing playback off to it\n(design D4 of `switch-output-without-hand-off`). Requires the\n`output-switch` capability; additive — no protocol-version bump. The\ntarget names the same `OutputSelection` shape as\n`SelectPlaybackOutput`; the difference is that the new output does not\nstart playing the queue's active slot.",
+      "properties": {
+        "SwitchPlaybackOutput": {
+          "$ref": "#/$defs/OutputSelection"
+        }
+      },
+      "required": [
+        "SwitchPlaybackOutput"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
       "description": "Create one Named queue, resting and empty. The Owner broadcasts\n`CtrlEvent::NamedQueueList` and answers `op` with the new queue's own\nsnapshot as `QueueOpResult::Applied`, whose data names the queue\n(design D3, D6 of `gui-named-queues`).",
       "properties": {
         "NamedQueueCreate": {

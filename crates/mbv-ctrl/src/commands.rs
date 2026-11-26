@@ -179,6 +179,14 @@ pub enum CtrlCmd {
     /// protocol-version bump. An output the Owner cannot host is rejected
     /// with `CtrlEvent::CommandRejected`.
     SelectPlaybackOutput(OutputSelection),
+    /// Change the Owner's playback output without handing playback off to it
+    /// (design D4 of `switch-output-without-hand-off`). Requires the
+    /// `output-switch` capability; additive — no protocol-version bump. The
+    /// target names the same `OutputSelection` shape as
+    /// `SelectPlaybackOutput`; the difference is that the new output does not
+    /// start playing the queue's active slot.
+    #[serde(rename = "SwitchPlaybackOutput")]
+    SwitchPlaybackOutput(OutputSelection),
 
     // ── Named queue commands (require `named-queues`) ───────────────────
     /// Create one Named queue, resting and empty. The Owner broadcasts
@@ -289,7 +297,8 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueClearOp { .. }
             | CtrlCmd::UnifiedQueueRefresh { .. }
             | CtrlCmd::UnifiedQueueApplyProgress { .. }
-            | CtrlCmd::SelectPlaybackOutput(_) => OwnerGate::Any,
+            | CtrlCmd::SelectPlaybackOutput(_)
+            | CtrlCmd::SwitchPlaybackOutput(_) => OwnerGate::Any,
         }
     }
 
@@ -329,7 +338,8 @@ impl CtrlCmd {
             // connection to that queue's snapshots.
             | CtrlCmd::NamedQueueShow { .. }
             // The output is not part of the persisted queue (design D3).
-            | CtrlCmd::SelectPlaybackOutput(_) => false,
+            | CtrlCmd::SelectPlaybackOutput(_)
+            | CtrlCmd::SwitchPlaybackOutput(_) => false,
         }
     }
 
