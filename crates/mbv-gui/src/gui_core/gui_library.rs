@@ -19,6 +19,7 @@ pub(crate) mod ensure;
 mod entry_list;
 mod feeds;
 mod feeds_projection;
+mod hero_facts;
 mod home;
 mod item_actions;
 mod item_menu;
@@ -57,9 +58,7 @@ use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(crate) use self::emby::GuiEmbyRootItems;
 pub(crate) use self::emby::emby_feed_wants_target_in_set;
-pub use self::emby_projection::{
-    GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
-};
+pub use self::emby_projection::{GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind};
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
@@ -70,6 +69,11 @@ pub(crate) use self::feeds::{feeds_effective_set, feeds_entries};
 #[cfg(test)]
 pub(crate) use self::feeds_projection::feeds_projection;
 pub use self::feeds_projection::{GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow};
+pub use self::hero_facts::{
+    GuiHeroCastMember, GuiHeroFactLabel, GuiHeroFactRow, GuiHeroFacts, GuiHeroPill,
+    hero_facts_abs_book, hero_facts_abs_episode, hero_facts_emby, hero_facts_feed,
+    hero_facts_queue, hero_facts_series,
+};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,

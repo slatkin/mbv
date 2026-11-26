@@ -17,6 +17,7 @@ pub use producers::{
     emby_artwork_policy, emby_hero_meta_rows_plain, feed_artwork_policy, hero_content_abs_book,
     hero_content_abs_episode, hero_content_emby, hero_content_feed, hero_content_music_album,
     hero_content_queue, hero_content_series_with_episode, hero_content_twitch, music_album_artwork,
+    seasons_label, series_years_range,
 };
 
 /// Canonical TV Wide Series image-type candidate chain. The artwork policy

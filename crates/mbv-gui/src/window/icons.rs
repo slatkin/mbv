@@ -466,6 +466,33 @@ lucide_icons! {
     }
 }
 
+/// The playing mark (gui-hero-design-polish design D6, artboard
+/// `album-proposed-wide.png`): three solid bars, bottom-aligned, the tallest in
+/// the middle, each 4 px wide with 4 px gaps on a 20 px mark. It is not a Lucide
+/// icon, so it paints filled rectangles with no stroke, in the svg's computed
+/// `color`. The viewBox is 24 units, so each bar is 4.8 units (the artboard's
+/// 4 px, scaled 1.2), and the mark fills the box at any size.
+#[component]
+pub fn PlayingBars(props: IconProps) -> Element {
+    let size = props.size;
+    let color = &props.color;
+    rsx! {
+        svg {
+            xmlns: "http://www.w3.org/2000/svg",
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "currentColor",
+            class: "playing-bars",
+            style: "color: {color};",
+            "aria-hidden": "true",
+            rect { x: "0", y: "7.2", width: "4.8", height: "16.8", stroke: "none" }
+            rect { x: "9.6", y: "0", width: "4.8", height: "24", stroke: "none" }
+            rect { x: "19.2", y: "12", width: "4.8", height: "12", stroke: "none" }
+        }
+    }
+}
+
 pub mod toast;
 
 #[cfg(test)]

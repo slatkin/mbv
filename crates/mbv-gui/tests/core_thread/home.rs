@@ -292,3 +292,59 @@ fn a_home_select_command_moves_the_hero() {
         mbv_gui::bridge::frame::library::GuiHomeRowIdFrame::Continue("cw-second".into())
     );
 }
+
+/// The Home Hero's frame carries the movie's cast (gui-hero-design-polish
+/// design D3): the people that are not directors ride the detail frame with
+/// their role, initials, and photo reference, and the director is left out
+/// — the projection's cast must not drop at the bridge.
+#[test]
+fn the_home_heros_frame_carries_the_movies_cast() {
+    let mut movie = make_item("Continue First", "Movie");
+    movie.id = "cw-first".to_string();
+    movie.people = vec![
+        mbv_emby_model::EmbyPerson {
+            name: "Kirsten Johnson".into(),
+            role: String::new(),
+            kind: "Director".into(),
+            id: String::new(),
+            primary_image_tag: String::new(),
+        },
+        mbv_emby_model::EmbyPerson {
+            name: "Jane Doe".into(),
+            role: "Lead".into(),
+            kind: "Actor".into(),
+            id: "person-9".into(),
+            primary_image_tag: "tag-9".into(),
+        },
+    ];
+    let mut test = test_core_with(stub_app_with_completed_emby_startup_and_contents(
+        Vec::new(),
+        vec![movie],
+    ));
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::OpenDestination { position: 0 }.into(),
+        ))
+        .unwrap();
+    assert!(test.core.step());
+
+    let (_, detail) = home_parts(&test.held());
+    let hero = detail.hero.expect("the Hero paints");
+    let cast: Vec<(&str, &str, &str, bool)> = hero
+        .cast
+        .iter()
+        .map(|member| {
+            (
+                member.name.as_str(),
+                member.role.as_str(),
+                member.initials.as_str(),
+                member.photo.is_some(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        cast,
+        vec![("Jane Doe", "Lead", "JD", true)],
+        "the frame carries the non-director with its photo, and no director"
+    );
+}

@@ -9,6 +9,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_ui_model::library_hero::producers::{HeroContentData, hero_content_series_with_episode};
 use mbv_ui_model::library_hero::{ArtworkShape, ArtworkSource};
 
+use super::super::hero_facts::hero_facts_series;
 use super::super::home::artwork_shape;
 use super::{GuiShowsHero, GuiShowsProjection, GuiShowsSeasonPill, GuiShowsWorkspace, episode_row};
 use crate::gui_core::GuiCore;
@@ -91,12 +92,12 @@ impl GuiCore {
         Some(self.gui_shows_series_hero_facts(&series, seasons, workspace))
     }
 
-    /// The TUI series producer's facts for one series (design D14): the genre,
-    /// the show's year range (else the release date), the season count, and
-    /// the network, with no duration row while the Workspace has no focus —
-    /// `hero_content_series_with_episode`, the producer the TUI's series Hero
-    /// paints. The season count comes from the cached detail, so the row
-    /// appears as soon as the detail lands.
+    /// The TUI series producer's artwork for one series (design D14), with
+    /// the D1 series builder's facts: the genre, the show's year range (else
+    /// the release date), the season count, and the network. The producer
+    /// names the artwork source — the `Primary` poster arm this Client
+    /// paints — and the season count comes from the cached detail, so the
+    /// season pill appears as soon as the detail lands.
     fn gui_shows_series_hero_facts(
         &mut self,
         series: &EmbyItem,
@@ -106,16 +107,6 @@ impl GuiCore {
         let content = primary_poster(hero_content_series_with_episode(
             series, None, false, seasons,
         ));
-        self.shows_hero_from(&content, workspace)
-    }
-
-    /// One hero's facts from a shared producer's output, with its artwork
-    /// fetched through the image cache at the producer's declared chain.
-    fn shows_hero_from(
-        &mut self,
-        content: &HeroContentData,
-        workspace: Option<GuiShowsWorkspace>,
-    ) -> GuiShowsHero {
         let art = super::super::artwork::emby_hero_art(
             &mut self.app,
             content.facts.artwork.source.as_ref(),
@@ -123,9 +114,7 @@ impl GuiCore {
         GuiShowsHero {
             title: content.facts.title.clone(),
             parent: None,
-            meta_rows: content.facts.meta_rows.clone(),
-            duration_row: content.facts.duration_row,
-            progress_row: content.facts.progress_row,
+            facts: hero_facts_series(series, seasons),
             overview: content.overview.clone(),
             art_shape: artwork_shape(super::super::artwork::hero_shape(
                 &self.app,

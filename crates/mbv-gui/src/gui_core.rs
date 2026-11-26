@@ -39,9 +39,10 @@ pub use self::gui_library::{
     GuiAudiobooksWorkspace,
 };
 pub use self::gui_library::{
-    GuiDestinationKind, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow,
-    GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
+    GuiDestinationKind, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+    GuiHeroCastMember, GuiHeroFactLabel, GuiHeroFactRow, GuiHeroFacts, GuiHeroPill,
+    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
+    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
 };
 pub use self::gui_library::{
     GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, GuiFeedsSelection,
@@ -53,7 +54,8 @@ pub use self::gui_library::{
 };
 pub use self::gui_library::{
     GuiLibraryCommand, GuiRowArt, GuiRowArtScope, GuiRowMediaKind, GuiRowSource,
-    artist_rows_in_view_id, playing_track_id_for_shell,
+    artist_rows_in_view_id, hero_facts_abs_book, hero_facts_abs_episode, hero_facts_emby,
+    hero_facts_feed, hero_facts_queue, hero_facts_series, playing_track_id_for_shell,
 };
 #[cfg(test)]
 pub(crate) use self::gui_library::{gui_active_destination, gui_library_tabs};

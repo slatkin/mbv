@@ -49,6 +49,7 @@ use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
 use crate::window::components::library_emby_hero::LibraryEmbyHero;
 use crate::window::components::library_feeds_hero::LibraryFeedsHero;
 use crate::window::components::library_hero::LibraryHero;
+use crate::window::components::library_hero_frame::HeroPaneWidth;
 use crate::window::components::library_home_hero::LibraryHomeHero;
 use crate::window::components::library_home_list::LibraryHomeList;
 use crate::window::components::library_lettered_list::LibraryLetteredList;
@@ -298,6 +299,17 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     // its own clone.
     let press_library = library.clone();
     let backdrop_library = library.clone();
+    // The Hero pane's width, for the backdrop's bake (design D4): the Library
+    // column less the list column while Wide paints both.
+    let hero_pane_width = if wide {
+        (props.library_column - props.list_width).max(1.0)
+    } else {
+        props.library_column.max(1.0)
+    };
+    let mut pane_width = use_context_provider(|| HeroPaneWidth(Signal::new(hero_pane_width)));
+    if (*pane_width.0.peek() - hero_pane_width).abs() >= 1.0 {
+        pane_width.0.set(hero_pane_width);
+    }
     // The list column's divider drag (design D4, D14): the store the drag's
     // width clamps and saves through. It needs no layout bump: the drag writes
     // the width the tree paints, so the frame that resolves the new inline

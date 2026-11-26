@@ -97,6 +97,20 @@ fn peer_without_queue_replace_start_position_capability_reads_false() {
     peer.validate_peer().unwrap();
 }
 
+// gui-hero-design-polish task 1.3: the person-image capability is additive, so
+// the current hello advertises it and a peer without it reads false but still
+// validates (design D3).
+#[test]
+fn peer_without_emby_person_images_capability_reads_false() {
+    assert!(CtrlHello::current().supports_emby_person_images());
+
+    let mut peer = CtrlHello::current();
+    peer.capabilities
+        .retain(|cap| cap != CTRL_CAP_EMBY_PERSON_IMAGES);
+    assert!(!peer.supports_emby_person_images());
+    peer.validate_peer().unwrap();
+}
+
 #[test]
 fn current_hello_has_no_service_credential_field() {
     let json = serde_json::to_string(&CtrlHello::current()).unwrap();

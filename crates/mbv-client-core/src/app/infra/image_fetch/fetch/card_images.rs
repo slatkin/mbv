@@ -14,6 +14,26 @@ impl App {
         self.queue_card_image_fetch(cache_key, item_id, series_id, types);
     }
 
+    /// Triggers the tiny Backdrop-image fetch the Hero backdrop blurs, under
+    /// `cache_key` (`mbv_images::backdrop_cache_key`). The chain prefers the
+    /// item's Backdrop image (the series' for an episode) and falls back to
+    /// Primary.
+    pub fn fetch_backdrop_image(&mut self, cache_key: String, item_id: String, series_id: String) {
+        let req = ImageFetchReq {
+            cache_key,
+            item_id,
+            series_id,
+            types: vec!["Backdrop".to_owned(), "Primary".to_owned()],
+            source: ImageSource::Emby,
+            rendition: mbv_images::ImageRendition::Backdrop,
+        };
+        if let mbv_images::cache::FetchReservation::Start(req) =
+            self.images.reserve_card_image_fetch(req, MAX_IMAGE_FETCHES)
+        {
+            self.spawn_image_fetch(req);
+        }
+    }
+
     fn queue_card_image_fetch(
         &mut self,
         cache_key: String,
@@ -29,6 +49,17 @@ impl App {
             source: ImageSource::Emby,
             rendition: mbv_images::ImageRendition::Hero,
         };
+        if let mbv_images::cache::FetchReservation::Start(req) =
+            self.images.reserve_card_image_fetch(req, MAX_IMAGE_FETCHES)
+        {
+            self.spawn_image_fetch(req);
+        }
+    }
+
+    /// Triggers one fetch for a request the caller sized itself, such as a
+    /// small `Row` thumb for a cast photo. The request carries its own cache
+    /// key and rendition.
+    pub fn fetch_sized_image(&mut self, req: ImageFetchReq) {
         if let mbv_images::cache::FetchReservation::Start(req) =
             self.images.reserve_card_image_fetch(req, MAX_IMAGE_FETCHES)
         {

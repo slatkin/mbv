@@ -24,10 +24,10 @@ use super::GuiLibraryArtwork;
 use super::artwork::{
     GuiRowArt, GuiRowMediaKind, queue_item_media_kind, queue_item_row_source, row_art,
 };
+use super::hero_facts::{GuiHeroCastMember, GuiHeroFacts, hero_cast_emby, hero_facts_queue};
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
-use mbv_ui_model::meta::MetaSegment;
 
 /// One Home row's stable identity (design D12): the identity
 /// `App::home_stable_target` resolves, addressed by Service ids and never by
@@ -138,25 +138,24 @@ pub struct GuiHomeItemRow {
     pub media: GuiRowMediaKind,
 }
 
-/// The selected row's Hero facts (design D12): one title, ordered meta rows
-/// with the duration row's position and the resume-progress row's position,
-/// the cleaned overview, and the Hero's artwork. Home has no Workspace, and
-/// the projection carries no letter rail or pill data. The facts come from
-/// the shared hero producers (`hero_content_queue`), the same facts the TUI
-/// paints for the same item, so the two Clients cannot drift.
+/// The selected row's Hero facts (design D12, gui-hero-design-polish design
+/// D1): the item's facts as the D1 queue builder splits them — header pills
+/// and labelled rows — the split title's parent, the movie's cast, the
+/// cleaned overview, and the Hero's artwork. Home has no Workspace, and the
+/// projection carries no letter rail or pill data.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiHomeHero {
-    /// The hero's title.
+    /// The hero's title: the item's own name. When a parent took the header
+    /// title, the detail block paints this name.
     pub title: String,
-    /// The meta rows in display order.
-    pub meta_rows: Vec<Vec<MetaSegment>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does. The shared
-    /// Emby hero producer fills none, so a Home Emby hero carries `None`
-    /// exactly as the TUI's does; the Audiobookshelf book producer fills a
-    /// resume percent when the snapshot carries one.
-    pub progress_row: Option<usize>,
+    /// The name of the largest unit the item belongs to (the invariant 30
+    /// header title rule): the series, show, artist, or feed name the split
+    /// title's context names. `None` when the item is its own largest unit.
+    pub parent: Option<String>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFacts,
     /// The cleaned overview text, when the item's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves: the artwork policy's declared
@@ -169,6 +168,10 @@ pub struct GuiHomeHero {
     /// content paints its own placeholder there, as the shared header
     /// painter does.
     pub art: Option<GuiLibraryArtwork>,
+    /// The movie's cast (gui-hero-design-polish design D3): the people that
+    /// are not directors, in the order Emby gives. Empty on every other
+    /// item kind.
+    pub cast: Vec<GuiHeroCastMember>,
 }
 
 /// The Hero artwork's box shape, mirroring the artwork policy's declared
@@ -220,11 +223,14 @@ pub struct GuiHomeProjection {
 }
 
 /// One item row beside the queue item that projects it: the row carries the
-/// paint facts, and the hero and the artwork read the item. Internal to one
-/// projection run.
+/// paint facts, and the hero and the artwork read the item. `feed_name` is
+/// the subscription name the split title reads — the same name the row's
+/// labels read, so the Hero's parent cannot drift from the row's. Internal
+/// to one projection run.
 struct GuiHomeItem {
     row: GuiHomeItemRow,
     item: QueueItem,
+    feed_name: Option<String>,
 }
 
 impl GuiHomeItem {
@@ -369,6 +375,7 @@ fn home_item(
     let art = row_art(app, queue_item_row_source(app, item).as_ref());
     GuiHomeItem {
         item: item.clone(),
+        feed_name: feed_name.map(str::to_string),
         row: GuiHomeItemRow {
             id,
             title,
@@ -382,10 +389,13 @@ fn home_item(
     }
 }
 
-/// The selected row's Hero facts (design D12): the shared hero producers'
-/// facts for the row's item, with the artwork fetched through the image cache
-/// at the artwork policy's chain. Home has no Workspace. `None` while the
-/// selection names no row of the list, which a stale frame's id can only miss.
+/// The selected row's Hero facts (design D12): the item's facts as the D1
+/// queue builder splits them, the artwork fetched through the image cache
+/// at the artwork policy's chain, and the movie's cast. The parent is the
+/// split title's context, read with the same feed or subscription name the
+/// row projection already passes, so the header title rule (invariant 30)
+/// reads one split. `None` while the selection names no row of the list,
+/// which a stale frame's id can only miss.
 fn home_hero(
     app: &mut App,
     items: &[&GuiHomeItem],
@@ -395,6 +405,11 @@ fn home_hero(
         .iter()
         .find_map(|item| (item.id() == selected).then_some(*item))?;
     let content = hero_content_queue(&item.item);
+    let parts = item.item.playback_title_parts(item.feed_name.as_deref());
+    let cast = match &item.item {
+        QueueItem::Emby(emby) => hero_cast_emby(app, emby),
+        _ => Vec::new(),
+    };
     // The artwork rides the artwork policy's declared source: an Emby source
     // is the fetched chain, an Audiobookshelf cover is the Service-scoped
     // cover the Podcasts and Audiobooks Heroes read, and an undeclared arm (a
@@ -413,12 +428,12 @@ fn home_hero(
     ));
     Some(GuiHomeHero {
         title: content.facts.title.clone(),
-        meta_rows: content.facts.meta_rows.clone(),
-        duration_row: content.facts.duration_row,
-        progress_row: content.facts.progress_row,
+        parent: parts.context.map(|context| context.text),
+        facts: hero_facts_queue(&item.item),
         overview: content.overview.clone(),
         art_shape,
         art,
+        cast,
     })
 }
 

@@ -459,8 +459,9 @@ the secondary title's purple, which the GUI adds.
 | role and character | `--canvas-type-role` (`--canvas-owner`) |
 
 A line that joins values of several types is built as typed segments where it
-is built, never split in the window. The core's Hero meta rows and the
-window's own facts lines (`src/window/library/hero.rs`) return segments, and
+is built, never split in the window. The Hero's fact pills and fact rows
+carry segments built in the core (`src/gui_core/gui_library/hero_facts.rs`,
+the frame mirror in `src/bridge/frame/library/hero_facts.rs`), and
 `src/window/components/typed_text.rs` paints them: each segment maps its
 kind to its token, and a plain segment inherits the line's own colour. A
 time or a date repeated down a list — a duration column, a Music tree row's
@@ -1202,13 +1203,14 @@ window paints its own placeholder while `null`). `GuiHomeDetail`'s `selected`
 carries the core's selected row the select command last named — the first item row is
 the Hero default, so the Hero paints as soon as a section lands; a stale
 frame's selection resolves on its own rows or falls back without a hero.
-`GuiHomeDetail`'s `hero` carries `title`, `meta_rows` with `duration_row` and
-`progress_row`,
+`GuiHomeDetail`'s `hero` carries `title`, `parent` (the feed or subscription
+name, or the series, show, or artist when the queue item has one), `facts`
+(the fact pills and fact rows), `cast`,
 `overview`, `art_shape` (`landscape`, `square`, or `portrait`, the artwork
 policy's declared arm), and `art` (the artwork policy chain's display
 encode for Emby items only, again `null` on the rows without art) — the
-shared hero producers' facts, the same facts the TUI paints for the same
-item.
+shared hero producers' values, the same values the TUI paints for the same
+item, split into pills and rows by the GUI (gui-hero-design-polish D1).
 
 `GuiShowsList` (`src/bridge/frame/library/shows.rs`) carries `lib_idx` (the
 Shows library index the Shows commands name), `view` (the single-choice view
@@ -1242,7 +1244,10 @@ so the Hero paints as soon as a list lands, and a stored id the list no
 longer carries falls back to that first node. The `hero` is present exactly
 while a series is selected; the driver's Shows steps run in order — the root
 load, then the default series' detail, then the selected season's episodes —
-so the Workspace paints without a season press.
+so the Workspace paints without a season press. `playing_episode_id` is the
+Emby id of the episode at the displayed playhead, or `null` while no episode of
+the series plays; a queued target that is not yet playing does not count. The
+window marks that episode's Workspace row as playing (gui-hero-design-polish D6).
 
 The All view drives one bounded in-view loader over the painted window
 (gui-list-header-buttons design D5): the list reports the open nodes in its
@@ -1257,10 +1262,10 @@ nothing, so a view change stops the loader. The quiet mark is core-owned
 episode fetch that a detail landing normally starts, and a pick of that
 series removes the mark and still loads the first season.
 
-That hero carries the TUI series producer's facts —
-`hero_content_series_with_episode`'s genre, year range (else the release
-date), season count, and network rows, no duration row while the Workspace
-has no focus, and the artwork policy's landscape arm — plus `workspace`: the
+That hero carries the series producer's values as fact pills (the year range,
+else the release date, each genre, and the season count) and a Network fact
+row, `cast` when the series declares one, and the artwork policy's landscape
+arm — plus `workspace`: the
 detail's seasons (`season_id`, `name`, `selected`, painted as a dropdown), `selected_season`
 (the stored choice while the detail still holds it, else the first season,
 because the pills start on the first season and are never kept across a
@@ -1268,9 +1273,10 @@ series change), and that season's `episodes`. The Workspace-focus overlay
 that swaps the facts for the selected episode's is recorded in D14 as a
 follow-up and is not carried. A Workspace episode row carries `episode_id`,
 `number`, `name`, `duration`, and `state` (the shared row state the Home rows
-carry). The landscape arm paints the still
-at the Hero content width at 16:9 above the facts, as the TUI does; the
-portrait and square arms keep the canvas's 300 px box beside the text. A
+carry). A landscape arm takes the
+larger share of the detail row beside the text column and drops above the text
+when the Hero is narrow; the portrait and square arms keep the canvas's 300 px
+box beside the text. A
 click or a double-click on a Workspace episode sends that episode's
 `episode_id` with `showsPlay`, and a right-press on a tree row opens the item
 menu at that row's stable Service id.
@@ -1304,9 +1310,11 @@ the frame painted it, with the first row as the default, so
 the Hero paints as soon as a list lands, and a stored id the list no longer
 carries falls back to that first row; a plain mode's fetch that failed
 carries `failed` and shows no row until the library opens again. The detail's `hero` is
-the selected row's shared Emby hero producer's facts — `title`, `meta_rows`
-with `duration_row` and `progress_row`, `overview`, `art_shape` at the
-artwork policy's declared arm, and `art` — and carries no Workspace.
+the selected row's shared Emby hero producer's values — `title`, `facts`
+(the year, each genre, the runtime, and the IMDb pill as a link), `cast`,
+`overview`, `art_shape` at the artwork policy's declared arm, and `art` — and
+carries no Workspace. The movie's Director and Studio appear as fact rows, and
+no progress row exists.
 
 `GuiAudiobooksList` (`src/bridge/frame/library/audiobooks.rs`) carries
 `lib_idx` (the Audiobooks library index the Audiobooks commands name),
@@ -1331,8 +1339,8 @@ pick falls back to that first book.
 
 The detail's `hero` is the selected book's Hero: the shared
 `hero_content_abs_book`
-producer's facts — `title`, `meta_rows` (the author, the duration, and the
-`Finished` or `N%` progress row) with `duration_row` and `progress_row`, and
+producer's values — `title`, `facts` (the duration pill), and the Author fact
+row, with no progress row, and
 no narrator, series, or description — `art_shape` at the book artwork
 policy's portrait arm, `art` (the cover through the Service-scoped book-cover
 chain, `null` while the book declares no cover or no server is configured),
@@ -1374,9 +1382,9 @@ falls back to `All`.
 
 The detail's `hero` is the selected episode's Hero: the shared
 `hero_content_abs_episode`
-producer's facts — `title` (the episode), `meta_rows` (the show title, the
-duration, and the publish date) with `duration_row` and `progress_row` (the
-producer fills no progress row for an episode) — the cleaned description as
+producer's facts — `title` (the episode), `parent` (the show title), `facts`
+(the duration pill), and the Published fact row, with no progress row (the
+producer fills none for an episode) — the cleaned description as
 `overview`, `art_shape` at the episode artwork policy's Square arm, and `art`:
 the parent show's cover through the Service-scoped cover chain (`null` while
 the show declares no cover or no server is configured). There is no
@@ -1388,8 +1396,12 @@ subscription in the tab's order, and the Subscriptions noun), `sort`
 (`Option<GuiListSortFrame>`: the list's sort frame with the target, the
 active sort, and the choices Title, Newest, and Oldest; gui-flat-list-sort
 designs D2, D7), `loading`, `failed`, and `rows`. `GuiFeedsDetail` carries
-`selected` and `hero`. It carries no `libIdx`: a Client holds one feed tab,
-so the Feeds commands name no library.
+`selected`, `playing_entry_id`, and `hero`. It carries no `libIdx`: a Client holds one feed tab,
+so the Feeds commands name no library. `playing_entry_id` is the encoded
+`(subscription url, guid)` of the entry at the displayed playhead, in the
+`GuiFeedEntryId` form the rows carry, or `null`; an entry without a feed id uses
+the rows' empty-feed fallback. A queued target does not count, and the window
+marks that row as playing (gui-hero-design-polish D6).
 The letter rail rides exactly while the sort compares a name — a date sort
 paints no heading and no rail — and there is no state filter.
 `failed` is always `false`, because the feed tab keeps no failure state: a
@@ -1414,9 +1426,10 @@ falls back to `All`.
 
 The detail's `hero` is the selected entry's Hero: the shared
 `hero_content_feed`
-producer's facts — `title` (the entry) and `meta_rows` (the subscription
-name, then the duration when the entry declares one) with `duration_row` and
-`progress_row` (the producer fills no progress row for an entry) — and
+producer's facts — `title` (the entry) and `parent` (the subscription
+name), `facts` (the duration pill when the entry declares one), and the Published
+fact row when the entry is dated, with no progress row (the producer fills none
+for an entry) — and
 `art_shape` at the feed artwork policy's arm: Square for a podcast feed
 (`FeedKind::Audio`), Landscape otherwise. No `overview`, no `art`, and no
 Workspace ride here: a feed entry has no artwork source and no description,
@@ -1431,9 +1444,8 @@ header and the Library Status bar's location read), `loading`, `failure`
 `artists` (`artist_key`, `name`, `sort_letter`, and `albums`).
 `GuiMusicDetail` carries
 `hero`, `art`, and `playing_track_id` (the playhead's Emby track id, from the
-Queue panel's own authority, which the tracklist's playing row paints with a
-play glyph beside the title, as the Queue's now-playing row does; the library
-tree shows no playing marker). An album carries `album_id`,
+Queue panel's own authority, which the tracklist's playing row paints with the playing mark in its number
+cell, with no glyph beside the title; the library tree shows no playing marker). An album carries `album_id`,
 `name`, `year`, and its `tracks` and `total` when the cache holds them; a
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
@@ -2101,19 +2113,82 @@ one handling:
 ### Library Hero and list shared pieces
 
 Invariant 30 (`docs/invariants/30-shared-ui-is-never-bent-to-fit-a-consumer.md`)
-governs these. `LibraryHeroFrame` paints the Hero for Music, Shows, Podcasts,
-Audiobooks, Feeds, and Movies: a required header band (the largest unit's
-kicker, title, and plain facts — a movie is its own largest unit), the detail
-block (art, selected unit, actions, overview), and the list band (the movie's
-credits table and the IMDb button).
+governs these. `LibraryHeroFrame` is the only Hero layout, for Home, Music, Shows, Podcasts,
+Audiobooks, Feeds, and Movies (gui-hero-design-polish D2). It paints, top to
+bottom: the backdrop layer, the header band, the detail block, and the bands.
+
+The header band holds the kicker as the eyebrow, the title, and the fact pills
+(`LibraryHeroPills`). The backdrop is the Hero's art, blurred and baked as one
+opaque image behind the header and the detail block at the pane's full width
+(`Hero backdrop`, the `backdrop/` art path). The detail block
+(`LibraryHeroDetail`) holds the art in an inset frame, the text column with the
+block's eyebrow and name lines, the action row, and the fact rows
+(`LibraryHeroFactRows`, a label word and its value). The overview sits in the
+frame, not the block. Each band sits under a section header with a rule
+(`LibraryHeroSection`): Overview when the item has one, Cast when it has cast
+(`LibraryHeroCast`, a two-column grid of round photos or initials, one column
+when narrow), then the destination's list band. Music passes Tracks, a Shows
+series passes Episodes, Audiobooks passes Chapters, and Feeds passes Entries.
+Podcasts, Home, the plain Emby libraries, and a flat Shows episode pass no list
+band.
+
+The Hero title follows the parent rule: when the queue item has a parent (a
+series, a show, an artist, or a feed), the header title is the parent and the
+detail block's name is the item title. Otherwise the header title is the item
+title. The IMDb link is the IMDb fact pill, so the header carries no IMDb
+action.
+
+The album Hero passes no header pills. It passes its track count and total time
+as block pills. The artist page passes its album count, year span, and (once
+loaded) track count and total time as header pills, and its selected
+collections as the eyebrow, joined with ` + `. The page's block has no rows.
+The Tracks list sits under the Tracks section header.
+
+A pill is one short fact, `Fact pill`, in the pill style of the header. The
+fact pill text keeps today's formats (for example `01:37:32`).
+
+The cast is the Emby people that are not directors, in Emby's order
+(`hero_cast_emby`). A member carries `name`, `role`, `initials`, and `photo`.
+`photo` is `None` when the person has no Emby id or no Primary tag. Otherwise
+the core starts one bounded Primary fetch through the card cache
+(`fetch_card_image`), and the window reads it through `mbv-art` like other Hero
+art. The ctrl wire carries `EmbyPerson` `id` and `primary_image_tag` under the
+additive `emby-person-images` capability (`CTRL_CAP_EMBY_PERSON_IMAGES`), with no
+protocol version bump.
+
+The backdrop is a baked image on the `backdrop/{style}/{width}/{key}` art path
+(`ArtPath::Backdrop`). `art.rs` maps the Hero's `image` card URL to that path,
+and the Library panel provides the pane width the Hero asks for (rounded up to
+a 200 px step). A `placeholder` or `Loading` art has no backdrop. The source is
+a tiny (`maxWidth=32`) Backdrop image that the Emby Hero's projection fetches
+under the key `{art key}:BD` (the series' Backdrop for an episode, Primary when
+the item has none); a Music Hero blurs its own art. While the tiny image is in
+flight the request answers missing and the window retries. A cached JPEG
+answers on the core thread. Otherwise the core queues the source bytes to the
+one `mbv-art-backdrop` worker, which reads the image disk cache first, then
+shrinks them to 32 px,
+cover-fits them to the width by 560 px, blurs them at sigma 8, bakes the
+vertical and horizontal scrims over the pane colour `#272e33`, and answers
+`image/jpeg`. The worker keeps the last 32 results and writes each bake to the
+image disk cache, so a restart does not bake again. The bottom row equals the
+pane colour, and the title area keeps 4.5:1 against the title colour, so the
+window paints no CSS opacity, gradient, or blur filter.
+Two lists stripe, with two rules that stay apart. The cast card
+(`LibraryHeroCast`) is a bordered, rounded grid with no gap: it stripes by
+visual row (`#2e383c`, then `#232a2e`), both cells of a row share a fill, an
+empty last cell takes its row's fill, and it paints two columns from a 640 px
+pane. A free list (`LibraryWorkspaceTable`: tracks and episodes) has no
+container, `gap: 2px` between rows, and stripes by index from 0 within the
+list: even rows are the pane's `#272e33`, odd rows `--canvas-list-stripe`
+`#2b3338`. The playing row overrides the stripe with `#333f4a`.
 `LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play and Add to queue buttons,
 `LibraryDropdown` the Shows Workspace's season dropdown (a radio row per
 season and a filter field, one open state in `LibraryUiState.shows_seasons`),
 `FlatRow` and `TreeRow` the rows of
 every list, `LibraryLetterHeading` the letter and section headings, and
-`LibraryVirtualList` the scroller of every list. Home still
-paints `LibraryHeroSummary`. The episode row state is one module
+`LibraryVirtualList` the scroller of every list.
+The episode row state is one module
 (`src/window/library/episode.rs`): `is_played_episode` and
 `episode_progress` read the played state and the resume percent an episode
 row and a Hero paint, whatever destination carries the row, so no other

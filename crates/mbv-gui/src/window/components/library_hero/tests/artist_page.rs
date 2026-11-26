@@ -153,3 +153,30 @@ fn a_track_play_on_the_artist_page_sends_play_artist_track() {
         "the play command names the page's albums and the played track"
     );
 }
+
+/// Contract (spec "A picked Music artist shows an artist page"): the artist
+/// page's header pills hold its album count, here the only count the page
+/// paints, since its tracks have not all loaded.
+#[test]
+fn the_artist_page_header_pills_hold_the_album_count() {
+    let fixture = built_artist_page();
+
+    assert_eq!(
+        fixture.text_of("[data-library-hero-pills] [data-meta-kind=\"count\"]"),
+        "2",
+        "the header's count pill is the artist's album count"
+    );
+}
+
+/// Contract (spec "A picked Music artist shows an artist page"): the artist
+/// page's eyebrow shows the selected collections.
+#[test]
+fn the_artist_page_eyebrow_shows_the_selected_collections() {
+    let fixture = built_artist_page();
+
+    assert_eq!(
+        fixture.text_of("[data-library-hero-kicker]"),
+        "Hip-Hop",
+        "the eyebrow names the selected collections"
+    );
+}

@@ -10,7 +10,7 @@ use crate::gui_core::{
     GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
 };
 
-use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::hero_facts::GuiHeroFactsFrame;
 use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
@@ -59,6 +59,9 @@ pub struct GuiShowsDetail {
     /// The selected row's Hero facts; `None` in the Upcoming mode and while
     /// no row is selected.
     pub hero: Option<GuiShowsHeroFrame>,
+    /// The Emby episode playing at the playhead (design D6), by its stable
+    /// Service id; the Workspace row with this id is the playing row.
+    pub playing_episode_id: Option<String>,
 }
 
 /// One series node of the All series tree (design D14), the Music artist
@@ -132,12 +135,10 @@ pub struct GuiShowsHeroFrame {
     pub title: String,
     /// The name of the largest unit the item belongs to; see the projection.
     pub parent: Option<String>,
-    /// The meta rows in display order.
-    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFactsFrame,
     /// The cleaned overview text, when the item's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves (the artwork policy's declared
@@ -221,6 +222,7 @@ impl GuiShowsDetail {
             workspace_loading: projection.workspace_loading,
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiShowsHeroFrame::from),
+            playing_episode_id: projection.playing_episode_id.clone(),
         }
     }
 }
@@ -276,9 +278,7 @@ impl From<&GuiShowsHero> for GuiShowsHeroFrame {
         Self {
             title: hero.title.clone(),
             parent: hero.parent.clone(),
-            meta_rows: gui_meta_rows(&hero.meta_rows),
-            duration_row: hero.duration_row,
-            progress_row: hero.progress_row,
+            facts: GuiHeroFactsFrame::from(&hero.facts),
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),

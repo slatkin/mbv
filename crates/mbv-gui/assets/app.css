@@ -164,6 +164,14 @@
 	--canvas-library-panel: #2d353b; /* the list column's and the Search dropdown's raised fill */
 	--canvas-library-raise: #343f44; /* the Hero's raised fill: the hovered and cursor track row, the album art box, and the secondary controls */
 	--canvas-library-control: #475258; /* the Hero's control border */
+	/* The playing Workspace row's fill (gui-hero-design-polish design D6): a
+	   blue-grey lifted above the striped rows, so the playing row reads at a
+	   glance. Estimated from the album artboard; confirm live. */
+	--canvas-playing-row: #333f4a; /* the row the playhead is on */
+	--canvas-list-stripe: #2b3338; /* every second row of a free list: a slight lift over the pane */
+	/* The Hero's part values (gui-hero-design-polish design D2): the inset
+	   frame's thin bezel around the Hero's art. */
+	--canvas-art-frame: #1c2226; /* the inset frame around the Hero's art */
 	/* The GUI trees' indent guides (gui-tree-indent-guides design D5): the
 	   neutral tone a top-level parent's guide paints in — Everforest bg5, the
 	   nearest palette value to the mockup's #4f5862, which reads as a rule and
@@ -313,7 +321,7 @@
 }
 
 /* Every interactive control answers the pointer (design D16): one rule, so a
-   new button cannot be born without the hover, and the glow is a veil rather
+   new button cannot be born without the hover, and the backdrop is a veil rather
    than a fill because the controls paint their own fills inline. The veil is
    a one-colour gradient in `background-image`: it composites over the inline
    `background-color` and under the label, which is why a pill, a selected
@@ -334,7 +342,7 @@
    out of `box-shadow`.
    A control that paints its own pointer look sets `--hover-veil: transparent`
    on itself or on an ancestor (the Queue header's bar, the Queue chooser's
-   card, the seekbar's row), so the shared glow does not wash the look and no
+   card, the seekbar's row), so the shared backdrop does not wash the look and no
    rule has to name the component. */
 button:not(:disabled):hover,
 [role='menuitem']:not([aria-disabled='true']):hover,

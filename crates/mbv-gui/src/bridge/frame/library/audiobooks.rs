@@ -9,7 +9,7 @@ use crate::gui_core::{
     GuiAudiobooksWorkspace, GuiListSortFrame,
 };
 
-use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::hero_facts::GuiHeroFactsFrame;
 use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
@@ -74,18 +74,16 @@ pub struct GuiAudiobooksRowFrame {
     pub media: GuiRowMediaKindFrame,
 }
 
-/// The book Hero's facts (row 9.1), with the chapters Workspace.
+/// The book Hero's facts (row 9.1; gui-hero-design-polish design D1), with
+/// the chapters Workspace.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiAudiobooksHeroFrame {
     /// The hero's title.
     pub title: String,
-    /// The meta rows in display order: the author, the duration, and the
-    /// `Finished` or `N%` progress row.
-    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFactsFrame,
     /// The cleaned description, when the catalog record carries one: the
     /// overview the TUI's Hero paints.
     pub overview: Option<String>,
@@ -179,9 +177,7 @@ impl From<&GuiAudiobooksHero> for GuiAudiobooksHeroFrame {
     fn from(hero: &GuiAudiobooksHero) -> Self {
         Self {
             title: hero.title.clone(),
-            meta_rows: gui_meta_rows(&hero.meta_rows),
-            duration_row: hero.duration_row,
-            progress_row: hero.progress_row,
+            facts: GuiHeroFactsFrame::from(&hero.facts),
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),

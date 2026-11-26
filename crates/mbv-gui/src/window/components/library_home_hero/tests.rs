@@ -1,7 +1,8 @@
 //! Headless tests of the Home Hero (D16): the contracts of
-//! `LibraryHomeHero.test.ts` — the Hero paints the title, the meta rows with
-//! their duration and progress roles, and the overview, and no Workspace;
-//! the artwork box reserves the arm the frame declares; and the actions send
+//! `LibraryHomeHero.test.ts` — the Hero paints the title, the fact pills and
+//! rows, and the overview, and no list band; the header takes the parent
+//! as its title; the artwork box reserves the arm the frame declares; and the
+//! actions send
 //! the Home commands for the frame's selected row. The IPC of the
 //! the tests is the mock core link here; the asserted commands are the
 //! same neutral shapes. A headless document cannot fire a DOM click, so the
@@ -20,8 +21,10 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryHomeHero;
 use super::press;
+use crate::art::{GuiArtRef, art_url};
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiHomeDetail, GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiLibraryDetail,
+    GuiArtShapeFrame, GuiHeroFactLabelFrame, GuiHeroFactRowFrame, GuiHeroFactsFrame,
+    GuiHeroPillFrame, GuiHomeDetail, GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiLibraryDetail,
     GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
@@ -42,21 +45,27 @@ fn selected() -> GuiHomeRowIdFrame {
 fn hero(art_shape: GuiArtShapeFrame) -> GuiHomeHeroFrame {
     GuiHomeHeroFrame {
         title: "Better Call Saul".to_owned(),
-        meta_rows: vec![
-            vec![GuiMetaSegmentFrame {
-                text: "1 h 47 m left".to_owned(),
-                kind: GuiMetaKindFrame::Time,
+        parent: None,
+        facts: GuiHeroFactsFrame {
+            pills: vec![GuiHeroPillFrame {
+                segments: vec![GuiMetaSegmentFrame {
+                    text: "2015".to_owned(),
+                    kind: GuiMetaKindFrame::Date,
+                }],
+                link: None,
             }],
-            vec![GuiMetaSegmentFrame {
-                text: "S3E4 · Sabrosito".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
+            rows: vec![GuiHeroFactRowFrame {
+                label: GuiHeroFactLabelFrame::Released,
+                value: vec![GuiMetaSegmentFrame {
+                    text: "February 8, 2015".to_owned(),
+                    kind: GuiMetaKindFrame::Date,
+                }],
             }],
-        ],
-        duration_row: Some(0),
-        progress_row: None,
+        },
         overview: Some("Jimmy turns to paying work.".to_owned()),
         art_shape,
         art: None,
+        cast: Vec::new(),
     }
 }
 
@@ -177,21 +186,6 @@ impl Fixture {
             .to_owned()
     }
 
-    /// The attribute of every node the selector names, in paint order.
-    fn all_attrs(&self, selector: &str, attribute: &str) -> Vec<String> {
-        let dom = self.doc.inner();
-        dom.query_selector_all(selector)
-            .expect("the selector is valid")
-            .into_iter()
-            .filter_map(|id| {
-                dom.get_node(id)
-                    .expect("the node is in the document")
-                    .attr(LocalName::from(attribute))
-                    .map(str::to_owned)
-            })
-            .collect()
-    }
-
     /// The Home commands the core link received, in send order.
     fn library_commands(&mut self) -> Vec<crate::gui_core::GuiLibraryCommand> {
         self.receiver
@@ -238,11 +232,10 @@ fn built(facts: GuiHomeHeroFrame) -> Fixture {
     fixture
 }
 
-/// Contract (`LibraryHomeHero.test.ts`): the Hero paints the title, the meta
-/// rows with their duration and progress roles, and the overview, and no
-/// Workspace.
+/// Contract (`LibraryHomeHero.test.ts`): the Hero paints the title, the fact
+/// pills and labelled rows, and the overview, and no list band.
 #[test]
-fn the_hero_paints_the_title_the_meta_rows_and_the_overview_and_no_workspace() {
+fn the_hero_paints_the_title_the_facts_and_the_overview_and_no_list_band() {
     let fixture = built(hero(GuiArtShapeFrame::Landscape));
 
     assert_eq!(
@@ -250,22 +243,82 @@ fn the_hero_paints_the_title_the_meta_rows_and_the_overview_and_no_workspace() {
         "Better Call Saul",
         "the title paints"
     );
-    assert_eq!(
-        fixture.all_attrs(
-            "[data-library-home-hero-role]",
-            "data-library-home-hero-role"
-        ),
-        vec!["duration".to_owned(), "meta".to_owned()],
-        "the meta rows paint their duration and meta roles"
+    assert!(
+        fixture.presents("[data-library-home-hero-pill]"),
+        "the fact pills paint"
+    );
+    assert!(
+        fixture.presents("[data-library-home-hero-row]"),
+        "the labelled fact rows paint"
     );
     assert_eq!(
-        fixture.text_of("[data-library-home-hero-overview]"),
+        fixture.text_of("p[data-library-home-hero-overview]"),
         "Jimmy turns to paying work.",
         "the overview paints"
     );
     assert!(
-        !fixture.presents("[data-library-tracklist]"),
-        "no Workspace paints"
+        !fixture.presents("[data-library-home-hero-list]"),
+        "no list band paints"
+    );
+}
+
+/// Contract (the flat episode scenario, gui-hero-design-polish spec): an
+/// episode whose payload names its series titles the header with the series,
+/// and the episode paints in the block's name line.
+#[test]
+fn a_flat_episode_titles_the_header_with_its_series_and_names_the_episode() {
+    let mut frame = hero(GuiArtShapeFrame::Landscape);
+    frame.title = "Ozymandias".to_owned();
+    frame.parent = Some("Breaking Bad".to_owned());
+    let fixture = built(frame);
+
+    assert_eq!(
+        fixture.text_of("[data-library-home-hero-title]"),
+        "Breaking Bad",
+        "the series titles the header"
+    );
+    assert_eq!(
+        fixture.text_of("[data-library-home-hero-block-name]"),
+        "Ozymandias",
+        "the episode paints in the block's name line"
+    );
+}
+
+/// Contract (the Home feed-entry scenario, gui-hero-design-polish spec): a
+/// feed entry whose payload names its feed titles the header with the feed,
+/// and the entry paints in the block's name line.
+#[test]
+fn a_feed_entry_titles_the_header_with_its_feed_and_names_the_entry() {
+    let mut frame = hero(GuiArtShapeFrame::Landscape);
+    frame.title = "Entry title".to_owned();
+    frame.parent = Some("Example Feed".to_owned());
+    let fixture = built(frame);
+
+    assert_eq!(
+        fixture.text_of("[data-library-home-hero-title]"),
+        "Example Feed",
+        "the feed titles the header"
+    );
+    assert_eq!(
+        fixture.text_of("[data-library-home-hero-block-name]"),
+        "Entry title",
+        "the entry paints in the block's name line"
+    );
+}
+
+/// Contract (design D4): the Hero's card art makes its backdrop, and no art paints
+/// none.
+#[test]
+fn the_hero_s_card_art_makes_its_backdrop() {
+    let mut frame = hero(GuiArtShapeFrame::Landscape);
+    frame.art = Some(GuiArtRef::Image {
+        src: art_url("card/backdrop"),
+    });
+    let fixture = built(frame);
+
+    assert!(
+        fixture.presents("[data-library-home-hero-backdrop]"),
+        "the backdrop paints from the card art"
     );
 }
 
@@ -275,14 +328,14 @@ fn the_hero_paints_the_title_the_meta_rows_and_the_overview_and_no_workspace() {
 #[test]
 fn a_square_or_portrait_hero_places_its_artwork_box_at_300_px_wide() {
     let square = built(hero(GuiArtShapeFrame::Square));
-    let style = square.style_of("[data-library-home-hero-art]");
+    let style = square.style_of("[data-library-home-hero-art] > div > div");
     assert!(
         style.contains("width: 300px") && style.contains("height: 300px"),
         "the square box holds 300 px on a side, painted: {style}"
     );
 
     let portrait = built(hero(GuiArtShapeFrame::Portrait));
-    let style = portrait.style_of("[data-library-home-hero-art]");
+    let style = portrait.style_of("[data-library-home-hero-art] > div > div");
     assert!(
         style.contains("width: 300px") && style.contains("height: 450px"),
         "the portrait box holds 300 px by 450 px, painted: {style}"
@@ -296,7 +349,7 @@ fn a_square_or_portrait_hero_places_its_artwork_box_at_300_px_wide() {
 fn a_landscape_hero_fills_the_content_width_at_16_9_instead_of_the_300_px_box() {
     let fixture = built(hero(GuiArtShapeFrame::Landscape));
 
-    let style = fixture.style_of("[data-library-home-hero-art]");
+    let style = fixture.style_of("[data-library-home-hero-art] > div > div");
     assert!(
         style.contains("width: 100%") && style.contains("aspect-ratio: 16 / 9"),
         "the landscape still fills the content width at 16:9, painted: {style}"

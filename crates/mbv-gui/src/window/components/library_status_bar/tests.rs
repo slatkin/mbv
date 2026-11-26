@@ -489,6 +489,7 @@ fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
         }],
     });
     let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        playing_entry_id: None,
         selected: Some("sub1:guid12".to_owned()),
         hero: None,
     });

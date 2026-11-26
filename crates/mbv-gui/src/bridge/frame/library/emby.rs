@@ -5,11 +5,10 @@
 //! frame carries, never by position.
 
 use crate::gui_core::{
-    GuiCollections, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
-    GuiListSortFrame,
+    GuiCollections, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiListSortFrame,
 };
 
-use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
+use super::hero_facts::{GuiHeroCastMemberFrame, GuiHeroFactsFrame};
 use super::{GuiArtShapeFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
@@ -98,12 +97,10 @@ pub struct GuiEmbyHeroFrame {
     pub kind: String,
     /// The hero's title.
     pub title: String,
-    /// The meta rows in display order.
-    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFactsFrame,
     /// The cleaned overview text, when the item's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves (the artwork policy's declared
@@ -112,23 +109,10 @@ pub struct GuiEmbyHeroFrame {
     /// The Hero's artwork, present exactly while the item obtains art from
     /// the image cache; the window paints its own placeholder while `None`.
     pub art: Option<GuiArtRef>,
-    /// The movie's credits table (design D17, Q7): the director first, then
-    /// the cast, as the TUI's credits table paints them.
-    pub credits: Vec<GuiEmbyHeroCreditFrame>,
-    /// The `IMDb` link's target (design D17, Q7), when the item carries one;
-    /// the `IMDb` meta row links to it.
-    pub imdb_url: Option<String>,
-}
-
-/// One credit of the Hero's credits table (design D17, Q7), mirroring
-/// `crate::gui_core::GuiEmbyHeroCredit`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuiEmbyHeroCreditFrame {
-    /// The person's name.
-    pub name: String,
-    /// The role painted beside the name: the person's role, else their
-    /// kind (a director's `Director`).
-    pub role: String,
+    /// The movie's cast (gui-hero-design-polish design D3): the people that
+    /// are not directors, in the order Emby gives. Empty when the item is
+    /// not a movie or carries no people.
+    pub cast: Vec<GuiHeroCastMemberFrame>,
 }
 
 impl GuiEmbyList {
@@ -188,27 +172,11 @@ impl From<&GuiEmbyHero> for GuiEmbyHeroFrame {
         Self {
             kind: hero.kind.clone(),
             title: hero.title.clone(),
-            meta_rows: gui_meta_rows(&hero.meta_rows),
-            duration_row: hero.duration_row,
-            progress_row: hero.progress_row,
+            facts: GuiHeroFactsFrame::from(&hero.facts),
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),
-            credits: hero
-                .credits
-                .iter()
-                .map(GuiEmbyHeroCreditFrame::from)
-                .collect(),
-            imdb_url: hero.imdb_url.clone(),
-        }
-    }
-}
-
-impl From<&GuiEmbyHeroCredit> for GuiEmbyHeroCreditFrame {
-    fn from(credit: &GuiEmbyHeroCredit) -> Self {
-        Self {
-            name: credit.name.clone(),
-            role: credit.role.clone(),
+            cast: hero.cast.iter().map(GuiHeroCastMemberFrame::from).collect(),
         }
     }
 }

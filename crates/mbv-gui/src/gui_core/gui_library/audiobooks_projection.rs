@@ -22,11 +22,11 @@ use super::GuiListSort;
 use super::GuiListSortFrame;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, catalog_book_row_source, row_art};
+use super::hero_facts::{GuiHeroFacts, hero_facts_abs_book};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::gui_core::GuiCore;
 use mbv_client_core::App;
-use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
 /// The active destination's Audiobooks library index (row 9.1): the
 /// destination whose book list the GUI Library panel paints. `None` for every
@@ -62,22 +62,17 @@ pub struct GuiAudiobooksRow {
     pub media: GuiRowMediaKind,
 }
 
-/// The book Hero's facts (row 9.1): the shared `hero_content_abs_book`
-/// producer's facts — the same meta rows the TUI's hero paints — the
-/// portrait cover artwork, and the chapters as the Hero's Workspace. The
-/// producer carries no narrator, series, or description, and the design
-/// adds none.
+/// The book Hero's facts (row 9.1; gui-hero-design-polish design D1): the
+/// D1 book builder's facts — the duration pill over the Author row — the
+/// portrait cover artwork, and the chapters as the Hero's Workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiAudiobooksHero {
     /// The hero's title.
     pub title: String,
-    /// The meta rows in display order: the author, the duration, and the
-    /// `Finished` or `N%` progress row.
-    pub meta_rows: Vec<Vec<MetaSegment>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFacts,
     /// The cleaned description, when the catalog record carries one: the
     /// overview the TUI's Hero paints, which the GUI dropped before D15.
     pub overview: Option<String>,
@@ -231,46 +226,24 @@ impl GuiCore {
         }
     }
 
-    /// The selected book's Hero (row 9.1): the TUI's own facts — the shared
-    /// book producer's title, duration, and progress rows, with the
-    /// catalog-only `Read by <narrator>` and published-year rows and the
-    /// description overview restored, exactly as `book_content`'s
-    /// `resolved_hero_data` builds them (design D15) — the cover fetched
-    /// through the Service-scoped book cover chain, and the Workspace the
-    /// book's detail holds.
+    /// The selected book's Hero (row 9.1): the D1 book builder's facts —
+    /// the duration pill over the Author row — the catalog's cleaned
+    /// description as the overview, the cover fetched through the
+    /// Service-scoped book cover chain, and the Workspace the book's detail
+    /// holds.
     fn abs_hero(&mut self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksHero> {
         let state = self.app.audiobookshelf_book_browse_state(lib_idx)?;
         let book = audiobookshelf_book_item(state, book_id)?;
-        // The catalog's own record beside the queue item: the narrator, the
-        // published year, and the description ride only there.
+        // The catalog's own record: the description rides only there.
         let catalog = state
             .books
             .iter()
             .find(|candidate| candidate.library_item_id == book_id);
-        let narrator = catalog
-            .and_then(|book| book.narrator.clone())
-            .filter(|value| !value.is_empty());
-        let year = catalog
-            .and_then(|book| book.published_year.clone())
-            .filter(|value| !value.is_empty());
         let description = catalog.and_then(|book| book.description.clone());
-        // The shared book producer's facts, with the catalog-only rows the
-        // TUI's Hero restores: `Read by <narrator>`, the published year, and
-        // the description overview.
-        let mut content = hero_content_abs_book(&book);
-        if let Some(narrator) = narrator {
-            content
-                .facts
-                .meta_rows
-                .push(vec![MetaSegment::plain(format!("Read by {narrator}"))]);
-        }
-        if let Some(year) = year {
-            content
-                .facts
-                .meta_rows
-                .push(vec![MetaSegment::new(year, MetaKind::Date)]);
-        }
-        content.overview = description
+        // The shared book producer's facts for the artwork policy's source,
+        // with the D1 builder's pills and rows beside them.
+        let content = hero_content_abs_book(&book);
+        let overview = description
             .as_deref()
             .map(mbv_ui_model::ui_util::clean_overview)
             .filter(|overview| !overview.is_empty());
@@ -284,10 +257,8 @@ impl GuiCore {
         let workspace = self.abs_workspace(lib_idx, book_id);
         Some(GuiAudiobooksHero {
             title: content.facts.title.clone(),
-            meta_rows: content.facts.meta_rows.clone(),
-            duration_row: content.facts.duration_row,
-            progress_row: content.facts.progress_row,
-            overview: content.overview.clone(),
+            facts: hero_facts_abs_book(&book),
+            overview,
             art_shape: artwork_shape(super::artwork::hero_shape(
                 &self.app,
                 content.facts.artwork.shape,

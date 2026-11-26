@@ -25,6 +25,10 @@ const ROW_LANDSCAPE_MAX_WIDTH: u32 = 128;
 /// A Square row image's requested sides: about 2x the 40 x 40 painted box.
 const ROW_SQUARE_MAX_SIDE: u32 = 72;
 
+/// The Hero backdrop source's requested width: tiny, because the backdrop
+/// blurs it into soft colour fields.
+const BACKDROP_MAX_WIDTH: u32 = 32;
+
 /// A row image's JPEG quality (design D6).
 const ROW_IMAGE_QUALITY: u8 = 60;
 
@@ -46,7 +50,7 @@ pub(in crate::app) fn fetch_emby_image(
     // (design D6); every other request walks `types` untagged.
     let declared = match rendition {
         ImageRendition::Row(row) => row.emby.as_ref(),
-        ImageRendition::Hero => None,
+        ImageRendition::Hero | ImageRendition::Backdrop => None,
     };
     let fetched = declared.map_or_else(
         || {
@@ -187,6 +191,10 @@ fn emby_image_url(
         ImageRendition::Row(_) => (
             format!("maxWidth={ROW_LANDSCAPE_MAX_WIDTH}"),
             ROW_IMAGE_QUALITY,
+        ),
+        ImageRendition::Backdrop => (
+            format!("maxWidth={BACKDROP_MAX_WIDTH}"),
+            IMAGE_FETCH_QUALITY,
         ),
     };
     let tag = tag.map_or_else(String::new, |tag| format!("&tag={tag}"));

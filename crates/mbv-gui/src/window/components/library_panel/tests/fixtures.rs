@@ -9,10 +9,9 @@ use crate::bridge::frame::library::{
     GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList,
     GuiHomeDetail, GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
     GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame,
-    GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
-    GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsHeroFrame,
-    GuiShowsList, GuiShowsRowFrame,
+    GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistPageFrame, GuiMusicDetail,
+    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiRowArtFrame,
+    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList, GuiShowsRowFrame,
 };
 
 /// The carried Music list part with no album picked.
@@ -94,14 +93,6 @@ pub(super) fn music_artist_page() -> GuiMusicHeroFrame {
     }
 }
 
-/// A meta segment the fixtures' Hero rows carry.
-pub(super) fn segment(text: &str, kind: GuiMetaKindFrame) -> Vec<GuiMetaSegmentFrame> {
-    vec![GuiMetaSegmentFrame {
-        text: text.to_owned(),
-        kind,
-    }]
-}
-
 /// The carried Home sections: one item row and its Hero.
 pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetail) {
     let row_id = GuiHomeRowIdFrame::Continue("e1".to_owned());
@@ -136,12 +127,15 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
             selected: Some(row_id),
             hero: with_hero.then(|| GuiHomeHeroFrame {
                 title: "Better Call Saul".to_owned(),
-                meta_rows: vec![segment("1 h 47 m left", GuiMetaKindFrame::Time)],
-                duration_row: Some(0),
-                progress_row: None,
+                parent: None,
+                facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                    pills: Vec::new(),
+                    rows: Vec::new(),
+                },
                 overview: None,
                 art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
                 art: None,
+                cast: Vec::new(),
             }),
         }),
     )
@@ -173,14 +167,16 @@ pub(super) fn shows_list() -> GuiShowsList {
 /// The carried Shows detail part: the selected series and its Hero.
 pub(super) fn shows_detail() -> GuiShowsDetail {
     GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: Some("s1".to_owned()),
         hero: Some(GuiShowsHeroFrame {
             title: "Atlanta".to_owned(),
             parent: None,
-            meta_rows: vec![segment("4 seasons", GuiMetaKindFrame::Count)],
-            duration_row: None,
-            progress_row: None,
+            facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                pills: Vec::new(),
+                rows: Vec::new(),
+            },
             overview: None,
             art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
             art: None,
@@ -251,14 +247,14 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
             hero: Some(GuiEmbyHeroFrame {
                 kind: "movie".to_owned(),
                 title: "Alien".to_owned(),
-                meta_rows: vec![segment("1979", GuiMetaKindFrame::Date)],
-                duration_row: Some(0),
-                progress_row: None,
+                facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                    pills: Vec::new(),
+                    rows: Vec::new(),
+                },
                 overview: None,
                 art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
                 art: None,
-                credits: Vec::new(),
-                imdb_url: None,
+                cast: Vec::new(),
             }),
         }),
     )
@@ -309,12 +305,10 @@ pub(super) fn audiobooks_hero(
 ) -> GuiAudiobooksHeroFrame {
     GuiAudiobooksHeroFrame {
         title: "Aftermath".to_owned(),
-        meta_rows: vec![
-            segment("Bill Wyman", GuiMetaKindFrame::Plain),
-            segment("4:32", GuiMetaKindFrame::Time),
-        ],
-        duration_row: Some(1),
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         overview: None,
         art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Portrait,
         art: None,
@@ -363,6 +357,7 @@ pub(super) fn feeds_sections(
             }),
         },
         GuiLibraryDetail::Feeds(GuiFeedsDetail {
+            playing_entry_id: None,
             selected: Some("s1::e1".to_owned()),
             hero,
         }),
@@ -374,12 +369,10 @@ pub(super) fn feeds_hero() -> GuiFeedsHeroFrame {
     GuiFeedsHeroFrame {
         title: "Entry A".to_owned(),
         parent: None,
-        meta_rows: vec![
-            segment("Sub One", GuiMetaKindFrame::Plain),
-            segment("12:30", GuiMetaKindFrame::Time),
-        ],
-        duration_row: Some(1),
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
     }
 }

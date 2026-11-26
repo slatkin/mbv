@@ -169,10 +169,21 @@ fn all_merges_two_shows_in_date_order_with_the_default_hero() {
     assert_eq!(
         hero.parent.as_deref(),
         Some("Show B"),
-        "the show is the largest unit, so it rides as the parent and not as a meta row"
+        "the show is the largest unit, so it rides as the parent and not as a fact"
     );
-    assert_eq!(hero.meta_rows.len(), 2, "the duration, the date");
-    assert_eq!(hero.duration_row, Some(0));
+    assert_eq!(
+        pill_texts(&hero.facts),
+        vec!["20:00"],
+        "the duration is the one pill"
+    );
+    assert_eq!(
+        row_texts(&hero.facts),
+        vec![(
+            GuiHeroFactLabel::Published,
+            mbv_ui_model::ui_util::fmt_publish_date(1_800_000_000)
+        )],
+        "the publish date is the one row"
+    );
     assert_eq!(
         hero.overview.as_deref(),
         Some("The B show's newest episode."),
@@ -581,4 +592,27 @@ fn a_podcast_row_shows_its_show_cover() {
         "the episode row shows the cached show cover"
     );
     assert_eq!(projection.rows[0].media, GuiRowMediaKind::Audio);
+}
+
+/// One pill's text of `facts`, in paint order.
+fn pill_texts(facts: &GuiHeroFacts) -> Vec<String> {
+    facts
+        .pills
+        .iter()
+        .map(|pill| pill.segments.iter().map(|s| s.text.as_str()).collect())
+        .collect()
+}
+
+/// One row of `facts` as `(label, text)`, in paint order.
+fn row_texts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
+    facts
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.label,
+                row.value.iter().map(|s| s.text.as_str()).collect(),
+            )
+        })
+        .collect()
 }

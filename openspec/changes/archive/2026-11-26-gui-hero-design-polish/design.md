@@ -22,7 +22,7 @@ See `proposal.md` for the why and the decisions, and `specs/gui-client/spec.md` 
 
 - One set of Hero parts in the window, used by every Hero, so that a fix lands in all destinations.
 - One GUI-owned split of each Hero's facts into pills and labelled rows, built from the source items.
-- The glow and the cast photos without decoded images on the core thread.
+- The backdrop and the cast photos without decoded images on the core thread.
 
 **Non-Goals:**
 
@@ -67,14 +67,14 @@ Alternatives considered:
 
 `LibraryHeroFrame` becomes the only Hero layout. Home moves onto it and `LibraryHeroSummary` is deleted. The frame paints, top to bottom:
 
-1. The glow layer (D4), behind the header band only.
+1. The backdrop layer (D4), behind the header and the detail block.
 2. The header band: the kicker as the eyebrow with a leading dot, the title, and the fact pills row (`LibraryHeroPills`). The header action stays (Shuffle artist). The IMDb header action is deleted, because the IMDb pill is the link.
 3. The detail block (`LibraryHeroDetail`): the art in an inset frame, and the text column with the block's eyebrow and name lines (when a parent took the title, and the album's year and label line), the album's pills (D5), the action row, and the fact rows (`LibraryHeroFactRows`). The overview leaves the block.
 4. The bands, each under a section header with a rule (`LibraryHeroSection`, a new component): Overview (when the item has one), Cast (when the item has cast, D3), then the destination's Hero list band when one is defined. Music passes Tracks, a Shows series passes Episodes, Audiobooks passes Chapters, and Feeds passes Entries. Podcasts, Home, plain Emby libraries, and a flat Shows episode Hero pass no list title and no list children; Podcasts keeps its episodes only in the Library list and does not duplicate them in the detail pane. The list title prop is optional.
 
 `HeroBlock` loses `facts` and `meta` and gets `rows: Vec<GuiHeroFactRow>` and `pills: Vec<GuiHeroPill>` (the block pills, used by the album). `HeroHeader.facts` becomes `pills`. `hero_layout`, `HeroLayoutFacts`, `HeroMetaRow`, `HeroMetaRole`, `hero_meta_rows`, and `join_meta_rows` are deleted with their tests, because no progress or duration role remains. The overview moves to a frame prop.
 
-The detail block keeps its wrap rule. A landscape art box takes the larger share of the row beside the text column (the artboard's proportion) and drops above the text when the Hero is too narrow. Square and portrait art keep their box. The album's square art gets the vinyl disc behind it through a `disc: bool` prop on `LibraryHeroArt`, which only the album branch sets.
+The detail block keeps its wrap rule. A landscape art box takes the larger share of the row beside the text column (the artboard's proportion) and drops above the text when the Hero is too narrow. Square and portrait art keep their box.
 
 Fonts: each new part takes the font of the text it replaces. The eyebrow and the section headers use the kicker's label font. The pills use the font of today's facts line. A row's label uses the label font, and its value uses today's meta row font. A cast name and role use today's credit name and role fonts. Sizes, colours, radii, and spacing come from the artboards. New colour values become `--canvas-*` tokens in `crates/mbv-gui/assets/app.css`, and `make gui-css` regenerates `app.generated.css`.
 
@@ -87,13 +87,16 @@ Fonts: each new part takes the font of the text it replaces. The eyebrow and the
 
 Alternative considered: initials only. Rejected by the user.
 
-### D4. The glow is a pre-blurred image from a new art path
+### D4. The backdrop is a baked, blurred image from a new art path
 
-- `ArtPath` gets `Glow(key)` for `glow/<percent-encoded key>`, with `glow_path(cache_key)` beside `card_path`.
-- `CoreThread::answer_art` answers `Glow(key)` by reading the cached source bytes (`gui_art_source`) on the core thread, and then moving the bytes and the `reply` to a new thread (`std::thread::Builder` named `mbv-art-glow`). That thread decodes with `image::load_from_memory`, computes aspect-preserving thumbnail bounds whose long side is 64 px (never a forced 64×64 square), shrinks the image with `imageops::thumbnail` inside those bounds, blurs it with `imageops::blur` at sigma 4, encodes it as PNG, and calls `reply` with `image/png`. A decode or encode failure answers `Missing`. No memo: the window keeps the image while the Hero shows it, and a new Hero is a new request.
-- `art.rs` owns one helper that maps the Hero's existing `GuiArtRef::Image` card URL to the glow URL for the same cache key. `Placeholder` and `Loading` map to `None`. The frame takes `glow: Option<GuiArtRef>`; each Hero passes the helper's result, so no window component parses art URLs ad hoc and no duplicate glow state crosses the bridge. The frame paints the image to cover the header band's area, under a fade to the pane's background, behind the text.
+- `ArtPath` gets `Backdrop(BackdropRequest)` for `backdrop/{style}/{width}/{percent-encoded key}`: the style letter (`v` video, `m` music), the baked width, and the image-cache key of the Hero's art.
+- The source is a tiny Backdrop image. When an Emby Hero's art is projected (`home_hero_artwork`), `App::fetch_backdrop_image` also fetches `maxWidth=32&quality=90` of the item's Backdrop (the series' for an episode), falling back to Primary, under the key `{art key}:BD` (`ImageRendition::Backdrop`, `mbv_images::backdrop_cache_key`). A Music Hero fetches none: it blurs its own Primary art. `CoreThread::answer_art` answers a backdrop request with `GuiCore::gui_backdrop_source`: the tiny image when it landed, the Hero's own art when the item has no Backdrop image, and `Missing` while the tiny image is in flight (the window retries).
+- The one `mbv-art-backdrop` worker thread (`art/backdrop/worker.rs`) bakes. A cached JPEG answers on the core thread. The worker keeps the last 32 JPEGs (first in, first out), and writes every bake to the image disk cache under `backdrop:{source key}:{width}:560:{strength}:v1`, so a re-selected Hero, or a Hero after a restart, is not baked twice.
+- The bake (`art/backdrop.rs`): shrink the source to 32 px wide (the size a tiny image request gives); cover-fit to the width by 560 px with `CatmullRom` and a centre crop, anchored 30% from the top for `v` and 50% for `m`; blur at sigma 8 (run at a quarter size with sigma 2, then upscale); bake the scrims over the pane background `#272e33` with `a = S * (1 - y/(H-1))^1.4 * (0.55 + 0.45 * min(1, x/(0.6 W)))` (S 0.55 video, 0.45 music), so the bottom row is exactly the pane colour; encode JPEG at quality 88. A source whose title area falls under 4.5:1 against `#ece3cc` bakes again with S reduced until it passes, and the bake logs it.
+- The Library panel provides the Hero pane's width (the Library column less the list column while Wide paints both). Each Hero asks for that width rounded up to the next 200 px, so a resize does not bake a new image on every frame.
+- `art.rs` owns one helper that maps the Hero's existing `GuiArtRef::Image` card URL to the backdrop URL for the same cache key. `Placeholder` and `Loading` map to `None`. The frame takes `backdrop: Option<GuiArtRef>` and paints one `img` absolutely at the top left of the Hero's scrolling content, 100% wide and 560 px tall, behind the content. It paints nothing while the image bakes. There is no CSS opacity, gradient, filter, or blend: the scrims are in the bitmap.
 
-Alternative considered: CSS `filter: blur()` on the art in the window. Blitz parses it and the `vello-hybrid` backend maps a Gaussian blur, but a large-radius blur over a large area runs on every repaint, and filter support in this backend is new. A 64 px pre-blurred image costs once and is renderer-independent.
+Alternative considered: CSS `filter: blur()` on the art in the window. Blitz parses it and the `vello-hybrid` backend maps a Gaussian blur, but a large-radius blur over a large area runs on every repaint, and filter support in this backend is new. A baked image costs once and is renderer-independent.
 
 ### D5. Music: album Hero and artist page
 
@@ -117,8 +120,8 @@ Then change `LibraryWorkspaceTable`:
 
 ### D7. Docs and the glossary
 
-- `docs/architecture/gui-client.md`: the Hero frame section (the bands, the pills and rows, the glow path, the cast), the frame field lists for each destination (no `meta_rows`, `duration_row`, `progress_row`, or `imdb_url`; the `facts` and `cast` fields), and the sentence that says the GUI Hero carries "the same facts the TUI paints". It becomes: the same values, split into pills and rows by the GUI.
-- `CONTEXT.md`: two terms. **Fact pill** (GUI): a short Hero fact in a pill; *Avoid* chip, tag, badge. **Hero glow** (GUI): the blurred copy of the Hero's art behind the header band; *Avoid* backdrop (the dimmed backdrop is an overlay scrim), background image.
+- `docs/architecture/gui-client.md`: the Hero frame section (the bands, the pills and rows, the backdrop path, the cast), the frame field lists for each destination (no `meta_rows`, `duration_row`, `progress_row`, or `imdb_url`; the `facts` and `cast` fields), and the sentence that says the GUI Hero carries "the same facts the TUI paints". It becomes: the same values, split into pills and rows by the GUI.
+- `CONTEXT.md`: two terms. **Fact pill** (GUI): a short Hero fact in a pill; *Avoid* chip, tag, badge. **Hero backdrop** (GUI): the blurred copy of the Hero's art behind the header band; *Avoid* backdrop (the dimmed backdrop is an overlay scrim), background image.
 
 ### D8. Tests (contracts, by owner)
 
@@ -129,15 +132,15 @@ Per `docs/invariants/14-test-ownership.md` and `crates/mbv-gui/AGENTS.md`: herme
 - `hero_facts` (gui_core tests): one `#[case]` table over the source kinds, each asserting the pills and rows in order. The movie case is the contract of the spec scenario "A movie's Hero" (no runtime row; the year pill and the Released row both show).
 - Emby projection: one `#[case]` table for cast members: a director is not in the cast; a person with a tag has a photo; a person with no tag has initials and no photo. Extend the Home/Shows-New projection tests for the queue-backed parent rule (series or show for an episode, feed for an entry, no parent for a movie or book).
 - Shows/Feeds projections and destination rows: extend existing projection or component coverage so that the playing episode or entry id reaches `WorkspaceRow.playing`; the painter alone does not own this contract.
-- `art.rs`: add a `parse_path` case table (none exists today) with a glow path case. One unit test for the glow encoder uses an in-memory image larger than 64 px and asserts that the output PNG's long side is at most 64 px with its aspect ratio preserved; bytes that do not decode give `Missing`.
-- Window: extend the `LibraryHeroFrame` painted-structure test (pills row, fact rows, section headers, no progress element, glow present only with art). Extend the album branch test in `library_hero/tests.rs` (no artist facts, two block pills) and the artist branch test (header pills and the collections eyebrow). Change the existing playing-row test in `library_workspace_table` to assert the mark in the number cell and no glyph beside the title (spec scenario "The playing Workspace row keeps its own mark").
+- `art.rs`: add a `parse_path` case table (none exists today) with a backdrop path case. One unit test for the backdrop encoder uses an in-memory image larger than 64 px and asserts that the output PNG's long side is at most 64 px with its aspect ratio preserved; bytes that do not decode give `Missing`.
+- Window: extend the `LibraryHeroFrame` painted-structure test (pills row, fact rows, section headers, no progress element, backdrop present only with art). Extend the album branch test in `library_hero/tests.rs` (no artist facts, two block pills) and the artist branch test (header pills and the collections eyebrow). Change the existing playing-row test in `library_workspace_table` to assert the mark in the number cell and no glyph beside the title (spec scenario "The playing Workspace row keeps its own mark").
 - Delete the tests of the deleted helpers (`hero_layout`, `hero_meta_rows`, `join_meta_rows`, `HeroMetaRole`, `LibraryHeroSummary`, the Emby credits table and IMDb header action).
 
 ## Risks / Trade-offs
 
 - [The pill text keeps today's formats (`01:37:32`), not the artboard's `1h 37m`] → Accepted: the user asked for no text changes beyond the listed ones. A format change is a separate request.
 - [A movie with a long cast fetches many photos] → Each photo is one bounded Hero-rendition Primary image (at most 1280 px on a side at the existing image quality) through the existing cache, not an unbounded original. The fetch starts only when the Hero shows the movie. The rendition is larger than a cast thumbnail needs, but changing the shared rendition policy is outside this design.
-- [The glow thread decodes a large backdrop] → It runs off the core thread and the window thread. A fast series of Hero changes can start a few threads that each end in tens of milliseconds.
+- [The backdrop thread decodes a large backdrop] → It runs off the core thread and the window thread. One worker thread runs the encodes in order, so a fast series of Hero changes queues work and never starts more threads; the cache answers a repeat key.
 - [`gui-emby-row-played-marks` changes the same Workspace requirement and lands after this change] → That change must rebase its delta on this change's text of "Library lists and Workspace tables paint through shared parts" before it archives.
 - [`EmbyPerson` grows on the ctrl wire] → `#[serde(default)]` makes the field additive at the serde and protocol-version level, and the `emby-person-images` capability advertises support. The conformance bless shows the schema diff for review. Separately, the existing local Owner wire-identity gate can refuse mixed local binaries because any field addition changes the wire digest; that gate is pre-existing local-binary policy, not a new protocol-version incompatibility.
 - [Home moves from `LibraryHeroSummary` to the frame] → The Home tests that hook `data-library-home-hero-*` keep their attribute names through the frame's `attr`.

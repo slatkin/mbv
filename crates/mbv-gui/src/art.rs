@@ -12,12 +12,21 @@
 use std::fmt;
 use std::fmt::Write as _;
 
+/// The backdrop encoder (design D4): the pure bytes-to-JPEG step the backdrop
+/// request's worker thread runs.
+pub(crate) mod backdrop;
+use backdrop::{BackdropRequest, BackdropStyle};
+
 /// The scheme host the window loads images through (design D7).
 /// The net provider answers the scheme `mbv-art://localhost/<path>`.
 const SCHEME_HOST: &str = "mbv-art://localhost";
 
 /// The path that names the queue card's bundled placeholder bytes.
 pub const PLACEHOLDER_PATH: &str = "placeholder";
+
+/// The one-shot reply edge an art request carries: a boxed [`FnOnce`] the
+/// one answer travels through exactly once.
+pub type ArtReply = Box<dyn FnOnce(ArtResponse) + Send>;
 
 /// The image reference a section DTO carries (design D7): the window paints
 /// `src` as the image's URL, and a `loading` reference paints the loading
@@ -58,6 +67,32 @@ pub fn card_path(cache_key: &str) -> String {
     format!("card/{}", percent_encode(cache_key))
 }
 
+/// The backdrop URL for the artwork `art` names (design D4): the `mbv-art`
+/// backdrop URL for the same cache key the art's image URL names, baked at
+/// `width` in `style`. A `Placeholder` names no cache key and a `Loading`
+/// reference names no URL, so both map to `None`, as does an image URL that
+/// names no card.
+#[must_use]
+pub(crate) fn backdrop_from_art(
+    art: &GuiArtRef,
+    width: u32,
+    style: BackdropStyle,
+) -> Option<String> {
+    match art {
+        GuiArtRef::Image { src } => {
+            let path = src.strip_prefix(SCHEME_HOST)?.strip_prefix('/')?;
+            match parse_path(path) {
+                Some(ArtPath::Card(key)) => {
+                    let request = BackdropRequest { key, width, style };
+                    Some(art_url(&format!("backdrop/{}", request.path_tail())))
+                }
+                Some(ArtPath::Backdrop(_) | ArtPath::Placeholder) | None => None,
+            }
+        }
+        GuiArtRef::Placeholder { .. } | GuiArtRef::Loading => None,
+    }
+}
+
 /// One request the window's image load raised (design D7): the percent-encoded
 /// request path and the one-shot edge that answers it. Production wires the
 /// `reply` to the net provider's responder; the tests mock it, so
@@ -69,7 +104,7 @@ pub struct ArtRequest {
     /// The edge the one answer travels through. Every request is answered
     /// exactly once; the pre-attach campaign answers `Missing`, so no
     /// responder is left open before the attach.
-    pub reply: Box<dyn FnOnce(ArtResponse) + Send>,
+    pub reply: ArtReply,
 }
 
 impl fmt::Debug for ArtRequest {
@@ -97,16 +132,17 @@ pub enum ArtResponse {
 }
 
 /// The path an art request names (design D7): the image-cache key a card
-/// names, or the placeholder.
+/// names, the backdrop rendition key, or the placeholder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ArtPath {
     Card(String),
+    Backdrop(BackdropRequest),
     Placeholder,
 }
 
-/// Parse a request path (design D7): the two forms only. A card segment is
-/// percent-decoded; another prefix, a missing segment, or an undecodable one
-/// is malformed, and the request answers `Missing`.
+/// Parse a request path (design D7): the three forms only. A card or backdrop
+/// segment is percent-decoded; another prefix, a missing segment, or an
+/// undecodable one is malformed, and the request answers `Missing`.
 pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
     if path == PLACEHOLDER_PATH {
         return Some(ArtPath::Placeholder);
@@ -114,6 +150,7 @@ pub(crate) fn parse_path(path: &str) -> Option<ArtPath> {
     let (kind, rest) = path.split_once('/')?;
     match kind {
         "card" => Some(ArtPath::Card(percent_decode(rest)?)),
+        "backdrop" => BackdropRequest::parse_tail(rest).map(ArtPath::Backdrop),
         _ => None,
     }
 }
@@ -166,3 +203,6 @@ fn hex_digit(byte: u8) -> Option<u8> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests;

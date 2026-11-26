@@ -10,8 +10,8 @@ use crate::Held;
 use mbv_client_core::ClientTickHost;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_gui::bridge::frame::library::{
-    GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiLibraryDetail, GuiMetaKindFrame,
-    GuiMetaSegmentFrame,
+    GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiHeroPillFrame, GuiLibraryDetail,
+    GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::gui_core::test_support::GuiStateSeams;
@@ -234,22 +234,26 @@ fn movies_hero_frame(items: Vec<EmbyItem>) -> Held {
     test.held()
 }
 
-/// An Emby Hero's duration row reaches the frame as a `time` segment, so the
-/// window can paint it in the time colour (design D14).
+/// An Emby Hero's duration fact reaches the frame as a `time`-typed pill, so
+/// the window can paint it in the time colour (design D14;
+/// gui-hero-design-polish design D1).
 #[test]
-fn an_emby_heros_duration_row_arrives_as_a_time_segment() {
+fn an_emby_heros_duration_fact_arrives_as_a_time_pill() {
     let mut item = movie("m-1", "A Movie");
     item.runtime_ticks = 5_400 * TICKS_PER_SECOND;
     let frame = movies_hero_frame(vec![item]);
     let hero = emby_parts(&frame)
         .and_then(|(_, detail)| detail.hero)
         .expect("the Hero paints");
-    let duration = hero.duration_row.expect("the Hero names its duration row");
     assert_eq!(
-        hero.meta_rows[duration],
-        vec![GuiMetaSegmentFrame {
-            text: "01:30:00".into(),
-            kind: GuiMetaKindFrame::Time,
+        hero.facts.pills,
+        vec![GuiHeroPillFrame {
+            segments: vec![GuiMetaSegmentFrame {
+                text: "01:30:00".into(),
+                kind: GuiMetaKindFrame::Time,
+            }],
+            link: None,
         }],
+        "the runtime is the one pill, typed as time"
     );
 }

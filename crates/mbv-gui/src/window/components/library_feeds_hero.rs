@@ -1,12 +1,13 @@
 //! The Feeds Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryFeedsHero`; add-gui-library-panel design D12, row 11.1):
-//! the selected entry's detail pane in the Emby Hero look — the artwork box
-//! the `artShape` arm names, the title, and the meta rows with their duration
-//! role.
+//! `LibraryFeedsHero`; add-gui-library-panel design D12, row 11.1;
+//! gui-hero-design-polish design D2, D4): the selected entry's detail pane on
+//! the shared frame — the artwork box the `artShape` arm names, the feed's
+//! name as the header title, the entry in the block with its publish date
+//! row, and the duration as a fact pill.
 //!
 //! A feed entry has no artwork source and no overview, so the box paints the
-//! window's placeholder for the shape and no overview paragraph paints. There
-//! is no Workspace and no tracklist, so only Play and Add to queue paint.
+//! window's placeholder for the shape and no Overview section paints. The
+//! feed's entries are the list band under the Entries section.
 //!
 //! Play and Add to queue send the Feeds destination's commands with the
 //! frame's selected entry (design D12) — the core owns the selection, so the
@@ -19,7 +20,7 @@ use crate::bridge::frame::library::{GuiEntryRowFrame, GuiLibraryDetail, GuiLibra
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::components::library_workspace_table::{LibraryWorkspaceTable, WorkspaceRow};
-use crate::window::library::hero::{HeroLayoutFacts, hero_command, hero_layout};
+use crate::window::library::hero::{hero_command, label_segments};
 use crate::window::library::lettered::{FeedsList, LetteredDestination};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
@@ -60,18 +61,22 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
 
     // The frame's header and block for the Hero (invariant 30): the feed is
     // the largest unit and titles the header, and the entry is the block's
-    // name.
-    let facts = HeroLayoutFacts {
-        title: &hero.title,
-        parent: hero.parent.as_deref(),
-        meta_rows: &hero.meta_rows,
-        duration_row: hero.duration_row,
-        progress_row: hero.progress_row,
-        overview: None,
-        // A Feeds Hero's item is an entry, which paints as an episode does.
-        episode: true,
+    // name line, one step smaller.
+    let parent = hero.parent.as_deref().filter(|parent| !parent.is_empty());
+    let header = HeroHeader {
+        kicker: label_segments("feed"),
+        title: parent.map_or_else(|| hero.title.clone(), ToString::to_string),
+        pills: hero.facts.pills.clone(),
     };
-    let layout = hero_layout(&facts, "feed");
+    let block = HeroBlock {
+        label: hero.title.clone(),
+        eyebrow: None,
+        name: parent.map(|_| hero.title.clone()),
+        // A Feeds Hero's item is an entry, which paints as an episode does.
+        name_episode: true,
+        pills: Vec::new(),
+        rows: hero.facts.rows.clone(),
+    };
 
     // The feed's entries, newest first, as the Workspace table paints them:
     // the checked collections' rows that belong to the Hero's feed. A date
@@ -80,6 +85,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     // never clones them (`share-gui-sections-by-rc` design D3).
     let rows: &[GuiEntryRowFrame] =
         library_feeds_list(Some(&props.list)).map_or(&[][..], |list| list.rows.as_slice());
+    let playing_entry_id = detail.playing_entry_id.as_deref();
     let entry_rows: Vec<WorkspaceRow> = match hero.parent.as_deref() {
         None => Vec::new(),
         Some(parent) => rows
@@ -91,7 +97,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
                 number: (index + 1).to_string(),
                 name: row.title.clone(),
                 duration: row.date.clone().unwrap_or_default(),
-                playing: false,
+                playing: playing_entry_id == Some(row.id.as_str()),
                 state: Some(row.state.clone()),
             })
             .collect(),
@@ -139,12 +145,14 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
         LibraryHeroFrame {
             attr: "feeds",
             root: "data-library-feeds-hero",
-            header: HeroHeader::from(layout.header),
-            block: HeroBlock::from(layout.block),
+            header,
+            block,
             art_shape: hero.art_shape,
             art: None,
             art_title: hero.title.clone(),
             actions: Some(actions),
+            // A feed entry has no artwork source, so no backdrop maps (design D4).
+            list_title: Some("Entries".to_owned()),
             children: Some(rsx! {
                 LibraryWorkspaceTable {
                     root: "data-library-feeds-entries",

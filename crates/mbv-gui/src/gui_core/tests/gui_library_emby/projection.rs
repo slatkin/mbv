@@ -4,6 +4,9 @@
 //! boxset row, and the row art each mode's items paint.
 
 use super::*;
+use mbv_emby_model::EmbyPerson;
+use mbv_ui_model::meta::MetaKind;
+use rstest::rstest;
 
 fn movie_item(id: &str, name: &str, year: u32, runtime_ticks: i64) -> EmbyItem {
     let mut item = make_item(name, "Movie");
@@ -11,6 +14,17 @@ fn movie_item(id: &str, name: &str, year: u32, runtime_ticks: i64) -> EmbyItem {
     item.production_year = year;
     item.runtime_ticks = runtime_ticks;
     item
+}
+
+/// One person of a movie's people, over the wire fields the parse carries.
+fn person(name: &str, role: &str, kind: &str, id: &str, tag: &str) -> EmbyPerson {
+    EmbyPerson {
+        name: name.into(),
+        role: role.into(),
+        kind: kind.into(),
+        id: id.into(),
+        primary_image_tag: tag.into(),
+    }
 }
 
 /// A stub `App` whose plain Movies library is active, with the root-list
@@ -36,8 +50,8 @@ fn plain_movies_app(items: Vec<EmbyItem>) -> App {
 /// The plain mode's projection (row 8.1, contract a): the rows are the
 /// root-list store's rows in the server's `SortName` order, each with its
 /// rail letter over the article-stripped sort name (`#` past Z), the first
-/// row is the Hero default, the Hero is the shared Emby hero producer's
-/// facts with no Workspace, and the mode carries no pill at all.
+/// row is the Hero default, the Hero is the D1 builder's facts with no
+/// Workspace, and the mode carries no pill at all.
 #[test]
 fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
     let _guard = mbv_client_core::config::TestStateDirGuard::new();
@@ -55,11 +69,15 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
                     name: "Kirsten Johnson".into(),
                     role: String::new(),
                     kind: "Director".into(),
+                    id: String::new(),
+                    primary_image_tag: String::new(),
                 },
                 mbv_emby_model::EmbyPerson {
                     name: "Jane Doe".into(),
                     role: "Lead".into(),
                     kind: "Actor".into(),
+                    id: "person-9".into(),
+                    primary_image_tag: "tag-9".into(),
                 },
             ];
             item.external_urls = vec![mbv_emby_model::EmbyLink {
@@ -111,34 +129,35 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
         "the kicker's kind word is the item type's lowercase word"
     );
     assert_eq!(hero.title, "A Movie");
-    // The shared Emby hero producer's facts: the premiere date, the
-    // duration row, and the IMDb row the producer appends from the item's
-    // external URLs — the same meta rows the TUI's hero paints.
+    // The D1 movie builder's facts (spec scenario "A movie's Hero"): the
+    // year, runtime, and IMDb-link pills over the Director and Released
+    // rows — and no runtime row.
     assert_eq!(
-        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
-        vec!["1 Jun 1999", "01:30:00", "IMDb"]
-    );
-    assert_eq!(hero.duration_row, Some(1));
-    assert_eq!(hero.progress_row, None);
-    // The credits and the IMDb target ride the shared producer's output,
-    // director first (design D17, Q7): the TUI paints the same table.
-    assert_eq!(
-        hero.credits,
+        pill_facts(&hero.facts),
         vec![
-            GuiEmbyHeroCredit {
-                name: "Kirsten Johnson".into(),
-                role: "Director".into(),
-            },
-            GuiEmbyHeroCredit {
-                name: "Jane Doe".into(),
-                role: "Lead".into(),
-            },
-        ]
+            ("1999".into(), Some(MetaKind::Date), None),
+            ("01:30:00".into(), Some(MetaKind::Time), None),
+            (
+                "IMDb".into(),
+                Some(MetaKind::Plain),
+                Some("https://www.imdb.com/title/tt0000001".into())
+            ),
+        ],
+        "the pills are the year, the runtime, and the IMDb link"
     );
     assert_eq!(
-        hero.imdb_url.as_deref(),
-        Some("https://www.imdb.com/title/tt0000001"),
-        "the IMDb meta row's link target rides the hero"
+        row_facts(&hero.facts),
+        vec![
+            (GuiHeroFactLabel::Director, "Kirsten Johnson".into()),
+            (GuiHeroFactLabel::Released, "1 Jun 1999".into()),
+        ],
+        "the rows are the director and the release date"
+    );
+    // The cast (design D3): the people that are not directors, with Jane
+    // Doe's photo fetched — the director paints in the Director row only.
+    assert_eq!(
+        cast_facts(&hero.cast),
+        vec![("Jane Doe", "Lead", "JD", true)]
     );
     assert!(hero.overview.is_none());
     // No image tag declares a source, so the Hero carries none and the
@@ -317,4 +336,92 @@ fn the_plain_mode_rows_paint_their_row_art() {
         GuiRowArt::NoSource,
         "an item that declares no image has no source"
     );
+}
+
+/// One pill of `facts` as `(text, type kind, link target)`, in paint order.
+fn pill_facts(facts: &GuiHeroFacts) -> Vec<(String, Option<MetaKind>, Option<String>)> {
+    facts
+        .pills
+        .iter()
+        .map(|pill| {
+            (
+                pill.segments.iter().map(|s| s.text.as_str()).collect(),
+                pill.segments.first().map(|s| s.kind),
+                pill.link.clone(),
+            )
+        })
+        .collect()
+}
+
+/// One row of `facts` as `(label, text)`, in paint order.
+/// The cast as `(name, role, initials, has photo)`, in the order the Hero carries it.
+fn cast_facts(cast: &[GuiHeroCastMember]) -> Vec<(&str, &str, &str, bool)> {
+    cast.iter()
+        .map(|member| {
+            (
+                member.name.as_str(),
+                member.role.as_str(),
+                member.initials.as_str(),
+                member.photo.is_some(),
+            )
+        })
+        .collect()
+}
+
+fn row_facts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
+    facts
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.label,
+                row.value.iter().map(|s| s.text.as_str()).collect(),
+            )
+        })
+        .collect()
+}
+
+/// A movie whose cast is `people`, selected so the Hero projects.
+fn cast_app(people: Vec<EmbyPerson>) -> App {
+    let mut item = movie_item("m-1", "A Movie", 2015, 0);
+    item.people = people;
+    plain_movies_app(vec![item])
+}
+
+/// One cast outcome the frame carries: the member's name, role, and
+/// initials, and whether a photo rides.
+type ExpectedMember = (&'static str, &'static str, &'static str, bool);
+
+/// The cast of a movie's Hero (gui-hero-design-polish design D3; spec
+/// scenario "A cast member with no photo"): the director paints in the
+/// Director row and not in the cast; a person with an id and a tag has a
+/// photo; a person with no tag has the initials and no photo.
+#[rstest]
+#[case::a_director_is_not_in_the_cast(
+    vec![person("Kirsten Johnson", "", "Director", "", "")],
+    Vec::<ExpectedMember>::new(),
+    "the director is the Director row, not a cast member",
+)]
+#[case::a_person_with_an_id_and_a_tag_has_a_photo(
+    vec![person("Jane Doe", "Lead", "Actor", "person-9", "tag-9")],
+    vec![("Jane Doe", "Lead", "JD", true)],
+    "the id and tag start the Primary photo fetch, so the photo rides",
+)]
+#[case::a_person_with_no_tag_has_initials_and_no_photo(
+    vec![person("Jane Doe", "Lead", "Actor", "person-9", "")],
+    vec![("Jane Doe", "Lead", "JD", false)],
+    "no tag means no photo, and the initials fall in",
+)]
+fn the_cast_carries_the_non_directors_and_their_photo_rules(
+    #[case] people: Vec<EmbyPerson>,
+    #[case] expected: Vec<ExpectedMember>,
+    #[case] why: &str,
+) {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let mut app = cast_app(people);
+
+    let projection = gui_emby_projection(&mut app, 0);
+
+    let hero = projection.hero.expect("the Hero paints");
+    assert_eq!(cast_facts(&hero.cast), expected, "{why}");
 }

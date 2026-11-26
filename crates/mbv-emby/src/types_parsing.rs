@@ -264,6 +264,8 @@ fn parse_people(raw: &Value) -> Vec<EmbyPerson> {
                     name: person["Name"].as_str().unwrap_or("").to_string(),
                     role: person["Role"].as_str().unwrap_or("").to_string(),
                     kind: person["Type"].as_str().unwrap_or("").to_string(),
+                    id: person["Id"].as_str().unwrap_or("").to_string(),
+                    primary_image_tag: person["PrimaryImageTag"].as_str().unwrap_or("").to_string(),
                 })
                 .collect()
         })

@@ -6,7 +6,7 @@
 //! paints no More actions control, the tracklist paints the cursor on its
 //! first track before any key moves it, a track's play gestures send that
 //! track's id, the playing row marks the play glyph and keeps its own fill,
-//! and the album's facts line types its count and its time at the repeated
+//! and the album's block pills type their count and their time at the repeated
 //! tracklist durations. The track row's Add-to-queue send rides
 //! the tracklist's action closure, which a headless document cannot fire; the
 //! command it builds is the same shape the album's
@@ -585,10 +585,10 @@ fn a_track_s_play_gesture_sends_that_track_play() {
 }
 
 /// Contract (`LibraryHero.test.ts`): the tracklist marks the frame playing
-/// track with a play glyph, not a fill — a highlight marks focus only, so the
-/// playing row keeps its own fill.
+/// track with the bars mark in its number cell, not a fill — a highlight marks
+/// focus only, so the playing row keeps its own fill.
 #[test]
-fn the_playing_track_marks_the_play_glyph_and_keeps_its_own_fill() {
+fn the_playing_track_marks_the_bars_mark_and_keeps_its_own_fill() {
     let facts = hero();
     let fixture = built(artists(&facts), detail(facts, Some("t1".to_owned())));
 
@@ -598,8 +598,8 @@ fn the_playing_track_marks_the_play_glyph_and_keeps_its_own_fill() {
         "the playing row carries the playing mark"
     );
     assert!(
-        fixture.presents("[data-library-track=\"t1\"] [data-library-track-glyph]"),
-        "the playing row paints its play glyph"
+        fixture.presents("[data-library-track=\"t1\"] [data-library-track-number] svg"),
+        "the playing row paints the bars mark in its number cell"
     );
     assert!(
         fixture
@@ -614,15 +614,39 @@ fn the_playing_track_marks_the_play_glyph_and_keeps_its_own_fill() {
     );
 }
 
-/// Contract (`LibraryHero.test.ts`, add-gui-settings-screen design D14): the
-/// album's facts line joins a count and a time, and each paints its own
-/// type's token.
+/// Contract (spec "The Hero paints a picked album"): the album's header
+/// carries no artist facts, so it paints no fact pills, and its kicker names
+/// the artist's selected collections.
 #[test]
-fn the_album_facts_line_types_its_count_and_its_time() {
+fn the_album_header_carries_no_fact_pills_and_names_the_collections() {
     let fixture = built_hero();
 
+    assert!(
+        !fixture.presents("[data-library-hero-pills]"),
+        "the album header paints no fact pills"
+    );
+    assert!(
+        fixture
+            .text_of("[data-library-hero-kicker]")
+            .contains("HIP-HOP"),
+        "the kicker names the selected collections"
+    );
+}
+
+/// Contract (spec "The Hero paints a picked album", add-gui-settings-screen
+/// design D14): the album block shows its track count and its total time as two
+/// fact pills, and each pill's value paints its own type's token.
+#[test]
+fn the_album_block_pills_type_their_count_and_their_time() {
+    let fixture = built_hero();
+
+    assert_eq!(
+        fixture.count_of("[data-library-hero-block-pills] [data-library-hero-pill]"),
+        2,
+        "the block paints two fact pills"
+    );
     let count = fixture.attr_of(
-        "[data-library-hero-block-facts] [data-meta-kind=\"count\"]",
+        "[data-library-hero-block-pills] [data-meta-kind=\"count\"]",
         "style",
     );
     assert!(
@@ -632,12 +656,12 @@ fn the_album_facts_line_types_its_count_and_its_time() {
         "the count paints its own token, painted: {count:?}"
     );
     assert_eq!(
-        fixture.text_of("[data-library-hero-block-facts] [data-meta-kind=\"count\"]"),
+        fixture.text_of("[data-library-hero-block-pills] [data-meta-kind=\"count\"]"),
         "2",
         "the count's text is the track count"
     );
     let time = fixture.attr_of(
-        "[data-library-hero-block-facts] [data-meta-kind=\"time\"]",
+        "[data-library-hero-block-pills] [data-meta-kind=\"time\"]",
         "style",
     );
     assert!(

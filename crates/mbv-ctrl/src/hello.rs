@@ -1,11 +1,12 @@
 use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
-    CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_NAMED_QUEUES,
-    CTRL_CAP_OWNER_ACTION, CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP,
-    CTRL_CAP_PINNED_SURFACE, CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_REPLACE_START_POSITION,
-    CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN,
-    CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY, CTRL_CAP_TWITCH_QUEUE, CTRL_PROTOCOL_VERSION,
+    CTRL_CAP_EMBY_PERSON_IMAGES, CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN,
+    CTRL_CAP_NAMED_QUEUES, CTRL_CAP_OWNER_ACTION, CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE,
+    CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE, CTRL_CAP_PLAYBACK_OUTPUT,
+    CTRL_CAP_QUEUE_REPLACE_START_POSITION, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
+    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
+    CTRL_CAP_TWITCH_QUEUE, CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -63,6 +64,7 @@ impl CtrlHello {
                 CTRL_CAP_QUEUE_SHUFFLE.to_string(),
                 CTRL_CAP_QUEUE_REPLACE_START_POSITION.to_string(),
                 CTRL_CAP_TWITCH_QUEUE.to_string(),
+                CTRL_CAP_EMBY_PERSON_IMAGES.to_string(),
             ],
             control_token: None,
             swap_token: None,
@@ -260,6 +262,15 @@ impl CtrlHello {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_QUEUE_REPLACE_START_POSITION)
+    }
+
+    /// The peer can decode the optional Emby person `id` and
+    /// `primary_image_tag` in unified queue item payloads (gui-hero-design-polish D3).
+    #[must_use]
+    pub fn supports_emby_person_images(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_EMBY_PERSON_IMAGES)
     }
 
     #[must_use]

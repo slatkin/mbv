@@ -620,6 +620,7 @@ fn feeds_frame(rows: Vec<GuiEntryRowFrame>, loading: bool, failed: bool) -> GuiF
 /// The Feeds detail part: `selected` picked, and no Hero.
 fn feeds_detail(selected: Option<&str>) -> GuiFeedsDetail {
     GuiFeedsDetail {
+        playing_entry_id: None,
         selected: selected.map(str::to_owned),
         hero: None,
     }

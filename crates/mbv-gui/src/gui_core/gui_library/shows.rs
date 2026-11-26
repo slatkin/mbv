@@ -14,6 +14,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use mbv_ui_model::library_hero::producers::hero_content_queue;
 
+use super::hero_facts::hero_facts_queue;
 use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use crate::gui_core::GuiCore;
@@ -169,15 +170,18 @@ pub(in crate::gui_core::gui_library) fn shows_new_item(
         .cloned()
 }
 
-/// The single flat row's Hero facts (design D9): the shared Hero producer the
-/// Recently added rows use, so a New row's Hero cannot drift from the same
-/// item shown elsewhere. No Workspace rides a flat episode Hero.
+/// The single flat row's Hero facts (design D9; gui-hero-design-polish
+/// design D1): the D1 queue builder's facts, and the split title's parent —
+/// the item's series — so the header title rule (invariant 30) reads one
+/// split. Shows New passes no feed name: the split reads the series alone.
+/// No Workspace rides a flat episode Hero.
 pub(in crate::gui_core::gui_library) fn shows_flat_hero(
     app: &mut App,
     item: &EmbyItem,
 ) -> super::GuiShowsHero {
     let item = QueueItem::Emby(Box::new(item.clone()));
     let content = hero_content_queue(&item);
+    let parts = item.playback_title_parts(None);
     let art = super::artwork::emby_hero_art(app, content.facts.artwork.source.as_ref());
     let art_shape = super::home::artwork_shape(super::artwork::hero_shape(
         app,
@@ -186,10 +190,8 @@ pub(in crate::gui_core::gui_library) fn shows_flat_hero(
     ));
     super::GuiShowsHero {
         title: content.facts.title.clone(),
-        parent: None,
-        meta_rows: content.facts.meta_rows.clone(),
-        duration_row: content.facts.duration_row,
-        progress_row: content.facts.progress_row,
+        parent: parts.context.map(|context| context.text),
+        facts: hero_facts_queue(&item),
         overview: content.overview.clone(),
         art_shape,
         art,

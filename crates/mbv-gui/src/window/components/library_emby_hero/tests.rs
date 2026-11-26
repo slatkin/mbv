@@ -1,16 +1,19 @@
-//! Headless tests of the plain Emby-library Hero (D16): the contracts of
-//! `LibraryEmbyHero.test.ts` — the artwork box reserves the arm the frame
-//! declares, the header paints the kind word's kicker and the movie's title,
-//! the credits table and the `IMDb` button paint as the TUI's hero shows them,
-//! a press on the `IMDb` button sends the open-url command with the url the
-//! frame carries (the `IMDb` meta row mapped out of the header's facts), a
-//! Hero without facts paints nothing, no Workspace and no tracklist paint,
-//! and the actions send the Emby commands with the frame's selected row. The
-//! The IPC of the earlier tests is the mock core link here; the asserted
-//! commands are the same neutral shapes. A headless document cannot fire a
-//! DOM click, so the press contracts ride the handler functions the
-//! component's own handlers call one line each. The core channel is a mock
-//! pair; no test opens a window, sleeps, or reaches the core.
+//! Headless tests of the plain Emby-library Hero (gui-hero-design-polish
+//! design D2, D3, D4): the contracts of the movie case of the spec scenario
+//! "A movie's Hero" — the header band paints the kind word's kicker, the
+//! movie's title, and the fact pills in the frame's order with the `IMDb` link
+//! as a link pill; the detail block paints the labelled rows in the frame's
+//! order and no runtime row; the cast grid paints the members in the frame's
+//! order, a member with no photo shows the member's initials; no `IMDb` header
+//! action paints; the Hero's art makes its backdrop through the shared
+//! art-to-backdrop mapping; a Hero without facts paints nothing; no Workspace
+//! and no tracklist paint; and the actions send the Emby commands with the
+//! frame's selected row. The IPC of the earlier tests is the mock core link
+//! here; the asserted commands are the same neutral shapes. A headless
+//! document cannot fire a DOM click, so the press contracts ride the handler
+//! functions the component's own handlers call one line each. The core
+//! channel is a mock pair; no test opens a window, sleeps, or reaches the
+//! core.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,10 +25,12 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
-use super::{LibraryEmbyHero, open_imdb};
+use super::LibraryEmbyHero;
+use crate::art::{GuiArtRef, art_url};
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame,
-    GuiEmbyList, GuiLibraryDetail, GuiLibraryList, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiArtShapeFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList,
+    GuiHeroCastMemberFrame, GuiHeroFactLabelFrame, GuiHeroFactRowFrame, GuiHeroFactsFrame,
+    GuiHeroPillFrame, GuiLibraryDetail, GuiLibraryList, GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -39,29 +44,66 @@ use crate::window::sections::{SectionRef, Sections};
 /// The library index the Emby commands name.
 const LIB_IDX: usize = 3;
 
-/// The selected row's Hero facts: two meta rows, with the runtime and the
-/// resume roles marked, and the overview text (design D12, row 8.1).
-fn hero(art_shape: GuiArtShapeFrame) -> GuiEmbyHeroFrame {
+/// One typed segment, as the pills and the row values carry their text.
+fn segment(text: &str, kind: GuiMetaKindFrame) -> GuiMetaSegmentFrame {
+    GuiMetaSegmentFrame {
+        text: text.to_owned(),
+        kind,
+    }
+}
+
+/// One fact pill: its typed segments, no link.
+fn pill(segments: Vec<GuiMetaSegmentFrame>) -> GuiHeroPillFrame {
+    GuiHeroPillFrame {
+        segments,
+        link: None,
+    }
+}
+
+/// One link pill: its typed segments and the URL its press opens.
+fn link_pill(segments: Vec<GuiMetaSegmentFrame>, url: &str) -> GuiHeroPillFrame {
+    GuiHeroPillFrame {
+        segments,
+        link: Some(url.to_owned()),
+    }
+}
+
+/// One labelled fact row: the label word its enum names, one plain value.
+fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
+    GuiHeroFactRowFrame {
+        label,
+        value: vec![segment(value, GuiMetaKindFrame::Plain)],
+    }
+}
+
+/// The selected row's Hero facts: the movie case of the spec scenario
+/// "A movie's Hero" — pills for the year, the genre, the runtime, and the
+/// `IMDb` link; rows for the director, the release date, and the studio, and
+/// no runtime row.
+fn movie_hero(art_shape: GuiArtShapeFrame) -> GuiEmbyHeroFrame {
     GuiEmbyHeroFrame {
         kind: "movie".to_owned(),
         title: "Heat".to_owned(),
-        meta_rows: vec![
-            vec![GuiMetaSegmentFrame {
-                text: "2 h 50 m".to_owned(),
-                kind: GuiMetaKindFrame::Time,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "1995 · Crime".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-        ],
-        duration_row: Some(0),
-        progress_row: Some(1),
+        facts: GuiHeroFactsFrame {
+            pills: vec![
+                pill(vec![segment("1995", GuiMetaKindFrame::Date)]),
+                pill(vec![segment("Crime", GuiMetaKindFrame::Plain)]),
+                pill(vec![segment("2 h 50 m", GuiMetaKindFrame::Time)]),
+                link_pill(
+                    vec![segment("IMDb", GuiMetaKindFrame::Plain)],
+                    "https://www.imdb.com/title/tt0113277/",
+                ),
+            ],
+            rows: vec![
+                row(GuiHeroFactLabelFrame::Director, "Michael Mann"),
+                row(GuiHeroFactLabelFrame::Released, "08 Oct 1995"),
+                row(GuiHeroFactLabelFrame::Studio, "20th Century Fox"),
+            ],
+        },
         overview: Some("A crew plans a bank job.".to_owned()),
         art_shape,
         art: None,
-        credits: Vec::new(),
-        imdb_url: None,
+        cast: Vec::new(),
     }
 }
 
@@ -192,25 +234,22 @@ impl Fixture {
             .to_owned()
     }
 
-    /// The attribute of the first node the selector names.
-    fn attr_of(&self, selector: &str, attribute: &str) -> Option<String> {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_node(id)
-            .expect("the node is in the document")
-            .attr(LocalName::from(attribute))
-            .map(str::to_owned)
-    }
-
-    /// The style attribute of the first node the selector names.
-    fn style_of(&self, selector: &str) -> String {
-        self.attr_of(selector, "style").unwrap_or_default()
-    }
-
     /// The attribute of every node the selector names, in paint order.
+    fn all_attrs(&self, selector: &str, attribute: &str) -> Vec<String> {
+        let dom = self.doc.inner();
+        dom.query_selector_all(selector)
+            .expect("the selector is valid")
+            .into_iter()
+            .filter_map(|id| {
+                dom.get_node(id)
+                    .expect("the node is in the document")
+                    .attr(LocalName::from(attribute))
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
+    /// The texts of every node the selector names, in paint order.
     fn all_texts(&self, selector: &str) -> Vec<String> {
         let dom = self.doc.inner();
         dom.query_selector_all(selector)
@@ -272,47 +311,12 @@ fn built(facts: Option<GuiEmbyHeroFrame>) -> Fixture {
     fixture
 }
 
-/// Contract (`LibraryEmbyHero.test.ts`, design D15): the artwork box reserves
-/// the arm the frame declares — a portrait or square cover keeps the Music
-/// Hero's 300 px box at the aspect's height.
-#[rstest]
-#[case::square(GuiArtShapeFrame::Square, "300px")]
-#[case::portrait(GuiArtShapeFrame::Portrait, "450px")]
-fn a_cover_hero_places_its_artwork_box_at_300_px_by_the_aspect_s_height(
-    #[case] shape: GuiArtShapeFrame,
-    #[case] height: &str,
-) {
-    let fixture = built(Some(hero(shape)));
-
-    let style = fixture.style_of("[data-library-emby-hero-art]");
-    assert!(
-        style.contains("width: 300px") && style.contains(&format!("height: {height}")),
-        "the box holds 300 px by {height}, painted: {style}"
-    );
-}
-
-/// Contract (`LibraryEmbyHero.test.ts`, design D15): a landscape still fills
-/// the content width at 16:9 instead of the 300 px box, as the TUI's hero
-/// does.
-#[test]
-fn a_landscape_hero_fills_the_content_width_at_16_9_instead_of_the_300_px_box() {
-    let fixture = built(Some(hero(GuiArtShapeFrame::Landscape)));
-
-    let style = fixture.style_of("[data-library-emby-hero-art]");
-    assert!(
-        style.contains("width: 100%")
-            && style.contains("aspect-ratio: 16 / 9")
-            && style.contains("height: auto"),
-        "the landscape still fills the content width at 16:9, painted: {style}"
-    );
-}
-
 /// Contract (`LibraryEmbyHero.test.ts`, invariant 30): the header's big title
 /// is the movie itself (a movie is its own largest unit), and the kicker is
 /// the item's kind word in upper case.
 #[test]
 fn the_header_paints_the_item_kind_s_kicker_and_the_movie_s_title() {
-    let fixture = built(Some(hero(GuiArtShapeFrame::Landscape)));
+    let fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
 
     assert_eq!(
         fixture.text_of("[data-library-emby-hero-kicker]"),
@@ -326,80 +330,188 @@ fn the_header_paints_the_item_kind_s_kicker_and_the_movie_s_title() {
     );
 }
 
-/// Contract (`LibraryEmbyHero.test.ts`, design D17, Q7): the Hero paints its
-/// credits table as the TUI's hero shows it — the director first, the name at
-/// the left and the role at the right.
+/// Contract (spec scenario "A movie's Hero", gui-hero-design-polish D2): the
+/// header band paints the movie's fact pills in the frame's order — the year,
+/// each genre, the runtime, and the `IMDb` link as the one link pill.
 #[test]
-fn the_hero_paints_its_credits_table() {
-    let mut facts = hero(GuiArtShapeFrame::Landscape);
-    facts.credits = vec![
-        GuiEmbyHeroCreditFrame {
-            name: "Michael Mann".to_owned(),
-            role: "Director".to_owned(),
-        },
-        GuiEmbyHeroCreditFrame {
-            name: "Al Pacino".to_owned(),
-            role: "Lt. Vincent Hanna".to_owned(),
-        },
-    ];
-    let fixture = built(Some(facts));
+fn the_header_paints_the_movie_s_pills_in_the_frame_s_order() {
+    let fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
 
     assert_eq!(
-        fixture.all_texts("[data-library-emby-hero-credit-name]"),
-        vec!["Michael Mann".to_owned(), "Al Pacino".to_owned()],
+        fixture.all_texts("[data-library-emby-hero-pill]"),
+        vec![
+            "1995".to_owned(),
+            "Crime".to_owned(),
+            "2 h 50 m".to_owned(),
+            "IMDb".to_owned(),
+        ],
+        "the pills paint in the frame's order, the IMDb link among them"
+    );
+    assert_eq!(
+        fixture.all_attrs(
+            "[data-library-emby-hero-pill]",
+            "data-library-emby-hero-pill"
+        ),
+        vec![
+            "fact".to_owned(),
+            "fact".to_owned(),
+            "fact".to_owned(),
+            "link".to_owned(),
+        ],
+        "the IMDb pill paints as the one link pill"
+    );
+}
+
+/// Contract (spec scenario "A movie's Hero", gui-hero-design-polish D2): the
+/// detail block paints the movie's labelled rows in the frame's order — the
+/// director, the release date, and the studio — and no runtime row: the
+/// runtime is a header pill, so no row paints a duration.
+#[test]
+fn the_block_paints_the_movie_s_labelled_rows_in_the_frame_s_order() {
+    let fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
+
+    assert_eq!(
+        fixture.all_attrs("[data-library-emby-hero-row]", "data-library-emby-hero-row"),
+        vec![
+            "director".to_owned(),
+            "released".to_owned(),
+            "studio".to_owned()
+        ],
+        "the rows paint in the frame's order, the label wire per row"
+    );
+    assert_eq!(
+        fixture.all_texts("[data-library-emby-hero-row-label]"),
+        vec![
+            "Director".to_owned(),
+            "Released".to_owned(),
+            "Studio".to_owned()
+        ],
+        "each row paints the label word its enum names"
+    );
+    assert_eq!(
+        fixture.all_texts("[data-library-emby-hero-row-value]"),
+        vec![
+            "Michael Mann".to_owned(),
+            "08 Oct 1995".to_owned(),
+            "20th Century Fox".to_owned(),
+        ],
+        "each row paints its value beside the label"
+    );
+}
+
+/// Contract (spec scenario "A movie's Hero", the cast member with no photo,
+/// gui-hero-design-polish D3): the cast grid paints the members in the
+/// frame's order — the people that are not directors — with each member's
+/// name and role.
+#[test]
+fn the_cast_grid_paints_the_members_in_the_frame_s_order() {
+    let mut hero = movie_hero(GuiArtShapeFrame::Landscape);
+    hero.cast = vec![
+        GuiHeroCastMemberFrame {
+            name: "Al Pacino".to_owned(),
+            role: "Lt. Vincent Hanna".to_owned(),
+            initials: "AP".to_owned(),
+            photo: None,
+        },
+        GuiHeroCastMemberFrame {
+            name: "Robert De Niro".to_owned(),
+            role: "Neil McCauley".to_owned(),
+            initials: "RD".to_owned(),
+            photo: Some(GuiArtRef::Image {
+                src: art_url("card/photo"),
+            }),
+        },
+    ];
+    let fixture = built(Some(hero));
+
+    assert_eq!(
+        fixture.all_texts("[data-library-emby-hero-cast-name]"),
+        vec!["Al Pacino".to_owned(), "Robert De Niro".to_owned()],
         "the names paint in the frame's order"
     );
     assert_eq!(
-        fixture.all_texts("[data-library-emby-hero-credit-role]"),
-        vec!["Director".to_owned(), "Lt. Vincent Hanna".to_owned()],
+        fixture.all_texts("[data-library-emby-hero-cast-role]"),
+        vec!["Lt. Vincent Hanna".to_owned(), "Neil McCauley".to_owned()],
         "the roles paint beside their names"
     );
 }
 
-/// Contract (`LibraryEmbyHero.test.ts`, design D17, Q7): the `IMDb` button
-/// paints under the url the frame carries, and a press sends the open-url
-/// command with it. The `IMDb` meta row rides as the header's trailing
-/// action, mapped out of the facts the layout joins (invariant 30: the piece
-/// is never bent) — the press contract rides the handler function the
-/// component's own handler calls (a headless document cannot fire a DOM
-/// click).
+/// Contract (spec scenario "A cast member with no photo", gui-hero-design-polish
+/// D3): the member the Service holds no photo for shows the member's initials
+/// where a photo would show, and the member with a photo paints the photo.
 #[test]
-fn the_imdb_button_paints_and_a_press_sends_the_open_url_command() {
-    let mut facts = hero(GuiArtShapeFrame::Landscape);
-    facts.progress_row = None;
-    facts.meta_rows.push(vec![GuiMetaSegmentFrame {
-        text: "IMDb".to_owned(),
-        kind: GuiMetaKindFrame::Plain,
-    }]);
-    facts.imdb_url = Some("https://www.imdb.com/title/tt0113277/".to_owned());
-    let mut fixture = built(Some(facts));
+fn a_cast_member_with_no_photo_shows_the_member_s_initials() {
+    let mut hero = movie_hero(GuiArtShapeFrame::Landscape);
+    hero.cast = vec![
+        GuiHeroCastMemberFrame {
+            name: "Al Pacino".to_owned(),
+            role: "Lt. Vincent Hanna".to_owned(),
+            initials: "AP".to_owned(),
+            photo: None,
+        },
+        GuiHeroCastMemberFrame {
+            name: "Robert De Niro".to_owned(),
+            role: "Neil McCauley".to_owned(),
+            initials: "RD".to_owned(),
+            photo: Some(GuiArtRef::Image {
+                src: art_url("card/photo"),
+            }),
+        },
+    ];
+    let fixture = built(Some(hero));
 
     assert_eq!(
-        fixture.text_of("[data-library-emby-imdb]"),
-        "IMDb",
-        "the IMDb button paints"
+        fixture.all_texts("[data-library-emby-hero-cast-initials]"),
+        vec!["AP".to_owned()],
+        "the member with no photo shows the member's initials"
     );
+    let photos = fixture.all_attrs("[data-library-emby-hero-cast-photo] img", "src");
     assert_eq!(
-        fixture.attr_of("[data-library-emby-imdb]", "data-library-emby-imdb"),
-        Some("https://www.imdb.com/title/tt0113277/".to_owned()),
-        "the button carries the url the frame holds"
+        photos,
+        vec![art_url("card/photo")],
+        "the member with a photo paints the photo"
     );
-    assert_eq!(
-        fixture.text_of("[data-library-emby-hero-facts]"),
-        "1995 · Crime",
-        "the IMDb meta row maps out of the header's facts"
-    );
+}
 
-    let url = "https://www.imdb.com/title/tt0113277/".to_owned();
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || open_imdb(&state, &url));
+/// Contract (gui-hero-design-polish D2, the deleted `IMDb` header action): no
+/// `IMDb` button paints in the header band — the `IMDb` link is the link pill,
+/// and no other header action paints.
+#[test]
+fn no_imdb_header_action_paints() {
+    let fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
+
+    assert!(
+        !fixture.presents("[data-library-emby-imdb]"),
+        "no IMDb header action paints"
+    );
+    assert!(
+        fixture.presents("[data-library-emby-hero-pill]"),
+        "the IMDb link paints as a fact pill instead"
+    );
+}
+
+/// The one case table (gui-hero-design-polish D4, spec scenario "The Hero's
+/// artwork makes its backdrop"): the backdrop paints through the shared art-to-backdrop
+/// mapping exactly when the Hero carries art with a card source — none paints
+/// without art, with the bundled placeholder, or with art still loading.
+#[rstest]
+#[case::no_art(None, false)]
+#[case::placeholder_art(Some(GuiArtRef::Placeholder {
+    src: art_url("placeholder"),
+}), false)]
+#[case::loading_art(Some(GuiArtRef::Loading), false)]
+#[case::card_art(Some(GuiArtRef::Image {
+    src: art_url("card/backdrop"),
+}), true)]
+fn the_hero_s_art_makes_its_backdrop(#[case] art: Option<GuiArtRef>, #[case] paints: bool) {
+    let mut hero = movie_hero(GuiArtShapeFrame::Landscape);
+    hero.art = art;
+    let fixture = built(Some(hero));
 
     assert_eq!(
-        fixture.library_commands(),
-        vec![crate::gui_core::GuiLibraryCommand::OpenUrl {
-            url: "https://www.imdb.com/title/tt0113277/".to_owned(),
-        }],
-        "the press sends the open-url command with the frame's url"
+        fixture.presents("[data-library-emby-hero-backdrop]"),
+        paints,
+        "the backdrop paints exactly when the Hero carries card art"
     );
 }
 
@@ -420,7 +532,7 @@ fn a_hero_that_paints_none_paints_nothing() {
 /// folder-play rule, so the Hero is one block.
 #[test]
 fn the_hero_paints_no_workspace_and_no_tracklist() {
-    let fixture = built(Some(hero(GuiArtShapeFrame::Landscape)));
+    let fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
 
     assert!(
         !fixture.presents("[data-library-shows-workspace]"),
@@ -438,7 +550,7 @@ fn the_hero_paints_no_workspace_and_no_tracklist() {
 /// click).
 #[test]
 fn play_sends_the_play_command_for_the_selected_row() {
-    let mut fixture = built(Some(hero(GuiArtShapeFrame::Landscape)));
+    let mut fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();
@@ -461,7 +573,7 @@ fn play_sends_the_play_command_for_the_selected_row() {
 /// function (a headless document cannot fire a DOM click).
 #[test]
 fn add_to_queue_sends_the_enqueue_command_for_the_selected_row() {
-    let mut fixture = built(Some(hero(GuiArtShapeFrame::Landscape)));
+    let mut fixture = built(Some(movie_hero(GuiArtShapeFrame::Landscape)));
 
     let detail = fixture.detail.clone();
     let state = fixture.state.clone();

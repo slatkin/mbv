@@ -1,6 +1,6 @@
-//! The wire form of a Hero meta row (design D14). A row is a list of typed
-//! segments; the window paints each segment in its kind's colour and joins
-//! nothing it has not been given.
+//! The wire form of a typed text segment (design D14). The window paints
+//! each segment in its kind's colour and joins nothing it has not been
+//! given.
 
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
@@ -48,10 +48,9 @@ impl From<&MetaSegment> for GuiMetaSegmentFrame {
     }
 }
 
-/// The wire rows of a Hero's meta rows, in display order.
+/// The wire segments of one typed text run, in paint order: the pills and
+/// the fact rows' values (`gui-hero-design-polish` design D1).
 #[must_use]
-pub fn gui_meta_rows(rows: &[Vec<MetaSegment>]) -> Vec<Vec<GuiMetaSegmentFrame>> {
-    rows.iter()
-        .map(|row| row.iter().map(GuiMetaSegmentFrame::from).collect())
-        .collect()
+pub fn gui_meta_segments(segments: &[MetaSegment]) -> Vec<GuiMetaSegmentFrame> {
+    segments.iter().map(GuiMetaSegmentFrame::from).collect()
 }

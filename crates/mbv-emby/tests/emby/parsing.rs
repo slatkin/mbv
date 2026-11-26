@@ -40,7 +40,7 @@ fn parse_item_metadata_lists() {
         "Genres": ["Action", "Drama"],
         "People": [
             {"Name": "Director", "Type": "Director"},
-            {"Name": "Actor", "Role": "Hero", "Type": "Actor"}
+            {"Name": "Actor", "Role": "Hero", "Type": "Actor", "Id": "p-9", "PrimaryImageTag": "tag-1"}
         ],
         "ExternalUrls": [
             {"Name": "IMDb", "Url": "https://imdb.example/movie"},
@@ -53,10 +53,16 @@ fn parse_item_metadata_lists() {
         EmbyPerson {
             name: "Director".into(),
             role: String::new(),
-            kind: "Director".into()
+            kind: "Director".into(),
+            id: String::new(),
+            primary_image_tag: String::new(),
         }
     );
     assert_eq!(item.people[1].role, "Hero");
+    // A person with image identity carries both fields; a person without
+    // them decodes both as empty.
+    assert_eq!(item.people[1].id, "p-9");
+    assert_eq!(item.people[1].primary_image_tag, "tag-1");
     assert_eq!(item.external_urls[0].name, "IMDb");
     assert_eq!(item.external_urls[1].url, "");
 }

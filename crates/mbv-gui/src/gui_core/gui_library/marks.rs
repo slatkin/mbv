@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use mbv_queue::{AudiobookshelfItem, QueueItem};
 
+use super::feeds_projection::feed_entry_row_id;
 use crate::gui_core::GuiCore;
 use mbv_client_core::App;
 
@@ -25,6 +26,9 @@ pub struct GuiPlayheadMarks {
     /// slot is pending, so a pending book marks nothing (`playing_book_chapter`'s
     /// rule).
     pub audiobook: Option<String>,
+    /// The encoded feed entry playing at the playhead, in the form the Feeds
+    /// rows carry (`GuiFeedEntryId::encode`). `None` while no feed entry plays.
+    pub feed_entry: Option<String>,
 }
 
 impl GuiCore {
@@ -77,6 +81,35 @@ pub fn playhead_marks(app: &App) -> GuiPlayheadMarks {
     GuiPlayheadMarks {
         music_track: super::playing_track_id_for_shell(app),
         audiobook: playing_book_id(app),
+        feed_entry: playing_feed_entry_id(app),
+    }
+}
+
+/// The queue item at the displayed playhead, or `None` while idle. Each
+/// playing-identity read below names its own kind of item from it.
+fn playhead_item(app: &App) -> Option<&QueueItem> {
+    let state = app.displayed_playback_state();
+    if !state.active {
+        return None;
+    }
+    app.queue_item_at_playhead(state)
+}
+
+/// The id of the Emby episode at the playhead (design D6), or `None` while no
+/// episode plays. A Shows row carries this id to mark itself playing.
+pub(crate) fn playing_episode_id(app: &App) -> Option<String> {
+    match playhead_item(app) {
+        Some(QueueItem::Emby(item)) if item.item_type == "Episode" => Some(item.id.clone()),
+        Some(_) | None => None,
+    }
+}
+
+/// The encoded id of the feed entry at the playhead (design D6), in the form
+/// the Feeds rows carry, or `None` while no feed entry plays.
+pub(crate) fn playing_feed_entry_id(app: &App) -> Option<String> {
+    match playhead_item(app) {
+        Some(QueueItem::Feed(entry)) => Some(feed_entry_row_id(entry)),
+        Some(_) | None => None,
     }
 }
 

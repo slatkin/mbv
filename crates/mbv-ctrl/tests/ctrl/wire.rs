@@ -69,6 +69,26 @@ fn player_status_with_legacy_play_order_field_still_decodes() {
     assert_eq!(decoded.queue_len, 0);
 }
 
+// gui-hero-design-polish task 1.4: the Emby person `id` and `primary_image_tag`
+// are additive on the shared queue item payload (design D3); the conformance
+// fixture pins the populated shape, and this pins the decode tolerance — a
+// payload from a peer that predates the fields decodes both as empty.
+#[test]
+fn queue_item_person_payload_without_image_fields_decodes_empty() {
+    use mbv_queue::QueueItem;
+
+    let mut payload = serde_json::to_value(QueueItem::Emby(Box::new(stub_media_item()))).unwrap();
+    payload["people"] = serde_json::json!([{"name": "Jane Doe", "role": "Lead", "kind": "Actor"}]);
+
+    let decoded: QueueItem = serde_json::from_value(payload).unwrap();
+
+    let QueueItem::Emby(emby) = decoded else {
+        panic!("expected an Emby item")
+    };
+    assert_eq!(emby.people[0].id, "");
+    assert_eq!(emby.people[0].primary_image_tag, "");
+}
+
 #[rstest::rstest]
 #[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1, op: None, queue: None }, true)]
 #[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2], op: None, queue: None }, true)]

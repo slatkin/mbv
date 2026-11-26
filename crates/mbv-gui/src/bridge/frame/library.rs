@@ -22,6 +22,7 @@ mod detail;
 mod emby;
 mod entry_list;
 mod feeds;
+mod hero_facts;
 mod home;
 mod list;
 mod meta;
@@ -37,17 +38,20 @@ pub use self::audiobooks::{
 pub use self::collections::{ALL_KEY, GuiCollectionEntry, GuiCollections, GuiCollectionsFrame};
 pub use self::detail::GuiLibraryDetail;
 pub use self::emby::{
-    GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame,
-    GuiEmbyRowKindFrame,
+    GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
 };
 pub use self::entry_list::GuiEntryRowFrame;
 pub use self::feeds::{GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList};
+pub use self::hero_facts::{
+    GuiHeroCastMemberFrame, GuiHeroFactLabelFrame, GuiHeroFactRowFrame, GuiHeroFactsFrame,
+    GuiHeroPillFrame,
+};
 pub use self::home::{
     GuiHomeDetail, GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
     GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame,
 };
 pub use self::list::{GuiDestinationList, GuiLibraryList};
-pub use self::meta::{GuiMetaKindFrame, GuiMetaSegmentFrame, gui_meta_rows};
+pub use self::meta::{GuiMetaKindFrame, GuiMetaSegmentFrame, gui_meta_segments};
 pub use self::music::{
     GuiArtistKey, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicArtistPageFrame, GuiMusicDetail,
     GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame,

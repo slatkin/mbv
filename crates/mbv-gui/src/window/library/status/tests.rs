@@ -253,6 +253,7 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
         }),
     };
     let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        playing_entry_id: None,
         selected: Some("sub1:guid12".to_owned()),
         hero: None,
     });
@@ -274,12 +275,15 @@ fn home_content() -> (GuiLibraryList, GuiLibraryDetail) {
         selected: None,
         hero: Some(GuiHomeHeroFrame {
             title: "Better Call Saul".to_owned(),
-            meta_rows: Vec::new(),
-            duration_row: None,
-            progress_row: None,
+            parent: None,
+            facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                pills: Vec::new(),
+                rows: Vec::new(),
+            },
             overview: None,
             art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
             art: None,
+            cast: Vec::new(),
         }),
     });
     (list, detail)
@@ -323,6 +327,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: Some("s2".to_owned()),
         hero: None,

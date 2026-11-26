@@ -15,8 +15,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEntryRowFrame,
     GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiRowArtFrame,
-    GuiRowMediaKindFrame,
+    GuiLibraryList, GuiLibraryTabFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::window::library::feeds::initial_feeds_ui;
@@ -95,12 +94,10 @@ fn feeds_hero(parent: &str) -> GuiFeedsHeroFrame {
     GuiFeedsHeroFrame {
         title: "Entry A".to_owned(),
         parent: Some(parent.to_owned()),
-        meta_rows: vec![vec![GuiMetaSegmentFrame {
-            text: "0 h 54 m".to_owned(),
-            kind: GuiMetaKindFrame::Time,
-        }]],
-        duration_row: Some(0),
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         art_shape: GuiArtShapeFrame::Square,
     }
 }
@@ -160,7 +157,11 @@ fn feeds_content_selected(
             rows: rows.to_owned(),
         }),
     };
-    let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail { selected, hero });
+    let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        selected,
+        hero,
+        playing_entry_id: None,
+    });
     (list, detail)
 }
 

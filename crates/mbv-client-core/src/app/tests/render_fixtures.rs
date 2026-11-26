@@ -29,6 +29,8 @@ pub fn make_movie_app() -> App {
         name: "Director Hidden".into(),
         role: String::new(),
         kind: "Director".into(),
+        id: String::new(),
+        primary_image_tag: String::new(),
     }];
     focused.production_year = 1988;
     focused.genres = vec!["Action".into()];

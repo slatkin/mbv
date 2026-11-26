@@ -93,6 +93,17 @@ impl GuiCore {
         art_source(&self.app, cache_key)
     }
 
+    /// The source the Hero backdrop for the art cached under `cache_key`
+    /// blurs (design D4): the tiny Backdrop image once it landed, and the
+    /// Hero's own art when the item has no Backdrop image. `None` while the
+    /// tiny image is still in flight, so the request answers `Missing` and the
+    /// window asks again, rather than baking and keeping the wrong image.
+    /// Like [`Self::gui_art_source`], it starts no fetch.
+    #[must_use]
+    pub fn gui_backdrop_source(&self, cache_key: &str) -> Option<(String, SourceImage)> {
+        backdrop_source(&self.app, cache_key)
+    }
+
     /// Project the Hero's artwork for the album `album_id` (design D5).
     #[must_use]
     pub fn gui_library_artwork(&mut self, album_id: &str) -> GuiLibraryArtwork {
@@ -117,6 +128,21 @@ pub(in crate::gui_core::gui_library) fn art_source(
     app.image_cache()
         .image(cache_key)
         .and_then(|entry| entry.source.clone())
+}
+
+/// The source the Hero backdrop for the art cached under `cache_key` blurs,
+/// with the key it sits under: the tiny Backdrop image once it landed, the
+/// Hero's own art when the item has no Backdrop image, and `None` while the
+/// tiny image is in flight.
+fn backdrop_source(app: &App, cache_key: &str) -> Option<(String, SourceImage)> {
+    let backdrop_key = mbv_images::backdrop_cache_key(cache_key);
+    match resolve_gui_art(app, &backdrop_key) {
+        GuiLibraryArtwork::Image { key, source } => Some((key, source)),
+        GuiLibraryArtwork::Loading => None,
+        GuiLibraryArtwork::Placeholder => {
+            art_source(app, cache_key).map(|source| (cache_key.to_owned(), source))
+        }
+    }
 }
 
 /// The artist page's artwork source for a Service artist id
@@ -302,7 +328,35 @@ pub(in crate::gui_core::gui_library) fn home_hero_artwork(
         series_id.to_owned(),
         &types,
     );
+    // The Hero's backdrop blurs a tiny Backdrop image of its own (design D4),
+    // fetched beside the art it sits behind.
+    app.fetch_backdrop_image(
+        mbv_images::backdrop_cache_key(cache_key),
+        item_id.to_owned(),
+        series_id.to_owned(),
+    );
     resolve_gui_art(app, cache_key)
+}
+
+/// One cast member's photo (gui-hero-design-polish design D3): the person's
+/// Primary image under the person's own card key, fetched here and read from
+/// the image cache. `None` with no id or no tag — the person paints their
+/// initials — and `Some` with the fetch's loading state while it runs, so a
+/// started fetch never looks like a person with no photo.
+pub(in crate::gui_core::gui_library) fn emby_person_photo(
+    app: &mut App,
+    person_id: &str,
+    image_tag: &str,
+) -> Option<GuiLibraryArtwork> {
+    if person_id.is_empty() || image_tag.is_empty() {
+        return None;
+    }
+    // A cast photo paints as a small square circle, so it takes the square
+    // row thumb (the Music artist's own Primary request), not the Hero size.
+    let req = mbv_images::row::emby_row_primary_request(person_id);
+    let cache_key = req.cache_key.clone();
+    app.fetch_sized_image(req);
+    Some(resolve_gui_art(app, &cache_key))
 }
 
 /// The cached art under `cache_key`, as the server sent it, or the empty
@@ -331,3 +385,6 @@ pub(in crate::gui_core::gui_library) fn resolve_gui_art(
         None => GuiLibraryArtwork::Placeholder,
     }
 }
+
+#[cfg(test)]
+mod tests;

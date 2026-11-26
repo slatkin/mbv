@@ -178,3 +178,23 @@ fn a_square_row_request_url_asks_for_both_sides() {
         "https://emby.example/Items/item-1/Images/Primary?maxWidth=72&maxHeight=72&quality=60&api_key=secret"
     );
 }
+
+/// The Hero backdrop's source (gui-hero-design-polish design D4): the tiny
+/// 32 px, quality-90 request, and an episode's Backdrop addresses its series.
+#[test]
+fn a_backdrop_request_url_asks_for_a_tiny_image_of_the_series() {
+    let url = emby_type_url(
+        "Backdrop",
+        "episode-1",
+        "series-1",
+        &ImageRendition::Backdrop,
+        None,
+        "https://emby.example",
+        "secret",
+    );
+
+    assert_eq!(
+        url,
+        "https://emby.example/Items/series-1/Images/Backdrop/0?maxWidth=32&quality=90&api_key=secret"
+    );
+}

@@ -26,12 +26,12 @@ use super::GuiListSortFrame;
 use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
+use super::hero_facts::{GuiHeroCastMember, GuiHeroFacts, hero_cast_emby, hero_facts_emby};
 use super::home::{GuiArtShape, artwork_shape};
 use super::list_sort::gui_title_sort_key;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
-use mbv_ui_model::meta::MetaSegment;
 use mbv_ui_model::sort_filter::effective_sort_str;
 
 /// One row's kind (row 8.1): `Collection` when the row is a folder or a
@@ -70,22 +70,10 @@ pub struct GuiEmbyRow {
     pub media: GuiRowMediaKind,
 }
 
-/// One credit of the movie's credits table (design D17, Q7): the shared
-/// Emby hero producer's credit — the director first, then the cast — as the
-/// TUI's credits table paints it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiEmbyHeroCredit {
-    /// The person's name.
-    pub name: String,
-    /// The role painted beside the name: the person's role, else their
-    /// kind (a director's `Director`).
-    pub role: String,
-}
-
-/// The Hero's facts for the selected row (row 8.1): the shared Emby hero
-/// producer's facts for the item — the same facts the TUI paints — and the
-/// artwork at the artwork policy's chain. A plain Emby-library Hero has no
-/// Workspace, so none rides here.
+/// The Hero's facts for the selected row (row 8.1): the item's facts as the
+/// D1 builders split them — header pills and labelled rows — the movie's
+/// cast, and the artwork at the artwork policy's chain. A plain Emby-library
+/// Hero has no Workspace, so none rides here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEmbyHero {
     /// The item's kind word for the Hero's kicker (design D17): the item
@@ -94,14 +82,10 @@ pub struct GuiEmbyHero {
     pub kind: String,
     /// The hero's title.
     pub title: String,
-    /// The meta rows in display order.
-    pub meta_rows: Vec<Vec<MetaSegment>>,
-    /// Which meta row paints the duration role, when one does.
-    pub duration_row: Option<usize>,
-    /// Which meta row paints the progress role, when one does. The shared
-    /// Emby hero producer fills none, so an Emby-library hero carries `None`
-    /// exactly as the TUI's does.
-    pub progress_row: Option<usize>,
+    /// The item's facts (gui-hero-design-polish design D1): the header
+    /// band's pills and the detail block's labelled rows, each in paint
+    /// order.
+    pub facts: GuiHeroFacts,
     /// The cleaned overview text, when the item's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves: the artwork policy's declared
@@ -111,15 +95,10 @@ pub struct GuiEmbyHero {
     /// policy's chain. `None` when the item declares no image source; the
     /// window content paints its own placeholder there.
     pub art: Option<GuiLibraryArtwork>,
-    /// The movie's credits table (design D17, Q7): the shared Emby hero
-    /// producer's credits — the director first, then the cast. Empty when
-    /// the item carries no people or is not a movie, as the TUI's credits
-    /// table paints none either.
-    pub credits: Vec<GuiEmbyHeroCredit>,
-    /// The `IMDb` link's target (design D17, Q7), when the shared producer
-    /// carried one; the `IMDb` meta row links to it. `None` on an item the
-    /// producer gives no link, as the TUI paints no link either.
-    pub imdb_url: Option<String>,
+    /// The movie's cast (gui-hero-design-polish design D3): the people that
+    /// are not directors, in the order Emby gives. Empty when the item is
+    /// not a movie or carries no people.
+    pub cast: Vec<GuiHeroCastMember>,
 }
 
 /// The plain Emby-library projection the GUI Library panel paints (row 8.1):
@@ -338,37 +317,27 @@ impl GuiCore {
         hero_item(&self.app, lib_idx, &item).then(|| self.hero(&item))
     }
 
-    /// The selected row's Hero facts (row 8.1): the shared Emby hero
-    /// producer's facts, with the artwork fetched through the image cache at
-    /// the artwork policy's declared chain — the same facts and fetch the
-    /// TUI's hero paints. No Workspace rides a plain Emby-library Hero.
+    /// The selected row's Hero facts (row 8.1): the item's facts as the D1
+    /// builders split them, with the artwork fetched through the image cache
+    /// at the artwork policy's declared chain and the movie's cast built
+    /// through the shared cast helper.
     fn hero(&mut self, item: &EmbyItem) -> GuiEmbyHero {
         let content = hero_content_emby(item);
         let art =
             super::artwork::emby_hero_art(&mut self.app, content.facts.artwork.source.as_ref());
+        let cast = hero_cast_emby(&mut self.app, item);
         GuiEmbyHero {
             kind: item.item_type.to_lowercase(),
             title: content.facts.title.clone(),
-            meta_rows: content.facts.meta_rows.clone(),
-            duration_row: content.facts.duration_row,
-            progress_row: content.facts.progress_row,
+            facts: hero_facts_emby(item),
             overview: content.overview.clone(),
-            credits: content
-                .credits
-                .unwrap_or_default()
-                .into_iter()
-                .map(|credit| GuiEmbyHeroCredit {
-                    name: credit.name,
-                    role: credit.role,
-                })
-                .collect(),
-            imdb_url: content.facts.links.first().map(|link| link.url.clone()),
             art_shape: artwork_shape(super::artwork::hero_shape(
                 &self.app,
                 content.facts.artwork.shape,
                 art.as_ref(),
             )),
             art,
+            cast,
         }
     }
 }

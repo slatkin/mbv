@@ -13,8 +13,8 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiHomeRowStateFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiShowsDetail,
-    GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
+    GuiArtShapeFrame, GuiHomeRowStateFrame, GuiShowsDetail, GuiShowsEpisodeRowFrame,
+    GuiShowsHeroFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -146,18 +146,17 @@ fn shows_detail(episodes: Vec<GuiShowsEpisodeRowFrame>, selected_season: &str) -
     let hero = GuiShowsHeroFrame {
         title: "Better Call Saul".to_owned(),
         parent: None,
-        meta_rows: vec![vec![GuiMetaSegmentFrame {
-            text: "TV Series".to_owned(),
-            kind: GuiMetaKindFrame::Plain,
-        }]],
-        duration_row: None,
-        progress_row: None,
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
         overview: None,
         art_shape: GuiArtShapeFrame::Landscape,
         art: None,
         workspace: Some(workspace(episodes, selected_season)),
     };
     GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: Some("series1".to_owned()),
         hero: Some(hero),

@@ -301,6 +301,7 @@ fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
 /// The Shows detail part over `selected`, with no Hero painted here.
 fn shows_detail(selected: Option<&str>) -> GuiShowsDetail {
     GuiShowsDetail {
+        playing_episode_id: None,
         workspace_loading: false,
         selected: selected.map(str::to_owned),
         hero: None,

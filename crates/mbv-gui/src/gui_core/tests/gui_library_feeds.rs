@@ -392,11 +392,17 @@ fn all_merges_two_subscriptions_in_date_order_with_the_default_hero() {
         "the feed is the largest unit"
     );
     assert!(
-        hero.meta_rows.is_empty(),
-        "an entry of no duration adds no meta row, and the feed name is the parent"
+        hero.facts.pills.is_empty(),
+        "an entry of no duration adds no pill, and the feed name is the parent"
     );
-    assert_eq!(hero.duration_row, None);
-    assert_eq!(hero.progress_row, None);
+    assert_eq!(
+        row_texts(&hero.facts),
+        vec![(
+            GuiHeroFactLabel::Published,
+            mbv_ui_model::ui_util::fmt_publish_date(300)
+        )],
+        "the publish date is the one row"
+    );
     assert_eq!(
         hero.art_shape,
         crate::gui_core::GuiArtShape::Square,
@@ -658,4 +664,50 @@ fn a_feed_row_paints_no_art_and_its_declared_media_kind() {
         0,
         "a row with no source reserves no fetch"
     );
+}
+
+/// One row of `facts` as `(label, text)`, in paint order.
+fn row_texts(facts: &GuiHeroFacts) -> Vec<(GuiHeroFactLabel, String)> {
+    facts
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.label,
+                row.value.iter().map(|s| s.text.as_str()).collect(),
+            )
+        })
+        .collect()
+}
+
+/// The playing feed entry rides the Feeds projection and the playhead marks
+/// (gui-hero-design-polish design D6): an active entry names its row id in
+/// both reads, and an idle playhead names none.
+#[rstest]
+#[case::an_active_entry(true, Some(entry_id(FEED_A, "a-new")))]
+#[case::an_idle_playhead(false, None)]
+fn the_playing_feed_entry_rides_the_projection_and_the_marks(
+    #[case] active: bool,
+    #[case] expected: Option<String>,
+) {
+    let mut app = fetched_feeds_app();
+    let entry = gui_feeds_entries_seeded(&app)
+        .into_iter()
+        .find(|entry| entry.guid == "a-new")
+        .expect("the a-new entry is listed");
+    app.adopt_playing_queue_items_with_active_for_test(
+        vec![mbv_queue::QueueItem::Feed(entry)],
+        0,
+        0,
+    );
+    app.edit_player_status_for_test(|status| {
+        status.active = active;
+        status.current_idx = 0;
+    });
+
+    let projection = gui_feeds_projection_seeded(&app);
+    let marks = crate::gui_core::gui_library::marks::playhead_marks(&app);
+
+    assert_eq!(projection.playing_entry_id, expected);
+    assert_eq!(marks.feed_entry, expected);
 }
