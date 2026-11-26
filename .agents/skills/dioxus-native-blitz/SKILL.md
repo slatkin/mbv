@@ -1,6 +1,6 @@
 ---
 name: dioxus-native-blitz
-description: Work on the mbv GUI Client — the Dioxus Native window over the Blitz rendering engine in crates/mbv-gui. Use when the user mentions the GUI, mbv-gui, the window, a GUI surface, Dioxus, Blitz, rsx!, components, signals, or GUI styling or input. Triggers include "add a GUI panel", "the window paints X wrong", "how does rsx work", "make a component", "the signal does not update", "a Blitz gap", "regenerate the stylesheet", "make dev", "add a GUI surface to the Client". Do not use for TUI work (mbv-visual-tweak owns TUI appearance tweaks) or for changes outside crates/mbv-gui.
+description: Work on the mbv GUI Client — the Dioxus Native window over the Blitz rendering engine in crates/mbv-gui. Use when the user mentions the GUI, mbv-gui, the window, a GUI surface, Dioxus, Blitz, rsx!, components, signals, or GUI styling or input. Triggers include "add a GUI panel", "the window paints X wrong", "how does rsx work", "make a component", "the signal does not update", "a Blitz gap", "regenerate the stylesheet", "make run", "add a GUI surface to the Client". Do not use for TUI work (mbv-visual-tweak owns TUI appearance tweaks) or for changes outside crates/mbv-gui.
 ---
 
 # Dioxus Native on Blitz — the mbv GUI Client
@@ -336,15 +336,15 @@ A short map; `docs/architecture/gui-client.md` owns the detail.
 
 | What | Command |
 | --- | --- |
-| Build and run both binaries | `make dev` (or `make dev-release`) |
+| Build and run both binaries | `make run` (or `make dev-release`) |
 | Regenerate the stylesheet | `make gui-css` |
-| Check | `cargo check -p mbv-gui` |
-| Test | `cargo nextest run -p mbv-gui` |
+| Check | `make checks PKG=mbv-gui` |
+| Test | `make test PKG=mbv-gui` |
 | Logs | `mbv-gui.log` in the mbv state directory |
 
-`make dev` builds `mbv` and `mbv-gui` together, because the handshake refuses
-an Owner whose build id differs from the window's. `cargo run -p mbv-gui`
-alone leaves the Owner stale after a commit.
+`make run` builds `mbv` and `mbv-owner` together, because the handshake
+refuses an Owner whose build id differs from the window's. `cargo run -p
+mbv-gui` alone leaves the Owner stale after a commit.
 
 ## Tests
 

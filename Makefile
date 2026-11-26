@@ -4,7 +4,7 @@ BINARY     := mbv
 PREFIX     ?= /usr
 TAILWINDCSS ?= tailwindcss
 
-.PHONY: all build install uninstall clean clean-dev gui-css check-code-file-lines test-check-code-file-lines dev dev-release
+.PHONY: all build install uninstall clean clean-dev gui-css check-code-file-lines test-check-code-file-lines dev dev-release checks format format-check test run ast audit build-release test-release feature-matrix release release-preflight release-tag
 
 all: build
 
@@ -74,19 +74,73 @@ clean:
 clean-dev:
 	cargo clean --profile dev
 
+## Agent gates
+# Agents run these make targets instead of cargo directly, so the flags live
+# in one place. PKG=<package> narrows `checks` and `test` to one package; the
+# default is the whole workspace (which includes mbv-gui). Where a target
+# mirrors a .github/workflows/build.yml step, its comment names that step.
+PKG ?=
+SCOPE = $(if $(PKG),-p $(PKG),--workspace)
+
+# Typecheck and lint in one pass: clippy compiles every target it lints.
+# (CI: Lint)
+checks:
+	$(CARGO) clippy $(SCOPE) --all-targets -- -D warnings
+
+format:
+	$(CARGO) fmt --all
+
+# (CI: Check formatting)
+format-check:
+	$(CARGO) fmt --all -- --check
+
+test:
+	$(CARGO) nextest run $(SCOPE)
+
+# (CI: Ast-grep tripwires)
+ast:
+	ast-grep test --skip-snapshot-tests
+	ast-grep scan .
+
+# (CI: Audit dependencies)
+audit:
+	$(CARGO) audit
+
+# The release-profile build of every target, GUI included.
+# (CI: Build release + Build GUI Client)
+build-release:
+	$(CARGO) build --release --all-targets
+	$(CARGO) build --release -p mbv-gui
+
+# The throttled invocation CI uses: a third of the suite stands up a real
+# libmpv handle or a loopback fixture per test, and unthrottled runs fail on
+# fd/thread budget. The default --workspace scope covers mbv-gui too, so one
+# run is the union of CI's "Test release" and "Test mbv-gui" steps.
+test-release:
+	$(CARGO) nextest run --release --test-threads=4 $(SCOPE)
+
+# The slow one: --each-feature re-checks the workspace once per feature.
+# (CI: Check feature matrix)
+feature-matrix:
+	$(CARGO) hack check --each-feature --workspace --all-targets
+
+## Run
+
 # The GUI (`mbv`) starts its Owner from the sibling `mbv-owner` program, and
 # the handshake refuses an Owner whose build id differs. `cargo run -p mbv-gui`
 # alone leaves `mbv-owner` stale after a commit, so build all three (`mbv`,
 # `mbv-tui`, `mbv-owner`) before the window starts.
-dev:
-	cargo build -p mbv-tui -p mbv-owner -p mbv-gui
-	cargo run -p mbv-gui
+run:
+	$(CARGO) build -p mbv-tui -p mbv-owner -p mbv-gui
+	$(CARGO) run -p mbv-gui
 
-# The same as `dev`, with the release profile: an optimized build that maps
+dev: run
+
+# The same as `run`, with the release profile: an optimized build that maps
 # far less code than the debug binary, for memory and speed checks.
 dev-release:
-	cargo build --release -p mbv-tui -p mbv-owner -p mbv-gui
-	cargo run --release -p mbv-gui
+	$(CARGO) build --release -p mbv-tui -p mbv-owner -p mbv-gui
+	$(CARGO) run --release -p mbv-gui
 
 # The GUI's stylesheet builds from `assets/app.css` through the Tailwind
 # standalone CLI (replace-tauri-with-blitz design D11). The CLI is not in the
@@ -107,3 +161,73 @@ check-code-file-lines:
 
 test-check-code-file-lines:
 	./scripts/check-code-file-lines-test.sh
+
+## Release
+# `make release VERSION=0.8.9 SUMMARY="short summary"` runs the CI gate set
+# (the make targets above, each leaning on the others rather than open-coded
+# cargo commands), bumps Cargo.toml + PKGBUILD, updates Cargo.lock, commits,
+# and pushes. On main it also tags and pushes the tag; the tag push triggers
+# the PKGBUILD publish run (tarball, debs, GitHub release, AUR hand-off). On
+# a feature branch it only commits the version bump: merge, then
+# `make release-tag VERSION=...`. PKGBUILD sha256sums becomes 'SKIP' here;
+# build.yml fills in the real hash after building the release tarball.
+#
+# The gates are prerequisites of `release` and run in the order listed, the
+# same order as the CI steps. Never run with -j: their order is the point.
+# A gate failure means the tag push would fail CI the same way — fix the
+# cause, never bypass the gate.
+VERSION ?=
+SUMMARY ?=
+# Cargo.toml carries the bare version; the tag and the commit message carry
+# the v prefix.
+RELVERSION := $(patsubst v%,%,$(VERSION))
+TAG := v$(RELVERSION)
+
+release-preflight:
+	@test -n "$(VERSION)" || { echo 'usage: make release VERSION=0.8.9 SUMMARY="short summary"'; exit 1; }
+	@test -n "$(SUMMARY)" || { echo 'error: SUMMARY is empty (make release VERSION=0.8.9 SUMMARY="short summary")'; exit 1; }
+	@test -z "$$(git status --porcelain --untracked-files=no)" || { echo 'error: uncommitted changes to tracked files'; echo 'commit them before running a release (untracked *.md files are fine)'; exit 1; }
+	@untracked="$$(git ls-files --others --exclude-standard | grep -vE '\.md$$' || true)"; \
+	test -z "$$untracked" || { echo 'error: untracked non-markdown files would be left out of the release'; echo "$$untracked"; echo 'commit or remove them before running a release (untracked *.md files are fine)'; exit 1; }
+	@test -n "$$(git branch --show-current)" || { echo 'error: detached HEAD is not supported for release prep'; exit 1; }
+	@! git rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null 2>&1 || { echo 'error: tag $(TAG) already exists locally'; exit 1; }
+	@git fetch origin --quiet
+	@! git ls-remote --exit-code --tags origin "refs/tags/$(TAG)" >/dev/null 2>&1 || { echo 'error: tag $(TAG) already exists on origin'; exit 1; }
+	@echo "==> Releasing $(TAG): $(SUMMARY)"
+
+release: release-preflight format-check checks ast audit build-release test-release feature-matrix
+	@echo "==> Bumping Cargo.toml to $(RELVERSION)..."
+	sed -i 's/^version = ".*"/version = "$(RELVERSION)"/' Cargo.toml
+	@echo "==> Bumping PKGBUILD to $(RELVERSION)..."
+	sed -i 's/^pkgver=.*/pkgver=$(RELVERSION)/' PKGBUILD
+	sed -i "s/^sha256sums=.*/sha256sums=('SKIP')/" PKGBUILD
+	@echo "==> cargo build (updates Cargo.lock)..."
+	$(CARGO) build
+	@echo "==> Committing..."
+	git add Cargo.toml Cargo.lock PKGBUILD
+	git commit --no-verify --allow-empty -m "Release $(TAG): $(SUMMARY)"
+	@if [ "$$(git branch --show-current)" = "main" ]; then \
+		echo "==> git push origin main..."; \
+		git push origin main; \
+		echo "==> git tag $(TAG)..."; \
+		git tag "$(TAG)"; \
+		echo "==> git push origin $(TAG)..."; \
+		git push origin "$(TAG)"; \
+	else \
+		echo "==> Release committed on $$(git branch --show-current) (not main)."; \
+		echo "    PR-merge into main, then tag with: make release-tag VERSION=$(RELVERSION)"; \
+	fi
+
+# For a release committed on a feature branch, once that branch has merged:
+# fetches origin/main, tags it, pushes the tag. On main `make release`
+# already tagged; never run this there.
+release-tag:
+	@test -n "$(VERSION)" || { echo 'usage: make release-tag VERSION=0.8.9'; exit 1; }
+	@! git rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null 2>&1 || { echo 'error: tag $(TAG) already exists locally'; exit 1; }
+	@git fetch origin --quiet
+	@! git ls-remote --exit-code --tags origin "refs/tags/$(TAG)" >/dev/null 2>&1 || { echo 'error: tag $(TAG) already exists on origin'; exit 1; }
+	@echo "==> Tagging origin/main as $(TAG)..."
+	git tag "$(TAG)" "$$(git rev-parse origin/main)"
+	@echo "==> git push origin $(TAG)..."
+	git push origin "$(TAG)"
+	@echo "==> Pushed $(TAG). The publish run: https://github.com/slatkin/mbv/actions"

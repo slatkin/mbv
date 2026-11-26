@@ -113,9 +113,9 @@ them. For a tweak they mean in practice:
 ## Verify
 
 ```bash
-cargo check -p <package>
-cargo nextest run -p <package>
-cargo fmt
+make checks PKG=<package>
+make test PKG=<package>
+make format
 ```
 
 Colour is judged by eyes, not by tests. Build and launch mbv, then ask the

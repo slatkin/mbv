@@ -138,15 +138,19 @@ The TUI's component-level flow (sync/push into an Interactive Component, typed
 
 **Commands**:
 
+Run the make targets, never the cargo commands behind them: the Makefile
+owns the flags. `PKG=<package>` narrows `checks` and `test` to one package.
+
 ```sh
-cargo check -p <package>                              # check
-cargo nextest run -p <package>                        # test locally (prefer nextest)
-cargo nextest run --release --test-threads=4          # CI test run (fd-budget throttling, see build.yml comment)
-cargo llvm-cov                                        # measure coverage
-cargo clippy --workspace --all-targets -- -D warnings # lint
-cargo fmt                                             # run for each Rust change
-cargo fmt --all -- --check                            # read-only check
-make check-code-file-lines                            # just before you push
+make checks [PKG=<package>]    # typecheck + lint (clippy -D warnings)
+make format                    # run for each Rust change
+make format-check              # read-only check
+make test [PKG=<package>]      # test locally (nextest)
+make run                       # build mbv, mbv-tui, mbv-owner; start the window
+make build                     # release build
+make release VERSION=<x.y.z> SUMMARY="..."  # release (the safe-mbv-release skill)
+cargo llvm-cov                 # measure coverage
+make check-code-file-lines     # just before you push
 ```
 
 ## Notes for Agents
@@ -187,7 +191,7 @@ make check-code-file-lines                            # just before you push
 1. Coding standards live in `docs/standards/README.md` (Microsoft Pragmatic Rust Guidelines, pinned locally, one file per rule). Scan its checklist. Then run `qmd query` for the full text of a rule. Never read every rule.
 2. Write no bespoke scripting. Write no shell, awk, or python checkers, including their self-tests, CI jobs, and Makefile targets. Never use one as proof. Use unit tests instead, unless the user explicitly asks for a script for that request.
 3. Use no lint suppression without per-instance user approval. Use no `allow` or `expect` attribute in any form. Do not loosen `[lints]`. Never edit `clippy.toml` (thresholds included) unless the user explicitly asks. Fix the cause instead (params struct, delete dead code and its tests, drop the unused import).
-4. Run `cargo fmt` for each Rust change (stock edition-2024, max-width-100). Accept all reflow and never revert it.
+4. Run `make format` for each Rust change (stock edition-2024, max-width-100). Accept all reflow and never revert it.
 5. Write custom domain error types (for example, `AudiobookshelfError`). Do not introduce `anyhow`, `thiserror`, or `eyre`.
 6. Lay out modules as one file per module through `mod`. Never splice a module across files with `include!` or `#[path]`. Give a module with children as `foo.rs` plus a `foo/` directory to hold them (tests as `foo/tests.rs`, or `foo/tests.rs` plus `foo/tests/` when split). Never use `mod.rs`.
 7. Prefer synchronous code first. `tokio` is edge-only (`crates/mbv-desktop`, `crates/mbv-gui` — `dioxus-native`'s asset resolver only, `zbus`). Do not spread it.

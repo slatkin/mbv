@@ -32,7 +32,7 @@ GUI edge; `docs/architecture/gui-client.md` is the full behaviour guide.
 
 The GUI Client is a workspace member outside `default-members`: the default
 `cargo build` and nextest runs skip it, while `--workspace` clippy and fmt
-cover it. The package is `mbv-gui`; its program is `mbv`. `make dev` builds
+cover it. The package is `mbv-gui`; its program is `mbv`. `make run` builds
 `mbv`, `mbv-tui`, and `mbv-owner` together before it starts the window,
 because the GUI starts its Owner from the sibling `mbv-owner` program and the
 handshake refuses an Owner with a different build id.

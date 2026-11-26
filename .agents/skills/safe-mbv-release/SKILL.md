@@ -1,18 +1,19 @@
 ---
 name: safe-mbv-release
-description: Safely prepare and publish an mbv release using the repository's release script. Use this whenever the user asks to release an mbv version, push a release tag, delete and retag a version, or asks whether mbv is ready to release. Do not use for release-note writing or ordinary version discussion that does not change tags or publish artifacts.
+description: Safely prepare and publish an mbv release using the repository's `make release` target. Use this whenever the user asks to release an mbv version, push a release tag, delete and retag a version, or asks whether mbv is ready to release. Do not use for release-note writing or ordinary version discussion that does not change tags or publish artifacts.
 ---
 
 # Safe mbv Release
 
-Use the repository's `tools/release.sh` as the single source of truth for
-release preparation. The script runs the project checks (`cargo nextest run`,
-`cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`), updates
-`Cargo.toml`, `Cargo.lock`, and `PKGBUILD` (`pkgver`, `sha256sums='SKIP'` —
-build.yml fills the real hash when it builds the release tarball), commits the
-release, and pushes. On `main` it also tags and pushes the tag itself. Do not
-reproduce those steps manually unless the script is unavailable or the user
-explicitly asks to change it.
+Use `make release` as the single source of truth for release preparation.
+The Makefile target runs the project gates as make prerequisites
+(`format-check`, `checks`, `ast`, `audit`, `build-release`, `test-release`,
+`feature-matrix` — the same checks, in the same order, as
+`.github/workflows/build.yml`), updates `Cargo.toml`, `Cargo.lock`, and
+`PKGBUILD` (`pkgver`, `sha256sums='SKIP'` — build.yml fills the real hash when
+it builds the release tarball), commits the release, and pushes. On `main` it
+also tags and pushes the tag itself. Do not reproduce those steps manually
+unless the target is unavailable or the user explicitly asks to change it.
 
 Releases never go through a pull request. The release commit pushes directly
 to `main` and the tag pushes directly to `origin`. Never open a release PR,
@@ -32,43 +33,45 @@ git tag --sort=-version:refname | head -10
 - Confirm the requested version and release summary. If the summary is absent,
   derive a concise one from commits since the previous tag and show it before
   running the release command; do not invent product claims.
-- Read `tools/release.sh` before invoking it, especially if the script has
-  changed since the last release.
+- Read the release section of the `Makefile` before invoking it, especially
+  if it has changed since the last release.
 - Old CI runs on `main` are not a release gate: the release commit is not on
-  `main` yet, and the release script runs the full gate set itself. Do not
-  poll `gh run list` before running the script.
+  `main` yet, and `make release` runs the full gate set itself. Do not poll
+  `gh run list` before running it.
 - Check both local and remote tag state. Stop if the release tag already exists
-  locally or on `origin`; the script only protects against an existing local
-  tag. Preserve unrelated work rather than committing it as part of the
+  locally or on `origin`; the preflight only protects against an existing
+  local tag. Preserve unrelated work rather than committing it as part of the
   release.
 - A readiness question is read-only: inspect and report the preflight state but
-  do not run the release script, commit, push, or tag unless the user asks to
+  do not run `make release`, commit, push, or tag unless the user asks to
   perform the release.
 - Stop on uncommitted changes to *tracked* files or detached `HEAD`. Untracked
   files never enter the release commit, but only untracked `*.md` notes are
   tolerated: any other untracked file could be a source the tag would silently
-  omit, so it also stops the release (the script enforces the same rule).
-- Do not bypass the script's checks or force a tag as a shortcut.
+  omit, so it also stops the release (`make release-preflight` enforces the
+  same rule).
+- Do not bypass the gates or force a tag as a shortcut.
 
 ## Normal Release
 
-Run the repository-provided command with the normalized version and summary:
+Run the Makefile target with the normalized version and summary:
 
 ```bash
-tools/release.sh <version> "<summary>"
+make release VERSION=<version> SUMMARY="<summary>"
 ```
 
-The script accepts either `0.x.y` or `v0.x.y`; Cargo uses the version without
-the `v` prefix and the Git tag uses `v0.x.y`.
+The target accepts either `0.x.y` or `v0.x.y`; Cargo uses the version without
+the `v` prefix and the Git tag uses `v0.x.y`. Never add `-j`: the gates are
+prerequisites and their order is the point.
 
-The script runs the CI gate set first (the same checks, in the same order, as
+The target runs the CI gate set first (the same checks, in the same order, as
 `.github/workflows/build.yml`): fmt, clippy, ast-grep, `cargo audit`, the
-release builds, release tests for the workspace and `mbv-gui`, and the
-feature matrix. A failure there means the release push would fail CI the
-same way; fix the cause and rerun the script. Do not skip or shorten the
-gate set, and never bypass it with a manual tag.
+release builds, the release tests, and the feature matrix. A failure there
+means the release push would fail CI the same way; fix the cause and rerun
+the target. Do not skip or shorten the gate set, and never bypass it with a
+manual tag.
 
-On `main`, the script pushes the release commit to `main`, tags it `vX.Y.Z`,
+On `main`, the target pushes the release commit to `main`, tags it `vX.Y.Z`,
 and pushes the tag — no PR, no release branch. The tag push triggers the
 PKGBUILD publish run (tarball, debs, GitHub release, AUR hand-off). Then
 verify:
@@ -84,10 +87,10 @@ must be running. Use `gh` to inspect checks or release status when the
 repository exposes them; do not assume a workflow name or that a pushed tag
 means the release completed.
 
-On a feature branch, the script only prepares and commits the version bump.
+On a feature branch, the target only prepares and commits the version bump.
 Do not tag it there. Report that the branch must be merged into `main`
-before the tag is created (then `tools/release-tag.sh <version>`), and keep
-release publishing separate from unrelated PR work.
+before the tag is created (then `make release-tag VERSION=<version>`), and
+keep release publishing separate from unrelated PR work.
 
 Never wait for the release github action to complete as part of this process.
 
@@ -120,7 +123,7 @@ End with a compact factual report containing:
 - normalized version and tag;
 - commit that carries the release;
 - branch used;
-- checks run by the release script and their result;
+- gates run by `make release` and their result;
 - whether the commit and tag were pushed;
 - remote tag verification and any pending CI or release status;
 - any step intentionally not performed, such as tagging from a feature branch.

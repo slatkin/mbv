@@ -20,7 +20,7 @@ on:
     # protected main require these checks before a merge.
   workflow_dispatch:
 
-# One commit means one build. tools/release.sh pushes main and then the tag,
+# One commit means one build. `make release` pushes main and then the tag,
 # so the same commit would otherwise be built twice (~7min each in the Arch
 # container):
 # once on refs/heads/main, once on refs/tags/v*. Keying on the commit SHA makes
