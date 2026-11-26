@@ -12,7 +12,7 @@ use std::sync::{Arc, LazyLock};
 use blitz_shell::{BlitzShellEvent, BlitzShellProxy};
 use dioxus_native::prelude::*;
 use dioxus_native::use_window;
-use dioxus_native::winit::window::{Window, WindowId};
+use dioxus_native::winit::window::WindowId;
 use futures_channel::mpsc::TryRecvError;
 use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
@@ -25,7 +25,7 @@ use crate::window::arrangement::{GuiArrangement, library_arrangement, settings_a
 use crate::window::cells::cell_unit_rule;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent};
 use crate::window::clock::{Clock, FiredTimers};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::components::attach_screen::AttachScreen;
 use crate::window::components::library_top_bar::{HOME_POSITION, LibraryTopBar};
 use crate::window::components::panel_divider::{
@@ -94,9 +94,6 @@ fn apply_batch(sections: &mut Sections, playhead: &mut Playhead, batch: &GuiSect
 struct Drain {
     proxy: BlitzShellProxy,
     window_id: WindowId,
-    /// The window the drain reads the scale factor from (D7, D9).
-    scale_window: Arc<dyn Window>,
-    scale: ScaleFactor,
     epoch: LayoutEpoch,
     art_events: ArtEvents,
     fired: FiredTimers,
@@ -114,13 +111,11 @@ impl Drain {
                     window_id: self.window_id,
                 });
             }
-            // A viewport change rewrites the scale factor the natural-size
-            // caps divide by (D7). The layout size does not arrive here: the
-            // launch copy writes it into the tree before the frame that resolves
-            // at the new size (D9), so this event would be a turn late for it.
-            WindowEvent::Viewport => {
-                self.scale.0.set(self.scale_window.scale_factor());
-            }
+            // A viewport change needs no drain work. The layout size does not
+            // arrive here: the launch copy writes it into the tree before the
+            // frame that resolves at the new size (D9), so this event would be
+            // a turn late for it.
+            WindowEvent::Viewport => {}
             // An art answer reaches its `ArtImage` through the store (D7).
             WindowEvent::Art(event) => self.art_events.push(event),
             // A passed timer reaches the surface that armed it (D10); the
@@ -411,9 +406,6 @@ pub fn App() -> Element {
     provide_context(art_events);
     let fired = use_hook(FiredTimers::new);
     provide_context(fired);
-    let scale_window = Arc::clone(&window);
-    let scale = use_hook(move || ScaleFactor(Signal::new(scale_window.scale_factor())));
-    provide_context(scale);
     let sections = use_hook(Sections::new);
     provide_context(sections.clone());
     let clock = consume_context::<Arc<dyn Clock>>();
@@ -519,8 +511,6 @@ pub fn App() -> Element {
         Drain {
             proxy: use_hook(consume_context::<BlitzShellProxy>),
             window_id,
-            scale_window: Arc::clone(&window),
-            scale,
             epoch,
             art_events,
             fired,

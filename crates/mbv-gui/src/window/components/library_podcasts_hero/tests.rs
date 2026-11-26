@@ -29,7 +29,7 @@ use crate::bridge::frame::library::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::library::hero::hero_command;
 use crate::window::library::lettered::{LetteredDestination, PodcastsList};
 use crate::window::library::state::LibraryState;
@@ -139,7 +139,6 @@ fn podcasts_hero_app(props: FixtureProps) -> Element {
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
     provide_context(events);
     provide_context(fired);
-    provide_context(ScaleFactor(Signal::new(1.0)));
     provide_context(Arc::clone(&clock));
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the

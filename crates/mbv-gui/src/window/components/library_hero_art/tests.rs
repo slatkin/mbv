@@ -18,7 +18,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryHeroArt;
 use crate::art::GuiArtRef;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 
 /// The props a test hands its document: the art to paint and the box's shape.
 #[derive(Clone)]
@@ -37,7 +37,6 @@ fn art_app(props: FixtureProps) -> Element {
     provide_context(events);
     provide_context(fired);
     provide_context(clock as Arc<dyn Clock>);
-    provide_context(ScaleFactor(Signal::new(1.0)));
     let art = use_signal(move || art);
     let current = art.cloned();
     rsx! {

@@ -36,7 +36,7 @@ use crate::bridge::layout::{LayoutReport, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::components::queue_footer::QueueFooter;
 use crate::window::components::queue_playback_panel::QueuePlaybackPanel;
 use crate::window::layout::{LayoutEpoch, use_layout_reporter};
@@ -337,7 +337,6 @@ pub(super) fn provide_fixture_contexts(
     provide_context(use_hook(ArtEvents::new));
     provide_context(use_hook(FiredTimers::new));
     provide_context(art_clock);
-    provide_context(ScaleFactor(Signal::new(1.0)));
     handle
         .borrow_mut()
         .replace((sections, playhead, handle_epoch));

@@ -37,7 +37,7 @@ use crate::bridge::frame::playback::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, WindowEvent};
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::components::queue_playback_panel::QueuePlaybackPanel;
 use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 use crate::window::net::{MbvNetProvider, NetLoads};
@@ -121,7 +121,6 @@ fn root(props: RootProps) -> Element {
     provide_context(art_events);
     provide_context(use_hook(FiredTimers::new));
     provide_context(Arc::clone(&clock));
-    provide_context(ScaleFactor(Signal::new(1.0)));
     provide_context(use_hook(|| {
         PanelWidthsStore::new(GuiPanelWidths::default(), Arc::new(|_| {}))
     }));

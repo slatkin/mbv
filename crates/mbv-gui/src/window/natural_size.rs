@@ -2,7 +2,7 @@
 //! the port of `lib/bridge/natural-size.ts`): the core hands the window the
 //! server's bytes unchanged, and the art boxes are sized by the layout, so a
 //! box larger than the image would stretch it. The cap is the image's natural
-//! size in device pixels divided by the window's scale factor: a smaller
+//! size in image pixels, each one a CSS pixel: a smaller
 //! image paints 1:1, a larger one still scales down to its box.
 
 use crate::window::input::f32_from_f64;
@@ -32,8 +32,7 @@ pub struct NaturalCap {
 }
 
 /// The cap for an image whose natural size is `natural_width` ×
-/// `natural_height` device pixels, viewed at the window's `scale_factor`
-/// (D7): the natural size divided by the scale factor, each side held inside
+/// `natural_height` image pixels (D7): the natural size, each side held inside
 /// `bounds` when the caller names one. `None` while the image has no natural
 /// size — the source has not loaded, so nothing caps — which the caller
 /// repaints when the load lands.
@@ -41,21 +40,13 @@ pub struct NaturalCap {
 pub fn capped_natural_size(
     natural_width: u32,
     natural_height: u32,
-    scale_factor: f64,
     bounds: Option<NaturalSizeBounds>,
 ) -> Option<NaturalCap> {
     if natural_width == 0 || natural_height == 0 {
         return None;
     }
-    // The window fell back to 1 when `devicePixelRatio` read 0; a scale
-    // factor of 0 or below reads the same way.
-    let ratio = if scale_factor > 0.0 {
-        scale_factor
-    } else {
-        1.0
-    };
-    let width = f32_from_f64(f64::from(natural_width) / ratio);
-    let height = f32_from_f64(f64::from(natural_height) / ratio);
+    let width = f32_from_f64(f64::from(natural_width));
+    let height = f32_from_f64(f64::from(natural_height));
     let bounded = |side: f32, bound: Option<f32>| bound.map_or(side, |bound| side.min(bound));
     let max_width = bounded(width, bounds.and_then(|bounds| bounds.width));
     let max_height = bounded(height, bounds.and_then(|bounds| bounds.height));

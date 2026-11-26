@@ -27,7 +27,7 @@ use crate::bridge::frame::library::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::library::hero::label_segments;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
@@ -114,7 +114,6 @@ fn frame_app(props: LibraryHeroFrameProps) -> Element {
     provide_context(use_hook(FiredTimers::new));
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
     provide_context(Arc::clone(&clock));
-    provide_context(ScaleFactor(Signal::new(1.0)));
     // The pills row's store: the link pill's press sends through the mock
     // core link, which no test reads.
     let (sender, _receiver) = mpsc::channel::<CoreInput>();

@@ -13,7 +13,7 @@ use blitz_dom::{Document as _, local_name};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::{ArtEvents, ArtImage, ScaleFactor};
+use super::{ArtEvents, ArtImage};
 use crate::art::{GuiArtRef, art_url};
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 
@@ -47,7 +47,6 @@ fn art_app(props: FixtureProps) -> Element {
     provide_context(events);
     provide_context(clock as Arc<dyn Clock>);
     provide_context(fired);
-    provide_context(ScaleFactor(Signal::new(1.0)));
     handle.borrow_mut().replace((events, fired, art));
     let current = art.cloned();
     rsx! {

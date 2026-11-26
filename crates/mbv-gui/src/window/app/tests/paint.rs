@@ -44,7 +44,7 @@ use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::components::attach_screen::AttachScreen;
 use crate::window::components::library_panel::LibraryPanel;
 use crate::window::components::library_top_bar::LibraryTopBar;
@@ -246,7 +246,6 @@ fn root(props: RootProps) -> Element {
     provide_context(use_hook(ArtEvents::new));
     provide_context(use_hook(FiredTimers::new));
     provide_context(Arc::clone(&clock));
-    provide_context(ScaleFactor(Signal::new(1.0)));
     let widths = use_hook(|| PanelWidthsStore::new(GuiPanelWidths::default(), Arc::new(|_| {})));
     provide_context(widths);
     let library = use_hook(|| {

@@ -4,7 +4,7 @@
 //! paints the same loading fill; a failed load becomes
 //! [`ArtEvent::Failed`] for the painted URL, and the natural size
 //! (`capToNaturalSize`, `window/natural_size.rs`) comes from
-//! [`ArtEvent::Loaded`] divided by the window's scale factor. The fill then
+//! [`ArtEvent::Loaded`], one image pixel to one CSS pixel. The fill then
 //! retries the same URL with capped backoff while mounted: the `mbv-art` miss
 //! is a failed load, so a retry asks the core again (D7). A new URL starts a
 //! fresh load. While the natural size is still unreported, the caller's
@@ -85,13 +85,6 @@ impl ArtEvents {
     }
 }
 
-/// The window's scale factor (D7): the root seeds it from `use_window()` and
-/// rewrites it on every viewport change, so a `ScaleFactorChanged` recomputes
-/// the natural-size caps. A context value, so a headless test injects one and
-/// the component needs no window handle.
-#[derive(Clone, Copy, Debug)]
-pub struct ScaleFactor(pub Signal<f64>);
-
 /// The load that failed: its URL, how many times it failed in a row since its
 /// source changed, and whether its retry still waits.
 #[derive(Debug, Clone, PartialEq)]
@@ -164,7 +157,7 @@ struct ArtImageState {
     /// of the current failure streak is `seen - base`, as the former failure
     /// reset on a source change did.
     misses_base: Signal<u64>,
-    /// The painted URL's natural size, in device pixels, from `Loaded`.
+    /// The painted URL's natural size, in image pixels, from `Loaded`.
     natural: Signal<Option<(u32, u32)>>,
 }
 
@@ -239,7 +232,7 @@ fn clear_waiting(mut state: ArtImageState, fired: &mut FiredTimers, timer: Timer
     state.retry_timer.set(None);
 }
 
-/// The natural size (D7): the `Loaded` answer carries it, in device pixels.
+/// The natural size (D7): the `Loaded` answer carries it, in image pixels.
 fn loaded_natural(mut state: ArtImageState, art_events: &ArtEvents, url: &str) {
     if let Some(ArtStatus::Loaded { width, height }) = art_events.status(url) {
         state.natural.set(Some((width, height)));
@@ -256,7 +249,7 @@ fn painted_url(src: Option<String>, failure: Option<Failure>) -> Option<String> 
 }
 
 /// The `img` inline style with the natural-size cap appended, in CSS pixels
-/// (D7): the loaded size divided by the window's scale factor. With bounds the
+/// (D7): the loaded size, one image pixel to one CSS pixel. With bounds the
 /// image also never outgrows its parent's width. While the natural size is
 /// still unreported the bounds cap provisionally: an `img` never paints above
 /// its own pixels, so the bounds alone land on the same layout the loaded cap
@@ -311,7 +304,6 @@ pub fn ArtImage(props: ArtImageProps) -> Element {
     let art_events = consume_context::<ArtEvents>();
     let mut fired = consume_context::<FiredTimers>();
     let clock = consume_context::<Arc<dyn Clock>>();
-    let scale = consume_context::<ScaleFactor>();
 
     // The owned URL: the effects below capture it, and a `loading` reference
     // or a missing one paints the fill (it names no URL).
@@ -354,7 +346,7 @@ pub fn ArtImage(props: ArtImageProps) -> Element {
         clear_waiting(state, &mut fired, timer);
     });
 
-    // The natural size (D7): the `Loaded` answer carries it, in device pixels.
+    // The natural size (D7): the `Loaded` answer carries it, in image pixels.
     // The effect reads the URL reactively too: Blitz serves an already-cached
     // URL from its image cache without a fetch, so no new `Loaded` arrives —
     // the URL change itself must re-read the store, or the cap is lost.
@@ -371,15 +363,13 @@ pub fn ArtImage(props: ArtImageProps) -> Element {
 
     let painted = painted_url(src, state.failure.cloned());
 
-    // The natural-size cap in CSS pixels: the loaded size divided by the
-    // window's scale factor, recomputed when either changes (D7).
+    // The natural-size cap in CSS pixels: the loaded size, one image pixel to
+    // one CSS pixel, recomputed when it changes (D7).
     let cap = state
         .natural
         .cloned()
         .filter(|_| !props.uncapped)
-        .and_then(|(width, height)| {
-            capped_natural_size(width, height, scale.0.cloned(), props.bounds)
-        });
+        .and_then(|(width, height)| capped_natural_size(width, height, props.bounds));
     // The provisional bounds cap while the natural size is unreported; an
     // uncapped image takes its caller's style alone (`cap` is already `None`
     // for it, but its bounds must not cap it either).

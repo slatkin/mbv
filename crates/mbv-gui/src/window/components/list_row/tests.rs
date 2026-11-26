@@ -22,7 +22,7 @@ use super::{
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::components::tree_guide::{LEAF_INSET_X, NESTED_INSET_X};
 use crate::window::components::tree_row::{LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX};
 
@@ -100,7 +100,6 @@ fn provide_row_contexts() {
     let fired = use_hook(FiredTimers::new);
     provide_context(events);
     provide_context(fired);
-    provide_context(ScaleFactor(Signal::new(1.0)));
     let clock: std::sync::Arc<dyn Clock> = std::sync::Arc::new(RecordingClock::new());
     provide_context(clock);
 }

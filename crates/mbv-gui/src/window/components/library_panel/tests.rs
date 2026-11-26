@@ -29,7 +29,7 @@ use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::FiredTimers;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::art_image::ArtEvents;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
@@ -93,7 +93,6 @@ fn panel_app(props: FixtureProps) -> Element {
     let fired = use_hook(FiredTimers::new);
     provide_context(events);
     provide_context(fired);
-    provide_context(ScaleFactor(Signal::new(1.0)));
     provide_context(Arc::clone(&clock));
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
