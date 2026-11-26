@@ -291,3 +291,20 @@ fn the_facts_of_each_source_kind_follow_the_design_table(
         "{kind:?}: the rows of design D1's table, in order"
     );
 }
+
+/// Contract (gui-hero-design-polish, the premiere-date fallback restored): a
+/// series with no production year shows its formatted premiere date in the
+/// year pill's place, as the pre-polish Hero did.
+#[test]
+fn a_series_without_a_production_year_shows_its_premiere_date() {
+    let mut item = series();
+    item.production_year = 0;
+    item.end_year = 0;
+    item.premiere_date = "1982-09-24T00:00:00.0000000Z".into();
+    let facts = hero_facts_series(&item, None);
+    assert_eq!(
+        actual_pills(&facts).first(),
+        Some(&("24 Sep 1982".to_owned(), Some(MetaKind::Date), None)),
+        "the premiere date stands in for the missing year range"
+    );
+}

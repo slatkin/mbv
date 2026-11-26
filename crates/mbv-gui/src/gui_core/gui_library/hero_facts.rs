@@ -126,12 +126,16 @@ pub fn hero_facts_emby(item: &EmbyItem) -> GuiHeroFacts {
     facts
 }
 
-/// The Shows series' facts (design D1): the year range (else nothing), each
-/// genre, and the season count as pills, over the Network row.
+/// The Shows series' facts (design D1): the year range (else the formatted
+/// premiere date, as the pre-polish Hero showed, else nothing), each genre, and
+/// the season count as pills, over the Network row.
 #[must_use]
 pub fn hero_facts_series(series: &EmbyItem, seasons: Option<usize>) -> GuiHeroFacts {
     let mut facts = GuiHeroFacts::default();
-    if let Some(range) = series_years_range(series) {
+    let years = series_years_range(series).or_else(|| {
+        (!series.premiere_date.is_empty()).then(|| format_release_date(&series.premiere_date))
+    });
+    if let Some(range) = years {
         facts.pills.push(GuiHeroPill {
             segments: vec![MetaSegment::new(range, MetaKind::Date)],
             link: None,

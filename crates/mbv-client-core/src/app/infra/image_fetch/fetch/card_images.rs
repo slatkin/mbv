@@ -56,6 +56,17 @@ impl App {
         }
     }
 
+    /// Triggers one fetch for a request the caller sized itself, such as a
+    /// small `Row` thumb for a cast photo. The request carries its own cache
+    /// key and rendition.
+    pub fn fetch_sized_image(&mut self, req: ImageFetchReq) {
+        if let mbv_images::cache::FetchReservation::Start(req) =
+            self.images.reserve_card_image_fetch(req, MAX_IMAGE_FETCHES)
+        {
+            self.spawn_image_fetch(req);
+        }
+    }
+
     /// Triggers the plain (uncropped) Audiobookshelf cover fetch for
     /// `item_id` — the queue card's entry. The Library hero uses the
     /// hero-scoped key instead (`App::audiobookshelf_cover_key`), because it

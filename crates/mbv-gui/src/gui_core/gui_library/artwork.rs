@@ -351,13 +351,11 @@ pub(in crate::gui_core::gui_library) fn emby_person_photo(
     if person_id.is_empty() || image_tag.is_empty() {
         return None;
     }
-    let cache_key = mbv_images::emby_card_cache_key(person_id, "");
-    app.fetch_card_image(
-        cache_key.clone(),
-        person_id.to_owned(),
-        String::new(),
-        &["Primary"],
-    );
+    // A cast photo paints as a small square circle, so it takes the square
+    // row thumb (the Music artist's own Primary request), not the Hero size.
+    let req = mbv_images::row::emby_row_primary_request(person_id);
+    let cache_key = req.cache_key.clone();
+    app.fetch_sized_image(req);
     Some(resolve_gui_art(app, &cache_key))
 }
 
