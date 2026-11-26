@@ -10,7 +10,10 @@ use std::time::Instant;
 use mbv_cast::{CastClient, CastJob, CastReceiver, ConnectMode, spawn_cast_worker};
 use mbv_ctrl::{CtrlEvent, OutputConnection, OutputSelection};
 
-use crate::output::handoff::{HandoffPlayback, SelectionIntent, hand_remote_output_back_to_local};
+use crate::output::handoff::{
+    HandoffPlayback, SelectionIntent, clear_observed_slot_after_switch,
+    hand_remote_output_back_to_local,
+};
 use crate::{CtrlSender, send_to};
 
 use super::DaemonLoop;
@@ -340,11 +343,7 @@ fn apply_connected_output(
         let _ = daemon.owner.core.queue.set_active_slot(handoff.slot);
         spawn_handoff_resolve(daemon, handoff);
     } else if matches!(intent, SelectionIntent::SwitchOnly) {
-        // A switch hands nothing off, so the new output plays nothing: the
-        // observed active slot is recorded as none and published, so no Client
-        // highlights the slot that stopped (invariant 25).
-        daemon.owner.core.note_observed_active_slot(None);
-        daemon.shared_queue.publish_observed(&daemon.owner.core);
+        clear_observed_slot_after_switch(daemon);
     }
 }
 

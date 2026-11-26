@@ -17,7 +17,7 @@ use crate::emby_session::load::{
 };
 use crate::emby_session::worker::spawn_emby_session_worker;
 use crate::event_loop::DaemonLoop;
-use crate::output::handoff::{HandoffPlayback, SelectionIntent};
+use crate::output::handoff::{HandoffPlayback, SelectionIntent, clear_observed_slot_after_switch};
 use crate::{CtrlSender, DaemonEvent, send_to};
 
 use super::EmbySessionEvent;
@@ -308,11 +308,7 @@ fn install_output(
         let _ = daemon.owner.core.queue.set_active_slot(handoff.slot);
         load_handoff(daemon, handoff, &reply_tx);
     } else if matches!(intent, SelectionIntent::SwitchOnly) {
-        // A switch hands nothing off, so the new output plays nothing: the
-        // observed active slot is recorded as none and published, so no Client
-        // highlights the slot that stopped (invariant 25).
-        daemon.owner.core.note_observed_active_slot(None);
-        daemon.shared_queue.publish_observed(&daemon.owner.core);
+        clear_observed_slot_after_switch(daemon);
     }
     crate::emby_session::status::refresh_presentation(daemon, Instant::now());
     broadcast_output_change(daemon);

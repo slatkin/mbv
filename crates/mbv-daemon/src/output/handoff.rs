@@ -56,6 +56,14 @@ pub(crate) fn capture_handoff_for_selection(daemon: &DaemonLoop) -> Option<Hando
     }
 }
 
+/// A switch hands nothing off, so the new output plays nothing: the observed
+/// active slot is recorded as none and published, so no Client highlights the
+/// slot that stopped (invariant 25).
+pub(crate) fn clear_observed_slot_after_switch(daemon: &mut DaemonLoop) {
+    daemon.owner.core.note_observed_active_slot(None);
+    daemon.shared_queue.publish_observed(&daemon.owner.core);
+}
+
 /// The hand-off a selection captures for its intent
 /// (switch-output-without-hand-off design D5): a `Continue` answer pins the
 /// presented position to the selection instant and captures the old output's
@@ -220,11 +228,7 @@ pub(crate) fn hand_remote_output_back_to_local(
     if let Some(handoff) = handoff {
         continue_slot_on_local(daemon, handoff, reply_tx);
     } else if matches!(intent, SelectionIntent::SwitchOnly) {
-        // A switch hands nothing off, so the new local output plays nothing:
-        // the observed active slot is recorded as none and published, so no
-        // Client highlights the slot that stopped (invariant 25).
-        daemon.owner.core.note_observed_active_slot(None);
-        daemon.shared_queue.publish_observed(&daemon.owner.core);
+        clear_observed_slot_after_switch(daemon);
     }
 }
 
