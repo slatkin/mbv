@@ -13,6 +13,7 @@ use blitz_shell::{BlitzShellEvent, BlitzShellProxy};
 use dioxus_native::prelude::*;
 use dioxus_native::use_window;
 use dioxus_native::winit::window::{Window, WindowId};
+use futures_channel::mpsc::TryRecvError;
 use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
@@ -149,6 +150,16 @@ impl Drain {
 
 /// The window channel's drain (D4): the root's one long-lived future. The
 /// receiver is taken once; the drain lives for the window's life.
+///
+/// One drain cycle dispatches the awaited event and every event already
+/// queued behind it in one task poll, so Dioxus renders the cycle's writes
+/// once. A landing batch that queues while the previous batch's render is
+/// still running applies in the same poll as that batch's successors, so
+/// closely-spaced landings (the progressive per-album track landings, the
+/// clustered restore fetches) produce one projection update, not one per
+/// landing. The painted end state is unchanged — a batch carries the full
+/// present value of every section it names — only the number of
+/// intermediate re-renders shrinks.
 fn use_window_drain(drain: Drain, slot: EventSlot) {
     use_future(move || {
         let mut drain = drain.clone();
@@ -157,11 +168,35 @@ fn use_window_drain(drain: Drain, slot: EventSlot) {
             let Some(mut events) = slot.take() else {
                 return;
             };
-            while let Some(event) = events.next().await {
+            loop {
+                let Some(event) = events.next().await else {
+                    return;
+                };
                 drain.dispatch(event);
+                if drain_queued(&mut events, &mut |event| drain.dispatch(event)) {
+                    return;
+                }
             }
         }
     });
+}
+
+/// Dispatch the events already queued behind the one the caller dispatched,
+/// in the caller's poll. Returns whether the channel ended, which ends the
+/// drain: a closed-and-empty receiver yields no further event.
+fn drain_queued(
+    events: &mut UnboundedReceiver<WindowEvent>,
+    dispatch: &mut impl FnMut(WindowEvent),
+) -> bool {
+    loop {
+        match events.try_recv() {
+            Ok(event) => dispatch(event),
+            // Open and empty: back to the awaited receive.
+            Err(TryRecvError::Empty) => return false,
+            // Closed and drained: the stream is over.
+            Err(TryRecvError::Closed) => return true,
+        }
+    }
 }
 
 /// Fold one frame's `uiResetEpoch` into the width store (D14): the effect

@@ -16,8 +16,8 @@ use super::route_library_key;
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
-    GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail,
-    GuiShowsList,
+    GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsList,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::{DomKey, DomModifiers};
@@ -381,7 +381,7 @@ fn hero() -> GuiMusicHeroFrame {
         collections: vec!["Rock".to_owned()],
         album_count: 1,
         artist_tracks: None,
-        album: GuiMusicAlbumFrame {
+        subject: GuiMusicHeroSubjectFrame::Album(GuiMusicAlbumFrame {
             album_id: "al1".to_owned(),
             name: "Licensed To Ill".to_owned(),
             year: "1986".to_owned(),
@@ -390,7 +390,7 @@ fn hero() -> GuiMusicHeroFrame {
                 track("t2", "The New Style", 2, "4:35"),
             ]),
             total: None,
-        },
+        }),
         menu: Vec::new(),
     }
 }

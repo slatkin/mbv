@@ -52,6 +52,26 @@ pub enum GuiLibraryCommand {
     AddToQueue { item_id: String },
     /// Shuffle the artist whose albums are `albumIds`.
     ShuffleArtist { album_ids: Vec<String> },
+    /// Show the artist's page in the Hero (gui-music-artist-page design D2):
+    /// `lib_idx` is the Music library whose row was pressed, and `artist_key`
+    /// is the artist row's stable identity.
+    ShowArtist {
+        lib_idx: usize,
+        artist_key: crate::bridge::frame::library::GuiArtistKey,
+    },
+    /// Play the artist whose albums are `album_ids` (gui-music-artist-page
+    /// design D2): the artist page's Play control.
+    PlayArtist { album_ids: Vec<String> },
+    /// Add the artist whose albums are `album_ids` to the queue
+    /// (gui-music-artist-page design D2): the artist page's Add to queue
+    /// control.
+    AddArtistToQueue { album_ids: Vec<String> },
+    /// Play the artist page's track `track_id` (gui-music-artist-page design
+    /// D2): the page's album ids in their shown order name the sequence.
+    PlayArtistTrack {
+        album_ids: Vec<String>,
+        track_id: String,
+    },
     /// Run the row menu's entry at `index`.
     MenuEntry {
         row: crate::gui_core::GuiLibraryMenuRow,
@@ -226,6 +246,24 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
             GuiLibraryCommand::Play { item_id } => Self::Play { item_id },
             GuiLibraryCommand::AddToQueue { item_id } => Self::AddToQueue { item_id },
             GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
+            GuiLibraryCommand::ShowArtist {
+                lib_idx,
+                artist_key,
+            } => Self::ShowArtist {
+                lib_idx,
+                artist_key: artist_key.into(),
+            },
+            GuiLibraryCommand::PlayArtist { album_ids } => Self::PlayArtist { album_ids },
+            GuiLibraryCommand::AddArtistToQueue { album_ids } => {
+                Self::AddArtistToQueue { album_ids }
+            }
+            GuiLibraryCommand::PlayArtistTrack {
+                album_ids,
+                track_id,
+            } => Self::PlayArtistTrack {
+                album_ids,
+                track_id,
+            },
             GuiLibraryCommand::MenuEntry { row, index } => Self::MenuEntry { row, index },
             GuiLibraryCommand::RowMenu { row } => Self::RowMenu { row },
             GuiLibraryCommand::Shuffle { row } => Self::Shuffle { row },

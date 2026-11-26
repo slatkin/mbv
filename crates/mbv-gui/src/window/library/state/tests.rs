@@ -15,8 +15,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
-    GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
+    GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
@@ -291,7 +292,12 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
         collections: vec!["Rock".to_owned()],
         album_count: 1,
         artist_tracks: None,
-        album: album("al3", "One For All", "1990", Some(Vec::new())),
+        subject: GuiMusicHeroSubjectFrame::Album(album(
+            "al3",
+            "One For All",
+            "1990",
+            Some(Vec::new()),
+        )),
         menu: Vec::new(),
     };
     let list = music_list(artists.clone());
@@ -306,7 +312,7 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
         let GuiLibraryDetail::Music(detail) = &*detail_part.expect("detail") else {
             panic!("detail fixture");
         };
-        state.reveal_picked_album(music, detail);
+        state.reveal_picked_row(music, detail);
         state.measure_library_list(40.0);
         facts.lock().expect("facts").push(music_scroll(state));
     });
@@ -315,6 +321,63 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
     // view: the album's bottom edge at the viewport's top.
     assert_eq!(facts, ["top=1214 viewport=40"]);
     // The album's tracks are cached, so the reveal sends no open-album.
+    assert_eq!(commands(&rx), []);
+}
+
+/// gui-music-artist-page design D6: a reveal whose subject is the artist page
+/// scrolls the artist row into view once the list is measured, and opens
+/// nothing — the artist row stays closed and no command sends.
+#[test]
+fn a_reveal_of_the_artist_page_scrolls_the_artist_row_into_view_and_opens_nothing() {
+    // Twenty artists with no albums above the target, so its row starts
+    // below a short viewport.
+    let mut artists: Vec<GuiMusicArtistFrame> =
+        (0..20).map(|index| artist("filler", index)).collect();
+    artists.push(GuiMusicArtistFrame {
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Audio,
+        artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a2".to_owned()),
+        name: "Brand Nubian".to_owned(),
+        sort_letter: 'B',
+        albums: vec![album("al3", "One For All", "1990", Some(Vec::new()))],
+    });
+    let hero = GuiMusicHeroFrame {
+        artist: "Brand Nubian".to_owned(),
+        collections: vec!["Rock".to_owned()],
+        album_count: 1,
+        artist_tracks: None,
+        subject: GuiMusicHeroSubjectFrame::Artist(
+            crate::bridge::frame::library::GuiMusicArtistPageFrame {
+                artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a2".to_owned()),
+                albums: vec![album("al3", "One For All", "1990", Some(Vec::new()))],
+                years: Some(("1990".to_owned(), "1990".to_owned())),
+            },
+        ),
+        menu: Vec::new(),
+    };
+    let list = music_list(artists.clone());
+    let detail = music_detail(Some(hero));
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, Some(list.clone()), Some(detail.clone()));
+        let list_part = state.sections.library_list.peek().clone();
+        let detail_part = state.sections.library_detail.peek().clone();
+        let GuiDestinationList::Music(music) = &list_part.expect("list").destination else {
+            panic!("music fixture");
+        };
+        let GuiLibraryDetail::Music(detail) = &*detail_part.expect("detail") else {
+            panic!("detail fixture");
+        };
+        state.reveal_picked_row(music, detail);
+        state.measure_library_list(40.0);
+        facts.lock().expect("facts").push(music_scroll(state));
+        facts
+            .lock()
+            .expect("facts")
+            .push(format!("open={}", state.ui.peek().open_nodes.len()));
+    });
+    // The artist row's bottom edge at the viewport's top: the row scrolled
+    // into view, and no node opened.
+    assert_eq!(facts, ["top=1184 viewport=40", "open=0"]);
     assert_eq!(commands(&rx), []);
 }
 

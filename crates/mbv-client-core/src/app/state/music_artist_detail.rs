@@ -214,6 +214,16 @@ impl App {
         });
     }
 
+    /// Start the per-album track loads of one artist page (design D3). The
+    /// loads are bounded at `MAX_ARTIST_FALLBACK_TRACK_FETCHES` and
+    /// deduplicated against the cache, the loading set, and the pending
+    /// queue, so a repeat call for albums already cached, loading, or queued
+    /// starts nothing. The intent holds no logic of its own;
+    /// `enqueue_artist_album_tracks` stays the one implementation.
+    pub fn request_albums_tracks(&mut self, album_ids: Vec<String>) {
+        self.enqueue_artist_album_tracks(album_ids);
+    }
+
     /// Queue the fallback aggregation's per-album fetches (design D7). The
     /// aggregation source stays the existing per-album cache, but a fallback
     /// root's scope can cover the whole settled catalog, so arming every album

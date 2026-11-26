@@ -49,8 +49,9 @@ pub use self::home::{
 pub use self::list::{GuiDestinationList, GuiLibraryList};
 pub use self::meta::{GuiMetaKindFrame, GuiMetaSegmentFrame, gui_meta_rows};
 pub use self::music::{
-    GuiArtistKey, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
-    GuiMusicList, GuiMusicTrackFrame, GuiMusicTrackTotalFrame,
+    GuiArtistKey, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicArtistPageFrame, GuiMusicDetail,
+    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame,
+    GuiMusicTrackTotalFrame, gui_album_row_id, gui_artist_row_id,
 };
 pub use self::podcasts::{GuiPodcastsDetail, GuiPodcastsHeroFrame, GuiPodcastsList};
 pub use self::search::{GuiSearchFrame, GuiSearchRowFrame};

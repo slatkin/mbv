@@ -186,3 +186,55 @@ fn esc_closes_the_open_item_menu() {
     );
     assert_eq!(commands(&rx), []);
 }
+
+// Enter on a tracklist row while the artist page shows sends `PlayArtistTrack`
+// with the page's album ids in order (gui-music-artist-page design D6, spec
+// "Enter plays the hovered artist page track"): Enter, the hover Play, and the
+// double-click share one path.
+#[test]
+fn enter_on_a_tracklist_row_under_the_artist_page_sends_play_artist_track() {
+    let artists = vec![beastie()];
+    let list = music_list(artists);
+    let detail = music_detail(Some(GuiMusicHeroFrame {
+        artist: "Beastie Boys".to_owned(),
+        collections: vec!["Rock".to_owned()],
+        album_count: 2,
+        artist_tracks: None,
+        subject: GuiMusicHeroSubjectFrame::Artist(
+            crate::bridge::frame::library::GuiMusicArtistPageFrame {
+                artist_key: crate::bridge::frame::library::GuiArtistKey::Service("a1".to_owned()),
+                albums: vec![
+                    GuiMusicAlbumFrame {
+                        album_id: "al1".to_owned(),
+                        name: "Licensed To Ill".to_owned(),
+                        year: "1986".to_owned(),
+                        tracks: Some(vec![track("t1", "Rhymin & Stealin", 1, "4:08")]),
+                        total: None,
+                    },
+                    GuiMusicAlbumFrame {
+                        album_id: "al2".to_owned(),
+                        name: "Paul's Boutique".to_owned(),
+                        year: "1989".to_owned(),
+                        tracks: None,
+                        total: None,
+                    },
+                ],
+                years: Some(("1986".to_owned(), "1989".to_owned())),
+            },
+        ),
+        menu: Vec::new(),
+    }));
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), detail.clone());
+        route_hero(state, facts, "enter", "Enter", "t1");
+    });
+    assert_eq!(
+        commands(&rx),
+        [GuiLibraryCommand::PlayArtistTrack {
+            album_ids: vec!["al1".to_owned(), "al2".to_owned()],
+            track_id: "t1".to_owned(),
+        }
+        .into()]
+    );
+    assert_eq!(facts, ["enter=Handled"]);
+}

@@ -90,8 +90,8 @@ pub use self::podcasts_projection::{
 #[cfg(test)]
 pub(crate) use self::projection::music_artist_row_art;
 pub use self::projection::{
-    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
-    GuiMusicTrackTotal,
+    GuiMusicAlbum, GuiMusicArtist, GuiMusicArtistPage, GuiMusicHero, GuiMusicHeroSubject,
+    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
 pub(crate) use self::request::GuiSectionRequest;
 pub(crate) use self::rows_in_view::queue_in_view_row_fetches;
@@ -196,6 +196,32 @@ pub enum GuiLibraryCommand {
     AddToQueue { item_id: String },
     /// Shuffle the artist whose albums are `album_ids` (design D8).
     ShuffleArtist { album_ids: Vec<String> },
+    /// Show the artist's page in the Hero (gui-music-artist-page design D1,
+    /// D2): `lib_idx` is the Music library whose row was pressed, and
+    /// `artist_key` is the artist row's stable identity. The page pick
+    /// replaces any earlier one, the artist page's album track loads start,
+    /// and navigation is stamped as an album pick stamps it.
+    ShowArtist {
+        lib_idx: usize,
+        artist_key: mbv_ui_model::music_grouping::ArtistKey,
+    },
+    /// Play the artist whose albums are `album_ids` (gui-music-artist-page
+    /// design D2): the artist page's Play control, through the same blocking
+    /// album walk the Shuffle artist command runs with shuffle on. A stale
+    /// frame's album id is skipped and logged.
+    PlayArtist { album_ids: Vec<String> },
+    /// Add the artist whose albums are `album_ids` to the queue
+    /// (gui-music-artist-page design D2): the artist page's Add to queue
+    /// control, through the shared add path for each album in order.
+    AddArtistToQueue { album_ids: Vec<String> },
+    /// Play the artist page's track `track_id` (gui-music-artist-page design
+    /// D2, D4): the page's album ids in their shown order name the sequence
+    /// the core builds from the album track cache, and playback starts at
+    /// the track. A track the sequence does not hold plays nothing.
+    PlayArtistTrack {
+        album_ids: Vec<String>,
+        track_id: String,
+    },
     /// Run the row menu's entry at `index` (design D8): the entry the frame
     /// painted for the row, run through the row's destination menu.
     MenuEntry {
@@ -391,6 +417,26 @@ impl GuiCore {
             }
             GuiLibraryCommand::ShuffleArtist { album_ids } => {
                 self.shuffle_gui_artist(&album_ids);
+            }
+            GuiLibraryCommand::ShowArtist {
+                lib_idx,
+                artist_key,
+            } => {
+                self.show_gui_artist_page(lib_idx, artist_key);
+            }
+            GuiLibraryCommand::PlayArtist { album_ids } => {
+                self.play_gui_artist(&album_ids);
+            }
+            GuiLibraryCommand::AddArtistToQueue { album_ids } => {
+                for album_id in &album_ids {
+                    item_actions::add_library_item(&mut self.app, &self.gui, album_id);
+                }
+            }
+            GuiLibraryCommand::PlayArtistTrack {
+                album_ids,
+                track_id,
+            } => {
+                item_actions::play_gui_artist_track(&mut self.app, &album_ids, &track_id);
             }
             // Row 3.6 runs the menu entry the frame carried through the shared
             // context-action executor.

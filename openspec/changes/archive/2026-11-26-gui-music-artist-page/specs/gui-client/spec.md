@@ -201,3 +201,30 @@ Each Music group SHALL keep the album its Hero last showed while it was the only
 - **GIVEN** the GUI Client quit with Paul's Boutique kept under Hip-Hop and only Hip-Hop checked
 - **WHEN** the GUI Client starts again
 - **THEN** Music opens with Hip-Hop checked, and the Hero shows Paul's Boutique
+
+### Requirement: The Library Status bar shows hints and the location
+
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the Search field on the left, and the location on the right: the destination, All or the names of the checked collections, and the picked item. The Music location names the picked album's title, or, while the Hero shows the artist page, the artist's name. The bar SHALL show no key hints. While prefix mode is armed, the armed state SHALL paint after the Search field, and the field and the location SHALL stay. The bar SHALL show no toast.
+
+#### Scenario: Music has an album picked
+
+- **GIVEN** Music is active with Hip-Hop checked and the album Licensed To Ill picked
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the Search field and the location Music, Hip-Hop, Licensed To Ill, and no key hints
+
+#### Scenario: Music shows the artist page
+
+- **GIVEN** Music is active with Hip-Hop checked and the Hero shows the Beastie Boys artist page
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the Search field and the location Music, Hip-Hop, Beastie Boys, and no key hints
+
+#### Scenario: Two collections are checked
+
+- **GIVEN** Feeds is active with Tifo Football and Off Menu checked
+- **WHEN** the Library Status bar paints
+- **THEN** the location names Feeds, then both subscriptions, then the picked entry
+
+#### Scenario: A toast arrives
+
+- **WHEN** a toast is presented while the Library panel shows
+- **THEN** the Library Status bar does not show it and does not change

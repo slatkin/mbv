@@ -28,12 +28,15 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryHero;
-use super::{add_album_to_queue, play_album, press_menu_entry, run_menu_entry, shuffle_artist};
+use super::{
+    add_album_to_queue, add_artist_to_queue, play_album, play_artist, press_menu_entry,
+    run_menu_entry, shuffle_artist,
+};
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
-    GuiMusicMenuEntryFrame, GuiMusicTrackFrame, GuiMusicTrackTotalFrame, GuiRowArtFrame,
-    GuiRowMediaKindFrame,
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicArtistPageFrame, GuiMusicDetail,
+    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicMenuEntryFrame,
+    GuiMusicTrackFrame, GuiMusicTrackTotalFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -141,6 +144,9 @@ fn hero_app(props: FixtureProps) -> Element {
                 artists,
             }),
         })));
+    // The carried detail, as the core's batch would: `play_library_track`
+    // reads the subject from the section store, not from the Hero's props.
+    sections.library_detail.set(Some(detail.clone()));
     provide_context(state.clone());
     handle.borrow_mut().replace((state, epoch));
     rsx! {
@@ -160,7 +166,7 @@ fn hero() -> GuiMusicHeroFrame {
             count: 2,
             duration: "7:02".to_owned(),
         }),
-        album: GuiMusicAlbumFrame {
+        subject: GuiMusicHeroSubjectFrame::Album(GuiMusicAlbumFrame {
             album_id: "al1".to_owned(),
             name: "Licensed To Ill".to_owned(),
             year: "1986".to_owned(),
@@ -182,7 +188,7 @@ fn hero() -> GuiMusicHeroFrame {
                 count: 2,
                 duration: "8:43".to_owned(),
             }),
-        },
+        }),
         menu: vec![
             GuiMusicMenuEntryFrame {
                 label: "Play All".to_owned(),
@@ -212,7 +218,13 @@ fn artists(facts: &GuiMusicHeroFrame) -> Vec<GuiMusicArtistFrame> {
         artist_key: GuiArtistKey::Service("a1".to_owned()),
         name: "Beastie Boys".to_owned(),
         sort_letter: 'B',
-        albums: vec![facts.album.clone(), pauls_boutique()],
+        albums: vec![
+            facts
+                .album()
+                .expect("the fixture's subject is an album")
+                .clone(),
+            pauls_boutique(),
+        ],
     }]
 }
 
@@ -279,6 +291,15 @@ impl Fixture {
     /// Whether the selector names a node in the painted tree.
     fn presents(&self, selector: &str) -> bool {
         matches!(self.doc.inner().query_selector(selector), Ok(Some(_)))
+    }
+
+    /// The count of nodes the selector names, in paint order.
+    fn count_of(&self, selector: &str) -> usize {
+        self.doc
+            .inner()
+            .query_selector_all(selector)
+            .expect("the selector is valid")
+            .len()
     }
 
     /// The trimmed text of the first node the selector names.
@@ -649,3 +670,5 @@ fn a_tracklist_duration_carries_the_repeated_time_token() {
         "the repeated duration paints at the repeat opacity, painted: {repeated:?}"
     );
 }
+
+mod artist_page;

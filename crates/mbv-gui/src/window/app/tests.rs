@@ -22,11 +22,14 @@ use blitz_dom::Document as _;
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
+use futures_channel::mpsc::unbounded;
 use futures_util::FutureExt;
 use mbv_config::GuiPanelWidths;
 
-use super::note_panel_ui_reset;
+use super::{drain_queued, note_panel_ui_reset};
 use crate::bridge::frame::GuiPanelToggles;
+use crate::bridge::sections::GuiSectionBatch;
+use crate::window::channel::WindowEvent;
 use crate::window::input::f32_from_f64;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
@@ -144,6 +147,60 @@ fn the_ui_reset_effect_settles() {
         ui_reset_epoch: 1,
     });
     assert!(fixture.settles(), "the effect did not settle after a reset");
+}
+
+/// The event's kind, for the drain tests' order assertions.
+fn event_kind(event: &WindowEvent) -> &'static str {
+    match event {
+        WindowEvent::Batch(_) => "batch",
+        WindowEvent::Quit => "quit",
+        WindowEvent::Art(_) => "art",
+        WindowEvent::Timer(_) => "timer",
+        WindowEvent::Frame { .. } => "frame",
+        WindowEvent::Viewport => "viewport",
+    }
+}
+
+/// Contract (the coalescing drain): every event already queued behind the
+/// awaited one dispatches in the same drain call, in send order. Two
+/// landing batches that queue together apply in one poll, so Dioxus renders
+/// them once and the intermediate painted state between them never reaches
+/// the DOM.
+#[test]
+fn drain_queued_dispatches_every_queued_event_in_one_call() {
+    let (tx, mut rx) = unbounded::<WindowEvent>();
+    let batch = GuiSectionBatch::default();
+    tx.unbounded_send(WindowEvent::Batch(Box::new(batch)))
+        .unwrap();
+    tx.unbounded_send(WindowEvent::Quit).unwrap();
+    let mut dispatched = Vec::new();
+    let ended = drain_queued(&mut rx, &mut |event| dispatched.push(event_kind(&event)));
+    assert!(
+        !ended,
+        "an open channel with a drained queue keeps the drain"
+    );
+    assert_eq!(
+        dispatched,
+        ["batch", "quit"],
+        "the queued events dispatch in order, in one call"
+    );
+}
+
+/// Contract (the coalescing drain): a closed-and-drained channel ends the
+/// drain, and the last queued event still dispatches before the end.
+#[test]
+fn drain_queued_ends_on_a_closed_and_drained_channel() {
+    let (tx, mut rx) = unbounded::<WindowEvent>();
+    tx.unbounded_send(WindowEvent::Quit).unwrap();
+    drop(tx);
+    let mut dispatched = Vec::new();
+    let ended = drain_queued(&mut rx, &mut |event| dispatched.push(event_kind(&event)));
+    assert!(ended, "a closed and drained channel ends the drain");
+    assert_eq!(
+        dispatched,
+        ["quit"],
+        "the last queued event still dispatches"
+    );
 }
 
 /// The root's own markup, in the shape the window paints it: the `style`

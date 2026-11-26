@@ -31,6 +31,7 @@ impl GuiCore {
         self.gui.library_groups.clear();
         self.gui.library_picks.clear();
         self.gui.music_union_picks.clear();
+        self.gui.music_artist_pages.clear();
         self.gui.home_selection = None;
         self.gui.tv_shows.clear();
         self.gui.emby_libs.clear();

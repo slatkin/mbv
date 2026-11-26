@@ -14,6 +14,7 @@ pub mod daemon_lost_overlay;
 pub mod dialog_frame;
 pub mod folded_queue;
 pub mod header_icon_button;
+pub mod library_artist_tracklist;
 pub mod library_attr;
 pub mod library_audiobooks_hero;
 pub mod library_collection_dropdown;

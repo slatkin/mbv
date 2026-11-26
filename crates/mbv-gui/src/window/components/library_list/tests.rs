@@ -27,7 +27,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryList;
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail,
+    GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame,
+    GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
     GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -690,56 +691,6 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
     );
 }
 
-/// Contract (gui-tree-double-click design D2, D4; gui-row-hover-actions design
-/// D1-D3): the Music artist row is a tree parent — its open state paints as
-/// `aria-expanded` and its hover offers the Expand control, which reuses the
-/// row's toggle, beside Play, Add, and Shuffle over the artist's item id.
-#[test]
-fn the_artist_row_paints_its_open_state_and_offers_every_control() {
-    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
-    measure(&mut fixture, 240.0);
-
-    let row = "[data-library-row-id=\"artist:service:a1\"]";
-    assert_eq!(
-        fixture.attr_of(row, local_name!("aria-expanded")),
-        Some("false".to_owned()),
-        "the closed artist paints its open state"
-    );
-    assert_eq!(
-        fixture.hover_controls_of("artist:service:a1"),
-        ["play", "queue", "shuffle", "toggle"],
-        "the artist with an item id offers Play, Add, Shuffle, and Expand"
-    );
-}
-
-/// Contract (gui-delineated-rows design D1): an artist row is a top-level row
-/// and paints the shared part's thumb with its art state, while the album and
-/// track rows under it keep their own painters and paint none.
-#[test]
-fn the_artist_row_paints_a_thumb_and_its_nested_rows_paint_none() {
-    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
-    open_beastie(&mut fixture);
-    open_licensed_to_ill(&mut fixture);
-    measure(&mut fixture, 240.0);
-
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-row-id=\"artist:service:a1\"] [data-library-thumb]",
-            blitz_dom::LocalName::from("data-library-thumb"),
-        ),
-        Some("loading".to_owned()),
-        "the artist row paints the shared part's thumb with its art state"
-    );
-    assert!(
-        !fixture.presents("[data-library-row-id=\"album:al1\"] [data-library-thumb]"),
-        "the nested album row paints no thumb"
-    );
-    assert!(
-        !fixture.presents("[data-library-row-id=\"track:t1\"] [data-library-thumb]"),
-        "the nested track row paints no thumb"
-    );
-}
-
 /// Contract (gui-delineated-rows design D7): the list reports the artist rows it
 /// paints with the core's own artist ids, under the Music scope, so the core
 /// queues their row art without a coordinate.
@@ -781,3 +732,5 @@ fn a_press_on_a_track_row_picks_its_album_and_marks_no_row() {
         "no row paints a cursor mark"
     );
 }
+
+mod artist_row;

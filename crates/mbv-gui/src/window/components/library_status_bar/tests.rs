@@ -24,8 +24,8 @@ use crate::bridge::frame::library::{
     GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
     GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail,
-    GuiMusicHeroFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList, GuiRowArtFrame,
-    GuiRowMediaKindFrame,
+    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList,
+    GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::SectionRef;
@@ -73,13 +73,13 @@ fn hero() -> GuiMusicHeroFrame {
         collections: vec!["Hip-Hop".to_owned()],
         album_count: 1,
         artist_tracks: None,
-        album: GuiMusicAlbumFrame {
+        subject: GuiMusicHeroSubjectFrame::Album(GuiMusicAlbumFrame {
             album_id: "al1".to_owned(),
             name: "Licensed To Ill".to_owned(),
             year: "1986".to_owned(),
             tracks: None,
             total: None,
-        },
+        }),
         menu: Vec::new(),
     }
 }
@@ -250,7 +250,7 @@ fn built(props: LibraryStatusBarProps) -> Fixture {
 
 /// Contract (`LibraryStatusBar.test.ts`, the spec's "The Library Status bar
 /// shows hints and the location"): the bar paints the location line — the
-/// destination, the selected collection, and the picked album's artist — and
+/// destination, the selected collection, and the picked album — and
 /// no key hints. The Search field is the top bar's now (user request
 /// 2026-11-19), so the bar paints no field and no hint.
 #[test]
@@ -259,7 +259,7 @@ fn the_bar_paints_the_location_and_no_key_hints() {
 
     assert_eq!(
         doc.text_of("[data-library-status-location]"),
-        "Music › Hip-Hop › Beastie Boys"
+        "Music › Hip-Hop › Licensed To Ill"
     );
     assert!(
         !doc.presents("[data-library-search-input]"),
@@ -286,7 +286,7 @@ fn the_bar_shows_no_toast_and_keeps_the_location() {
     assert!(!doc.presents("[data-library-status-toast]"));
     assert!(
         doc.text_of("[data-library-status-location]")
-            .contains("Music › Hip-Hop › Beastie Boys"),
+            .contains("Music › Hip-Hop › Licensed To Ill"),
         "the location stays"
     );
 }
@@ -304,7 +304,7 @@ fn an_armed_prefix_paints_and_keeps_the_location() {
     );
     assert!(
         doc.text_of("[data-library-status-location]")
-            .contains("Music › Hip-Hop › Beastie Boys"),
+            .contains("Music › Hip-Hop › Licensed To Ill"),
         "the location stays"
     );
 }

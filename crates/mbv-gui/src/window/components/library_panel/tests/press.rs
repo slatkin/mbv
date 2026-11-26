@@ -55,6 +55,44 @@ fn view_detail_opens_the_narrow_hero_overlay() {
     assert!(!fixture.presents("[data-row-menu]"));
 }
 
+/// Contract (gui-music-artist-page design D6, spec "The overlay shows the
+/// artist page"): in the Narrow arrangement a Music artist row's menu holds
+/// View Detail — the row menu's `detail` gate is gone, so every row menu
+/// leads with it — and choosing it opens the Hero overlay, which shows the
+/// artist page.
+#[test]
+fn view_detail_on_an_artist_row_opens_the_overlay_with_the_artist_page() {
+    let mut fixture = built(GuiArrangement::Narrow);
+    let (list, detail) = fixtures::music_sections(Some(fixtures::music_artist_page()));
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || {
+        state.open_library_row_menu(
+            crate::gui_core::GuiLibraryMenuRow::Item("a1".to_owned()),
+            40.0,
+            60.0,
+        );
+    });
+    fixture.carry_row_menu("a1");
+
+    assert_eq!(
+        fixture.text_of("[data-menu-entry]"),
+        "View Detail",
+        "the artist row's menu leads with View Detail"
+    );
+    assert!(!fixture.presents("[data-library-region=\"heroOverlay\"]"));
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.view_library_detail());
+
+    assert!(fixture.presents("[data-library-region=\"heroOverlay\"]"));
+    assert!(
+        fixture.presents("[data-library-region=\"heroOverlay\"] [data-library-artist-tracklist]"),
+        "the overlay shows the artist page"
+    );
+}
+
 /// Contract: the right-click item menu carries the pointer position it opened
 /// at (the `RowMenu` state), and the card paints while it is up. Where the
 /// card sits on screen is design presentation, not a contract: no test asserts

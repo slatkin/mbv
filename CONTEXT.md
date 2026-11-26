@@ -570,6 +570,10 @@ Wide hero:
 The sole Wide arrangement for hero-bearing browse surfaces. The selected-item hero or provider-owned detail workspace takes the *Hero pane* on the left. The one-column Library browser and its pills take the browser rail on the right. It applies only when the shared width breakpoint and minimum-height guard hold. Otherwise the standard fixed-row browser stays active and detail opens through the Library Hero overlay.
 _Avoid_: separate detail block, split, side-by-side, hero-on-side, hero-on-left, hero-on-right
 
+Artist page:
+The *GUI Library panel*'s Music Hero state for a picked artist. A press on an artist row makes that artist the Hero's subject. The Hero then paints the artist's facts, the albums of the artist in the union's order with their cached tracklists, and Play and Add to queue actions on the albums. It is session state: the core keeps the picked artist's key per Music library for the session and saves nothing, so a restart shows an album again. It differs from the TUI's *Artist root*: the Artist root is the TUI's selectable tree row, not this Hero state.
+_Avoid_: artist detail page, artist screen, artist hero
+
 Hero pane:
 The fixed `#1e2326` slot `BgDim` dark sheet of the Wide hero pane that holds the hero. It is the container surface itself, apart from what paints inside it. The sheet is fixed in both focus states. It does not lighten with the focus bit of the panel. It is the same dark chrome that the Library Hero overlay paints when it shows the same hero over a non-Wide browser.
 _Avoid_: recessed box, hero panel, detail panel
