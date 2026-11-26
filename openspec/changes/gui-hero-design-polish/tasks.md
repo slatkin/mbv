@@ -58,7 +58,7 @@ This change starts after `gui-music-artist-page` has merged to `main`. Each unit
 
 ## 9. Docs and the glossary (design D7)
 
-- [ ] 9.1 Update `docs/architecture/gui-client.md` as design D7 states: the Hero frame section, every Hero frame field list, the parent/title rule, the conditional list bands, the cast and the glow path, the Shows/Feeds playing identity, and the "same facts the TUI paints" sentences. Add **Fact pill** and **Hero glow** to `CONTEXT.md` with their *Avoid* lines. Verify: `rg -n "progress_row|imdb_url|meta_rows" docs/architecture/gui-client.md` returns no line about a GUI Hero frame, and `rg -n "Fact pill|Hero glow" CONTEXT.md` returns two lines.
+- [x] 9.1 Update `docs/architecture/gui-client.md` as design D7 states: the Hero frame section, every Hero frame field list, the parent/title rule, the conditional list bands, the cast and the glow path, the Shows/Feeds playing identity, and the "same facts the TUI paints" sentences. Add **Fact pill** and **Hero glow** to `CONTEXT.md` with their *Avoid* lines. Verify: `rg -n "progress_row|imdb_url|meta_rows" docs/architecture/gui-client.md` returns no line about a GUI Hero frame, and `rg -n "Fact pill|Hero glow" CONTEXT.md` returns two lines.
 
 ## 10. Gates
 
