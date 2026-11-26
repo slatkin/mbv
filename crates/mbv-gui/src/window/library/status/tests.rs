@@ -274,12 +274,15 @@ fn home_content() -> (GuiLibraryList, GuiLibraryDetail) {
         selected: None,
         hero: Some(GuiHomeHeroFrame {
             title: "Better Call Saul".to_owned(),
-            meta_rows: Vec::new(),
-            duration_row: None,
-            progress_row: None,
+            parent: None,
+            facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                pills: Vec::new(),
+                rows: Vec::new(),
+            },
             overview: None,
             art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
             art: None,
+            cast: Vec::new(),
         }),
     });
     (list, detail)

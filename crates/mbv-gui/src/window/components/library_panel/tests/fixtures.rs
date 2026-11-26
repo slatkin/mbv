@@ -9,10 +9,9 @@ use crate::bridge::frame::library::{
     GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList,
     GuiHomeDetail, GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
     GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame,
-    GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
-    GuiMusicList, GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsHeroFrame,
-    GuiShowsList, GuiShowsRowFrame,
+    GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistPageFrame, GuiMusicDetail,
+    GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList, GuiRowArtFrame,
+    GuiRowMediaKindFrame, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList, GuiShowsRowFrame,
 };
 
 /// The carried Music list part with no album picked.
@@ -94,14 +93,6 @@ pub(super) fn music_artist_page() -> GuiMusicHeroFrame {
     }
 }
 
-/// A meta segment the fixtures' Hero rows carry.
-pub(super) fn segment(text: &str, kind: GuiMetaKindFrame) -> Vec<GuiMetaSegmentFrame> {
-    vec![GuiMetaSegmentFrame {
-        text: text.to_owned(),
-        kind,
-    }]
-}
-
 /// The carried Home sections: one item row and its Hero.
 pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetail) {
     let row_id = GuiHomeRowIdFrame::Continue("e1".to_owned());
@@ -136,12 +127,15 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
             selected: Some(row_id),
             hero: with_hero.then(|| GuiHomeHeroFrame {
                 title: "Better Call Saul".to_owned(),
-                meta_rows: vec![segment("1 h 47 m left", GuiMetaKindFrame::Time)],
-                duration_row: Some(0),
-                progress_row: None,
+                parent: None,
+                facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                    pills: Vec::new(),
+                    rows: Vec::new(),
+                },
                 overview: None,
                 art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
                 art: None,
+                cast: Vec::new(),
             }),
         }),
     )
@@ -252,14 +246,14 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
             hero: Some(GuiEmbyHeroFrame {
                 kind: "movie".to_owned(),
                 title: "Alien".to_owned(),
-                meta_rows: vec![segment("1979", GuiMetaKindFrame::Date)],
-                duration_row: Some(0),
-                progress_row: None,
+                facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                    pills: Vec::new(),
+                    rows: Vec::new(),
+                },
                 overview: None,
                 art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
                 art: None,
-                credits: Vec::new(),
-                imdb_url: None,
+                cast: Vec::new(),
             }),
         }),
     )
