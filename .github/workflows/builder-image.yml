@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view ci-mbv-builder-shuttle --json assets \
-               --jq '.assets[].name' 2>/dev/null | grep -qx mbv-builder-image.tar.zst; then
+            --jq '.assets[].name' 2>/dev/null | grep -qx mbv-builder-image.tar.zst; then
             echo "Shuttle asset present: loading the off-GitHub build."
             gh release download ci-mbv-builder-shuttle \
               -p mbv-builder-image.tar.zst --clobber
