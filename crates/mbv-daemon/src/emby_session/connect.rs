@@ -239,8 +239,8 @@ fn install_output(
     // review r6). The guard is narrow: it fires only while the output is still
     // Local, so an Emby Session→Emby Session selection never trips it, even
     // when the old device presents content the Owner did not load. A
-    // switch-only answer asks for exactly the swap that stops the old output,
-    // so the guard does not apply to it (switch-output-without-hand-off
+    // switch-only answer asks for exactly the swap that releases the old
+    // output, so the guard does not apply to it (switch-output-without-hand-off
     // design D5).
     let local_playback_started = matches!(intent, SelectionIntent::Continue)
         && matches!(daemon.owner.output, PlaybackOutput::Local)
@@ -257,12 +257,15 @@ fn install_output(
         );
         return;
     }
-    // Every swap stops the old output (design D10 step 3, D11), whether or not
-    // a hand-off was captured: the local run stops, the old receiver's media
-    // stops with its app teardown, or the old Session's device stops only
-    // while it plays the loaded item. The stop makes every awaited transition
-    // identity the old output could confirm unobservable.
-    crate::output::handoff::stop_old_output_for_handoff(daemon);
+    // Every swap stops or releases the old output (design D10 step 3, D11;
+    // keep-old-output-playing-on-switch design D1/D2/D4/D5), whether or not
+    // a hand-off was captured: the local run stops, a `Continue` old
+    // receiver's media stops with its app teardown while a `SwitchOnly` one
+    // is released with no stop and no teardown, and the old Session's device
+    // stops only while it plays the loaded item — a `SwitchOnly` selection
+    // sends no device stop. The stop makes every awaited transition identity
+    // the old output could confirm unobservable.
+    crate::output::handoff::stop_old_output_for_handoff(daemon, intent);
     crate::core::reset_slot_jumps(
         &mut daemon.owner.core.transitions,
         &mut daemon.owner.queued_transition_origin,

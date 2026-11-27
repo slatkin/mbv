@@ -113,7 +113,9 @@ pub fn handle_select_playback_output(
             // capture, stop and tear down the receiver or the Session, then
             // continue the slot on a fresh local run. A switch-only answer
             // continues nothing (switch-output-without-hand-off design D5):
-            // the remote output stops and no local run starts.
+            // no local run starts and the remote output is released — the
+            // device keeps playing what it plays
+            // (keep-old-output-playing-on-switch design D1/D4).
             match &daemon.owner.output {
                 PlaybackOutput::Cast(_) | PlaybackOutput::EmbySession(_) => {
                     hand_remote_output_back_to_local(daemon, reply_tx, intent);
@@ -315,17 +317,18 @@ fn apply_connected_output(
         return;
     }
     log_handoff_connect_outcome(active_now, handoff);
-    // Every swap stops the old output (design D10 step 3), whether
-    // or not a hand-off was captured: the local run stops; the old
-    // receiver's media stops with its stop reports — none where
-    // nothing was loaded or reported — and the deliberate output
-    // change tears the old receiver's app down (design D12), on the
-    // old receiver never the new one. An Emby Session old output stops
-    // its device only while the device plays the loaded item (design
-    // D11). The stop also makes every awaited transition identity the
-    // old output could confirm unobservable (the same rule a ctrl stop
-    // applies).
-    crate::output::handoff::stop_old_output_for_handoff(daemon);
+    // Every swap stops or releases the old output (design D10 step 3;
+    // keep-old-output-playing-on-switch design D1/D2/D4/D5), whether
+    // or not a hand-off was captured: the local run stops; a
+    // `Continue` old receiver's media stops with its stop reports —
+    // none where nothing was loaded or reported — and tears its app
+    // down (design D12), while a `SwitchOnly` old receiver is released
+    // with no stop and no teardown; an Emby Session old output stops
+    // its device only while the device plays the loaded item, and a
+    // `SwitchOnly` one sends no device stop. The stop also makes every
+    // awaited transition identity the old output could confirm
+    // unobservable (the same rule a ctrl stop applies).
+    crate::output::handoff::stop_old_output_for_handoff(daemon, intent);
     crate::core::reset_slot_jumps(
         &mut daemon.owner.core.transitions,
         &mut daemon.owner.queued_transition_origin,

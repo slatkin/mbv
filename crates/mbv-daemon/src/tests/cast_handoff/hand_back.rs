@@ -179,13 +179,14 @@ fn the_owner_shutdown_queues_no_stop_and_no_teardown_on_the_receiver() {
     );
 }
 
-/// Contract: switch-output-without-hand-off row 2.5 and row 2.6 — a
-/// `SwitchPlaybackOutput` to Local while a Cast receiver plays captures no
-/// hand-off: the receiver's media stops and its app tears down, Local becomes
-/// the output, no local run is submitted, the queue keeps its order, and the
+/// Contract: keep-old-output-playing-on-switch rows 2.1 and 1.3 (spec "A
+/// remote output switches to local playback"; design D1/D3) — a switch to
+/// Local releases the receiver: its worker is dropped with no stop job and no
+/// teardown job queued, so the device keeps playing, while Local becomes the
+/// output, no local run is submitted, the queue keeps its order, and the
 /// observed active slot is recorded and published as none (invariant 25).
 #[test]
-fn a_switch_to_local_stops_the_receiver_and_submits_no_local_run() {
+fn a_switch_to_local_releases_the_receiver_and_submits_no_local_run() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
         vec![feed_qi_with_url("a", "https://feed/a.mp3")],
@@ -244,17 +245,11 @@ fn a_switch_to_local_stops_the_receiver_and_submits_no_local_run() {
         "the switch makes Local the output"
     );
     let calls = calls.lock().unwrap();
-    let stop = calls
-        .iter()
-        .position(|call| *call == "stop")
-        .expect("the receiver's media stops");
-    let teardown = calls
-        .iter()
-        .position(|call| *call == "teardown")
-        .expect("the receiver's app is torn down");
     assert!(
-        stop < teardown,
-        "the teardown runs after the media stop, in worker FIFO order: {calls:?}"
+        !calls
+            .iter()
+            .any(|call| call == "stop" || call == "teardown"),
+        "the released receiver's drop sends no stop and no teardown: {calls:?}"
     );
     assert!(
         commands.try_recv().is_err(),
@@ -290,5 +285,79 @@ fn a_switch_to_local_stops_the_receiver_and_submits_no_local_run() {
             .unwrap(),
         None,
         "the switch publishes the observed slot as none (invariant 25)"
+    );
+}
+
+/// Contract: keep-old-output-playing-on-switch row 2.2 (spec "A released
+/// device does not move the queue") — a status report from a released
+/// receiver after the switch to Local settles and advances nothing: the
+/// loaded item is forgotten and the Owner no longer tracks the device.
+#[test]
+fn a_status_report_from_a_released_receiver_advances_nothing() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let status = CastStatus {
+        duration_seconds: Some(10.0),
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    };
+    let (client_id, _rx, _calls) = select_cast_output(&mut t, status);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    load_slot_on_receiver(&mut t, client_id, slot);
+    // One tick runs the status poll, so the loaded slot is the observed one
+    // before the switch.
+    t.event_loop.tick(std::time::Instant::now());
+    pump(&mut t);
+    let queue_before: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+
+    switch_output(
+        &mut t,
+        client_id,
+        &mpsc::channel().0,
+        OutputSelection::Local,
+    );
+    // The released receiver reports it still plays its media.
+    t.event_loop
+        .handle_event(DaemonEvent::Cast(crate::cast::CastOwnerEvent::Status {
+            receiver_id: "rcv-1".to_string(),
+            poll_id: 0,
+            result: Ok(playing_status_at("https://feed/a.mp3", 20.0)),
+        }));
+
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the stale status report does not change the output"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "the stale status report starts no playback"
+    );
+    let queue_after: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    assert_eq!(
+        queue_after, queue_before,
+        "the stale status report does not move the queue"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        None,
+        "the stale status report restores no observed slot"
     );
 }

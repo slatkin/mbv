@@ -511,20 +511,30 @@ pub(super) fn report_resolve_failure(
 /// What an output stop acts on (emby-session-owner-output design D9/D11): an
 /// explicit stop from a Client or from the transport acts on whatever the
 /// output plays; the stop an output change issues only ends the Owner's own
-/// load and leaves content the Owner did not load playing.
+/// load and leaves content the Owner did not load playing; the stop a
+/// switch-only selection issues releases the remote device without stopping
+/// it (keep-old-output-playing-on-switch design D1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum StopScope {
     /// A user stop: the output's device stops whatever it plays.
     Everything,
     /// The old output's stop on an output change: only the loaded item stops.
     LoadedItemOnly,
+    /// The old output's stop on a switch-only selection: the remote device is
+    /// released, not stopped — it keeps playing what it plays, and the Owner
+    /// only forgets the loaded item and stops tracking it (design D1/D2).
+    Release,
 }
 
 /// Stops the active output's media (design D4, row 5.3): Local stops the
 /// run; Cast stops the receiver media and forgets the loaded item, so a
 /// later idle status of the stopped receiver can neither settle nor advance
-/// anything (design D5/D7). Shared by the ctrl stop, the guarded stop
-/// intent, and the transport (MPRIS/tray) stop, which mirrors `CtrlCmd::Stop`.
+/// anything (design D5/D7) — a `Release` scope keeps the bookkeeping (the
+/// stop report, the Feed `Stopped`, the forgotten loaded item) but sends no
+/// media stop, so the released receiver keeps playing
+/// (keep-old-output-playing-on-switch design D1/D2). Shared by the ctrl
+/// stop, the guarded stop intent, and the transport (MPRIS/tray) stop,
+/// which mirrors `CtrlCmd::Stop`.
 /// The Cast arm also re-presents the output: with the loaded item gone the
 /// presented status shows no active playback (design D8, row 6.1), and the
 /// loaded Feed slot's `Stopped` goes out to the Clients (design D9).
@@ -567,7 +577,11 @@ pub(super) fn stop_active_output(
             // 7.1): the user stopped the output before the hand-off's load
             // landed, so the resolve's late outcome must load nothing.
             cast.pending_handoff_load = None;
-            command::submit_command_job(cast, "stop", |transport| transport.stop());
+            // A release sends no media stop: the device keeps playing what
+            // it plays (design D1). Every other scope stops the loaded media.
+            if scope != StopScope::Release {
+                command::submit_command_job(cast, "stop", |transport| transport.stop());
+            }
             let base = player.status.lock().unwrap().clone();
             let presented = status::presented_player_status(
                 &base,
@@ -595,6 +609,10 @@ pub(super) fn stop_active_output(
                 StopScope::LoadedItemOnly => {
                     crate::emby_session::command::stop_loaded_item(session)
                 }
+                // A release sends no device stop: the device keeps playing
+                // what it plays (design D1), so nothing it presents was
+                // stopped by the Owner.
+                StopScope::Release => false,
             };
             session.loaded = None;
             session.advance = None;
