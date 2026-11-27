@@ -87,15 +87,15 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
 
 ## 5. Favourites list component
 
-- [ ] 5.1 Add `LibraryFavouritesList` in `crates/mbv-gui/src/window/components/` over the shared
+- [x] 5.1 Add `LibraryFavouritesList` in `crates/mbv-gui/src/window/components/` over the shared
   flat-row parts, painted in the list column while the library's view is Favourites; the Hero shows
   the selected favourite; pressing All restores the All list with its selection and scroll
   (spec "A Favourites view replaces the destination's list column"). The list keeps its own
   `ListScroll` per library (design D6), paints no letter headings and no rail, and its refresh
   button refetches the favourites list.
-- [ ] 5.2 Wire row press, double-click play, and right-click menu to the existing shared commands
+- [x] 5.2 Wire row press, double-click play, and right-click menu to the existing shared commands
   by stable id.
-- [ ] 5.3 Update `docs/architecture/gui-client.md` for the view type, the favourites store, and the
+- [x] 5.3 Update `docs/architecture/gui-client.md` for the view type, the favourites store, and the
   list part, and add `docs/invariants/` text only if a new property that no type enforces appears.
   Verify: `rg "Favourites" docs/architecture/gui-client.md` shows the section.
 
