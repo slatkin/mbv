@@ -157,7 +157,9 @@ Level look differences are token values at the level root (D10).
 ### D5. HERO BASE
 
 HERO BASE takes one `GuiHeroFrame`: header, detail block, art shape and art, overview, cast,
-actions as `Vec<GuiHeroActionFrame>` (painted by CONTROL BASE), backdrop, and a body
+actions as `Vec<GuiHeroActionFrame>` (painted by CONTROL BASE), the favourite heart as
+`favourite: Option<GuiHeroFavouriteFrame>` (a header field: the item key and its state; the
+toggle is `GuiHeroAct::SetFavourite(bool)`, which the core resolves to today's `SetFavourite`), backdrop, and a body
 `GuiHeroBodyFrame::{None, Workspace(GuiListFrame)}`. The seven Hero components and the
 `actions` and `children` props of `LibraryHeroFrame` go. The current `LibraryHeroFrame`
 mechanics become HERO BASE's internals. The Shows Hero's extra fact layout and the Music artist
@@ -283,9 +285,9 @@ differently today, the difference becomes two values of one token, and the look 
 | `library_workspace_table`, `library_tracklist`, `library_artist_tracklist` | WORKSPACE |
 | `library_hero_frame`, `library_hero_art`, `library_hero_cast`, `library_hero_detail`, `library_hero_fact_rows`, `library_hero_section`, `library_hero_pills` | HERO BASE internals |
 | `library_hero`, `library_home_hero`, `library_shows_hero`, `library_emby_hero`, `library_favourites_hero`, `library_audiobooks_hero`, `library_podcasts_hero`, `library_feeds_hero` | deleted (data in `GuiHeroFrame`) |
-| `header_icon_button`, `settings_button`, `settings_switch`, `checkbox_box`, `clear_field_button`, `library_hero_actions`, `prefix_badge`, `settings_state_pill`, `library_sort_control`, `queue_target_control`, `library_top_bar/tabs`, `settings_pick_button`, `track_chips` (chips) | CONTROL BASE |
+| `header_icon_button`, `settings_button`, `settings_switch`, `checkbox_box`, `clear_field_button`, `library_hero_actions`, `prefix_badge`, `settings_state_pill`, `library_sort_control`, `queue_target_control`, `library_top_bar/tabs`, `settings_pick_button`, `track_chips` (chips), `library_hero_heart` (the favourite heart) | CONTROL BASE |
 | `library_filter_field`, `library_search_control`, `settings_field`, the Playlists rename input | FIELD BASE |
-| `queue_row_menu`, `chooser_menu`, `queue_chooser_menu`, `library_dropdown`, `library_collection_dropdown`, `library_shows_view_dropdown`, `menu_card`, `track_chips` (popover) | POPUP / MENU |
+| `queue_row_menu`, `chooser_menu`, `queue_chooser_menu`, `library_dropdown`, `library_collection_dropdown`, `library_view_dropdown`, `menu_card`, `track_chips` (popover) | POPUP / MENU |
 | `dialog_frame`, `confirm_overlay`, `daemon_lost_overlay`, `attach_screen` | POPUP / DIALOG |
 | `library_top_bar`, `library_list_header`, `queue_header`, `library_status_bar`, `settings_status_bar`, `queue_footer` | BAR BASE |
 | `settings_row`, `settings_rows`, `settings_entry_row`, `settings_card`, `settings_checkbox_grid` | SETTINGS ROW |
@@ -294,7 +296,7 @@ differently today, the difference becomes two values of one token, and the look 
 | `library_panel` | LIBRARY composite |
 | `art_image`, `typed_text`, `play_mark`, `library_attr`, `use_focus_while`, `toast_stack` | shared leaf parts, unchanged in role |
 
-`window/library/`: `audiobooks*`, `emby*`, `feeds*`, `podcasts*`, `shows*`, `home*`, `episode`,
+`window/library/`: `favourites*`, `audiobooks*`, `emby*`, `feeds*`, `podcasts*`, `shows*`, `home*`, `episode`,
 `hero`, `lettered*`, `parts`, `row_memo`, and the per-destination parts of `state*` and `keys*`
 go. `list*`, `scroll`, `search`, `status`, and `reset` become generic over `GuiListId`.
 `window/sections.rs` replaces its `playlists` section with the neutral Library section of task 1.5

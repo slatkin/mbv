@@ -19,11 +19,11 @@ Commit each task with a message that names the task number.
   `make checks PKG=mbv-gui` passes.
 - [ ] 1.2 In the same module, add `GuiListFrame`, `GuiListHeaderFrame`, `GuiChoiceFrame`,
   `GuiLettersFrame`, and `GuiListNoticeFrame` (D6). Verify: `make checks PKG=mbv-gui` passes.
-- [ ] 1.3 In `src/bridge/frame/hero.rs` (new), add `GuiHeroFrame`, `GuiHeroActionFrame`, and
+- [ ] 1.3 In `src/bridge/frame/hero.rs` (new), add `GuiHeroFrame`, `GuiHeroActionFrame`, `GuiHeroFavouriteFrame`, and
   `GuiHeroBodyFrame::{None, Workspace(GuiListFrame)}` (D5). Verify: `make checks PKG=mbv-gui`
   passes.
 - [ ] 1.4 In `src/bridge/intent.rs` (new), add `GuiListIntent`, `GuiListAct`,
-  `GuiListHeaderAct`, `GuiHeroIntent`, `GuiHeroAct`, and `GuiPointerAct` over the existing
+  `GuiListHeaderAct`, `GuiHeroIntent`, `GuiHeroAct` (with `SetFavourite(bool)`), and `GuiPointerAct` over the existing
   `RegionTarget` (D7, D8). Route each intent type through the window-to-core channel beside
   `GuiLibraryCommand`; the core answers with a documented no-op for now. Verify:
   `make checks PKG=mbv-gui` passes and `rg -n '_ =>' src/core_thread.rs` shows no wildcard arm
@@ -113,8 +113,10 @@ the destination accepts that asserts the resulting command.
   `track_chips` chips, the transport and fold controls). Verify: `make test PKG=mbv-gui` passes.
 - [ ] 4.7 Move the Settings controls onto CONTROL BASE (`settings_button`, `settings_switch`,
   `checkbox_box`, `settings_state_pill`, `settings_pick_button`). Verify: `make test
-  PKG=mbv-gui` passes and `rg -l '^\s*button \{' src/window --glob '!**/control/**' --glob
-  '!**/tests*'` prints nothing.
+  PKG=mbv-gui` passes. The crate-wide `button {` check holds only after task 4.14 and runs as
+  task 12.1's gate; here, `rg -l '^\s*button \{' src/window/components --glob 'settings*'
+  --glob '!**/tests*'` prints only files that tasks 4.13 moves (`settings_entry_row`,
+  `settings_checkbox_grid`, `settings_sidebar`, `settings_feeds`).
 - [ ] 4.8 Add FIELD BASE (`field.rs`, `field/`) with its contract tests (draft, clear, commit,
   cancel, focus while open), and move `library_filter_field`, `library_search_control`,
   `settings_field`, and the `library_dropdown` filter onto it. Verify: `make test PKG=mbv-gui`
@@ -124,7 +126,7 @@ the destination accepts that asserts the resulting command.
   (anchor, outside press closes, the topmost entry takes the press, entry intent). Verify: the
   new tests pass.
 - [ ] 4.10 Move `queue_row_menu`, `chooser_menu`, `queue_chooser_menu`, `menu_card`,
-  `library_dropdown`, `library_collection_dropdown`, `library_shows_view_dropdown`, and the
+  `library_dropdown`, `library_collection_dropdown`, `library_view_dropdown`, and the
   `track_chips` popover onto MENU. Delete the old components. Verify: `make test PKG=mbv-gui`
   passes.
 - [ ] 4.11 Move `dialog_frame`, `confirm_overlay`, `daemon_lost_overlay`, and `attach_screen`
@@ -203,8 +205,8 @@ the destination accepts that asserts the resulting command.
 
 - [ ] 8.1 Add WORKSPACE (`list/workspace.rs`): `WorkspaceSource`, the column grid, the header
   row, the playing bars in the number cell, and `Heading` rows. Contract tests: the playing row
-  paints the bars in place of its number, a press does nothing, a double-click activates, a
-  heading takes no press. Verify: the new tests pass.
+  paints the bars in place of its number, a press on the header row does nothing, a press on a data row sends `Press`, a double-click
+  activates, a heading takes no press. Verify: the new tests pass.
 - [ ] 8.2 Add HERO BASE (`hero.rs`, `hero/`) over `GuiHeroFrame`, built from
   `library_hero_frame`, `library_hero_art`, `library_hero_cast`, `library_hero_detail`,
   `library_hero_fact_rows`, `library_hero_section`, and `library_hero_pills`, with actions on
@@ -212,7 +214,7 @@ the destination accepts that asserts the resulting command.
   body paints its section header, an action press sends its `GuiHeroAct`. Verify: the new tests
   pass.
 - [ ] 8.3 Mount HERO BASE for every destination. Delete `library_hero`, `library_home_hero`,
-  `library_shows_hero`, `library_emby_hero`, `library_favourites_hero`, `library_audiobooks_hero`,
+  `library_shows_hero`, `library_hero_heart`, `library_emby_hero`, `library_favourites_hero`, `library_audiobooks_hero`,
   `library_podcasts_hero`, `library_feeds_hero`, `library_workspace_table`,
   `library_tracklist`, `library_artist_tracklist`, and `window/library/*_workspace.rs` and
   `window/library/hero.rs`. Remove the Hero lines from invariant 38's failure list. Verify:
