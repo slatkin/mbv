@@ -135,6 +135,26 @@ fn play_and_add_to_queue_send_the_pages_albums_in_order() {
     );
 }
 
+/// Contract (user direction 2026-11-27): the artist page's Shuffle shuffles
+/// the whole artist, so it sends `ShuffleArtist` naming every album of the
+/// page in the page's order — the album Hero's Shuffle keeps to its own album.
+#[test]
+fn shuffle_sends_the_pages_albums_in_order() {
+    let mut fixture = built_artist_page();
+
+    let album_ids = vec!["al1".to_owned(), "al2".to_owned()];
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || shuffle_artist_page(&state, &album_ids));
+
+    assert_eq!(
+        fixture.library_commands(),
+        vec![crate::gui_core::GuiLibraryCommand::ShuffleArtist {
+            album_ids: vec!["al1".to_owned(), "al2".to_owned()],
+        }],
+        "the artist page's shuffle names every album of the page"
+    );
+}
+
 /// Contract (gui-music-artist-page design D6, spec "Enter plays the hovered
 /// artist page track"): a track row's play gesture while the page shows sends
 /// `PlayArtistTrack` with the page's album ids in order, so the sequence runs

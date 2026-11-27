@@ -1,6 +1,6 @@
 //! Headless tests of the Music Hero (D16): the contracts of
-//! `LibraryHero.test.ts` — the album's Play, Enqueue, and
-//! Shuffle artist sends name the item's own stable id, the More actions menu
+//! `LibraryHero.test.ts` — the album's Play, Shuffle, and
+//! Enqueue sends name the item's own stable id, the More actions menu
 //! paints the entries the frame carries under their shared-builder indexes
 //! and a chosen entry sends its index, an album whose menu remainder is empty
 //! paints no More actions control, the tracklist paints the cursor on its
@@ -30,7 +30,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryHero;
 use super::{
     add_album_to_queue, add_artist_to_queue, play_album, play_artist, press_menu_entry,
-    run_menu_entry, shuffle_artist,
+    run_menu_entry, shuffle_album, shuffle_artist_page,
 };
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
@@ -216,7 +216,7 @@ fn hero() -> GuiMusicHeroFrame {
 }
 
 /// The carried Music content (the former client `music(facts)` fixture): the artist
-/// that owns the picked album, whose union albums Shuffle artist names.
+/// that owns the picked album.
 fn artists(facts: &GuiMusicHeroFrame) -> Vec<GuiMusicArtistFrame> {
     vec![GuiMusicArtistFrame {
         art: GuiRowArtFrame::NoSource,
@@ -468,23 +468,23 @@ fn add_to_queue_sends_the_picked_album_s_id() {
     );
 }
 
-/// Contract (`LibraryHero.test.ts`): Shuffle artist sends the artist's albums
-/// in the union.
+/// Contract (user direction 2026-11-27): the album Hero's Shuffle shuffles the
+/// picked album alone, so it sends the album's own row shuffle — the entry the
+/// album's right-click menu runs — never the whole artist's albums.
 #[test]
-fn shuffle_artist_sends_the_union_s_albums() {
+fn shuffle_sends_the_picked_album_s_own_row_shuffle() {
     let mut fixture = built_hero();
-    let facts = hero();
 
-    let union = artists(&facts);
+    let album_id = "al1".to_owned();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || shuffle_artist(&state, &union, &facts));
+    fixture.in_runtime(move || shuffle_album(&state, &album_id));
 
     assert_eq!(
         fixture.library_commands(),
-        vec![crate::gui_core::GuiLibraryCommand::ShuffleArtist {
-            album_ids: vec!["al1".to_owned(), "al2".to_owned()],
+        vec![crate::gui_core::GuiLibraryCommand::Shuffle {
+            row: crate::gui_core::GuiLibraryMenuRow::Item("al1".to_owned()),
         }],
-        "the shuffle command names the union's albums"
+        "the album Hero's shuffle names the picked album, not the artist's albums"
     );
 }
 

@@ -1379,9 +1379,9 @@ The Music list SHALL show the artists of the selected collection as a tree of ar
 
 ### Requirement: A picked Music artist shows an artist page
 
-A press on a Music artist row SHALL pick the artist, and the Hero SHALL show the artist page for it. The press SHALL NOT open or close the row. The artist page SHALL paint in the Hero frame: its header band SHALL show the artist name, the selected collections as a label pill, and its short facts as fact pills (the artist's album count, the span of the artist's release years, and the artist's track count and total time once every album of the artist has loaded its tracks). Its detail block SHALL show the artist's artwork and the actions Play, Enqueue, and Shuffle artist. Its list band SHALL show the artist's tracks grouped by album, in the order of the albums in the list and then in disc and track order, with one label for each album that shows the album's name and release year. The artist page SHALL offer no More actions control.
+A press on a Music artist row SHALL pick the artist, and the Hero SHALL show the artist page for it. The press SHALL NOT open or close the row. The artist page SHALL paint in the Hero frame: its header band SHALL show the artist name, the selected collections as a label pill, and its short facts as fact pills (the artist's album count, the span of the artist's release years, and the artist's track count and total time once every album of the artist has loaded its tracks). Its detail block SHALL show the artist's artwork and the actions Play, Shuffle, and Enqueue. Its list band SHALL show the artist's tracks grouped by album, in the order of the albums in the list and then in disc and track order, with one label for each album that shows the album's name and release year. The artist page SHALL offer no More actions control.
 
-Play and Enqueue SHALL act on the whole artist: every album of the artist that the list holds, in the list's album order. Shuffle artist SHALL act as it does on an album. A double-click on a track row of the page, its hover Play control, or Enter while the pointer rests on it SHALL replace the queue and start playback from that track through the rest of the tracks that the page shows, in the page's order, and it SHALL NOT stop at the end of the track's album. A track row's hover Enqueue control SHALL append only that track. A press on a track row, and a press on an album label, SHALL change nothing.
+Play, Shuffle, and Enqueue SHALL act on the whole artist: every album of the artist that the list holds, in the list's album order. The artist page's Shuffle SHALL therefore play the whole artist, unlike the album Hero's Shuffle, which plays its one album. A double-click on a track row of the page, its hover Play control, or Enter while the pointer rests on it SHALL replace the queue and start playback from that track through the rest of the tracks that the page shows, in the page's order, and it SHALL NOT stop at the end of the track's album. A track row's hover Enqueue control SHALL append only that track. A press on a track row, and a press on an album label, SHALL change nothing.
 
 The artist page SHALL load the tracks of every album of the artist when the artist is picked, and SHALL show each album's group as its tracks arrive. An album whose tracks have not loaded SHALL show its label and no rows, and SHALL NOT be part of a played sequence. The artist's row SHALL stay marked in the list while the Hero shows its page. A press on an album row or a track row of the list SHALL end the artist page and show that album. The artist page SHALL NOT be saved in the launch location.
 
@@ -1419,6 +1419,12 @@ The artist page SHALL load the tracks of every album of the artist when the arti
 
 - **WHEN** the artist page shows an artist with two albums and the user presses Enqueue
 - **THEN** every track of the first album followed by every track of the second album is appended to the queue, and the queue's current item does not change
+
+#### Scenario: Shuffle acts on the whole artist
+
+- **GIVEN** the artist page shows an artist with two albums
+- **WHEN** the user presses the artist page's Shuffle control
+- **THEN** the queue is replaced with every track of the first album and of the second album, in shuffled order
 
 #### Scenario: An album row ends the artist page
 
@@ -1488,13 +1494,19 @@ A Library list sorted by name SHALL show letter headings and a letter rail from 
 
 ### Requirement: The Hero shows the picked item with its actions
 
-The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist, or, while an artist is picked, the artist page that the requirement "A picked Music artist shows an artist page" states. The album Hero's header band SHALL show the artist and the selected collections, and SHALL NOT show the artist's album count or the artist's track count and total time: those facts belong to the artist page. The album's detail block SHALL show the album's track count and total time as fact pills. It SHALL offer Play, Enqueue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. More actions SHALL open the item's menu. A tracklist row SHALL show the hover controls that the requirement "GUI Library rows show hover controls" defines, and a double-click on a tracklist row SHALL play that track, as it does in every Workspace list (Shows episodes, Audiobooks chapters, Feeds entries). The tracklist row of the track playing at the playhead SHALL show as the playing row, as the requirement "Library lists and Workspace tables paint through shared parts" states.
+The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist, or, while an artist is picked, the artist page that the requirement "A picked Music artist shows an artist page" states. The album Hero's header band SHALL show the artist and the selected collections, and SHALL NOT show the artist's album count or the artist's track count and total time: those facts belong to the artist page. The album's detail block SHALL show the album's track count and total time as fact pills. It SHALL offer Play, Shuffle, Enqueue with the key hint `a`, and More actions. Shuffle SHALL play the picked album's own items shuffled, as the album's menu Shuffle entry does, and SHALL leave the artist's other albums out of the queue. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. More actions SHALL open the item's menu. A tracklist row SHALL show the hover controls that the requirement "GUI Library rows show hover controls" defines, and a double-click on a tracklist row SHALL play that track, as it does in every Workspace list (Shows episodes, Audiobooks chapters, Feeds entries). The tracklist row of the track playing at the playhead SHALL show as the playing row, as the requirement "Library lists and Workspace tables paint through shared parts" states.
 
 #### Scenario: The Hero paints a picked album
 
 - **WHEN** the user picks the album Licensed to Ill
 - **THEN** the artist header shows the artist and the selected collections, and no album count, artist track count, or artist total time
 - **AND** the album block shows the year, the title, the track count and the time as fact pills, and the square artwork, above the tracklist
+
+#### Scenario: Shuffle plays the picked album alone
+
+- **GIVEN** the Hero shows a picked album of an artist with two albums
+- **WHEN** the user presses the Hero's Shuffle control
+- **THEN** the queue is replaced with the picked album's playable items in shuffled order, and the artist's other album contributes nothing
 
 #### Scenario: Play next from the Hero
 

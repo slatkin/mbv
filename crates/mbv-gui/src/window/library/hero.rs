@@ -1,8 +1,7 @@
 //! The Library Hero's facts and geometry (`add-gui-library-panel` design D5, D8,
 //! the port of `lib/library/hero.ts`): the picked album's lines as the canvas
-//! prints them, and the artist's albums in the union that Shuffle artist
-//! plays. The data is the core's, so this module only reads the carried Hero;
-//! keeping the lines here lets the painters stay markup.
+//! prints them. The data is the core's, so this module only reads the carried
+//! Hero; keeping the lines here lets the painters stay markup.
 //!
 //! A line that joins values of several data types is built as typed segments
 //! (`add-gui-settings-screen` design D14): colour carries the type, so a count
@@ -140,44 +139,6 @@ pub fn artist_page_pills(hero: &GuiMusicHeroFrame) -> Vec<GuiHeroPillFrame> {
         pills.extend(track_total_pills(total));
     }
     pills
-}
-
-/// The artist's albums in the union, which Shuffle artist plays (design D8).
-/// The union artist is the one that owns the picked album, so a name the
-/// Service repeats cannot pick the wrong artist; the picked album alone is the
-/// fallback while the union holds no owner. The union's artists are the
-/// albums' own content, so the caller passes them alone — the Hero reads no
-/// other part of the carried list.
-#[must_use]
-pub fn artist_union_albums(
-    artists: &[crate::bridge::frame::library::GuiMusicArtistFrame],
-    hero: &GuiMusicHeroFrame,
-) -> Vec<String> {
-    // The artist page's albums are the union's own, in the union's order, so
-    // the page names them directly (gui-music-artist-page design D6).
-    if let GuiMusicHeroSubjectFrame::Artist(page) = &hero.subject {
-        return page
-            .albums
-            .iter()
-            .map(|album| album.album_id.clone())
-            .collect();
-    }
-    let Some(picked) = hero.album().map(|album| album.album_id.clone()) else {
-        return Vec::new();
-    };
-    let owner = artists
-        .iter()
-        .find(|artist| artist.albums.iter().any(|album| album.album_id == picked));
-    owner.map_or_else(
-        || vec![picked],
-        |owner| {
-            owner
-                .albums
-                .iter()
-                .map(|album| album.album_id.clone())
-                .collect()
-        },
-    )
 }
 
 /// The attribute name of one part of a destination's Hero (`add-gui-library-panel`
