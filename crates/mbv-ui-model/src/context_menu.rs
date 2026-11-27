@@ -99,6 +99,11 @@ pub enum ContextAction {
     EnqueueFolder(Box<EmbyItem>),
     MarkPlayed(String),
     MarkUnplayed(String),
+    /// Set or clear the item's Emby per-user favourite flag (emby-favourites
+    /// design D2): the entry carries the stable item id, and the executor
+    /// writes the server's returned state over every App-held copy.
+    Favourite(String),
+    Unfavourite(String),
     RemoveFromContinueWatching,
     RemoveFromQueue(usize),
     /// Empty the whole Bound queue through the same prompt the `c` chord
@@ -164,6 +169,8 @@ impl ContextAction {
             | Self::EnqueueFolder(_)
             | Self::MarkPlayed(_)
             | Self::MarkUnplayed(_)
+            | Self::Favourite(_)
+            | Self::Unfavourite(_)
             | Self::RemoveFromContinueWatching
             | Self::RemoveFromQueue(_)
             | Self::ClearQueue

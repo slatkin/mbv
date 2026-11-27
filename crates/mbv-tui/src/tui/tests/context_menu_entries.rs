@@ -48,25 +48,34 @@ fn folder_item(name: &str, item_type: &str, unplayed_children: u32) -> EmbyItem 
 
 /// One case per item shape: the standard action set for that shape (context
 /// menu spec, "Library lists share one standard action set", the Played label,
-/// and the music rule).
+/// and the music rule), with the favourites entry after the played-state
+/// entry — or after Enqueue for music — per the emby-favourites delta.
 #[rstest]
 #[case::unplayed_movie(
     leaf_item("movie", "Movie", "Video", false),
-    &["Play", "Enqueue", "Mark Played"],
+    &["Play", "Enqueue", "Mark Played", "Add to Favourites"],
 )]
 #[case::played_movie(
     leaf_item("movie", "Movie", "Video", true),
-    &["Play", "Enqueue", "Mark Unplayed"],
+    &["Play", "Enqueue", "Mark Unplayed", "Add to Favourites"],
 )]
+#[case::unplayed_favourited_movie({
+    let mut item = leaf_item("movie", "Movie", "Video", false);
+    item.is_favorite = true;
+    item
+}, &["Play", "Enqueue", "Mark Played", "Remove from Favourites"],)]
 #[case::season_with_unplayed_children(
     folder_item("Season 1", "Season", 5),
     &["Play All", "Shuffle", "Enqueue", "Mark Played"],
 )]
 #[case::music_album(
     folder_item("Album", "MusicAlbum", 0),
-    &["Play All", "Shuffle", "Enqueue"],
+    &["Play All", "Shuffle", "Enqueue", "Add to Favourites"],
 )]
-#[case::music_track(leaf_item("Track", "Audio", "Audio", false), &["Play", "Enqueue"])]
+#[case::music_track(
+    leaf_item("Track", "Audio", "Audio", false),
+    &["Play", "Enqueue", "Add to Favourites"],
+)]
 fn emby_menu_follows_the_standard_action_set_for(
     #[case] item: EmbyItem,
     #[case] expected: &[&str],
@@ -156,6 +165,12 @@ fn an_emby_queue_row_menu_ends_with_the_shuffle_entry() {
     let labels = opened_menu_labels(&mut app);
 
     assert_eq!(labels.last(), Some(&"Shuffle"));
+    // emby-favourites spec, "The favourites entry is single-row and
+    // library-scoped": a Queue row offers no favourites entry (design D2).
+    assert!(
+        labels.iter().all(|label| !label.contains("Favourites")),
+        "queue row must offer no favourites entry: {labels:?}"
+    );
 }
 
 /// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner

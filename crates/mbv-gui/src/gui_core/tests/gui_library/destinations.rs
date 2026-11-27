@@ -114,7 +114,9 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
         .map(|entry| entry.label.as_str())
         .collect();
     assert!(!labels.iter().any(|label| label.contains("Mark")));
-    assert_eq!(labels, ["Play", "Enqueue"]);
+    // The favourites entry stays (emby-favourites delta: music items offer
+    // it even without a played-state entry).
+    assert_eq!(labels, ["Play", "Enqueue", "Add to Favourites"]);
 }
 
 /// The opener the openUrl seam stages: it records the url the core handed

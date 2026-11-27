@@ -264,6 +264,14 @@ impl App {
                 self.context_set_played(&id, false, lib_idx);
                 None
             }
+            Some(ContextAction::Favourite(id)) => {
+                self.context_set_favourite(&id, true);
+                None
+            }
+            Some(ContextAction::Unfavourite(id)) => {
+                self.context_set_favourite(&id, false);
+                None
+            }
             Some(ContextAction::RemoveFromContinueWatching) => {
                 if let Some(item) = cw_item {
                     self.remove_from_continue_watching(&item);
@@ -454,6 +462,8 @@ impl App {
                 | ContextAction::EnqueueFolder(_)
                 | ContextAction::MarkPlayed(_)
                 | ContextAction::MarkUnplayed(_)
+                | ContextAction::Favourite(_)
+                | ContextAction::Unfavourite(_)
                 | ContextAction::RemoveFromContinueWatching
                 | ContextAction::RemoveFromQueue(_)
                 | ContextAction::ClearQueue
@@ -547,6 +557,73 @@ impl App {
                 format!("Couldn't update play status: {e}"),
                 ToastSeverity::Error,
             ),
+        }
+    }
+
+    /// The favourites write (emby-favourites design D3, D4): like
+    /// `context_set_played`, a missing Emby client flashes "Emby is
+    /// unavailable", an error flashes an error toast and changes nothing, and
+    /// a success writes the server's returned `IsFavorite` — never the
+    /// requested value — over every App-held copy of the item. No queue
+    /// propagation and no list refetch run: design D4 flips the held copies
+    /// in place, and queue items are out of scope (design D2).
+    fn context_set_favourite(&mut self, item_id: &str, favourite: bool) {
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
+        let result = client.set_favourite(item_id, favourite);
+        drop(client);
+        match result {
+            Ok(actual) => self.flip_favourite_held_copies(item_id, actual),
+            Err(e) => self.flash(
+                format!("Couldn't update favourite: {e}"),
+                ToastSeverity::Error,
+            ),
+        }
+    }
+
+    /// Set `is_favorite` on every App-held `EmbyItem` with `item_id`
+    /// (emby-favourites design D4): the TUI browse levels, the Home Continue
+    /// Watching content, the cached series details the Shows tree reads
+    /// (`series_detail_item`), the album track cache, and the artist detail
+    /// cache. Queue items stay untouched (design D2).
+    fn flip_favourite_held_copies(&mut self, item_id: &str, favourite: bool) {
+        let flip = |item: &mut EmbyItem| {
+            if item.id == item_id {
+                item.is_favorite = favourite;
+            }
+        };
+        for lib in &mut self.libs {
+            for level in &mut lib.nav_stack {
+                for item in &mut level.items {
+                    flip(item);
+                }
+            }
+        }
+        for item in &mut self.home_content.continue_items {
+            flip(item);
+        }
+        for detail in self.series_detail_cache.values_mut() {
+            for item in &mut detail.seasons {
+                flip(item);
+            }
+            for episodes in detail.episodes.values_mut() {
+                for item in episodes {
+                    flip(item);
+                }
+            }
+        }
+        for tracks in self.album_tracks_cache.values_mut() {
+            for item in tracks {
+                flip(item);
+            }
+        }
+        for entry in self.artist_detail_cache.values_mut() {
+            for item in &mut entry.tracks {
+                flip(item);
+            }
         }
     }
 

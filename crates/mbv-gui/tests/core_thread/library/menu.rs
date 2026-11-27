@@ -46,7 +46,7 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     let labels: Vec<&str> = menu.iter().map(|entry| entry.label.as_str()).collect();
     assert_eq!(
         labels,
-        ["Play All", "Shuffle", "Enqueue"],
+        ["Play All", "Shuffle", "Enqueue", "Add to Favourites"],
         "the frame carries the album's own entries"
     );
 
@@ -103,7 +103,12 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
         .iter()
         .map(|entry| entry.label.as_str())
         .collect();
-    assert_eq!(labels, ["Play All", "Shuffle", "Enqueue"],);
+    // The favourites entry follows Enqueue: music has no played-state entry
+    // (emby-favourites delta, context-menu spec).
+    assert_eq!(
+        labels,
+        ["Play All", "Shuffle", "Enqueue", "Add to Favourites",],
+    );
 }
 
 /// Entities a right-click menu names but the store no longer holds carry no
