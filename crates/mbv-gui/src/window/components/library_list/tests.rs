@@ -656,8 +656,8 @@ fn a_refresh_of_music_names_only_the_open_album_rows_in_view() {
     open_beastie(&mut fixture);
     toggle_row(&mut fixture, "album:al1");
     toggle_row(&mut fixture, "album:al3");
-    // 150 px holds the letter, the artist, al1 with its track, and the closed
-    // al2; al3's row starts past the window.
+    // 150 px holds the letter, the artist, and al1 with its track; al2 and
+    // the open al3 start past the window.
     measure(&mut fixture, 150.0);
 
     refresh_music(&mut fixture);

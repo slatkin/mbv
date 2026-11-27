@@ -6,10 +6,11 @@
 //! letter rail beside it. The rows paint at the canvas's fixed heights over
 //! native scroll, and only the rows in view paint, so a long artist list
 //! stays fast. The artist rows are top-level rows and paint through the shared
-//! row part with their art thumb; the album and track rows under them paint
-//! through the nested row part at the first and second depth (gui-unified-list-
-//! rows design D3). The rows it paints are also the row art set the core
-//! fetches (design D7).
+//! row part with their art thumb; the album rows under them paint through the
+//! branch row part, with their Branch swatch and their facts line, and the
+//! track rows through the leaf row part, in their album's Leaf well
+//! (gui-tree-row-roles design D1, D2, D5). The rows it paints are also the row
+//! art set the core fetches (design D7).
 //!
 //! The open nodes and the filter text are window-content state in
 //! [`crate::window::library::state`] (design D1), the scroll offset and the
@@ -42,8 +43,7 @@ use crate::window::components::library_list_column::{
 use crate::window::components::library_list_header::{LibraryListHeaderProps, LibraryTreeActions};
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNoticesProps};
 use crate::window::components::list_row::{
-    FlatRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, TreeDepth, TreeLevel, TreeRow,
-    TreeTrail,
+    BranchRow, FlatRow, LeafRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX,
 };
 use crate::window::components::tree_rail::subtree_tails;
 use crate::window::library::list::{LETTER_ROW_HEIGHT, LibraryRow, letter_rail};
@@ -76,12 +76,12 @@ fn paint_letter_row(letter: char) -> Element {
     }
 }
 
-/// The track row under an open album: the number, the muted name, and the
-/// runtime. It is a leaf of the tree at the second depth, so it paints both
-/// guides that pass through it — the artist's and its album's — and the mono
-/// leaf face (gui-unified-list-rows design D3). Its hover offers Play and Add
-/// and no Shuffle, because a track is no collection (gui-row-hover-actions
-/// design D3).
+/// The track row under an open album: one segment of the album's Leaf well,
+/// with its number, its title, and its runtime (gui-tree-row-roles design D1,
+/// D3). The well edge the row model carries places its rounded corners, its
+/// separator, and the well's gaps. Its hover offers Play and Add and no
+/// Shuffle, because a track is no collection (gui-row-hover-actions design
+/// D3).
 fn paint_track_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -94,6 +94,7 @@ fn paint_track_row(
         name,
         number,
         duration,
+        well,
         ..
     } = row
     else {
@@ -107,15 +108,14 @@ fn paint_track_row(
     let hover = library.row_hover_presses(item_id.clone(), false);
     let track_id = track_id.clone();
     rsx! {
-        TreeRow {
+        LeafRow {
             attr: "",
             kind: "track".to_owned(),
             id: base.id.clone(),
-            level: TreeLevel::Leaf,
-            depth: TreeDepth::Two,
             title: name.clone(),
+            well: *well,
             number: Some(number.to_string()),
-            trail: Some(TreeTrail::Duration(duration.clone())),
+            duration: Some(duration.clone()),
             selected: picked_row,
             tail,
             on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
@@ -135,9 +135,9 @@ fn paint_track_row(
     }
 }
 
-/// One painted row of the canvas tree: the letter heading, the nested track
-/// row, the shared part's artist row (gui-delineated-rows design D1), or the
-/// nested album row (gui-unified-list-rows design D3).
+/// One painted row of the canvas tree: the letter heading, the leaf part's
+/// track row, the shared part's artist row (gui-delineated-rows design D1), or
+/// the branch part's album row (gui-tree-row-roles design D1).
 fn paint_library_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -224,12 +224,12 @@ fn paint_artist_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) 
     }
 }
 
-/// A nested album row under an open artist: a tree parent at the first depth,
-/// so it paints the Music album look — its press picks the album, its
-/// double-click opens or closes the node, its year paints the parent trail's
-/// date, and the hover controls replace it (gui-unified-list-rows design D3;
-/// gui-row-hover-actions design D3). The album is a collection that names its
-/// own item, so it offers Play, Add, Shuffle, and Expand.
+/// The album row under an open artist: a branch row, so it paints its Branch
+/// swatch, its title over its facts line, and its open state mark, and its
+/// press picks the album, its double-click opens or closes the node, and the
+/// hover controls replace its trailing end (gui-tree-row-roles design D1, D5,
+/// D7; gui-row-hover-actions design D3). The album is a collection that names
+/// its own item, so it offers Play, Add, Shuffle, and Expand.
 fn paint_album_row(
     row: &LibraryRow,
     library: &LibraryState,
@@ -239,9 +239,9 @@ fn paint_album_row(
     let LibraryRow::Album {
         base,
         name,
-        year,
+        sibling,
+        facts,
         open,
-        shows_children,
         ..
     } = row
     else {
@@ -255,17 +255,15 @@ fn paint_album_row(
     let item_id = LibraryState::action_item_id(row);
     let hover = library.row_hover_presses(item_id.clone(), true);
     rsx! {
-        TreeRow {
+        BranchRow {
             attr: "",
             kind: "album".to_owned(),
             id: base.id.clone(),
-            level: TreeLevel::Parent,
-            depth: TreeDepth::One,
             title: name.clone(),
-            trail: Some(TreeTrail::Date(year.clone())),
-            selected: picked_row,
+            sibling: *sibling,
+            facts: facts.clone(),
             open: Some(*open),
-            shows_children: *shows_children,
+            selected: picked_row,
             tail,
             on_press: Callback::new(move |()| press_library.press_library_row(&press_row)),
             on_play: Callback::new(|()| {}),
