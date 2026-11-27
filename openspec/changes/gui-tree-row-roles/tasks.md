@@ -50,7 +50,7 @@ the group.
 
 ## 3. The shared role parts
 
-- [ ] 3.1 Add `src/window/components/tree_rail.rs` (register it in `src/window/components.rs`):
+- [x] 3.1 Add `src/window/components/tree_rail.rs` (register it in `src/window/components.rs`):
   `RailTone { Open, Group }` and `#[component] TreeRail` (one `pointer-events-none absolute`
   span at x 0, full height, 3 px wide, `data-tree-rail` = `open` or `group`, fill
   `--canvas-tree-rail` or `--canvas-tree-rail-muted`); the five swatch token names as a
@@ -59,7 +59,7 @@ the group.
   table for `swatch_var` at siblings 0, 4, 5, and 9; and one assertion that every token name
   the module holds is a property in `assets/app.css` (the pattern of
   `every_ef_token_names_a_stylesheet_property`). Verify: `make test PKG=mbv-gui` passes.
-- [ ] 3.2 Add `src/window/components/list_row/branch.rs` with `BranchRow` and `BranchRowProps`
+- [x] 3.2 Add `src/window/components/list_row/branch.rs` with `BranchRow` and `BranchRowProps`
   per design D1, D5, and D7: the hover host with `--row-fill`, the group rail, the swatch from
   `swatch_var`, the title and facts `Truncate` boxes, the state mark (`ChevronRight` /
   `ChevronDown`, `row-hover-trail`), the open and picked fills, `aria-expanded`, the tail
@@ -67,17 +67,17 @@ the group.
   (`SWATCH_X`, `SWATCH_PX`, `SWATCH_RADIUS_PX`, the 12 px text gap) with doc comments. Rename
   `RowLevel::Parent` to `RowLevel::Branch` in `components/list_row.rs` and set the selection
   radius to 0 at every level. Verify: `make checks PKG=mbv-gui` passes.
-- [ ] 3.3 Add `src/window/components/list_row/leaf.rs` with `LeafRow` and `LeafRowProps` per
+- [x] 3.3 Add `src/window/components/list_row/leaf.rs` with `LeafRow` and `LeafRowProps` per
   design D1, D3, and D7: the strip, the group rail, the well segment with its edge radii, top
   shade, bottom lip, and `overflow: hidden` on edge segments, the host, the 28 px button with
   the separator off the first row, the number cell, the title in `--canvas-text` (or the
   `RowPlay` tone), the duration or `PlayCluster`, the `data-tree-well` hook, and the tail
   divider on the strip. Name `WELL_X` and `WELL_RIGHT_GAP_PX`, `WELL_RADIUS_PX` with doc
   comments. Verify: `make checks PKG=mbv-gui` passes.
-- [ ] 3.4 In `src/window/components/list_row/flat.rs`, paint `TreeRail { tone: Open }` while
+- [x] 3.4 In `src/window/components/list_row/flat.rs`, paint `TreeRail { tone: Open }` while
   `tree_open == Some(true)`, and stop painting `parent_guide_start`. Update the module doc.
   Verify: `make checks PKG=mbv-gui` passes.
-- [ ] 3.5 Split `src/window/components/list_row/tests.rs` into `tests.rs` plus `tests/`, and add
+- [x] 3.5 Split `src/window/components/list_row/tests.rs` into `tests.rs` plus `tests/`, and add
   `tests/branch.rs` and `tests/leaf.rs` with the painted-structure contracts of design D10: a
   branch paints the swatch hook of its sibling, `aria-expanded` and the open mark when open,
   and no mark when it opens nothing; a leaf paints its `data-tree-well` edge and the separator
