@@ -99,12 +99,45 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
   list part, and add `docs/invariants/` text only if a new property that no type enforces appears.
   Verify: `rg "Favourites" docs/architecture/gui-client.md` shows the section.
 
-## 6. Gates
+## 6. Gates (first pass, pre-correction)
 
-- [x] 6.1 Run `make format`, `make checks`, and `make test` in the foreground; fix every red gate
-  whoever introduced it. Verify: all three exit 0.
-- [x] 6.2 Run `make check-code-file-lines` and split any file over 800 lines along its
-  responsibility seam. Verify: exit 0.
+- [x] 6.1 (first pass) Run `make format`, `make checks`, and `make test` in the foreground; fix
+  every red gate whoever introduced it. Verify: all three exit 0.
+- [x] 6.2 (first pass) Run `make check-code-file-lines` and split any file over 800 lines along
+  its responsibility seam. Verify: exit 0.
+
+Correction pass (2026-11-27 review): the first pass merged what Emby keeps separate (TV Favourite
+Shows / Favourite Episodes), gave the Grouped Music library favourites affordances the user
+excluded, and missed the Hero heart and two live defects. Section 7 corrects the implementation
+to the revised spec; sections 1–6 stay as the record of the first pass.
+
+## 7. Correction: separate TV views, exclude Grouped Music, Hero heart
+
+- [ ] 7.1 Split the view type: add `FavouriteShows` and `FavouriteEpisodes` variants to
+  `GuiLibraryView` beside `Favourites` (design D5). `choices` returns (All, New, Upcoming,
+  Favourite Shows, Favourite Episodes) for Shows, (All, Favourites) for non-music Emby
+  destinations, and no entries for a Grouped Music library, whose header paints no view
+  dropdown. Labels "Favourite Shows" / "Favourite Episodes", keys `favourite-shows` /
+  `favourite-episodes`. Verify: `make checks PKG=mbv-gui`.
+- [ ] 7.2 Project the split (design D6, D9): the favourites store keeps holding the whole fetch;
+  the projection filters Series rows for Favourite Shows and Episode rows for Favourite
+  Episodes. The dropdown, header rules, status bar location, scroll, pick, and Hero wiring treat
+  both new views exactly as they treated Favourites.
+- [ ] 7.3 Exclude Grouped Music (design D11): `push_favourite_context_action` pushes nothing when
+  the resolved target belongs to a Grouped Music library; the destination never starts a
+  favourites fetch and paints no dropdown. The `/Artists` merge in `get_favourites` and the
+  artist play routing (design D8) stay for non-grouped music libraries only.
+- [ ] 7.4 Add the Hero heart (design D10): a heart control in the Hero's upper right on every
+  non-Grouped-Music Emby Hero whose item `supports_favourite()`, filled per `is_favorite`,
+  press toggles through the same write path as the menu entry. No heart on Music destination
+  Heroes or unsupported items.
+- [ ] 7.5 Fix the stale-copy defect: `flip_favourite_held_copies` reaches `home_recently_added`
+  so a Home row's menu never shows a stale favourites entry after a write (design D4).
+- [ ] 7.6 Fix the Favourites list keyboard routing: Enter, `a`, and the arrows work on
+  Favourites rows in every destination, per `crates/mbv-gui/AGENTS.md` keyboard-and-pointer
+  rule.
+- [ ] 7.7 Gates: `make format`, `make checks`, `make test`, `make check-code-file-lines` in the
+  foreground, all exit 0.
 
 ## Workflow follow-up
 
