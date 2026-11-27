@@ -5,18 +5,18 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
 
 ## 1. Emby model and client
 
-- [ ] 1.1 Add `is_favorite: bool` (`#[serde(default)]`) and `EmbyItem::supports_favourite()` to
+- [x] 1.1 Add `is_favorite: bool` (`#[serde(default)]`) and `EmbyItem::supports_favourite()` to
   `crates/mbv-emby-model/src/lib.rs`. The rule is design D1: false for Season, Folder,
   CollectionFolder, UserView, Channel, Program, Timer, SeriesTimer, Studio, Tag. Update every
   `EmbyItem` constructor the compiler names. Verify: `make checks PKG=mbv-emby-model`.
-- [ ] 1.2 Read `UserData.IsFavorite` in `parse_item` (`crates/mbv-emby/src/types_parsing.rs`). The
+- [x] 1.2 Read `UserData.IsFavorite` in `parse_item` (`crates/mbv-emby/src/types_parsing.rs`). The
   field's `#[serde(default)]` makes a queue-item file written before this change load as not
   favourite.
-- [ ] 1.3 Add `EmbyClient::set_favourite(item_id, favourite) -> Result<bool, EmbyError>` in
+- [x] 1.3 Add `EmbyClient::set_favourite(item_id, favourite) -> Result<bool, EmbyError>` in
   `crates/mbv-emby/src/client_library.rs` next to `mark_played`: `POST
   /Users/{uid}/FavoriteItems/{id}` to set, `POST .../{id}/Delete` to clear, returning the reply's
   `IsFavorite` (design D3).
-- [ ] 1.4 Add `EmbyClient::get_favourites(library_id, music: bool)`: the Items query of design D6
+- [x] 1.4 Add `EmbyClient::get_favourites(library_id, music: bool)`: the Items query of design D6
   with `LATEST_FIELDS`, plus the `/Artists` listing when `music`, merged by id, with items that
   fail `supports_favourite()` dropped. A favourited Season therefore never reaches the list, and a
   Music library's artist rows merge with its items one row per id.
