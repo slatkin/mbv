@@ -256,9 +256,11 @@ the destination accepts that asserts the resulting command.
 - [ ] 9.4 Verify that the Library path is destination-free: `rg -n -i
   'music|shows|emby|favourite|audiobook|podcast|feeds|playlist' src/window/components/library.rs
   src/window/components/library src/window/components/list src/window/components/hero
-  src/window/library src/window/pointer_target.rs src/bridge/frame --glob '!**/tests*'` prints
-  only token names, icon names, and comments. Settings, Sessions, brand icons, and the Queue
-  output choosers are outside this check. Verify: the command's output holds no type, function,
+  src/window/library src/window/pointer_target.rs src/bridge/frame/list.rs
+  src/bridge/frame/hero.rs src/bridge/frame/library.rs src/bridge/intent.rs --glob '!**/tests*'` prints
+  only token names, icon names, and comments. Settings, Sessions, brand icons, the Queue
+  output choosers, the footer playlist pill (`frame/chrome.rs`), `frame/playback.rs`, and
+  `frame/theme.rs` are outside this check. Verify: the command's output holds no type, function,
   or match arm that names a destination.
 
 ## 10. QUEUE and the single input system
