@@ -473,6 +473,11 @@ button:disabled {
    `:hover` carries it to the button and to the part's cover together: the row
    reads as one hovered row, whichever of its two boxes the pointer is on. The
    Workspace table's rows paint no fill, so they take no veil of their own. */
+/* The Hero heart: only the glyph turns accent green on hover; the shared
+   button veil is off on the control (`--hover-veil: transparent`). */
+.hero-heart:not(:disabled):hover {
+	color: var(--canvas-accent) !important;
+}
 .row-hover-host {
 	position: relative;
 }

@@ -3,8 +3,8 @@
 //! and flips it through the same write the menu entry runs. Every non-music
 //! Emby Hero paints it when its item supports favourites, so the control has
 //! one look and one press path across the plain, Shows, Favourites, and Home
-//! Heroes. The filled state is the accent tone over the Lucide heart's own
-//! fill; the empty state is the muted outline. A press sends the
+//! Heroes. The filled state is the rose `#e57e80` over the Lucide heart's own
+//! fill, and only the heart glyph turns the accent green on hover; the empty state is the muted outline. A press sends the
 //! `SetFavourite` command with the state the item does not yet have, so the
 //! write, the menu entry, and every held copy flip together.
 
@@ -40,7 +40,7 @@ pub fn LibraryHeroHeart(props: LibraryHeroHeartProps) -> Element {
         (
             "Remove from Favourites",
             "currentColor".to_owned(),
-            "var(--canvas-accent)".to_owned(),
+            "#e57e80".to_owned(),
         )
     } else {
         (
@@ -52,8 +52,8 @@ pub fn LibraryHeroHeart(props: LibraryHeroHeartProps) -> Element {
     rsx! {
         button {
             "type": "button",
-            class: "flex flex-none items-center justify-center",
-            style: "width: 32px; height: 32px; padding: 0; background: none; border: none; color: {color}; cursor: pointer;",
+            class: "hero-heart flex flex-none items-center justify-center",
+            style: "width: 32px; height: 32px; padding: 0; --hover-veil: transparent; --heart-color: {color}; background: none; border: none; color: {color}; cursor: pointer;",
             "aria-label": label,
             "aria-pressed": if favourite { "true" } else { "false" },
             title: label,

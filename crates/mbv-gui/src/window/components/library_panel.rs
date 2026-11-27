@@ -481,7 +481,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                     rsx! {
                         div {
                             class: "fixed",
-                            style: "left: 0; top: 0; width: 0; height: 0;",
+                            style: "left: 0; top: 0; width: 0; height: 0; z-index: 30;",
                             onpointerdown: move |event: PointerEvent| {
                                 // A press on the menu does not close it: the
                                 // outside-press rule skips the menu, and the
