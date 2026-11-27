@@ -38,14 +38,21 @@ pub fn LibraryHeroHeart(props: LibraryHeroHeartProps) -> Element {
     let favourite = props.heart.favourite;
     // The svg paints from its own `color` attribute, which a CSS `:hover` on
     // the button does not re-resolve, so the hover state is a signal that
-    // names the glyph's colour: rose at rest, accent green under the pointer.
+    // names the glyph's colour: rose when favourited, muted when not, accent
+    // green under the pointer.
     let mut hovered = use_signal(|| false);
     let (label, fill) = if favourite {
         ("Remove from Favourites", "currentColor".to_owned())
     } else {
         ("Add to Favourites", "none".to_owned())
     };
-    let color = if hovered() { "#a7c080" } else { "#e57e80" };
+    let color = if hovered() {
+        "#a7c080"
+    } else if favourite {
+        "#e57e80"
+    } else {
+        "var(--canvas-muted)"
+    };
     rsx! {
         button {
             "type": "button",
