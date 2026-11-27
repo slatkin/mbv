@@ -182,7 +182,15 @@ pub(in crate::gui_core::gui_library) fn artist_artwork(
     else {
         return GuiLibraryArtwork::Placeholder;
     };
-    home_hero_artwork(app, &cache_key, &item_id, &series_id, &image_types)
+    // A Music Hero fetches none (gui-hero-design-polish design D4): the artist
+    // page blurs its own Primary art, so this projection starts the Primary
+    // fetch alone and starts no tiny Backdrop fetch. `home_hero_artwork` — the
+    // video heroes' shared path — also starts the tiny fetch, whose in-flight
+    // state answers every backdrop request `Missing` and lets no bake run, so
+    // the artist page's blur never painted on a first view (2026-11-27).
+    let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
+    app.fetch_card_image(cache_key.clone(), item_id, series_id, &types);
+    resolve_gui_art(app, &cache_key)
 }
 
 /// Pre-warm the Hero artwork of the entries neighbouring the picked one in
