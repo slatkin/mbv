@@ -86,13 +86,13 @@ the group.
 
 ## 4. Music pilot
 
-- [ ] 4.1 In `src/window/components/library_list.rs`, paint the album row through `BranchRow`
+- [x] 4.1 In `src/window/components/library_list.rs`, paint the album row through `BranchRow`
   (`sibling`, `facts`, `open`, `selected`, `tail`, the same handlers) and the track row through
   `LeafRow` (`well`, `number`, `duration`, the same handlers). Remove the `TreeRow` and guide
   imports. Update the module and function doc comments. Update the expectations in
   `src/window/components/library_list/tests.rs` that named a guide, an inset, or the 30 px
   album height; keep every behaviour assertion. Verify: `make test PKG=mbv-gui` passes.
-- [ ] 4.2 In `docs/architecture/gui-client.md`, in "The top-level Library row and its art",
+- [x] 4.2 In `docs/architecture/gui-client.md`, in "The top-level Library row and its art",
   describe the Music tree's new rows: the root rail, the group, the branch row and its swatch,
   the leaf well, and the parts that paint them; mark the guide text as Shows and Playlists only
   until groups 5 and 6. Add a row to the "Blitz gaps" table: an inset `box-shadow` averages the
