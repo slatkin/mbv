@@ -1038,7 +1038,10 @@ the list's body over the shared column scaffold are then one generic component,
 only its data; `play_next` defaults to no play-next, and only Emby overrides it.
 Home and Shows keep their own list modules (`src/window/library/home_list.rs`,
 `src/window/library/shows_list.rs`): Home's rows carry headings and spacers,
-and Shows' rows carry the New and Upcoming modes. Every list's column wiring
+and Shows' rows carry the New and Upcoming modes. The Favourites view paints
+`LibraryFavouritesList` in the list column in place of the destination's own
+list, for Music, Shows, and a plain Emby library alike (see *The Favourites
+view* below). Every list's column wiring
 goes through one scaffold, `library_list_column`
 (`src/window/components/library_list_column.rs`), beside the scroll shell
 `library_virtual_list`: the column's own hook, the header block, the notice
@@ -1097,9 +1100,13 @@ menu repeated the buttons and offered nothing new.
 The collection dropdown is one component for every destination that has
 collections (gui-collection-dropdown design D6): Music, Podcasts, Feeds, and
 an Emby library in feed-group mode paint it, and no other destination does.
-Shows paints a separate single-choice view dropdown — All, New, Upcoming —
-through the same prop-driven dropdown presentation; it is not a collection
-filter and adds no key. Its closed state is one trigger that
+Every Emby destination paints a separate single-choice view dropdown through
+the same prop-driven dropdown presentation — All, New, Upcoming, and
+Favourites on Shows, All and Favourites elsewhere (emby-favourites design D5)
+— and it is not a collection filter and adds no key. A Music or feed-group
+header paints the collection dropdown beside the view one; while the view is
+Favourites the collection dropdown does not paint, because Favourites lists
+the whole library. Its closed state is one trigger that
 names the selection — `All`, the one checked collection's name, or the count
 with the destination's noun (`2 folders`) — with a `Clear` control while the
 selection is not All. A press on `Clear` selects All without opening
@@ -1489,6 +1496,70 @@ gate, so fast arrow traffic warms nothing, and the three select commands
 move. The Music window is the TUI's own rule
 (`openspec/specs/music-library-hero/spec.md`). An Audiobookshelf or Podcasts
 Hero keeps its Service-scoped cover key and is not warmed.
+
+### The Favourites view
+
+Every Emby destination paints one single-choice view: All, New, Upcoming, and
+Favourites on Shows, All and Favourites on Music and on every plain Emby
+library (emby-favourites design D5). The type is `GuiLibraryView`
+(`src/gui_core/gui_library/library_view.rs`), its choices are the
+destination's own (`GuiLibraryView::choices`), the store is keyed by library
+index (`GuiClientState::library_views`), and `librarySetView` is the one command
+that writes it — the dropdown's press. Entering Favourites starts that
+library's fetch, a first load while the store holds no list and an in-place
+refresh while it holds one (design D7), and pressing All paints the
+destination's All list again from its own stores: the All selection, the All
+scroll, and the All filter text are never written by the Favourites view. The
+launch location saves All only, so a stored Favourites restores as All
+(`GuiLaunchShowsView`), and only Shows persists a view.
+
+The core holds one favourites store per library id (`GuiClientState::favourites`,
+`src/gui_core/gui_library/favourites.rs`), in the New store's shape
+(`GuiSectionRequest`: absent, `Requesting`, `Landed`). A worker per fetch runs
+`EmbyClient::get_favourites`, which asks
+`Items?ParentId=<lib>&Recursive=true&Filters=IsFavorite` with the list fields and,
+for a Music library, merges the `/Artists` listing by id; the result lands as
+`LibraryFetchEvent::Favourites { library_id, result }`. The list drops an item
+that fails `supports_favourite()` — Emby can return a favourited Season — and
+orders the collections first, then the media items, each by `SortName` (design
+D6, D9), so a TV library lists its Series before its Episodes. A failed first
+load lands an empty list and a failed in-place refresh keeps the rows already
+held, so the list paints a loading line and no failure line. The projection
+carries the list's own pick per library id (`GuiClientState::favourites_picks`),
+which never writes the All list's `picked_row`, and the picked row's Hero.
+
+The list rides each of the three destinations' list parts as an optional part,
+`GuiFavouritesList` (`src/bridge/frame/library/favourites.rs`), holding
+`loading`, the `GuiEmbyRowFrame` rows, `selected`, and `hero`; while it is
+carried, that destination's own rows, selection, sort control, and Hero project
+as empty or absent. The Hero comes from that part, not from the destination's
+detail part: every favourite's Hero is built as the Home Hero builds an Emby
+item's — `hero_content_emby`, `hero_facts_emby`, the declared artwork, and the
+cast, with no `hero_item` gate — so a favourite series, boxset, album, or artist
+paints one though the plain library's gate excludes folders and non-movies.
+
+`LibraryFavouritesList` (`src/window/components/library_favourites_list.rs`)
+paints the part over the shared flat-row parts, with the destination's Emby mark
+and its view dropdown, the list's `/` filter field, and the loading and empty
+lines — and no letter heading, letter rail, tree button, collection dropdown, or
+sort control (design D5, D6). `LibraryFavouritesHero`
+(`src/window/components/library_favourites_hero.rs`) paints the picked
+favourite's Hero on the shared Hero frame, in the Wide pane and in the Narrow
+overlay alike. Its rows carry stable Service ids, so a press (`showDetail`), a
+double-click and the hover Play (`play`), the hover Add and `a` (`addToQueue`),
+and the right-click row menu (`rowMenu`) name the id, and the core resolves it
+through the one lookup the other destinations use
+(`item_actions::library_item`), extended to read the favourites store only while
+that library's view is Favourites (design D6): a favourite music artist row
+plays, shuffles, and enqueues its tracks through the `ArtistIds` fetch (design
+D8). The window keeps the list's own scroll and filter text per library
+(`LibraryState::favourites_views`, `src/window/library/favourites.rs`), so
+scrolling or filtering the Favourites list moves no store the All list paints.
+The header's Refresh button sends the destination's `refresh` command, which the
+core routes to the favourites refetch while the view is Favourites (design D5),
+and the rows in view report the `Favourites` row art scope so their thumbs fetch
+(gui-delineated-rows design D7). The list's scroller carries its own
+`PointerList::Favourites` marker, so a key over it never acts on an All row.
 
 ### The `library` command
 
