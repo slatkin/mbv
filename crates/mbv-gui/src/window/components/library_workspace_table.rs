@@ -279,7 +279,7 @@ fn paint_number_cell(hook: &'static str, row: &WorkspaceRow) -> Element {
     };
     rsx! {
         span {
-            class: "row-hover-face flex flex-none items-center font-mono tabular-nums",
+            class: "flex flex-none items-center font-mono tabular-nums",
             style: "justify-content: flex-end; font-size: 12px; color: var(--canvas-muted);",
             ..number_attrs,
             {content}
