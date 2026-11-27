@@ -264,7 +264,7 @@ pub(in crate::gui_core::gui_library) fn select_emby(
     }
     // A Favourites row's pick is the list's own, so the All pick is left as it
     // was (emby-favourites design D6).
-    if super::shows::library_view(gui, lib_idx) == super::GuiLibraryView::Favourites {
+    if super::library_view::paints_favourites(gui, lib_idx) {
         if !super::favourites::select_favourites_row(app, gui, lib_idx, item_id) {
             super::log_stale_library_item("embySelect", item_id);
         }

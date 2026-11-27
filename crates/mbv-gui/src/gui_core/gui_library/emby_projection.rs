@@ -179,7 +179,7 @@ impl GuiCore {
         if !super::emby::emby_library(&self.app, lib_idx) {
             return GuiEmbyProjection::default();
         }
-        if super::shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+        if super::library_view::paints_favourites(&self.gui, lib_idx) {
             return self.emby_favourites_projection(lib_idx);
         }
         let projection = if self.app.is_feed_home_video_library(lib_idx) {
@@ -280,7 +280,7 @@ impl GuiCore {
             .into_iter()
             .map(|item| plain_row(app, item, sort.rail_letter(effective_sort_str(item))))
             .collect();
-        let view = super::shows::library_view(gui, lib_idx);
+        let view = super::library_view::library_view(gui, lib_idx);
         let selected = self.emby_selected(lib_idx, &rows);
         let hero = self.emby_hero_for(lib_idx, selected.as_deref());
         GuiEmbyProjection {
@@ -344,7 +344,7 @@ impl GuiCore {
             collections: Some(collections),
             collection_names,
             feed_group: true,
-            view: super::shows::library_view(&self.gui, lib_idx),
+            view: super::library_view::library_view(&self.gui, lib_idx),
             loading,
             failed: false,
             rows,
@@ -432,7 +432,7 @@ pub(crate) fn emby_item(
     // While the library's view is Favourites the painted rows are the
     // favourites list's (emby-favourites design D6), so the id resolves there
     // and nowhere else of this library's.
-    if super::shows::library_view(gui, lib_idx) == GuiLibraryView::Favourites {
+    if super::library_view::paints_favourites(gui, lib_idx) {
         return super::favourites::favourites_item(gui, app.emby_library_id(lib_idx)?, item_id);
     }
     if app.is_feed_home_video_library(lib_idx) {

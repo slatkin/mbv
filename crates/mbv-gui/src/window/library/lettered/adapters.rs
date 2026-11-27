@@ -157,14 +157,6 @@ impl LetteredDestination for EmbyList {
     }
 }
 
-/// The row kind word the item row's hook paints (`data-library-emby-row`).
-fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
-    match kind {
-        GuiEmbyRowKindFrame::Collection => "collection",
-        GuiEmbyRowKindFrame::Media => "media",
-    }
-}
-
 /// One painted row of the plain Emby-library list: the letter heading or the
 /// item row. Its hover offers Play and Add on every row, and Shuffle on a
 /// `Collection` row alone (`gui-row-hover-actions` design D3).
@@ -192,7 +184,7 @@ fn paint_emby_row(
             rsx! {
                 FlatRow {
                     attr: "emby",
-                    kind: kind_word(item.row.kind).to_owned(),
+                    kind: item.row.kind.kind_word().to_owned(),
                     id: item.id.clone(),
                     title: item.row.title.clone(),
                     subtitle: item.row.subtitle.clone(),

@@ -75,6 +75,19 @@ pub enum GuiEmbyRowKindFrame {
     Media,
 }
 
+impl GuiEmbyRowKindFrame {
+    /// The row kind word the item row's hook paints (`data-library-<list>-row`):
+    /// the plain Emby list and the Favourites list carry the same two arms, so
+    /// the word is one fact of the kind.
+    #[must_use]
+    pub fn kind_word(self) -> &'static str {
+        match self {
+            Self::Collection => "collection",
+            Self::Media => "media",
+        }
+    }
+}
+
 /// One row of the plain Emby-library list (row 8.1). The row carries the
 /// shared media-list row state (`GuiHomeRowStateFrame`), through the one
 /// conversion the Home rows already use (gui-emby-row-played-marks design

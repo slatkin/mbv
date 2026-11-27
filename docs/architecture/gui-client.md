@@ -1502,8 +1502,9 @@ Hero keeps its Service-scoped cover key and is not warmed.
 Every Emby destination paints one single-choice view: All, New, Upcoming, and
 Favourites on Shows, All and Favourites on Music and on every plain Emby
 library (emby-favourites design D5). The type is `GuiLibraryView`
-(`src/gui_core/gui_library/library_view.rs`), its choices are the
-destination's own (`GuiLibraryView::choices`), the store is keyed by library
+(`src/gui_core/gui_library/library_view.rs`), with the store's one getter
+(`library_view`) and the `paints_favourites` predicate beside it; its choices are
+the destination's own (`GuiLibraryView::choices`), the store is keyed by library
 index (`GuiClientState::library_views`), and `librarySetView` is the one command
 that writes it — the dropdown's press. Entering Favourites starts that
 library's fetch, a first load while the store holds no list and an in-place

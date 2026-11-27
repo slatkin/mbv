@@ -133,7 +133,7 @@ fn show_library_detail(app: &mut App, gui: &mut GuiClientState, item_id: &str) {
     // A Favourites row's pick is the list's own (emby-favourites design D6):
     // it never writes the Music pick, so pressing All finds the album the
     // Music list showed.
-    if super::shows::library_view(gui, lib_idx) == super::GuiLibraryView::Favourites {
+    if super::library_view::paints_favourites(gui, lib_idx) {
         if !super::favourites::select_favourites_row(app, gui, lib_idx, item_id) {
             super::log_stale_library_item("showDetail", item_id);
         }
@@ -350,7 +350,7 @@ pub(crate) fn library_item(
         // active view is Favourites (emby-favourites design D6): a Music tree
         // artist row whose id equals a favourite artist's id therefore still
         // resolves no item in All.
-        if super::shows::library_view(gui, lib_idx) == super::GuiLibraryView::Favourites
+        if super::library_view::paints_favourites(gui, lib_idx)
             && let Some(item) = super::favourites::favourites_item(gui, &lib.library.id, item_id)
         {
             return Some((lib_idx, item));

@@ -18,7 +18,7 @@ use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
 
 use super::GuiDestinationKind;
-use super::library_view::GuiLibraryView;
+use super::library_view::{GuiLibraryView, library_view, paints_favourites};
 use super::{emby, favourites, projection, shows, shows_open_loads, store};
 
 impl GuiCore {
@@ -37,7 +37,7 @@ impl GuiCore {
             // workers can still be out.
             Some(GuiDestinationKind::Home) => self.app.home_recent_refresh_pending(),
             Some(GuiDestinationKind::Music { lib_idx }) => {
-                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                if paints_favourites(&self.gui, lib_idx) {
                     favourites_refreshing(&self.app, &self.gui, lib_idx)
                 } else {
                     self.gui
@@ -50,7 +50,7 @@ impl GuiCore {
                 shows_refreshing(&self.app, &self.gui, lib_idx)
             }
             Some(GuiDestinationKind::Library { lib_idx }) => {
-                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                if paints_favourites(&self.gui, lib_idx) {
                     favourites_refreshing(&self.app, &self.gui, lib_idx)
                 } else {
                     self.gui.emby_roots_refreshing.contains(&lib_idx)
@@ -75,7 +75,7 @@ impl GuiCore {
 /// landing clears — the New view's store refetch mark, and the Upcoming
 /// snapshot's fetch mark.
 fn shows_refreshing(app: &App, gui: &GuiClientState, lib_idx: usize) -> bool {
-    match shows::library_view(gui, lib_idx) {
+    match library_view(gui, lib_idx) {
         GuiLibraryView::All => app
             .emby_library_level(lib_idx)
             .is_some_and(|level| level.loading),
@@ -110,7 +110,7 @@ impl GuiCore {
         match kind {
             GuiDestinationKind::Home => self.app.refresh_home_content(),
             GuiDestinationKind::Music { lib_idx } => {
-                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                if paints_favourites(&self.gui, lib_idx) {
                     // The Favourites view's refresh refetches the favourites
                     // list (emby-favourites design D5, D6).
                     favourites::refetch_favourites(&mut self.app, &mut self.gui, lib_idx);
@@ -122,7 +122,7 @@ impl GuiCore {
                 refresh_shows(&mut self.app, &mut self.gui, lib_idx);
             }
             GuiDestinationKind::Library { lib_idx } => {
-                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                if paints_favourites(&self.gui, lib_idx) {
                     // The Favourites view's refresh refetches the favourites
                     // list (emby-favourites design D5, D6).
                     favourites::refetch_favourites(&mut self.app, &mut self.gui, lib_idx);
@@ -181,7 +181,7 @@ fn refresh_music(app: &mut App, gui: &mut GuiClientState, lib_idx: usize, album_
 /// level's in-place refresh and the open rows' stale marks in All, one list's
 /// refetch in New, and the snapshot's refetch in Upcoming.
 fn refresh_shows(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
-    match shows::library_view(gui, lib_idx) {
+    match library_view(gui, lib_idx) {
         GuiLibraryView::All => {
             app.refresh_lib(lib_idx);
             mark_open_shows_rows_stale(app, gui, lib_idx);

@@ -40,15 +40,6 @@ use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
 use crate::window::service_mark::ServiceMark;
 
-/// The row kind word the item row's hook paints
-/// (`data-library-favourites-row`), the plain Emby list's own two arms.
-fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
-    match kind {
-        GuiEmbyRowKindFrame::Collection => "collection",
-        GuiEmbyRowKindFrame::Media => "media",
-    }
-}
-
 /// One painted Favourites row: the shared top-level row part over the carried
 /// row's two title lines, its art thumb, and its play state. A press picks the
 /// row for the Favourites Hero, a double-click plays it, and a right-press opens
@@ -78,7 +69,7 @@ fn paint_favourites_row(
     rsx! {
         FlatRow {
             attr: "favourites",
-            kind: kind_word(item.kind).to_owned(),
+            kind: item.kind.kind_word().to_owned(),
             id: row.id.clone(),
             title: item.title.clone(),
             subtitle: item.subtitle.clone(),

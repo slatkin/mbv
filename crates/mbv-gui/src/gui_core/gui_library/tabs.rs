@@ -59,6 +59,20 @@ impl GuiDestinationKind {
             | Self::Podcasts { lib_idx } => Some(lib_idx),
         }
     }
+
+    /// The destination's Emby library index (emby-favourites design D5, D6):
+    /// the three Emby destinations name one, and Home, Feeds, and the two
+    /// Audiobookshelf destinations name none. An Audiobookshelf index counts
+    /// its own libraries, so `library_index` alone never answers this.
+    #[must_use]
+    pub fn emby_library_index(self) -> Option<usize> {
+        match self {
+            Self::Music { lib_idx } | Self::Shows { lib_idx } | Self::Library { lib_idx } => {
+                Some(lib_idx)
+            }
+            Self::Home | Self::Audiobooks { .. } | Self::Podcasts { .. } | Self::Feeds => None,
+        }
+    }
 }
 
 /// One destination tab the Library panel's top bar paints (design D2).

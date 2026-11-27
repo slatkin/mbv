@@ -220,7 +220,7 @@ pub(in crate::gui_core::gui_library) fn music_projection(
     let set = effective_music_set(app, gui, lib_idx);
     let collections =
         super::collection_command::collections(app, gui, GuiCollectionTarget::Music(lib_idx));
-    let view = super::shows::library_view(gui, lib_idx);
+    let view = super::library_view::library_view(gui, lib_idx);
     if view == GuiLibraryView::Favourites {
         // The Favourites view paints the favourites list in place of the
         // artist tree (emby-favourites design D6, D7): no union artist, no

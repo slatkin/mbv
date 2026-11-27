@@ -95,6 +95,8 @@ pub use self::marks::GuiPlayheadMarks;
 use self::podcasts::GuiPodcastsCollectionSite;
 
 pub use self::library_view::GuiLibraryView;
+#[cfg(test)]
+pub(crate) use self::library_view::library_view;
 pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
@@ -110,7 +112,7 @@ pub(crate) use self::rows_in_view::queue_in_view_row_fetches;
 pub(crate) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
 #[cfg(test)]
-pub(crate) use self::shows::{library_view, refetch_shows_new};
+pub(crate) use self::shows::refetch_shows_new;
 pub(crate) use self::shows_open_loads::GuiShowsOpenInView;
 pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
@@ -578,16 +580,8 @@ impl GuiCore {
         app: &App,
         gui: &crate::gui_core::gui_client_state::GuiClientState,
     ) -> Option<usize> {
-        let lib_idx = match tabs::active_destination(app)? {
-            GuiDestinationKind::Music { lib_idx }
-            | GuiDestinationKind::Shows { lib_idx }
-            | GuiDestinationKind::Library { lib_idx } => lib_idx,
-            GuiDestinationKind::Home
-            | GuiDestinationKind::Audiobooks { .. }
-            | GuiDestinationKind::Podcasts { .. }
-            | GuiDestinationKind::Feeds => return None,
-        };
-        (shows::library_view(gui, lib_idx) == GuiLibraryView::Favourites).then_some(lib_idx)
+        let lib_idx = tabs::active_destination(app)?.emby_library_index()?;
+        library_view::paints_favourites(gui, lib_idx).then_some(lib_idx)
     }
 
     /// Select a Home row (design D2, D12): the row the Hero shows. The

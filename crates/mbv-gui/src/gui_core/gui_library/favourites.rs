@@ -284,13 +284,19 @@ pub(in crate::gui_core::gui_library) fn select_favourites_row(
     lib_idx: usize,
     item_id: &str,
 ) -> bool {
-    if super::shows::library_view(gui, lib_idx) != GuiLibraryView::Favourites {
+    if !super::library_view::paints_favourites(gui, lib_idx) {
         return false;
     }
     let Some(library_id) = app.emby_library_id(lib_idx).map(str::to_string) else {
         return false;
     };
-    if favourites_item(gui, &library_id, item_id).is_none() {
+    // The store answers whether it holds the row; the item's own copy is not
+    // needed here, so a press copies no row.
+    let holds = gui
+        .favourites
+        .get(&library_id)
+        .is_some_and(|request| request.items().iter().any(|item| item.id == item_id));
+    if !holds {
         return false;
     }
     if gui.favourites_picks.get(&library_id).map(String::as_str) == Some(item_id) {

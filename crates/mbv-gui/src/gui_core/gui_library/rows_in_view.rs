@@ -110,13 +110,15 @@ fn touch_in_view_row_images(
 fn row_art_scope(app: &App, gui: &GuiClientState) -> Option<GuiRowArtScope> {
     match super::tabs::active_destination(app)? {
         super::GuiDestinationKind::Home => Some(GuiRowArtScope::Home),
-        super::GuiDestinationKind::Music { lib_idx } => Some(if paints_favourites(gui, lib_idx) {
-            GuiRowArtScope::Favourites
-        } else {
-            GuiRowArtScope::Music
-        }),
+        super::GuiDestinationKind::Music { lib_idx } => {
+            Some(if super::library_view::paints_favourites(gui, lib_idx) {
+                GuiRowArtScope::Favourites
+            } else {
+                GuiRowArtScope::Music
+            })
+        }
         super::GuiDestinationKind::Shows { lib_idx } => {
-            Some(match super::shows::library_view(gui, lib_idx) {
+            Some(match super::library_view::library_view(gui, lib_idx) {
                 super::GuiLibraryView::New => GuiRowArtScope::ShowsNew,
                 super::GuiLibraryView::Upcoming => GuiRowArtScope::ShowsUpcoming,
                 // The Favourites view paints the favourites list in place of
@@ -127,7 +129,7 @@ fn row_art_scope(app: &App, gui: &GuiClientState) -> Option<GuiRowArtScope> {
             })
         }
         super::GuiDestinationKind::Library { lib_idx } => {
-            Some(if paints_favourites(gui, lib_idx) {
+            Some(if super::library_view::paints_favourites(gui, lib_idx) {
                 GuiRowArtScope::Favourites
             } else {
                 GuiRowArtScope::Emby
@@ -264,26 +266,11 @@ pub(in crate::gui_core::gui_library) fn shows_series_item(
         .cloned()
 }
 
-/// Whether `lib_idx`'s destination paints the Favourites view (emby-favourites
-/// design D5): the Music and plain Emby destinations paint it in place of their
-/// own list, so their in-view rows are the favourites list's.
-fn paints_favourites(gui: &GuiClientState, lib_idx: usize) -> bool {
-    super::shows::library_view(gui, lib_idx) == super::GuiLibraryView::Favourites
-}
-
 /// The active destination's Emby library index, whichever of the three
 /// destinations that paint a Favourites view holds the window (emby-favourites
 /// design D6): the library whose store resolves the list's row ids.
 fn active_emby_library_index(app: &App) -> Option<usize> {
-    match super::tabs::active_destination(app)? {
-        super::GuiDestinationKind::Music { lib_idx }
-        | super::GuiDestinationKind::Shows { lib_idx }
-        | super::GuiDestinationKind::Library { lib_idx } => Some(lib_idx),
-        super::GuiDestinationKind::Home
-        | super::GuiDestinationKind::Audiobooks { .. }
-        | super::GuiDestinationKind::Podcasts { .. }
-        | super::GuiDestinationKind::Feeds => None,
-    }
+    super::tabs::active_destination(app)?.emby_library_index()
 }
 
 /// The active plain Emby library's index (design D7).

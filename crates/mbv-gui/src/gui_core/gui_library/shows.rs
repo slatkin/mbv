@@ -16,7 +16,7 @@ use mbv_queue::QueueItem;
 use mbv_ui_model::library_hero::producers::hero_content_queue;
 
 use super::hero_facts::hero_facts_queue;
-use super::library_view::GuiLibraryView;
+use super::library_view::{GuiLibraryView, library_view};
 use super::request::GuiSectionRequest;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
@@ -58,14 +58,6 @@ pub(in crate::gui_core::gui_library) fn emby_view_destination(
     } else {
         super::GuiDestinationKind::Library { lib_idx }
     })
-}
-
-/// The stored view of one library (design D5): a library with no stored
-/// choice shows All, the default. It reads only the core's library-view
-/// store, so it is a core function the projection, the row art, and the
-/// launch reach through the `App` they hold.
-pub(crate) fn library_view(gui: &GuiClientState, lib_idx: usize) -> GuiLibraryView {
-    gui.library_views.get(&lib_idx).copied().unwrap_or_default()
 }
 
 /// Install one library view (design D5): a press replaces the active view,

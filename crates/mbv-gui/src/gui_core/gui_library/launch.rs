@@ -152,7 +152,7 @@ impl GuiCore {
                 })
         });
         shows.map_or(GuiLaunchShowsView::All, |lib_idx| {
-            launch_shows_view(super::shows::library_view(&self.gui, lib_idx))
+            launch_shows_view(super::library_view::library_view(&self.gui, lib_idx))
         })
     }
 

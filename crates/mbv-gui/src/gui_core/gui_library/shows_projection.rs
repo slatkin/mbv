@@ -241,7 +241,7 @@ impl GuiCore {
         if !super::tv::tv_library(&self.app, lib_idx) {
             return GuiShowsProjection::default();
         }
-        let view = super::shows::library_view(&self.gui, lib_idx);
+        let view = super::library_view::library_view(&self.gui, lib_idx);
         let mut sort_frame = None;
         let (series, rows, selected, hero, workspace_loading, loading, favourites) = match view {
             GuiLibraryView::All => {
@@ -564,7 +564,7 @@ pub(crate) fn shows_item(
     lib_idx: usize,
     item_id: &str,
 ) -> Option<EmbyItem> {
-    match super::shows::library_view(gui, lib_idx) {
+    match super::library_view::library_view(gui, lib_idx) {
         GuiLibraryView::New => return super::shows::shows_new_item(gui, item_id),
         // A Favourites id resolves through the favourites store, only while
         // that library's view is Favourites (emby-favourites design D6).

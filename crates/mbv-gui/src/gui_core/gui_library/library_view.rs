@@ -5,6 +5,8 @@
 //! own type, command, core state, frame field, and launch field. The TUI's
 //! content modes stay unchanged.
 
+use crate::gui_core::gui_client_state::GuiClientState;
+
 use super::tabs::GuiDestinationKind;
 
 /// The Emby destination's one active view (design D5): exactly one entry is
@@ -74,4 +76,21 @@ impl GuiLibraryView {
             _ => None,
         }
     }
+}
+
+/// The stored view of one library (design D5): a library with no stored
+/// choice shows All, the default. It reads only the core's library-view
+/// store, so it is a core function the projection, the row art, and the
+/// launch reach through the `App` they hold.
+pub(crate) fn library_view(gui: &GuiClientState, lib_idx: usize) -> GuiLibraryView {
+    gui.library_views.get(&lib_idx).copied().unwrap_or_default()
+}
+
+/// Whether `lib_idx`'s destination paints the Favourites view (emby-favourites
+/// design D5, D6): the one predicate every step that forks on the active view
+/// reads, so the Music, Shows, and plain Emby destinations answer it the same
+/// way.
+#[must_use]
+pub(crate) fn paints_favourites(gui: &GuiClientState, lib_idx: usize) -> bool {
+    library_view(gui, lib_idx) == GuiLibraryView::Favourites
 }

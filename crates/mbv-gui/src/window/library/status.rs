@@ -170,27 +170,22 @@ fn segments_of(
         GuiDestinationList::Emby(emby) => {
             let selected = detail_selected(detail);
             let mut segments = vec![label];
-            if emby.feed_group {
-                // While the view is Favourites the location names Favourites
-                // in place of the collection names (emby-favourites design
-                // D5): Favourites lists the whole library.
-                if emby.view == GuiLibraryView::Favourites {
-                    segments.push(Some("Favourites".to_owned()));
-                } else {
-                    segments.extend(emby.collection_names.iter().cloned().map(Some));
-                }
-            } else if emby.view == GuiLibraryView::Favourites {
-                // The plain mode's list is the whole library, so the view
-                // segment stands where the collection names would (design
-                // D5).
+            // While the view is Favourites the location names Favourites in
+            // place of the collection names (emby-favourites design D5):
+            // Favourites lists the whole library, so no collection pick
+            // narrows it.
+            if emby.view == GuiLibraryView::Favourites {
                 segments.push(Some("Favourites".to_owned()));
+            } else if emby.feed_group {
+                segments.extend(emby.collection_names.iter().cloned().map(Some));
             }
             // The Favourites view's picked row is the list's own pick
             // (emby-favourites design D6).
-            match emby.favourites.as_ref() {
-                Some(favourites) => segments.push(favourites_picked_title(Some(favourites))),
-                None => segments.push(selected_title(selected, &emby.rows)),
-            }
+            let picked = match emby.favourites.as_ref() {
+                Some(favourites) => favourites_picked_title(Some(favourites)),
+                None => selected_title(selected, &emby.rows),
+            };
+            segments.push(picked);
             segments
         }
         GuiDestinationList::Audiobooks(audiobooks) => {
