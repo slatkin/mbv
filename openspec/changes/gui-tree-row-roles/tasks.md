@@ -11,11 +11,11 @@ the group.
 
 ## 1. Terms and tokens
 
-- [ ] 1.1 In `CONTEXT.md` (repository root), add the terms *Branch swatch (GUI)* and *Leaf well
+- [x] 1.1 In `CONTEXT.md` (repository root), add the terms *Branch swatch (GUI)* and *Leaf well
   (GUI)* with the definitions and *Avoid* lines of design D9, next to the other GUI Library
   terms. Verify: `rg -n "Branch swatch|Leaf well" CONTEXT.md` prints both terms and their
   *Avoid* lines.
-- [ ] 1.2 In `assets/app.css`, in the `:root` canvas block after `--canvas-tree-subtree`, add the
+- [x] 1.2 In `assets/app.css`, in the `:root` canvas block after `--canvas-tree-subtree`, add the
   new tokens of design D6 with their values and a comment that names `gui-tree-row-roles`
   design D6: `--canvas-tree-rail`, `--canvas-tree-rail-muted`, `--canvas-tree-branch-open`,
   `--canvas-tree-branch-open-picked`, `--canvas-tree-well`, `--canvas-tree-well-rule`,
