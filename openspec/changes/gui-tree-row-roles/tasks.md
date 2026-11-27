@@ -27,13 +27,13 @@ the group.
 
 ## 2. Music row model
 
-- [ ] 2.1 In `src/window/library/list.rs`, add `pub const BRANCH_ROW_HEIGHT: f32 = 42.0;`, the
+- [x] 2.1 In `src/window/library/list.rs`, add `pub const BRANCH_ROW_HEIGHT: f32 = 42.0;`, the
   well gap constants `WELL_GAP_TOP_PX = 4.0` and `WELL_GAP_BOTTOM_PX = 6.0`, and
   `pub enum WellEdge { Only, First, Middle, Last }` with `WellEdge::of(index: usize, len: usize)`
   and `WellEdge::height(self) -> f32` (`TRACK_ROW_HEIGHT` plus the gaps its edge carries), each
   with a doc comment that names design D3. Re-export them from `components/list_row.rs` beside
   the other row constants. Verify: `make checks PKG=mbv-gui` passes.
-- [ ] 2.2 In `src/window/library/list.rs`, give `LibraryRow::Album` the fields `sibling: usize`
+- [x] 2.2 In `src/window/library/list.rs`, give `LibraryRow::Album` the fields `sibling: usize`
   and `facts: String`, and `LibraryRow::Track` the field `well: WellEdge`. In `push_albums`,
   count the pushed albums of the artist from 0 into `sibling`; build `facts` per design D5 (the
   year; for an open album whose frame carries `total`, `year · N tracks · total`, skipping an
@@ -41,7 +41,7 @@ the group.
   `WellEdge::of` over the album's kept tracks and push it at `well.height()`. Fix every pattern
   and constructor the compiler names with `..` or the new field. Verify: `make checks
   PKG=mbv-gui` passes.
-- [ ] 2.3 In `src/window/library/list/tests.rs`, add two contract tests (design D10): the album
+- [x] 2.3 In `src/window/library/list/tests.rs`, add two contract tests (design D10): the album
   `sibling` counts from 0 under each artist and restarts under the next open artist; and the
   track tops of an open album follow `WellEdge` heights (a `#[case]` table for one, two, and
   three tracks). Update the existing height expectations that the 42 px album row and the well
