@@ -1,14 +1,14 @@
 //! The Library Hero (`replace-tauri-with-blitz` task 7.5, the port of
 //! `LibraryHero`; add-gui-library-panel design D5, D8): the canvas's
 //! detail pane for the picked album — the artist header with Shuffle artist,
-//! the album block with its square artwork and its Play, Add to queue, and
+//! the album block with its square artwork and its Play, Enqueue, and
 //! More actions controls, and the album's tracklist. The Wide
 //! arrangement paints it as the pane beside the list, and the Narrow
 //! arrangement paints the very same painters inside its overlay (design D4),
 //! so the two cannot drift.
 //!
 //! Every control sends the command the core applies through its existing App
-//! action (design D8): Play, Add to queue, and Shuffle artist name stable
+//! action (design D8): Play, Shuffle, and Enqueue name stable
 //! Service ids, and Shuffle artist names the artist's albums in the current
 //! union. The Hero's controls paint their key (`a`).
 //!
@@ -36,7 +36,7 @@ use crate::window::components::library_hero_frame::{
 use crate::window::components::library_panel::row_menu_entries;
 use crate::window::components::library_tracklist::LibraryTracklist;
 use crate::window::components::queue_row_menu::QueueRowMenu;
-use crate::window::icons::{Ellipsis, Shuffle};
+use crate::window::icons::Ellipsis;
 use crate::window::library::hero::{album_pills, artist_page_pills, artist_union_albums};
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::sections::SectionRef;
@@ -164,36 +164,6 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     }
 }
 
-/// The Shuffle artist header action's button (design D6, D8): one painter
-/// for both branches — only the press's send differs, so the markup cannot
-/// drift.
-fn shuffle_artist_button(send: impl Fn() + 'static) -> Element {
-    rsx! {
-        button {
-            "type": "button",
-            class: "flex flex-none items-center",
-            style: "height: 40px; padding: 0 14px; gap: 8px; background: none; border: 1px solid var(--canvas-library-control); border-radius: 6px; color: var(--canvas-text); font-size: 14px; cursor: pointer;",
-            "data-library-hero-shuffle": "",
-            onclick: move |_| send(),
-            Shuffle { size: 15 }
-            "Shuffle artist"
-        }
-    }
-}
-
-/// The album branch's Shuffle artist header action (design D8): the albums of
-/// the current union, played shuffled — the closure reads the current frame,
-/// so a Hero repaint never clones the union's albums or the tracklist for it.
-fn album_shuffle_action(library: &LibraryState) -> Element {
-    let shuffle_library = library.clone();
-    shuffle_artist_button(move || {
-        let Some((artists, hero)) = current_union(&shuffle_library) else {
-            return;
-        };
-        shuffle_artist(&shuffle_library, &artists, &hero);
-    })
-}
-
 /// The album branch's actions row (design D8): the shared actions painter over
 /// the picked album's own stable id, the picked item's More actions — painted
 /// only while the frame's remainder carries entries — and its menu.
@@ -205,6 +175,12 @@ fn album_actions_row(
     let play_library = library.clone();
     let play_id = album_id.to_owned();
     let on_play = Callback::new(move |()| play_album(&play_library, &play_id));
+    let shuffle_library = library.clone();
+    let on_shuffle = Callback::new(move |()| {
+        if let Some((artists, hero)) = current_union(&shuffle_library) {
+            shuffle_artist(&shuffle_library, &artists, &hero);
+        }
+    });
     let queue_library = library.clone();
     let queue_id = album_id.to_owned();
     let on_queue = Callback::new(move |()| add_album_to_queue(&queue_library, &queue_id));
@@ -221,6 +197,7 @@ fn album_actions_row(
         LibraryHeroActions {
             attr: "",
             on_play: Some(on_play),
+            on_shuffle: Some(on_shuffle),
             on_queue: Some(on_queue),
         }
         if !menu.is_empty() {
@@ -261,7 +238,7 @@ fn album_hero(
     // send (the Play entries and the add-to-queue entry) drop at paint time,
     // so the menu names only what no button offers, and an album whose
     // remainder is empty hides the control entirely.
-    const HERO_BUTTON_LABELS: [&str; 3] = ["Play", "Play All", "Add to Queue"];
+    const HERO_BUTTON_LABELS: [&str; 4] = ["Play", "Play All", "Shuffle", "Enqueue"];
 
     let Some(album) = hero.album() else {
         return rsx! {};
@@ -274,7 +251,6 @@ fn album_hero(
         .cloned()
         .collect();
 
-    let header_action = album_shuffle_action(library);
     let actions = album_actions_row(library, &album.album_id, &menu);
     let backdrop = hero_backdrop(detail.art.as_ref(), BackdropStyle::Music);
 
@@ -286,7 +262,6 @@ fn album_hero(
                 title: hero.artist.clone(),
                 pills: Vec::new(),
             },
-            header_action: Some(header_action),
             block: HeroBlock {
                 label: album.name.clone(),
                 eyebrow: Some(vec![GuiMetaSegmentFrame {
@@ -319,7 +294,7 @@ fn album_hero(
 /// The artist branch of the Library Hero (gui-music-artist-page design D6):
 /// the artist page — the header with the artist's fact pills (the year span
 /// among them) and the Shuffle artist action, the block with the artist's
-/// name and no rows, the actions row with Play and Add to queue and no
+/// name and no rows, the actions row with Play and Enqueue and no
 /// More actions control, the artist's art in the square shape, and the
 /// artist's tracks grouped by album.
 fn artist_hero(
@@ -350,7 +325,7 @@ fn artist_hero(
     // same send the album branch's union walk builds.
     let shuffle_ids = album_ids.clone();
     let shuffle_library = library.clone();
-    let header_action = shuffle_artist_button(move || {
+    let on_shuffle = Callback::new(move |()| {
         shuffle_library
             .link
             .library(GuiLibraryCommand::ShuffleArtist {
@@ -358,13 +333,14 @@ fn artist_hero(
             });
     });
 
-    // The actions row (design D6): Play and Add to queue over the whole
+    // The actions row (design D6): Play and Enqueue over the whole
     // artist. The artist page offers no More actions control — the frame
     // carries no entries for it.
     let actions = rsx! {
         LibraryHeroActions {
             attr: "",
             on_play: Some(on_play),
+            on_shuffle: Some(on_shuffle),
             on_queue: Some(on_queue),
         }
     };
@@ -377,7 +353,6 @@ fn artist_hero(
                 title: hero.artist.clone(),
                 pills: artist_page_pills(hero),
             },
-            header_action: Some(header_action),
             block: HeroBlock {
                 label: hero.artist.clone(),
                 eyebrow: None,

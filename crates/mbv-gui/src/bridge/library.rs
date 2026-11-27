@@ -63,7 +63,7 @@ pub enum GuiLibraryCommand {
     /// design D2): the artist page's Play control.
     PlayArtist { album_ids: Vec<String> },
     /// Add the artist whose albums are `album_ids` to the queue
-    /// (gui-music-artist-page design D2): the artist page's Add to queue
+    /// (gui-music-artist-page design D2): the artist page's Enqueue
     /// control.
     AddArtistToQueue { album_ids: Vec<String> },
     /// Play the artist page's track `track_id` (gui-music-artist-page design

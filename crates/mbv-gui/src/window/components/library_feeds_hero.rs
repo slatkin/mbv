@@ -9,7 +9,7 @@
 //! window's placeholder for the shape and no Overview section paints. The
 //! feed's entries are the list band under the Entries section.
 //!
-//! Play and Add to queue send the Feeds destination's commands with the
+//! Play and Enqueue send the Feeds destination's commands with the
 //! frame's selected entry (design D12) — the core owns the selection, so the
 //! actions name the row the frame painted and never a position. A Client holds
 //! one feed tab, so no library index rides the commands.

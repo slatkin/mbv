@@ -90,7 +90,7 @@ impl Control {
         match self {
             Self::Play => "Play",
             Self::Shuffle => "Shuffle",
-            Self::Add => "Add to queue",
+            Self::Add => "Enqueue",
             Self::Rename => "Rename",
             Self::Refresh => "Refresh",
             Self::Delete => "Delete",

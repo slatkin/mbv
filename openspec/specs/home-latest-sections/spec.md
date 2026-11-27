@@ -71,7 +71,7 @@ Every Home action SHALL address the selected row by its section and its Service-
 
 #### Scenario: Mixed-Service multi-selection
 - **WHEN** a multi-selection holds an Emby movie and a feed entry
-- **THEN** the context menu offers Play and Add to Queue only
+- **THEN** the context menu offers Play and Enqueue only
 
 #### Scenario: Marked items act in display order
 - **WHEN** the user marks two items under `Recently added` and enqueues the selection

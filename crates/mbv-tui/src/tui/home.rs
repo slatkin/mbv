@@ -69,7 +69,7 @@ impl Model {
     /// `Recently added` rows, or both — keeps the Emby multi menu, with
     /// Continue rows the only Remove targets (Remove is Continue-only);
     /// any non-Emby row makes the selection span Services, and that menu
-    /// offers Play and Add to Queue only. An unresolved target contributes
+    /// offers Play and Enqueue only. An unresolved target contributes
     /// nothing, as in enqueue.
     fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget]) {
         let resolved: Vec<(QueueItem, bool)> = targets
@@ -129,7 +129,7 @@ impl Model {
         }
         match item {
             QueueItem::Emby(item) => {
-                // Bare `Play` and `Add to Queue` execute through the shell's
+                // Bare `Play` and `Enqueue` execute through the shell's
                 // `home_context_item` (no tab-dependent re-read), so the
                 // resolved row is pinned there before the menu opens.
                 self.home_context_item = Some(item.as_ref().clone());
@@ -490,7 +490,7 @@ mod tests {
     /// Spec scenario "Podcast row context menu" (`home-latest-sections`): a
     /// single `Recently added` podcast row opens the same menu that
     /// episode's row offers on its podcast library's Latest list — Play,
-    /// Add to Queue, then the one mark entry the cached progress state
+    /// Enqueue, then the one mark entry the cached progress state
     /// chooses (a missing entry counts as unfinished, so Mark Played).
     #[test]
     fn single_recent_podcast_row_opens_the_audiobookshelf_destination_menu() {
@@ -517,12 +517,12 @@ mod tests {
             panic!("a single Recently added podcast row must open its destination menu");
         };
         let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
-        assert_eq!(labels, vec!["Play", "Add to Queue", "Mark Played"]);
+        assert_eq!(labels, vec!["Play", "Enqueue", "Mark Played"]);
     }
 
     /// Spec scenario "Mixed-Service multi-selection" (`home-latest-sections`):
     /// a multi-selection holding an Emby movie and a feed entry offers Play
-    /// and Add to Queue only, through the mixed-Service selection actions
+    /// and Enqueue only, through the mixed-Service selection actions
     /// that carry the resolved queue items.
     #[test]
     fn mixed_service_selection_menu_offers_play_and_add_to_queue_only() {
@@ -569,8 +569,8 @@ mod tests {
                 .collect();
         assert_eq!(
             offered,
-            vec![("Play", true), ("Add to Queue", true)],
-            "a selection spanning Services offers Play and Add to Queue only"
+            vec![("Play", true), ("Enqueue", true)],
+            "a selection spanning Services offers Play and Enqueue only"
         );
     }
 }

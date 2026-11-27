@@ -107,7 +107,7 @@ the selected count and a clickable control that clears the multi-selection.
 
 ### Requirement: Context menu acts on the whole multi-selection
 Opening the context menu on a selected row SHALL offer only actions valid for
-every selected item, drawn from: Play, Shuffle, Add to Queue, Remove, Mark
+every selected item, drawn from: Play, Shuffle, Enqueue, Remove, Mark
 Played, Mark Unplayed. An action whose Service provides no backend for it
 SHALL NOT be offered. Opening it on a row outside the multi-selection SHALL clear
 the multi-selection and show that row's single-item menu. Running any multi-selection
@@ -121,14 +121,14 @@ action SHALL clear the multi-selection.
 - **WHEN** rows 2-4 are selected and the user right-clicks row 8
 - **THEN** the multi-selection is cleared and row 8's normal menu opens
 
-### Requirement: Play, Shuffle and Add to Queue use list order
+### Requirement: Play, Shuffle and Enqueue use list order
 Play SHALL replace the queue with the selected items in their list order and
-start the first; Shuffle SHALL do the same in random order; Add to Queue SHALL
+start the first; Shuffle SHALL do the same in random order; Enqueue SHALL
 append them in list order. Items the Player owner does not admit SHALL be
 reported through existing enqueue feedback while admitted items proceed.
 
-#### Scenario: Add to Queue order
-- **WHEN** the user Ctrl+Clicks rows 5, then 2, then 9 and chooses Add to Queue
+#### Scenario: Enqueue order
+- **WHEN** the user Ctrl+Clicks rows 5, then 2, then 9 and chooses Enqueue
 - **THEN** the queue gains rows 2, 5, 9 in that order
 
 ### Requirement: Remove is offered only for removable lists
@@ -155,7 +155,7 @@ There SHALL be no per-item toggle action for a multi-selection.
 
 #### Scenario: Queue omits self-referential actions
 - **WHEN** rows containing only Emby-backed items in the Queue are selected
-- **THEN** the menu offers Remove, Mark Played and Mark Unplayed but not Play, Shuffle or Add to Queue
+- **THEN** the menu offers Remove, Mark Played and Mark Unplayed but not Play, Shuffle or Enqueue
 
 #### Scenario: Mixed-kind Queue selection drops unsupported actions
 - **WHEN** a Queue selection contains at least one non-Emby item (a Feed or Audiobookshelf queue entry)

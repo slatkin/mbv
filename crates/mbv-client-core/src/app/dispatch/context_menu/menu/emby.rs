@@ -103,7 +103,7 @@ impl App {
     /// (spec `home-latest-sections`, "Home actions resolve the row's own
     /// section and Service identity"): a Home `Recently added` Emby row
     /// opens the same menu its row offers on the destination library — Play,
-    /// Add to Queue, and the played-state entry — and never the Continue
+    /// Enqueue, and the played-state entry — and never the Continue
     /// Watching removal. The bare `Play` and `Enqueue` actions execute
     /// through the shell's `home_context_item`, which the caller sets to
     /// this item.
@@ -125,7 +125,7 @@ impl App {
 
     /// The Continue Watching row menu for an explicitly resolved Emby item,
     /// without raising it: the same entries the TUI's Home Continue row opens
-    /// (Play, Add to Queue, the one mark entry, and Remove from Continue
+    /// (Play, Enqueue, the one mark entry, and Remove from Continue
     /// Watching), shared with the GUI Library panel's Home rows.
     pub fn build_continue_watching_context_menu(&self, item: &EmbyItem) -> Option<ContextMenu> {
         self.context_menu_from_resolved_target(Some(item), None, true, false)
@@ -133,7 +133,7 @@ impl App {
 
     /// The Home mixed-Service multi-selection menu (spec
     /// `home-latest-sections`, "Home actions resolve the row's own section and
-    /// Service identity"): a selection spanning Services offers Play and Add to Queue only,
+    /// Service identity"): a selection spanning Services offers Play and Enqueue only,
     /// and both entries carry the shell-resolved queue items in display
     /// order. An empty resolution opens nothing.
     pub fn open_home_mixed_context_menu(&mut self, items: Vec<QueueItem>) {
@@ -148,7 +148,7 @@ impl App {
         );
         Self::push_context_action(
             &mut entries,
-            "Add to Queue",
+            "Enqueue",
             ContextAction::HomeEnqueueSelection(items),
         );
         self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
@@ -219,7 +219,7 @@ impl App {
         );
         Self::push_context_action(
             entries,
-            "Add to Queue",
+            "Enqueue",
             ContextAction::EnqueueFolder(Box::new(item.clone())),
         );
         Self::push_play_state_context_action(entries, item);
@@ -268,7 +268,7 @@ impl App {
                 mbv_ui_model::settings::PanelFocus::Queue
             )
         {
-            Self::push_context_action(entries, "Add to Queue", ContextAction::Enqueue);
+            Self::push_context_action(entries, "Enqueue", ContextAction::Enqueue);
         }
         // Music items (tracks, albums, artists) don't get a mark entry;
         // `push_play_state_context_action` enforces the music rule itself.

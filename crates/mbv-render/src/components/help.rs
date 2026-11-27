@@ -329,7 +329,7 @@ fn static_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> 
     let sec_home = vec![
         help_section_line("Continue"),
         help_line(key_w, "Ctrl+W", "Toggle watched"),
-        help_line(key_w, "Ctrl+A", "Add to Queue"),
+        help_line(key_w, "Ctrl+A", "Enqueue"),
         help_blank(),
     ];
     let sec_library = vec![
@@ -339,7 +339,7 @@ fn static_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> 
         help_line(key_w, "Ctrl+W", "Toggle watched"),
         help_line(key_w, "Ctrl+S", "Shuffle"),
         help_line(key_w, "Ctrl+P", "Play all"),
-        help_line(key_w, "Ctrl+A", "Add to Queue"),
+        help_line(key_w, "Ctrl+A", "Enqueue"),
         help_line(key_w, "r", "Refresh library"),
         help_line(key_w, "Ctrl+R", "Rescan library"),
         help_blank(),

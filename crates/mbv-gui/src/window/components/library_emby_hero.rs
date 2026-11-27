@@ -10,7 +10,7 @@
 //! boxset plays through the TUI's folder-play rule, so the pane is the frame
 //! and no list band opens.
 //!
-//! Play and Add to queue (`a`) send the Emby destination's commands with the
+//! Play and Enqueue (`a`) send the Emby destination's commands with the
 //! frame's selected row (add-gui-library-panel design D12) — the core owns
 //! the selection, so the actions name the row the frame painted and never a
 //! position, and the destination's list part names the library index.

@@ -583,7 +583,7 @@ The sole Wide arrangement for hero-bearing browse surfaces. The selected-item he
 _Avoid_: separate detail block, split, side-by-side, hero-on-side, hero-on-left, hero-on-right
 
 Artist page:
-The *GUI Library panel*'s Music Hero state for a picked artist. A press on an artist row makes that artist the Hero's subject. The Hero then paints the artist's facts, the albums of the artist in the union's order with their cached tracklists, and Play and Add to queue actions on the albums. It is session state: the core keeps the picked artist's key per Music library for the session and saves nothing, so a restart shows an album again. It differs from the TUI's *Artist root*: the Artist root is the TUI's selectable tree row, not this Hero state.
+The *GUI Library panel*'s Music Hero state for a picked artist. A press on an artist row makes that artist the Hero's subject. The Hero then paints the artist's facts, the albums of the artist in the union's order with their cached tracklists, and Play and Enqueue actions on the albums. It is session state: the core keeps the picked artist's key per Music library for the session and saves nothing, so a restart shows an album again. It differs from the TUI's *Artist root*: the Artist root is the TUI's selectable tree row, not this Hero state.
 _Avoid_: artist detail page, artist screen, artist hero
 
 Hero pane:

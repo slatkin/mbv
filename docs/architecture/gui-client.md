@@ -1464,7 +1464,7 @@ with their cached tracklists, and the albums' year span. The page is the GUI's
 Artist page, and it is session state: the core keeps the picked artist's key
 per Music library and saves nothing, so a restart shows an album again. An
 artist row press sends `ShowArtist` (`libIdx`, `artistKey`). The page's Play
-and Add to queue controls send `PlayArtist` and `AddArtistToQueue`, each with
+and Enqueue controls send `PlayArtist` and `AddArtistToQueue`, each with
 the page's `albumIds`. A press, a double-click, or Enter on a page track
 sends `PlayArtistTrack` (`albumIds`, `trackId`). The `rowMenu` section
 (`GuiLibraryRowMenuFrame`) carries the row the `rowMenu` command named, with
@@ -2189,7 +2189,7 @@ container, `gap: 2px` between rows, and stripes by index from 0 within the
 list: even rows are the pane's `#272e33`, odd rows `--canvas-list-stripe`
 `#2b3338`. The playing row overrides the stripe with `#333f4a`.
 `LibraryWorkspaceTable` paints the list band's rows,
-`LibraryHeroActions` the Play and Add to queue buttons,
+`LibraryHeroActions` the Play and Enqueue buttons,
 `LibraryDropdown` the Shows Workspace's season dropdown (a radio row per
 season and a filter field, one open state in `LibraryUiState.shows_seasons`),
 `FlatRow` and `TreeRow` the rows of
@@ -2247,7 +2247,7 @@ through `TreeRow`: a Music album or track, and a Shows season or episode.
 Under the pointer, a Library row reveals the shared `RowHoverActions` part
 (`crates/mbv-gui/src/window/components/row_hover_actions.rs`,
 `gui-row-hover-actions` design D1, D2): the fixed control order is Play,
-Add to queue, Shuffle, and Expand/collapse, and a row paints only the
+Enqueue, Shuffle, and Expand/collapse, and a row paints only the
 controls its kind asks for — D3's matrix governs the hover controls, so a
 Playlists item row shows Play and Add only, while the screen's hero and menu
 control set for an item still carries Shuffle. The reveal is CSS, with no

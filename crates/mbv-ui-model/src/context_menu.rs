@@ -118,7 +118,7 @@ pub enum ContextAction {
     AudiobookshelfMarkUnplayed(Vec<AudiobookshelfMenuTarget>),
     /// Home mixed-Service selection play (spec `home-latest-sections`,
     /// "Home actions resolve the row's own section and Service identity"): a
-    /// multi-selection spanning Services offers only Play and Add to Queue,
+    /// multi-selection spanning Services offers only Play and Enqueue,
     /// and both carry the shell-resolved queue items in display order.
     HomePlaySelection(Vec<QueueItem>),
     /// Home mixed-Service selection enqueue (same terms as

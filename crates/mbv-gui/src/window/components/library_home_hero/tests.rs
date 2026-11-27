@@ -380,7 +380,7 @@ fn play_sends_the_play_command_for_the_selected_row() {
     );
 }
 
-/// Contract (`LibraryHomeHero.test.ts`): Add to queue sends the enqueue
+/// Contract (`LibraryHomeHero.test.ts`): Enqueue sends the enqueue
 /// command for the selected row. The press contract rides the handler
 /// function (a headless document cannot fire a DOM click).
 #[test]

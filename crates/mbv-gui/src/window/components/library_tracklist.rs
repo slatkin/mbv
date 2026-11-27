@@ -5,7 +5,7 @@
 //! on the row the pointer marks (`gui-pointer-target-interaction` D2), and a
 //! press on a row changes nothing.
 //!
-//! The row's hover controls (gui-row-hover-actions design D5) run add to queue
+//! The row's hover controls (gui-row-hover-actions design D5) run enqueue
 //! on that track, which appends to the queue's tail, and play it; each sends
 //! the track's own id. A track also plays from a double-click on the row: the
 //! queue is replaced, and under autoload the album plays from that track
@@ -55,7 +55,7 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
         })
         .collect();
 
-    // The row's hover Add (design D8, gui-row-hover-actions D5): add to queue
+    // The row's hover Add (design D8, gui-row-hover-actions D5): enqueue
     // appends to the tail.
     let queue_library = library.clone();
     let on_queue = Callback::new(move |track_id: String| {

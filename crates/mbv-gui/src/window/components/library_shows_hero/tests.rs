@@ -632,7 +632,7 @@ fn the_series_hero_play_sends_the_play_command_for_the_selected_season() {
 }
 
 /// Contract (`LibraryShowsHero.test.ts`, Q6 of the Hero look audit): the
-/// Latest Hero's Add to queue sends the queue command for the selected
+/// Latest Hero's Enqueue sends the queue command for the selected
 /// episode. The press contract rides the handler function the component's own
 /// handler calls.
 #[test]

@@ -1,5 +1,5 @@
 //! The rows' hover controls (gui-row-hover-actions design D1, D2): one part
-//! paints Play, Add to queue, Shuffle, and Expand/collapse in that fixed order
+//! paints Play, Enqueue, Shuffle, and Expand/collapse in that fixed order
 //! at the trailing end of a Library row, so every row surface shows the same
 //! controls in the same order.
 //!
@@ -96,7 +96,7 @@ fn action_button(
     }
 }
 
-/// The rows' hover controls: Play, Add to queue, Shuffle, and Expand/collapse,
+/// The rows' hover controls: Play, Enqueue, Shuffle, and Expand/collapse,
 /// each painted only while its callback is set.
 #[component]
 pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
@@ -137,7 +137,7 @@ pub fn RowHoverActions(props: RowHoverActionsProps) -> Element {
                 {
                     action_button(
                         "queue",
-                        "Add to queue",
+                        "Enqueue",
                         &style,
                         on_queue,
                         rsx! {

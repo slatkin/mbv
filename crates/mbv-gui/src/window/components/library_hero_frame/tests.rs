@@ -41,7 +41,6 @@ fn props() -> LibraryHeroFrameProps {
             title: "The Long Road Home".to_owned(),
             pills: Vec::new(),
         },
-        header_action: None,
         block: HeroBlock {
             label: "The Long Road Home".to_owned(),
             eyebrow: None,

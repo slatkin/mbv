@@ -52,21 +52,21 @@ fn folder_item(name: &str, item_type: &str, unplayed_children: u32) -> EmbyItem 
 #[rstest]
 #[case::unplayed_movie(
     leaf_item("movie", "Movie", "Video", false),
-    &["Play", "Add to Queue", "Mark Played"],
+    &["Play", "Enqueue", "Mark Played"],
 )]
 #[case::played_movie(
     leaf_item("movie", "Movie", "Video", true),
-    &["Play", "Add to Queue", "Mark Unplayed"],
+    &["Play", "Enqueue", "Mark Unplayed"],
 )]
 #[case::season_with_unplayed_children(
     folder_item("Season 1", "Season", 5),
-    &["Play All", "Shuffle", "Add to Queue", "Mark Played"],
+    &["Play All", "Shuffle", "Enqueue", "Mark Played"],
 )]
 #[case::music_album(
     folder_item("Album", "MusicAlbum", 0),
-    &["Play All", "Shuffle", "Add to Queue"],
+    &["Play All", "Shuffle", "Enqueue"],
 )]
-#[case::music_track(leaf_item("Track", "Audio", "Audio", false), &["Play", "Add to Queue"])]
+#[case::music_track(leaf_item("Track", "Audio", "Audio", false), &["Play", "Enqueue"])]
 fn emby_menu_follows_the_standard_action_set_for(
     #[case] item: EmbyItem,
     #[case] expected: &[&str],

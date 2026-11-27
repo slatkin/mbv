@@ -37,15 +37,15 @@ fn feeds_menu_labels(app: &mut App, entries: &[mbv_queue::FeedEntry]) -> Vec<&'s
 #[rstest]
 #[case::unplayed_single_entry(
     vec![feed_entry("a", false)],
-    &["Play", "Add to Queue", "Mark Played"],
+    &["Play", "Enqueue", "Mark Played"],
 )]
 #[case::played_single_entry(
     vec![feed_entry("a", true)],
-    &["Play", "Add to Queue", "Mark Unplayed"],
+    &["Play", "Enqueue", "Mark Unplayed"],
 )]
 #[case::two_entries(
     vec![feed_entry("a", false), feed_entry("b", true)],
-    &["Play", "Shuffle", "Add to Queue", "Mark Played", "Mark Unplayed"],
+    &["Play", "Shuffle", "Enqueue", "Mark Played", "Mark Unplayed"],
 )]
 fn feeds_menu_follows_the_standard_action_set_for(
     #[case] entries: Vec<mbv_queue::FeedEntry>,

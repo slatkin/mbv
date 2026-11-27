@@ -14,7 +14,7 @@
 //! (gui-row-hover-actions D5) paint Play only. A chapter enqueues nothing, so
 //! the table takes no `on_queue`.
 //!
-//! Play, and Add to queue (`a`), send the Audiobooks destination's commands
+//! Play, and Enqueue (`a`), send the Audiobooks destination's commands
 //! with the frame's selected book (design D12) — the core owns the selection,
 //! so the actions name the book the frame painted and never a position, and
 //! the destination's list part names the library index.

@@ -40,7 +40,7 @@ fn the_play_command_asks_the_owner_to_play_the_album() {
     );
 }
 
-/// Add to queue asks the Owner to append the album's tracks at the tail
+/// Enqueue asks the Owner to append the album's tracks at the tail
 /// (design D8).
 #[test]
 fn the_add_to_queue_command_asks_the_owner_to_append_the_album() {
@@ -64,7 +64,7 @@ fn the_add_to_queue_command_asks_the_owner_to_append_the_album() {
     );
 }
 
-/// Add to queue applies the library playback policy's autoload rule to a
+/// Enqueue applies the library playback policy's autoload rule to a
 /// track (add-gui-library-panel): with autoload on, the album's cached
 /// playable tracks enter in disc/track order starting at the selected track,
 /// so the selected track is the first of the block and the album follows it. The tracks come from the same cache the tracklist paints —

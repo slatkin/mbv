@@ -52,9 +52,6 @@ pub struct LibraryHeroFrameProps {
     /// The header band: always painted, so every Hero shares the one look.
     /// The pills carry each value's data type (design D14).
     pub header: HeroHeader,
-    /// The header band's trailing control, when the destination has one.
-    #[props(default)]
-    pub header_action: Option<Element>,
     /// The detail block's text: each line paints only when it is non-empty.
     pub block: HeroBlock,
     /// The artwork box's shape and its fetched art.
@@ -95,7 +92,6 @@ impl std::fmt::Debug for LibraryHeroFrameProps {
             .field("attr", &self.attr)
             .field("root", &self.root)
             .field("header", &self.header)
-            .field("header_action", &self.header_action.is_some())
             .field("block", &self.block)
             .field("art_shape", &self.art_shape)
             .field("art", &self.art)
@@ -202,7 +198,6 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
         attr,
         root,
         header,
-        header_action,
         block,
         art_shape,
         art,
@@ -265,16 +260,6 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                     }
                     if !header.pills.is_empty() {
                         LibraryHeroPills { attr, hook: "pills", pills: header.pills.clone() }
-                    }
-                }
-                if let Some(action) = header_action {
-                    div {
-                        // The action's own stacking context (as the detail
-                        // block's actions row): the backdrop layer is absolute, so
-                        // a bare static action would paint and hit-test under
-                        // it (review 2026-11-26).
-                        class: "relative flex-none",
-                        { action }
                     }
                 }
             }

@@ -6,9 +6,9 @@
 //! publish date row, the duration as a fact pill, and the episode
 //! description as the Overview section. No Episodes list band paints: a
 //! podcast Hero is episode information only, and the episodes stay in the
-//! Library list (design D2). Only Play and Add to queue paint.
+//! Library list (design D2). Only Play and Enqueue paint.
 //!
-//! Play and Add to queue send the Podcasts destination's commands with the
+//! Play and Enqueue send the Podcasts destination's commands with the
 //! frame's selected episode (design D12) — the core owns the selection, so the
 //! actions name the row the frame painted and never a position, and the
 //! destination's list part names the library index.

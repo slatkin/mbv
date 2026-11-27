@@ -82,8 +82,8 @@ impl App {
         let mut menu_entries = Vec::new();
         // Standard action set split on entry count (context-menu spec,
         // standard-media-context-menus design D3): a leaf row offers Play,
-        // Add to Queue, then the one entry that changes its state; a
-        // multi-selection offers Play, Shuffle, Add to Queue, and both mark
+        // Enqueue, then the one entry that changes its state; a
+        // multi-selection offers Play, Shuffle, Enqueue, and both mark
         // entries.
         Self::push_context_action(
             &mut menu_entries,
@@ -99,7 +99,7 @@ impl App {
         }
         Self::push_context_action(
             &mut menu_entries,
-            "Add to Queue",
+            "Enqueue",
             ContextAction::FeedsEnqueue(entries.clone()),
         );
         if let [entry] = entries.as_slice() {
@@ -133,7 +133,7 @@ impl App {
 
     /// Build the Audiobookshelf row menu from component-resolved targets
     /// (standard-media-context-menus design D3). The standard action set
-    /// splits on target count: a leaf row offers Play, Add to Queue, then the
+    /// splits on target count: a leaf row offers Play, Enqueue, then the
     /// one mark entry its cached progress state chooses (a missing entry
     /// counts as unfinished); a multi-selection adds Shuffle and offers both
     /// mark entries.
@@ -176,7 +176,7 @@ impl App {
         }
         Self::push_context_action(
             &mut menu_entries,
-            "Add to Queue",
+            "Enqueue",
             ContextAction::AudiobookshelfEnqueue(targets.clone()),
         );
         if let [target] = targets.as_slice() {
@@ -346,7 +346,7 @@ impl App {
             );
             Self::push_context_action(
                 &mut entries,
-                "Add to Queue",
+                "Enqueue",
                 ContextAction::EnqueueSelection(items.to_vec()),
             );
         }

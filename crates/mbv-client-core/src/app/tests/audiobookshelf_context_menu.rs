@@ -37,24 +37,24 @@ fn menu_labels(app: &mut App, targets: &[AudiobookshelfMenuTarget]) -> Vec<&'sta
 #[case::one_episode(
     vec![episode_target("episode-a")],
     false,
-    &["Play", "Add to Queue", "Mark Played"],
+    &["Play", "Enqueue", "Mark Played"],
 )]
 #[case::one_finished_episode(
     vec![episode_target("episode-a")],
     true,
-    &["Play", "Add to Queue", "Mark Unplayed"],
+    &["Play", "Enqueue", "Mark Unplayed"],
 )]
 #[case::one_book(
     vec![AudiobookshelfMenuTarget::Book {
         library_item_id: "book-a".into(),
     }],
     false,
-    &["Play", "Add to Queue", "Mark Played"],
+    &["Play", "Enqueue", "Mark Played"],
 )]
 #[case::two_episodes(
     vec![episode_target("episode-a"), episode_target("episode-b")],
     false,
-    &["Play", "Shuffle", "Add to Queue", "Mark Played", "Mark Unplayed"],
+    &["Play", "Shuffle", "Enqueue", "Mark Played", "Mark Unplayed"],
 )]
 fn audiobookshelf_menu_follows_the_standard_action_set_for(
     #[case] targets: Vec<AudiobookshelfMenuTarget>,

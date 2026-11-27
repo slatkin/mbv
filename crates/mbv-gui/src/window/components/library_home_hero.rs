@@ -9,7 +9,7 @@
 //! under their sections, and the backdrop comes from the shared art-to-backdrop
 //! mapping. Home has no list band.
 //!
-//! Play and Add to queue (`a`) send the Home destination's row commands with
+//! Play and Enqueue (`a`) send the Home destination's row commands with
 //! the frame's selected row (design D12) — the core owns the selection, so the
 //! actions name the row the frame painted and never a position.
 

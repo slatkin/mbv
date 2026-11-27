@@ -21,7 +21,7 @@ Status bar.
 - The Client core holds the data selection: the active destination, the
   selected collections of each destination, and the item whose detail the
   Hero shows. It loads the Service data that the selection needs, encodes
-  artwork from the image cache, and runs the actions (play, add to queue,
+  artwork from the image cache, and runs the actions (play, enqueue,
   play next, shuffle, the item menu's entries) through Owner admission.
 - The core focus stack keeps Panel focus between the Library panel and the
   Queue panel ([ADR 0035](0035-client-core-owns-focus-tuirealm-is-the-tui-adapter.md)).

@@ -8,7 +8,7 @@
 use dioxus_native::prelude::*;
 
 use crate::window::components::library_hero_frame::own;
-use crate::window::icons::Play;
+use crate::window::icons::{Play, Plus, Shuffle};
 
 /// The props of the action buttons (the `LibraryHeroActions` props, in
 /// order).
@@ -23,6 +23,9 @@ pub struct LibraryHeroActionsProps {
     /// Add the selected row to the queue.
     #[props(default)]
     pub on_queue: Option<Callback<()>>,
+    /// Shuffle the selected unit; only a destination that shuffles supplies it.
+    #[props(default)]
+    pub on_shuffle: Option<Callback<()>>,
 }
 
 /// The accent Play pill's style, shared with the Playlists hero. The buttons
@@ -44,6 +47,8 @@ pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
     let add_attrs = vec![Attribute::new(own(props.attr, "add"), "", None, false)];
     let on_play = props.on_play;
     let on_queue = props.on_queue;
+    let on_shuffle = props.on_shuffle;
+    let shuffle_attrs = vec![Attribute::new(own(props.attr, "shuffle"), "", None, false)];
 
     rsx! {
         if let Some(on_play) = on_play {
@@ -56,6 +61,17 @@ pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
                 Play { size: 14, fill: "var(--canvas-ink)".to_owned(), stroke_width: 0.0 }
                 "Play"
             }
+            if let Some(on_shuffle) = on_shuffle {
+                button {
+                    "type": "button",
+                    class: "flex items-center",
+                    style: RAISED_STYLE,
+                    onclick: move |_| on_shuffle.call(()),
+                    ..shuffle_attrs,
+                    Shuffle { size: 14 }
+                    "Shuffle"
+                }
+            }
             if let Some(on_queue) = on_queue {
                 button {
                     "type": "button",
@@ -63,7 +79,8 @@ pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
                     style: RAISED_STYLE,
                     onclick: move |_| on_queue.call(()),
                     ..add_attrs,
-                    "Add to queue"
+                    Plus { size: 14 }
+                    "Enqueue"
                 }
             }
         }

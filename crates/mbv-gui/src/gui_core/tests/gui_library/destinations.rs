@@ -84,7 +84,7 @@ fn the_current_tab_names_the_movies_destination() {
 /// item kind (the context-menu spec's music rule, through the GUI's menu
 /// builder): music ignores its played state everywhere, so the mark entries
 /// would name changes the UI never shows. An album-folder music item carries
-/// the standard folder entries — Play All, Shuffle, Add to Queue — and
+/// the standard folder entries — Play All, Shuffle, Enqueue — and
 /// nothing else.
 #[test]
 fn a_music_items_row_menu_leaves_out_the_played_toggle() {
@@ -114,7 +114,7 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
         .map(|entry| entry.label.as_str())
         .collect();
     assert!(!labels.iter().any(|label| label.contains("Mark")));
-    assert_eq!(labels, ["Play", "Add to Queue"]);
+    assert_eq!(labels, ["Play", "Enqueue"]);
 }
 
 /// The opener the openUrl seam stages: it records the url the core handed

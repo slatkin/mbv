@@ -1,6 +1,6 @@
 //! Headless tests of the rows' hover controls (gui-row-hover-actions design
 //! D1, D2): the part paints exactly the controls its row offers, in the fixed
-//! order Play, Add to queue, Shuffle, Expand/collapse. The reveal and the
+//! order Play, Enqueue, Shuffle, Expand/collapse. The reveal and the
 //! press behaviour are the stylesheet's and the browser's, so no test checks
 //! them here. No test opens a window, sleeps, or reaches the core.
 
@@ -86,7 +86,7 @@ fn label_of(doc: &DioxusDocument, action: &str) -> String {
 }
 
 /// Contract (design D1, D2): only the controls the row offers paint, and they
-/// paint in the fixed order Play, Add to queue, Shuffle, Expand/collapse.
+/// paint in the fixed order Play, Enqueue, Shuffle, Expand/collapse.
 #[rstest]
 #[case((true, true, true, true), &["play", "queue", "shuffle", "toggle"])]
 #[case((false, true, false, true), &["queue", "toggle"])]

@@ -1,5 +1,5 @@
 //! Headless tests of the Music Hero (D16): the contracts of
-//! `LibraryHero.test.ts` — the album's Play, Add to queue, and
+//! `LibraryHero.test.ts` — the album's Play, Enqueue, and
 //! Shuffle artist sends name the item's own stable id, the More actions menu
 //! paints the entries the frame carries under their shared-builder indexes
 //! and a chosen entry sends its index, an album whose menu remainder is empty
@@ -200,9 +200,14 @@ fn hero() -> GuiMusicHeroFrame {
                 index: 1,
             },
             GuiMusicMenuEntryFrame {
-                label: "Add to Queue".to_owned(),
+                label: "Enqueue".to_owned(),
                 key_hint: None,
                 index: 2,
+            },
+            GuiMusicMenuEntryFrame {
+                label: "Mark Played".to_owned(),
+                key_hint: None,
+                index: 3,
             },
         ],
     }
@@ -442,7 +447,7 @@ fn play_sends_the_picked_album_s_id() {
     );
 }
 
-/// Contract (`LibraryHero.test.ts`): Add to queue sends the picked album's
+/// Contract (`LibraryHero.test.ts`): Enqueue sends the picked album's
 /// id.
 #[test]
 fn add_to_queue_sends_the_picked_album_s_id() {
@@ -540,8 +545,8 @@ fn the_artwork_box_names_its_placeholder_while_the_frame_carries_no_art() {
 
 /// Contract (`LibraryHero.test.ts`): More actions paints the item menu's
 /// entries from the frame. The Hero's own buttons already send Play All and
-/// Add to Queue, so the dropped-duplicates rule leaves Shuffle the only
-/// painted entry, under its shared-builder index. The press that opens the
+/// Shuffle and Enqueue, so the dropped-duplicates rule leaves Mark Played the
+/// only painted entry, under its shared-builder index. The press that opens the
 /// menu is the interaction state's own open, driven here (a headless
 /// document cannot fire a DOM click).
 #[test]
@@ -556,8 +561,8 @@ fn more_actions_paints_the_item_menu_s_entries_from_the_frame() {
 
     assert_eq!(
         fixture.menu_entries(),
-        vec![("Shuffle".to_owned(), "1".to_owned())],
-        "the dropped-duplicates rule leaves Shuffle under its shared-builder index"
+        vec![("Mark Played".to_owned(), "3".to_owned())],
+        "the dropped-duplicates rule leaves Mark Played under its shared-builder index"
     );
 }
 

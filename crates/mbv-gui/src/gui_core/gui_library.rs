@@ -215,7 +215,7 @@ pub enum GuiLibraryCommand {
     /// frame's album id is skipped and logged.
     PlayArtist { album_ids: Vec<String> },
     /// Add the artist whose albums are `album_ids` to the queue
-    /// (gui-music-artist-page design D2): the artist page's Add to queue
+    /// (gui-music-artist-page design D2): the artist page's Enqueue
     /// control, through the shared add path for each album in order.
     AddArtistToQueue { album_ids: Vec<String> },
     /// Play the artist page's track `track_id` (gui-music-artist-page design

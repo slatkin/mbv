@@ -454,7 +454,7 @@ impl App {
     /// the active Audiobookshelf library first, because its cache is the one
     /// the destination menu painted, then every other library. The fallback is
     /// what resolves a Home `Recently added` row: the tab is Home there, so a
-    /// tab-gated lookup found nothing and every Play, Shuffle, and Add to Queue
+    /// tab-gated lookup found nothing and every Play, Shuffle, and Enqueue
     /// entry on that row did nothing.
     fn audiobookshelf_menu_target_queue_item(
         &self,

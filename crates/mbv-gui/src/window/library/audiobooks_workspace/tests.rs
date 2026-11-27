@@ -299,7 +299,7 @@ fn play_sends_the_play_command_for_the_selected_book() {
     );
 }
 
-// Add to queue sends the enqueue command for the selected book.
+// Enqueue sends the enqueue command for the selected book.
 #[test]
 fn add_to_queue_sends_the_enqueue_command_for_the_selected_book() {
     let (_facts, rx) = run(|state, _facts| {

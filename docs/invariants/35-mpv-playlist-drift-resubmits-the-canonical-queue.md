@@ -13,7 +13,7 @@
 
 ## Why it matters
 
-When the mapping corrupts, every later slot-addressed operation addresses the wrong mpv entry: removing a queued slot removes the wrong file from mpv, and playing a newly queued slot starts whatever file sits at the stale index — the user's deleted items kept playing after they removed rows and queued replacements (local-daemon.log 2026-11-08T19:33:53, the GUI queue fixes). The same resubmit restarted the playing video when a multi-item append (Play Next or Add to queue of a season) read its own per-item count steps as drift (local-daemon.log 2026-11-20T17:11:17). Before the resubmit, the Owner relayed `QueueDesynced` to Clients and repaired nothing, so the divergence was permanent until a cold start.
+When the mapping corrupts, every later slot-addressed operation addresses the wrong mpv entry: removing a queued slot removes the wrong file from mpv, and playing a newly queued slot starts whatever file sits at the stale index — the user's deleted items kept playing after they removed rows and queued replacements (local-daemon.log 2026-11-08T19:33:53, the GUI queue fixes). The same resubmit restarted the playing video when a multi-item append (Play Next or Enqueue of a season) read its own per-item count steps as drift (local-daemon.log 2026-11-20T17:11:17). Before the resubmit, the Owner relayed `QueueDesynced` to Clients and repaired nothing, so the divergence was permanent until a cold start.
 
 ## How the code maintains it today
 

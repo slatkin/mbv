@@ -1379,9 +1379,9 @@ The Music list SHALL show the artists of the selected collection as a tree of ar
 
 ### Requirement: A picked Music artist shows an artist page
 
-A press on a Music artist row SHALL pick the artist, and the Hero SHALL show the artist page for it. The press SHALL NOT open or close the row. The artist page SHALL paint in the Hero frame: its header band SHALL show the artist name, the selected collections as a label pill, and its short facts as fact pills (the artist's album count, the span of the artist's release years, and the artist's track count and total time once every album of the artist has loaded its tracks). Its detail block SHALL show the artist's artwork and the actions Play, Add to queue, and Shuffle artist. Its list band SHALL show the artist's tracks grouped by album, in the order of the albums in the list and then in disc and track order, with one label for each album that shows the album's name and release year. The artist page SHALL offer no More actions control.
+A press on a Music artist row SHALL pick the artist, and the Hero SHALL show the artist page for it. The press SHALL NOT open or close the row. The artist page SHALL paint in the Hero frame: its header band SHALL show the artist name, the selected collections as a label pill, and its short facts as fact pills (the artist's album count, the span of the artist's release years, and the artist's track count and total time once every album of the artist has loaded its tracks). Its detail block SHALL show the artist's artwork and the actions Play, Enqueue, and Shuffle artist. Its list band SHALL show the artist's tracks grouped by album, in the order of the albums in the list and then in disc and track order, with one label for each album that shows the album's name and release year. The artist page SHALL offer no More actions control.
 
-Play and Add to queue SHALL act on the whole artist: every album of the artist that the list holds, in the list's album order. Shuffle artist SHALL act as it does on an album. A double-click on a track row of the page, its hover Play control, or Enter while the pointer rests on it SHALL replace the queue and start playback from that track through the rest of the tracks that the page shows, in the page's order, and it SHALL NOT stop at the end of the track's album. A track row's hover Add to queue control SHALL append only that track. A press on a track row, and a press on an album label, SHALL change nothing.
+Play and Enqueue SHALL act on the whole artist: every album of the artist that the list holds, in the list's album order. Shuffle artist SHALL act as it does on an album. A double-click on a track row of the page, its hover Play control, or Enter while the pointer rests on it SHALL replace the queue and start playback from that track through the rest of the tracks that the page shows, in the page's order, and it SHALL NOT stop at the end of the track's album. A track row's hover Enqueue control SHALL append only that track. A press on a track row, and a press on an album label, SHALL change nothing.
 
 The artist page SHALL load the tracks of every album of the artist when the artist is picked, and SHALL show each album's group as its tracks arrive. An album whose tracks have not loaded SHALL show its label and no rows, and SHALL NOT be part of a played sequence. The artist's row SHALL stay marked in the list while the Hero shows its page. A press on an album row or a track row of the list SHALL end the artist page and show that album. The artist page SHALL NOT be saved in the launch location.
 
@@ -1415,9 +1415,9 @@ The artist page SHALL load the tracks of every album of the artist when the arti
 - **WHEN** the artist page shows an artist with two albums and the user presses Play
 - **THEN** the queue is replaced with every track of the first album followed by every track of the second album, and playback starts at the first track
 
-#### Scenario: Add to queue acts on the whole artist
+#### Scenario: Enqueue acts on the whole artist
 
-- **WHEN** the artist page shows an artist with two albums and the user presses Add to queue
+- **WHEN** the artist page shows an artist with two albums and the user presses Enqueue
 - **THEN** every track of the first album followed by every track of the second album is appended to the queue, and the queue's current item does not change
 
 #### Scenario: An album row ends the artist page
@@ -1488,7 +1488,7 @@ A Library list sorted by name SHALL show letter headings and a letter rail from 
 
 ### Requirement: The Hero shows the picked item with its actions
 
-The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist, or, while an artist is picked, the artist page that the requirement "A picked Music artist shows an artist page" states. The album Hero's header band SHALL show the artist and the selected collections, and SHALL NOT show the artist's album count or the artist's track count and total time: those facts belong to the artist page. The album's detail block SHALL show the album's track count and total time as fact pills. It SHALL offer Play, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. More actions SHALL open the item's menu. A tracklist row SHALL show the hover controls that the requirement "GUI Library rows show hover controls" defines, and a double-click on a tracklist row SHALL play that track, as it does in every Workspace list (Shows episodes, Audiobooks chapters, Feeds entries). The tracklist row of the track playing at the playhead SHALL show as the playing row, as the requirement "Library lists and Workspace tables paint through shared parts" states.
+The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist, or, while an artist is picked, the artist page that the requirement "A picked Music artist shows an artist page" states. The album Hero's header band SHALL show the artist and the selected collections, and SHALL NOT show the artist's album count or the artist's track count and total time: those facts belong to the artist page. The album's detail block SHALL show the album's track count and total time as fact pills. It SHALL offer Play, Enqueue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. More actions SHALL open the item's menu. A tracklist row SHALL show the hover controls that the requirement "GUI Library rows show hover controls" defines, and a double-click on a tracklist row SHALL play that track, as it does in every Workspace list (Shows episodes, Audiobooks chapters, Feeds entries). The tracklist row of the track playing at the playhead SHALL show as the playing row, as the requirement "Library lists and Workspace tables paint through shared parts" states.
 
 #### Scenario: The Hero paints a picked album
 
@@ -1503,7 +1503,7 @@ The Hero SHALL show the picked album with its artist header, its square artwork,
 
 #### Scenario: A tracklist row's hover controls
 
-- **WHEN** the pointer is over a tracklist row and the user presses its Add to queue control
+- **WHEN** the pointer is over a tracklist row and the user presses its Enqueue control
 - **THEN** that track is appended at the end of the queue
 
 #### Scenario: A tracklist row is played
@@ -1613,7 +1613,7 @@ The window SHALL paint artwork (the Library art, the queue card art, and the tri
 
 ### Requirement: Every Hero is one frame with the largest unit as its title
 
-The Hero of Music, Shows, Podcasts, Audiobooks, Feeds, Home, and every plain Emby library (Movies included) SHALL paint one frame: a header band, a detail block beside or above the art, and the bands below it. The header band SHALL show its title, and, except for the Music album totals this requirement names, its short facts as a row of fact pills. No header band SHALL paint an eyebrow line above its title. The header band's title SHALL be the name of the largest unit the item belongs to: the artist for Music, the series for a series or one of its episodes, the podcast for a podcast episode, the feed for a feed entry, the book for an audiobook, or the item itself for a movie or another item without a containing unit. A blurred backdrop made from the Hero's own artwork SHALL show behind the header band, and a Hero with no artwork SHALL show no backdrop. The detail block SHALL show the artwork and, beside it or under it when the Hero is narrow, the selected smaller unit's name when a larger unit took the title, its Play and Add to queue actions, and its labelled facts as label and value rows. The Music artist page SHALL be the one Hero whose detail block shows the largest unit: it has no smaller unit, so the block shows the artist's artwork and the actions.
+The Hero of Music, Shows, Podcasts, Audiobooks, Feeds, Home, and every plain Emby library (Movies included) SHALL paint one frame: a header band, a detail block beside or above the art, and the bands below it. The header band SHALL show its title, and, except for the Music album totals this requirement names, its short facts as a row of fact pills. No header band SHALL paint an eyebrow line above its title. The header band's title SHALL be the name of the largest unit the item belongs to: the artist for Music, the series for a series or one of its episodes, the podcast for a podcast episode, the feed for a feed entry, the book for an audiobook, or the item itself for a movie or another item without a containing unit. A blurred backdrop made from the Hero's own artwork SHALL show behind the header band, and a Hero with no artwork SHALL show no backdrop. The detail block SHALL show the artwork and, beside it or under it when the Hero is narrow, the selected smaller unit's name when a larger unit took the title, its Play and Enqueue actions, and its labelled facts as label and value rows. The Music artist page SHALL be the one Hero whose detail block shows the largest unit: it has no smaller unit, so the block shows the artist's artwork and the actions.
 
 Each fact SHALL show in one place only. The short facts (a year, a genre, a runtime or duration, a count, an external link) SHALL be fact pills, and the facts that need a label (a director, a full release date, a studio or network, an author, a publish date) SHALL be label and value rows. The Music album Hero is the exception to the header-facts rule: its track count and total time SHALL be fact pills in the detail block, not in the header. A full release date row MAY show while a pill shows the year. A fact pill that names an external link SHALL open that link when pressed.
 
@@ -1650,7 +1650,7 @@ A destination SHALL map its facts onto this frame and SHALL NOT remove a band th
 
 #### Scenario: A TV series' actions act on the selected season
 
-- **WHEN** a series is selected and the user presses Play or Add to queue
+- **WHEN** a series is selected and the user presses Play or Enqueue
 - **THEN** the selected season is played or appended
 
 #### Scenario: A movie's Hero
@@ -1658,7 +1658,7 @@ A destination SHALL map its facts onto this frame and SHALL NOT remove a band th
 - **GIVEN** a movie with a year, two genres, a runtime, an IMDb link, a director, a release date, a studio, and a cast
 - **WHEN** the Hero shows the movie
 - **THEN** the header band shows the movie's title and fact pills for the year, each genre, the runtime, and the IMDb link
-- **AND** the detail block shows the artwork, Play and Add to queue, and rows for the director, the release date, and the studio, and no runtime row
+- **AND** the detail block shows the artwork, Play and Enqueue, and rows for the director, the release date, and the studio, and no runtime row
 - **AND** an Overview section and a Cast section follow, and the cast does not hold the director
 
 #### Scenario: A cast member with no photo
@@ -2124,17 +2124,17 @@ While the pointer rests on a GUI Library row, the row SHALL show its hover contr
 
 ### Requirement: A row's hover controls follow its kind
 
-A collection row SHALL show Play, Add to queue, and Shuffle. A collection row is an Emby folder or boxset, a Music artist or album, a Shows series or season, a Home row that names a collection, or a saved playlist. A media row SHALL show Play and Add to queue. An Audiobooks chapter row SHALL show Play only. A row that cannot play, such as a Shows Upcoming row, SHALL show no hover controls. No row SHALL show a Play next control.
+A collection row SHALL show Play, Enqueue, and Shuffle. A collection row is an Emby folder or boxset, a Music artist or album, a Shows series or season, a Home row that names a collection, or a saved playlist. A media row SHALL show Play and Enqueue. An Audiobooks chapter row SHALL show Play only. A row that cannot play, such as a Shows Upcoming row, SHALL show no hover controls. No row SHALL show a Play next control.
 
 #### Scenario: A series row's controls
 
 - **WHEN** the pointer rests on a Shows series row
-- **THEN** the row shows Play, Add to queue, and Shuffle
+- **THEN** the row shows Play, Enqueue, and Shuffle
 
 #### Scenario: A top-level tree parent's controls
 
 - **WHEN** the pointer rests on a top-level Music artist row that names an item
-- **THEN** the row shows Play, Add to queue, Shuffle, and Expand/collapse
+- **THEN** the row shows Play, Enqueue, Shuffle, and Expand/collapse
 - **AND** a top-level Shows series row and a Playlists screen playlist row show the same four controls
 
 #### Scenario: A top-level tree parent with no item
@@ -2145,12 +2145,12 @@ A collection row SHALL show Play, Add to queue, and Shuffle. A collection row is
 #### Scenario: An episode row's controls
 
 - **WHEN** the pointer rests on a Shows episode row of the Workspace table
-- **THEN** the row shows Play and Add to queue, and no Shuffle
+- **THEN** the row shows Play and Enqueue, and no Shuffle
 
 #### Scenario: A playlist item row's controls
 
 - **WHEN** the pointer rests on an item row of an open saved playlist
-- **THEN** the row shows Play and Add to queue, and no Shuffle
+- **THEN** the row shows Play and Enqueue, and no Shuffle
 
 #### Scenario: A chapter row's controls
 
@@ -2164,13 +2164,13 @@ A collection row SHALL show Play, Add to queue, and Shuffle. A collection row is
 
 ### Requirement: A hover control does what the row's menu entry does
 
-Play, Add to queue, and Shuffle SHALL each have the same effect as the entry of the same name in the row's right-click menu. A row with no right-click menu, such as an Audiobooks chapter row, SHALL play as its double-click plays it. A press on a hover control SHALL NOT also count as a press or a double-click on the row.
+Play, Enqueue, and Shuffle SHALL each have the same effect as the entry of the same name in the row's right-click menu. A row with no right-click menu, such as an Audiobooks chapter row, SHALL play as its double-click plays it. A press on a hover control SHALL NOT also count as a press or a double-click on the row.
 
-#### Scenario: Add to queue from an album row
+#### Scenario: Enqueue from an album row
 
 - **GIVEN** the queue holds two items
-- **WHEN** the user presses the Add to queue control of a Music album row
-- **THEN** the album's tracks are appended after the two items, as the album's right-click Add to Queue entry appends them
+- **WHEN** the user presses the Enqueue control of a Music album row
+- **THEN** the album's tracks are appended after the two items, as the album's right-click Enqueue entry appends them
 
 #### Scenario: Shuffle from a folder row
 
@@ -2190,7 +2190,7 @@ Play, Add to queue, and Shuffle SHALL each have the same effect as the entry of 
 #### Scenario: A control press does not pick the row
 
 - **GIVEN** the Hero shows an album
-- **WHEN** the user presses the Add to queue control of another album's row
+- **WHEN** the user presses the Enqueue control of another album's row
 - **THEN** the Hero still shows the first album
 
 ### Requirement: A GUI tree parent row shows an expand control on hover

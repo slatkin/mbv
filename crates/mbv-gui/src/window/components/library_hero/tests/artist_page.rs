@@ -108,8 +108,8 @@ fn the_artist_page_paints_its_header_labels_and_loaded_tracks() {
 }
 
 /// Contract (gui-music-artist-page design D6, spec "Play acts on the whole
-/// artist" and "Add to queue acts on the whole artist"): the artist branch's
-/// Play and Add to queue send the page's album ids in the page's order.
+/// artist" and "Enqueue acts on the whole artist"): the artist branch's
+/// Play and Enqueue send the page's album ids in the page's order.
 #[test]
 fn play_and_add_to_queue_send_the_pages_albums_in_order() {
     let mut fixture = built_artist_page();
