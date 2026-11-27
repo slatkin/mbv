@@ -145,9 +145,13 @@ fn segments_of(
         }
         GuiDestinationList::Shows(shows) => {
             // The series list is the whole library (design D8): Shows paints
-            // no collection selector, so the line names no collection.
+            // no collection selector, so the line names no collection. While
+            // the view is Favourites the location names Favourites in its
+            // place (emby-favourites design D5).
             let selected = detail_selected(detail);
-            vec![label, selected_title(selected, &shows.rows)]
+            let view_segment =
+                (shows.view == GuiLibraryView::Favourites).then(|| "Favourites".to_owned());
+            vec![label, view_segment, selected_title(selected, &shows.rows)]
         }
         GuiDestinationList::Emby(emby) => {
             let selected = detail_selected(detail);
@@ -161,6 +165,11 @@ fn segments_of(
                 } else {
                     segments.extend(emby.collection_names.iter().cloned().map(Some));
                 }
+            } else if emby.view == GuiLibraryView::Favourites {
+                // The plain mode's list is the whole library, so the view
+                // segment stands where the collection names would (design
+                // D5).
+                segments.push(Some("Favourites".to_owned()));
             }
             segments.push(selected_title(selected, &emby.rows));
             segments
@@ -204,11 +213,13 @@ fn segments_of(
 /// The location line's segments in canvas order. On Home the line reads
 /// `Home`, then the selected row's Hero title (design D10, D12). On Shows it
 /// reads the destination tab's label and the selected row's title, because
-/// the series list carries no collection selector (design D8). On a plain Emby
-/// library it reads the destination tab's label and the selected row's title
-/// (row 8.1), and in feed-group mode the checked folder names in between —
-/// named Favourites while the view is Favourites (emby-favourites design
-/// D5). On an Audiobooks library it reads the destination tab's label and the
+/// the series list carries no collection selector (design D8), named
+/// Favourites while the view is Favourites (emby-favourites design D5). On a
+/// plain Emby library it reads the destination tab's label and the selected
+/// row's title (row 8.1) — named Favourites while the view is Favourites —
+/// and in feed-group mode the checked folder names in between, named
+/// Favourites while the view is Favourites (emby-favourites design D5). On
+/// an Audiobooks library it reads the destination tab's label and the
 /// selected book's title (row 9.1). On a Podcasts library it reads the destination tab's
 /// label, the checked shows, and the selected episode's title (row 10.1). On a
 /// Feeds destination it reads the destination tab's label, the checked

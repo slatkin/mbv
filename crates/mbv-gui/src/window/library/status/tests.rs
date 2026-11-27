@@ -514,3 +514,35 @@ fn the_location_reads_the_shows_destination_and_the_selected_row() {
         "Shows › The Bear"
     );
 }
+
+// On a Shows library the Favourites view names Favourites between the
+// destination and the picked item (emby-favourites design D5, spec "A
+// Favourites view names Favourites").
+#[test]
+fn the_shows_favourites_view_names_favourites_in_place_of_the_view_segment() {
+    let (mut list, detail) = shows_content();
+    let GuiDestinationList::Shows(shows) = &mut list.destination else {
+        panic!("shows fixture");
+    };
+    shows.view = crate::gui_core::GuiLibraryView::Favourites;
+    assert_eq!(
+        library_location(&[tab(3, "Shows")], Some(3), Some(&list), Some(&detail)),
+        "Shows › Favourites › The Bear"
+    );
+}
+
+// On a plain Emby library the Favourites view names Favourites between the
+// destination and the picked item, where the plain mode paints no collection
+// names (emby-favourites design D5).
+#[test]
+fn the_plain_emby_favourites_view_names_favourites_in_place_of_the_view_segment() {
+    let (mut list, detail) = emby_plain();
+    let GuiDestinationList::Emby(emby) = &mut list.destination else {
+        panic!("emby fixture");
+    };
+    emby.view = crate::gui_core::GuiLibraryView::Favourites;
+    assert_eq!(
+        library_location(&[tab(2, "Movies")], Some(2), Some(&list), Some(&detail)),
+        "Movies › Favourites › Heat"
+    );
+}
