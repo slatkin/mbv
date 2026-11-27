@@ -35,6 +35,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiLibraryList, GuiMusicHeroFrame};
 use crate::bridge::library::GuiRowArtScopeFrame;
+use crate::gui_core::{GuiDestinationKind, GuiLibraryView};
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
     ListColumnBody, ListColumnWiring, library_list_column,
@@ -408,12 +409,16 @@ pub fn LibraryList() -> Element {
     let filter_library = library.clone();
     let accept_library = library.clone();
     // The tree's two header presses (gui-list-header-buttons design D1, D4):
-    // Music is a tree list, so its header paints both.
+    // Music is a tree list, so its All view paints both. The Favourites view
+    // paints no tree buttons (emby-favourites design D5, the title line's
+    // order).
     let expand_library = library.clone();
     let collapse_library = library.clone();
-    let tree = Some(LibraryTreeActions {
-        on_expand_all: Callback::new(move |()| expand_library.expand_all_music()),
-        on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_music()),
+    let tree = (frame.is_some_and(|frame| frame.view == GuiLibraryView::All)).then(|| {
+        LibraryTreeActions {
+            on_expand_all: Callback::new(move |()| expand_library.expand_all_music()),
+            on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_music()),
+        }
     });
     // The header's Refresh button (gui-list-header-buttons design D7): Music
     // names the open album rows its window holds, so the core reloads exactly
@@ -428,7 +433,16 @@ pub fn LibraryList() -> Element {
         label: String::new(),
         label_attr: None,
         collections,
-        view: None,
+        // Music is an Emby destination, so its header paints the view
+        // dropdown beside the collection one (emby-favourites design D5).
+        view: frame.map(|frame| {
+            (
+                frame.view,
+                GuiDestinationKind::Music {
+                    lib_idx: frame.lib_idx,
+                },
+            )
+        }),
         sort: None,
         on_refresh: Callback::new(move |()| refresh_library.refresh_music_list()),
         refreshing: carried_refreshing(carried.as_ref()),

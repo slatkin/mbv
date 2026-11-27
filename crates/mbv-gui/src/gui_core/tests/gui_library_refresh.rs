@@ -149,7 +149,7 @@ fn shows_app(http: &MockHttp) -> App {
 fn shows_new_app(http: &MockHttp) -> App {
     let app = shows_app(http);
     stub_gui_state(|gui| {
-        gui.shows_views.insert(0, GuiShowsView::New);
+        gui.library_views.insert(0, GuiLibraryView::New);
         gui.shows_new
             .insert(TV_ID.to_string(), GuiSectionRequest::Landed(Vec::new()));
     });
@@ -161,7 +161,7 @@ fn shows_new_app(http: &MockHttp) -> App {
 fn shows_upcoming_app(http: &MockHttp) -> App {
     let mut app = shows_app(http);
     stub_gui_state(|gui| {
-        gui.shows_views.insert(0, GuiShowsView::Upcoming);
+        gui.library_views.insert(0, GuiLibraryView::Upcoming);
     });
     app.send_lib_event_for_test(LibEvent::ModelContent(
         ModelContentEvent::TvUpcomingSnapshotFetched {

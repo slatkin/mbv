@@ -33,6 +33,7 @@ use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_media_kind, emby_row_sourc
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::hero_facts::{GuiHeroCastMember, GuiHeroFacts, hero_cast_emby, hero_facts_emby};
 use super::home::{GuiArtShape, artwork_shape};
+use super::library_view::GuiLibraryView;
 use super::list_sort::gui_title_sort_key;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
@@ -141,6 +142,9 @@ pub struct GuiEmbyProjection {
     /// feed-group mode's fetches report through the feed state's own
     /// loading, so only the plain mode's store names a failure here.
     pub failed: bool,
+    /// The destination's one active view (emby-favourites design D5): All or
+    /// Favourites, All the default.
+    pub view: GuiLibraryView,
     /// The active list's rows in the list's order: the store's root list in
     /// plain mode — the server's `SortName` order under the Title sort, else
     /// the date order — and the selected group's items under the feed-group
@@ -227,6 +231,7 @@ impl GuiCore {
             .into_iter()
             .map(|item| plain_row(app, item, sort.rail_letter(effective_sort_str(item))))
             .collect();
+        let view = super::shows::library_view(gui, lib_idx);
         let selected = self.emby_selected(lib_idx, &rows);
         let hero = self.emby_hero_for(lib_idx, selected.as_deref());
         GuiEmbyProjection {
@@ -234,6 +239,7 @@ impl GuiCore {
             collections: None,
             collection_names: Vec::new(),
             feed_group: false,
+            view,
             loading,
             failed,
             rows,
@@ -288,6 +294,7 @@ impl GuiCore {
             collections: Some(collections),
             collection_names,
             feed_group: true,
+            view: super::shows::library_view(&self.gui, lib_idx),
             loading,
             failed: false,
             rows,

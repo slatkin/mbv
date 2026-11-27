@@ -6,7 +6,7 @@
 //! or nothing.
 
 use crate::gui_core::{
-    GuiCollectionTarget, GuiListSort, GuiRowArtScope, GuiShowsView, GuiSortTarget,
+    GuiCollectionTarget, GuiLibraryView, GuiListSort, GuiRowArtScope, GuiSortTarget,
 };
 use mbv_queue::QueueItemContentId;
 
@@ -38,9 +38,13 @@ pub enum GuiLibraryCommand {
         target: GuiSortTarget,
         sort: GuiListSort,
     },
-    /// Select the Shows view (design D8): All, New, or Upcoming. This is a
-    /// view choice, not a collection command.
-    ShowsSetView { lib_idx: usize, view: GuiShowsView },
+    /// Select the destination's view (design D8; emby-favourites design D5):
+    /// one of the destination's own choices. This is a view choice, not a
+    /// collection command.
+    LibrarySetView {
+        lib_idx: usize,
+        view: GuiLibraryView,
+    },
     /// Show the item's detail in the Hero.
     ShowDetail { item_id: String },
     /// Open the album node: load its tracks when the cache does not hold
@@ -238,8 +242,8 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
             }
             GuiLibraryCommand::CollectionAll { target } => Self::CollectionAll { target },
             GuiLibraryCommand::ListSort { target, sort } => Self::ListSort { target, sort },
-            GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
-                Self::ShowsSetView { lib_idx, view }
+            GuiLibraryCommand::LibrarySetView { lib_idx, view } => {
+                Self::LibrarySetView { lib_idx, view }
             }
             GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
             GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },

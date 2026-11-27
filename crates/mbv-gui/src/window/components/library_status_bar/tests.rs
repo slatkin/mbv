@@ -87,6 +87,7 @@ fn hero() -> GuiMusicHeroFrame {
 /// The Music list part: one checked collection.
 fn music_list() -> GuiDestinationList {
     GuiDestinationList::Music(GuiMusicList {
+        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         collections: GuiCollections {
             target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -312,6 +313,7 @@ fn an_armed_prefix_paints_and_keeps_the_location() {
 /// The carried plain Emby-library list part: one selected row.
 fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Emby(GuiEmbyList {
+        view: crate::gui_core::GuiLibraryView::All,
         sort: None,
         lib_idx: 2,
         library_name: "Movies".to_owned(),

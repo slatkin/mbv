@@ -360,6 +360,27 @@ fn a_saved_group_no_longer_held_restores_as_all() {
     assert!(app.try_recv_lib_event().is_none(), "All fetches nothing");
 }
 
+/// Contract (emby-favourites design D5): only Shows persists — a Favourites
+/// choice on a Music library saves no view, so the field stays All.
+#[test]
+fn a_music_favourites_choice_saves_no_view() {
+    let _guard = mbv_client_core::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.seed_music_levels_for_test(&["group", "album"]);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.collection_type = "music".into();
+    app.push_library_for_test(mbv_ui_model::library_tab::LibraryTab::new(library));
+    app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
+    crate::gui_core::test_support::stub_gui_state(|state| {
+        state.library_views.insert(0, GuiLibraryView::Favourites)
+    });
+
+    let saved =
+        crate::gui_core::test_support::with_stub_gui(&mut app, |core| core.gui_launch_state());
+    assert_eq!(saved.shows_view, mbv_config::GuiLaunchShowsView::All);
+}
+
 /// Contract (design D14): the Shows view saves in its own launch field and an
 /// old file without the field loads as All.
 #[test]
@@ -372,12 +393,30 @@ fn the_shows_view_survives_a_restart() {
     app.push_library_for_test(mbv_ui_model::library_tab::LibraryTab::new(library));
     app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     crate::gui_core::test_support::stub_gui_state(|state| {
-        state.shows_views.insert(0, GuiShowsView::Upcoming)
+        state.library_views.insert(0, GuiLibraryView::Upcoming)
     });
 
     let saved =
         crate::gui_core::test_support::with_stub_gui(&mut app, |core| core.gui_launch_state());
     assert_eq!(saved.shows_view, mbv_config::GuiLaunchShowsView::Upcoming);
+
+    // A Favourites choice does not survive a restart: it saves as All
+    // (emby-favourites design D5, spec "Favourites does not survive a
+    // restart").
+    crate::gui_core::test_support::stub_gui_state(|state| {
+        state.library_views.insert(0, GuiLibraryView::Favourites)
+    });
+    let saved_favourites =
+        crate::gui_core::test_support::with_stub_gui(&mut app, |core| core.gui_launch_state());
+    assert_eq!(
+        saved_favourites.shows_view,
+        mbv_config::GuiLaunchShowsView::All
+    );
+    // The round trip below still saves and restores the Upcoming choice, so
+    // the shared stub state carries it again.
+    crate::gui_core::test_support::stub_gui_state(|state| {
+        state.library_views.insert(0, GuiLibraryView::Upcoming)
+    });
     mbv_config::save_gui_launch_state(&saved).expect("the snapshot is written");
     let loaded = mbv_config::load_gui_launch_state().expect("the snapshot is read");
     let mut restored = make_app_stub();
@@ -391,8 +430,8 @@ fn the_shows_view_survives_a_restart() {
         GuiLaunchOpen::Opened(_)
     ));
     assert_eq!(
-        crate::gui_core::test_support::stub_gui_state(|state| state.shows_views.get(&0).copied()),
-        Some(GuiShowsView::Upcoming),
+        crate::gui_core::test_support::stub_gui_state(|state| state.library_views.get(&0).copied()),
+        Some(GuiLibraryView::Upcoming),
         "the restored launch installs the saved Shows view"
     );
     // The Client state belongs to one Client, so the fresh start begins with a
@@ -426,8 +465,8 @@ fn the_shows_view_survives_a_restart() {
     fresh.push_library_for_test(mbv_ui_model::library_tab::LibraryTab::new(library));
     crate::gui_core::test_support::open_launch_destination(&mut fresh, &old);
     assert_eq!(
-        crate::gui_core::test_support::stub_gui_state(|state| state.shows_views.get(&0).copied()),
-        Some(GuiShowsView::All),
+        crate::gui_core::test_support::stub_gui_state(|state| state.library_views.get(&0).copied()),
+        Some(GuiLibraryView::All),
         "an old file with no view opens on All"
     );
 }

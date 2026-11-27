@@ -9,7 +9,7 @@
 //! (`gui-pointer-target-interaction` D2), which is never a heading. The model is
 //! plain data over fixed heights, so the geometry is asserted without a layout.
 
-use crate::gui_core::GuiShowsView;
+use crate::gui_core::GuiLibraryView;
 
 use crate::bridge::frame::library::{
     GuiRowArtFrame, GuiRowMediaKindFrame, GuiShowsEpisodeRowFrame, GuiShowsRowFrame,
@@ -59,7 +59,7 @@ pub struct ShowsTreeState<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShowsRowsFacts {
     /// The view mode the rows were built for.
-    pub view: GuiShowsView,
+    pub view: GuiLibraryView,
     /// The filter text the rows were narrowed by.
     pub filter: String,
     /// The node row ids the user opened.
@@ -340,15 +340,19 @@ pub fn episode_row_id(episode_id: &str) -> String {
 /// native scroll.
 #[must_use]
 pub fn build_shows_rows(
-    view: GuiShowsView,
+    view: GuiLibraryView,
     series: &[GuiShowsSeriesFrame],
     rows: &[GuiShowsRowFrame],
     filter: &str,
     tree: ShowsTreeState<'_>,
 ) -> Vec<ShowsListRow> {
     match view {
-        GuiShowsView::All => series_shows_rows(series, filter, tree),
-        GuiShowsView::New | GuiShowsView::Upcoming => {
+        GuiLibraryView::All => series_shows_rows(series, filter, tree),
+        // The Favourites list is the favourites data path's own list
+        // component (emby-favourites design D6, unit 5.1): until it lands,
+        // the view paints no row.
+        GuiLibraryView::Favourites => Vec::new(),
+        GuiLibraryView::New | GuiLibraryView::Upcoming => {
             // The filter's empty text keeps every row (`filter_match`'s own
             // rule), so no separate emptiness test rides here.
             let keeps = |row: &GuiShowsRowFrame| {

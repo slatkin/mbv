@@ -5,7 +5,8 @@
 //! frame carries, never by position.
 
 use crate::gui_core::{
-    GuiCollections, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiListSortFrame,
+    GuiCollections, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiLibraryView,
+    GuiListSortFrame,
 };
 
 use super::hero_facts::{GuiHeroCastMemberFrame, GuiHeroFactsFrame};
@@ -33,6 +34,9 @@ pub struct GuiEmbyList {
     pub collection_names: Vec<String>,
     /// Whether the library presents the feed-group mode (`feed_view_libraries`).
     pub feed_group: bool,
+    /// The destination's one active view (emby-favourites design D5): the
+    /// header's view dropdown marks it, and the Library Status bar reads it.
+    pub view: GuiLibraryView,
     /// Whether the active list has not landed yet.
     pub loading: bool,
     /// Whether the plain mode's root-list fetch failed.
@@ -128,6 +132,7 @@ impl GuiEmbyList {
             collections: projection.collections.clone(),
             collection_names: projection.collection_names.clone(),
             feed_group: projection.feed_group,
+            view: projection.view,
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEmbyRowFrame::from).collect(),

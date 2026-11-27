@@ -38,11 +38,11 @@ impl Fixture {
 /// resolves — a series row's raw Emby id, and no row key the list itself adds —
 /// so the core queues their row art without a coordinate.
 #[rstest::rstest]
-#[case(crate::gui_core::GuiShowsView::All, crate::gui_core::GuiRowArtScope::ShowsSeries, &["s1", "s3"])]
-#[case(crate::gui_core::GuiShowsView::New, crate::gui_core::GuiRowArtScope::ShowsNew, &["new:e1"])]
-#[case(crate::gui_core::GuiShowsView::Upcoming, crate::gui_core::GuiRowArtScope::ShowsUpcoming, &["new:e1"])]
+#[case(crate::gui_core::GuiLibraryView::All, crate::gui_core::GuiRowArtScope::ShowsSeries, &["s1", "s3"])]
+#[case(crate::gui_core::GuiLibraryView::New, crate::gui_core::GuiRowArtScope::ShowsNew, &["new:e1"])]
+#[case(crate::gui_core::GuiLibraryView::Upcoming, crate::gui_core::GuiRowArtScope::ShowsUpcoming, &["new:e1"])]
 fn the_list_reports_the_rows_in_view_under_the_views_scope(
-    #[case] view: crate::gui_core::GuiShowsView,
+    #[case] view: crate::gui_core::GuiLibraryView,
     #[case] scope: crate::gui_core::GuiRowArtScope,
     #[case] ids: &[&str],
 ) {

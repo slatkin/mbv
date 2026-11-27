@@ -16,8 +16,8 @@ use crate::gui_core::gui_library::GuiLibraryMenuRow;
 use crate::gui_core::gui_library::emby_feed_wants_target_in_set;
 use crate::gui_core::gui_library::{
     GuiAudiobooksSelection, GuiCollectionSelection, GuiCollections, GuiEmbyLibrarySelection,
-    GuiEmbyRootItems, GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiListSort,
-    GuiPodcastsSelection, GuiSearchStore, GuiSectionRequest, GuiShowsOpenInView, GuiShowsView,
+    GuiEmbyRootItems, GuiFeedsSelection, GuiGroupAlbums, GuiHomeRowId, GuiLibraryView, GuiListSort,
+    GuiPodcastsSelection, GuiSearchStore, GuiSectionRequest, GuiShowsOpenInView,
     GuiTvShowsSelection,
 };
 use crate::gui_core::gui_settings::GuiSettingsState;
@@ -84,7 +84,7 @@ pub struct GuiClientState {
     /// The Shows surface's flat-list selection.
     pub(crate) shows_flat_selection: Option<String>,
     /// The Shows surface's view, by library index.
-    pub(crate) shows_views: std::collections::HashMap<usize, GuiShowsView>,
+    pub(crate) library_views: std::collections::HashMap<usize, GuiLibraryView>,
     /// The open Shows rows the list last reported in view (gui-list-header-
     /// buttons design D5): the loader's report. Each report replaces the last,
     /// so a row that left the view leaves the report with it.
@@ -194,7 +194,7 @@ impl GuiClientState {
             rows_in_view: std::collections::HashMap::new(),
             home_selection: None,
             shows_flat_selection: None,
-            shows_views: std::collections::HashMap::new(),
+            library_views: std::collections::HashMap::new(),
             shows_open_in_view: None,
             shows_open_series_loads: std::collections::HashSet::new(),
             shows_open_season_loads: std::collections::HashSet::new(),

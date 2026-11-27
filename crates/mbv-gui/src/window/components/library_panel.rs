@@ -83,7 +83,7 @@ pub struct LibraryPanelProps {
 /// A press inside the panel (design D8, D15; gui-collection-dropdown design
 /// D7): the press closes the right-click item menu — the outside-press rule —
 /// the open collection dropdown, whose next open starts with an empty filter,
-/// and the Shows view and season dropdowns. The menu's and the dropdowns' own
+/// and the view and season dropdowns. The menu's and the dropdowns' own
 /// handlers stop this one from running, so a press on either surface acts on
 /// it instead of closing it.
 fn press_in_panel(library: &LibraryState) {

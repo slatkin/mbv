@@ -6,8 +6,8 @@
 //! position.
 
 use crate::gui_core::{
-    GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
+    GuiLibraryView, GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection,
+    GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
 
 use super::hero_facts::GuiHeroFactsFrame;
@@ -24,9 +24,10 @@ pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
-    /// The one active view (design D8): All, New, or Upcoming. The header
+    /// The one active view (design D8; emby-favourites design D5): the
+    /// destination choice. The header
     /// paints the matching single-choice dropdown.
-    pub view: GuiShowsView,
+    pub view: GuiLibraryView,
     /// Whether the active list has not landed yet.
     pub loading: bool,
     /// The series list's tree (design D14): the series nodes with their

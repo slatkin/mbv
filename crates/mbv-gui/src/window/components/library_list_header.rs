@@ -15,9 +15,13 @@
 //! The heading line's right end holds one trailing control group
 //! (gui-list-header-buttons design D1): the refresh button, the tree list's
 //! Expand all and Collapse all buttons when the destination passes tree
-//! actions, then the dropdown, the Shows view dropdown, or the selection
-//! label, then the sort control. The group takes a 6 px inner gap in place of
-//! the line's 12 px gap, so its controls read as one cluster.
+//! actions, then the collection dropdown, the view dropdown, and the selection
+//! label, then the sort control. A destination that paints both dropdowns
+//! paints the collection one left of the view one (emby-favourites design
+//! D5); while the view is Favourites the collection dropdown does not paint,
+//! because Favourites lists the whole library and a collection pick does not
+//! filter it. The group takes a 6 px inner gap in place of the line's 12 px
+//! gap, so its controls read as one cluster.
 //!
 //! The dropdown rides the heading line's right end (gui-collection-dropdown
 //! design D6a, user override): it paints there, so the panel paints no selector
@@ -28,7 +32,7 @@
 //!
 //! The sort control paints last in the group (gui-flat-list-sort design D7), so
 //! it is the rightmost item and sits directly right of the collection dropdown
-//! or the Shows view dropdown. The five flat lists pass their frame's sort and
+//! or the view dropdown. The five flat lists pass their frame's sort and
 //! every other destination paints none, so the placement has one owner here.
 //!
 //! `label_attr` names a destination's own attribute, so a destination's tests
@@ -38,15 +42,15 @@ use std::borrow::Cow;
 
 use dioxus_native::prelude::*;
 
-use crate::gui_core::{GuiCollections, GuiListSortFrame, GuiShowsView};
+use crate::gui_core::{GuiCollections, GuiDestinationKind, GuiLibraryView, GuiListSortFrame};
 
 use crate::window::components::header_icon_button::{
     HEADER_ICON_SIZE, HEADER_ICON_STROKE_WIDTH, HeaderIconButton,
 };
 use crate::window::components::library_collection_dropdown::LibraryCollectionDropdown;
 use crate::window::components::library_filter_field::LibraryFilterField;
-use crate::window::components::library_shows_view_dropdown::LibraryShowsViewDropdown;
 use crate::window::components::library_sort_control::LibrarySortControl;
+use crate::window::components::library_view_dropdown::LibraryViewDropdown;
 use crate::window::icons::{ChevronsDownUp, ChevronsUpDown, RefreshCcw};
 use crate::window::service_mark::{ServiceMark, ServiceMarkIcon};
 
@@ -74,21 +78,24 @@ pub struct LibraryListHeaderProps {
     /// The list's heading, as the destination names itself.
     pub heading: LibraryListHeading,
     /// The carried selection's label, painted on the heading's line only when
-    /// it is non-empty and the destination paints no collection dropdown.
+    /// it is non-empty and the destination paints neither dropdown.
     pub label: String,
     /// The destination's own label attribute, when it has one.
     #[props(default)]
     pub label_attr: Option<&'static str>,
     /// The destination's collection selector, when it has one (design D6a):
     /// the dropdown paints on the heading's line after the heading, and the
-    /// label is not painted, because the trigger names the selection.
+    /// label is not painted, because the trigger names the selection. While
+    /// the destination's view is Favourites it does not paint
+    /// (emby-favourites design D5).
     #[props(default)]
     pub collections: Option<GuiCollections>,
-    /// The Shows destination's single-choice view, when it paints one
-    /// (gui-collection-dropdown design D8): the dropdown goes on the same
-    /// heading line and is not a collection selector.
+    /// The destination's single-choice view, when it paints one
+    /// (gui-collection-dropdown design D8; emby-favourites design D5): the
+    /// view and the destination whose choices the dropdown names, on the same
+    /// heading line and not a collection selector.
     #[props(default)]
-    pub view: Option<GuiShowsView>,
+    pub view: Option<(GuiLibraryView, GuiDestinationKind)>,
     /// The flat list's sort control, when its list has one (gui-flat-list-sort
     /// design D7): the control paints last in the heading line's trailing
     /// group, so it is the line's rightmost item.
@@ -152,6 +159,14 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
     let label_attrs = label_attr.map_or(Vec::new(), |name| {
         vec![Attribute::new(name, "", None, false)]
     });
+    // The Favourites view hides the collection dropdown (emby-favourites
+    // design D5): Favourites lists the whole library, and a collection pick
+    // does not filter it. On All the dropdown returns with its pick intact —
+    // the collection frame never changed.
+    let hide_collections = view.is_some_and(|(view, _)| view == GuiLibraryView::Favourites);
+    // The collection dropdown paints while the destination carries one and
+    // the view does not hide it (design D6a, emby-favourites design D5).
+    let paints_collections = collections.is_some() && !hide_collections;
 
     rsx! {
         div {
@@ -213,14 +228,21 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
                             }
                         }
                     }
-                    if let Some(collections) = collections {
-                        // The dropdown paints the end of the trailing group
-                        // (design D6a), left of the sort control when the list
-                        // has one.
+                    if let Some(collections) = collections.filter(|_| paints_collections) {
+                        // The dropdown paints in the trailing group (design
+                        // D6a), left of the view dropdown when the destination
+                        // paints one and of the sort control when the list has
+                        // one.
                         LibraryCollectionDropdown { collections }
-                    } else if let Some(view) = view {
-                        LibraryShowsViewDropdown { view }
-                    } else if !label.is_empty() {
+                    }
+                    if let Some((view, destination)) = view {
+                        LibraryViewDropdown { view, destination }
+                    } else if !paints_collections && !label.is_empty() {
+                        // The label paints only where no dropdown names the
+                        // selection (design D6a): a Favourites view hides the
+                        // collection dropdown, but a Favourites view always
+                        // carries a view dropdown, so a hidden collection
+                        // dropdown alone never un-hides the label.
                         span {
                             class: "font-mono",
                             style: "font-size: 12px; color: var(--canvas-muted);",

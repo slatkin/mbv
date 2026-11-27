@@ -161,7 +161,7 @@ fn paint_season_dropdown(
     let inside_library = library.clone();
     let on_inside_press = Callback::new(move |()| {
         inside_library.close_library_row_menu();
-        inside_library.close_shows_view_dropdown();
+        inside_library.close_library_view_dropdown();
     });
     let filter_library = library.clone();
     let on_filter =

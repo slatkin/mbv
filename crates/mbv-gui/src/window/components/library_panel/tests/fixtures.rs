@@ -17,6 +17,7 @@ use crate::bridge::frame::library::{
 /// The carried Music list part with no album picked.
 pub(super) fn music_list() -> GuiMusicList {
     GuiMusicList {
+        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         collections: GuiCollections {
             target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -146,7 +147,7 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
 pub(super) fn shows_list() -> GuiShowsList {
     GuiShowsList {
         sort: None,
-        view: crate::gui_core::GuiShowsView::All,
+        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         loading: false,
         series: Vec::new(),
@@ -213,6 +214,7 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
             }],
             current_tab: Some(3),
             destination: GuiDestinationList::Emby(GuiEmbyList {
+                view: crate::gui_core::GuiLibraryView::All,
                 sort: None,
                 lib_idx: 3,
                 library_name: "Movies".to_owned(),

@@ -21,10 +21,10 @@ use super::GuiSortTarget;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, emby_row_source, row_art, upcoming_row_source};
 use super::hero_facts::GuiHeroFacts;
 use super::home::GuiArtShape;
+use super::library_view::GuiLibraryView;
 use super::list_sort::gui_title_sort_key;
 use super::projection::sort_letter;
 use super::request::GuiSectionRequest;
-use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
@@ -182,9 +182,10 @@ pub struct GuiShowsHero {
 /// series list, the core's selected series, and its Hero.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiShowsProjection {
-    /// The one active view (design D8): All, New, or Upcoming. All is the
-    /// default for a library with no stored choice.
-    pub view: GuiShowsView,
+    /// The one active view (design D8; emby-favourites design D5): one of
+    /// the destination's choices. All is the default for a library with no
+    /// stored choice.
+    pub view: GuiLibraryView,
     /// Whether the active list has not landed yet.
     pub loading: bool,
     /// The New or Upcoming list's flat rows in paint order (design D9); empty
@@ -235,10 +236,10 @@ impl GuiCore {
         if !super::tv::tv_library(&self.app, lib_idx) {
             return GuiShowsProjection::default();
         }
-        let view = super::shows::shows_view(&self.gui, lib_idx);
+        let view = super::shows::library_view(&self.gui, lib_idx);
         let mut sort_frame = None;
         let (series, rows, selected, hero, workspace_loading, loading) = match view {
-            GuiShowsView::All => {
+            GuiLibraryView::All => {
                 let series = self.gui_shows_series_tree(lib_idx);
                 let loading = self
                     .app
@@ -260,7 +261,7 @@ impl GuiCore {
                     loading,
                 )
             }
-            GuiShowsView::New => {
+            GuiLibraryView::New => {
                 let frame = super::list_sort::list_sort_frame(
                     &self.app,
                     &self.gui,
@@ -288,7 +289,7 @@ impl GuiCore {
                 });
                 (Vec::new(), rows, selected, hero, false, loading)
             }
-            GuiShowsView::Upcoming => {
+            GuiLibraryView::Upcoming => {
                 // An Upcoming row is display-only: the Hero keeps the series
                 // the All view showed, so the detail part stays meaningful.
                 let selected = shows_default_series(&self.app, &self.gui, lib_idx);
@@ -304,6 +305,11 @@ impl GuiCore {
                     false,
                 )
             }
+            // The Favourites list is the favourites data path's own list
+            // component (emby-favourites design D6, units 4.2 and 5.1):
+            // until it lands, the view projects no rows, so no All row
+            // paints as a favourite.
+            GuiLibraryView::Favourites => (Vec::new(), Vec::new(), None, None, false, false),
         };
         let projection = GuiShowsProjection {
             view,
@@ -316,7 +322,7 @@ impl GuiCore {
             hero,
             playing_episode_id: crate::gui_core::gui_library::marks::playing_episode_id(&self.app),
         };
-        if view == GuiShowsView::All {
+        if view == GuiLibraryView::All {
             self.warm_shows_hero_neighbours(lib_idx, &projection);
         }
         projection
@@ -542,10 +548,14 @@ pub(crate) fn shows_item(
     lib_idx: usize,
     item_id: &str,
 ) -> Option<EmbyItem> {
-    match super::shows::shows_view(gui, lib_idx) {
-        GuiShowsView::New => return super::shows::shows_new_item(gui, item_id),
-        GuiShowsView::Upcoming => return None,
-        GuiShowsView::All => {}
+    match super::shows::library_view(gui, lib_idx) {
+        GuiLibraryView::New => return super::shows::shows_new_item(gui, item_id),
+        // An Upcoming row is display-only, and a Favourites id resolves
+        // through the favourites store (emby-favourites design D6, unit
+        // 4.3) — until that store lands, the id names no item in either
+        // view.
+        GuiLibraryView::Upcoming | GuiLibraryView::Favourites => return None,
+        GuiLibraryView::All => {}
     }
     let lib = app.emby_library(lib_idx)?;
     if let Some(item) = lib

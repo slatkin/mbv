@@ -226,6 +226,7 @@ impl Fixture {
                     current_tab,
                     destination: crate::bridge::frame::library::GuiDestinationList::Music(
                         crate::bridge::frame::library::GuiMusicList {
+                            view: crate::gui_core::GuiLibraryView::All,
                             lib_idx: 0,
                             collections: crate::bridge::frame::library::GuiCollections {
                                 target: crate::gui_core::GuiCollectionTarget::Music(0),

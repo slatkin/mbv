@@ -37,7 +37,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiShowsList};
 use crate::bridge::library::GuiRowArtScopeFrame;
-use crate::gui_core::GuiShowsView;
+use crate::gui_core::{GuiDestinationKind, GuiLibraryView};
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_column::{
@@ -361,21 +361,29 @@ fn paint_shows_row(
 fn shows_open_in_view(
     rows: &[ShowsListRow],
     scroll: ListScroll,
-    view: Option<GuiShowsView>,
+    view: Option<GuiLibraryView>,
 ) -> (Vec<String>, Vec<(String, String)>) {
     match view {
-        Some(GuiShowsView::All) => open_nodes_in_view(rows, scroll),
-        Some(GuiShowsView::New | GuiShowsView::Upcoming) | None => (Vec::new(), Vec::new()),
+        Some(GuiLibraryView::All) => open_nodes_in_view(rows, scroll),
+        // Only the All view paints a tree: the flat views and the Favourites
+        // view report none, so a view change stops the loader.
+        Some(GuiLibraryView::New | GuiLibraryView::Upcoming | GuiLibraryView::Favourites)
+        | None => (Vec::new(), Vec::new()),
     }
 }
 
 /// The destination list the painted rows' art belongs to (gui-delineated-rows
 /// design D7): the visible view names its own scope.
-fn shows_row_art_scope(view: Option<GuiShowsView>) -> GuiRowArtScopeFrame {
+fn shows_row_art_scope(view: Option<GuiLibraryView>) -> GuiRowArtScopeFrame {
     match view {
-        Some(GuiShowsView::New) => GuiRowArtScopeFrame::ShowsNew,
-        Some(GuiShowsView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
-        Some(GuiShowsView::All) | None => GuiRowArtScopeFrame::ShowsSeries,
+        Some(GuiLibraryView::New) => GuiRowArtScopeFrame::ShowsNew,
+        Some(GuiLibraryView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
+        // The Favourites list paints no row until the favourites store lands
+        // (emby-favourites design D6, unit 4.2), so the All tree's scope
+        // stands in and no fetch names it.
+        Some(GuiLibraryView::All | GuiLibraryView::Favourites) | None => {
+            GuiRowArtScopeFrame::ShowsSeries
+        }
     }
 }
 
@@ -409,10 +417,10 @@ fn shows_column_wiring<'a>(
 /// the All view paints the series tree, so the flat New and Upcoming views
 /// paint neither button.
 fn shows_tree_actions(
-    view: Option<GuiShowsView>,
+    view: Option<GuiLibraryView>,
     library: &LibraryState,
 ) -> Option<LibraryTreeActions> {
-    (view == Some(GuiShowsView::All)).then(|| {
+    (view == Some(GuiLibraryView::All)).then(|| {
         let expand_library = library.clone();
         let collapse_library = library.clone();
         LibraryTreeActions {
@@ -547,7 +555,14 @@ pub fn LibraryShowsList() -> Element {
         label: String::new(),
         label_attr: None,
         collections: None,
-        view: frame.map(|frame| frame.view),
+        view: frame.map(|frame| {
+            (
+                frame.view,
+                GuiDestinationKind::Shows {
+                    lib_idx: frame.lib_idx,
+                },
+            )
+        }),
         sort,
         on_refresh: Callback::new(move |()| refresh_library.refresh_library_list()),
         refreshing: carried.as_ref().is_some_and(|list| list.refreshing),

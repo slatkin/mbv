@@ -126,7 +126,7 @@ pub fn LibraryLetteredList<D: LetteredDestination>() -> Element {
         label: header.label.clone(),
         label_attr: header.label_attr,
         collections: header.collections.clone(),
-        view: None,
+        view: header.view,
         sort: header.sort.clone(),
         on_refresh: Callback::new(move |()| refresh_library.refresh_library_list()),
         refreshing: carried.as_ref().is_some_and(|list| list.refreshing),

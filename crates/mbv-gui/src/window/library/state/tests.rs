@@ -108,6 +108,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         }],
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
+            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: 0,
             collections: GuiCollections {
                 target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -527,7 +528,7 @@ fn close_popovers_closes_every_dropdown_and_the_search_panel_and_clears_filters(
         state.set_search_collapsed(true);
         state.toggle_collections_dropdown();
         state.set_collections_filter("rock".to_owned());
-        state.toggle_shows_view_dropdown();
+        state.toggle_library_view_dropdown();
         state.toggle_shows_seasons_dropdown();
         state.set_shows_seasons_filter("s1".to_owned());
         state.open_search_panel();
@@ -535,7 +536,7 @@ fn close_popovers_closes_every_dropdown_and_the_search_panel_and_clears_filters(
         let ui = state.ui.peek();
         let mut facts = facts.lock().expect("facts");
         facts.push(format!("collections={:?}", ui.collections));
-        facts.push(format!("view={:?}", ui.shows_view));
+        facts.push(format!("view={:?}", ui.library_view));
         facts.push(format!("seasons={:?}", ui.shows_seasons));
         facts.push(format!("search_panel={}", ui.search_control.panel_open));
     });

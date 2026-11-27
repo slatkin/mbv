@@ -575,9 +575,9 @@ fn a_failed_new_refetch_keeps_the_landed_rows() {
     });
     apply_gui_library_command(
         &mut app,
-        GuiLibraryCommand::ShowsSetView {
+        GuiLibraryCommand::LibrarySetView {
             lib_idx: 0,
-            view: GuiShowsView::New,
+            view: GuiLibraryView::New,
         },
     );
     http.fail(std::io::ErrorKind::ConnectionRefused);

@@ -626,7 +626,7 @@ pub fn App() -> Element {
             },
             onpointerdown: move |event: PointerEvent| {
                 // A press outside the collection dropdown closes it and clears
-                // its filter text, a press outside the Shows view popover or
+                // its filter text, a press outside the view popover or
                 // the season dropdown closes it, and a press outside the
                 // collapsed Search control's panel closes it, wherever in the
                 // window the press lands (gui-collection-dropdown design D7,

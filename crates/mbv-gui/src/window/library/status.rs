@@ -5,7 +5,7 @@
 //! composes no state of its own: the active destination's list part and detail
 //! part narrow on their kind.
 
-use crate::gui_core::GuiCollections;
+use crate::gui_core::{GuiCollections, GuiLibraryView};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail,
@@ -153,7 +153,14 @@ fn segments_of(
             let selected = detail_selected(detail);
             let mut segments = vec![label];
             if emby.feed_group {
-                segments.extend(emby.collection_names.iter().cloned().map(Some));
+                // While the view is Favourites the location names Favourites
+                // in place of the collection names (emby-favourites design
+                // D5): Favourites lists the whole library.
+                if emby.view == GuiLibraryView::Favourites {
+                    segments.push(Some("Favourites".to_owned()));
+                } else {
+                    segments.extend(emby.collection_names.iter().cloned().map(Some));
+                }
             }
             segments.push(selected_title(selected, &emby.rows));
             segments
@@ -180,7 +187,14 @@ fn segments_of(
         }
         GuiDestinationList::Music(music) => {
             let mut segments = vec![label];
-            segments.extend(music.collections.selected_names().into_iter().map(Some));
+            // While the view is Favourites the location names Favourites in
+            // place of the collection names (emby-favourites design D5):
+            // Favourites lists the whole library.
+            if music.view == GuiLibraryView::Favourites {
+                segments.push(Some("Favourites".to_owned()));
+            } else {
+                segments.extend(music.collections.selected_names().into_iter().map(Some));
+            }
             segments.push(picked_name(music_hero(detail)));
             segments
         }
@@ -192,12 +206,15 @@ fn segments_of(
 /// reads the destination tab's label and the selected row's title, because
 /// the series list carries no collection selector (design D8). On a plain Emby
 /// library it reads the destination tab's label and the selected row's title
-/// (row 8.1), and in feed-group mode the checked folder names in between. On an
-/// Audiobooks library it reads the destination tab's label and the selected
-/// book's title (row 9.1). On a Podcasts library it reads the destination tab's
+/// (row 8.1), and in feed-group mode the checked folder names in between —
+/// named Favourites while the view is Favourites (emby-favourites design
+/// D5). On an Audiobooks library it reads the destination tab's label and the
+/// selected book's title (row 9.1). On a Podcasts library it reads the destination tab's
 /// label, the checked shows, and the selected episode's title (row 10.1). On a
 /// Feeds destination it reads the destination tab's label, the checked
-/// subscriptions, and the selected entry's title (row 11.1). A segment the
+/// subscriptions, and the selected entry's title (row 11.1). On the Music
+/// destination the checked group names sit in between, named Favourites while
+/// the view is Favourites (emby-favourites design D5). A segment the
 /// content does not fill drops, so an unpicked Hero leaves the destination and
 /// the collections, and a destination outside the tabs leaves the rest.
 #[must_use]

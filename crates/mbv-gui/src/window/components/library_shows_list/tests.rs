@@ -289,7 +289,7 @@ fn built(list: GuiShowsList, detail: GuiShowsDetail) -> Fixture {
 fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
     GuiShowsList {
         sort: None,
-        view: crate::gui_core::GuiShowsView::All,
+        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         loading: false,
         series: tree,
@@ -484,7 +484,7 @@ fn new_view_rows() -> Vec<GuiShowsRowFrame> {
 fn the_date_sorted_view_paints_no_rail() {
     let frame = GuiShowsList {
         sort: None,
-        view: crate::gui_core::GuiShowsView::New,
+        view: crate::gui_core::GuiLibraryView::New,
         rows: new_view_rows(),
         ..shows_frame(Vec::new())
     };
@@ -552,7 +552,7 @@ fn the_tree_rows_offer_their_hover_controls() {
 fn a_new_row_offers_play_and_add() {
     let frame = GuiShowsList {
         sort: None,
-        view: crate::gui_core::GuiShowsView::New,
+        view: crate::gui_core::GuiLibraryView::New,
         rows: new_view_rows(),
         ..shows_frame(Vec::new())
     };
@@ -574,7 +574,7 @@ fn an_upcoming_row_offers_no_hover_control() {
     row.display_only = true;
     let frame = GuiShowsList {
         sort: None,
-        view: crate::gui_core::GuiShowsView::Upcoming,
+        view: crate::gui_core::GuiLibraryView::Upcoming,
         rows: vec![row],
         ..shows_frame(Vec::new())
     };
@@ -723,7 +723,7 @@ fn the_all_view_paints_the_tree_buttons_and_the_new_view_paints_neither() {
     );
 
     let new = GuiShowsList {
-        view: crate::gui_core::GuiShowsView::New,
+        view: crate::gui_core::GuiLibraryView::New,
         rows: new_view_rows(),
         ..shows_frame(Vec::new())
     };

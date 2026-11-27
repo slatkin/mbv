@@ -340,6 +340,7 @@ fn brand() -> GuiMusicArtistFrame {
 /// whose one derivation `selected_names` names the header's label (design D6).
 fn music(collection_names: &[&str]) -> GuiMusicList {
     GuiMusicList {
+        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         collections: GuiCollections {
             target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -391,6 +392,7 @@ fn loaded_album(album_id: &str, name: &str, year: &str, track_id: &str) -> GuiMu
 /// press that opens one sends no command.
 fn three_albums() -> GuiMusicList {
     GuiMusicList {
+        view: crate::gui_core::GuiLibraryView::All,
         artists: vec![GuiMusicArtistFrame {
             art: GuiRowArtFrame::NoSource,
             media: GuiRowMediaKindFrame::Audio,

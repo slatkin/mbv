@@ -28,6 +28,7 @@ use crate::bridge::frame::library::{
     GuiPodcastsList,
 };
 use crate::bridge::library::GuiRowArtScopeFrame;
+use crate::gui_core::{GuiDestinationKind, GuiLibraryView};
 use crate::window::components::library_letter_heading::paint_letter_heading;
 use crate::window::components::list_row::{FlatRow, LibraryRowThumb, LibraryTrailPart};
 use crate::window::library::list::LetteredRow;
@@ -103,7 +104,21 @@ impl LetteredDestination for EmbyList {
             label: String::new(),
             label_attr: None,
             collections: list.and_then(|list| list.collections.clone()),
-            sort: list.and_then(|list| list.sort.clone()),
+            // Every plain Emby library paints the view dropdown
+            // (emby-favourites design D5), in the feed-group mode too.
+            view: list.map(|list| {
+                (
+                    list.view,
+                    GuiDestinationKind::Library {
+                        lib_idx: list.lib_idx,
+                    },
+                )
+            }),
+            // The Favourites view paints no sort control (emby-favourites
+            // design D5).
+            sort: list
+                .filter(|list| list.view == GuiLibraryView::All)
+                .and_then(|list| list.sort.clone()),
             placeholder,
             aria_label: "Filter items",
         }
@@ -259,6 +274,9 @@ impl LetteredDestination for AudiobooksList {
             label: String::new(),
             label_attr: None,
             collections: None,
+            // Audiobookshelf paints no view dropdown (emby-favourites design
+            // D5).
+            view: None,
             sort: list.and_then(|list| list.sort.clone()),
             placeholder: "Filter books".to_owned(),
             aria_label: "Filter books",
@@ -410,6 +428,9 @@ impl LetteredDestination for PodcastsList {
             label,
             label_attr: Some("data-library-podcasts-selection-label"),
             collections: list.map(|list| list.collections.clone()),
+            // Audiobookshelf paints no view dropdown (emby-favourites design
+            // D5).
+            view: None,
             sort: list.and_then(|list| list.sort.clone()),
             aria_label: "Filter episodes",
         }
@@ -562,6 +583,8 @@ impl LetteredDestination for FeedsList {
             label,
             label_attr: Some("data-library-feeds-selection-label"),
             collections: list.map(|list| list.collections.clone()),
+            // Feeds paint no view dropdown (emby-favourites design D5).
+            view: None,
             sort: list.and_then(|list| list.sort.clone()),
             aria_label: "Filter entries",
         }

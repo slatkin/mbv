@@ -5,8 +5,9 @@
 //! Both ride the `libraryList` and `libraryDetail` sections.
 
 use crate::gui_core::{
-    GuiCollections, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicArtistPage,
-    GuiMusicHero, GuiMusicHeroSubject, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
+    GuiCollections, GuiLibraryMenuItem, GuiLibraryView, GuiMusicAlbum, GuiMusicArtist,
+    GuiMusicArtistPage, GuiMusicHero, GuiMusicHeroSubject, GuiMusicProjection, GuiMusicTrack,
+    GuiMusicTrackTotal,
 };
 use mbv_ui_model::music_grouping::ArtistKey;
 
@@ -33,6 +34,9 @@ pub struct GuiMusicList {
     pub failure: Option<String>,
     /// The union of the selected groups' artists in artist sort-name order.
     pub artists: Vec<GuiMusicArtistFrame>,
+    /// The destination's one active view (emby-favourites design D5): the
+    /// header's view dropdown marks it, and the Library Status bar reads it.
+    pub view: GuiLibraryView,
 }
 
 /// The Music destination's detail part (design D8): the Hero of the picked
@@ -67,6 +71,7 @@ impl GuiMusicList {
                 .iter()
                 .map(GuiMusicArtistFrame::from)
                 .collect(),
+            view: projection.view,
         }
     }
 }

@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use crate::gui_core::{GuiCollections, GuiListSortFrame};
+use crate::gui_core::{GuiCollections, GuiDestinationKind, GuiLibraryView, GuiListSortFrame};
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{
@@ -192,6 +192,10 @@ pub struct LetteredHeader {
     pub label_attr: Option<&'static str>,
     /// The destination's collection selector, when it has one.
     pub collections: Option<GuiCollections>,
+    /// The destination's single-choice view, when it paints one
+    /// (emby-favourites design D5): the view and the destination whose
+    /// choices the view dropdown names.
+    pub view: Option<(GuiLibraryView, GuiDestinationKind)>,
     /// The destination's sort control, when its list has one.
     pub sort: Option<GuiListSortFrame>,
     /// The filter field's placeholder, which names the selection it narrows.

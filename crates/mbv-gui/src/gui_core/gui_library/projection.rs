@@ -17,6 +17,7 @@ use mbv_ui_model::ui_util::fmt_duration_short;
 use super::artwork::{GuiRowArt, GuiRowMediaKind, artist_row_source, row_art};
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use super::collection_command::GuiCollectionSite;
+use super::library_view::GuiLibraryView;
 use super::{GuiGroupAlbums, GuiMusicCollectionSite};
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
@@ -152,6 +153,9 @@ pub struct GuiMusicProjection {
     /// The union of the selected groups' artists, one row per `ArtistKey`, in
     /// artist sort-name order (design D5).
     pub artists: Vec<GuiMusicArtist>,
+    /// The destination's one active view (emby-favourites design D5): All or
+    /// Favourites, All the default.
+    pub view: GuiLibraryView,
     /// The Hero's facts for the picked album; `None` until the window content
     /// picks one of the union's albums (design D2, D5).
     pub hero: Option<GuiMusicHero>,
@@ -220,6 +224,7 @@ pub(in crate::gui_core::gui_library) fn music_projection(
         loading: union.loading,
         failure: failure_line(&union.failed),
         artists,
+        view: super::shows::library_view(gui, lib_idx),
         hero,
     };
     warm_music_hero_neighbours(app, &projection);

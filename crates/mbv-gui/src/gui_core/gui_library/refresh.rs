@@ -18,7 +18,7 @@ use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
 
 use super::GuiDestinationKind;
-use super::shows_view::GuiShowsView;
+use super::library_view::GuiLibraryView;
 use super::{emby, projection, shows, shows_open_loads, store};
 
 impl GuiCore {
@@ -66,16 +66,20 @@ impl GuiCore {
 /// landing clears — the New view's store refetch mark, and the Upcoming
 /// snapshot's fetch mark.
 fn shows_refreshing(app: &App, gui: &GuiClientState, lib_idx: usize) -> bool {
-    match shows::shows_view(gui, lib_idx) {
-        GuiShowsView::All => app
+    match shows::library_view(gui, lib_idx) {
+        GuiLibraryView::All => app
             .emby_library_level(lib_idx)
             .is_some_and(|level| level.loading),
-        GuiShowsView::New => app
+        GuiLibraryView::New => app
             .emby_library_id(lib_idx)
             .is_some_and(|library_id| gui.shows_new_refreshing.contains(library_id)),
-        GuiShowsView::Upcoming => app
+        GuiLibraryView::Upcoming => app
             .emby_library_id(lib_idx)
             .is_some_and(|library_id| app.tv_upcoming_fetch_in_flight(library_id)),
+        // The Favourites view's refresh mark is the favourites store's own
+        // (emby-favourites design D6, unit 4.1); until it lands, the choice
+        // starts no fetch, so none is in flight.
+        GuiLibraryView::Favourites => false,
     }
 }
 
@@ -153,18 +157,22 @@ fn refresh_music(app: &mut App, gui: &mut GuiClientState, lib_idx: usize, album_
 /// level's in-place refresh and the open rows' stale marks in All, one list's
 /// refetch in New, and the snapshot's refetch in Upcoming.
 fn refresh_shows(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
-    match shows::shows_view(gui, lib_idx) {
-        GuiShowsView::All => {
+    match shows::library_view(gui, lib_idx) {
+        GuiLibraryView::All => {
             app.refresh_lib(lib_idx);
             mark_open_shows_rows_stale(app, gui, lib_idx);
             shows_open_loads::pump_shows_open_loads(app, gui);
         }
-        GuiShowsView::New => {
+        GuiLibraryView::New => {
             if let Some(library_id) = app.emby_library_id(lib_idx).map(str::to_string) {
                 shows::refetch_shows_new(app, gui, library_id);
             }
         }
-        GuiShowsView::Upcoming => app.refetch_tv_upcoming_snapshot(lib_idx),
+        GuiLibraryView::Upcoming => app.refetch_tv_upcoming_snapshot(lib_idx),
+        // The Favourites refresh refetches the favourites list
+        // (emby-favourites design D6, unit 4.1); until that fetch lands, the
+        // choice refetches nothing.
+        GuiLibraryView::Favourites => {}
     }
 }
 

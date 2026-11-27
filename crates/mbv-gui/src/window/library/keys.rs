@@ -102,13 +102,13 @@ fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyO
     types_into_filter(key).then_some(KeyOutcome::Text)
 }
 
-/// Route a key while the Shows view dropdown is open (gui-collection-dropdown
+/// Route a key while the view dropdown is open (gui-collection-dropdown
 /// design D8, gtds design D15): Esc closes it. The popover mounts no filter
 /// field, so every other key passes to the rest of the routing and stays the
 /// panel's and the core's.
-fn route_shows_view_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+fn route_library_view_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     if key.key == "Escape" && bare(key) {
-        state.close_shows_view_dropdown();
+        state.close_library_view_dropdown();
         return Some(KeyOutcome::Handled);
     }
     None
@@ -138,18 +138,18 @@ fn route_seasons_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutco
 /// Route a key while an open text field of the panel holds the keyboard (design
 /// D3, step 2; gui-collection-dropdown design D7, D8): the list's `/` filter
 /// takes every key, the collection dropdown's own filter takes the typed keys,
-/// Backspace, and Esc, and the Shows view popover takes Esc — everywhere the
+/// Backspace, and Esc, and the view popover takes Esc — everywhere the
 /// pointer is. `None` while no field or popover of the panel is open, so the
 /// rest of the routing answers the key.
 fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     // The facts are copied out of the store: a route may write it, and a held
     // read would meet that write.
-    let (filter_open, collections_open, shows_view_open, seasons_open, destinations_open) = {
+    let (filter_open, collections_open, library_view_open, seasons_open, destinations_open) = {
         let ui = state.ui.peek();
         (
             ui.filter_open,
             ui.collections.is_open(),
-            ui.shows_view.is_open(),
+            ui.library_view.is_open(),
             ui.shows_seasons.is_open(),
             ui.destinations.is_open(),
         )
@@ -160,8 +160,8 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
     if collections_open {
         return route_collections_open_key(state, key);
     }
-    if shows_view_open {
-        return route_shows_view_open_key(state, key);
+    if library_view_open {
+        return route_library_view_open_key(state, key);
     }
     if seasons_open {
         return route_seasons_open_key(state, key);

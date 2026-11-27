@@ -122,6 +122,7 @@ fn emby_library_list() -> GuiLibraryList {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: LIB_IDX,
             library_name: "Movies".to_owned(),
             collections: None,

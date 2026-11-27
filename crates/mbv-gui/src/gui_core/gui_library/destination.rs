@@ -57,7 +57,7 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }
@@ -131,7 +131,7 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }
@@ -215,7 +215,7 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }
@@ -278,7 +278,7 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }

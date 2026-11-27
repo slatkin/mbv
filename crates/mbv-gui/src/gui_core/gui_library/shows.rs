@@ -1,9 +1,10 @@
-// The Shows destination's actions (add-gui-library-panel design D14;
-// gui-collection-dropdown design D8, D9): the three-choice view selection, the
-// per-library New fetch, and the select, play, play-next, and add commands. The
-// projection lives in `shows_projection.rs`, as the other destinations split
-// their data path from their actions. All shows the series tree; New and
-// Upcoming show the merged flat lists the Home sections used to carry.
+// The Emby destinations' actions (add-gui-library-panel design D14;
+// gui-collection-dropdown design D8, D9; emby-favourites design D5): the
+// single-choice view selection, the per-library New fetch, and the select,
+// play, play-next, and add commands. The projection lives in
+// `shows_projection.rs`, as the other destinations split their data path from
+// their actions. All shows each destination's own list; the Shows New and
+// Upcoming views show the merged flat lists the Home sections used to carry.
 //
 // The per-library state lives in the core's GUI store, so every step is a free
 // function over the `App` the GUI core owns, with the `GuiCore` entries as
@@ -15,21 +16,21 @@ use mbv_queue::QueueItem;
 use mbv_ui_model::library_hero::producers::hero_content_queue;
 
 use super::hero_facts::hero_facts_queue;
+use super::library_view::GuiLibraryView;
 use super::request::GuiSectionRequest;
-use super::shows_view::GuiShowsView;
 use crate::gui_core::GuiCore;
 use crate::gui_core::gui_client_state::GuiClientState;
 use mbv_client_core::App;
 use mbv_client_core::state::library_fetch_events::LibraryFetchEvent;
 
 impl GuiCore {
-    /// Install one Shows view (design D8).
-    pub(in crate::gui_core::gui_library) fn set_gui_shows_view(
+    /// Install one library view (design D5).
+    pub(in crate::gui_core::gui_library) fn set_gui_library_view(
         &mut self,
         lib_idx: usize,
-        view: GuiShowsView,
+        view: GuiLibraryView,
     ) {
-        set_shows_view(&mut self.app, &mut self.gui, lib_idx, view);
+        set_library_view(&mut self.app, &mut self.gui, lib_idx, view);
     }
 
     /// Select a Shows row (design D12, D8, D9).
@@ -42,45 +43,75 @@ impl GuiCore {
     }
 }
 
-/// The Shows view of one library (design D8): a library with no stored choice
-/// shows All, the default. It reads only the core's Shows store, so it is a
-/// core function the projection, the row art, and the launch reach through the
-/// `App` they hold.
-pub(crate) fn shows_view(gui: &GuiClientState, lib_idx: usize) -> GuiShowsView {
-    gui.shows_views.get(&lib_idx).copied().unwrap_or_default()
+/// The Emby destination `lib_idx` names (design D5): the destination whose
+/// view a command sets. `None` when the index names no Emby library, which
+/// no view dropdown paints.
+pub(in crate::gui_core::gui_library) fn emby_view_destination(
+    app: &App,
+    lib_idx: usize,
+) -> Option<super::GuiDestinationKind> {
+    let collection_type = app.emby_library_collection_type(lib_idx)?;
+    Some(if app.is_grouped_music_library(lib_idx) {
+        super::GuiDestinationKind::Music { lib_idx }
+    } else if collection_type == "tvshows" {
+        super::GuiDestinationKind::Shows { lib_idx }
+    } else {
+        super::GuiDestinationKind::Library { lib_idx }
+    })
 }
 
-/// Install one Shows view (design D8): a press replaces the active view, and
-/// the loaders for the newly shown list run through the existing per-library
-/// sources. A stale library index changes nothing.
-pub(in crate::gui_core::gui_library) fn set_shows_view(
+/// The stored view of one library (design D5): a library with no stored
+/// choice shows All, the default. It reads only the core's library-view
+/// store, so it is a core function the projection, the row art, and the
+/// launch reach through the `App` they hold.
+pub(crate) fn library_view(gui: &GuiClientState, lib_idx: usize) -> GuiLibraryView {
+    gui.library_views.get(&lib_idx).copied().unwrap_or_default()
+}
+
+/// Install one library view (design D5): a press replaces the active view,
+/// the choice stays inside the destination's own choices, and the loaders for
+/// the newly shown list run through the existing per-library sources. A stale
+/// library index, a library no Emby destination presents, and a view outside
+/// the destination's choices change nothing.
+pub(in crate::gui_core::gui_library) fn set_library_view(
     app: &mut App,
     gui: &mut GuiClientState,
     lib_idx: usize,
-    view: GuiShowsView,
+    view: GuiLibraryView,
 ) {
-    if !super::tv::tv_library(app, lib_idx) {
+    let Some(destination) = emby_view_destination(app, lib_idx) else {
         super::log_ignored_library_command(
-            "showsSetView",
-            format_args!("the destination is no Shows library"),
+            "librarySetView",
+            format_args!("the library index names no Emby library"),
+        );
+        return;
+    };
+    if !GuiLibraryView::choices(destination).contains(&view) {
+        super::log_ignored_library_command(
+            "librarySetView",
+            format_args!("{view:?} is no choice of {destination:?}"),
         );
         return;
     }
-    gui.shows_views.insert(lib_idx, view);
+    gui.library_views.insert(lib_idx, view);
     match view {
-        GuiShowsView::All | GuiShowsView::Upcoming => {
+        GuiLibraryView::All | GuiLibraryView::Upcoming => {
             app.maybe_spawn_tv_upcoming_snapshot(lib_idx);
         }
-        GuiShowsView::New => {
+        GuiLibraryView::New => {
             let Some(library_id) = app.emby_library_id(lib_idx).map(str::to_string) else {
                 super::log_ignored_library_command(
-                    "showsSetView",
+                    "librarySetView",
                     format_args!("the library index names no tab"),
                 );
                 return;
             };
             spawn_shows_new(app, gui, library_id);
         }
+        // The Favourites list's fetch is the favourites data path's own
+        // (emby-favourites design D7, unit 4.1): until it lands, the choice
+        // installs alone and the destination's All list keeps painting.
+        GuiLibraryView::Favourites => {}
     }
 }
 
@@ -216,8 +247,8 @@ pub(in crate::gui_core::gui_library) fn select_shows_row(
         );
         return;
     }
-    match shows_view(gui, lib_idx) {
-        GuiShowsView::All => {
+    match library_view(gui, lib_idx) {
+        GuiLibraryView::All => {
             let unchanged = gui
                 .tv_shows
                 .get(&lib_idx)
@@ -230,7 +261,7 @@ pub(in crate::gui_core::gui_library) fn select_shows_row(
             }
             super::tv::select_tv_series(app, gui, lib_idx, row);
         }
-        GuiShowsView::New => {
+        GuiLibraryView::New => {
             if shows_new_item(gui, row).is_some() {
                 app.stamp_navigation();
                 gui.shows_flat_selection = Some(row.to_owned());
@@ -238,7 +269,11 @@ pub(in crate::gui_core::gui_library) fn select_shows_row(
                 super::log_stale_library_item("showsSelect", row);
             }
         }
-        GuiShowsView::Upcoming => {}
+        // An Upcoming row is display-only, and a Favourites row's pick
+        // resolves through the favourites store and lands in the favourites
+        // pick of design D6 (unit 4.3) — until that store lands, the list
+        // paints no Favourites row, so a press picks nothing in either view.
+        GuiLibraryView::Upcoming | GuiLibraryView::Favourites => {}
     }
 }
 

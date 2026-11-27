@@ -2,7 +2,7 @@
 //! spec "Open text fields and menus keep the keys"): a closed dropdown takes no
 //! key, so Space over its trigger still plays or pauses; the open dropdown's
 //! filter takes the typed keys and Backspace wherever the pointer is; and Esc
-//! closes the dropdown and clears its filter text. The Shows view popover has
+//! closes the dropdown and clears its filter text. The view popover has
 //! its own open fact (gtds design D15): it takes Esc and no typed key.
 
 use super::*;
@@ -65,7 +65,7 @@ fn esc_closes_the_open_dropdown_over_the_queue() {
     assert_eq!(commands(&rx), []);
 }
 
-// The Shows view popover mounts no filter field (design D8, D15), so the typed
+// The view popover mounts no filter field (design D8, D15), so the typed
 // keys stay the panel's and the core's while it is open: Space keeps its play
 // and pause and `n` reaches the core, and the popover stays open.
 #[test]
@@ -74,21 +74,21 @@ fn the_shows_view_popover_takes_no_typed_key() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), shows_detail());
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.shows_view.open());
+        ui.with_mut(|ui| ui.library_view.open());
         route_under(state, facts, "space", " ", PointerZone::Queue);
         route_under(state, facts, "n", "n", PointerZone::Queue);
         facts
             .lock()
             .expect("facts")
-            .push(format!("shows_view_open={}", state.shows_view_open()));
+            .push(format!("library_view_open={}", state.library_view_open()));
     });
     assert_eq!(facts[0], "space=Core(Queue)");
     assert_eq!(facts[1], "n=Core(Queue)");
-    assert_eq!(facts[2], "shows_view_open=true");
+    assert_eq!(facts[2], "library_view_open=true");
     assert_eq!(commands(&rx), []);
 }
 
-// Esc closes the Shows view popover wherever the pointer is, through its own
+// Esc closes the view popover wherever the pointer is, through its own
 // open fact (design D8, D15): the popover with no filter still binds its
 // close.
 #[test]
@@ -97,15 +97,15 @@ fn esc_closes_the_shows_view_popover() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), shows_detail());
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.shows_view.open());
+        ui.with_mut(|ui| ui.library_view.open());
         route_under(state, facts, "escape", "Escape", PointerZone::Queue);
         facts
             .lock()
             .expect("facts")
-            .push(format!("shows_view_open={}", state.shows_view_open()));
+            .push(format!("library_view_open={}", state.library_view_open()));
     });
     assert_eq!(facts[0], "escape=Handled");
-    assert_eq!(facts[1], "shows_view_open=false");
+    assert_eq!(facts[1], "library_view_open=false");
     assert_eq!(commands(&rx), []);
 }
 

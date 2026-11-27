@@ -24,6 +24,7 @@ mod home;
 mod item_actions;
 mod item_menu;
 mod launch;
+mod library_view;
 mod list_sort;
 pub(crate) mod marks;
 pub(crate) mod podcasts;
@@ -36,7 +37,6 @@ mod search;
 mod shows;
 pub(crate) mod shows_open_loads;
 pub(crate) mod shows_projection;
-mod shows_view;
 pub(crate) mod store;
 mod tabs;
 mod tv;
@@ -87,6 +87,7 @@ pub use self::marks::GuiPlayheadMarks;
 
 use self::podcasts::GuiPodcastsCollectionSite;
 
+pub use self::library_view::GuiLibraryView;
 pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
@@ -102,13 +103,12 @@ pub(crate) use self::rows_in_view::queue_in_view_row_fetches;
 pub(crate) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
 #[cfg(test)]
-pub(crate) use self::shows::{refetch_shows_new, shows_view};
+pub(crate) use self::shows::{library_view, refetch_shows_new};
 pub(crate) use self::shows_open_loads::GuiShowsOpenInView;
 pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
-pub use self::shows_view::GuiShowsView;
 pub(crate) use self::store::GuiGroupAlbums;
 use self::store::GuiMusicCollectionSite;
 #[cfg(test)]
@@ -186,9 +186,13 @@ pub enum GuiLibraryCommand {
         target: GuiSortTarget,
         sort: GuiListSort,
     },
-    /// Select the Shows destination's single view (design D8): All, New, or
-    /// Upcoming. This is a view choice, not a collection command.
-    ShowsSetView { lib_idx: usize, view: GuiShowsView },
+    /// Select the destination's single view (design D8; emby-favourites
+    /// design D5): one of the destination's own choices. This is a view
+    /// choice, not a collection command.
+    LibrarySetView {
+        lib_idx: usize,
+        view: GuiLibraryView,
+    },
     /// Show the item's detail in the Hero (design D2).
     ShowDetail { item_id: String },
     /// Open an album node: load its tracks when the cache does not hold them
@@ -401,8 +405,8 @@ impl GuiCore {
             GuiLibraryCommand::ListSort { target, sort } => {
                 self.apply_gui_list_sort(target, sort);
             }
-            GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
-                self.set_gui_shows_view(lib_idx, view);
+            GuiLibraryCommand::LibrarySetView { lib_idx, view } => {
+                self.set_gui_library_view(lib_idx, view);
             }
             GuiLibraryCommand::ShowDetail { item_id } => {
                 self.show_gui_library_detail(&item_id);
