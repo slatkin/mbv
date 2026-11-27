@@ -274,10 +274,22 @@ impl LibraryState {
         list.is_some()
     }
 
-    /// Whether the active destination's detail part paints a Hero: every
-    /// destination's detail carries a `hero`, `None` while none is picked.
+    /// Whether the active destination paints a Hero (design D4, D12;
+    /// emby-favourites design D6): every destination's detail carries a `hero`,
+    /// `None` while none is picked, and the Favourites view carries its picked
+    /// favourite's Hero on the list part instead — the same fact the panel's
+    /// paint side reads, so the key side opens and closes the overlay the pane
+    /// paints.
     #[must_use]
-    fn library_detail_has_hero(&self) -> bool {
+    fn library_paints_hero(&self) -> bool {
+        let favourites_hero = {
+            let list = self.sections.library_list.peek();
+            super::favourites::favourites_part(list.as_deref())
+                .is_some_and(|(_, part)| part.hero.is_some())
+        };
+        if favourites_hero {
+            return true;
+        }
         let detail = self.sections.library_detail.peek();
         match detail.as_deref() {
             Some(GuiLibraryDetail::Music(detail)) => detail.hero.is_some(),
@@ -593,15 +605,15 @@ impl LibraryState {
     /// a picked item, an arrangement that overlays rather than splits, and no
     /// dismissal since the row menu's View Detail. The Hero is the Music Hero, the Home Hero, the
     /// Shows Hero, or a plain Emby library's Hero (design D12), whichever
-    /// destination is active. Esc and a press on the backdrop close it. The
+    /// destination is active — or the Favourites Hero, which rides the list
+    /// part while that view paints (emby-favourites design D6). Esc and a press
+    /// on the backdrop close it. The
     /// `arrangement` is the one value the window hands both this predicate's
     /// caller and the panel's paint (design D4): the keys never read a report
     /// that may not have landed yet.
     #[must_use]
     pub fn hero_overlay_open(&self, ui: &LibraryUiState, arrangement: GuiArrangement) -> bool {
-        arrangement == GuiArrangement::Narrow
-            && !ui.hero_dismissed
-            && self.library_detail_has_hero()
+        arrangement == GuiArrangement::Narrow && !ui.hero_dismissed && self.library_paints_hero()
     }
 
     /// Open the destination tab at `position`: the command goes to the core,

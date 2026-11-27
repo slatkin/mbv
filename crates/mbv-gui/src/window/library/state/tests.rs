@@ -14,10 +14,11 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::library::{
-    GuiCollections, GuiDestinationList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiFavouritesList,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
-    GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList,
-    GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
+    GuiCollections, GuiDestinationList, GuiEmbyHeroFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
+    GuiFavouritesList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
+    GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame,
+    GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
@@ -161,6 +162,34 @@ fn music_favourites_list(rows: Vec<GuiEmbyRowFrame>) -> GuiLibraryList {
     }
 }
 
+/// The Music list section value in the Favourites view with a picked row's Hero
+/// on the list part (emby-favourites design D6): the destination's detail part
+/// carries no Hero while that view paints.
+fn music_favourites_hero_list(hero: bool) -> GuiLibraryList {
+    let row = favourite_row("m1", "Alien");
+    let mut list = music_favourites_list(vec![row.clone()]);
+    let GuiDestinationList::Music(music) = &mut list.destination else {
+        panic!("music fixture");
+    };
+    music.favourites = Some(GuiFavouritesList {
+        loading: false,
+        rows: vec![row],
+        selected: Some("m1".to_owned()),
+        hero: hero.then(|| GuiEmbyHeroFrame {
+            title: "Alien".to_owned(),
+            facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+                pills: Vec::new(),
+                rows: Vec::new(),
+            },
+            overview: None,
+            art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
+            art: None,
+            cast: Vec::new(),
+        }),
+    });
+    list
+}
+
 /// One carried favourites row with no art and no played state.
 fn favourite_row(id: &str, title: &str) -> GuiEmbyRowFrame {
     GuiEmbyRowFrame {
@@ -260,26 +289,29 @@ fn panel() -> GuiPanelToggles {
     }
 }
 
-/// A batch that carries the given Library sections.
-fn library_batch(
+/// A batch that carries the given Library sections at `revision`: a section
+/// applies only a revision the store has not held, so a test that changes the
+/// carried content twice moves the revision on.
+fn library_batch_at(
+    revision: u64,
     list: Option<GuiLibraryList>,
     detail: Option<GuiLibraryDetail>,
 ) -> GuiSectionBatch {
     let mut batch = GuiSectionBatch::default();
     if let Some(list) = list {
         batch.library_list = Some(crate::bridge::sections::GuiSection {
-            revision: 1,
+            revision,
             value: Some(list),
         });
     }
     if let Some(detail) = detail {
         batch.library_detail = Some(crate::bridge::sections::GuiSection {
-            revision: 1,
+            revision,
             value: Some(detail),
         });
     }
     batch.panel = Some(crate::bridge::sections::GuiSection {
-        revision: 1,
+        revision,
         value: panel(),
     });
     batch
@@ -287,8 +319,19 @@ fn library_batch(
 
 /// Carry the given Library content into the store's sections.
 fn carry(state: &LibraryState, list: Option<GuiLibraryList>, detail: Option<GuiLibraryDetail>) {
+    carry_at(state, 1, list, detail);
+}
+
+/// Carry the given Library content at `revision`, so a second carry replaces
+/// the content the store already holds.
+fn carry_at(
+    state: &LibraryState,
+    revision: u64,
+    list: Option<GuiLibraryList>,
+    detail: Option<GuiLibraryDetail>,
+) {
     let mut sections = state.sections.clone();
-    sections.apply_batch(&library_batch(list, detail));
+    sections.apply_batch(&library_batch_at(revision, list, detail));
 }
 
 /// The Music scroll facts, as the tests read them.
@@ -661,6 +704,39 @@ fn the_favourites_scroll_and_filter_are_their_own_per_library() {
             "filter \"\"",
         ]
     );
+}
+
+/// emby-favourites design D6, D7: the Narrow Hero overlay's fact reads the
+/// Favourites list part's Hero, which the destination's detail part does not
+/// carry while that view paints, so Esc closes the overlay the pane paints. A
+/// Favourites view with no Hero opens no overlay.
+#[test]
+fn the_narrow_hero_overlay_opens_for_a_favourites_hero() {
+    let with_hero = music_favourites_hero_list(true);
+    let without_hero = music_favourites_hero_list(false);
+    let (facts, _rx) = run(move |state, facts| {
+        carry(state, Some(with_hero.clone()), Some(music_detail(None)));
+        state.view_library_detail();
+        let ui = state.ui.peek().clone();
+        let mut recorded = facts.lock().expect("facts");
+        recorded.push(format!(
+            "narrow={} wide={}",
+            state.hero_overlay_open(&ui, crate::window::arrangement::GuiArrangement::Narrow),
+            state.hero_overlay_open(&ui, crate::window::arrangement::GuiArrangement::Wide)
+        ));
+        drop(recorded);
+        carry_at(
+            state,
+            2,
+            Some(without_hero.clone()),
+            Some(music_detail(None)),
+        );
+        facts.lock().expect("facts").push(format!(
+            "without hero={}",
+            state.hero_overlay_open(&ui, crate::window::arrangement::GuiArrangement::Narrow)
+        ));
+    });
+    assert_eq!(facts, ["narrow=true wide=false", "without hero=false"]);
 }
 
 /// A late filter write must not reopen a closed popover (review of #1028).
