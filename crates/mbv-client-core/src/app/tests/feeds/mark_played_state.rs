@@ -59,3 +59,31 @@ fn mark_played_shows_played_with_position_zero_in_the_loaded_rows() {
     assert!(!app.feed_tab.loading, "a mark must not start a refetch");
     assert_eq!(app.feed_tab.pending_results, 0);
 }
+
+/// The same mark propagates the stored pair into the Player owner's queue, so
+/// a queued episode's row repaints from the owner's broadcast without a
+/// refetch. Feed played-state is local curation: the read-back stored state
+/// is what every matching non-active slot records.
+#[test]
+fn mark_played_propagates_the_stored_state_to_the_owner_queue() {
+    let mut app = make_app_stub();
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(Vec::new(), 0);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+    app.player_rx = player_rx;
+    let marked = feed_entry("ep-1", "feed-a", 4_000_000_000);
+    app.feed_tab.entries = vec![vec![marked.clone()]];
+    app.feed_tab.all_entries = vec![marked.clone()];
+
+    app.execute_context_action(Some(ContextAction::FeedsMarkPlayed(vec![marked])), None);
+
+    assert!(
+        matches!(cmd_rx.try_recv(), Ok(mbv_ctrl::CtrlCmd::UnifiedQueueApplyProgress { updates, .. })
+        if updates == vec![mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Feed("ep-1".into()),
+            position_ticks: 0,
+            finished: true,
+        }]),
+        "the stored pair must reach the owner queue as one apply-progress update"
+    );
+}

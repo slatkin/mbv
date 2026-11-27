@@ -10,6 +10,44 @@ use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, BulkRemoveTarget};
 use rand::seq::SliceRandom;
 
 impl App {
+    /// Relay an accepted manual played-state mark into the Player owner's
+    /// queue through the shared `QueueOp::ApplyProgress` path — the same
+    /// propagation the Audiobookshelf accepted-mark local apply uses
+    /// (standard-media-context-menus design D6). Every non-active slot whose
+    /// content matches takes the new state, and the owner's broadcast
+    /// repaints the queue rows; the actively owned session is left out on the
+    /// owner side. A send failure surfaces as a warning, never silently: the
+    /// Service write already succeeded, so the queue row would otherwise stay
+    /// stale without a word.
+    pub(in crate::app) fn propagate_played_to_queue(
+        &mut self,
+        updates: Vec<mbv_ctrl::ProgressUpdate>,
+    ) {
+        if updates.is_empty() {
+            return;
+        }
+        let result = {
+            let (player, _) = self.queue_link(crate::app::QueueLink::Local);
+            player
+                .remote()
+                .send_queue_op(mbv_remote_player::QueueOp::ApplyProgress { updates }, None)
+        };
+        if let Err(error) = result {
+            self.flash(error.to_string(), ToastSeverity::Warning);
+        }
+    }
+
+    /// The one Emby played-state propagation every manual Emby mark shares:
+    /// the server clears the resume position on both a played and an unplayed
+    /// mark, so the queue slot's pair is `(0, played)`.
+    fn propagate_emby_played_to_queue(&mut self, item_id: &str, played: bool) {
+        self.propagate_played_to_queue(vec![mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Emby(item_id.to_string()),
+            position_ticks: 0,
+            finished: played,
+        }]);
+    }
+
     /// Play the resolved queue items in list order: the first replaces the
     /// queue and starts, the rest append (standard-media-context-menus task
     /// 5.3, design D4). Shuffle callers randomize before calling.
@@ -482,6 +520,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
+                self.propagate_emby_played_to_queue(item_id, played);
                 if let Some(lib_idx) = lib_idx
                     && played
                 {
@@ -587,8 +626,10 @@ impl App {
             client.mark_played(&item.id)
         };
         drop(client);
+        let new_played = !item.played;
         match result {
             Ok(()) => {
+                self.propagate_emby_played_to_queue(&item.id, new_played);
                 match self.fetch_home() {
                     Ok(content) => {
                         // Delivered to the stored `home_content` via the
@@ -664,6 +705,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
+                self.propagate_emby_played_to_queue(&item.id, !item.played);
                 if !item.played {
                     self.remove_watched_item_from_library(lib_idx, &item.id);
                 }
@@ -687,59 +729,6 @@ impl App {
         {
             lvl.items.remove(pos);
             lvl.rows.retire();
-        }
-    }
-
-    fn set_feed_entries_played(&mut self, entries: &[mbv_queue::FeedEntry], played: bool) {
-        let user_id = self
-            .config
-            .lock()
-            .unwrap()
-            .emby_setup
-            .as_ref()
-            .map_or_else(String::new, |setup| setup.user_id.clone());
-        for entry in entries {
-            if let Some(feed_id) = entry.feed_id.as_deref() {
-                self.feed_entry_state
-                    .set_played(&user_id, feed_id, &entry.guid, played);
-            }
-        }
-        let _ = self.feed_entry_state.save();
-        self.apply_stored_feed_entry_states(entries, &user_id);
-    }
-
-    /// Copy each entry's stored state onto the loaded Feeds rows, so a mark
-    /// shows at once without a refetch (design D5, spec `feed-queue-item`,
-    /// #1005). Rows are matched by `(feed_id, guid)`; Queue and Home rows are
-    /// not touched.
-    fn apply_stored_feed_entry_states(&mut self, entries: &[mbv_queue::FeedEntry], user_id: &str) {
-        for entry in entries {
-            let Some(feed_id) = entry.feed_id.as_deref() else {
-                continue;
-            };
-            let Some(state) = self.feed_entry_state.get(user_id, feed_id, &entry.guid) else {
-                continue;
-            };
-            for sub_entries in &mut self.feed_tab.entries {
-                apply_feed_entry_state(sub_entries, feed_id, &entry.guid, state);
-            }
-            apply_feed_entry_state(&mut self.feed_tab.all_entries, feed_id, &entry.guid, state);
-        }
-    }
-}
-
-/// Copy one stored feed-entry state onto every loaded row with that
-/// `(feed_id, guid)` identity (design D5, spec `feed-queue-item`, #1005).
-fn apply_feed_entry_state(
-    rows: &mut [mbv_queue::FeedEntry],
-    feed_id: &str,
-    entry_guid: &str,
-    state: mbv_feed::FeedEntryState,
-) {
-    for row in rows {
-        if row.feed_id.as_deref() == Some(feed_id) && row.guid == entry_guid {
-            row.position_ticks = state.position_ticks;
-            row.played = state.played;
         }
     }
 }
