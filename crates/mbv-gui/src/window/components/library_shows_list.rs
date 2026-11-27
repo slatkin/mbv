@@ -48,7 +48,7 @@ use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFra
 use crate::window::components::list_row::{
     FlatRow, LibraryRowThumb, LibraryTrailPart, TreeDepth, TreeLevel, TreeRow, TreeTrail,
 };
-use crate::window::components::tree_guide::subtree_tails;
+use crate::window::components::tree_rail::subtree_tails;
 use crate::window::library::list::{RailLetter, list_window};
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
 use crate::window::library::scroll::ListScroll;

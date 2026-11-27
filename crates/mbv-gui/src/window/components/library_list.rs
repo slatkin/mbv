@@ -45,7 +45,7 @@ use crate::window::components::list_row::{
     FlatRow, LibraryRowThumb, LibraryTrailPart, ROW_PADDING_PX, TreeDepth, TreeLevel, TreeRow,
     TreeTrail,
 };
-use crate::window::components::tree_guide::subtree_tails;
+use crate::window::components::tree_rail::subtree_tails;
 use crate::window::library::list::{LETTER_ROW_HEIGHT, LibraryRow, letter_rail};
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;

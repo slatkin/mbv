@@ -89,6 +89,7 @@ pub mod settings_switch;
 pub mod toast_stack;
 pub mod track_chips;
 pub mod tree_guide;
+pub mod tree_rail;
 pub mod tree_row;
 pub mod typed_text;
 pub mod use_focus_while;
