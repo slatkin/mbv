@@ -16,7 +16,7 @@ Conflating the two stops produced the same kind of silent no-op the other way: a
 ## How the code maintains it today
 
 - `PlaybackIntentAction::Stop` calls `handle_stop`, then `intents.applied_if_current` and sends the `Applied` event to the Client — the same settle the `SetPaused` remote arm performs.
-- `stop_active_output` takes a `StopScope`. The explicit callers (`handle_stop` for `CtrlCmd::Stop` and the intent, `DaemonLoop::handle_transport` for a transport stop) pass `StopScope::Everything`, which sends `transport("Stop")` to a Session and clears the loaded record. `stop_old_output_for_handoff` passes `StopScope::LoadedItemOnly`, which keeps `stop_loaded_item`'s guard.
+- `stop_active_output` takes a `StopScope`. The explicit callers (`handle_stop` for `CtrlCmd::Stop` and the intent, `DaemonLoop::handle_transport` for a transport stop) pass `StopScope::Everything`, which sends `transport("Stop")` to a Session and clears the loaded record. `stop_old_output_for_handoff` passes the scope the selection intent selects: `StopScope::LoadedItemOnly` for a `Continue` hand-off and `StopScope::Release` for a `SwitchOnly` switch, which sends the old remote device no stop; either keeps `stop_loaded_item`'s guard.
 - Guard tests: `a_client_stop_intent_stops_the_loaded_item_on_every_press` (two presses, two `Applied` events, two device stops) and `a_user_stop_while_foreign_content_plays_stops_the_device`, both in `crates/mbv-daemon/src/tests/`.
 
 ## Where it currently fails / how it could regress

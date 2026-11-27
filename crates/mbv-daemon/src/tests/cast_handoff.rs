@@ -191,7 +191,11 @@ fn a_handoff_selection_connects_in_first_select_mode() {
 
 /// Loads `slot` on the selected receiver through the ctrl play-slot command
 /// and waits for the resolve and the load job to run.
-fn load_slot_on_receiver(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
+pub(super) fn load_slot_on_receiver(
+    t: &mut TestLoop,
+    client_id: u64,
+    slot: mbv_queue::QueueSlotId,
+) {
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
             queue: None,

@@ -74,3 +74,4 @@ mod emby_session_support;
 mod emby_session_transport;
 mod r#loop;
 mod named_queues;
+mod stop_release;

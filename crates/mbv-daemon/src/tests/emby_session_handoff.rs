@@ -27,6 +27,8 @@ use crate::emby_session::poll::EMBY_SESSION_POLL_INTERVAL;
 use crate::emby_session::worker::EmbySessionJob;
 use mbv_emby::SessionInfo;
 
+mod switch_release;
+
 /// One second of media in ticks.
 const SECOND_TICKS: i64 = mbv_emby_model::TICKS_PER_SECOND;
 
@@ -74,7 +76,7 @@ fn wait_for_worker(worker: &mpsc::Sender<EmbySessionJob>) {
 }
 
 /// The `Stop` transport commands the fake recorded, in order.
-fn stop_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
+pub(super) fn stop_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
     calls
         .lock()
         .unwrap()

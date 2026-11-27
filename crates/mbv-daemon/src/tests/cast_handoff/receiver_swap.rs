@@ -1,7 +1,16 @@
 // Cast→Cast receiver swaps (cast-owner-output row 7.1 dispatch C,
-// design D10).
+// design D10) and the Cast→Session switch (keep-old-output-playing-on-switch
+// row 2.1).
 
 use super::*;
+
+use super::cast_output::connect_output_client_with_caps;
+use super::emby_session_output::host_session_output;
+use super::emby_session_output::pump_session_event;
+use super::emby_session_output::session_selection;
+use super::emby_session_output::wait_for_session_jobs;
+use crate::emby_session::fake::FakeSessionApi;
+use crate::emby_session::fake::session;
 
 /// Contract: cast-owner-output row 7.1 dispatch C (design D10) — selecting a
 /// second receiver while a first receiver plays connects to the new receiver
@@ -547,4 +556,96 @@ fn selecting_the_current_receiver_displaces_a_pending_connect() {
             .any(|call| *call == "stop" || *call == "teardown"),
         "the receiver is not stopped and not torn down"
     );
+}
+
+/// Contract: keep-old-output-playing-on-switch row 2.1 (spec "A receiver is
+/// released by a switch") — a switch from a playing Cast receiver to an Emby
+/// Session releases the receiver: it receives no stop and no teardown, and
+/// the Session becomes the output and is given no load. The queue keeps its
+/// order and the observed slot is cleared and published as none
+/// (invariant 25).
+#[test]
+fn a_switch_to_a_session_releases_the_old_receiver() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (client_id, _rx, old_calls) =
+        select_cast_output(&mut t, playing_status_at("https://feed/a.mp3", 10.0));
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    load_slot_on_receiver(&mut t, client_id, slot);
+    // One tick runs the status poll, so the receiver presents its loaded
+    // item and the loaded slot is the observed one before the switch.
+    t.event_loop.tick(std::time::Instant::now());
+    pump(&mut t);
+    let queue_before: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    host_session_output(&mut t, fake);
+    let (switch_id, reply_tx, _rx2) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    switch_output(&mut t, switch_id, &reply_tx, session_selection());
+    pump_session_event(&mut t);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert!(
+        !old_calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|call| call == "stop" || call == "teardown"),
+        "the released receiver receives no stop and no teardown: {old_calls:?}"
+    );
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output after the switch");
+    };
+    assert_eq!(
+        output.device_id, "device-1",
+        "the selected Session is the output after the switch"
+    );
+    assert_eq!(
+        output.loaded.as_ref().map(|loaded| loaded.slot),
+        None,
+        "a switch loads nothing on the Session"
+    );
+    assert_eq!(
+        queue_slot_ids_of(&t),
+        queue_before,
+        "the queue and its order are unchanged"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        None,
+        "the switch records no observed active slot"
+    );
+    assert_eq!(
+        *t.event_loop
+            .shared_queue
+            .observed_active_slot
+            .lock()
+            .unwrap(),
+        None,
+        "the switch publishes the observed slot as none (invariant 25)"
+    );
+}
+
+/// The queue's slot ids in order.
+fn queue_slot_ids_of(t: &TestLoop) -> Vec<mbv_queue::QueueSlotId> {
+    t.event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect()
 }

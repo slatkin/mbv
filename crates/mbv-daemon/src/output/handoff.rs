@@ -165,29 +165,43 @@ fn capture_emby_session_handoff(daemon: &DaemonLoop) -> Option<HandoffPlayback> 
     presented_handoff(daemon, loaded.slot)
 }
 
-/// Stops the old output for a successful swap (design D10 step 3): the local
-/// run stops; an old receiver's media stops with its stop reports, and the
-/// deliberate output change also tears its app down (design D12) — on the old
-/// receiver, never the new one; an old Emby Session sends its device a stop
-/// only while the device plays the loaded item (design D11). Called whether or
-/// not a hand-off was captured, because every swap stops the old output.
-pub(crate) fn stop_old_output_for_handoff(daemon: &mut DaemonLoop) {
+/// Stops the old output for a successful swap (design D10 step 3), scaled by
+/// the selection's intent (switch-output-without-hand-off design D5;
+/// keep-old-output-playing-on-switch design D1/D2/D4/D5): a `Continue` selection stops the old output — the local
+/// run stops; an old receiver's
+/// media stops with its stop reports, and the deliberate output change also
+/// tears its app down (design D12) — on the old receiver, never the new one;
+/// an old Emby Session sends its device a stop only while the device plays
+/// the loaded item (design D11). A `SwitchOnly` selection *releases* the old
+/// remote output: the Cast arm keeps the stop report, the Feed `Stopped`, and
+/// the forgotten loaded item but queues no media stop and no app teardown,
+/// and the Emby Session arm forgets the loaded item and sends no device stop
+/// — the device keeps playing what it plays (design D1/D2). Local is the
+/// exception: a switch away from Local still stops the local run, because the
+/// Owner hosts it (design D4). Called whether or not a hand-off was captured,
+/// because every swap stops or releases the old output.
+pub(crate) fn stop_old_output_for_handoff(daemon: &mut DaemonLoop, intent: SelectionIntent) {
     let old_output_is_cast = matches!(&daemon.owner.output, PlaybackOutput::Cast(_));
+    let scope = match intent {
+        SelectionIntent::Continue => StopScope::LoadedItemOnly,
+        SelectionIntent::SwitchOnly => StopScope::Release,
+    };
     stop_active_output(
         &daemon.player,
         &mut daemon.owner.output,
         &daemon.owner.core.queue,
         &daemon.ctrl_clients,
-        StopScope::LoadedItemOnly,
+        scope,
     );
-    if old_output_is_cast {
+    if old_output_is_cast && matches!(intent, SelectionIntent::Continue) {
         teardown_old_receiver_app(daemon);
     }
 }
 
 /// Queues the app teardown on the old receiver when it was the output
-/// (design D12): only a deliberate output change tears the app down. The
-/// worker's FIFO order runs it behind any media stop queued first.
+/// (design D12): only a deliberate `Continue` output change tears the app
+/// down — a `SwitchOnly` release leaves the receiver app running (design
+/// D1). The worker's FIFO order runs it behind any media stop queued first.
 fn teardown_old_receiver_app(daemon: &DaemonLoop) {
     if let PlaybackOutput::Cast(old) = &daemon.owner.output {
         queue_teardown_job(old);
@@ -206,17 +220,19 @@ fn teardown_old_receiver_app(daemon: &DaemonLoop) {
 ///
 /// `intent` is the user's answer to the output prompt (switch-output-without-
 /// hand-off design D5): a `Continue` answer captures the remote playback and
-/// continues it locally, while a `SwitchOnly` answer captures nothing, so the
-/// remote output stops and no local run starts. Either way the swap stops the
-/// old output, and a switch clears and publishes the observed slot, so no
-/// Client highlights the slot that stopped (invariant 25).
+/// continues it locally, while a `SwitchOnly` answer captures nothing, so no
+/// local run starts and the remote output is released — the device keeps
+/// playing what it plays (keep-old-output-playing-on-switch design D1/D4).
+/// Either way the swap stops or releases the old output, and a switch clears
+/// and publishes the observed slot, so no Client highlights the slot that
+/// stopped (invariant 25).
 pub(crate) fn hand_remote_output_back_to_local(
     daemon: &mut DaemonLoop,
     reply_tx: &CtrlSender,
     intent: SelectionIntent,
 ) {
     let handoff = capture_handoff_for_intent(daemon, intent);
-    stop_old_output_for_handoff(daemon);
+    stop_old_output_for_handoff(daemon, intent);
     // A stop makes every awaited transition identity unobservable (the same
     // rule the ctrl stop applies), so the fresh run starts with a clear gate.
     crate::core::reset_slot_jumps(

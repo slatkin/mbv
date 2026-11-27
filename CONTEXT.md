@@ -99,7 +99,7 @@ The relation of a Player owner to the Emby Session that is its *Playback output*
 _Avoid_: session watch, attach (bare), session attach, monitor, remote session (bare), tracked session, tracking, Queue handoff
 
 Output switch:
-The user's own selection of a new *Playback output* that hands nothing off. The old output stops and the new output starts with no active slot. It is one of the two user-answered output sends (`SwitchPlaybackOutput`, beside the hand-off fork's `SelectPlaybackOutput`), the answer to the continue prompt when the local Owner advertises the output-switch capability. It is never a side effect of a sever. It differs from a *Session output* or *Cast attachment* selection with hand-off, which moves the active slot to the new output.
+The user's own selection of a new *Playback output* that hands nothing off. The new output starts with no active slot. A switch away from a *Cast attachment* or *Session output* releases that device: the Owner sends it no stop and tears down no receiver app, the device keeps playing, and the Owner stops tracking it. A switch away from local playback still stops the local run, because the Owner hosts it. It is one of the two user-answered output sends (`SwitchPlaybackOutput`, beside the hand-off fork's `SelectPlaybackOutput`), the answer to the continue prompt when the local Owner advertises the output-switch capability. It is never a side effect of a sever. It differs from a *Session output* or *Cast attachment* selection with hand-off, which stops the old output because it moves the active slot to the new output.
 _Avoid_: Queue handoff, Take, detach (bare)
 
 mpv script set:
