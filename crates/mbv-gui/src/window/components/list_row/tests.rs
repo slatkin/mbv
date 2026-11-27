@@ -1,12 +1,11 @@
-//! Headless tests of the row parts (`gui-unified-list-rows` design D1–D4): the
-//! top-level row's thumb, the thumb's four art states, the image fit its own
-//! shape asks for, the media kind icon while the thumb holds no image, the
-//! row's resume run along the thumb's bottom edge, and a row that carries a
-//! title alone; and the nested row's level look (its height, inset, face, and
-//! open state) and its title tone over its play state. The document paints
-//! the part; the harness supplies the art painter's contexts and the utilities
-//! the tree sizes its boxes with. No test opens a window, sleeps, or reaches the
-//! core.
+//! Headless tests of the row parts (`gui-unified-list-rows` design D1–D4;
+//! `gui-tree-row-roles` design D10): the top-level row's thumb (its four art
+//! states, the image fit, the media kind icon, the resume run) and a title-
+//! alone row; the open root's rail; and the nested row's level look and its
+//! title tone over its play state. The role parts' painted structure has its
+//! own files: [`branch`] and [`leaf`]. The document paints the part; the
+//! harness supplies the art painter's contexts and the tree's box utilities.
+//! No test opens a window, sleeps, or reaches the core.
 
 use blitz_dom::{Document as _, LocalName};
 use blitz_traits::shell::{ColorScheme, Viewport};
@@ -26,9 +25,8 @@ use crate::window::components::art_image::ArtEvents;
 use crate::window::components::tree_guide::{LEAF_INSET_X, NESTED_INSET_X};
 use crate::window::components::tree_row::{LEAF_ROW_FONT_PX, TREE_ROW_FONT_PX};
 
-/// The layout rules the fixture resolves with, in place of the app
-/// stylesheet a real window loads: the utilities the row's tree sizes its
-/// boxes with.
+/// The layout rules the fixture resolves with, in place of the app stylesheet
+/// a real window loads: the utilities the row's tree sizes its boxes with.
 const FIXTURE_CSS: &str = concat!(
     ".flex { display: flex; }",
     ".flex-col { flex-direction: column; }",
@@ -70,6 +68,7 @@ struct FlatSpec {
     subtitle: Option<String>,
     trail: Option<String>,
     hover_play: bool,
+    tree_open: Option<bool>,
 }
 
 impl Default for FlatSpec {
@@ -81,6 +80,7 @@ impl Default for FlatSpec {
             subtitle: None,
             trail: None,
             hover_play: false,
+            tree_open: None,
         }
     }
 }
@@ -113,6 +113,7 @@ fn flat_app(spec: FlatSpec) -> Element {
         subtitle,
         trail,
         hover_play,
+        tree_open,
     } = spec;
     provide_row_contexts();
     rsx! {
@@ -127,6 +128,7 @@ fn flat_app(spec: FlatSpec) -> Element {
             thumb: Some(LibraryRowThumb { art, media }),
             play,
             selected: false,
+            tree_open,
             on_press: Callback::new(|()| {}),
             on_play: Callback::new(|()| {}),
             on_hover_play: hover_play.then_some(Callback::new(|()| {})),
@@ -134,8 +136,7 @@ fn flat_app(spec: FlatSpec) -> Element {
     }
 }
 
-/// The root: paints one selected top-level row that offers every hover
-/// control and is a tree parent.
+/// The root: paints one selected tree-parent row with every hover control.
 fn flat_hover_app() -> Element {
     provide_row_contexts();
     rsx! {
@@ -184,8 +185,7 @@ fn tree_app(spec: TreeSpec) -> Element {
     }
 }
 
-/// The root: paints one nested parent row that offers every hover control and
-/// carries a trailing date.
+/// The root: paints one nested tree-parent row with every hover control.
 fn tree_hover_app() -> Element {
     rsx! {
         TreeRow {
@@ -311,8 +311,8 @@ fn tree_built(spec: TreeSpec) -> Fixture {
     fixture
 }
 
-/// Paint one nested parent row that offers the hover controls and let its first
-/// render land.
+/// Paint one nested parent row that offers the hover controls and let its
+/// first render land.
 fn tree_hover_built() -> Fixture {
     let mut doc = DioxusDocument::new(VirtualDom::new(tree_hover_app), config());
     doc.initial_build();
@@ -772,3 +772,29 @@ fn a_flat_rows_mark_shares_the_trailing_cluster_with_the_trail_text(
         "the mark and the trail text share the one row-hover-trail cluster"
     );
 }
+
+/// Contract (`gui-tree-row-roles` design D10, D1, D2): an open root row paints
+/// the bright open rail at its left edge, and a row that is no open root —
+/// closed tree parent or plain flat row — paints no rail.
+#[test]
+fn an_open_root_row_paints_the_open_rail() {
+    let fixture = flat_built(FlatSpec {
+        tree_open: Some(true),
+        ..FlatSpec::default()
+    });
+
+    assert_eq!(
+        fixture
+            .attr_of("[data-tree-rail]", "data-tree-rail")
+            .as_deref(),
+        Some("open"),
+        "the open root paints the open rail"
+    );
+    assert!(
+        !flat_hover_built().presents("[data-tree-rail]"),
+        "a closed tree parent paints no rail"
+    );
+}
+
+mod branch;
+mod leaf;

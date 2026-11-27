@@ -12,7 +12,9 @@
 //! thumb's opacity from [`RowPlay`] (gui-played-row-marks design D1, D4), and
 //! paints the trailing cluster — the play mark, then the trailing text — that
 //! the hover controls hide together (design D3). A row that carries none keeps
-//! the bare trailing text. The row sits in a
+//! the bare trailing text. An open tree root paints the bright open rail
+//! segment at its left edge (`gui-tree-row-roles` design D1, D2), and gives up
+//! its divider to the subtree's last row. The row sits in a
 //! `row-hover-host` box with the shared hover controls as its later sibling
 //! (gui-row-hover-actions design D2), and the box carries the row's fill as
 //! `--row-fill` for both the row button and the controls.
@@ -29,7 +31,7 @@ use crate::window::components::list_row::{
 };
 use crate::window::components::play_mark::{PlayCluster, RowPlay};
 use crate::window::components::row_hover_actions::RowHoverActions;
-use crate::window::components::tree_guide::{TOP_GUIDE_X, parent_guide_start};
+use crate::window::components::tree_rail::{RailTone, TreeRail};
 use crate::window::components::tree_row::TREE_ROW_FONT_PX;
 use crate::window::library::episode::episode_progress;
 use crate::window::theme::canvas_var;
@@ -75,8 +77,8 @@ pub struct FlatRowProps {
     #[props(default)]
     pub tree_open: Option<bool>,
     /// Whether the open top-level parent shows child rows: the row then paints
-    /// its guide's start under its thumb instead of its divider, so the guide
-    /// crosses no divider.
+    /// no divider, so the subtree's last row paints it instead and the rails
+    /// and dividers never cross the open root.
     #[props(default)]
     pub tree_guide: bool,
     /// A press on the row: it picks the row's item.
@@ -140,7 +142,7 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     // the square corners, and the 1 px divider under the row. `border-box`
     // keeps the divider inside the row height the list's geometry holds. An
     // open parent that shows children paints none: its subtree's last row
-    // paints it, so the guides never cross it.
+    // paints it, so the rails never cross it.
     let divider_width = if props.tree_guide {
         0.0
     } else {
@@ -274,7 +276,7 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
     let on_double_click = props.on_toggle.unwrap_or(props.on_play);
     let on_press = props.on_press;
     let on_context = props.on_context;
-    let show_guide = props.tree_guide;
+    let paints_open_rail = props.tree_open == Some(true);
     let tree_open = props.tree_open;
 
     // The host is the hover box (design D2): the row button keeps its own
@@ -315,8 +317,8 @@ pub fn FlatRow(props: FlatRowProps) -> Element {
                 if let Some(trailing) = trailing {
                     {trailing}
                 }
-                if show_guide {
-                    {parent_guide_start(TOP_GUIDE_X, LIBRARY_ROW_HEIGHT, 0.0)}
+                if paints_open_rail {
+                    TreeRail { tone: RailTone::Open }
                 }
             }
             if paints_actions {
