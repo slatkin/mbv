@@ -30,7 +30,7 @@
   stops no remote playback), `CONTEXT.md` *Output switch*, and the owner-spec prompt text that
   says the old output stops on a switch. Verify: `rg "old output stops" docs CONTEXT.md` shows no
   switch-answer claim.
-- [ ] 3.2 Run `make format`, `make checks`, and `make test`; fix every red gate. Verify: all
+- [x] 3.2 Run `make format`, `make checks`, and `make test`; fix every red gate. Verify: all
   three exit 0.
 
 ## Workflow follow-up
