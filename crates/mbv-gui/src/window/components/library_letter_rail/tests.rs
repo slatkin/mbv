@@ -225,6 +225,7 @@ fn music() -> GuiMusicList {
         loading: false,
         failure: None,
         artists: vec![beastie(), brand()],
+        favourites: None,
     }
 }
 

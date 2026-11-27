@@ -55,6 +55,7 @@ fn dropdown_app(props: FixtureProps) -> Element {
                     series: Vec::new(),
                     upcoming_failed: false,
                     rows: Vec::new(),
+                    favourites: None,
                 }),
             }),
         }),

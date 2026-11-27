@@ -102,6 +102,21 @@ pub struct GuiClientState {
     /// its rows in place because of this mark, and a second refetch of the same
     /// library starts nothing.
     pub(crate) shows_new_refreshing: std::collections::HashSet<String>,
+    /// The Favourites list of every Emby library, by library id (emby-
+    /// favourites design D6): the same request state the New store uses. A
+    /// first load that fails lands an empty list and an in-place refresh that
+    /// fails keeps the rows already held.
+    pub(crate) favourites:
+        std::collections::HashMap<String, GuiSectionRequest<mbv_emby_model::EmbyItem>>,
+    /// The libraries whose favourites refetch is in flight (emby-favourites
+    /// design D6), by library id: a refetch of a landed list keeps its rows in
+    /// place because of this mark, and a second refetch of the same library
+    /// starts nothing.
+    pub(crate) favourites_refreshing: std::collections::HashSet<String>,
+    /// The Favourites list's own pick, by library id (emby-favourites design
+    /// D6): the row the Favourites Hero shows. It never writes the All list's
+    /// pick, so pressing All finds the All selection as it was.
+    pub(crate) favourites_picks: std::collections::HashMap<String, String>,
     /// The TV surface's selection, by library index.
     pub(crate) tv_shows: std::collections::HashMap<usize, GuiTvShowsSelection>,
     /// The Emby library selection, by library index. Distinct from
@@ -200,6 +215,9 @@ impl GuiClientState {
             shows_open_season_loads: std::collections::HashSet::new(),
             shows_new: std::collections::HashMap::new(),
             shows_new_refreshing: std::collections::HashSet::new(),
+            favourites: std::collections::HashMap::new(),
+            favourites_refreshing: std::collections::HashSet::new(),
+            favourites_picks: std::collections::HashMap::new(),
             tv_shows: std::collections::HashMap::new(),
             emby_libs: std::collections::HashMap::new(),
             emby_feed_sets: std::collections::HashMap::new(),
@@ -263,6 +281,15 @@ impl GuiClientState {
             // still misses (design D5).
             ClientLibraryEffect::SeriesContentChanged => {
                 crate::gui_core::gui_library::shows_open_loads::pump_shows_open_loads(app, self);
+            }
+            // A favourite write landed (emby-favourites design D4): this
+            // state's own copies of the item take the new value by id, and a
+            // library whose open list is its favourites fetches that list
+            // again so a row the user unfavourited leaves it.
+            ClientLibraryEffect::FavouriteChanged { item_id, favourite } => {
+                crate::gui_core::gui_library::apply_favourite_change(
+                    app, self, &item_id, favourite,
+                );
             }
             // A landed target retires its terminal failure mark, so a later
             // cache miss can fetch it again.

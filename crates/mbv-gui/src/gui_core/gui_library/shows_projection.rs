@@ -213,6 +213,11 @@ pub struct GuiShowsProjection {
     /// Service id: the Workspace row whose id equals it is the playing row.
     /// `None` while no episode plays or the item at the playhead is not one.
     pub playing_episode_id: Option<String>,
+    /// The library's Favourites list (emby-favourites design D6), carried
+    /// while the view is Favourites and `None` otherwise: the list the
+    /// destination paints in place of the All tree, with its own rows,
+    /// loading flag, pick, and Hero.
+    pub favourites: Option<super::favourites::GuiFavouritesProjection>,
 }
 
 impl GuiCore {
@@ -238,7 +243,7 @@ impl GuiCore {
         }
         let view = super::shows::library_view(&self.gui, lib_idx);
         let mut sort_frame = None;
-        let (series, rows, selected, hero, workspace_loading, loading) = match view {
+        let (series, rows, selected, hero, workspace_loading, loading, favourites) = match view {
             GuiLibraryView::All => {
                 let series = self.gui_shows_series_tree(lib_idx);
                 let loading = self
@@ -259,6 +264,7 @@ impl GuiCore {
                     hero,
                     workspace_loading,
                     loading,
+                    None,
                 )
             }
             GuiLibraryView::New => {
@@ -287,7 +293,7 @@ impl GuiCore {
                         .get(library_id)
                         .is_some_and(GuiSectionRequest::is_landed)
                 });
-                (Vec::new(), rows, selected, hero, false, loading)
+                (Vec::new(), rows, selected, hero, false, loading, None)
             }
             GuiLibraryView::Upcoming => {
                 // An Upcoming row is display-only: the Hero keeps the series
@@ -303,13 +309,22 @@ impl GuiCore {
                     hero,
                     false,
                     false,
+                    None,
                 )
             }
-            // The Favourites list is the favourites data path's own list
-            // component (emby-favourites design D6, units 4.2 and 5.1):
-            // until it lands, the view projects no rows, so no All row
-            // paints as a favourite.
-            GuiLibraryView::Favourites => (Vec::new(), Vec::new(), None, None, false, false),
+            // The Favourites view paints the favourites list in place of the
+            // All tree (emby-favourites design D6, D7): no All row, selection,
+            // or Hero projects, so no All row paints as a favourite, and the
+            // All stores keep what pressing All restores.
+            GuiLibraryView::Favourites => (
+                Vec::new(),
+                Vec::new(),
+                None,
+                None,
+                false,
+                false,
+                Some(self.gui_favourites_projection(lib_idx)),
+            ),
         };
         let projection = GuiShowsProjection {
             view,
@@ -321,6 +336,7 @@ impl GuiCore {
             selected,
             hero,
             playing_episode_id: crate::gui_core::gui_library::marks::playing_episode_id(&self.app),
+            favourites,
         };
         if view == GuiLibraryView::All {
             self.warm_shows_hero_neighbours(lib_idx, &projection);
@@ -550,11 +566,14 @@ pub(crate) fn shows_item(
 ) -> Option<EmbyItem> {
     match super::shows::library_view(gui, lib_idx) {
         GuiLibraryView::New => return super::shows::shows_new_item(gui, item_id),
-        // An Upcoming row is display-only, and a Favourites id resolves
-        // through the favourites store (emby-favourites design D6, unit
-        // 4.3) — until that store lands, the id names no item in either
-        // view.
-        GuiLibraryView::Upcoming | GuiLibraryView::Favourites => return None,
+        // A Favourites id resolves through the favourites store, only while
+        // that library's view is Favourites (emby-favourites design D6).
+        GuiLibraryView::Favourites => {
+            let library_id = app.emby_library_id(lib_idx)?;
+            return super::favourites::favourites_item(gui, library_id, item_id);
+        }
+        // An Upcoming row is display-only.
+        GuiLibraryView::Upcoming => return None,
         GuiLibraryView::All => {}
     }
     let lib = app.emby_library(lib_idx)?;

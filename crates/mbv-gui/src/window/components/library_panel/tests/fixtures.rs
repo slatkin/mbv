@@ -28,6 +28,7 @@ pub(super) fn music_list() -> GuiMusicList {
         loading: false,
         failure: None,
         artists: Vec::new(),
+        favourites: None,
     }
 }
 
@@ -162,6 +163,7 @@ pub(super) fn shows_list() -> GuiShowsList {
             date: None,
             sort_letter: Some('A'),
         }],
+        favourites: None,
     }
 }
 
@@ -243,6 +245,7 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
                     kind: GuiEmbyRowKindFrame::Media,
                     state: GuiHomeRowStateFrame::Ordinary,
                 }],
+                favourites: None,
             }),
         },
         GuiLibraryDetail::Emby(GuiEmbyDetail {

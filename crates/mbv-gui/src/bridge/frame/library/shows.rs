@@ -10,6 +10,7 @@ use crate::gui_core::{
     GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
 
+use super::favourites::GuiFavouritesList;
 use super::hero_facts::GuiHeroFactsFrame;
 use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
@@ -45,6 +46,9 @@ pub struct GuiShowsList {
     /// `Some` only while the view is New, whose list is the one the sort
     /// orders.
     pub sort: Option<GuiListSortFrame>,
+    /// The library's Favourites list (emby-favourites design D6): `Some` while
+    /// the view is Favourites, and `None` otherwise, whose All tree paints.
+    pub favourites: Option<GuiFavouritesList>,
 }
 
 /// The Shows destination's detail part (`gui-change-driven-sections` design
@@ -211,6 +215,10 @@ impl GuiShowsList {
                 .map(GuiShowsSeriesFrame::from)
                 .collect(),
             upcoming_failed: false,
+            favourites: projection
+                .favourites
+                .as_ref()
+                .map(GuiFavouritesList::from_projection),
         }
     }
 }

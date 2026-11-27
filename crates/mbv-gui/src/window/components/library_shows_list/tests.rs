@@ -295,6 +295,7 @@ fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
         series: tree,
         upcoming_failed: false,
         rows: Vec::new(),
+        favourites: None,
     }
 }
 

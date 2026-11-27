@@ -1,7 +1,8 @@
 //! The GUI Library's Client-only fetch channel (design D5 of
 //! `decouple-client-core`): the workers that fetch a group's albums, a plain
-//! Emby library's root list, and a Shows library's New episodes report here
-//! instead of the shared library event channel.
+//! Emby library's root list, a Shows library's New episodes, and an Emby
+//! library's favourites report here instead of the shared library event
+//! channel.
 //!
 //! The channel lives on the `App`, so a worker that starts before the GUI's
 //! core exists still has a sender to clone, and so does a worker that outlives
@@ -37,6 +38,12 @@ pub enum LibraryFetchEvent {
     },
     /// One TV library's latest episodes landed, under the library's id.
     ShowsNew {
+        library_id: String,
+        result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
+    },
+    /// One Emby library's favourites landed, under the library's id
+    /// (emby-favourites design D6).
+    Favourites {
         library_id: String,
         result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
     },

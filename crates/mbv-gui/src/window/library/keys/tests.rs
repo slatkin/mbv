@@ -413,6 +413,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
             loading: false,
             failure: None,
             artists,
+            favourites: None,
         }),
     }
 }
@@ -432,6 +433,7 @@ fn shows_list() -> GuiLibraryList {
             series: Vec::new(),
             upcoming_failed: false,
             rows: Vec::new(),
+            favourites: None,
         }),
     }
 }

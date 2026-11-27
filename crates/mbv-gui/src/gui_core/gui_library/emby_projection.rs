@@ -161,6 +161,11 @@ pub struct GuiEmbyProjection {
     pub selected: Option<String>,
     /// The selected row's Hero facts; `None` while no row is selected.
     pub hero: Option<GuiEmbyHero>,
+    /// The library's Favourites list (emby-favourites design D6), carried
+    /// while the destination's view is Favourites and `None` otherwise: the
+    /// list the destination paints in place of the All list, with its own
+    /// rows, loading flag, pick, and Hero.
+    pub favourites: Option<super::favourites::GuiFavouritesProjection>,
 }
 
 impl GuiCore {
@@ -174,6 +179,9 @@ impl GuiCore {
         if !super::emby::emby_library(&self.app, lib_idx) {
             return GuiEmbyProjection::default();
         }
+        if super::shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+            return self.emby_favourites_projection(lib_idx);
+        }
         let projection = if self.app.is_feed_home_video_library(lib_idx) {
             self.emby_feed_projection(lib_idx)
         } else {
@@ -181,6 +189,47 @@ impl GuiCore {
         };
         self.warm_emby_hero_neighbours(lib_idx, &projection);
         projection
+    }
+
+    /// The plain Emby-library projection while the view is Favourites
+    /// (emby-favourites design D6, D7): the library's own header facts and the
+    /// favourites list, and no All row, selection, sort control, or Hero — the
+    /// All stores keep what pressing All restores.
+    fn emby_favourites_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
+        let feed_group = self.app.is_feed_home_video_library(lib_idx);
+        let (collections, collection_names) = if feed_group {
+            let set = super::emby::emby_feed_effective_set(&self.app, &self.gui, lib_idx);
+            let folders = root_folder_names(&self.app, lib_idx);
+            let collections = super::collection_command::collections(
+                &self.app,
+                &self.gui,
+                GuiCollectionTarget::EmbyFeed(lib_idx),
+            );
+            (
+                Some(collections),
+                feed_collection_names(set.as_ref(), &folders),
+            )
+        } else {
+            (None, Vec::new())
+        };
+        GuiEmbyProjection {
+            library_name: self.emby_library_name(lib_idx),
+            collections,
+            collection_names,
+            feed_group,
+            loading: false,
+            failed: false,
+            view: GuiLibraryView::Favourites,
+            rows: Vec::new(),
+            sort: None,
+            selected: None,
+            hero: None,
+            favourites: Some(super::favourites::favourites_projection(
+                &mut self.app,
+                &self.gui,
+                lib_idx,
+            )),
+        }
     }
 
     /// Warm the Hero artwork of the rows neighbouring the picked one in the
@@ -246,6 +295,7 @@ impl GuiCore {
             sort: Some(sort_frame),
             selected,
             hero,
+            favourites: None,
         }
     }
 
@@ -301,6 +351,7 @@ impl GuiCore {
             sort: Some(sort_frame),
             selected,
             hero,
+            favourites: None,
         }
     }
 
@@ -338,22 +389,30 @@ impl GuiCore {
     /// at the artwork policy's declared chain and the movie's cast built
     /// through the shared cast helper.
     fn hero(&mut self, item: &EmbyItem) -> GuiEmbyHero {
-        let content = hero_content_emby(item);
-        let art =
-            super::artwork::emby_hero_art(&mut self.app, content.facts.artwork.source.as_ref());
-        let cast = hero_cast_emby(&mut self.app, item);
-        GuiEmbyHero {
-            title: content.facts.title.clone(),
-            facts: hero_facts_emby(item),
-            overview: content.overview.clone(),
-            art_shape: artwork_shape(super::artwork::hero_shape(
-                &self.app,
-                content.facts.artwork.shape,
-                art.as_ref(),
-            )),
-            art,
-            cast,
-        }
+        emby_hero(&mut self.app, item)
+    }
+}
+
+/// The Hero facts for one Emby item (row 8.1; emby-favourites design D6): the
+/// item's facts as the D1 builders split them, the artwork fetched through the
+/// image cache at the artwork policy's declared chain, and the item's cast.
+/// It paints no `hero_item` gate, so a Series, a `BoxSet`, an album, or an artist
+/// paints a Hero — the Favourites list's rule, where every row paints one.
+pub(in crate::gui_core::gui_library) fn emby_hero(app: &mut App, item: &EmbyItem) -> GuiEmbyHero {
+    let content = hero_content_emby(item);
+    let art = super::artwork::emby_hero_art(app, content.facts.artwork.source.as_ref());
+    let cast = hero_cast_emby(app, item);
+    GuiEmbyHero {
+        title: content.facts.title.clone(),
+        facts: hero_facts_emby(item),
+        overview: content.overview.clone(),
+        art_shape: artwork_shape(super::artwork::hero_shape(
+            app,
+            content.facts.artwork.shape,
+            art.as_ref(),
+        )),
+        art,
+        cast,
     }
 }
 
@@ -370,6 +429,12 @@ pub(crate) fn emby_item(
     lib_idx: usize,
     item_id: &str,
 ) -> Option<EmbyItem> {
+    // While the library's view is Favourites the painted rows are the
+    // favourites list's (emby-favourites design D6), so the id resolves there
+    // and nowhere else of this library's.
+    if super::shows::library_view(gui, lib_idx) == GuiLibraryView::Favourites {
+        return super::favourites::favourites_item(gui, app.emby_library_id(lib_idx)?, item_id);
+    }
     if app.is_feed_home_video_library(lib_idx) {
         let set = super::emby::emby_feed_effective_set(app, gui, lib_idx);
         let (items, _) = feed_gathered(app, lib_idx, set.as_ref());
@@ -530,8 +595,19 @@ fn gather_feed_target<'a>(
 /// One row of the plain list (row 8.1): the TUI browse row's primary label,
 /// with the year on `subtitle` — the plain list's rail replaces the TUI's
 /// letter-range pill row, so the row carries no gutter date.
-fn plain_row(app: &App, item: &EmbyItem, sort_letter: Option<char>) -> GuiEmbyRow {
+pub(in crate::gui_core::gui_library) fn plain_row(
+    app: &App,
+    item: &EmbyItem,
+    sort_letter: Option<char>,
+) -> GuiEmbyRow {
     emby_row(app, item, row_secondary(item), None, sort_letter)
+}
+
+/// One row of the Favourites list (emby-favourites design D6): the plain
+/// list's row shape, with no rail letter — the Favourites view paints no
+/// letter heading and no rail.
+pub(in crate::gui_core::gui_library) fn favourites_row(app: &App, item: &EmbyItem) -> GuiEmbyRow {
+    plain_row(app, item, None)
 }
 
 /// One row of the feed-group lists (row 8.1): the TUI row's primary label,
@@ -614,8 +690,9 @@ fn row_secondary(item: &EmbyItem) -> Option<String> {
 }
 
 /// The row's kind (row 8.1): a folder or a boxset is the container the
-/// folder-play rule expands.
-fn row_kind(item: &EmbyItem) -> GuiEmbyRowKind {
+/// folder-play rule expands. The Favourites list's collections group is the
+/// same rule (emby-favourites design D6).
+pub(in crate::gui_core::gui_library) fn row_kind(item: &EmbyItem) -> GuiEmbyRowKind {
     if item.is_folder || item.item_type == "BoxSet" {
         GuiEmbyRowKind::Collection
     } else {

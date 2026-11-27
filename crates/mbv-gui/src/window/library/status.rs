@@ -8,8 +8,9 @@
 use crate::gui_core::{GuiCollections, GuiLibraryView};
 
 use crate::bridge::frame::library::{
-    GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame, GuiShowsRowFrame,
+    GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame,
+    GuiFavouritesList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame,
+    GuiShowsRowFrame,
 };
 
 /// The current destination's label: the tab whose position the frame marks
@@ -87,6 +88,14 @@ fn selected_title<Row: LocationRow>(selected: Option<&str>, rows: &[Row]) -> Opt
         .map(|row| row.row_title().to_owned())
 }
 
+/// The Favourites list's picked row title (emby-favourites design D6): the
+/// list a destination paints while its view is Favourites, whose pick the
+/// Favourites Hero shows. `None` while no list is carried or no row is picked.
+fn favourites_picked_title(favourites: Option<&GuiFavouritesList>) -> Option<String> {
+    let favourites = favourites?;
+    selected_title(favourites.selected.as_deref(), &favourites.rows)
+}
+
 /// The selected row's id of a row-list destination's detail part. Music and
 /// Home carry no selected row id, so they read `None`.
 fn detail_selected(detail: Option<&GuiLibraryDetail>) -> Option<&str> {
@@ -148,10 +157,15 @@ fn segments_of(
             // no collection selector, so the line names no collection. While
             // the view is Favourites the location names Favourites in its
             // place (emby-favourites design D5).
-            let selected = detail_selected(detail);
             let view_segment =
                 (shows.view == GuiLibraryView::Favourites).then(|| "Favourites".to_owned());
-            vec![label, view_segment, selected_title(selected, &shows.rows)]
+            // The Favourites view's picked row is the list's own pick
+            // (emby-favourites design D6).
+            let picked = match shows.favourites.as_ref() {
+                Some(favourites) => favourites_picked_title(Some(favourites)),
+                None => selected_title(detail_selected(detail), &shows.rows),
+            };
+            vec![label, view_segment, picked]
         }
         GuiDestinationList::Emby(emby) => {
             let selected = detail_selected(detail);
@@ -171,7 +185,12 @@ fn segments_of(
                 // D5).
                 segments.push(Some("Favourites".to_owned()));
             }
-            segments.push(selected_title(selected, &emby.rows));
+            // The Favourites view's picked row is the list's own pick
+            // (emby-favourites design D6).
+            match emby.favourites.as_ref() {
+                Some(favourites) => segments.push(favourites_picked_title(Some(favourites))),
+                None => segments.push(selected_title(selected, &emby.rows)),
+            }
             segments
         }
         GuiDestinationList::Audiobooks(audiobooks) => {
@@ -201,10 +220,17 @@ fn segments_of(
             // Favourites lists the whole library.
             if music.view == GuiLibraryView::Favourites {
                 segments.push(Some("Favourites".to_owned()));
+                // The Favourites view's picked row is the list's own pick
+                // (emby-favourites design D6); a frame that carries no
+                // favourites list yet keeps the Hero's own picked name.
+                segments.push(
+                    favourites_picked_title(music.favourites.as_ref())
+                        .or_else(|| picked_name(music_hero(detail))),
+                );
             } else {
                 segments.extend(music.collections.selected_names().into_iter().map(Some));
+                segments.push(picked_name(music_hero(detail)));
             }
-            segments.push(picked_name(music_hero(detail)));
             segments
         }
     }

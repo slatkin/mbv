@@ -132,6 +132,7 @@ fn emby_library_list() -> GuiLibraryList {
             failed: false,
             rows: Vec::new(),
             sort: None,
+            favourites: None,
         }),
     }
 }

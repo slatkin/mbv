@@ -11,6 +11,7 @@ use crate::gui_core::{
 };
 use mbv_ui_model::music_grouping::ArtistKey;
 
+use super::favourites::GuiFavouritesList;
 use super::{GuiMusicMenuEntryFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
 
@@ -37,6 +38,9 @@ pub struct GuiMusicList {
     /// The destination's one active view (emby-favourites design D5): the
     /// header's view dropdown marks it, and the Library Status bar reads it.
     pub view: GuiLibraryView,
+    /// The library's Favourites list (emby-favourites design D6): `Some` while
+    /// the view is Favourites, and `None` otherwise, whose artist tree paints.
+    pub favourites: Option<GuiFavouritesList>,
 }
 
 /// The Music destination's detail part (design D8): the Hero of the picked
@@ -72,6 +76,10 @@ impl GuiMusicList {
                 .map(GuiMusicArtistFrame::from)
                 .collect(),
             view: projection.view,
+            favourites: projection
+                .favourites
+                .as_ref()
+                .map(GuiFavouritesList::from_projection),
         }
     }
 }

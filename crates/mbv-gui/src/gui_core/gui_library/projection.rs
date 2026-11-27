@@ -159,6 +159,11 @@ pub struct GuiMusicProjection {
     /// The Hero's facts for the picked album; `None` until the window content
     /// picks one of the union's albums (design D2, D5).
     pub hero: Option<GuiMusicHero>,
+    /// The library's Favourites list (emby-favourites design D6), carried
+    /// while the view is Favourites and `None` otherwise: the list the
+    /// destination paints in place of the artist tree, with its own rows,
+    /// loading flag, pick, and Hero.
+    pub favourites: Option<super::favourites::GuiFavouritesProjection>,
 }
 
 /// The de-duplicated union of the selected groups' albums, with each album's
@@ -215,6 +220,22 @@ pub(in crate::gui_core::gui_library) fn music_projection(
     let set = effective_music_set(app, gui, lib_idx);
     let collections =
         super::collection_command::collections(app, gui, GuiCollectionTarget::Music(lib_idx));
+    let view = super::shows::library_view(gui, lib_idx);
+    if view == GuiLibraryView::Favourites {
+        // The Favourites view paints the favourites list in place of the
+        // artist tree (emby-favourites design D6, D7): no union artist, no
+        // album pick, and no Hero of the All list's, so no All row paints as a
+        // favourite; the union's own stores keep what pressing All restores.
+        return GuiMusicProjection {
+            collections,
+            loading: false,
+            failure: None,
+            artists: Vec::new(),
+            view,
+            hero: None,
+            favourites: Some(super::favourites::favourites_projection(app, gui, lib_idx)),
+        };
+    }
     let selected_groups = selected_groups(app, gui, lib_idx, set.as_ref());
     let union = music_union(app, gui, lib_idx, &selected_groups);
     let artists = music_artists(app, &union);
@@ -224,8 +245,9 @@ pub(in crate::gui_core::gui_library) fn music_projection(
         loading: union.loading,
         failure: failure_line(&union.failed),
         artists,
-        view: super::shows::library_view(gui, lib_idx),
+        view,
         hero,
+        favourites: None,
     };
     warm_music_hero_neighbours(app, &projection);
     projection

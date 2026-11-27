@@ -102,6 +102,7 @@ fn music_list() -> GuiDestinationList {
         loading: false,
         failure: None,
         artists: Vec::new(),
+        favourites: None,
     })
 }
 
@@ -333,6 +334,7 @@ fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
             kind: GuiEmbyRowKindFrame::Media,
             state: GuiHomeRowStateFrame::Ordinary,
         }],
+        favourites: None,
     });
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {
         selected: Some("m1".to_owned()),

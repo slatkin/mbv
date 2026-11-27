@@ -21,6 +21,7 @@ mod collections;
 mod detail;
 mod emby;
 mod entry_list;
+mod favourites;
 mod feeds;
 mod hero_facts;
 mod home;
@@ -41,6 +42,7 @@ pub use self::emby::{
     GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
 };
 pub use self::entry_list::GuiEntryRowFrame;
+pub use self::favourites::GuiFavouritesList;
 pub use self::feeds::{GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList};
 pub use self::hero_facts::{
     GuiHeroCastMemberFrame, GuiHeroFactLabelFrame, GuiHeroFactRowFrame, GuiHeroFactsFrame,

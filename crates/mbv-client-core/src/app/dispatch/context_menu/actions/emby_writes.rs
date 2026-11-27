@@ -4,6 +4,7 @@
 //! parent module route here; the shared owner-queue played relay and the
 //! action dispatch stay there.
 
+use crate::app::dispatch::library::stores::{ClientLibraryEffect, ClientLibraryStores};
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, LibEvent, ModelContentEvent};
 use mbv_emby_model::EmbyItem;
@@ -75,8 +76,16 @@ impl App {
     /// a success writes the server's returned `IsFavorite` — never the
     /// requested value — over every App-held copy of the item. No queue
     /// propagation and no list refetch run: design D4 flips the held copies
-    /// in place, and queue items are out of scope (design D2).
-    pub(super) fn context_set_favourite(&mut self, item_id: &str, favourite: bool) {
+    /// in place, and queue items are out of scope (design D2). The landing
+    /// also reaches the Client's own stores through `stores`
+    /// ([`ClientLibraryEffect::FavouriteChanged`]), so a Client that keeps its
+    /// own copies flips them by id and refetches an open favourites list.
+    pub(super) fn context_set_favourite(
+        &mut self,
+        item_id: &str,
+        favourite: bool,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) {
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return;
@@ -85,7 +94,16 @@ impl App {
         let result = client.set_favourite(item_id, favourite);
         drop(client);
         match result {
-            Ok(actual) => self.flip_favourite_held_copies(item_id, actual),
+            Ok(actual) => {
+                self.flip_favourite_held_copies(item_id, actual);
+                self.apply_library_effects(
+                    stores,
+                    &[ClientLibraryEffect::FavouriteChanged {
+                        item_id: item_id.to_string(),
+                        favourite: actual,
+                    }],
+                );
+            }
             Err(e) => self.flash(
                 format!("Couldn't update favourite: {e}"),
                 ToastSeverity::Error,

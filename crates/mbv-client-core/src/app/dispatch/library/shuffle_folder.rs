@@ -133,6 +133,23 @@ impl App {
         }
     }
 
+    /// Play one artist's fetched tracks from the top (emby-favourites design
+    /// D8): the tracks arrive in album, disc, and track order from the
+    /// Client's own synchronous `ArtistIds` fetch, and the queue is replaced
+    /// with them — shuffled first when `shuffle` is set, so the randomness
+    /// stays the core's and a Client needs no random source of its own. The
+    /// GUI Library's favourite artist Play All and Shuffle run this; the TUI's
+    /// artist page keeps its own album walk.
+    pub fn play_artist_tracks_from_start(&mut self, mut tracks: Vec<EmbyItem>, shuffle: bool) {
+        let source = if shuffle {
+            tracks.shuffle(&mut rand::rng());
+            mbv_queue::QueueSource::Shuffle
+        } else {
+            mbv_queue::QueueSource::Album
+        };
+        self.play_items_routed(tracks, 0, source);
+    }
+
     /// `collection_type` is the source library's Emby collection type; it
     /// labels the confirmed replacement with `QueueSource::Collection`. The
     /// source is set inside the gated confirmed path (via the action), never

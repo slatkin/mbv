@@ -9,6 +9,7 @@ use crate::gui_core::{
     GuiListSortFrame,
 };
 
+use super::favourites::GuiFavouritesList;
 use super::hero_facts::{GuiHeroCastMemberFrame, GuiHeroFactsFrame};
 use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
@@ -47,6 +48,10 @@ pub struct GuiEmbyList {
     /// target a press names, its active sort, and the choices the library
     /// offers. The plain mode and the feed-group mode share it.
     pub sort: Option<GuiListSortFrame>,
+    /// The library's Favourites list (emby-favourites design D6): `Some` while
+    /// the destination's view is Favourites, and `None` otherwise, whose All
+    /// list paints.
+    pub favourites: Option<GuiFavouritesList>,
 }
 
 /// The plain Emby-library destination's detail part (`gui-change-driven-sections`
@@ -137,6 +142,10 @@ impl GuiEmbyList {
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEmbyRowFrame::from).collect(),
             sort: projection.sort.clone(),
+            favourites: projection
+                .favourites
+                .as_ref()
+                .map(GuiFavouritesList::from_projection),
         }
     }
 }

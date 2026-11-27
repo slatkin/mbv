@@ -19,7 +19,7 @@ use mbv_client_core::App;
 
 use super::GuiDestinationKind;
 use super::library_view::GuiLibraryView;
-use super::{emby, projection, shows, shows_open_loads, store};
+use super::{emby, favourites, projection, shows, shows_open_loads, store};
 
 impl GuiCore {
     /// Whether the active destination's refresh is in flight: the Library
@@ -36,17 +36,26 @@ impl GuiCore {
             // inside the dispatch, so only the two Services' Recently added
             // workers can still be out.
             Some(GuiDestinationKind::Home) => self.app.home_recent_refresh_pending(),
-            Some(GuiDestinationKind::Music { lib_idx }) => self
-                .gui
-                .music_albums_refreshing
-                .iter()
-                .any(|(refresh_lib_idx, _)| *refresh_lib_idx == lib_idx),
+            Some(GuiDestinationKind::Music { lib_idx }) => {
+                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                    favourites_refreshing(&self.app, &self.gui, lib_idx)
+                } else {
+                    self.gui
+                        .music_albums_refreshing
+                        .iter()
+                        .any(|(refresh_lib_idx, _)| *refresh_lib_idx == lib_idx)
+                }
+            }
             Some(GuiDestinationKind::Shows { lib_idx }) => {
                 shows_refreshing(&self.app, &self.gui, lib_idx)
             }
             Some(GuiDestinationKind::Library { lib_idx }) => {
-                self.gui.emby_roots_refreshing.contains(&lib_idx)
-                    || self.gui.emby_feed_refresh_targets.contains_key(&lib_idx)
+                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                    favourites_refreshing(&self.app, &self.gui, lib_idx)
+                } else {
+                    self.gui.emby_roots_refreshing.contains(&lib_idx)
+                        || self.gui.emby_feed_refresh_targets.contains_key(&lib_idx)
+                }
             }
             Some(GuiDestinationKind::Audiobooks { lib_idx }) => self
                 .app
@@ -76,11 +85,16 @@ fn shows_refreshing(app: &App, gui: &GuiClientState, lib_idx: usize) -> bool {
         GuiLibraryView::Upcoming => app
             .emby_library_id(lib_idx)
             .is_some_and(|library_id| app.tv_upcoming_fetch_in_flight(library_id)),
-        // The Favourites view's refresh mark is the favourites store's own
-        // (emby-favourites design D6, unit 4.1); until it lands, the choice
-        // starts no fetch, so none is in flight.
-        GuiLibraryView::Favourites => false,
+        GuiLibraryView::Favourites => favourites_refreshing(app, gui, lib_idx),
     }
+}
+
+/// Whether `lib_idx`'s favourites refetch is in flight (emby-favourites design
+/// D6): the Favourites view's own busy fact, which every destination that
+/// paints that view reports.
+fn favourites_refreshing(app: &App, gui: &GuiClientState, lib_idx: usize) -> bool {
+    app.emby_library_id(lib_idx)
+        .is_some_and(|library_id| gui.favourites_refreshing.contains(library_id))
 }
 
 impl GuiCore {
@@ -96,13 +110,23 @@ impl GuiCore {
         match kind {
             GuiDestinationKind::Home => self.app.refresh_home_content(),
             GuiDestinationKind::Music { lib_idx } => {
-                refresh_music(&mut self.app, &mut self.gui, lib_idx, album_ids);
+                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                    // The Favourites view's refresh refetches the favourites
+                    // list (emby-favourites design D5, D6).
+                    favourites::refetch_favourites(&mut self.app, &mut self.gui, lib_idx);
+                } else {
+                    refresh_music(&mut self.app, &mut self.gui, lib_idx, album_ids);
+                }
             }
             GuiDestinationKind::Shows { lib_idx } => {
                 refresh_shows(&mut self.app, &mut self.gui, lib_idx);
             }
             GuiDestinationKind::Library { lib_idx } => {
-                if self.app.is_feed_home_video_library(lib_idx) {
+                if shows::library_view(&self.gui, lib_idx) == GuiLibraryView::Favourites {
+                    // The Favourites view's refresh refetches the favourites
+                    // list (emby-favourites design D5, D6).
+                    favourites::refetch_favourites(&mut self.app, &mut self.gui, lib_idx);
+                } else if self.app.is_feed_home_video_library(lib_idx) {
                     // A feed-group library's rows come from the targets' own
                     // lists, so the refresh refetches the targets and never
                     // the hidden root listing (design D7a).
@@ -169,10 +193,7 @@ fn refresh_shows(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
             }
         }
         GuiLibraryView::Upcoming => app.refetch_tv_upcoming_snapshot(lib_idx),
-        // The Favourites refresh refetches the favourites list
-        // (emby-favourites design D6, unit 4.1); until that fetch lands, the
-        // choice refetches nothing.
-        GuiLibraryView::Favourites => {}
+        GuiLibraryView::Favourites => favourites::refetch_favourites(app, gui, lib_idx),
     }
 }
 

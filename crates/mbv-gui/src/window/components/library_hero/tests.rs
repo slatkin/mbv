@@ -142,6 +142,7 @@ fn hero_app(props: FixtureProps) -> Element {
                 loading: false,
                 failure: None,
                 artists,
+                favourites: None,
             }),
         })));
     // The carried detail, as the core's batch would: `play_library_track`

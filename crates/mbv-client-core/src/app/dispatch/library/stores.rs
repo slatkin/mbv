@@ -52,4 +52,9 @@ pub enum ClientLibraryEffect {
     /// a Client whose list loads the open rows in view starts the next one it
     /// still misses.
     SeriesContentChanged,
+    /// A favourite write landed (emby-favourites design D4): the Client's own
+    /// copies of the item take `favourite`, and a Client whose open list is
+    /// the item's library's favourites fetches that list again so a row the
+    /// user unfavourited leaves it.
+    FavouriteChanged { item_id: String, favourite: bool },
 }

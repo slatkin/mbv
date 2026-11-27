@@ -358,6 +358,7 @@ fn music(collection_names: &[&str]) -> GuiMusicList {
         loading: false,
         failure: None,
         artists: vec![beastie(), brand()],
+        favourites: None,
     }
 }
 

@@ -17,6 +17,7 @@ pub(crate) mod emby;
 mod emby_projection;
 pub(crate) mod ensure;
 mod entry_list;
+mod favourites;
 mod feeds;
 mod feeds_projection;
 mod hero_facts;
@@ -60,6 +61,8 @@ pub(crate) use self::emby::GuiEmbyRootItems;
 pub(crate) use self::emby::emby_feed_wants_target_in_set;
 pub use self::emby_projection::{GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind};
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
+pub use self::favourites::GuiFavouritesProjection;
+pub(crate) use self::favourites::apply_favourite_change;
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
 #[cfg(test)]
@@ -78,6 +81,8 @@ pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,
 };
+#[cfg(test)]
+pub(crate) use self::item_actions::library_item;
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
 pub use self::list_sort::{GuiListSort, GuiListSortFrame, GuiSortTarget};

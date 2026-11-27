@@ -116,6 +116,7 @@ fn emby_content(
             loading: false,
             failed: false,
             rows: rows.to_owned(),
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {

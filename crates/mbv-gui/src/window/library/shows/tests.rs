@@ -108,6 +108,7 @@ fn shows_list(series: Vec<GuiShowsSeriesFrame>) -> GuiLibraryList {
             series,
             upcoming_failed: false,
             rows: Vec::new(),
+            favourites: None,
         }),
     }
 }

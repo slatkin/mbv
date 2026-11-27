@@ -130,6 +130,15 @@ fn show_library_detail(app: &mut App, gui: &mut GuiClientState, item_id: &str) {
         super::log_stale_library_item("showDetail", item_id);
         return;
     };
+    // A Favourites row's pick is the list's own (emby-favourites design D6):
+    // it never writes the Music pick, so pressing All finds the album the
+    // Music list showed.
+    if super::shows::library_view(gui, lib_idx) == super::GuiLibraryView::Favourites {
+        if !super::favourites::select_favourites_row(app, gui, lib_idx, item_id) {
+            super::log_stale_library_item("showDetail", item_id);
+        }
+        return;
+    }
     gui.music_artist_pages.remove(&lib_idx);
     let single_group = match super::projection::effective_music_set(app, gui, lib_idx).as_ref() {
         GuiCollectionSet::Checked(keys) if keys.len() == 1 => Some(keys[0].clone()),
@@ -239,6 +248,13 @@ pub(in crate::gui_core::gui_library) fn play_library_item(
     lib_idx: usize,
     item: EmbyItem,
 ) {
+    // A music artist row plays its tracks, never its folder (emby-favourites
+    // design D8): the `ArtistIds` fetch replaces the queue, so no path sends
+    // `ParentId=<artist id>`.
+    if is_music_artist(&item) {
+        super::favourites::play_favourite_artist(app, &item.id, false);
+        return;
+    }
     if item.is_folder {
         let Some(ct) = app
             .emby_library_collection_type(lib_idx)
@@ -273,6 +289,12 @@ pub(in crate::gui_core::gui_library) fn add_library_item(
         super::log_stale_library_item("addToQueue", item_id);
         return;
     };
+    // A music artist row appends its tracks, never its folder (emby-favourites
+    // design D8).
+    if is_music_artist(&item) {
+        super::favourites::enqueue_favourite_artist(app, lib_idx, &item.id);
+        return;
+    }
     let autoload = app.autoload_enabled();
     if item.is_folder || !is_playable(&item) || !autoload {
         app.enqueue_lib_item(lib_idx, item);
@@ -292,6 +314,15 @@ pub(in crate::gui_core::gui_library) fn add_library_item(
     app.enqueue_lib_items(lib_idx, tracks);
 }
 
+/// Whether `item` is a music artist row (emby-favourites design D8): the
+/// `/Artists` listing's `MusicArtist` item a favourite artist row carries.
+/// Only the Favourites list holds such an item as a row — the Music tree's
+/// artist rows are groupings over albums — so the artist path keys on the
+/// item's own type, never on the row's destination.
+pub(in crate::gui_core::gui_library) fn is_music_artist(item: &EmbyItem) -> bool {
+    item.item_type == "MusicArtist"
+}
+
 /// The album whose cached tracklist holds `track_id` (design D5): the
 /// tracklist a track row and the Hero's tracklist paint, keyed by the
 /// album the open-album command fetched it for. `None` when no cached
@@ -303,17 +334,27 @@ pub(in crate::gui_core::gui_library) fn track_album_id(
     app.album_of_cached_track(track_id)
 }
 
-/// The item a command names, with the library it belongs to: the album
-/// lists the GUI store holds, then the plain Emby libraries' root lists,
-/// then the navigation levels the TUI also loads, then the Shows New
-/// fetch's landed rows, then the picked album's cached tracks (design D5,
-/// row 8.1, D9).
-pub(in crate::gui_core::gui_library) fn library_item(
+/// The item a command names, with the library it belongs to: the library's
+/// Favourites list while its view is Favourites, then the album lists the GUI
+/// store holds, then the plain Emby libraries' root lists, then the navigation
+/// levels the TUI also loads, then the Shows New fetch's landed rows, then the
+/// picked album's cached tracks (design D5, row 8.1, D9; emby-favourites
+/// design D6).
+pub(crate) fn library_item(
     app: &App,
     gui: &GuiClientState,
     item_id: &str,
 ) -> Option<(usize, EmbyItem)> {
     for (lib_idx, lib) in app.emby_libraries().iter().enumerate() {
+        // The favourites store resolves an id only while that library's
+        // active view is Favourites (emby-favourites design D6): a Music tree
+        // artist row whose id equals a favourite artist's id therefore still
+        // resolves no item in All.
+        if super::shows::library_view(gui, lib_idx) == super::GuiLibraryView::Favourites
+            && let Some(item) = super::favourites::favourites_item(gui, &lib.library.id, item_id)
+        {
+            return Some((lib_idx, item));
+        }
         let stored = stored_albums(gui, lib_idx).find(|album| album.id == item_id);
         let emby_root =
             || super::emby::stored_emby_root_items(gui, lib_idx).find(|item| item.id == item_id);

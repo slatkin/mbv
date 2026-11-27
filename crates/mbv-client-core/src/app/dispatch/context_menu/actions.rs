@@ -1,5 +1,6 @@
 pub(in crate::app) mod emby_writes;
 
+use crate::app::dispatch::library::stores::ClientLibraryStores;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, ContextAction, PanelFocus, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
@@ -63,12 +64,26 @@ impl App {
         action: Option<ContextAction>,
         cw_item: Option<EmbyItem>,
     ) {
+        self.execute_context_action_with_stores(action, cw_item, None);
+    }
+
+    /// The same dispatch with the Client's own library stores (emby-favourites
+    /// design D4): a write whose landing changes what those stores hold raises
+    /// its [`ClientLibraryEffect`] through them, so a Client that keeps its own
+    /// copies of the item takes the new value. A Client that keeps none (the
+    /// TUI) passes `None`, exactly as it does for a library event.
+    pub fn execute_context_action_with_stores(
+        &mut self,
+        action: Option<ContextAction>,
+        cw_item: Option<EmbyItem>,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) {
         // The shell dismisses the mounted ContextMenu component; this only
         // dispatches the chosen action (task 5.3c).
         let lib_idx = self.context_menu_lib_idx();
         let action = self.execute_context_visual_action(action);
         let action = self.execute_context_selection_action(action, lib_idx);
-        let action = self.execute_context_library_action(action, cw_item, lib_idx);
+        let action = self.execute_context_library_action(action, cw_item, lib_idx, stores);
         let action = self.execute_context_queue_and_feed_action(action);
         self.execute_context_navigation_action(action);
     }
@@ -203,6 +218,7 @@ impl App {
         action: Option<ContextAction>,
         cw_item: Option<EmbyItem>,
         lib_idx: Option<usize>,
+        stores: Option<&mut dyn ClientLibraryStores>,
     ) -> Option<ContextAction> {
         match action {
             Some(ContextAction::Play) => {
@@ -254,11 +270,11 @@ impl App {
                 None
             }
             Some(ContextAction::Favourite(id)) => {
-                self.context_set_favourite(&id, true);
+                self.context_set_favourite(&id, true, stores);
                 None
             }
             Some(ContextAction::Unfavourite(id)) => {
-                self.context_set_favourite(&id, false);
+                self.context_set_favourite(&id, false, stores);
                 None
             }
             Some(ContextAction::RemoveFromContinueWatching) => {

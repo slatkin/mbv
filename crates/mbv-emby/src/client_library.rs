@@ -448,13 +448,17 @@ impl EmbyClient {
     /// Fetches one artist's Audio tracks via Emby's
     /// `ArtistIds=<id>&IncludeItemTypes=Audio&Recursive=true` query.
     ///
-    /// `artist_id` must be a stable artist item ID resolved from an
+    /// `artist_id` is a stable artist item ID: either one resolved from an
     /// `ArtistItems` pair carried on an album/item payload (see
-    /// [`EmbyItem::matched_artist_item_id`]). That payload ID space is the
-    /// sole accepted input: mbv performs no `/Artists` listing fetch, and
-    /// IDs from such a listing have no proven equivalence to these keys, so
-    /// they are never valid here. Unsupported or rejected queries propagate
-    /// as `Err` and the caller falls back to per-album aggregation.
+    /// [`EmbyItem::matched_artist_item_id`]), or one a `/Artists` listing
+    /// returned. The two id spaces are the same one: the emby-favourites
+    /// design's read-only probe of the user's server (4.10.2.0) answered
+    /// `531595` and `590889` as "Metallica" from both an album payload's
+    /// `ArtistItems` and the library's `/Artists?Filters=IsFavorite`
+    /// listing, so a favourite artist row's id addresses this query. A library
+    /// can hold several artist items with one name, and each keeps its own
+    /// id. Unsupported or rejected queries propagate as `Err` and the caller
+    /// falls back to per-album aggregation.
     pub fn get_artist_audio_tracks(
         &self,
         artist_id: &str,

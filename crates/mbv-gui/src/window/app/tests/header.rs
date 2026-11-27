@@ -237,6 +237,7 @@ impl Fixture {
                             loading: false,
                             failure: None,
                             artists: Vec::new(),
+                            favourites: None,
                         },
                     ),
                 },

@@ -40,9 +40,9 @@ pub use self::gui_library::{
 };
 pub use self::gui_library::{
     GuiDestinationKind, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
-    GuiHeroCastMember, GuiHeroFactLabel, GuiHeroFactRow, GuiHeroFacts, GuiHeroPill, GuiLibraryView,
-    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
-    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
+    GuiFavouritesProjection, GuiHeroCastMember, GuiHeroFactLabel, GuiHeroFactRow, GuiHeroFacts,
+    GuiHeroPill, GuiLibraryView, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
+    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
 pub use self::gui_library::{
     GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, GuiFeedsSelection,

@@ -73,6 +73,7 @@ fn music_list() -> GuiLibraryList {
             loading: false,
             failure: None,
             artists: Vec::new(),
+            favourites: None,
         }),
     }
 }
@@ -121,6 +122,7 @@ fn emby_plain() -> (GuiLibraryList, GuiLibraryDetail) {
                 emby_row("m1", "Alien", Some('A')),
                 emby_row("m2", "Heat", Some('H')),
             ],
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {
@@ -173,6 +175,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
                 kind: GuiEmbyRowKindFrame::Media,
                 state: GuiHomeRowStateFrame::Ordinary,
             }],
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {
@@ -329,6 +332,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
                     sort_letter: Some('B'),
                 },
             ],
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {

@@ -284,6 +284,7 @@ fn shows_content(
             series,
             upcoming_failed: false,
             rows: Vec::new(),
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {

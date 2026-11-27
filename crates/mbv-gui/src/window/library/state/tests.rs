@@ -123,6 +123,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
             loading: false,
             failure: None,
             artists,
+            favourites: None,
         }),
     }
 }

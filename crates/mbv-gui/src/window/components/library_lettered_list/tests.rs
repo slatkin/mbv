@@ -466,6 +466,7 @@ fn emby_frame(feed_group: bool, rows: Vec<GuiEmbyRowFrame>) -> GuiEmbyList {
         loading: false,
         failed: false,
         rows,
+        favourites: None,
     }
 }
 

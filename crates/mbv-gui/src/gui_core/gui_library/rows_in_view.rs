@@ -115,9 +115,9 @@ fn row_art_scope(app: &App, gui: &GuiClientState) -> Option<GuiRowArtScope> {
             Some(match super::shows::library_view(gui, lib_idx) {
                 super::GuiLibraryView::New => GuiRowArtScope::ShowsNew,
                 super::GuiLibraryView::Upcoming => GuiRowArtScope::ShowsUpcoming,
-                // The Favourites list paints no row until the favourites
-                // store lands (emby-favourites design D6, unit 4.2), so the
-                // All tree's scope stands in beside All and no fetch names it.
+                // The Favourites list's own scope arrives with its list
+                // component (emby-favourites design D6, unit 5.1), so the All
+                // tree's scope stands in beside All and no fetch names it.
                 super::GuiLibraryView::All | super::GuiLibraryView::Favourites => {
                     GuiRowArtScope::ShowsSeries
                 }

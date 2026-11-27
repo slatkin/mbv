@@ -108,10 +108,11 @@ pub(in crate::gui_core::gui_library) fn set_library_view(
             };
             spawn_shows_new(app, gui, library_id);
         }
-        // The Favourites list's fetch is the favourites data path's own
-        // (emby-favourites design D7, unit 4.1): until it lands, the choice
-        // installs alone and the destination's All list keeps painting.
-        GuiLibraryView::Favourites => {}
+        // Entering the Favourites view starts its fetch (emby-favourites
+        // design D7): a first load when the store holds no list, an in-place
+        // refresh when it does. Leaving the view restores the All list
+        // untouched, because the All stores are never edited here.
+        GuiLibraryView::Favourites => super::favourites::refetch_favourites(app, gui, lib_idx),
     }
 }
 
@@ -269,11 +270,16 @@ pub(in crate::gui_core::gui_library) fn select_shows_row(
                 super::log_stale_library_item("showsSelect", row);
             }
         }
-        // An Upcoming row is display-only, and a Favourites row's pick
-        // resolves through the favourites store and lands in the favourites
-        // pick of design D6 (unit 4.3) — until that store lands, the list
-        // paints no Favourites row, so a press picks nothing in either view.
-        GuiLibraryView::Upcoming | GuiLibraryView::Favourites => {}
+        // A Favourites row's pick resolves through the favourites store and
+        // lands in the list's own pick, so the Favourites Hero shows it and
+        // the All selection is left as it was (emby-favourites design D6).
+        GuiLibraryView::Favourites => {
+            if !super::favourites::select_favourites_row(app, gui, lib_idx, row) {
+                super::log_stale_library_item("showsSelect", row);
+            }
+        }
+        // An Upcoming row is display-only.
+        GuiLibraryView::Upcoming => {}
     }
 }
 

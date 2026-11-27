@@ -378,8 +378,8 @@ fn shows_row_art_scope(view: Option<GuiLibraryView>) -> GuiRowArtScopeFrame {
     match view {
         Some(GuiLibraryView::New) => GuiRowArtScopeFrame::ShowsNew,
         Some(GuiLibraryView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
-        // The Favourites list paints no row until the favourites store lands
-        // (emby-favourites design D6, unit 4.2), so the All tree's scope
+        // The Favourites list's own scope arrives with its list component
+        // (emby-favourites design D6, unit 5.1), so the All tree's scope
         // stands in and no fetch names it.
         Some(GuiLibraryView::All | GuiLibraryView::Favourites) | None => {
             GuiRowArtScopeFrame::ShowsSeries
